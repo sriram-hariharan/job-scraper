@@ -1,5 +1,8 @@
-from src.discovery.greenhouse_discovery import discover_greenhouse_from_api
+from src.scrapers.workday_scraper import load_companies
 
-companies = discover_greenhouse_from_api()
+comp = load_companies()
 
-print("Total greenhouse discovered:", len(companies))
+for c in comp:
+    company = (c.split("https://")[1].split(".")[0])
+    if company == "otis":
+        print(c)

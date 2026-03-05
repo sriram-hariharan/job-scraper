@@ -8,12 +8,12 @@ print("=============================")
 print("ATS DISCOVERY")
 print("=============================\n")
 
-greenhouse, ashby, lever, workday = discover_from_domains()
+# greenhouse, ashby, lever, workday = discover_from_domains()
 
-print("Greenhouse detected:", len(greenhouse))
-print("Ashby detected:", len(ashby))
-print("Lever detected:", len(lever))
-print("Workday detected:", len(workday))
+# print("Greenhouse detected:", len(greenhouse))
+# print("Ashby detected:", len(ashby))
+# print("Lever detected:", len(lever))
+# print("Workday detected:", len(workday))
 
 print("\n=============================")
 print("SCRAPING JOBS")

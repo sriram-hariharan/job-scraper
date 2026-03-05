@@ -1,119 +1,102 @@
 import requests
+import time
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import json
-import time
+
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
 })
 
-def load_companies(path="data/workday_companies.txt"):
 
+def load_companies(path="data/workday_companies.txt"):
     companies = []
     with open(path) as f:
         for line in f:
             url = line.strip()
             if url:
-                # company = (url.split("https://")[1].split(".")[0])
-                # if company == "otis":
-                #     print("\n\nFound Otis in company list \n\n")
-                    companies.append(url)
+                companies.append(url)
     return companies
+    # return [
+    #     "https://motorolasolutions.wd5.myworkdayjobs.com/Careers",
+    #     "https://iqvia.wd1.myworkdayjobs.com/IQVIA"
+    # ]
 
-def get_us_country_id(data):
 
+def get_us_country_facet(data):
     facets = data.get("facetMetadata", {}).get("facets", [])
 
     for facet in facets:
-        if facet.get("name") == "locationCountry":
+        for val in facet.get("values", []):
+            label = val.get("label", "").lower()
 
-            for val in facet.get("values", []):
-                if val.get("label") == "United States":
-                    return val.get("id")
+            if "united states" in label or label == "us":
+                return facet.get("name"), val.get("id")
 
-    return None
+    return None, None
+
 
 def scrape_company(board_url):
-
+    seen_jobs = set()
     host = board_url.split(".myworkdayjobs.com")[0].replace("https://", "")
     tenant = host.split(".")[0]
     site = board_url.split(".myworkdayjobs.com/")[1].split("?")[0].strip("/")
 
     api_url = f"https://{host}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs"
 
-
     origin = f"https://{host}.myworkdayjobs.com"
-    referer = board_url  # full page URL is fine as referer
 
     headers = {
-    "Content-Type": "application/json",
-    "Accept": "application/json",
-    "Accept-Language": "en-US,en;q=0.9",
-    "User-Agent": "Mozilla/5.0",
-    "Origin": origin,
-    "Referer": referer,
-    "X-Requested-With": "XMLHttpRequest",
-    "Connection": "keep-alive"
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "User-Agent": "Mozilla/5.0",
+        "Origin": origin,
+        "Referer": board_url,
+        "X-Requested-With": "XMLHttpRequest",
+        "Connection": "keep-alive",
     }
 
     jobs = []
     offset = 0
     limit = 20
-    max_pages = 3
-    page = 0
-    country_filter = None
 
-    #Country discovery
-    payload = {
-    "limit": 1,
-    "offset": 0
-    }
-
-    r = session.post(api_url, data=json.dumps(payload), headers=headers, timeout=10)
-
+    # Discover US facet id
+    payload = {"limit": 1, "offset": 0, "searchText": ""}
+    r = session.post(api_url, json=payload, headers=headers, timeout=10)
     if r.status_code != 200:
         return []
-
     data = r.json()
-    country_filter = get_us_country_id(data)
+    facet_name, country_filter = get_us_country_facet(data)
+    
+    total = None
 
     while True:
         payload = {
             "limit": limit,
             "offset": offset,
+            "searchText": ""
         }
 
         if country_filter:
             payload["appliedFacets"] = {
-                "locationCountry": [country_filter]
+                facet_name: [country_filter]
             }
 
         try:
-            r = session.post(
-                api_url,
-                data = json.dumps(payload),
-                headers=headers,
-                timeout=10
-            )
+            r = session.post(api_url, json=payload, headers=headers, timeout=10)
             if r.status_code != 200:
                 break
-
             data = r.json()
-
-            # if country_filter is None:
-            #     country_filter = get_us_country_id(data)
-
-            #     # restart pagination with filter
-            #     offset = 0
-            #     jobs = []
-            #     continue
-
-            time.sleep(0.05)
-
-        except Exception as e:
-            print("Workday error:", e)
+        except Exception:
             break
+
+        # Set total once (or keep updating if you want)
+        if total is None:
+            total = data.get("total")
+            # If API doesn't provide total, fallback to old stopping logic
+            if not isinstance(total, int):
+                total = None
 
         postings = (
             data.get("jobPostings")
@@ -121,32 +104,50 @@ def scrape_company(board_url):
             or data.get("items")
             or []
         )
+
         if isinstance(postings, dict):
             postings = postings.get("postings", [])
 
         if not postings:
             break
-
+        
+        new_jobs_this_page = 0
         for job in postings:
+            job_id = job.get("externalPath")
+            if not job_id:
+                continue
+
+            if job_id in seen_jobs:
+                continue
+
+            seen_jobs.add(job_id)
+            new_jobs_this_page += 1
 
             location = job.get("locationsText", "")
 
-            if "United States" in location or "USA" in location:
-                jobs.append({
-                    "title": job.get("title"),
-                    "location": location,
-                    "url": f"{board_url.rstrip('/')}/{job.get('externalPath','').lstrip('/')}",
-                    "company": tenant,
-                    "source": "workday"
-                })
+            jobs.append({
+                "title": job.get("title"),
+                "location": location,
+                "url": f"{board_url.rstrip('/')}/{job_id.lstrip('/')}",
+                "company": tenant,
+                "source": "workday"
+            })
 
-        offset += limit
-        page += 1
-        # print(f"Scraped page: {page}\n")
-        tqdm.write(f"Scraped {len(jobs)} jobs (page {page})")
-        if page >= max_pages:
+        if new_jobs_this_page == 0:
             break
-    print(list(j["location"] for j in jobs))
+        offset += limit
+
+        
+
+        # Stop condition: prefer total when available
+        if total is not None and offset >= total:
+            break
+
+        # Fallback stop condition if total is missing
+        if total is None and len(postings) < limit:
+            break
+        time.sleep(0.05)
+    print(f"{tenant} total reported:", data.get("total"), " collected:", len(seen_jobs))
     return jobs
 
 def scrape_all_workday():

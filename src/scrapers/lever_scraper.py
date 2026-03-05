@@ -1,17 +1,17 @@
 import asyncio
 import aiohttp
-from src.pipeline.job_filter import title_matches, us_location
+from tqdm import tqdm
 
 
 LEVER_API = "https://api.lever.co/v0/postings"
 
 
-def load_lever_companies():
+def load_lever_companies(path="data/lever_companies.txt"):
 
     companies = []
 
     try:
-        with open("data/lever_companies.txt", "r") as f:
+        with open(path, "r") as f:
             for line in f:
                 c = line.strip()
                 if c:
@@ -27,34 +27,35 @@ async def fetch_company_jobs(session, company):
     url = f"{LEVER_API}/{company}?mode=json"
 
     try:
-        async with session.get(url) as resp:
+        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
+                print(f"{company} failed: status {resp.status}")
                 return []
 
             data = await resp.json()
-    except:
+
+    except Exception as e:
+        print(f"{company} error:", e)
         return []
 
     jobs = []
 
     for job in data:
+
         title = job.get("text", "")
         location = job.get("categories", {}).get("location", "")
         job_url = job.get("hostedUrl", "")
-
-        if not title_matches(title):
-            continue
-
-        if not us_location(location):
-            continue
 
         jobs.append({
             "company": company,
             "title": title,
             "location": location,
-            "url": job_url
+            "url": job_url,
+            "source": "lever"
         })
+
+    print(f"{company} total reported:", len(data), " collected:", len(jobs))
 
     return jobs
 
@@ -65,23 +66,28 @@ async def scrape_all_lever_async():
 
     connector = aiohttp.TCPConnector(limit=50)
 
-    async with aiohttp.ClientSession(connector=connector) as session:
-
-        tasks = []
-
-        for company in companies:
-            tasks.append(fetch_company_jobs(session, company))
-
-        results = await asyncio.gather(*tasks)
-
     all_jobs = []
 
-    for job_list in results:
-        all_jobs.extend(job_list)
+    async with aiohttp.ClientSession(connector=connector) as session:
+
+        tasks = [fetch_company_jobs(session, c) for c in companies]
+
+        for future in tqdm(asyncio.as_completed(tasks),
+                           total=len(tasks),
+                           desc="Lever scraping"):
+
+            jobs = await future
+            all_jobs.extend(jobs)
 
     return all_jobs
 
 
 def scrape_all_lever():
 
-    return asyncio.run(scrape_all_lever_async())
+    jobs = asyncio.run(scrape_all_lever_async())
+
+    print("\nLever summary")
+    print("------------------")
+    print("Total jobs collected:", len(jobs))
+
+    return jobs

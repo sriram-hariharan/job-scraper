@@ -1,19 +1,17 @@
 import asyncio
 import aiohttp
-from src.pipeline.job_filter import title_matches, us_location
+from tqdm import tqdm
 
 
 GREENHOUSE_API = "https://boards-api.greenhouse.io/v1/boards/{}/jobs"
 
 
-def load_companies():
-
+def load_companies(path="data/greenhouse_companies.txt"):
     companies = []
 
-    with open("data/greenhouse_companies.txt", "r") as f:
+    with open(path, "r") as f:
         for line in f:
             c = line.strip()
-
             if c:
                 companies.append(c)
 
@@ -25,36 +23,37 @@ async def fetch_company_jobs(session, company):
     url = GREENHOUSE_API.format(company)
 
     try:
-        async with session.get(url) as resp:
+        async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
+                print(f"{company} failed: status {resp.status}")
                 return []
 
             data = await resp.json()
 
-    except:
+    except Exception as e:
+        print(f"{company} error:", e)
         return []
 
     jobs = []
 
-    for job in data.get("jobs", []):
+    postings = data.get("jobs", [])
 
-        title = job["title"]
-        location = job["location"]["name"]
-        job_url = job["absolute_url"]
+    for job in postings:
 
-        if not title_matches(title):
-            continue
-
-        if not us_location(location):
-            continue
+        title = job.get("title")
+        location = job.get("location", {}).get("name", "")
+        job_url = job.get("absolute_url")
 
         jobs.append({
             "company": company,
             "title": title,
             "location": location,
-            "url": job_url
+            "url": job_url,
+            "source": "greenhouse"
         })
+
+    print(f"{company} total reported:", len(postings), " collected:", len(jobs))
 
     return jobs
 
@@ -65,20 +64,28 @@ async def scrape_all_greenhouse_async():
 
     connector = aiohttp.TCPConnector(limit=50)
 
-    async with aiohttp.ClientSession(connector=connector) as session:
-
-        tasks = []
-        for company in companies:
-            tasks.append(fetch_company_jobs(session, company))
-
-        results = await asyncio.gather(*tasks)
-
     all_jobs = []
 
-    for job_list in results:
-        all_jobs.extend(job_list)
+    async with aiohttp.ClientSession(connector=connector) as session:
+
+        tasks = [fetch_company_jobs(session, c) for c in companies]
+
+        for future in tqdm(asyncio.as_completed(tasks),
+                           total=len(tasks),
+                           desc="Greenhouse scraping"):
+
+            jobs = await future
+            all_jobs.extend(jobs)
+
     return all_jobs
+
 
 def scrape_all_greenhouse():
 
-    return asyncio.run(scrape_all_greenhouse_async())
+    jobs = asyncio.run(scrape_all_greenhouse_async())
+
+    print("\nGreenhouse summary")
+    print("------------------")
+    print("Total jobs collected:", len(jobs))
+
+    return jobs

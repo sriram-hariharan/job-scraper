@@ -42,10 +42,9 @@ def fetch_company_jobs(company):
             "title": job.get("title"),
             "location": job.get("location", ""),
             "url": job.get("url"),
-            "source": "workable"
+            "source": "workable",
+            "posted_at": job.get("published"),
         })
-
-    print(f"{company} total reported:", len(data.get("jobs", [])), " collected:", len(jobs))
 
     return jobs
 
@@ -65,5 +64,9 @@ def scrape_all_workable():
 
             jobs = future.result()
             all_jobs.extend(jobs)
+    
+    print("\nWorkable summary")
+    print("------------------")
+    print("Total jobs collected:", len(all_jobs))
 
     return all_jobs

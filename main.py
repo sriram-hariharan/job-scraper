@@ -18,6 +18,12 @@ def main():
     print("=============================\n")
 
     all_jobs = collect_all_jobs()
+    if all_jobs:
+        print("Sample job:")
+        print(all_jobs[0])
+    else:
+        print("No jobs returned.")
+    print("Final jobs:", len(all_jobs))
 
 if __name__ == "__main__":
     main()

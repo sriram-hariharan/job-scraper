@@ -1,90 +1,97 @@
-from ..config.consts import TARGET_TITLES, EXCLUDED_KEYWORDS, NON_US_COUNTRIES, US_STATE_NAMES, US_STATE_ABBREV
+from datetime import datetime, timedelta
 
-def title_matches(title):
+JOB_TITLES = [
+    "Data Scientist",
+    "Senior Data Scientist",
+    "Data Analyst",
+    "Senior Data Analyst",
+    "Machine Learning Engineer",
+    "AI Engineer",
+    "Applied Scientist"
+]
+US_STATES = [
+    "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
+    "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
+    "MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+    "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
+    "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
+]
+
+def title_matches(title: str) -> bool:
+
+    if not title:
+        return False
 
     title_lower = title.lower()
 
-    # Reject unwanted roles
-    for word in EXCLUDED_KEYWORDS:
-        if word in title_lower:
-            return False
-
-    # Accept only target roles
-    for target in TARGET_TITLES:
-
-        if title_lower.startswith(target):
-            return True
-
-        if f" {target}" in title_lower:
+    for role in JOB_TITLES:
+        if role.lower() in title_lower:
             return True
 
     return False
 
 
-def us_location(location):
+def us_location(location: str):
 
     if not location:
         return False
 
-    loc = location.lower()
+    loc = location.upper()
 
-    # -----------------------------
-    # Handle Ashby remote patterns
-    # -----------------------------
+    if "UNITED STATES" in loc:
+        return True
 
-    if "remote" in loc:
-        if "canada" not in loc and "europe" not in loc and "uk" not in loc:
+    if " USA" in loc:
+        return True
+
+    if "REMOTE" in loc:
+        return True
+
+    for state in US_STATES:
+        if f", {state}" in loc:
             return True
-
-    # -----------------------------
-    # Common US cities used without states
-    # (Ashby often returns these)
-    # -----------------------------
-
-    US_MAJOR_CITIES = [
-        "san francisco",
-        "new york",
-        "seattle",
-        "austin",
-        "boston",
-        "los angeles",
-        "denver",
-        "chicago",
-        "atlanta",
-        "miami"
-    ]
-
-    for city in US_MAJOR_CITIES:
-        if city in loc:
-            return True
-
-    # -----------------------------
-    # Reject clearly non-US
-    # -----------------------------
-
-    for country in NON_US_COUNTRIES:
-        if country in loc:
-            return False
-
-    # -----------------------------
-    # Existing Greenhouse logic
-    # -----------------------------
-
-    parts = loc.replace(";", ",").split(",")
-
-    for part in parts:
-
-        part = part.strip()
-
-        if "united states" in part or "usa" in part:
-            return True
-
-        for state in US_STATE_NAMES:
-            if state in part:
-                return True
-
-        for abbr in US_STATE_ABBREV:
-            if part.endswith(f" {abbr}") or part.endswith(f", {abbr}"):
-                return True
 
     return False
+
+
+def posted_within_24h(posted_on):
+
+    if not posted_on:
+        return True  # allow if timestamp missing
+
+    try:
+        if isinstance(posted_on, datetime):
+            posted_time = posted_on
+        else:
+            posted_time = datetime.fromisoformat(posted_on)
+
+        return posted_time >= datetime.utcnow() - timedelta(hours=24)
+
+    except Exception:
+        return True
+
+
+def filter_jobs(jobs):
+
+    filtered = []
+
+    for job in jobs:
+
+        title = job.get("title")
+        location = job.get("location")
+        posted = job.get("postedOn") or job.get("posted_on")
+
+        if not title_matches(title):
+            continue
+
+        if not us_location(location):
+            continue
+
+        if not posted_within_24h(posted):
+            continue
+
+        filtered.append(job)
+
+    print("Jobs after filtering:", len(filtered))
+
+    return filtered

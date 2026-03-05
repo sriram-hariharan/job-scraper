@@ -76,10 +76,9 @@ def fetch_company_jobs(company):
             "title": title,
             "location": location,
             "url": f"https://jobs.ashbyhq.com/{company}/{job['id']}",
-            "source": "ashby"
+            "source": "ashby",
+            "posted_at": job.get("publishedAt")
         })
-
-    print(f"{company} total reported:", len(jobs_data), " collected:", len(jobs))
 
     return jobs
 
@@ -99,5 +98,9 @@ def scrape_all_ashby():
 
             jobs = future.result()
             all_jobs.extend(jobs)
+
+    print("\nAshby summary")
+    print("------------------")
+    print("Total jobs collected:", len(all_jobs))
 
     return all_jobs

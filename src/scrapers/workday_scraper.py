@@ -130,14 +130,13 @@ def scrape_company(board_url):
                 "location": location,
                 "url": f"{board_url.rstrip('/')}/{job_id.lstrip('/')}",
                 "company": tenant,
-                "source": "workday"
+                "source": "workday",
+                "posted_at": job.get("postedDate") or job.get("createdDate"),
             })
 
         if new_jobs_this_page == 0:
             break
-        offset += limit
-
-        
+        offset += limit  
 
         # Stop condition: prefer total when available
         if total is not None and offset >= total:
@@ -147,7 +146,6 @@ def scrape_company(board_url):
         if total is None and len(postings) < limit:
             break
         time.sleep(0.05)
-    print(f"{tenant} total reported:", data.get("total"), " collected:", len(seen_jobs))
     return jobs
 
 def scrape_all_workday():
@@ -162,5 +160,9 @@ def scrape_all_workday():
         for future in tqdm(as_completed(futures), total=len(futures), desc="Workday scraping"):
             jobs = future.result()
             all_jobs.extend(jobs)
+    
+    print("\nWorkday summary")
+    print("------------------")
+    print("Total jobs collected:", len(jobs))
 
     return all_jobs

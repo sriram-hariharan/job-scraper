@@ -52,10 +52,9 @@ async def fetch_company_jobs(session, company):
             "title": title,
             "location": location,
             "url": job_url,
-            "source": "lever"
+            "source": "lever",
+            "posted_at": job.get("createdAt")
         })
-
-    print(f"{company} total reported:", len(data), " collected:", len(jobs))
 
     return jobs
 

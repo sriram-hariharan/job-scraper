@@ -1,19 +1,36 @@
+import re
+import time
+
+def normalize(text):
+
+    if not text:
+        return ""
+
+    text = text.lower().strip()
+
+    text = re.sub(r"\s+", " ", text)
+
+    return text
+
 def dedupe_jobs(jobs):
 
     seen = set()
-    unique = []
+    unique_jobs = []
 
     for job in jobs:
 
-        url = job.get("url")
+        title = normalize(job.get("title"))
+        company = normalize(job.get("company"))
+        location = normalize(job.get("location"))
 
-        if not url:
+        key = f"{title}|{company}|{location}"
+
+        if key in seen:
             continue
 
-        if url in seen:
-            continue
+        seen.add(key)
+        unique_jobs.append(job)
 
-        seen.add(url)
-        unique.append(job)
+    print("Jobs after dedupe:", len(unique_jobs))
 
-    return unique
+    return unique_jobs

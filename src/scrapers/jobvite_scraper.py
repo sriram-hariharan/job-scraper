@@ -69,10 +69,9 @@ def fetch_company_jobs(company):
             "title": title,
             "location": "",
             "url": job_url,
-            "source": "jobvite"
+            "source": "jobvite",
+            "posted_at": None,
         })
-
-    print(f"{company} collected:", len(jobs))
 
     return jobs
 
@@ -91,5 +90,9 @@ def scrape_all_jobvite():
 
             jobs = future.result()
             all_jobs.extend(jobs)
+    
+    print("\nJobvite summary")
+    print("------------------")
+    print("Total jobs collected:", len(all_jobs))
 
     return all_jobs

@@ -1,0 +1,9 @@
+requests==2.32.3
+pandas
+openpyxl==3.1.5
+schedule==1.2.1
+python-dotenv==1.0.1
+gspread
+google-auth
+beautifulsoup4
+aiohttp

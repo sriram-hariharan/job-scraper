@@ -1,5 +1,6 @@
 from .ats_detector import *
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 
 def load_domains():
 
@@ -29,9 +30,7 @@ def save_companies(filename, companies):
         pass
 
     with open(filename, "a") as f:
-
         for c in companies:
-
             if c not in existing:
                 f.write(c + "\n")
 
@@ -66,8 +65,12 @@ def check_domain(domain):
         pass
 
     try:
-        if check_workday(domain):
-            workday = domain
+        # if check_workday(domain):
+        wd_url = extract_workday_board_url(domain)
+
+        if wd_url:
+            workday = wd_url
+            
     except:
         pass
 
@@ -82,10 +85,19 @@ def discover_from_domains():
     lever = []
     workday = []
 
-    with ThreadPoolExecutor(max_workers=40) as executor:
-        results = executor.map(check_domain, domains)
+    results = []
 
-    for greenhouse_slug, ashby_slug, lever_slug, workday_domain in results:
+    with ThreadPoolExecutor(max_workers=20) as executor:
+
+        results = list(
+            tqdm(
+                executor.map(check_domain, domains),
+                total=len(domains),
+                desc="ATS discovery"
+            )
+        )
+
+    for greenhouse_slug, ashby_slug, lever_slug, workday_url in results:
 
         if greenhouse_slug:
             greenhouse.append(greenhouse_slug)
@@ -93,8 +105,8 @@ def discover_from_domains():
             ashby.append(ashby_slug)
         if lever_slug:
             lever.append(lever_slug)
-        if workday_domain:
-            workday.append(workday_domain)
+        if workday_url:
+            workday.append(workday_url)
 
     save_companies("data/greenhouse_companies.txt", greenhouse)
     save_companies("data/ashby_companies.txt", ashby)

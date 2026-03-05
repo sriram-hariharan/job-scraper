@@ -374,3 +374,5 @@ melio
 camusenergy
 traderepublicbank
 vercel
+disney
+lpl

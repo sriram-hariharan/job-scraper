@@ -1,3 +1,22 @@
+<<<<<<< Updated upstream
+=======
+import re
+import time
+
+def normalize(text):
+
+    if not text:
+        return ""
+
+    # handle Workday multi-location lists
+    if isinstance(text, list):
+        text = " ".join(sorted(text))
+
+    text = text.lower().strip()
+
+    return text
+
+>>>>>>> Stashed changes
 def dedupe_jobs(jobs):
 
     seen = set()

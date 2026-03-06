@@ -18,6 +18,39 @@ def load_companies(path="data/jobvite_companies.txt"):
 
     return companies
 
+def fetch_jobvite_posted_date(job_url):
+
+    try:
+        r = requests.get(job_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+        if r.status_code != 200:
+            return None
+    except Exception:
+        return None
+
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    # -------- JSON-LD structured data --------
+    scripts = soup.find_all("script", {"type": "application/ld+json"})
+
+    import json
+
+    for script in scripts:
+        try:
+            data = json.loads(script.string)
+        except Exception:
+            continue
+
+        if isinstance(data, dict):
+            if "datePosted" in data:
+                return data["datePosted"]
+
+        if isinstance(data, list):
+            for item in data:
+                if isinstance(item, dict) and "datePosted" in item:
+                    return item["datePosted"]
+
+    return None
+
 def fetch_company_jobs(company):
 
     urls = [
@@ -58,9 +91,19 @@ def fetch_company_jobs(company):
         if "/job/" not in href:
             continue
 
+        # find job container
+        container = link.find_parent("div")
+
+        is_new = False
+        if container:
+            if container.find("span", class_="jv-tag-new"):
+                is_new = True
+
         title = link.text.strip()
 
         job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
+        posted_at = fetch_jobvite_posted_date(job_url)
+        is_new = bool(link.find("span", class_="jv-tag-new"))
 
         jobs.append({
             "company": company,
@@ -68,7 +111,8 @@ def fetch_company_jobs(company):
             "location": "",
             "url": job_url,
             "source": "jobvite",
-            "posted_at": None
+            "posted_at": posted_at,
+            "is_new": is_new
         })
 
     return jobs
@@ -78,7 +122,7 @@ def scrape_all_jobvite():
     companies = load_companies()
     all_jobs = []
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
+    with ThreadPoolExecutor(max_workers=20) as executor:
 
         futures = [executor.submit(fetch_company_jobs, c) for c in companies]
 

@@ -132,19 +132,29 @@ def scrape_company(board_url):
 
             location = job.get("locationsText", "")
 
+            posted_at = (
+                job.get("postedOn")
+                or job.get("postedDate")
+                or job.get("postedAt")
+                or job.get("createdDate")
+                or job.get("createdAt")
+            )
+
+            if posted_at is None:
+                print("WORKDAY MISSING DATE DEBUG")
+                print("tenant:", tenant)
+                print("board_url:", board_url)
+                print("job title:", job.get("title"))
+                print("job keys:", sorted(job.keys()))
+                print("job sample:", job)
+
             jobs.append({
                 "title": job.get("title"),
                 "location": location,
                 "url": f"{board_url.rstrip('/')}/{job_id.lstrip('/')}",
                 "company": tenant,
                 "source": "workday",
-                "posted_at": (
-                    job.get("postedOn")
-                    or job.get("postedDate")
-                    or job.get("postedAt")
-                    or job.get("createdDate")
-                    or job.get("createdAt")
-                ),
+                "posted_at": posted_at,
             })
 
         if new_jobs_this_page == 0:

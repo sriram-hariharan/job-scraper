@@ -49,6 +49,12 @@ def parse_posted_at(value):
             days = int(m.group(2))
             return now - timedelta(days=days)
 
+    # Handle date-only values (Jobvite)
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        dt = datetime.strptime(s, "%Y-%m-%d")
+        dt = dt.replace(hour=12)  # assume midday
+        return dt.replace(tzinfo=timezone.utc)
+
     # ISO parsing
     # Prefer dateutil if installed (handles Z, offsets, many formats)
     if dtparser:
@@ -64,6 +70,11 @@ def parse_posted_at(value):
     try:
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
+        # Handle date-only values (Jobvite)
+        if re.match(r"^\d{4}-\d{2}-\d{2}$", value):
+            dt = datetime.strptime(value, "%Y-%m-%d")
+            dt = dt.replace(hour=12)  # assume midday
+            return dt.replace(tzinfo=timezone.utc)
         dt = datetime.fromisoformat(s)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)

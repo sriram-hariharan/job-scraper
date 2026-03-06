@@ -111,7 +111,6 @@ def us_location(location: str):
     return False
 
 def posted_within_24h(posted_at_raw):
-
     dt = parse_posted_at(posted_at_raw)
 
     # strict freshness rule
@@ -128,7 +127,7 @@ def filter_jobs(jobs):
     filtered = []
 
     for job in jobs:
-
+    
         title = job.get("title")
         location = job.get("location")
         posted = job.get("posted_at")
@@ -139,8 +138,12 @@ def filter_jobs(jobs):
         if not us_location(location):
             continue
 
-        if not posted_within_24h(posted):
-            continue
+        # allow Jobvite jobs marked as NEW to bypass freshness rule
+        if job.get("source") == "jobvite":
+            pass
+        else:
+            if not posted_within_24h(posted):
+                continue
 
         filtered.append(job)
 

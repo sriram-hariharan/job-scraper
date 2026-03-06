@@ -21,9 +21,6 @@ def main():
     jobs = collect_all_jobs()
 
     if jobs:
-        print("Sample job:")
-        print(jobs[0])
-
         write_jobs_to_sheet(jobs)
 
     print("Final jobs:", len(jobs))

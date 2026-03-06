@@ -10,22 +10,17 @@ def load_lever_companies(path="data/lever_companies.txt"):
 
     companies = []
 
-    try:
-        with open(path, "r") as f:
-            for line in f:
-                c = line.strip()
-                if c:
-                    companies.append(c)
-    except:
-        pass
+    with open(path, "r") as f:
+        for line in f:
+            c = line.strip()
+            if c:
+                companies.append(c)
 
     return companies
-
 
 async def fetch_company_jobs(session, company):
 
     url = f"{LEVER_API}/{company}?mode=json"
-
     try:
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
@@ -36,7 +31,6 @@ async def fetch_company_jobs(session, company):
             data = await resp.json()
 
     except Exception as e:
-        print(f"{company} error:", e)
         return []
 
     jobs = []

@@ -16,8 +16,6 @@ session.headers.update({
 def jobvite_get(url, **kwargs):
     return session.get(url, **kwargs)
 
-JOBVITE_API = "https://jobs.jobvite.com/api/jobs/{}"
-
 def load_companies(path="data/jobvite_companies.txt"):
 
     companies = []
@@ -57,10 +55,7 @@ def fetch_company_jobs(company):
 
     for url in urls:
 
-        try:
-            r = jobvite_get(url, timeout=10)
-        except Exception:
-            continue
+        r = jobvite_get(url, timeout=10)
         if r is None or r.status_code != 200:
             continue
 

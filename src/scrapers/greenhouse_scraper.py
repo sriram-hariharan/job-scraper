@@ -26,13 +26,11 @@ async def fetch_company_jobs(session, company):
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                print(f"{company} failed: status {resp.status}")
                 return []
 
             data = await resp.json()
 
     except Exception as e:
-        print(f"{company} error:", e)
         return []
 
     jobs = []
@@ -41,7 +39,7 @@ async def fetch_company_jobs(session, company):
 
     for job in postings:
 
-        title = job.get("title")
+        title = job.get("title", "")
         location = job.get("location", {}).get("name", "")
         job_url = job.get("absolute_url")
 

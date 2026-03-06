@@ -138,7 +138,7 @@ def fetch_company_jobs(company):
     missing_jobs = [j for j in jobs if not j.get("posted_at") and j.get("_shortcode")]
 
     if missing_jobs:
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
             future_to_job = {
                 executor.submit(
                     fetch_workable_timestamp,

@@ -45,50 +45,7 @@ def load_companies(path="data/ashby_companies.txt"):
             c = line.strip()
             if c:
                 companies.append(c)
-    print("Ashby companies:", len(companies))
     return companies
-
-# def fetch_job_timestamp(company, job_id):
-
-#     payload = {
-#         "operationName": "ApiJobPosting",
-#         "query": DETAIL_QUERY,
-#         "variables": {
-#             "organizationHostedJobsPageName": company,
-#             "jobPostingId": job_id
-#         }
-#     }
-
-#     try:
-#         r = requests.post(
-#             "https://jobs.ashbyhq.com/api/non-user-graphql",
-#             json=payload,
-#             headers={"User-Agent": "Mozilla/5.0"},
-#             timeout=10
-#         )
-
-#         if r.status_code != 200:
-#             return None
-
-#         data = r.json()
-
-#         job = data.get("data", {}).get("jobPosting", {})
-
-#         if isinstance(job, dict):
-#             # Correct Ashby timestamp field
-#             ts = job.get("publishedDate")
-
-#             if ts:
-#                 return ts
-
-#             # some responses nest the posting object
-#             posting = job.get("posting")
-#             if isinstance(posting, dict):
-#                 return posting.get("publishedDate")
-
-#         return None
-#     except:
-#         return None
 
 def fetch_job_timestamp(company, job_id):
 
@@ -201,29 +158,13 @@ def fetch_company_jobs(company):
             "posted_at": None,
             "_job_id": job_id  # temporary field for later timestamp fetch
         })
-    
-    print(company, "jobs:", len(jobs))
 
-    # fetch timestamps only after collecting jobs
-    # for job in jobs:
-    #     job_id = job.pop("_job_id", None)
-
-    #     if job_id:
-    #         job["posted_at"] = fetch_job_timestamp(company, job_id)
-
-    # return jobs
-    status_counts = {}
     for job in jobs:
         job_id = job.pop("_job_id", None)
-
         if job_id:
             posted_at, status = fetch_job_timestamp(company, job_id)
             job["posted_at"] = posted_at
-            job["_ashby_detail_status"] = status
-            status_counts[status] = status_counts.get(status, 0) + 1
-
-    print(company, "ashby detail status:", status_counts)
-
+            
     return jobs
 
 
@@ -232,8 +173,7 @@ def scrape_all_ashby():
     companies = load_companies()
     all_jobs = []
 
-    # with ThreadPoolExecutor(max_workers=10) as executor:
-    with ThreadPoolExecutor(max_workers=5) as executor:
+    with ThreadPoolExecutor(max_workers=10) as executor:
 
         futures = [executor.submit(fetch_company_jobs, c) for c in companies]
 

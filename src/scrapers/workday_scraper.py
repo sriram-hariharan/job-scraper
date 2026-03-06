@@ -172,7 +172,8 @@ def scrape_company(board_url):
             location = job.get("locationsText", "")
 
             posted_at = (
-                job.get("postedOn")
+                job.get("startDate")
+                or job.get("postedOn")
                 or job.get("postedDate")
                 or job.get("postedAt")
                 or job.get("createdDate")
@@ -209,7 +210,7 @@ def scrape_company(board_url):
 
     if missing_jobs:
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=10) as executor:
 
             futures = [
                 executor.submit(resolve_missing_timestamp, job, board_url)

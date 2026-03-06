@@ -2,10 +2,14 @@ import requests
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.utils.http_retry import retry_request
+<<<<<<< HEAD
 
 WORKABLE_V3_API = "https://apply.workable.com/api/v3/accounts/{}/jobs"
 WORKABLE_V1_API = "https://apply.workable.com/api/v1/widget/accounts/{}"
 WORKABLE_V2_DETAIL_API = "https://apply.workable.com/api/v2/accounts/{}/jobs/{}"
+=======
+from src.config.consts import WORKABLE_V1_API, WORKABLE_V2_DETAIL_API, WORKABLE_V3_API
+>>>>>>> main
 
 session = requests.Session()
 session.headers.update({

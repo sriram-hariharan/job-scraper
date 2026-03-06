@@ -1,10 +1,19 @@
 import asyncio
 import aiohttp
+<<<<<<< HEAD
 from tqdm import tqdm
+=======
+<<<<<<< Updated upstream
+from src.pipeline.job_filter import title_matches, us_location
+>>>>>>> main
 
 
 LEVER_API = "https://api.lever.co/v0/postings"
 
+=======
+from tqdm import tqdm
+from src.config.consts import LEVER_API
+>>>>>>> Stashed changes
 
 def load_lever_companies(path="data/lever_companies.txt"):
 

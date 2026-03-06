@@ -16,14 +16,28 @@ from src.pipeline.dedupe import dedupe_jobs
 
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
+<<<<<<< HEAD
     scrapers = [
         ("workday", scrape_all_workday),
+=======
+<<<<<<< Updated upstream
+    queries = build_queries()
+=======
+    scrapers = [
+        # ("workday", scrape_all_workday),
+>>>>>>> main
         # ("greenhouse", scrape_all_greenhouse),
         # ("lever", scrape_all_lever),
         # ("ashby", scrape_all_ashby),
         # ("workable", scrape_all_workable),
+<<<<<<< HEAD
         # ("jobvite", scrape_all_jobvite),
     ]
+=======
+        ("jobvite", scrape_all_jobvite),
+    ]
+>>>>>>> Stashed changes
+>>>>>>> main
 
     all_jobs: List[Dict[str, Any]] = []
 
@@ -44,6 +58,12 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
                 jobs = future.result()
                 elapsed = round(time.time() - start, 2)
 
+<<<<<<< HEAD
+=======
+<<<<<<< Updated upstream
+    return all_jobs
+=======
+>>>>>>> main
                 print(f"{name} scraper finished | jobs: {len(jobs)} | time: {elapsed}s")
 
                 all_jobs.extend(jobs)
@@ -62,6 +82,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     for source, count in Counter(job["source"] for job in all_jobs).items():
         print(source, count)
 
+<<<<<<< HEAD
     print("\nJobs missing posted_at:")
     missing = Counter(job["source"] for job in all_jobs if not job.get("posted_at"))
     for source, count in missing.items():
@@ -70,6 +91,16 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     # ----- FILTER -----
 
     filtered_jobs = filter_jobs(all_jobs)
+=======
+    # ----- FILTER -----
+
+    filtered_jobs = filter_jobs(all_jobs)
+    
+    print("\nJobs missing posted_at after filtering:")
+    missing = Counter(job["source"] for job in all_jobs if not job.get("posted_at"))
+    for source, count in missing.items():
+        print(source, count)
+>>>>>>> main
 
     print("\nTotal filtered jobs:", len(filtered_jobs))
 
@@ -81,4 +112,9 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     print("\nTotal deduped jobs:", len(deduped_jobs))
 
+<<<<<<< HEAD
     return deduped_jobs
+=======
+    return deduped_jobs
+>>>>>>> Stashed changes
+>>>>>>> main

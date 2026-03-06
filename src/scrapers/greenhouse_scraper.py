@@ -78,7 +78,6 @@ async def scrape_all_greenhouse_async():
 
     return all_jobs
 
-
 def scrape_all_greenhouse():
 
     jobs = asyncio.run(scrape_all_greenhouse_async())

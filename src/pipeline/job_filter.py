@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from src.utils.posted_at_utils import parse_posted_at
 import re
+import pycountry
+from geotext import GeoText
 
 # Broader title patterns for AI / ML / Data roles
 TITLE_INCLUDE_PATTERNS = [
@@ -46,6 +48,18 @@ US_STATE_NAMES = [
 "VIRGINIA","WASHINGTON","WEST VIRGINIA","WISCONSIN","WYOMING"
 ]
 
+ALL_COUNTRIES = {c.name.upper() for c in pycountry.countries}
+
+# also include common aliases
+ALL_COUNTRIES.update({
+    "UK",
+    "U.K.",
+    "UNITED KINGDOM",
+    "KOREA",
+    "SOUTH KOREA",
+    "NORTH KOREA",
+})
+
 def normalize_title(title):
 
     if not title:
@@ -80,33 +94,55 @@ def title_matches(title: str) -> bool:
 
     return True
 
-def us_location(location: str):
+def us_location(location: str, source: str):
 
     if not location:
         return False
 
     loc = location.upper()
 
+    if source == "lever":
+        # Lever returns many international locations as plain city names
+        if "," not in loc and "UNITED STATES" not in loc and "USA" not in loc:
+            return False
+
     # explicit US indicators
-    if "UNITED STATES" in loc or " U.S." in loc or " USA" in loc:
+    if "UNITED STATES" in loc or "USA" in loc or " U.S." in loc:
         return True
 
-    # Remote but must explicitly mention US
+    # remote but explicitly US
     if "REMOTE" in loc and (
-        "US" in loc
-        or "USA" in loc
-        or "UNITED STATES" in loc
-        ):
+        "US" in loc or "USA" in loc or "UNITED STATES" in loc
+    ):
         return True
 
-    # city, ST format
+    # state abbreviation format
     for state in US_STATES:
         if f", {state}" in loc:
             return True
-    
+
+    # state full name format
     for state in US_STATE_NAMES:
         if f", {state}" in loc:
             return True
+
+    # detect country using pycountry list
+    for country in ALL_COUNTRIES:
+        if country in loc and country != "UNITED STATES":
+            return False
+
+    # detect cities using GeoText
+    geo = GeoText(location)
+
+    # accept city only if state abbreviation exists
+    if geo.cities:
+        for state in US_STATES:
+            if state in loc:
+                return True
+
+    # fallback for office style names
+    if "OFFICE" in loc:
+        return True
 
     return False
 
@@ -131,11 +167,12 @@ def filter_jobs(jobs):
         title = job.get("title")
         location = job.get("location")
         posted = job.get("posted_at")
-
+        if "data" in title.lower() or "machine learning" in title.lower():
+            print("LEVER LOCATION SAMPLE:", title, location, posted)
         if not title_matches(title):
             continue
 
-        if not us_location(location):
+        if not us_location(location, job.get("source")):
             continue
 
         # allow Jobvite jobs marked as NEW to bypass freshness rule

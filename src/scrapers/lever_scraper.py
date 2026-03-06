@@ -30,7 +30,7 @@ async def fetch_company_jobs(session, company):
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                print(f"{company} failed: status {resp.status}")
+                # print(f"{company} failed: status {resp.status}")
                 return []
 
             data = await resp.json()
@@ -69,7 +69,12 @@ async def scrape_all_lever_async():
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        tasks = [fetch_company_jobs(session, c) for c in companies]
+        sem = asyncio.Semaphore(50)
+        async def limited_fetch(company):
+            async with sem:
+                return await fetch_company_jobs(session, company)
+
+        tasks = [limited_fetch(c) for c in companies]
 
         for future in tqdm(asyncio.as_completed(tasks),
                            total=len(tasks),

@@ -19,7 +19,6 @@ def format_sheet(sheet):
     sheet.sort((5, "des"))
 
 def write_jobs_to_sheet(jobs):
-
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
@@ -79,7 +78,6 @@ def write_jobs_to_sheet(jobs):
     run_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for job in jobs:
-
         if job["url"] in existing_urls:
             continue
 
@@ -87,7 +85,6 @@ def write_jobs_to_sheet(jobs):
 
         raw_posted = job.get("posted_at")
         relative_posted = time_ago(raw_posted)
-
         rows_to_add.append([
             job.get("source"),
             job.get("company"),
@@ -98,13 +95,13 @@ def write_jobs_to_sheet(jobs):
             run_time,
             job.get("url")
         ])
-        
     if not rows_to_add:
         print("No new jobs found")
         return
 
     sheet.append_rows(rows_to_add)
     format_sheet(sheet)
+    
     print(f"{len(rows_to_add)} new jobs written to sheet")
 
     

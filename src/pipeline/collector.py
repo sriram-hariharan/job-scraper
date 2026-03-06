@@ -20,9 +20,9 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     all_jobs: List[Dict[str, Any]] = []
 
     scrapers = [
-        ("workday", scrape_all_workday),
+        # ("workday", scrape_all_workday),
         # ("greenhouse", scrape_all_greenhouse),
-        # ("lever", scrape_all_lever),
+        ("lever", scrape_all_lever),
         # ("ashby", scrape_all_ashby),
         # ("workable", scrape_all_workable),
         # ("jobvite", scrape_all_jobvite),

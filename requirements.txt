@@ -9,3 +9,5 @@ beautifulsoup4
 aiohttp
 tqdm
 python-dateutil
+pycountry
+geotext

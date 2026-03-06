@@ -20,6 +20,17 @@ def parse_posted_at(value):
     if not value:
         return None
 
+    # Handle unix timestamps (ms or seconds)
+    if isinstance(value, (int, float)):
+        try:
+            # milliseconds → seconds
+            if value > 10_000_000_000:
+                value = value / 1000
+
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except Exception:
+            return None
+
     # If someone accidentally passed a display string like "5d ago", treat as unparseable
     if isinstance(value, str) and re.fullmatch(r"\d+\s*[dhm]\s*ago", value.strip().lower()):
         return None
@@ -30,6 +41,16 @@ def parse_posted_at(value):
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         return dt.astimezone(timezone.utc)
+
+    # numeric epoch handling (Lever / other ATS)
+    if isinstance(value, (int, float)):
+        try:
+            # milliseconds vs seconds
+            if value > 10_000_000_000:
+                value = value / 1000
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except Exception:
+            return None
 
     if not isinstance(value, str):
         return None

@@ -2,9 +2,21 @@ import requests
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
+from src.utils.html_timestamp_extractor import extract_jsonld_dateposted
+from src.utils.http_retry import retry_request
+
+
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0"
+})
+
+
+@retry_request(retries=2)
+def jobvite_get(url, **kwargs):
+    return session.get(url, **kwargs)
 
 JOBVITE_API = "https://jobs.jobvite.com/api/jobs/{}"
-
 
 def load_companies(path="data/jobvite_companies.txt"):
 
@@ -21,35 +33,18 @@ def load_companies(path="data/jobvite_companies.txt"):
 def fetch_jobvite_posted_date(job_url):
 
     try:
-        r = requests.get(job_url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        if r.status_code != 200:
+        r = jobvite_get(job_url, timeout=10)
+        if r is None or r.status_code != 200:
             return None
     except Exception:
         return None
 
-    soup = BeautifulSoup(r.text, "html.parser")
+    html = r.text
 
-    # -------- JSON-LD structured data --------
-    scripts = soup.find_all("script", {"type": "application/ld+json"})
+    # Use shared JSON-LD extractor
+    ts = extract_jsonld_dateposted(html)
 
-    import json
-
-    for script in scripts:
-        try:
-            data = json.loads(script.string)
-        except Exception:
-            continue
-
-        if isinstance(data, dict):
-            if "datePosted" in data:
-                return data["datePosted"]
-
-        if isinstance(data, list):
-            for item in data:
-                if isinstance(item, dict) and "datePosted" in item:
-                    return item["datePosted"]
-
-    return None
+    return ts
 
 def fetch_company_jobs(company):
 
@@ -63,10 +58,10 @@ def fetch_company_jobs(company):
     for url in urls:
 
         try:
-            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
+            r = jobvite_get(url, timeout=10)
         except Exception:
             continue
-        if r.status_code != 200:
+        if r is None or r.status_code != 200:
             continue
 
         html = r.text
@@ -103,7 +98,6 @@ def fetch_company_jobs(company):
 
         job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
         posted_at = fetch_jobvite_posted_date(job_url)
-        is_new = bool(link.find("span", class_="jv-tag-new"))
 
         jobs.append({
             "company": company,

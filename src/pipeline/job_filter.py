@@ -167,8 +167,6 @@ def filter_jobs(jobs):
         title = job.get("title")
         location = job.get("location")
         posted = job.get("posted_at")
-        if "data" in title.lower() or "machine learning" in title.lower():
-            print("LEVER LOCATION SAMPLE:", title, location, posted)
         if not title_matches(title):
             continue
 

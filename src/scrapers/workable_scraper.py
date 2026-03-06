@@ -1,15 +1,10 @@
 import requests
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from src.utils.http_retry import retry_request
-<<<<<<< HEAD
 
-WORKABLE_V3_API = "https://apply.workable.com/api/v3/accounts/{}/jobs"
-WORKABLE_V1_API = "https://apply.workable.com/api/v1/widget/accounts/{}"
-WORKABLE_V2_DETAIL_API = "https://apply.workable.com/api/v2/accounts/{}/jobs/{}"
-=======
+from src.utils.http_retry import retry_request
 from src.config.consts import WORKABLE_V1_API, WORKABLE_V2_DETAIL_API, WORKABLE_V3_API
->>>>>>> main
+
 
 session = requests.Session()
 session.headers.update({
@@ -65,8 +60,6 @@ def extract_v3_jobs(data):
     if not isinstance(data, dict):
         return []
 
-    # Some Workable v3 responses are keyed as {"0": {...}, "1": {...}}
-    # and some may expose a "results" array.
     if "results" in data and isinstance(data["results"], list):
         return data["results"]
 
@@ -78,7 +71,6 @@ def fetch_company_jobs(company):
 
     jobs_data = []
 
-    # Try v3 first
     v3_url = WORKABLE_V3_API.format(company)
 
     try:
@@ -96,8 +88,9 @@ def fetch_company_jobs(company):
     except Exception:
         pass
 
-    # Fallback to v1 widget API
+    # fallback to v1 widget API
     if not jobs_data:
+
         v1_url = WORKABLE_V1_API.format(company)
 
         try:
@@ -115,7 +108,7 @@ def fetch_company_jobs(company):
     jobs = []
 
     for job in jobs_data:
-        
+
         city = (job.get("city") or "").strip()
         state = (job.get("state") or "").strip()
         country = (job.get("country") or "").strip()
@@ -134,15 +127,19 @@ def fetch_company_jobs(company):
             "location": location,
             "url": url,
             "source": "workable",
-            "posted_at": job.get("published") or job.get("published_on") or job.get("created_at"),
+            "posted_at": job.get("published")
+            or job.get("published_on")
+            or job.get("created_at"),
             "_shortcode": shortcode
         })
 
-    # Resolve missing timestamps via v2 detail API
+    # resolve missing timestamps via v2 API
     missing_jobs = [j for j in jobs if not j.get("posted_at") and j.get("_shortcode")]
 
     if missing_jobs:
+
         with ThreadPoolExecutor(max_workers=10) as executor:
+
             future_to_job = {
                 executor.submit(
                     fetch_workable_timestamp,
@@ -153,6 +150,7 @@ def fetch_company_jobs(company):
             }
 
             for future in as_completed(future_to_job):
+
                 job = future_to_job[future]
 
                 try:
@@ -162,7 +160,6 @@ def fetch_company_jobs(company):
                 except Exception:
                     pass
 
-    # Cleanup internal helper field
     for job in jobs:
         job.pop("_shortcode", None)
 

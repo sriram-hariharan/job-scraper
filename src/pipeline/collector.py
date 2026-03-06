@@ -18,14 +18,15 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
         # ("workday", scrape_all_workday),
-        # ("greenhouse", scrape_all_greenhouse),
+        ("greenhouse", scrape_all_greenhouse),
         # ("lever", scrape_all_lever),
         # ("ashby", scrape_all_ashby),
         # ("workable", scrape_all_workable),
-        ("jobvite", scrape_all_jobvite),
+        # ("jobvite", scrape_all_jobvite),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
+
     start_total = time.time()
 
     with ThreadPoolExecutor(max_workers=len(scrapers)) as executor:
@@ -55,16 +56,20 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     print(f"\nTotal scraping time: {total_elapsed}s")
     print("Total raw jobs collected:", len(all_jobs))
 
+    # ----- DEBUG BEFORE FILTERING -----
+
     print("\nRaw jobs by source:")
     for source, count in Counter(job["source"] for job in all_jobs).items():
         print(source, count)
 
-    print("\nJobs missing posted_at:")
+    # ----- FILTER -----
+
+    filtered_jobs = filter_jobs(all_jobs)
+    
+    print("\nJobs missing posted_at after filtering:")
     missing = Counter(job["source"] for job in all_jobs if not job.get("posted_at"))
     for source, count in missing.items():
         print(source, count)
-
-    filtered_jobs = filter_jobs(all_jobs)
 
     print("\nTotal filtered jobs:", len(filtered_jobs))
 

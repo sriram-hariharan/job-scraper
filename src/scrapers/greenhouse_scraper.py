@@ -1,18 +1,7 @@
 import asyncio
 import aiohttp
-<<<<<<< HEAD
-from tqdm import tqdm
-=======
-<<<<<<< Updated upstream
-from src.pipeline.job_filter import title_matches, us_location
->>>>>>> main
-
-
-GREENHOUSE_API = "https://boards-api.greenhouse.io/v1/boards/{}/jobs"
-=======
 from tqdm import tqdm
 from src.config.consts import GREENHOUSE_API
->>>>>>> Stashed changes
 
 
 def load_companies(path="data/greenhouse_companies.txt"):

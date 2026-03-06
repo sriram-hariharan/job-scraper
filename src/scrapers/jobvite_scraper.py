@@ -4,11 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from src.utils.html_timestamp_extractor import extract_jsonld_dateposted
 from src.utils.http_retry import retry_request
-<<<<<<< HEAD
-
-=======
 from src.config.consts import JOBVITE_URL_PATTERNS
->>>>>>> main
 
 session = requests.Session()
 session.headers.update({
@@ -50,25 +46,13 @@ def fetch_jobvite_posted_date(job_url):
 
 def fetch_company_jobs(company):
 
-<<<<<<< HEAD
-    urls = [
-        f"https://jobs.jobvite.com/{company}/jobs/alljobs",
-        f"https://jobs.jobvite.com/{company}/jobs"
-    ]
-=======
     urls = [u.format(company=company) for u in JOBVITE_URL_PATTERNS]
->>>>>>> main
 
     html = None
 
     for url in urls:
 
         r = jobvite_get(url, timeout=10)
-<<<<<<< HEAD
-        if r is None or r.status_code != 200:
-            continue
-=======
->>>>>>> main
 
         html = r.text
         # if page actually contains jobs stop trying

@@ -1,14 +1,33 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+from src.utils.posted_at_utils import parse_posted_at
+import re
 
-JOB_TITLES = [
-    "Data Scientist",
-    "Senior Data Scientist",
-    "Data Analyst",
-    "Senior Data Analyst",
-    "Machine Learning Engineer",
-    "AI Engineer",
-    "Applied Scientist"
+# Broader title patterns for AI / ML / Data roles
+TITLE_INCLUDE_PATTERNS = [
+    r"data scientist",
+    r"machine learning engineer",
+    r"ml engineer",
+    r"ai engineer",
+    r"applied scientist",
+    r"research scientist",
+    r"data analyst",
+    r"decision scientist",
+    r"ml scientist",
+    r"genai",
+    r"machine learning",
 ]
+
+# Exclude senior leadership or irrelevant roles
+TITLE_EXCLUDE_PATTERNS = [
+    r"director",
+    r"vp",
+    r"vice president",
+    r"manager",
+    r"intern",
+    r"student",
+    r"principal architect"
+]
+
 US_STATES = [
     "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA",
     "HI","ID","IL","IN","IA","KS","KY","LA","ME","MD",
@@ -16,20 +35,50 @@ US_STATES = [
     "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC",
     "SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"
 ]
+US_STATE_NAMES = [
+"ALABAMA","ALASKA","ARIZONA","ARKANSAS","CALIFORNIA","COLORADO","CONNECTICUT",
+"DELAWARE","FLORIDA","GEORGIA","HAWAII","IDAHO","ILLINOIS","INDIANA","IOWA",
+"KANSAS","KENTUCKY","LOUISIANA","MAINE","MARYLAND","MASSACHUSETTS","MICHIGAN",
+"MINNESOTA","MISSISSIPPI","MISSOURI","MONTANA","NEBRASKA","NEVADA",
+"NEW HAMPSHIRE","NEW JERSEY","NEW MEXICO","NEW YORK","NORTH CAROLINA",
+"NORTH DAKOTA","OHIO","OKLAHOMA","OREGON","PENNSYLVANIA","RHODE ISLAND",
+"SOUTH CAROLINA","SOUTH DAKOTA","TENNESSEE","TEXAS","UTAH","VERMONT",
+"VIRGINIA","WASHINGTON","WEST VIRGINIA","WISCONSIN","WYOMING"
+]
+
+def normalize_title(title):
+
+    if not title:
+        return ""
+
+    title = title.lower()
+    # remove punctuation
+    title = re.sub(r"[^\w\s]", " ", title)
+    # remove roman numeral suffixes like I, II, III, IV, V
+    title = re.sub(r"\s+(i|ii|iii|iv|v)$", "", title)
+    # collapse whitespace
+    title = re.sub(r"\s+", " ", title).strip()
+
+    return title
 
 def title_matches(title: str) -> bool:
 
     if not title:
         return False
 
-    title_lower = title.lower()
+    normalized = normalize_title(title)
 
-    for role in JOB_TITLES:
-        if role.lower() in title_lower:
-            return True
+    # Must match at least one include pattern
+    include_match = any(re.search(pattern, normalized) for pattern in TITLE_INCLUDE_PATTERNS)
 
-    return False
+    if not include_match:
+        return False
 
+    # Reject if excluded pattern found
+    if any(re.search(pattern, normalized) for pattern in TITLE_EXCLUDE_PATTERNS):
+        return False
+
+    return True
 
 def us_location(location: str):
 
@@ -38,37 +87,40 @@ def us_location(location: str):
 
     loc = location.upper()
 
-    if "UNITED STATES" in loc:
+    # explicit US indicators
+    if "UNITED STATES" in loc or " U.S." in loc or " USA" in loc:
         return True
 
-    if " USA" in loc:
+    # Remote but must explicitly mention US
+    if "REMOTE" in loc and (
+        "US" in loc
+        or "USA" in loc
+        or "UNITED STATES" in loc
+        ):
         return True
 
-    if "REMOTE" in loc:
-        return True
-
+    # city, ST format
     for state in US_STATES:
+        if f", {state}" in loc:
+            return True
+    
+    for state in US_STATE_NAMES:
         if f", {state}" in loc:
             return True
 
     return False
 
+def posted_within_24h(posted_at_raw):
 
-def posted_within_24h(posted_on):
+    dt = parse_posted_at(posted_at_raw)
 
-    if not posted_on:
-        return True  # allow if timestamp missing
+    # strict freshness rule
+    if dt is None:
+        return False
 
-    try:
-        if isinstance(posted_on, datetime):
-            posted_time = posted_on
-        else:
-            posted_time = datetime.fromisoformat(posted_on)
+    now = datetime.now(timezone.utc)
 
-        return posted_time >= datetime.utcnow() - timedelta(hours=24)
-
-    except Exception:
-        return True
+    return dt >= now - timedelta(hours=24)
 
 
 def filter_jobs(jobs):
@@ -79,7 +131,7 @@ def filter_jobs(jobs):
 
         title = job.get("title")
         location = job.get("location")
-        posted = job.get("postedOn") or job.get("posted_on")
+        posted = job.get("posted_at")
 
         if not title_matches(title):
             continue

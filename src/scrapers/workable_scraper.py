@@ -43,7 +43,12 @@ def fetch_company_jobs(company):
             "location": job.get("location", ""),
             "url": job.get("url"),
             "source": "workable",
-            "posted_at": job.get("published"),
+            "posted_at": (
+                job.get("published")
+                or job.get("published_at")
+                or job.get("created_at")
+                or job.get("updated_at")
+            ),
         })
 
     return jobs

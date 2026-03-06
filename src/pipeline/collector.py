@@ -12,6 +12,7 @@ from src.pipeline.dedupe import dedupe_jobs
 
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 
 
 def collect_all_jobs() -> List[Dict[str, Any]]:
@@ -19,12 +20,12 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     all_jobs: List[Dict[str, Any]] = []
 
     scrapers = [
-        ("workday", scrape_all_workday),
-        ("greenhouse", scrape_all_greenhouse),
-        ("lever", scrape_all_lever),
+        # ("workday", scrape_all_workday),
+        # ("greenhouse", scrape_all_greenhouse),
+        # ("lever", scrape_all_lever),
         ("ashby", scrape_all_ashby),
-        ("workable", scrape_all_workable),
-        ("jobvite", scrape_all_jobvite),
+        # ("workable", scrape_all_workable),
+        # ("jobvite", scrape_all_jobvite),
     ]
 
     start_total = time.time()
@@ -56,8 +57,33 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     print("Total raw jobs collected:", len(all_jobs))
 
+    # ----- DEBUG BEFORE FILTERING -----
+    sources_raw = Counter(job["source"] for job in all_jobs)
+
+    print("\nRaw jobs by source:")
+    for k, v in sources_raw.items():
+        print(k, v)
+
+    missing_posted = Counter()
+
+    for job in all_jobs:
+        if not job.get("posted_at"):
+            missing_posted[job["source"]] += 1
+
+    print("\nJobs missing posted_at:")
+    for k, v in missing_posted.items():
+        print(k, v)
+
+    # ----- FILTER -----
     filtered_jobs = filter_jobs(all_jobs)
+
     print("Total filtered jobs:", len(filtered_jobs))
+
+    sources = Counter(job["source"] for job in filtered_jobs)
+
+    print("\nFiltered jobs by source:")
+    for k, v in sources.items():
+        print(k, v)
 
     deduped_jobs = dedupe_jobs(filtered_jobs)
     print("Total deduped jobs:", len(deduped_jobs))

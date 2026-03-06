@@ -78,15 +78,22 @@ def scrape_company(board_url):
             "searchText": ""
         }
 
-        if country_filter:
+        if facet_name and country_filter:
             payload["appliedFacets"] = {
                 facet_name: [country_filter]
             }
 
         try:
             r = session.post(api_url, json=payload, headers=headers, timeout=10)
+
+            # fallback if facet filter breaks request
+            if r.status_code == 400 and "appliedFacets" in payload:
+                payload.pop("appliedFacets")
+                r = session.post(api_url, json=payload, headers=headers, timeout=10)
+
             if r.status_code != 200:
                 break
+            
             data = r.json()
         except Exception:
             break
@@ -131,7 +138,13 @@ def scrape_company(board_url):
                 "url": f"{board_url.rstrip('/')}/{job_id.lstrip('/')}",
                 "company": tenant,
                 "source": "workday",
-                "posted_at": job.get("postedDate") or job.get("createdDate"),
+                "posted_at": (
+                    job.get("postedOn")
+                    or job.get("postedDate")
+                    or job.get("postedAt")
+                    or job.get("createdDate")
+                    or job.get("createdAt")
+                ),
             })
 
         if new_jobs_this_page == 0:
@@ -163,6 +176,6 @@ def scrape_all_workday():
     
     print("\nWorkday summary")
     print("------------------")
-    print("Total jobs collected:", len(jobs))
+    print("Total jobs collected:", len(all_jobs))
 
     return all_jobs

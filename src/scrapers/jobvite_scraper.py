@@ -33,12 +33,10 @@ def fetch_company_jobs(company):
             r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
         except Exception:
             continue
-
         if r.status_code != 200:
             continue
 
         html = r.text
-
         # if page actually contains jobs stop trying
         if "/job/" in html:
             break
@@ -70,7 +68,7 @@ def fetch_company_jobs(company):
             "location": "",
             "url": job_url,
             "source": "jobvite",
-            "posted_at": None,
+            "posted_at": None
         })
 
     return jobs

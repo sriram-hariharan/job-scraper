@@ -1,22 +1,22 @@
 import gspread
 from google.oauth2.service_account import Credentials
 from datetime import datetime
+from src.utils.location_cleaner import normalize_location
+from src.utils.time_utils import time_ago
 
 def format_sheet(sheet):
-
     # Freeze header row
     sheet.freeze(rows=1)
 
     # Make the link column wider
     sheet.format(
-        "D:D",
-        {
-            "wrapStrategy": "CLIP"
-        }
-    )
+    "H:H",
+    {
+        "wrapStrategy": "CLIP"
+    })
 
     # Auto sort newest entries by Date + Time
-    sheet.sort((5, "des"), (6, "des"))
+    sheet.sort((5, "des"))
 
 def write_jobs_to_sheet(jobs):
 
@@ -35,12 +35,14 @@ def write_jobs_to_sheet(jobs):
     sheet = client.open("AI Job Scraper").sheet1
 
     headers = [
-        "Job board",
-        "Search Title",
-        "Job Returned",
-        "Link",
-        "Date",
-        "Time"
+        "Source",
+        "Company",
+        "Title",
+        "Location",
+        "Posted At",
+        "Posted",
+        "Run Timestamp",
+        "Link"
     ]
 
     existing_data = sheet.get_all_values()
@@ -49,11 +51,9 @@ def write_jobs_to_sheet(jobs):
     if not existing_data or existing_data[0] != headers:
 
         sheet.clear()
-
         sheet.append_row(headers)
-
         sheet.format(
-            "A1:F1",
+            "A1:H1",
             {
                 "backgroundColor": {
                     "red": 0.15,
@@ -65,7 +65,6 @@ def write_jobs_to_sheet(jobs):
                 }
             }
         )
-
         existing_urls = set()
 
     else:
@@ -73,39 +72,34 @@ def write_jobs_to_sheet(jobs):
         existing_urls = set()
 
         for row in existing_data[1:]:
-            if len(row) >= 4:
-                existing_urls.add(row[3])
+            if len(row) >= 8:
+                existing_urls.add(row[7])
 
     rows_to_add = []
-
-    now = datetime.now()
-
-    date_str = now.strftime("%Y-%m-%d")
-
-    time_str = now.strftime("%H:%M")  # hours + minutes
+    run_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for job in jobs:
 
         if job["url"] in existing_urls:
             continue
 
-        job_board = job["url"].split("/")[2]
+        location = normalize_location(job.get("location"))
 
-        job_title_searched = job["query"].split('"')[1]
-
-        job_title_returned = job["title"]
+        raw_posted = job.get("posted_at")
+        relative_posted = time_ago(raw_posted)
 
         rows_to_add.append([
-            job_board,
-            job_title_searched,
-            job_title_returned,
-            job["url"],
-            date_str,
-            time_str
+            job.get("source"),
+            job.get("company"),
+            job.get("title"),
+            location,
+            raw_posted,
+            relative_posted,
+            run_time,
+            job.get("url")
         ])
-
+        
     if not rows_to_add:
-
         print("No new jobs found")
         return
 

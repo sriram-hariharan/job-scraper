@@ -1,16 +1,19 @@
 import requests
-from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from src.utils.http_retry import retry_request
 from src.config.consts import WORKABLE_V1_API, WORKABLE_V2_DETAIL_API, WORKABLE_V3_API
+from models.job import Job
+from src.utils.file_loader import load_lines
+from src.utils.parallel import run_parallel
+from src.utils.logging import get_logger
 
+logger = get_logger("workable")
 
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
 })
-
 
 @retry_request(retries=2)
 def workable_get(url, **kwargs):
@@ -20,20 +23,6 @@ def workable_get(url, **kwargs):
 @retry_request(retries=2)
 def workable_post(url, **kwargs):
     return session.post(url, **kwargs)
-
-
-def load_companies(path="data/workable_companies.txt"):
-
-    companies = []
-
-    with open(path) as f:
-        for line in f:
-            c = line.strip()
-            if c:
-                companies.append(c)
-
-    return companies
-
 
 def fetch_workable_timestamp(company, shortcode):
 
@@ -121,17 +110,32 @@ def fetch_company_jobs(company):
         if not url and shortcode:
             url = f"https://apply.workable.com/{company}/j/{shortcode}/"
 
-        jobs.append({
-            "company": company,
-            "title": job.get("title"),
-            "location": location,
-            "url": url,
-            "source": "workable",
-            "posted_at": job.get("published")
-            or job.get("published_on")
-            or job.get("created_at"),
-            "_shortcode": shortcode
-        })
+        # jobs.append({
+        #     "company": company,
+        #     "title": job.get("title"),
+        #     "location": location,
+        #     "url": url,
+        #     "source": "workable",
+        #     "posted_at": job.get("published")
+        #     or job.get("published_on")
+        #     or job.get("created_at"),
+        #     "_shortcode": shortcode
+        # })
+        jobs.append(Job(
+            company=company,
+            title=job.get("title"),
+            location=location,
+            url=url,
+            source="workable",  
+            posted_at=(
+                job.get("published")
+                or job.get("published_on")
+                or job.get("created_at")
+            ),
+            meta={
+                "_shortcode": shortcode
+            }
+        ).to_dict())
 
     # resolve missing timestamps via v2 API
     missing_jobs = [j for j in jobs if not j.get("posted_at") and j.get("_shortcode")]
@@ -168,23 +172,16 @@ def fetch_company_jobs(company):
 
 def scrape_all_workable():
 
-    companies = load_companies()
-    all_jobs = []
+    companies = load_lines("data/workable_companies.txt")
+    all_jobs = run_parallel(
+        companies,
+        fetch_company_jobs,
+        max_workers=5,
+        desc="Workable scraping"
+        )
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-
-        futures = [executor.submit(fetch_company_jobs, c) for c in companies]
-
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc="Workable scraping"
-        ):
-            jobs = future.result()
-            all_jobs.extend(jobs)
-
-    print("\nWorkable summary")
-    print("------------------")
-    print("Total jobs collected:", len(all_jobs))
+    logger.info("Workable summary")
+    logger.info("------------------")
+    logger.info(f"Total jobs collected: {len(all_jobs)}")
 
     return all_jobs

@@ -2,18 +2,11 @@ import asyncio
 import aiohttp
 from tqdm import tqdm
 from src.config.consts import LEVER_API
+from models.job import Job
+from src.utils.file_loader import load_lines
+from src.utils.logging import get_logger
 
-def load_lever_companies(path="data/lever_companies.txt"):
-
-    companies = []
-
-    with open(path, "r") as f:
-        for line in f:
-            c = line.strip()
-            if c:
-                companies.append(c)
-
-    return companies
+logger = get_logger("lever")
 
 async def fetch_company_jobs(session, company):
 
@@ -22,7 +15,6 @@ async def fetch_company_jobs(session, company):
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                # print(f"{company} failed: status {resp.status}")
                 return []
 
             data = await resp.json()
@@ -38,21 +30,29 @@ async def fetch_company_jobs(session, company):
         location = job.get("categories", {}).get("location", "")
         job_url = job.get("hostedUrl", "")
 
-        jobs.append({
-            "company": company,
-            "title": title,
-            "location": location,
-            "url": job_url,
-            "source": "lever",
-            "posted_at": job.get("createdAt")
-        })
+        # jobs.append({
+        #     "company": company,
+        #     "title": title,
+        #     "location": location,
+        #     "url": job_url,
+        #     "source": "lever",
+        #     "posted_at": job.get("createdAt")
+        # })
+        jobs.append(Job(
+            company=company,
+            title=title,
+            location=location,
+            url=job_url,
+            source="lever",
+            posted_at=job.get("createdAt")
+        ).to_dict())
 
     return jobs
 
 
 async def scrape_all_lever_async():
 
-    companies = load_lever_companies()
+    companies = load_lines("data/lever_companies.txt")
 
     connector = aiohttp.TCPConnector(limit=50)
 
@@ -81,8 +81,8 @@ def scrape_all_lever():
 
     jobs = asyncio.run(scrape_all_lever_async())
 
-    print("\nLever summary")
-    print("------------------")
-    print("Total jobs collected:", len(jobs))
+    logger.info("Lever summary")
+    logger.info("------------------")
+    logger.info(f"Total jobs collected: {len(jobs)}")
 
     return jobs

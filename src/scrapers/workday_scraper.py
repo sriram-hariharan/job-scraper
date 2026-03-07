@@ -1,11 +1,15 @@
 import requests
 import time
-from tqdm import tqdm
 from src.utils.http_retry import retry_request
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.config.consts import (
     WORKDAY_API_URL_TEMPLATE,
     WORKDAY_ORIGIN_TEMPLATE)
+from models.job import Job
+from src.utils.file_loader import load_lines
+from src.utils.parallel import run_parallel
+from src.utils.logging import get_logger
+
+logger = get_logger("workday")
 
 session = requests.Session()
 session.headers.update({
@@ -21,16 +25,6 @@ def workday_get(url, **kwargs):
 @retry_request(retries=2)
 def workday_post(url, **kwargs):
     return session.post(url, **kwargs)
-
-
-def load_companies(path="data/workday_companies.txt"):
-    companies = []
-    with open(path) as f:
-        for line in f:
-            url = line.strip()
-            if url:
-                companies.append(url)
-    return companies
 
 def get_us_country_facet(data):
     facets = data.get("facetMetadata", {}).get("facets", [])
@@ -76,7 +70,7 @@ def scrape_company(board_url):
 
     payload = {"limit": 1, "offset": 0, "searchText": ""}
     r = workday_post(api_url, json=payload, headers=headers, timeout=10)
-    if r.status_code != 200:
+    if r is None or r.status_code != 200:
         return []
 
     data = r.json()
@@ -168,16 +162,28 @@ def scrape_company(board_url):
 
             job_url = f"{board_url.rstrip('/')}/{job_id.lstrip('/')}"
 
-            jobs.append({
-                "title": job.get("title"),
-                "location": locations,  
-                "url": job_url,
-                "company": tenant,
-                "source": "workday",
-                "posted_at": posted_at,
-                "_externalPath": job.get("externalPath"),
-                "_board_url": board_url,
-            })
+            # jobs.append({
+            #     "title": job.get("title"),
+            #     "location": locations,  
+            #     "url": job_url,
+            #     "company": tenant,
+            #     "source": "workday",
+            #     "posted_at": posted_at,
+            #     "_externalPath": job.get("externalPath"),
+            #     "_board_url": board_url,
+            # })
+            jobs.append(Job(
+                title=job.get("title"),
+                location=locations,
+                url=job_url,
+                company=tenant,
+                source="workday",
+                posted_at=posted_at,
+                meta={
+                    "_externalPath": job.get("externalPath"),
+                    "_board_url": board_url
+                }
+            ).to_dict())
 
         if new_jobs_this_page == 0:
             break
@@ -196,23 +202,16 @@ def scrape_company(board_url):
 
 def scrape_all_workday():
 
-    companies = load_companies()
-    all_jobs = []
+    companies = load_lines("data/workday_companies.txt")
+    all_jobs = run_parallel(
+                companies,
+                scrape_company,
+                max_workers=5,
+                desc="Workday scraping"
+                )
 
-    with ThreadPoolExecutor(max_workers=10) as executor:
-
-        futures = [executor.submit(scrape_company, c) for c in companies]
-
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc="Workday scraping"
-        ):
-            jobs = future.result()
-            all_jobs.extend(jobs)
-
-    print("\nWorkday summary")
-    print("------------------")
-    print("Total jobs collected:", len(all_jobs))
+    logger.info("Workday summary")
+    logger.info("------------------")
+    logger.info(f"Total jobs collected: {len(all_jobs)}")
 
     return all_jobs

@@ -2,19 +2,11 @@ import asyncio
 import aiohttp
 from tqdm import tqdm
 from src.config.consts import GREENHOUSE_API
+from models.job import Job
+from src.utils.file_loader import load_lines
+from src.utils.logging import get_logger
 
-
-def load_companies(path="data/greenhouse_companies.txt"):
-    companies = []
-
-    with open(path, "r") as f:
-        for line in f:
-            c = line.strip()
-            if c:
-                companies.append(c)
-
-    return companies
-
+logger = get_logger("greenhouse")
 
 async def fetch_company_jobs(session, company):
 
@@ -41,21 +33,31 @@ async def fetch_company_jobs(session, company):
         location = job.get("location", {}).get("name", "")
         job_url = job.get("absolute_url")
 
-        jobs.append({
-            "company": company,
-            "title": title,
-            "location": location,
-            "url": job_url,
-            "source": "greenhouse",
-            "posted_at": job.get("updated_at")
-        })
+        # jobs.append({
+        #     "company": company,
+        #     "title": title,
+        #     "location": location,
+        #     "url": job_url,
+        #     "source": "greenhouse",
+        #     "posted_at": job.get("updated_at")
+        # })
+        jobs.append(
+            Job(
+                company=company,
+                title=title,
+                location=location,
+                url=job_url,
+                source="greenhouse",
+                posted_at=job.get("updated_at")
+            ).to_dict()
+        )
 
     return jobs
 
 
 async def scrape_all_greenhouse_async():
 
-    companies = load_companies()
+    companies = load_lines("data/greenhouse_companies.txt")
 
     connector = aiohttp.TCPConnector(limit=50)
 
@@ -78,8 +80,8 @@ def scrape_all_greenhouse():
 
     jobs = asyncio.run(scrape_all_greenhouse_async())
 
-    print("\nGreenhouse summary")
-    print("------------------")
-    print("Total jobs collected:", len(jobs))
+    logger.info("Greenhouse summary")
+    logger.info("------------------")
+    logger.info(f"Total jobs collected: {len(jobs)}")
 
     return jobs

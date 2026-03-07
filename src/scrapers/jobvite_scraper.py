@@ -1,32 +1,23 @@
 import requests
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 from src.utils.html_timestamp_extractor import extract_jsonld_dateposted
 from src.utils.http_retry import retry_request
 from src.config.consts import JOBVITE_URL_PATTERNS
+from models.job import Job
+from src.utils.file_loader import load_lines
+from src.utils.parallel import run_parallel
+from src.utils.logging import get_logger
+
+logger = get_logger("jobvite")
 
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
 })
 
-
 @retry_request(retries=2)
 def jobvite_get(url, **kwargs):
     return session.get(url, **kwargs)
-
-def load_companies(path="data/jobvite_companies.txt"):
-
-    companies = []
-
-    with open(path) as f:
-        for line in f:
-            c = line.strip()
-            if c:
-                companies.append(c)
-
-    return companies
 
 def fetch_jobvite_posted_date(job_url):
 
@@ -53,14 +44,15 @@ def fetch_company_jobs(company):
     for url in urls:
 
         r = jobvite_get(url, timeout=10)
-
+        if r is None or r.status_code != 200:
+            continue
         html = r.text
         # if page actually contains jobs stop trying
         if "/job/" in html:
             break
 
     if not html:
-        print(f"{company} no page")
+        logger.warning(f"{company} no jobvite page found")
         return []
 
     soup = BeautifulSoup(html, "html.parser")
@@ -89,36 +81,43 @@ def fetch_company_jobs(company):
         job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
         posted_at = fetch_jobvite_posted_date(job_url)
 
-        jobs.append({
-            "company": company,
-            "title": title,
-            "location": "",
-            "url": job_url,
-            "source": "jobvite",
-            "posted_at": posted_at,
-            "is_new": is_new
-        })
+        # jobs.append({
+        #     "company": company,
+        #     "title": title,
+        #     "location": "",
+        #     "url": job_url,
+        #     "source": "jobvite",
+        #     "posted_at": posted_at,
+        #     "is_new": is_new
+        # })
+        jobs.append(
+            Job(
+                company=company,
+                title=title,
+                location="",
+                url=job_url,
+                source="jobvite",
+                posted_at=posted_at,
+                meta={
+                    "is_new": is_new
+                }
+            ).to_dict()
+        )
 
     return jobs
 
 def scrape_all_jobvite():
 
-    companies = load_companies()
-    all_jobs = []
-
-    with ThreadPoolExecutor(max_workers=20) as executor:
-
-        futures = [executor.submit(fetch_company_jobs, c) for c in companies]
-
-        for future in tqdm(as_completed(futures),
-                           total=len(futures),
-                           desc="Jobvite scraping"):
-
-            jobs = future.result()
-            all_jobs.extend(jobs)
+    companies = load_lines("data/jobvite_companies.txt")
+    all_jobs = run_parallel(
+        companies,
+        fetch_company_jobs,
+        max_workers=8,
+        desc="Jobvite scraping"
+        )
     
-    print("\nJobvite summary")
-    print("------------------")
-    print("Total jobs collected:", len(all_jobs))
+    logger.info("Jobvite summary")
+    logger.info("------------------")
+    logger.info(f"Total jobs collected: {len(all_jobs)}")
 
     return all_jobs

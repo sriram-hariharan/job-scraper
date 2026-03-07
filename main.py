@@ -1,29 +1,28 @@
 from src.pipeline.collector import collect_all_jobs
 from src.pipeline.excel_writer import write_jobs_to_sheet
+from src.utils.logging import get_logger
+logger = get_logger(__name__)
 
 def main():
 
-    print("=============================")
-    print("ATS DISCOVERY")
-    print("=============================\n")
+    logger = get_logger(__name__)
+
+    logger.info("=============================")
+    logger.info("ATS DISCOVERY")
+    logger.info("=============================\n")
 
     # greenhouse, ashby, lever, workday = discover_from_domains()
 
-    # print("Greenhouse detected:", len(greenhouse))
-    # print("Ashby detected:", len(ashby))
-    # print("Lever detected:", len(lever))
-    # print("Workday detected:", len(workday))
-
-    print("=============================")
-    print("SCRAPING JOBS")
-    print("=============================\n")
+    logger.info("=============================")
+    logger.info("SCRAPING JOBS")
+    logger.info("=============================\n")
 
     jobs = collect_all_jobs()
 
     if jobs:
         write_jobs_to_sheet(jobs)
 
-    print("Final jobs:", len(jobs))
+    logger.info("Final jobs: %s", len(jobs))
 
 if __name__ == "__main__":
     main()

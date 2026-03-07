@@ -1,15 +1,13 @@
 import time
 import requests
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from src.config.consts import ASHBY_URL, ASHBY_DETAIL_QUERY, ASHBY_QUERY
+from models.job import Job
+from src.utils.file_loader import load_lines
+from src.utils.parallel import run_parallel
+from src.utils.logging import get_logger
+logger = get_logger("ashby")
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
-
-def load_companies(path="data/ashby_companies.txt"):
-    with open(path) as f:
-        return [line.strip() for line in f if line.strip()]
-
 
 def fetch_job_timestamp(company, job_id):
 
@@ -31,7 +29,7 @@ def fetch_job_timestamp(company, job_id):
                 headers=HEADERS,
                 timeout=10
             )
-            if r.status_code == 429:
+            if r is None or r.status_code == 429:
                 time.sleep(1.5 * (attempt + 1))
                 continue
 
@@ -44,13 +42,13 @@ def fetch_job_timestamp(company, job_id):
     except Exception:
         return None, "detail_unknown_exception"
 
-    if r.status_code != 200:
+    if r is None or r.status_code != 200:
         return None, f"detail_http_{r.status_code}"
 
     try:
         data = r.json()
         if data.get("errors"):
-            print("Ashby GraphQL error:", company, data["errors"])
+            logger.error(f"Ashby GraphQL error | company={company} | errors={data['errors']}")
     except Exception:
         return None, "detail_invalid_json"
 
@@ -82,7 +80,6 @@ def fetch_company_jobs(company):
         "query": ASHBY_QUERY,
         "variables": {"organizationHostedJobsPageName": company}
     }
-    print("Ashby company slug:", company)
     try:
         r = requests.post(
             ASHBY_URL,
@@ -93,16 +90,11 @@ def fetch_company_jobs(company):
     except Exception:
         return []
 
-    if r.status_code != 200:
+    if r is None or r.status_code != 200:
         return []
 
     data = r.json()
 
-    # jobs_data = (
-    #     data.get("data", {})
-    #         .get("jobBoard", {})
-    #         .get("jobPostings", [])
-    # )
     data_root = data.get("data")
     if not data_root:
         return []
@@ -120,46 +112,41 @@ def fetch_company_jobs(company):
 
         job_id = job.get("id")
 
-        jobs.append({
-            "company": company,
-            "title": job.get("title", ""),
-            "location": job.get("locationName", ""),
-            "url": f"https://jobs.ashbyhq.com/{company}/{job_id}",
-            "source": "ashby",
-            # "posted_at": None
-            "posted_at": job.get("publishedDate")
-        })
-
-    # # timestamp fetch
-    # for job, job_data in zip(jobs, jobs_data):
-
-    #     job_id = job_data.get("id")
-
-    #     if job_id:
-    #         posted_at, _ = fetch_job_timestamp(company, job_id)
-    #         job["posted_at"] = posted_at
+        # jobs.append({
+        #     "company": company,
+        #     "title": job.get("title", ""),
+        #     "location": job.get("locationName", ""),
+        #     "url": f"https://jobs.ashbyhq.com/{company}/{job_id}",
+        #     "source": "ashby",
+        #     # "posted_at": None
+        #     "posted_at": job.get("publishedDate")
+        # })
+        jobs.append(
+            Job(
+                company=company,
+                title=job.get("title", ""),
+                location=job.get("locationName", ""),
+                url=f"https://jobs.ashbyhq.com/{company}/{job_id}",
+                source="ashby",
+                posted_at=job.get("publishedDate")
+            ).to_dict()
+        )
 
     return jobs
 
 
 def scrape_all_ashby():
 
-    companies = load_companies()
-    all_jobs = []
+    companies = load_lines("data/ashby_companies.txt")
+    all_jobs = run_parallel(
+        companies,
+        fetch_company_jobs,
+        max_workers=20,
+        desc="Ashby scraping"
+        )
 
-    with ThreadPoolExecutor(max_workers=20) as executor:
-
-        futures = [executor.submit(fetch_company_jobs, c) for c in companies]
-
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc="Ashby scraping"
-        ):
-            all_jobs.extend(future.result())
-
-    print("\nAshby summary")
-    print("------------------")
-    print("Total jobs collected:", len(all_jobs))
+    logger.info("Ashby summary")
+    logger.info("------------------")
+    logger.info(f"Total jobs collected: {len(all_jobs)}")
 
     return all_jobs

@@ -13,12 +13,24 @@ from src.scrapers.jobvite_scraper import scrape_all_jobvite
 from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 
+from src.utils.logging import get_logger
+
+logger = get_logger("collector")
+
+def print_source_counts(title, jobs):
+
+    logger.info(title)
+
+    counts = Counter(job["source"] for job in jobs)
+
+    for source, count in counts.items():
+        logger.info(f"{source} {count}")
 
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
-        # ("workday", scrape_all_workday),
-        ("greenhouse", scrape_all_greenhouse),
+        ("workday", scrape_all_workday),
+        # ("greenhouse", scrape_all_greenhouse),
         # ("lever", scrape_all_lever),
         # ("ashby", scrape_all_ashby),
         # ("workable", scrape_all_workable),
@@ -39,46 +51,44 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
         for future in as_completed(futures):
 
             name, start = futures[future]
+            elapsed = None
 
             try:
                 jobs = future.result()
                 elapsed = round(time.time() - start, 2)
 
-                print(f"{name} scraper finished | jobs: {len(jobs)} | time: {elapsed}s")
+                logger.info(f"[collector] {name} finished | jobs={len(jobs)} | time={elapsed}s")
 
                 all_jobs.extend(jobs)
 
             except Exception as e:
-                print(f"{name} scraper failed:", e)
+                elapsed = round(time.time() - start, 2)
+                logger.error(f"[collector] {name} failed | time={elapsed}s | error={e}")
 
     total_elapsed = round(time.time() - start_total, 2)
 
-    print(f"\nTotal scraping time: {total_elapsed}s")
-    print("Total raw jobs collected:", len(all_jobs))
-
+    logger.info(f"Total scraping time: {total_elapsed}s")
+    logger.info(f"Total raw jobs collected: {len(all_jobs)}")
+    
     # ----- DEBUG BEFORE FILTERING -----
 
-    print("\nRaw jobs by source:")
-    for source, count in Counter(job["source"] for job in all_jobs).items():
-        print(source, count)
+    print_source_counts("Raw jobs by source:", all_jobs)
 
     # ----- FILTER -----
 
     filtered_jobs = filter_jobs(all_jobs)
     
-    print("\nJobs missing posted_at after filtering:")
+    logger.info("Jobs missing posted_at after filtering:")
     missing = Counter(job["source"] for job in all_jobs if not job.get("posted_at"))
     for source, count in missing.items():
-        print(source, count)
+        logger.info(f"{source} {count}")
 
-    print("\nTotal filtered jobs:", len(filtered_jobs))
+    logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
 
-    print("\nFiltered jobs by source:")
-    for source, count in Counter(job["source"] for job in filtered_jobs).items():
-        print(source, count)
+    print_source_counts("Filtered jobs by source:", filtered_jobs)
 
     deduped_jobs = dedupe_jobs(filtered_jobs)
 
-    print("\nTotal deduped jobs:", len(deduped_jobs))
+    logger.info(f"Total deduped jobs: {len(deduped_jobs)}")
 
     return deduped_jobs

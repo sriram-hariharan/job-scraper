@@ -1,6 +1,36 @@
-job_scrap/
+
+# Python cache
 __pycache__/
-.env
-.DS_Store
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+venv/
+.env/
+.venv/
+job_scrap/
+
+# macOS junk
+.DS_Store
+__MACOSX/
+
+# IDE
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# credentials
+.env
+service_account.json
+*.json.key
 *.json
+
+# Git
+.git/
+
+# temporary files
+*.tmp
+*.bak

@@ -3,6 +3,9 @@ from google.oauth2.service_account import Credentials
 from datetime import datetime
 from src.utils.location_cleaner import normalize_location
 from src.utils.time_utils import time_ago
+from src.utils.logging import get_logger
+
+logger = get_logger("excel_writer")
 
 def format_sheet(sheet):
     # Freeze header row
@@ -78,7 +81,10 @@ def write_jobs_to_sheet(jobs):
     run_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for job in jobs:
-        if job["url"] in existing_urls:
+        url = job.get("url")
+        if not url:
+            continue
+        if url in existing_urls:
             continue
 
         location = normalize_location(job.get("location"))
@@ -96,13 +102,13 @@ def write_jobs_to_sheet(jobs):
             job.get("url")
         ])
     if not rows_to_add:
-        print("No new jobs found")
+        logger.info("No new jobs found")
         return
 
     sheet.append_rows(rows_to_add)
     format_sheet(sheet)
     
-    print(f"{len(rows_to_add)} new jobs written to sheet")
+    logger.info(f"{len(rows_to_add)} new jobs written to sheet")
 
     
 

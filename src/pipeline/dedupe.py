@@ -1,5 +1,5 @@
-import re
-import time
+from src.utils.logging import get_logger
+logger = get_logger("dedupe")
 
 def normalize(text):
 
@@ -33,6 +33,5 @@ def dedupe_jobs(jobs):
         seen.add(key)
         unique_jobs.append(job)
 
-    print("Jobs after dedupe:", len(unique_jobs))
-
+    logger.info(f"Jobs after dedupe: {len(unique_jobs)}")
     return unique_jobs

@@ -12,7 +12,7 @@ from src.scrapers.jobvite_scraper import scrape_all_jobvite
 
 from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
-
+    
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
@@ -21,7 +21,7 @@ def print_source_counts(title, jobs):
 
     logger.info(title)
 
-    counts = Counter(job["source"] for job in jobs)
+    counts = Counter(job.get("source", "unknown") for job in jobs)
 
     for source, count in counts.items():
         logger.info(f"{source} {count}")
@@ -30,18 +30,18 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
         ("workday", scrape_all_workday),
-        # ("greenhouse", scrape_all_greenhouse),
-        # ("lever", scrape_all_lever),
-        # ("ashby", scrape_all_ashby),
-        # ("workable", scrape_all_workable),
-        # ("jobvite", scrape_all_jobvite),
+        ("greenhouse", scrape_all_greenhouse),
+        ("lever", scrape_all_lever),
+        ("ashby", scrape_all_ashby),
+        ("workable", scrape_all_workable),
+        ("jobvite", scrape_all_jobvite),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
 
     start_total = time.time()
 
-    with ThreadPoolExecutor(max_workers=len(scrapers)) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, min(4, len(scrapers)))) as executor:
 
         futures = {
             executor.submit(fn): (name, time.time())
@@ -58,8 +58,8 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
                 elapsed = round(time.time() - start, 2)
 
                 logger.info(f"[collector] {name} finished | jobs={len(jobs)} | time={elapsed}s")
-
-                all_jobs.extend(jobs)
+                if jobs:
+                    all_jobs.extend(jobs)
 
             except Exception as e:
                 elapsed = round(time.time() - start, 2)

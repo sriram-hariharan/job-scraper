@@ -3,6 +3,21 @@ from typing import Optional, Dict, Any, Union, List
 
 @dataclass
 class Job:
+    def __post_init__(self):
+        # prevent None values entering pipeline
+        self.company = self.company or ""
+        self.title = self.title or ""
+        self.url = self.url or ""
+        self.source = self.source or ""
+
+        # location safety
+        if self.location is None:
+            self.location = ""
+
+        # ensure meta always dict
+        if self.meta is None:
+            self.meta = {}
+
     company: str
     title: str
     location: Union[str, List[str]]

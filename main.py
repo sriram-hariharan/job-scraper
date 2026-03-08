@@ -5,8 +5,6 @@ logger = get_logger(__name__)
 
 def main():
 
-    logger = get_logger(__name__)
-
     logger.info("=============================")
     logger.info("ATS DISCOVERY")
     logger.info("=============================\n")

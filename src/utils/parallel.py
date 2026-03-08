@@ -1,6 +1,8 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from tqdm import tqdm
+from src.utils.logging import get_logger
 
+logger = get_logger("parallel")
 
 def run_parallel(items, worker_fn, max_workers=10, desc="Processing"):
 
@@ -16,7 +18,6 @@ def run_parallel(items, worker_fn, max_workers=10, desc="Processing"):
                 if res:
                     results.extend(res)
             except Exception as e:
-                print(f"Error occurred while processing item in thread pooling at {desc}: {e}")
-                pass
+                logger.warning(f"worker failed: {e}")
 
     return results

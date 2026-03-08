@@ -22,7 +22,10 @@ TITLE_EXCLUDE_PATTERNS = [
     r"manager",
     r"intern",
     r"student",
-    r"principal architect"
+    r"principal architect",
+    r"lead",
+    r"staff",
+    r"principal"
 ]
 #Ashby queries
 ASHBY_QUERY = """

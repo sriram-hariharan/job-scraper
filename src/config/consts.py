@@ -100,6 +100,8 @@ ALL_COUNTRIES.update({
 })
 
 # ATS identifiers (prevents string typos)
+SUPPORTED_ATS = ["greenhouse", "lever", "workday", "ashby", "workable", "jobvite"]
+
 ATS_WORKDAY = "workday"
 ATS_LEVER = "lever"
 ATS_JOBVITE = "jobvite"
@@ -125,3 +127,28 @@ WORKDAY_ORIGIN_TEMPLATE = "https://{host}.myworkdayjobs.com"
 TIMESTAMP_WORKERS = 10
 DATE_ONLY_HOUR = 12
 FRESHNESS_HOURS = 24
+
+#ATS Detection and discovery
+CAREER_PATHS = [
+    "/careers",
+    "/careers/",
+    "/jobs",
+    "/jobs/",
+    "/careers/jobs",
+    "/careers/jobs/",
+    "/join-us",
+    "/join-us/",
+    "/work-with-us",
+    "/work-with-us/"
+]
+CAREER_SUBDOMAINS = [
+    "jobs",
+    "careers",
+    "apply",
+    "join",
+    "work"
+]
+
+WORKDAY_REGEX = re.compile(
+    r"https://[a-zA-Z0-9-]+\.wd[0-9]+\.myworkdayjobs\.com/[a-zA-Z0-9_-]+"
+)

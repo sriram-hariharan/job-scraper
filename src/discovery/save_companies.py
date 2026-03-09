@@ -11,11 +11,11 @@ def append_new_companies(file_path, companies):
         with open(file_path) as f:
             existing = {line.strip() for line in f if line.strip()}
 
-    new = [c for c in companies if c not in existing]
+    new = set(companies) - existing
 
     if not new:
         return
 
     with open(file_path, "a") as f:
-        for c in new:
+        for c in sorted(new):
             f.write(c + "\n")

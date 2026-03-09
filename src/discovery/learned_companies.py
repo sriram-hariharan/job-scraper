@@ -1,6 +1,7 @@
 import json
 import os
 from src.utils.logging import get_logger
+from src.discovery.learn_domains import learn_domain_from_slug
 
 logger = get_logger(__name__)
 
@@ -46,7 +47,7 @@ def learn_from_job_url(url):
 
     if ats and slug:
         _DISCOVERED[ats].add(slug)
-
+        # learn_domain_from_slug(slug)
 
 def save_learned():
     logger.info("Saving discovered companies...")

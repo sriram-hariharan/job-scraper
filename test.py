@@ -1,8 +1,8 @@
-from src.scrapers.workday_scraper import load_companies
+comp = []
+with open ("data/greenhouse_companies.txt", "r") as f:
+    for line in f:
+        comp.append(line.strip())
 
-comp = load_companies()
+print(len(comp))
+print(len(set(comp)))
 
-for c in comp:
-    company = (c.split("https://")[1].split(".")[0])
-    if company == "otis":
-        print(c)

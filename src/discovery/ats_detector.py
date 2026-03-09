@@ -35,22 +35,31 @@ def extract_greenhouse_slug(html):
 
 
 def extract_ashby_slug(html):
-    m = re.search(r"jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)", html)
-    return m.group(1) if m else None
+    m = re.search(r"jobs\.ashbyhq\.com/([a-z0-9\-]+)", html.lower())
+    if m:
+        return m.group(1)
+    return None
 
 
 def extract_lever_slug(html):
-    m = re.search(r"lever\.co/([a-zA-Z0-9_-]+)", html)
-    return m.group(1) if m else None
-
+    m = re.search(r"jobs\.lever\.co/([a-zA-Z0-9_-]+)", html)
+    if m:
+        return m.group(1)
+    m = re.search(r"api\.lever\.co/v0/postings/([a-zA-Z0-9_-]+)", html)
+    if m:
+        return m.group(1)
+    return None
 
 def extract_workday_url(html):
-    m = WORKDAY_REGEX.search(html)
-    return m.group(0) if m else None
+    m = re.search(r"https://[a-z0-9\-]+\.myworkdayjobs\.com/[^\"]+", html)
+    if m:
+        return m.group(0).split("?")[0]
+
+    return None
 
 
 def extract_workable_slug(html):
-    m = re.search(r"apply\.workable\.com/([a-zA-Z0-9_-]+)", html)
+    m = re.search(r"apply\.workable\.com/([a-z0-9\-]+)", html.lower())
     return m.group(1) if m else None
 
 
@@ -59,7 +68,13 @@ def extract_jobvite_slug(html):
     return m.group(1) if m else None
 
 def extract_links_from_html(html):
-    links = re.findall(r'href=["\'](.*?)["\']', html)
+    if not html:
+        return []
+    html = html.lower()
+    links = re.findall(
+        r'(?:href|src|data-url|data-href|data-src)=["\'](.*?)["\']',
+        html
+    )
     return links
 
 # -----------------------------
@@ -74,7 +89,7 @@ def detect_ats_from_html(html: str):
     if "jobs.ashbyhq.com" in html:
         return "ashby"
 
-    if "lever.co" in html:
+    if "jobs.lever.co" in html or "api.lever.co/v0/postings/" in html:
         return "lever"
 
     if "myworkdayjobs.com" in html:
@@ -92,22 +107,24 @@ def detect_ats_from_links(links):
 
     for link in links:
 
-        if "boards.greenhouse.io" in link:
+        link = link.lower()
+
+        if "boards.greenhouse.io/" in link:
             return "greenhouse", link
 
-        if "jobs.ashbyhq.com" in link:
+        if "jobs.ashbyhq.com/" in link:
             return "ashby", link
 
-        if "lever.co" in link:
+        if "jobs.lever.co/" in link or "api.lever.co/v0/postings/" in link:
             return "lever", link
 
         if "myworkdayjobs.com" in link:
             return "workday", link
 
-        if "apply.workable.com" in link:
+        if "apply.workable.com/" in link:
             return "workable", link
 
-        if "jobs.jobvite.com" in link:
+        if "jobs.jobvite.com/" in link:
             return "jobvite", link
 
     return None, None
@@ -115,10 +132,16 @@ def detect_ats_from_links(links):
 def detect_ats_from_redirect(domain):
 
     paths = [
-        "/careers",
-        "/jobs",
-        "/join-us",
-        "/work-with-us"
+    "",
+    "/careers",
+    "/careers/",
+    "/jobs",
+    "/jobs/",
+    "/join-us",
+    "/join",
+    "/work-with-us",
+    "/careers/openings",
+    "/company/careers"
     ]
 
     headers = {"User-Agent": "Mozilla/5.0"}
@@ -128,7 +151,7 @@ def detect_ats_from_redirect(domain):
         url = f"https://{domain}{path}"
 
         try:
-            r = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+            r = requests.get(url, headers=headers, timeout=2, allow_redirects=True)
         except Exception:
             continue
 
@@ -142,8 +165,8 @@ def detect_ats_from_redirect(domain):
             slug = final_url.split("jobs.ashbyhq.com/")[1].split("/")[0]
             return "ashby", slug
 
-        if "lever.co" in final_url:
-            slug = final_url.split("lever.co/")[1].split("/")[0]
+        if "jobs.lever.co/" in final_url:
+            slug = final_url.split("jobs.lever.co/")[1].split("/")[0]
             return "lever", slug
 
         if "apply.workable.com" in final_url:
@@ -158,7 +181,32 @@ def detect_ats_from_redirect(domain):
             return "workday", final_url.split("?")[0]
 
     return None, None
+def detect_ats_from_embeds(html):
 
+    if not html:
+        return None, None
+
+    html = html.lower()
+
+    # only match actual embedded URLs
+    patterns = [
+        ("greenhouse", r"boards\.greenhouse\.io/([a-z0-9\-]+)"),
+        ("ashby", r"jobs\.ashbyhq\.com/([a-z0-9\-]+)/"),
+        ("lever", r"jobs\.lever\.co/([a-z0-9\-]+)"),
+        ("lever", r"api\.lever\.co/v0/postings/([a-z0-9\-]+)"),
+        ("workable", r"apply\.workable\.com/([a-z0-9\-]+)"),
+        ("jobvite", r"jobs\.jobvite\.com/([a-z0-9\-]+)"),
+        ("workday", r"(https:\/\/[a-z0-9\-]+\.myworkdayjobs\.com\/[^\"'\s]+)")
+    ]
+
+    for ats, pattern in patterns:
+        m = re.search(pattern, html)
+        if m:
+            if ats == "workday":
+                return ats, m.group(1).split("?")[0]
+            return ats, m.group(1)
+
+    return None, None
 # -----------------------------
 # CAREER PAGE FETCH
 # -----------------------------
@@ -171,9 +219,15 @@ def fetch_career_page(domain: str):
 
         try:
             url = f"https://{base}{path}"
-            r = session.get(url, timeout=4, allow_redirects=True)
 
-            if r.status_code == 200 and r.text:
+            r = session.get(
+                url,
+                timeout=2,
+                allow_redirects=True,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+
+            if r.status_code == 200:
                 return r.text
 
         except Exception:
@@ -193,7 +247,7 @@ def fetch_career_subdomain(domain: str):
         try:
             url = f"https://{sub}.{root}"
 
-            r = session.get(url, timeout=4, allow_redirects=True)
+            r = session.get(url, timeout=2, allow_redirects=True)
 
             if r.status_code == 200 and r.text:
                 return r.text
@@ -218,14 +272,22 @@ def check_greenhouse(slug: str):
     except:
         return False
 
-
 def check_ashby(slug: str):
-
     url = f"https://jobs.ashbyhq.com/{slug}"
 
     try:
         r = session.get(url, timeout=2)
-        return r.status_code == 200
+
+        if r.status_code != 200:
+            return False
+
+        html = r.text.lower()
+        # verify real ashby board content
+        if "ashbyhq" in html and "jobs" in html:
+            return True
+
+        return False
+
     except:
         return False
 
@@ -249,7 +311,7 @@ def extract_lever_slug_from_domain(domain: str):
 
         try:
             url = f"https://api.lever.co/v0/postings/{slug}?mode=json"
-            r = session.get(url, timeout=4)
+            r = session.get(url, timeout=2)
 
             if r.status_code == 200 and r.json():
                 return slug
@@ -268,7 +330,7 @@ def extract_workday_board_url(domain: str):
 
         try:
             url = f"https://{base}{path}"
-            r = session.get(url, timeout=4, allow_redirects=True)
+            r = session.get(url, timeout=2, allow_redirects=True)
 
             if "myworkdayjobs.com" in r.url:
                 return r.url.split("?")[0]

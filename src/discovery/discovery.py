@@ -7,7 +7,6 @@ from src.discovery.ats_detector import (
     fetch_career_subdomain,
     extract_links_from_html,
     detect_ats_from_links,
-    detect_ats_from_html,
     extract_greenhouse_slug,
     extract_ashby_slug,
     extract_lever_slug,
@@ -19,7 +18,8 @@ from src.discovery.ats_detector import (
     slug_from_domain,
     extract_lever_slug_from_domain,
     extract_workday_board_url,
-    detect_ats_from_redirect
+    detect_ats_from_redirect,
+    detect_ats_from_embeds
 )
 from src.config.consts import SUPPORTED_ATS
 from tqdm import tqdm
@@ -105,11 +105,12 @@ def detect_ats_for_domain(domain: str):
     try:
         ats, value = detect_ats_from_redirect(domain)
         if ats:
+            # print("REDIRECT:", domain, ats, value)
             result[ats] = value
             return result
     except:
         pass
-    
+
     # fetch career page once
     html = fetch_career_page(domain)
 
@@ -122,138 +123,166 @@ def detect_ats_for_domain(domain: str):
 
     if html:
         links = extract_links_from_html(html)
-        ats, link = detect_ats_from_links(links)
-        if not ats:
-            ats = detect_ats_from_html(html)
 
-        try:
+    # 1. detect ATS from normal links
+    ats, link = detect_ats_from_links(links)
+    # if ats:
+    #     print("LINK:", domain, ats, link)
 
-            if ats == "greenhouse":
+    # 2. detect ATS from embedded iframe/script
+    if not ats:
+        ats, link = detect_ats_from_embeds(html)
+        # if ats:
+        #     print("EMBED:", domain, ats, link)
+
+    # 3. HTML detection fallback (SAFE)
+    if not ats and html:
+
+        # greenhouse detection
+        if "boards.greenhouse.io/" in html:
+            slug = extract_greenhouse_slug(html)
+            if slug:
+                result["greenhouse"] = slug
+                return result
+
+        # ashby detection
+        if "jobs.ashbyhq.com/" in html and "/jobs" in html:
+            slug = extract_ashby_slug(html)
+            if slug:
+                result["ashby"] = slug
+                return result
+
+    try:
+
+        if ats == "greenhouse":
+            slug = extract_slug(
+                link,
+                html,
+                "boards.greenhouse.io/",
+                extract_greenhouse_slug
+            )
+
+            if slug and check_greenhouse(slug):
+                result["greenhouse"] = slug
+
+        elif ats == "ashby":
+            slug = extract_slug(
+                link,
+                html,
+                "jobs.ashbyhq.com/",
+                extract_ashby_slug
+            )
+
+            if slug and check_ashby(slug):
+                result["ashby"] = slug
+
+
+        elif ats == "lever":
+
+            if link and "api.lever.co/v0/postings/" in link:
+                slug = link.split("api.lever.co/v0/postings/")[1].split("?")[0].split("/")[0]
+            else:
                 slug = extract_slug(
                     link,
                     html,
-                    "boards.greenhouse.io/",
-                    extract_greenhouse_slug
-                )
-
-                if slug and check_greenhouse(slug):
-                    result["greenhouse"] = slug
-
-            elif ats == "ashby":
-                slug = extract_slug(
-                    link,
-                    html,
-                    "jobs.ashbyhq.com/",
-                    extract_ashby_slug
-                )
-
-                if slug and check_ashby(slug):
-                    result["ashby"] = slug
-
-
-            elif ats == "lever":
-                slug = extract_slug(
-                    link,
-                    html,
-                    "lever.co/",
+                    "jobs.lever.co/",
                     extract_lever_slug
                 )
+            if slug:
+                result["lever"] = slug
 
-                if slug:
-                    result["lever"] = slug
+        elif ats == "workday":
+            wd_url = None
 
+            if link and "myworkdayjobs.com" in link:
+                wd_url = link.split("?")[0]
 
-            elif ats == "workday":
-                wd_url = None
+            if not wd_url:
+                wd_url = extract_workday_url(html)
 
-                if link and "myworkdayjobs.com" in link:
-                    wd_url = link.split("?")[0]
+            if wd_url:
+                result["workday"] = wd_url
 
-                if not wd_url:
-                    wd_url = extract_workday_url(html)
+        elif ats == "workable":
+            slug = extract_slug(
+                link,
+                html,
+                "apply.workable.com/",
+                extract_workable_slug
+            )
 
-                if wd_url:
-                    result["workday"] = wd_url
-
-
-            elif ats == "workable":
-                slug = extract_slug(
-                    link,
-                    html,
-                    "apply.workable.com/",
-                    extract_workable_slug
-                )
-
-                if slug:
-                    result["workable"] = slug
+            if slug:
+                result["workable"] = slug
 
 
-            elif ats == "jobvite":
-                slug = extract_slug(
-                    link,
-                    html,
-                    "jobs.jobvite.com/",
-                    extract_jobvite_slug
-                )
+        elif ats == "jobvite":
+            slug = extract_slug(
+                link,
+                html,
+                "jobs.jobvite.com/",
+                extract_jobvite_slug
+            )
 
-                if slug:
-                    result["jobvite"] = slug
+            if slug:
+                result["jobvite"] = slug
 
+    except:
+        pass
+    
+     # stop if we already detected an ATS
+    if any(result.values()):
+        return result
+    
+    if not any(result.values()):
+        slug = slug_from_domain(domain)
+
+        try:
+            if slug and check_greenhouse(slug):
+                result["greenhouse"] = slug
+                return result
         except:
             pass
 
-        if not any(result.values()):
-            slug = slug_from_domain(domain)
+        # try:
+        #     if slug and check_ashby(slug):
+        #         result["ashby"] = slug
+        #         return result
+        # except:
+        #     pass
 
-            try:
-                if slug and check_greenhouse(slug):
-                    result["greenhouse"] = slug
-                    return result
-            except:
-                pass
+        try:
+            lever_slug = extract_lever_slug_from_domain(domain)
+            if lever_slug:
+                result["lever"] = lever_slug
+                return result
+        except:
+            pass
 
-            try:
-                if slug and check_ashby(slug):
-                    result["ashby"] = slug
-                    return result
-            except:
-                pass
-
-            try:
-                lever_slug = extract_lever_slug_from_domain(domain)
-                if lever_slug:
-                    result["lever"] = lever_slug
-                    return result
-            except:
-                pass
-
-            try:
-                wd_url = extract_workday_board_url(domain)
-                if wd_url:
-                    result["workday"] = wd_url
-                    return result
-            except:
-                pass
-
+        try:
+            wd_url = extract_workday_board_url(domain)
+            if wd_url:
+                result["workday"] = wd_url
+                return result
+        except:
+            pass
+    # print(domain, result)
     return result
 
 
 def discover_from_domains(domains: List[str]) -> Dict[str, List[str]]:
     
     cache = load_cache()
-
+    # print("CACHE SIZE:", len(cache))
     buckets: Dict[str, List[str]] = {ats: [] for ats in SUPPORTED_ATS}
 
     cleaned = []
     seen = set()
 
     for domain in domains:
-
         if not domain:
             continue
 
         value = domain.strip().lower()
-
         if not value or value in seen:
             continue
 
@@ -263,15 +292,17 @@ def discover_from_domains(domains: List[str]) -> Dict[str, List[str]]:
     to_detect = []
     cached_results = []
 
+    DISCOVERY_FORCE_REFRESH = False
+
     for domain in cleaned:
-        if domain in cache:
+        if domain in cache and not DISCOVERY_FORCE_REFRESH:
             cached_results.append(cache[domain])
         else:
             to_detect.append(domain)
 
     # parallel ATS detection
     results = []
-
+    # print("DOMAINS TO DETECT:", len(to_detect))
     with ThreadPoolExecutor(max_workers=20) as executor:
 
         futures = {
@@ -327,7 +358,7 @@ def discover_from_domains(domains: List[str]) -> Dict[str, List[str]]:
 
     for ats in buckets:
         buckets[ats] = list(set(buckets[ats]))
-    if to_detect:
+    if to_detect and cache:
         save_cache(cache)
 
     return buckets

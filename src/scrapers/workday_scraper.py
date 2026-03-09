@@ -42,7 +42,8 @@ def get_us_country_facet(data):
 
 def scrape_company(board_url):
     seen_jobs = set()
-    host = board_url.split(".myworkdayjobs.com")[0].replace("https://", "")
+    host = board_url.split("//")[1].split("/")[0]
+    host = host.replace(".myworkdayjobs.com", "")
     tenant = host.split(".")[0]
     site = board_url.split(".myworkdayjobs.com/")[1].split("?")[0].strip("/")
 
@@ -197,7 +198,7 @@ def scrape_company(board_url):
         if total is None and len(postings) < limit:
             break
 
-        time.sleep(0.05)
+        time.sleep(0.01)
 
     return jobs
 
@@ -207,7 +208,7 @@ def scrape_all_workday():
     all_jobs = run_parallel(
                 companies,
                 scrape_company,
-                max_workers=5,
+                max_workers=20,
                 desc="Workday scraping"
                 )
 

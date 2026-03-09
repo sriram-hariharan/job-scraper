@@ -1,5 +1,6 @@
 from src.discovery.discovery import discover_from_domains
 from src.discovery.save_companies import append_new_companies
+from src.discovery.ats_network_discovery import discover_greenhouse_neighbors
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 
@@ -19,9 +20,23 @@ def run_discovery():
     for ats, companies in discovered.items():
         logger.info(f"{ats}: {len(companies)} discovered")
 
+    # Save ATS discoveries from domains
     append_new_companies("data/greenhouse_companies.txt", discovered["greenhouse"])
     append_new_companies("data/lever_companies.txt", discovered["lever"])
     append_new_companies("data/workday_companies.txt", discovered["workday"])
     append_new_companies("data/ashby_companies.txt", discovered["ashby"])
     append_new_companies("data/workable_companies.txt", discovered["workable"])
     append_new_companies("data/jobvite_companies.txt", discovered["jobvite"])
+
+    # -------- GREENHOUSE NETWORK EXPANSION --------
+
+    logger.info("Greenhouse network discovery...")
+
+    neighbors = discover_greenhouse_neighbors(limit=50)
+
+    append_new_companies(
+        "data/greenhouse_companies.txt",
+        neighbors
+    )
+
+    logger.info(f"Greenhouse expansion added: {len(neighbors)} companies")

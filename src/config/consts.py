@@ -130,17 +130,19 @@ FRESHNESS_HOURS = 24
 
 #ATS Detection and discovery
 CAREER_PATHS = [
+    "",
     "/careers",
-    "/careers/",
     "/jobs",
-    "/jobs/",
     "/careers/jobs",
-    "/careers/jobs/",
+    "/about/careers",
+    "/careers/openings",
     "/join-us",
-    "/join-us/",
     "/work-with-us",
-    "/work-with-us/"
+    "/company/careers",
+    "/join",
+    "/careers.html",
 ]
+
 CAREER_SUBDOMAINS = [
     "jobs",
     "careers",

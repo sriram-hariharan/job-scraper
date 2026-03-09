@@ -9,7 +9,7 @@ def discover_greenhouse_neighbors(limit=50):
     url = "https://boards-api.greenhouse.io/v1/boards"
 
     try:
-        r = session.get(url, timeout=10)
+        r = session.get(url, timeout=3)
         if r.status_code != 200:
             return []
 

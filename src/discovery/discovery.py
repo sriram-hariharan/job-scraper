@@ -19,7 +19,8 @@ from src.discovery.ats_detector import (
     extract_lever_slug_from_domain,
     extract_workday_board_url,
     detect_ats_from_redirect,
-    detect_ats_from_embeds
+    detect_ats_from_embeds,
+    detect_ats_from_html
 )
 from src.config.consts import SUPPORTED_ATS
 from tqdm import tqdm
@@ -136,20 +137,45 @@ def detect_ats_for_domain(domain: str):
         #     print("EMBED:", domain, ats, link)
 
     # 3. HTML detection fallback (SAFE)
-    if not ats and html:
-
+    
         # greenhouse detection
-        if "boards.greenhouse.io/" in html:
+    if not ats and html:
+        ats = detect_ats_from_html(html)
+
+        if ats == "greenhouse":
             slug = extract_greenhouse_slug(html)
             if slug:
                 result["greenhouse"] = slug
                 return result
 
-        # ashby detection
-        if "jobs.ashbyhq.com/" in html and "/jobs" in html:
+        elif ats == "ashby":
             slug = extract_ashby_slug(html)
             if slug:
                 result["ashby"] = slug
+                return result
+
+        elif ats == "lever":
+            slug = extract_lever_slug(html)
+            if slug:
+                result["lever"] = slug
+                return result
+
+        elif ats == "workday":
+            wd_url = extract_workday_url(html)
+            if wd_url:
+                result["workday"] = wd_url
+                return result
+
+        elif ats == "workable":
+            slug = extract_workable_slug(html)
+            if slug:
+                result["workable"] = slug
+                return result
+
+        elif ats == "jobvite":
+            slug = extract_jobvite_slug(html)
+            if slug:
+                result["jobvite"] = slug
                 return result
 
     try:

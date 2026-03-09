@@ -78,7 +78,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     filtered_jobs = filter_jobs(all_jobs)
     
-    logger.info("Jobs missing posted_at after filtering:")
+    logger.info("Jobs missing posted_at in the entire raw dataset:")
     missing = Counter(job["source"] for job in all_jobs if not job.get("posted_at"))
     for source, count in missing.items():
         logger.info(f"{source} {count}")

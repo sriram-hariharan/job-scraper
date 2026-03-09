@@ -3,7 +3,8 @@ import time
 from src.utils.http_retry import retry_request
 from src.config.consts import (
     WORKDAY_API_URL_TEMPLATE,
-    WORKDAY_ORIGIN_TEMPLATE)
+    WORKDAY_ORIGIN_TEMPLATE
+)
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
@@ -26,6 +27,7 @@ def workday_get(url, **kwargs):
 def workday_post(url, **kwargs):
     return session.post(url, **kwargs)
 
+
 def get_us_country_facet(data):
     facets = data.get("facetMetadata", {}).get("facets", [])
 
@@ -38,9 +40,10 @@ def get_us_country_facet(data):
 
     return None, None
 
-
 def scrape_company(board_url):
+
     seen_jobs = set()
+
     host = board_url.split(".myworkdayjobs.com")[0].replace("https://", "")
     tenant = host.split(".")[0]
     site = board_url.split(".myworkdayjobs.com/")[1].split("?")[0].strip("/")
@@ -69,15 +72,19 @@ def scrape_company(board_url):
     limit = 20
 
     payload = {"limit": 1, "offset": 0, "searchText": ""}
+
     r = workday_post(api_url, json=payload, headers=headers, timeout=10)
     if r is None or r.status_code != 200:
         return []
 
     data = r.json()
+
     facet_name, country_filter = get_us_country_facet(data)
+
     total = None
 
     while True:
+
         payload = {
             "limit": limit,
             "offset": offset,
@@ -90,6 +97,7 @@ def scrape_company(board_url):
             }
 
         try:
+
             r = workday_post(api_url, json=payload, headers=headers, timeout=10)
 
             if r is not None and r.status_code == 400 and "appliedFacets" in payload:
@@ -100,6 +108,7 @@ def scrape_company(board_url):
                 break
 
             data = r.json()
+
         except Exception:
             break
 
@@ -124,7 +133,9 @@ def scrape_company(board_url):
         new_jobs_this_page = 0
 
         for job in postings:
+
             job_id = job.get("externalPath")
+
             if not job_id:
                 continue
 
@@ -152,8 +163,12 @@ def scrape_company(board_url):
             if not locations and job.get("locationsText"):
                 locations.append(job.get("locationsText"))
 
+            info = job.get("jobPostingInfo", {})
+
             posted_at = (
-                job.get("startDate")
+                info.get("startDate")
+                or job.get("startDate")
+                or info.get("postedOn")
                 or job.get("postedDate")
                 or job.get("postedAt")
                 or job.get("createdDate")
@@ -162,28 +177,20 @@ def scrape_company(board_url):
 
             job_url = f"{board_url.rstrip('/')}/{job_id.lstrip('/')}"
 
-            # jobs.append({
-            #     "title": job.get("title"),
-            #     "location": locations,  
-            #     "url": job_url,
-            #     "company": tenant,
-            #     "source": "workday",
-            #     "posted_at": posted_at,
-            #     "_externalPath": job.get("externalPath"),
-            #     "_board_url": board_url,
-            # })
-            jobs.append(Job(
-                title=job.get("title"),
-                location=locations,
-                url=job_url,
-                company=tenant,
-                source="workday",
-                posted_at=posted_at,
-                meta={
-                    "_externalPath": job.get("externalPath"),
-                    "_board_url": board_url
-                }
-            ).to_dict())
+            jobs.append(
+                Job(
+                    title=job.get("title"),
+                    location=locations,
+                    url=job_url,
+                    company=tenant,
+                    source="workday",
+                    posted_at=posted_at,
+                    meta={
+                        "_externalPath": job.get("externalPath"),
+                        "_board_url": board_url
+                    }
+                ).to_dict()
+            )
 
         if new_jobs_this_page == 0:
             break
@@ -200,15 +207,17 @@ def scrape_company(board_url):
 
     return jobs
 
+
 def scrape_all_workday():
 
     companies = load_lines("data/workday_companies.txt")
+
     all_jobs = run_parallel(
-                companies,
-                scrape_company,
-                max_workers=5,
-                desc="Workday scraping"
-                )
+        companies,
+        scrape_company,
+        max_workers=5,
+        desc="Workday scraping"
+    )
 
     logger.info("Workday summary")
     logger.info("------------------")

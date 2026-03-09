@@ -2,6 +2,7 @@ import requests
 from requests.adapters import HTTPAdapter
 import re
 from src.config.consts import CAREER_PATHS, WORKDAY_REGEX, CAREER_SUBDOMAINS
+import requests
 
 session = requests.Session()
 session.headers.update({
@@ -111,6 +112,52 @@ def detect_ats_from_links(links):
 
     return None, None
 
+def detect_ats_from_redirect(domain):
+
+    paths = [
+        "/careers",
+        "/jobs",
+        "/join-us",
+        "/work-with-us"
+    ]
+
+    headers = {"User-Agent": "Mozilla/5.0"}
+
+    for path in paths:
+
+        url = f"https://{domain}{path}"
+
+        try:
+            r = requests.get(url, headers=headers, timeout=5, allow_redirects=True)
+        except Exception:
+            continue
+
+        final_url = r.url.lower()
+
+        if "boards.greenhouse.io" in final_url:
+            slug = final_url.split("boards.greenhouse.io/")[1].split("/")[0]
+            return "greenhouse", slug
+
+        if "jobs.ashbyhq.com" in final_url:
+            slug = final_url.split("jobs.ashbyhq.com/")[1].split("/")[0]
+            return "ashby", slug
+
+        if "lever.co" in final_url:
+            slug = final_url.split("lever.co/")[1].split("/")[0]
+            return "lever", slug
+
+        if "apply.workable.com" in final_url:
+            slug = final_url.split("apply.workable.com/")[1].split("/")[0]
+            return "workable", slug
+
+        if "jobs.jobvite.com" in final_url:
+            slug = final_url.split("jobs.jobvite.com/")[1].split("/")[0]
+            return "jobvite", slug
+
+        if "myworkdayjobs.com" in final_url:
+            return "workday", final_url.split("?")[0]
+
+    return None, None
 
 # -----------------------------
 # CAREER PAGE FETCH

@@ -5,6 +5,7 @@ from src.config.consts import GREENHOUSE_API
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
+from src.discovery.learned_companies import learn_from_job_url, load_learned
 
 logger = get_logger("greenhouse")
 
@@ -32,6 +33,7 @@ async def fetch_company_jobs(session, company):
         title = job.get("title", "")
         location = job.get("location", {}).get("name", "")
         job_url = job.get("absolute_url")
+        learn_from_job_url(job_url)
 
         # jobs.append({
         #     "company": company,
@@ -58,6 +60,11 @@ async def fetch_company_jobs(session, company):
 async def scrape_all_greenhouse_async():
 
     companies = load_lines("data/greenhouse_companies.txt")
+    learned = load_learned()
+    companies += learned.get("greenhouse", [])
+
+    # remove duplicates
+    companies = list(set(companies))
 
     connector = aiohttp.TCPConnector(limit=50)
 

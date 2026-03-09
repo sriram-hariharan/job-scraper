@@ -7,6 +7,7 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
+from src.discovery.learned_companies import learn_from_job_url, load_learned
 
 logger = get_logger("jobvite")
 
@@ -79,6 +80,7 @@ def fetch_company_jobs(company):
         title = link.text.strip()
 
         job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
+        learn_from_job_url(job_url)
         posted_at = fetch_jobvite_posted_date(job_url)
 
         # jobs.append({
@@ -109,6 +111,11 @@ def fetch_company_jobs(company):
 def scrape_all_jobvite():
 
     companies = load_lines("data/jobvite_companies.txt")
+    learned = load_learned()
+    companies += learned.get("jobvite", [])
+
+    # remove duplicates
+    companies = list(set(companies))
     all_jobs = run_parallel(
         companies,
         fetch_company_jobs,

@@ -7,6 +7,7 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
+from src.discovery.learned_companies import learn_from_job_url, load_learned
 
 logger = get_logger("workable")
 
@@ -59,7 +60,6 @@ def extract_v3_jobs(data):
 def fetch_company_jobs(company):
 
     jobs_data = []
-
     v3_url = WORKABLE_V3_API.format(company)
 
     try:
@@ -109,7 +109,7 @@ def fetch_company_jobs(company):
         url = job.get("url")
         if not url and shortcode:
             url = f"https://apply.workable.com/{company}/j/{shortcode}/"
-
+        learn_from_job_url(url)
         # jobs.append({
         #     "company": company,
         #     "title": job.get("title"),
@@ -173,6 +173,11 @@ def fetch_company_jobs(company):
 def scrape_all_workable():
 
     companies = load_lines("data/workable_companies.txt")
+    learned = load_learned()
+    companies += learned.get("workable", [])
+
+    # remove duplicates
+    companies = list(set(companies))
     all_jobs = run_parallel(
         companies,
         fetch_company_jobs,

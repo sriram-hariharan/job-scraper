@@ -5,6 +5,8 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
+from src.discovery.learned_companies import learn_from_job_url, load_learned
+
 logger = get_logger("ashby")
 
 HEADERS = {"User-Agent": "Mozilla/5.0"}
@@ -121,12 +123,15 @@ def fetch_company_jobs(company):
         #     # "posted_at": None
         #     "posted_at": job.get("publishedDate")
         # })
+        job_url = f"https://jobs.ashbyhq.com/{company}/{job_id}"
+        learn_from_job_url(job_url)
+
         jobs.append(
             Job(
                 company=company,
                 title=job.get("title", ""),
                 location=job.get("locationName", ""),
-                url=f"https://jobs.ashbyhq.com/{company}/{job_id}",
+                url=job_url,
                 source="ashby",
                 posted_at=job.get("publishedDate")
             ).to_dict()
@@ -138,6 +143,12 @@ def fetch_company_jobs(company):
 def scrape_all_ashby():
 
     companies = load_lines("data/ashby_companies.txt")
+    learned = load_learned()
+    companies += learned.get("ashby", [])
+
+    # remove duplicates
+    companies = list(set(companies))
+
     all_jobs = run_parallel(
         companies,
         fetch_company_jobs,

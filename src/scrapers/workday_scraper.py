@@ -8,6 +8,7 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
+from src.discovery.learned_companies import learn_from_job_url
 
 logger = get_logger("workday")
 
@@ -161,7 +162,7 @@ def scrape_company(board_url):
             )
 
             job_url = f"{board_url.rstrip('/')}/{job_id.lstrip('/')}"
-
+            learn_from_job_url(job_url)
             # jobs.append({
             #     "title": job.get("title"),
             #     "location": locations,  

@@ -18,9 +18,11 @@ from src.discovery.ats_detector import (
     check_ashby,
     slug_from_domain,
     extract_lever_slug_from_domain,
-    extract_workday_board_url
+    extract_workday_board_url,
+    detect_ats_from_redirect
 )
 from src.config.consts import SUPPORTED_ATS
+from tqdm import tqdm
 
 CACHE_PATH = "data/ats_cache.json"
 
@@ -66,8 +68,48 @@ def detect_ats_for_domain(domain: str):
         "jobvite": None
     }
 
-    # slug = slug_from_domain(domain)
+    slug = slug_from_domain(domain)
 
+    # --- FAST ATS DETECTION ---
+    try:
+        if slug and check_greenhouse(slug):
+            result["greenhouse"] = slug
+            return result
+    except:
+        pass
+
+    try:
+        if slug and check_ashby(slug):
+            result["ashby"] = slug
+            return result
+    except:
+        pass
+
+    try:
+        lever_slug = extract_lever_slug_from_domain(domain)
+        if lever_slug:
+            result["lever"] = lever_slug
+            return result
+    except:
+        pass
+
+    try:
+        wd_url = extract_workday_board_url(domain)
+        if wd_url:
+            result["workday"] = wd_url
+            return result
+    except:
+        pass
+    
+    # redirect detection
+    try:
+        ats, value = detect_ats_from_redirect(domain)
+        if ats:
+            result[ats] = value
+            return result
+    except:
+        pass
+    
     # fetch career page once
     html = fetch_career_page(domain)
 
@@ -237,7 +279,12 @@ def discover_from_domains(domains: List[str]) -> Dict[str, List[str]]:
             for domain in to_detect
         }
 
-        for future in as_completed(futures):
+        for future in tqdm(
+        as_completed(futures),
+        total=len(futures),
+        desc="ATS discovery",
+        unit="domain"
+        ):
 
             domain = futures[future]
 

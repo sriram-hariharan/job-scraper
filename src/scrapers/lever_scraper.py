@@ -5,6 +5,7 @@ from src.config.consts import LEVER_API
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
+from src.discovery.learned_companies import learn_from_job_url, load_learned
 
 logger = get_logger("lever")
 
@@ -29,7 +30,8 @@ async def fetch_company_jobs(session, company):
         title = job.get("text", "")
         location = job.get("categories", {}).get("location", "")
         job_url = job.get("hostedUrl", "")
-
+        learn_from_job_url(job_url)
+        
         # jobs.append({
         #     "company": company,
         #     "title": title,
@@ -53,6 +55,12 @@ async def fetch_company_jobs(session, company):
 async def scrape_all_lever_async():
 
     companies = load_lines("data/lever_companies.txt")
+    learned = load_learned()
+
+    companies += learned.get("lever", [])
+
+    # remove duplicates
+    companies = list(set(companies))
 
     connector = aiohttp.TCPConnector(limit=50)
 

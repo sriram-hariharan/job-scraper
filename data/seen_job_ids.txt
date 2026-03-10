@@ -65,3 +65,5 @@ workday|https://bah.wd1.myworkdayjobs.com/BAH_Jobs/job/Beavercreek-OH/Data-Analy
 workday|https://capitalone.wd12.myworkdayjobs.com/Capital_One/job/Plano-TX/Senior-Data-Analyst_R233775-1
 workday|https://capitalone.wd12.myworkdayjobs.com/Capital_One/job/McLean-VA/Senior-Machine-Learning-Engineer_R237422-2
 workday|https://bah.wd1.myworkdayjobs.com/bah_jobs/job/Beavercreek-OH/Data-Analyst_R0235426
+workday|https://bah.wd1.myworkdayjobs.com/bah_jobs/job/McLean-VA/Data-Scientist_R0229817
+workday|https://bah.wd1.myworkdayjobs.com/bah_jobs/job/San-Antonio-TX/Cyber-Data-Scientist--Senior_R0229560

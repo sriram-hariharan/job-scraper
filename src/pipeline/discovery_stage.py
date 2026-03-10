@@ -1,11 +1,80 @@
 from src.discovery.discovery import discover_from_domains
-from src.discovery.save_companies import append_new_companies
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 from src.discovery.career_ats_detector import detect_ats_from_domains
+from src.discovery.persist_discovered import persist_discovered_companies
+from src.discovery.learned_companies import get_learned
+
 import asyncio
+import aiohttp
+
+from src.discovery.ats_network_discovery import (
+    discover_greenhouse_neighbors,
+    discover_lever_neighbors,
+    discover_ashby_neighbors,
+    discover_workable_neighbors,
+    discover_jobvite_neighbors
+)
 
 logger = get_logger(__name__)
+
+
+async def discover_from_existing_boards():
+
+    discovered = {
+        "greenhouse": set(),
+        "lever": set(),
+        "ashby": set(),
+        "workable": set(),
+        "jobvite": set()
+    }
+
+    async with aiohttp.ClientSession() as session:
+
+        async def scan(url):
+
+            try:
+                async with session.get(url, timeout=10) as resp:
+
+                    if resp.status != 200:
+                        return
+
+                    html = await resp.text()
+
+                    discovered["greenhouse"].update(
+                        discover_greenhouse_neighbors(html)
+                    )
+
+                    discovered["lever"].update(
+                        discover_lever_neighbors(html)
+                    )
+
+                    discovered["ashby"].update(
+                        discover_ashby_neighbors(html)
+                    )
+
+                    discovered["workable"].update(
+                        discover_workable_neighbors(html)
+                    )
+
+                    discovered["jobvite"].update(
+                        discover_jobvite_neighbors(html)
+                    )
+
+            except Exception:
+                return
+
+        companies = load_lines("data/greenhouse_companies.txt")
+
+        tasks = []
+
+        for slug in companies[:100]:  # safety limit
+            url = f"https://boards.greenhouse.io/{slug}"
+            tasks.append(scan(url))
+
+        await asyncio.gather(*tasks)
+
+    return discovered
 
 
 def run_discovery():
@@ -18,18 +87,13 @@ def run_discovery():
 
     # -------- DOMAIN ATS DISCOVERY --------
 
-    discovered = discover_from_domains(domains)
+    domain_discovered = discover_from_domains(domains)
 
-    for ats, companies in discovered.items():
+    learned = get_learned()
+
+    for ats, companies in domain_discovered.items():
+        learned[ats].update(companies)
         logger.info(f"{ats}: {len(companies)} discovered")
-
-    append_new_companies("data/greenhouse_companies.txt", discovered["greenhouse"])
-    append_new_companies("data/lever_companies.txt", discovered["lever"])
-    append_new_companies("data/workday_companies.txt", discovered["workday"])
-    append_new_companies("data/ashby_companies.txt", discovered["ashby"])
-    append_new_companies("data/workable_companies.txt", discovered["workable"])
-    append_new_companies("data/jobvite_companies.txt", discovered["jobvite"])
-
 
     # -------- CAREER PAGE ATS DETECTION --------
 
@@ -42,11 +106,20 @@ def run_discovery():
     logger.info("Career ATS detection results:")
 
     for ats, companies in career_discovered.items():
+        learned[ats].update(companies)
         logger.info(f"{ats}: {len(companies)} discovered")
 
-    append_new_companies("data/greenhouse_companies.txt", career_discovered["greenhouse"])
-    append_new_companies("data/lever_companies.txt", career_discovered["lever"])
-    append_new_companies("data/workday_companies.txt", career_discovered["workday"])
-    append_new_companies("data/ashby_companies.txt", career_discovered["ashby"])
-    append_new_companies("data/workable_companies.txt", career_discovered["workable"])
-    append_new_companies("data/jobvite_companies.txt", career_discovered["jobvite"])
+    # -------- ATS NETWORK DISCOVERY --------
+
+    logger.info("Running ATS network discovery...")
+
+    network_discovered = asyncio.run(
+        discover_from_existing_boards()
+    )
+
+    for ats, companies in network_discovered.items():
+        learned[ats].update(companies)
+        logger.info(f"{ats}: {len(companies)} discovered from ATS network")
+
+    #Final common persisting
+    persist_discovered_companies()

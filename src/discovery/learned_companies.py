@@ -48,7 +48,9 @@ def learn_from_job_url(url):
 
     elif "myworkdayjobs.com" in url:
         ats = "workday"
-        slug = url.split("myworkdayjobs.com/")[1].split("/")[0]
+        m = re.search(r"https://[^/]+\.myworkdayjobs\.com/[^/?#]+", url)
+        if m:
+            slug = m.group(0)
 
     if ats and slug:
         _DISCOVERED[ats].add(slug)

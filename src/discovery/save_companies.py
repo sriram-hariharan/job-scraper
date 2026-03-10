@@ -1,21 +1,34 @@
 import os
+import re
 
 def append_new_companies(file_path, companies):
 
     if not companies:
         return
 
-    existing = set()
+    # remove blanks
+    companies = {c.strip() for c in companies if c and c.strip()}
 
+    # ---- VALIDATION FIREWALL ----
+    if "workday" in file_path:
+        companies = {
+            c for c in companies
+            if re.match(r"^https://[^/]+\.myworkdayjobs\.com/[^/]+$", c)
+        }
+
+    # load existing
+    existing = set()
     if os.path.exists(file_path):
         with open(file_path) as f:
             existing = {line.strip() for line in f if line.strip()}
 
-    new = set(companies) - existing
+    # compute new companies
+    new = companies - existing
 
     if not new:
         return
 
+    # append new ones
     with open(file_path, "a") as f:
         for c in sorted(new):
             f.write(c + "\n")

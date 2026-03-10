@@ -13,7 +13,6 @@ ATS_FILES = {
 def persist_discovered_companies():
     learned = get_learned()
     for ats, companies in learned.items():
-
         if not companies:
             continue
 

@@ -14,6 +14,7 @@ from src.utils.logging import get_logger
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.pipeline.job_filter import title_matches, posted_within_24h
 from src.discovery.learned_companies import learn_from_job_url
+from src.utils.url_normalizer import normalize_workday_url
 
 logger = get_logger("workday")
 
@@ -197,7 +198,11 @@ def scrape_company(board_url):
             )
 
             job_url = f"{board_url.rstrip('/')}/{job_id.lstrip('/')}"
-            learn_from_job_url(job_url)
+            normalized = normalize_workday_url(job_url)
+
+            if normalized:
+                learn_from_job_url(normalized)
+                
             jobs.append(
                 Job(
                     title=title,

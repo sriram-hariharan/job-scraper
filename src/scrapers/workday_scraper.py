@@ -1,15 +1,18 @@
 import requests
 import time
+
 from src.utils.http_retry import retry_request
 from src.config.consts import (
     WORKDAY_API_URL_TEMPLATE,
     WORKDAY_ORIGIN_TEMPLATE
 )
+
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
-from src.discovery.learned_companies import learn_from_job_url
+from src.pipeline.job_filter import posted_within_24h
+from src.utils.workday_timestamp import fetch_workday_timestamp
 
 logger = get_logger("workday")
 
@@ -40,6 +43,7 @@ def get_us_country_facet(data):
                 return facet.get("name"), val.get("id")
 
     return None, None
+
 
 def scrape_company(board_url):
 
@@ -72,6 +76,7 @@ def scrape_company(board_url):
     offset = 0
     limit = 20
 
+    # initial probe request
     payload = {"limit": 1, "offset": 0, "searchText": ""}
 
     r = workday_post(api_url, json=payload, headers=headers, timeout=10)
@@ -98,7 +103,6 @@ def scrape_company(board_url):
             }
 
         try:
-
             r = workday_post(api_url, json=payload, headers=headers, timeout=10)
 
             if r is not None and r.status_code == 400 and "appliedFacets" in payload:
@@ -142,6 +146,13 @@ def scrape_company(board_url):
 
             if job_id in seen_jobs:
                 continue
+
+            # ---- EARLY STOP CHECK (first job of page only) ----
+            if new_jobs_this_page == 0:
+                ts = fetch_workday_timestamp(board_url, job_id)
+
+                if ts and not posted_within_24h(ts):
+                    return jobs
 
             seen_jobs.add(job_id)
             new_jobs_this_page += 1

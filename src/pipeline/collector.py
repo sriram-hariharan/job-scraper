@@ -29,10 +29,10 @@ def print_source_counts(title, jobs):
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
-        # ("workday", scrape_all_workday),
+        ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
         ("lever", scrape_all_lever),
-        # ("ashby", scrape_all_ashby),
+        ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
     ]
@@ -71,7 +71,6 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     logger.info(f"Total scraping time: {total_elapsed}s")
     logger.info(f"Total raw jobs collected: {len(all_jobs)}")
-    logger.info(f"Sample job: {all_jobs[0]}")
     
     # ----- DEBUG BEFORE FILTERING -----
 

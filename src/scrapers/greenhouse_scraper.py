@@ -14,6 +14,7 @@ from src.discovery.crawl_scheduler import (
     should_scrape,
     mark_scraped
 )
+from src.pipeline.job_filter import title_matches, us_location, posted_within_24h
 from src.config.settings import SCRAPER_DEV_MODE
 
 logger = get_logger("greenhouse")
@@ -36,9 +37,21 @@ async def fetch_company_jobs(session, company, schedule):
         postings = data.get("jobs", [])
 
         for job in postings:
+
             title = job.get("title", "")
             location = job.get("location", {}).get("name", "")
             job_url = job.get("absolute_url")
+            posted_at = job.get("updated_at")
+
+            # --- PRE FILTERS ---
+            if not title_matches(title):
+                continue
+
+            if not us_location(location, "greenhouse"):
+                continue
+
+            if not posted_within_24h(posted_at):
+                continue
 
             learn_from_job_url(job_url)
 
@@ -49,7 +62,7 @@ async def fetch_company_jobs(session, company, schedule):
                     location=location,
                     url=job_url,
                     source="greenhouse",
-                    posted_at=job.get("updated_at")
+                    posted_at=posted_at
                 ).to_dict()
             )
 
@@ -90,9 +103,9 @@ async def scrape_all_greenhouse_async():
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
+        all_neighbors = set()
         tasks = [fetch_company_jobs(session, c, schedule) for c in companies]
 
-        all_neighbors = set()
         for future in tqdm(asyncio.as_completed(tasks),
                         total=len(tasks),
                         desc="Greenhouse scraping"):

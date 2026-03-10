@@ -62,13 +62,13 @@ async def scrape_all_lever_async():
     # remove duplicates
     companies = list(set(companies))
 
-    connector = aiohttp.TCPConnector(limit=50)
+    connector = aiohttp.TCPConnector(limit=100)
 
     all_jobs = []
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        sem = asyncio.Semaphore(50)
+        sem = asyncio.Semaphore(100)
         async def limited_fetch(company):
             async with sem:
                 return await fetch_company_jobs(session, company)

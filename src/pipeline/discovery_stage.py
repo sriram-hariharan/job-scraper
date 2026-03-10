@@ -26,51 +26,68 @@ async def discover_from_existing_boards():
         "lever": set(),
         "ashby": set(),
         "workable": set(),
-        "jobvite": set()
+        "jobvite": set(),
+        "workday": set()
     }
 
+    semaphore = asyncio.Semaphore(20)   # limit concurrent requests
     async with aiohttp.ClientSession() as session:
 
         async def scan(url):
 
-            try:
-                async with session.get(url, timeout=10) as resp:
+            async with semaphore:   # concurrency control
 
-                    if resp.status != 200:
-                        return
+                try:
+                    async with session.get(
+                        url,
+                        timeout=10,
+                        headers={"User-Agent": "Mozilla/5.0"}
+                    ) as resp:
 
-                    html = await resp.text()
+                        if resp.status != 200:
+                            return
 
-                    discovered["greenhouse"].update(
-                        discover_greenhouse_neighbors(html)
-                    )
+                        html = await resp.text()
 
-                    discovered["lever"].update(
-                        discover_lever_neighbors(html)
-                    )
+                        discovered["greenhouse"].update(
+                            discover_greenhouse_neighbors(html)
+                        )
 
-                    discovered["ashby"].update(
-                        discover_ashby_neighbors(html)
-                    )
+                        discovered["lever"].update(
+                            discover_lever_neighbors(html)
+                        )
 
-                    discovered["workable"].update(
-                        discover_workable_neighbors(html)
-                    )
+                        discovered["ashby"].update(
+                            discover_ashby_neighbors(html)
+                        )
 
-                    discovered["jobvite"].update(
-                        discover_jobvite_neighbors(html)
-                    )
+                        discovered["workable"].update(
+                            discover_workable_neighbors(html)
+                        )
 
-            except Exception:
-                return
+                        discovered["jobvite"].update(
+                            discover_jobvite_neighbors(html)
+                        )
 
-        companies = load_lines("data/greenhouse_companies.txt")
+                except Exception:
+                    return
+
+        ATS_BOARD_URLS = {
+            "greenhouse": ("data/greenhouse_companies.txt", "https://boards.greenhouse.io/{}"),
+            "lever": ("data/lever_companies.txt", "https://jobs.lever.co/{}"),
+            "ashby": ("data/ashby_companies.txt", "https://jobs.ashbyhq.com/{}"),
+            "workable": ("data/workable_companies.txt", "https://apply.workable.com/{}"),
+            "jobvite": ("data/jobvite_companies.txt", "https://jobs.jobvite.com/{}")
+        }
 
         tasks = []
+        for ats, (file_path, url_template) in ATS_BOARD_URLS.items():
 
-        for slug in companies[:100]:  # safety limit
-            url = f"https://boards.greenhouse.io/{slug}"
-            tasks.append(scan(url))
+            companies = load_lines(file_path)
+
+            for slug in companies[:100]:   # safety limit
+                url = url_template.format(slug)
+                tasks.append(scan(url))
 
         await asyncio.gather(*tasks)
 

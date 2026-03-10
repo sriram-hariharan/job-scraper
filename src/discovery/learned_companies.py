@@ -2,7 +2,6 @@ import json
 import os
 import re
 from src.utils.logging import get_logger
-from src.discovery.learn_domains import learn_domain_from_slug
 
 logger = get_logger(__name__)
 
@@ -13,7 +12,8 @@ _DISCOVERED = {
     "lever": set(),
     "workday": set(),
     "workable": set(),
-    "jobvite": set()
+    "jobvite": set(),
+    "smartrecruiters": set()
 }
 def get_learned():
     return _DISCOVERED

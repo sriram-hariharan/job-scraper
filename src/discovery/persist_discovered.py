@@ -8,6 +8,7 @@ ATS_FILES = {
     "ashby": "data/ashby_companies.txt",
     "workable": "data/workable_companies.txt",
     "jobvite": "data/jobvite_companies.txt",
+    "smartrecruiters": "data/smartrecruiters_companies.txt",
 }
 
 def persist_discovered_companies():

@@ -21,6 +21,7 @@ from src.config.consts import (
     FRESHNESS_HOURS,
 )
 from src.utils.logging import get_logger
+from src.scrapers.ashby_scraper import fetch_ashby_timestamp
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,14 @@ def us_location(location, source):
 
     loc = location.upper()
 
+    if source == "ashby":
+        if "REMOTE" in loc and ("US" in loc or "UNITED STATES" in loc):
+            return True
+        if loc == "REMOTE":
+            return True
+        if loc == "UNITED STATES":
+            return True
+        
     if source == ATS_LEVER and "," not in loc and "USA" not in loc and "UNITED STATES" not in loc:
         return False
 
@@ -96,8 +105,8 @@ def posted_within_24h(posted_at_raw):
 
 def filter_jobs(jobs):
 
-    logger.debug("FILTER PIPELINE START")
-    logger.debug(f"Total jobs entering filter: {len(jobs)}")
+    logger.info("FILTER PIPELINE START")
+    logger.info(f"Total jobs entering filter: {len(jobs)}")
 
     title_pass = 0
     location_pass = 0
@@ -112,18 +121,57 @@ def filter_jobs(jobs):
 
         if not title_matches(title):
             continue
-
         title_pass += 1
 
         if not any(us_location(loc, job.get("source")) for loc in locations):
             continue
-
+        
         location_pass += 1
         prefiltered.append(job)
 
-    logger.debug(f"Jobs passing title filter: {title_pass}")
-    logger.debug(f"Jobs passing location filter: {location_pass}")
-    logger.debug(f"Jobs after title/location filtering: {len(prefiltered)}")
+    logger.info(f"Jobs passing title filter: {title_pass}")
+    logger.info(f"Jobs passing location filter: {location_pass}")
+    logger.info(f"Jobs after title/location filtering: {len(prefiltered)}")
+
+    ashby_missing = [
+    job for job in prefiltered
+    if job.get("source") == "ashby"
+    and not job.get("posted_at")
+    and job.get("_job_id")
+    ]
+
+    logger.info(f"Ashby jobs missing timestamp: {len(ashby_missing)}")
+
+    if ashby_missing:
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+
+            futures = {
+                executor.submit(
+                    fetch_ashby_timestamp,
+                    job["company"],
+                    job["_job_id"]
+                ): job
+                for job in ashby_missing
+            }
+
+            resolved = 0
+
+            for future in as_completed(futures):
+
+                job = futures[future]
+
+                try:
+                    ts = future.result()
+
+                    if ts:
+                        job["posted_at"] = ts
+                        resolved += 1
+
+                except Exception:
+                    pass
+
+        logger.info(f"Ashby timestamps resolved: {resolved}")
 
     # resolve missing Workday timestamps
     workday_missing = [
@@ -133,8 +181,6 @@ def filter_jobs(jobs):
         and job.get("_externalPath")
         and job.get("_board_url")
     ]
-
-    logger.debug(f"Workday jobs missing timestamp (to fetch): {len(workday_missing)}")
 
     if workday_missing:
         with ThreadPoolExecutor(max_workers=TIMESTAMP_WORKERS) as executor:
@@ -160,13 +206,12 @@ def filter_jobs(jobs):
                 except Exception:
                     pass
 
-        logger.debug(f"Resolved timestamps: {resolved}")
+        logger.info(f"Resolved timestamps: {resolved}")
 
     filtered = []
     freshness_pass = 0
 
     for job in prefiltered:
-
         posted = job.get("posted_at")
 
         if job.get("source") == ATS_JOBVITE:
@@ -175,12 +220,15 @@ def filter_jobs(jobs):
 
         if not posted_within_24h(posted):
             continue
-
+        
         freshness_pass += 1
         filtered.append(job)
 
-    logger.debug(f"Jobs passing freshness filter: {freshness_pass}")
-    logger.debug(f"Jobs after filtering: {len(filtered)}")
-    logger.debug("FILTER PIPELINE END")
+    logger.info(f"Jobs passing freshness filter: {freshness_pass}")
+    logger.info(f"Jobs after filtering: {len(filtered)}")
+    logger.info("FILTER PIPELINE END")
+
+    for job in filtered:
+        job.pop("_job_id", None)
 
     return filtered

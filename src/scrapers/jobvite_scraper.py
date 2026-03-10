@@ -39,7 +39,6 @@ def fetch_jobvite_posted_date(job_url):
 def fetch_company_jobs(company):
 
     urls = [u.format(company=company) for u in JOBVITE_URL_PATTERNS]
-
     html = None
 
     for url in urls:
@@ -62,12 +61,18 @@ def fetch_company_jobs(company):
 
     links = soup.find_all("a", href=True)
 
+    seen_urls = set()
+
     for link in links:
-
         href = link["href"]
-
         if "/job/" not in href:
             continue
+
+        job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
+        if job_url in seen_urls:
+            continue
+
+        seen_urls.add(job_url)
 
         # find job container
         container = link.find_parent("div")
@@ -79,9 +84,10 @@ def fetch_company_jobs(company):
 
         title = link.text.strip()
 
-        job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
         learn_from_job_url(job_url)
-        posted_at = fetch_jobvite_posted_date(job_url)
+        posted_at = None
+        if is_new:
+            posted_at = fetch_jobvite_posted_date(job_url)
 
         # jobs.append({
         #     "company": company,

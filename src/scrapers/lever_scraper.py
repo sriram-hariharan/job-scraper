@@ -6,12 +6,18 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url, load_learned
+from src.pipeline.job_filter import (
+    title_matches,
+    us_location,
+    posted_within_24h
+)
 
 logger = get_logger("lever")
 
 async def fetch_company_jobs(session, company):
 
     url = f"{LEVER_API}/{company}?mode=json"
+
     try:
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
@@ -20,7 +26,7 @@ async def fetch_company_jobs(session, company):
 
             data = await resp.json()
 
-    except Exception as e:
+    except Exception:
         return []
 
     jobs = []
@@ -30,24 +36,32 @@ async def fetch_company_jobs(session, company):
         title = job.get("text", "")
         location = job.get("categories", {}).get("location", "")
         job_url = job.get("hostedUrl", "")
+        posted_at = job.get("createdAt")
+
         learn_from_job_url(job_url)
-        
-        # jobs.append({
-        #     "company": company,
-        #     "title": title,
-        #     "location": location,
-        #     "url": job_url,
-        #     "source": "lever",
-        #     "posted_at": job.get("createdAt")
-        # })
-        jobs.append(Job(
-            company=company,
-            title=title,
-            location=location,
-            url=job_url,
-            source="lever",
-            posted_at=job.get("createdAt")
-        ).to_dict())
+
+        # ---------- EARLY FILTERS ----------
+
+        if not title_matches(title):
+            continue
+
+        if not us_location(location, "lever"):
+            continue
+
+        if not posted_within_24h(posted_at):
+            continue
+        # -----------------------------------
+
+        jobs.append(
+            Job(
+                company=company,
+                title=title,
+                location=location,
+                url=job_url,
+                source="lever",
+                posted_at=posted_at
+            ).to_dict()
+        )
 
     return jobs
 

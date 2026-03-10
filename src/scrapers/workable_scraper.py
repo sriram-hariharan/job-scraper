@@ -62,17 +62,35 @@ def fetch_company_jobs(company):
     jobs_data = []
     v3_url = WORKABLE_V3_API.format(company)
 
-    try:
-        r = workable_post(
-            v3_url,
-            json={"limit": 50, "offset": 0},
-            headers={"Content-Type": "application/json"},
-            timeout=10
-        )
+    limit = 50
+    offset = 0
 
-        if r is not None and r.status_code == 200:
+    try:
+
+        while True:
+
+            r = workable_post(
+                v3_url,
+                json={"limit": limit, "offset": offset},
+                headers={"Content-Type": "application/json"},
+                timeout=10
+            )
+
+            if r is None or r.status_code != 200:
+                break
+
             data = r.json()
-            jobs_data = extract_v3_jobs(data)
+            postings = extract_v3_jobs(data)
+
+            if not postings:
+                break
+
+            jobs_data.extend(postings)
+
+            if len(postings) < limit:
+                break
+
+            offset += limit
 
     except Exception:
         pass
@@ -103,7 +121,8 @@ def fetch_company_jobs(company):
         country = (job.get("country") or "").strip()
 
         location = ", ".join(p for p in [city, state, country] if p)
-
+        if not location:
+            location = country
         shortcode = job.get("shortcode")
 
         url = job.get("url")
@@ -138,7 +157,10 @@ def fetch_company_jobs(company):
         ).to_dict())
 
     # resolve missing timestamps via v2 API
-    missing_jobs = [j for j in jobs if not j.get("posted_at") and j.get("_shortcode")]
+    missing_jobs = [
+        j for j in jobs
+        if not j.get("posted_at") and j.get("_shortcode")
+        ]
 
     if missing_jobs:
 

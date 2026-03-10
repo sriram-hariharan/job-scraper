@@ -33,14 +33,13 @@ query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
   jobBoard: jobBoardWithTeams(
     organizationHostedJobsPageName: $organizationHostedJobsPageName
   ) {
-        jobPostings {
-        id
-        title
-        locationName
-        workplaceType
-        employmentType
-        publishedDate
-        }
+    jobPostings {
+      id
+      title
+      locationName
+      workplaceType
+      employmentType
+    }
   }
 }
 """

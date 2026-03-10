@@ -29,12 +29,12 @@ def print_source_counts(title, jobs):
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
-        ("workday", scrape_all_workday),
-        ("greenhouse", scrape_all_greenhouse),
-        ("lever", scrape_all_lever),
+        # ("workday", scrape_all_workday),
+        # ("greenhouse", scrape_all_greenhouse),
+        # ("lever", scrape_all_lever),
         ("ashby", scrape_all_ashby),
-        ("workable", scrape_all_workable),
-        ("jobvite", scrape_all_jobvite),
+        # ("workable", scrape_all_workable),
+        # ("jobvite", scrape_all_jobvite),
     ]
 
     all_jobs: List[Dict[str, Any]] = []

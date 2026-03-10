@@ -374,3 +374,12 @@ zuora
 coinbase
 databricks
 stripe
+tandem
+partiful
+akasa
+imprint
+parafin
+ramp
+mercor
+atticus
+siro

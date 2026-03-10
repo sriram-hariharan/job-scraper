@@ -11,8 +11,8 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
-from src.pipeline.job_filter import posted_within_24h
 from src.utils.workday_timestamp import fetch_workday_timestamp
+from src.pipeline.job_filter import title_matches, posted_within_24h
 
 logger = get_logger("workday")
 
@@ -20,11 +20,6 @@ session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0"
 })
-
-
-@retry_request(retries=2)
-def workday_get(url, **kwargs):
-    return session.get(url, **kwargs)
 
 
 @retry_request(retries=2)
@@ -75,19 +70,10 @@ def scrape_company(board_url):
     jobs = []
     offset = 0
     limit = 20
-
-    # initial probe request
-    payload = {"limit": 1, "offset": 0, "searchText": ""}
-
-    r = workday_post(api_url, json=payload, headers=headers, timeout=10)
-    if r is None or r.status_code != 200:
-        return []
-
-    data = r.json()
-
-    facet_name, country_filter = get_us_country_facet(data)
-
     total = None
+
+    facet_name = None
+    country_filter = None
 
     while True:
 
@@ -105,17 +91,17 @@ def scrape_company(board_url):
         try:
             r = workday_post(api_url, json=payload, headers=headers, timeout=10)
 
-            if r is not None and r.status_code == 400 and "appliedFacets" in payload:
-                payload.pop("appliedFacets")
-                r = workday_post(api_url, json=payload, headers=headers, timeout=10)
-
-            if r.status_code != 200:
+            if r is None or r.status_code != 200:
                 break
 
             data = r.json()
 
         except Exception:
             break
+
+        # detect US facet once
+        if facet_name is None:
+            facet_name, country_filter = get_us_country_facet(data)
 
         if total is None:
             total = data.get("total")
@@ -135,7 +121,17 @@ def scrape_company(board_url):
         if not postings:
             break
 
-        new_jobs_this_page = 0
+        page_number = offset // limit
+
+        if page_number > 0:
+            first_job = postings[0]
+            job_id = first_job.get("externalPath")
+
+            if job_id:
+                ts = fetch_workday_timestamp(board_url, job_id)
+
+                if ts and not posted_within_24h(ts):
+                    return jobs
 
         for job in postings:
 
@@ -147,15 +143,18 @@ def scrape_company(board_url):
             if job_id in seen_jobs:
                 continue
 
-            # ---- EARLY STOP CHECK (first job of page only) ----
-            if new_jobs_this_page == 0:
-                ts = fetch_workday_timestamp(board_url, job_id)
+            # # ---- EARLY STOP AFTER PAGE 1 ----
+            # if page_number > 0:
+            #     ts = fetch_workday_timestamp(board_url, job_id)
 
-                if ts and not posted_within_24h(ts):
-                    return jobs
+            #     if ts and not posted_within_24h(ts):
+            #         return jobs
 
-            seen_jobs.add(job_id)
-            new_jobs_this_page += 1
+            title = job.get("title")
+
+            # ----- TITLE FILTER -----
+            if not title_matches(title):
+                continue
 
             primary_location = (
                 job.get("location")
@@ -175,6 +174,8 @@ def scrape_company(board_url):
             if not locations and job.get("locationsText"):
                 locations.append(job.get("locationsText"))
 
+            seen_jobs.add(job_id)
+
             info = job.get("jobPostingInfo", {})
 
             posted_at = (
@@ -191,7 +192,7 @@ def scrape_company(board_url):
 
             jobs.append(
                 Job(
-                    title=job.get("title"),
+                    title=title,
                     location=locations,
                     url=job_url,
                     company=tenant,
@@ -203,9 +204,6 @@ def scrape_company(board_url):
                     }
                 ).to_dict()
             )
-
-        if new_jobs_this_page == 0:
-            break
 
         offset += limit
 

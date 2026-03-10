@@ -1,31 +1,25 @@
-import random
-import requests
+import re
+from src.config.consts import GREENHOUSE_PATTERNS, INVALID_GREENHOUSE_SLUGS
 
-session = requests.Session()
-session.headers.update({"User-Agent": "Mozilla/5.0"})
+def discover_greenhouse_neighbors(html: str):
 
-def discover_greenhouse_neighbors(limit=50):
-
-    url = "https://boards-api.greenhouse.io/v1/boards"
-
-    try:
-        r = session.get(url, timeout=3)
-        if r.status_code != 200:
-            return []
-
-        data = r.json()
-    except Exception:
+    if not html:
         return []
 
-    companies = []
+    discovered = set()
 
-    for board in data.get("boards", []):
-        slug = board.get("token")
-        if slug:
-            companies.append(slug)
+    for pattern in GREENHOUSE_PATTERNS:
+        matches = re.findall(pattern, html, flags=re.IGNORECASE)
 
-    # randomize so expansion is different every run
-    random.shuffle(companies)
+        for slug in matches:
+            slug = slug.strip().lower()
 
-    # return only a small batch
-    return companies[:limit]
+            if not slug:
+                continue
+
+            if slug in INVALID_GREENHOUSE_SLUGS:
+                continue
+
+            discovered.add(slug)
+
+    return sorted(discovered)

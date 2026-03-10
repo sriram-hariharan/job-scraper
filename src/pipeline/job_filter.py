@@ -20,7 +20,9 @@ from src.config.consts import (
     DATE_ONLY_HOUR,
     FRESHNESS_HOURS,
 )
+from src.utils.logging import get_logger
 
+logger = get_logger(__name__)
 
 def normalize_title(title):
     if not title:
@@ -33,12 +35,10 @@ def normalize_title(title):
 
 
 def title_matches(title):
-
     if not title:
         return False
 
     normalized = normalize_title(title)
-
     if not any(regex.search(normalized) for regex in TITLE_INCLUDE_REGEX):
         return False
 
@@ -82,9 +82,7 @@ def us_location(location, source):
 
 
 def posted_within_24h(posted_at_raw):
-
     dt = parse_posted_at(posted_at_raw)
-
     if not dt:
         return False
 
@@ -98,8 +96,8 @@ def posted_within_24h(posted_at_raw):
 
 def filter_jobs(jobs):
 
-    print("\n--- FILTER DEBUG START ---")
-    print("Total jobs entering filter:", len(jobs))
+    logger.debug("FILTER PIPELINE START")
+    logger.debug(f"Total jobs entering filter: {len(jobs)}")
 
     title_pass = 0
     location_pass = 0
@@ -123,9 +121,9 @@ def filter_jobs(jobs):
         location_pass += 1
         prefiltered.append(job)
 
-    print("Jobs passing title filter:", title_pass)
-    print("Jobs passing location filter:", location_pass)
-    print("Jobs after title/location filtering:", len(prefiltered))
+    logger.debug(f"Jobs passing title filter: {title_pass}")
+    logger.debug(f"Jobs passing location filter: {location_pass}")
+    logger.debug(f"Jobs after title/location filtering: {len(prefiltered)}")
 
     # resolve missing Workday timestamps
     workday_missing = [
@@ -136,12 +134,10 @@ def filter_jobs(jobs):
         and job.get("_board_url")
     ]
 
-    print("Workday jobs missing timestamp (to fetch):", len(workday_missing))
+    logger.debug(f"Workday jobs missing timestamp (to fetch): {len(workday_missing)}")
 
     if workday_missing:
-
         with ThreadPoolExecutor(max_workers=TIMESTAMP_WORKERS) as executor:
-
             futures = {
                 executor.submit(
                     fetch_workday_timestamp,
@@ -152,7 +148,6 @@ def filter_jobs(jobs):
             }
 
             resolved = 0
-
             for future in as_completed(futures):
 
                 job = futures[future]
@@ -165,7 +160,7 @@ def filter_jobs(jobs):
                 except Exception:
                     pass
 
-        print("Resolved timestamps:", resolved)
+        logger.debug(f"Resolved timestamps: {resolved}")
 
     filtered = []
     freshness_pass = 0
@@ -184,8 +179,8 @@ def filter_jobs(jobs):
         freshness_pass += 1
         filtered.append(job)
 
-    print("Jobs passing freshness filter:", freshness_pass)
-    print("Jobs after filtering:", len(filtered))
-    print("--- FILTER DEBUG END ---\n")
+    logger.debug(f"Jobs passing freshness filter: {freshness_pass}")
+    logger.debug(f"Jobs after filtering: {len(filtered)}")
+    logger.debug("FILTER PIPELINE END")
 
     return filtered

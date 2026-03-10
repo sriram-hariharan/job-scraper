@@ -1,0 +1,1 @@
+SCRAPER_DEV_MODE = True

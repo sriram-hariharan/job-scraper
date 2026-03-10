@@ -12,7 +12,7 @@ from src.scrapers.jobvite_scraper import scrape_all_jobvite
 
 from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
-    
+from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
@@ -29,15 +29,17 @@ def print_source_counts(title, jobs):
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
-        ("workday", scrape_all_workday),
+        # ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
         ("lever", scrape_all_lever),
-        ("ashby", scrape_all_ashby),
+        # ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
+    seen_job_ids = load_seen_job_ids()
+    logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
 
     start_total = time.time()
 
@@ -69,26 +71,26 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     logger.info(f"Total scraping time: {total_elapsed}s")
     logger.info(f"Total raw jobs collected: {len(all_jobs)}")
+    logger.info(f"Sample job: {all_jobs[0]}")
     
     # ----- DEBUG BEFORE FILTERING -----
 
     print_source_counts("Raw jobs by source:", all_jobs)
 
     # ----- FILTER -----
-
     filtered_jobs = filter_jobs(all_jobs)
-    
-    logger.info("Jobs missing posted_at after filtering:")
-    missing = Counter(job["source"] for job in all_jobs if not job.get("posted_at"))
-    for source, count in missing.items():
-        logger.info(f"{source} {count}")
-
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
-
     print_source_counts("Filtered jobs by source:", filtered_jobs)
 
+    # ----- DEDUPE -----
     deduped_jobs = dedupe_jobs(filtered_jobs)
+    logger.info(f"Jobs after dedupe: {len(deduped_jobs)}")
 
-    logger.info(f"Total deduped jobs: {len(deduped_jobs)}")
+    # ----- CACHE FILTER -----
+    new_jobs, new_job_ids = filter_new_jobs(deduped_jobs, seen_job_ids)
+    logger.info(f"New jobs after cache filtering: {len(new_jobs)}")
 
-    return deduped_jobs
+    # ----- SAVE CACHE -----
+    save_new_job_ids(new_job_ids)
+
+    return new_jobs

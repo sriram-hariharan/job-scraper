@@ -33,5 +33,4 @@ def dedupe_jobs(jobs):
         seen.add(key)
         unique_jobs.append(job)
 
-    logger.info(f"Jobs after dedupe: {len(unique_jobs)}")
     return unique_jobs

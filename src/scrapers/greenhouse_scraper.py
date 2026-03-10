@@ -14,6 +14,7 @@ from src.discovery.crawl_scheduler import (
     should_scrape,
     mark_scraped
 )
+from src.config.settings import SCRAPER_DEV_MODE
 
 logger = get_logger("greenhouse")
 
@@ -22,12 +23,13 @@ async def fetch_company_jobs(session, company, schedule):
     url = GREENHOUSE_API.format(company)
 
     jobs = []
+    neighbors = []
 
     try:
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                return jobs
+                return jobs, neighbors
 
             data = await resp.json()
 
@@ -52,40 +54,36 @@ async def fetch_company_jobs(session, company, schedule):
             )
 
         # --- ATS NETWORK DISCOVERY ---
-        # neighbors = discover_greenhouse_neighbors(company)
+        neighbors = discover_greenhouse_neighbors(company)
 
-        # if neighbors:
-        #     append_new_companies(
-        #         "data/greenhouse_companies.txt",
-        #         neighbors
-        #     )
-        return jobs
+        return jobs, neighbors
     except Exception:
-        pass
+        return jobs, neighbors
 
     finally:
         # ALWAYS mark company as crawled
         mark_scraped(company, schedule)
 
-    return jobs
-
-
 async def scrape_all_greenhouse_async():
 
     # companies = load_lines("data/greenhouse_companies.txt")
     companies = load_lines("data/greenhouse_companies.txt")
+    logger.info(f"Greenhouse companies loaded: {len(companies)}")
     learned = load_learned()
     companies += learned.get("greenhouse", [])
+    logger.info(f"Greenhouse companies after adding learned: {len(companies)}")
 
     # remove duplicates
     companies = list(set(companies))
     schedule = load_schedule()
 
     # scheduler filtering
-    companies = [
-        c for c in companies
-        if should_scrape(c, schedule)
-    ]
+    if not SCRAPER_DEV_MODE:
+        companies = [
+            c for c in companies
+            if should_scrape(c, schedule)
+        ]
+    logger.info(f"Greenhouse companies after schedule filter: {len(companies)}")
 
     connector = aiohttp.TCPConnector(limit=50)
     all_jobs = []

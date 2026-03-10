@@ -1,6 +1,5 @@
 from src.discovery.discovery import discover_from_domains
 from src.discovery.save_companies import append_new_companies
-from src.discovery.ats_network_discovery import discover_greenhouse_neighbors
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 
@@ -29,14 +28,6 @@ def run_discovery():
     append_new_companies("data/jobvite_companies.txt", discovered["jobvite"])
 
     # -------- GREENHOUSE NETWORK EXPANSION --------
-
-    logger.info("Greenhouse network discovery...")
-
-    neighbors = discover_greenhouse_neighbors(limit=50)
-
-    append_new_companies(
-        "data/greenhouse_companies.txt",
-        neighbors
-    )
-
-    logger.info(f"Greenhouse expansion added: {len(neighbors)} companies")
+    # Greenhouse discovery now happens during scraping
+    # (board HTML + job URL learning)
+    logger.info("Greenhouse discovery handled during scraping stage")

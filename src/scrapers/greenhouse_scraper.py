@@ -5,8 +5,7 @@ from src.config.consts import GREENHOUSE_API
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
-from src.discovery.learned_companies import learn_from_job_url, load_learned
-from src.discovery.ats_network_discovery import discover_greenhouse_neighbors
+from src.discovery.learned_companies import learn_from_job_url, get_learned
 from src.discovery.save_companies import append_new_companies
 from src.discovery.crawl_scheduler import (
     load_schedule,
@@ -24,13 +23,12 @@ async def fetch_company_jobs(session, company, schedule):
     url = GREENHOUSE_API.format(company)
 
     jobs = []
-    neighbors = []
 
     try:
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
 
             if resp.status != 200:
-                return jobs, neighbors
+                return jobs
 
             data = await resp.json()
 
@@ -66,12 +64,10 @@ async def fetch_company_jobs(session, company, schedule):
                 ).to_dict()
             )
 
-        # --- ATS NETWORK DISCOVERY ---
-        neighbors = discover_greenhouse_neighbors(company)
+        return jobs
 
-        return jobs, neighbors
     except Exception:
-        return jobs, neighbors
+        return jobs
 
     finally:
         # ALWAYS mark company as crawled
@@ -82,9 +78,6 @@ async def scrape_all_greenhouse_async():
     # companies = load_lines("data/greenhouse_companies.txt")
     companies = load_lines("data/greenhouse_companies.txt")
     logger.info(f"Greenhouse companies loaded: {len(companies)}")
-    learned = load_learned()
-    companies += learned.get("greenhouse", [])
-    logger.info(f"Greenhouse companies after adding learned: {len(companies)}")
 
     # remove duplicates
     companies = list(set(companies))
@@ -103,26 +96,26 @@ async def scrape_all_greenhouse_async():
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        all_neighbors = set()
         tasks = [fetch_company_jobs(session, c, schedule) for c in companies]
 
         for future in tqdm(asyncio.as_completed(tasks),
                         total=len(tasks),
                         desc="Greenhouse scraping"):
 
-            jobs, neighbors = await future
-
+            jobs = await future
             all_jobs.extend(jobs)
 
-            if neighbors:
-                all_neighbors.update(neighbors)
+        # --- SAVE DISCOVERED COMPANIES ---
 
-        if all_neighbors:
+        discovered = get_learned().get("greenhouse", set())
+
+        if discovered:
             append_new_companies(
                 "data/greenhouse_companies.txt",
-                all_neighbors
+                discovered
             )
-
+            get_learned()["greenhouse"].clear()
+            
     save_schedule(schedule)
     return all_jobs
 

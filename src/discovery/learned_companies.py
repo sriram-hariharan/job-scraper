@@ -1,11 +1,10 @@
 import json
 import os
+import re
 from src.utils.logging import get_logger
 from src.discovery.learn_domains import learn_domain_from_slug
 
 logger = get_logger(__name__)
-
-DATA_PATH = "data/learned_companies.json"
 
 # in-memory store
 _DISCOVERED = {
@@ -16,6 +15,8 @@ _DISCOVERED = {
     "workable": set(),
     "jobvite": set()
 }
+def get_learned():
+    return _DISCOVERED
 
 def learn_from_job_url(url):
 
@@ -27,7 +28,9 @@ def learn_from_job_url(url):
 
     if "boards.greenhouse.io" in url:
         ats = "greenhouse"
-        slug = url.split("boards.greenhouse.io/")[1].split("/")[0].split("?")[0]
+        match = re.search(r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)", url)
+        if match:
+            slug = match.group(1)
 
     elif "jobs.ashbyhq.com" in url:
         ats = "ashby"
@@ -49,41 +52,4 @@ def learn_from_job_url(url):
         _DISCOVERED[ats].add(slug)
         # learn_domain_from_slug(slug)
 
-def save_learned():
-    logger.info("Saving discovered companies...")
-    
-    os.makedirs("data", exist_ok=True)
 
-    existing = {}
-
-    if os.path.exists(DATA_PATH):
-        try:
-            with open(DATA_PATH) as f:
-                existing = json.load(f)
-        except:
-            existing = {}
-
-    # merge existing + discovered
-    for ats, values in _DISCOVERED.items():
-
-        existing.setdefault(ats, [])
-
-        merged = set(existing[ats])
-        merged.update(values)
-
-        existing[ats] = sorted(list(merged))
-
-    with open(DATA_PATH, "w") as f:
-        json.dump(existing, f, indent=2)
-
-
-def load_learned():
-
-    if not os.path.exists(DATA_PATH):
-        return {}
-
-    try:
-        with open(DATA_PATH) as f:
-            return json.load(f)
-    except:
-        return {}

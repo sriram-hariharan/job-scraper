@@ -5,7 +5,7 @@ from src.config.consts import LEVER_API
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
-from src.discovery.learned_companies import learn_from_job_url, load_learned
+from src.discovery.learned_companies import learn_from_job_url
 from src.pipeline.job_filter import (
     title_matches,
     us_location,
@@ -69,9 +69,6 @@ async def fetch_company_jobs(session, company):
 async def scrape_all_lever_async():
 
     companies = load_lines("data/lever_companies.txt")
-    learned = load_learned()
-
-    companies += learned.get("lever", [])
 
     # remove duplicates
     companies = list(set(companies))

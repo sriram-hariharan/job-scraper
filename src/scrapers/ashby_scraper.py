@@ -5,8 +5,7 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
-from src.discovery.learned_companies import learn_from_job_url, load_learned
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from src.discovery.learned_companies import learn_from_job_url
 
 logger = get_logger("ashby")
 
@@ -116,8 +115,6 @@ def fetch_company_jobs(company):
 
 def scrape_all_ashby():
     companies = load_lines("data/ashby_companies.txt")
-    learned = load_learned()
-    companies += learned.get("ashby", [])
 
     # remove duplicates
     companies = list(set(companies))

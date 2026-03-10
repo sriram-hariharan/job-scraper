@@ -4,15 +4,19 @@ import pycountry
 TITLE_INCLUDE_PATTERNS = [
     r"data scientist",
     r"machine learning engineer",
-    r"ml engineer",
+    r"\bml engineer\b",
     r"ai engineer",
     r"applied scientist",
     r"research scientist",
+    r"research engineer",
     r"data analyst",
     r"decision scientist",
     r"ml scientist",
-    r"genai",
-    r"machine learning",
+    r"analytics engineer",
+    r"deep learning engineer",
+    r"computer vision engineer",
+    r"nlp engineer",
+    r"\bgenai\b",
 ]
 
 TITLE_EXCLUDE_PATTERNS = [
@@ -27,6 +31,7 @@ TITLE_EXCLUDE_PATTERNS = [
     r"staff",
     r"principal"
 ]
+
 #Ashby queries
 ASHBY_QUERY = """
 query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
@@ -159,3 +164,17 @@ CAREER_SUBDOMAINS = [
 WORKDAY_REGEX = re.compile(
     r"https://[a-zA-Z0-9-]+\.wd[0-9]+\.myworkdayjobs\.com/[a-zA-Z0-9_-]+"
 )
+
+INVALID_GREENHOUSE_SLUGS = {
+    "job",
+    "jobs",
+    "apply",
+    "careers",
+    "boards",
+    "greenhouse",
+}
+
+GREENHOUSE_PATTERNS = [
+    r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)",
+    r"job-boards\.greenhouse\.io/([a-zA-Z0-9_-]+)",
+]

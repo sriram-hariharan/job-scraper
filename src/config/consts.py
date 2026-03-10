@@ -84,6 +84,31 @@ US_STATE_NAMES = {
 "VIRGINIA","WASHINGTON","WEST VIRGINIA","WISCONSIN","WYOMING"
 }
 
+MAJOR_US_CITIES = {
+    "NEW YORK",
+    "SAN FRANCISCO",
+    "SEATTLE",
+    "AUSTIN",
+    "BOSTON",
+    "CHICAGO",
+    "LOS ANGELES",
+    "DENVER",
+    "ATLANTA",
+    "SAN DIEGO",
+    "PORTLAND",
+    "WASHINGTON",
+}
+
+FOREIGN_CITY_BLOCKLIST = {
+    "JERUSALEM",
+    "TEL AVIV",
+    "LONDON",
+    "TORONTO",
+    "BERLIN",
+    "PARIS",
+    "AMSTERDAM",
+}
+
 # compiled regex used for location parsing
 TOKEN_SPLIT_REGEX = re.compile(r"[,\-\s]+")
 
@@ -133,6 +158,8 @@ DATE_ONLY_HOUR = 12
 FRESHNESS_HOURS = 24
 
 #ATS Detection and discovery
+SLUG_REGEX = re.compile(r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)")
+
 CAREER_PATHS = [
     "",
     "/careers",
@@ -174,7 +201,38 @@ INVALID_GREENHOUSE_SLUGS = {
     "greenhouse",
 }
 
+#Greenhouse discovery
+
 GREENHOUSE_PATTERNS = [
     r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)",
     r"job-boards\.greenhouse\.io/([a-zA-Z0-9_-]+)",
 ]
+
+#ALL ATS DISCOVERY
+
+ATS_REGEX = {
+    "greenhouse": [
+        re.compile(r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)", re.I),
+        re.compile(r"boards\.greenhouse\.io/embed/job_board.*?for=([a-zA-Z0-9_-]+)", re.I),
+    ],
+
+    "lever": [
+        re.compile(r"jobs\.lever\.co/([a-zA-Z0-9_-]+)", re.I)
+    ],
+
+    "ashby": [
+        re.compile(r"jobs\.ashbyhq\.com/([a-zA-Z0-9_-]+)", re.I)
+    ],
+
+    "workable": [
+        re.compile(r"apply\.workable\.com/([a-zA-Z0-9_-]+)", re.I)
+    ],
+
+    "jobvite": [
+        re.compile(r"jobs\.jobvite\.com/([a-zA-Z0-9_-]+)", re.I)
+    ],
+
+    "workday": [
+        re.compile(r"myworkdayjobs\.com/([^/]+)/", re.I)
+    ]
+}

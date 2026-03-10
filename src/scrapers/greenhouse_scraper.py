@@ -104,17 +104,6 @@ async def scrape_all_greenhouse_async():
 
             jobs = await future
             all_jobs.extend(jobs)
-
-        # --- SAVE DISCOVERED COMPANIES ---
-
-        discovered = get_learned().get("greenhouse", set())
-
-        if discovered:
-            append_new_companies(
-                "data/greenhouse_companies.txt",
-                discovered
-            )
-            get_learned()["greenhouse"].clear()
             
     save_schedule(schedule)
     return all_jobs

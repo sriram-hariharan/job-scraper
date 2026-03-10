@@ -136,5 +136,4 @@ def scrape_all_ashby():
     logger.info("Ashby summary")
     logger.info("------------------")
     logger.info(f"Total jobs collected: {len(all_jobs)}")
-    print(type(all_jobs[0]))
     return all_jobs

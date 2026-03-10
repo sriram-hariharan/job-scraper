@@ -15,8 +15,8 @@ def main():
 
     jobs = collect_all_jobs()
     
-    if jobs:
-        write_jobs_to_sheet(jobs)
+    # if jobs:
+    #     write_jobs_to_sheet(jobs)
 
     logger.info("Final jobs: %s", len(jobs))
 

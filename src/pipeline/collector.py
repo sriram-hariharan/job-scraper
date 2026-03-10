@@ -14,6 +14,7 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.logging import get_logger
+from src.discovery.persist_discovered import persist_discovered_companies
 
 logger = get_logger("collector")
 
@@ -29,12 +30,12 @@ def print_source_counts(title, jobs):
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
     scrapers = [
-        # ("workday", scrape_all_workday),
+        ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
-        # ("lever", scrape_all_lever),
-        # ("ashby", scrape_all_ashby),
-        # ("workable", scrape_all_workable),
-        # ("jobvite", scrape_all_jobvite),
+        ("lever", scrape_all_lever),
+        ("ashby", scrape_all_ashby),
+        ("workable", scrape_all_workable),
+        ("jobvite", scrape_all_jobvite),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
@@ -51,15 +52,14 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
         }
 
         for future in as_completed(futures):
-
             name, start = futures[future]
-            elapsed = None
 
             try:
                 jobs = future.result()
                 elapsed = round(time.time() - start, 2)
 
                 logger.info(f"[collector] {name} finished | jobs={len(jobs)} | time={elapsed}s")
+
                 if jobs:
                     all_jobs.extend(jobs)
 
@@ -91,5 +91,8 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     # ----- SAVE CACHE -----
     save_new_job_ids(new_job_ids)
+
+    # ----- SAVE DISCOVERED COMPANIES -----
+    persist_discovered_companies()
 
     return new_jobs

@@ -13,6 +13,7 @@ from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.pipeline.job_filter import title_matches, posted_within_24h
+from src.discovery.learned_companies import learn_from_job_url
 
 logger = get_logger("workday")
 
@@ -44,9 +45,16 @@ def scrape_company(board_url):
 
     seen_jobs = set()
 
-    host = board_url.split(".myworkdayjobs.com")[0].replace("https://", "")
+    host_part = board_url.split(".myworkdayjobs.com")[0]
+    host = host_part.replace("https://", "")
     tenant = host.split(".")[0]
-    site = board_url.split(".myworkdayjobs.com/")[1].split("?")[0].strip("/")
+
+    site = ""
+    if ".myworkdayjobs.com/" in board_url:
+        site = board_url.split(".myworkdayjobs.com/", 1)[1].split("?")[0].strip("/")
+
+    if not site:
+        return []
 
     api_url = WORKDAY_API_URL_TEMPLATE.format(
         host=host,
@@ -189,7 +197,7 @@ def scrape_company(board_url):
             )
 
             job_url = f"{board_url.rstrip('/')}/{job_id.lstrip('/')}"
-
+            learn_from_job_url(job_url)
             jobs.append(
                 Job(
                     title=title,

@@ -28,17 +28,15 @@ def learn_from_job_url(url):
 
     if "boards.greenhouse.io" in url:
         ats = "greenhouse"
-        match = re.search(r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)", url)
-        if match:
-            slug = match.group(1)
+        slug = url.split("boards.greenhouse.io/")[1].split("/")[0].split("?")[0]
+
+    elif "jobs.lever.co" in url:
+        ats = "lever"
+        slug = url.split("jobs.lever.co/")[1].split("/")[0].split("?")[0]
 
     elif "jobs.ashbyhq.com" in url:
         ats = "ashby"
         slug = url.split("jobs.ashbyhq.com/")[1].split("/")[0].split("?")[0]
-
-    elif "lever.co" in url:
-        ats = "lever"
-        slug = url.split("lever.co/")[1].split("/")[0].split("?")[0]
 
     elif "apply.workable.com" in url:
         ats = "workable"
@@ -48,8 +46,11 @@ def learn_from_job_url(url):
         ats = "jobvite"
         slug = url.split("jobs.jobvite.com/")[1].split("/")[0].split("?")[0]
 
+    elif "myworkdayjobs.com" in url:
+        ats = "workday"
+        slug = url.split("myworkdayjobs.com/")[1].split("/")[0]
+
     if ats and slug:
         _DISCOVERED[ats].add(slug)
-        # learn_domain_from_slug(slug)
 
 

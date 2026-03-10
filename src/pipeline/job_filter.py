@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
-
+import re
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.config.consts import (
@@ -19,6 +19,8 @@ from src.config.consts import (
     TIMESTAMP_WORKERS,
     DATE_ONLY_HOUR,
     FRESHNESS_HOURS,
+    MAJOR_US_CITIES,
+    FOREIGN_CITY_BLOCKLIST
 )
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp
@@ -73,10 +75,13 @@ def us_location(location, source):
     if "REMOTE" in loc and ("US" in loc or "USA" in loc or "UNITED STATES" in loc):
         return True
 
+    if loc in FOREIGN_CITY_BLOCKLIST:
+        return False
+    
     # reject foreign countries
-    for country in ALL_COUNTRIES:
-        if country in loc and country != "UNITED STATES":
-            return False
+    FOREIGN_COUNTRY_REGEX = re.compile("|".join(ALL_COUNTRIES), re.I)
+    if FOREIGN_COUNTRY_REGEX.search(loc) and "UNITED STATES" not in loc:
+        return False
 
     tokens = set(TOKEN_SPLIT_REGEX.split(loc))
 
@@ -86,6 +91,11 @@ def us_location(location, source):
     for state in US_STATE_NAMES:
         if state in loc:
             return True
+    
+        # allow known US cities
+        if loc in MAJOR_US_CITIES:
+            return True
+    
 
     return False
 
@@ -140,8 +150,6 @@ def filter_jobs(jobs):
     and job.get("_job_id")
     ]
 
-    logger.info(f"Ashby jobs missing timestamp: {len(ashby_missing)}")
-
     if ashby_missing:
 
         with ThreadPoolExecutor(max_workers=2) as executor:
@@ -170,8 +178,6 @@ def filter_jobs(jobs):
 
                 except Exception:
                     pass
-
-        logger.info(f"Ashby timestamps resolved: {resolved}")
 
     # resolve missing Workday timestamps
     workday_missing = [

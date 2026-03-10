@@ -10,7 +10,6 @@ def load_seen_job_ids():
     with open(CACHE_FILE) as f:
         return set(line.strip() for line in f if line.strip())
 
-
 def save_new_job_ids(job_ids):
 
     if not job_ids:

@@ -34,7 +34,8 @@ def filter_new_jobs(jobs, seen_ids):
             new_jobs.append(job)
             continue
 
-        cache_key = f"{job['source']}|{job_id}"
+        # cache_key = f"{job['source']}|{job_id}"
+        cache_key = job_id
 
         if cache_key in seen_ids:
             continue

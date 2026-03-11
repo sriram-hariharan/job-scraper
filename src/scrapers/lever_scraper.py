@@ -59,7 +59,8 @@ async def fetch_company_jobs(session, company):
                 location=location,
                 url=job_url,
                 source="lever",
-                posted_at=posted_at
+                posted_at=posted_at,
+                job_id=f"lv_{job.get('id')}"
             ).to_dict()
         )
 

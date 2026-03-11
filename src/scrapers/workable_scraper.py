@@ -140,6 +140,10 @@ def fetch_company_jobs(company):
         #     or job.get("created_at"),
         #     "_shortcode": shortcode
         # })
+        workable_id = job.get("id")
+        if not workable_id and url:
+            workable_id = url.split("/j/")[-1].split("/")[0]
+
         jobs.append(Job(
             company=company,
             title=job.get("title"),
@@ -153,7 +157,8 @@ def fetch_company_jobs(company):
             ),
             meta={
                 "_shortcode": shortcode
-            }
+            },
+            job_id=f"wb_{workable_id}" if workable_id else None
         ).to_dict())
 
     # resolve missing timestamps via v2 API

@@ -12,7 +12,7 @@ def discover_smartrecruiters_companies():
     pages = 0
 
     # while True:
-    for offset in range(0, 2000, 100):
+    for offset in range(0, 3000, 100):
         r = requests.get(API.format(offset), timeout=10)
 
         if r.status_code != 200:

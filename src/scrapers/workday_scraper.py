@@ -203,6 +203,10 @@ def scrape_company(board_url):
             if normalized:
                 learn_from_job_url(normalized)
 
+            job_req_id = None
+            if job_url:
+                job_req_id = job_url.split("/")[-1]
+
             jobs.append(
                 Job(
                     title=title,
@@ -214,7 +218,8 @@ def scrape_company(board_url):
                     meta={
                         "_externalPath": job.get("externalPath"),
                         "_board_url": board_url
-                    }
+                    },
+                    job_id=f"wd_{job_req_id}"
                 ).to_dict()
             )
 

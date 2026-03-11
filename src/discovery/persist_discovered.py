@@ -1,5 +1,6 @@
 from src.discovery.learned_companies import get_learned
 from src.discovery.save_companies import append_new_companies
+import re
 
 ATS_FILES = {
     "greenhouse": "data/greenhouse_companies.txt",
@@ -11,6 +12,11 @@ ATS_FILES = {
     "smartrecruiters": "data/smartrecruiters_companies.txt",
 }
 
+def normalize_company_slug(slug: str) -> str:
+    slug = slug.lower().strip()
+    slug = re.sub(r'\d+$', '', slug)
+    return slug
+
 def persist_discovered_companies():
     learned = get_learned()
     for ats, companies in learned.items():
@@ -20,4 +26,11 @@ def persist_discovered_companies():
         path = ATS_FILES.get(ats)
 
         if path:
-            append_new_companies(path, companies)
+            # normalize slugs before saving
+            normalized = {
+                normalize_company_slug(c)
+                for c in companies
+                if c
+            }
+
+            append_new_companies(path, normalized)

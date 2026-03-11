@@ -1,22 +1,9 @@
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Any, Union, List
 
+
 @dataclass
 class Job:
-    def __post_init__(self):
-        # prevent None values entering pipeline
-        self.company = self.company or ""
-        self.title = self.title or ""
-        self.url = self.url or ""
-        self.source = self.source or ""
-
-        # location safety
-        if self.location is None:
-            self.location = ""
-
-        # ensure meta always dict
-        if self.meta is None:
-            self.meta = {}
 
     company: str
     title: str
@@ -24,8 +11,22 @@ class Job:
     url: str
     source: str
     posted_at: Optional[str] = None
-
+    job_id: Optional[str] = None
     meta: Dict[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self):
+
+        # prevent None values entering pipeline
+        self.company = self.company or ""
+        self.title = self.title or ""
+        self.url = self.url or ""
+        self.source = self.source or ""
+
+        if self.location is None:
+            self.location = ""
+
+        if self.meta is None:
+            self.meta = {}
 
     def to_dict(self):
 
@@ -35,7 +36,8 @@ class Job:
             "location": self.location,
             "url": self.url,
             "source": self.source,
-            "posted_at": self.posted_at
+            "posted_at": self.posted_at,
+            "job_id": self.job_id
         }
 
         job.update(self.meta)

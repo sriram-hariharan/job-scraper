@@ -106,7 +106,8 @@ def fetch_company_jobs(company):
                 url=job_url,
                 source="ashby",
                 posted_at=None,
-                meta={"_job_id": job_id}
+                meta={"_job_id": job_id},
+                job_id=f"as_{job_id}",
             ).to_dict()
         )
 

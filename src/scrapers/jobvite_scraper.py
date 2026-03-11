@@ -69,6 +69,7 @@ def fetch_company_jobs(company):
             continue
 
         job_url = href if href.startswith("http") else f"https://jobs.jobvite.com{href}"
+        jobvite_id = job_url.split("/job/")[-1].split("?")[0]
         if job_url in seen_urls:
             continue
 
@@ -108,7 +109,8 @@ def fetch_company_jobs(company):
                 posted_at=posted_at,
                 meta={
                     "is_new": is_new
-                }
+                },
+                job_id=f"jv_{jobvite_id}",
             ).to_dict()
         )
 

@@ -70,7 +70,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     for source, count in counts.items():
         logger.info(f"{source:15} {count} jobs")
 
-    logger.info("-" * 40)
+        logger.info("-" * 40)
     logger.info(f"Total raw jobs: {len(all_jobs)}")
 
     # ----- FILTER -----

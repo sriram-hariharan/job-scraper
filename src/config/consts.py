@@ -240,3 +240,10 @@ ATS_REGEX = {
     re.compile(r"jobs\.smartrecruiters\.com/([a-zA-Z0-9\-_]+)", re.I)
     ],
 }
+
+#Misc.
+
+COMPANY_SUFFIXES = [
+    "inc", "inc.", "llc", "l.l.c", "corp", "corporation",
+    "co", "company", "ltd", "limited", "plc"
+]

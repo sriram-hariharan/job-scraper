@@ -41,16 +41,18 @@ def fetch_company_board(company):
             or ""
         )
 
-        job_url = job.get("ref")
-        if not job_url:
+        sr_id = job.get("id")
+        if not sr_id:
             continue
 
-        learn_from_job_url(job_url)
-
         identifier = job.get("company", {}).get("identifier")
-        if identifier:
-            learn_from_job_url(f"https://jobs.smartrecruiters.com/{identifier}")
+        if not identifier:
+            continue
 
+        job_url = f"https://jobs.smartrecruiters.com/{identifier}/{sr_id}"
+
+        learn_from_job_url(job_url)
+        
         jobs.append(
             Job(
                 company=company,
@@ -58,7 +60,8 @@ def fetch_company_board(company):
                 location=location,
                 url=job_url,
                 source="smartrecruiters",
-                posted_at=job.get("releasedDate")
+                posted_at=job.get("releasedDate"),
+                job_id=f"sr_{sr_id}" if sr_id else None
             ).to_dict()
         )
 
@@ -79,8 +82,7 @@ def fetch_company_jobs(company):
     except Exception:
         return []
 
-    content = data.get("content", {})
-    postings = content.values() if isinstance(content, dict) else content
+    postings = data.get("content", [])
     if not postings:
         return []
     
@@ -98,6 +100,7 @@ def fetch_company_jobs(company):
         )
 
         job_url = job.get("applyUrl")
+        sr_id = job.get("id")
         if not job_url:
             continue
 
@@ -113,7 +116,8 @@ def fetch_company_jobs(company):
                 location=location,
                 url=job_url,
                 source="smartrecruiters",
-                posted_at=job.get("releasedDate")
+                posted_at=job.get("releasedDate"),
+                job_id=f"sr_{sr_id}" if sr_id else None
             ).to_dict()
         )
 

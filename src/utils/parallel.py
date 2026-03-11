@@ -18,6 +18,6 @@ def run_parallel(items, worker_fn, max_workers=10, desc="Processing"):
                 if res:
                     results.extend(res)
             except Exception as e:
-                logger.warning(f"worker failed: {e}")
+                logger.warning(f"parallel worker failed: {e}")
 
     return results

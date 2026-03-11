@@ -9,23 +9,16 @@ from src.scrapers.lever_scraper import scrape_all_lever
 from src.scrapers.ashby_scraper import scrape_all_ashby
 from src.scrapers.workable_scraper import scrape_all_workable
 from src.scrapers.jobvite_scraper import scrape_all_jobvite
+from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
 
 from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.logging import get_logger
 from src.discovery.persist_discovered import persist_discovered_companies
+from src.utils.log_sections import section
 
 logger = get_logger("collector")
-
-def print_source_counts(title, jobs):
-
-    logger.info(title)
-
-    counts = Counter(job.get("source", "unknown") for job in jobs)
-
-    for source, count in counts.items():
-        logger.info(f"{source} {count}")
 
 def collect_all_jobs() -> List[Dict[str, Any]]:
 
@@ -36,6 +29,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
         ("ashby", scrape_all_ashby),
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
+        ("smartrecruiters", scrape_all_smartrecruiters),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
@@ -44,7 +38,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     start_total = time.time()
 
-    with ThreadPoolExecutor(max_workers=max(1, min(4, len(scrapers)))) as executor:
+    with ThreadPoolExecutor(max_workers=max(1, len(scrapers))) as executor:
 
         futures = {
             executor.submit(fn): (name, time.time())
@@ -69,23 +63,32 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     total_elapsed = round(time.time() - start_total, 2)
 
+    section("SCRAPER RESULTS", logger)
     logger.info(f"Total scraping time: {total_elapsed}s")
-    logger.info(f"Total raw jobs collected: {len(all_jobs)}")
-    
-    # ----- DEBUG BEFORE FILTERING -----
+    counts = Counter(job.get("source", "unknown") for job in all_jobs)
 
-    print_source_counts("Raw jobs by source:", all_jobs)
+    for source, count in counts.items():
+        logger.info(f"{source:15} {count} jobs")
+
+    logger.info("-" * 40)
+    logger.info(f"Total raw jobs: {len(all_jobs)}")
 
     # ----- FILTER -----
+    section("FILTER PIPELINE", logger)
     filtered_jobs = filter_jobs(all_jobs)
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
-    print_source_counts("Filtered jobs by source:", filtered_jobs)
+    counts = Counter(job.get("source", "unknown") for job in filtered_jobs)
+
+    for source, count in counts.items():
+        logger.info(f"{source:15} {count} jobs")
 
     # ----- DEDUPE -----
+    section("DEDUPLICATION", logger)
     deduped_jobs = dedupe_jobs(filtered_jobs)
     logger.info(f"Jobs after dedupe: {len(deduped_jobs)}")
 
     # ----- CACHE FILTER -----
+    section("CACHE FILTER", logger)
     new_jobs, new_job_ids = filter_new_jobs(deduped_jobs, seen_job_ids)
     logger.info(f"New jobs after cache filtering: {len(new_jobs)}")
 

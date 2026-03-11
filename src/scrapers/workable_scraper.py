@@ -205,8 +205,4 @@ def scrape_all_workable():
         desc="Workable scraping"
         )
 
-    logger.info("Workable summary")
-    logger.info("------------------")
-    logger.info(f"Total jobs collected: {len(all_jobs)}")
-
     return all_jobs

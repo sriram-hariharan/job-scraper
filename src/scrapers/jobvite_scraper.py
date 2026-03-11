@@ -126,9 +126,5 @@ def scrape_all_jobvite():
         max_workers=8,
         desc="Jobvite scraping"
         )
-    
-    logger.info("Jobvite summary")
-    logger.info("------------------")
-    logger.info(f"Total jobs collected: {len(all_jobs)}")
 
     return all_jobs

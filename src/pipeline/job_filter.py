@@ -115,9 +115,6 @@ def posted_within_24h(posted_at_raw):
 
 def filter_jobs(jobs):
 
-    logger.info("FILTER PIPELINE START")
-    logger.info(f"Total jobs entering filter: {len(jobs)}")
-
     title_pass = 0
     location_pass = 0
     prefiltered = []
@@ -138,10 +135,6 @@ def filter_jobs(jobs):
         
         location_pass += 1
         prefiltered.append(job)
-
-    logger.info(f"Jobs passing title filter: {title_pass}")
-    logger.info(f"Jobs passing location filter: {location_pass}")
-    logger.info(f"Jobs after title/location filtering: {len(prefiltered)}")
 
     ashby_missing = [
     job for job in prefiltered
@@ -212,8 +205,6 @@ def filter_jobs(jobs):
                 except Exception:
                     pass
 
-        logger.info(f"Resolved timestamps: {resolved}")
-
     filtered = []
     freshness_pass = 0
 
@@ -229,10 +220,6 @@ def filter_jobs(jobs):
         
         freshness_pass += 1
         filtered.append(job)
-
-    logger.info(f"Jobs passing freshness filter: {freshness_pass}")
-    logger.info(f"Jobs after filtering: {len(filtered)}")
-    logger.info("FILTER PIPELINE END")
 
     for job in filtered:
         job.pop("_job_id", None)

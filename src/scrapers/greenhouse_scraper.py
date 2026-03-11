@@ -6,7 +6,6 @@ from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url, get_learned
-from src.discovery.save_companies import append_new_companies
 from src.discovery.crawl_scheduler import (
     load_schedule,
     save_schedule,
@@ -111,9 +110,5 @@ async def scrape_all_greenhouse_async():
 def scrape_all_greenhouse():
 
     jobs = asyncio.run(scrape_all_greenhouse_async())
-
-    logger.info("Greenhouse summary")
-    logger.info("------------------")
-    logger.info(f"Total jobs collected: {len(jobs)}")
 
     return jobs

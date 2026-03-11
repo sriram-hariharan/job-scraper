@@ -52,6 +52,17 @@ def learn_from_job_url(url):
         if m:
             slug = m.group(0)
 
+    elif "smartrecruiters.com" in url:
+        ats = "smartrecruiters"
+
+        # example URL
+        # https://jobs.smartrecruiters.com/Nvidia/12345-ml-engineer
+
+        try:
+            slug = url.split("smartrecruiters.com/")[1].split("/")[0]
+        except Exception:
+            slug = None
+
     if ats and slug:
         _DISCOVERED[ats].add(slug)
 

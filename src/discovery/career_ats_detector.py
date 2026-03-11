@@ -58,6 +58,7 @@ async def detect_ats_from_domains(domains):
         "workable": set(),
         "jobvite": set(),
         "workday": set(),
+        "smartrecruiters": set()
     }
 
     async with aiohttp.ClientSession(connector=connector) as session:

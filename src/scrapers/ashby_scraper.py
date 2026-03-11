@@ -133,7 +133,4 @@ def scrape_all_ashby():
         elif isinstance(r, dict):
             all_jobs.append(r)
 
-    logger.info("Ashby summary")
-    logger.info("------------------")
-    logger.info(f"Total jobs collected: {len(all_jobs)}")
     return all_jobs

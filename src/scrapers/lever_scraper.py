@@ -100,8 +100,4 @@ def scrape_all_lever():
 
     jobs = asyncio.run(scrape_all_lever_async())
 
-    logger.info("Lever summary")
-    logger.info("------------------")
-    logger.info(f"Total jobs collected: {len(jobs)}")
-
     return jobs

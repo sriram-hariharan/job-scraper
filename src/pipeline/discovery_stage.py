@@ -4,7 +4,8 @@ from src.utils.logging import get_logger
 from src.discovery.career_ats_detector import detect_ats_from_domains
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.discovery.learned_companies import get_learned
-
+from src.discovery.smartrecruiters_discovery import discover_smartrecruiters_companies
+from src.utils.log_sections import section
 import asyncio
 import aiohttp
 
@@ -96,39 +97,38 @@ async def discover_from_existing_boards():
 
 def run_discovery():
 
-    logger.info("=============================")
-    logger.info("ATS DISCOVERY")
-    logger.info("=============================\n")
+    section("ATS DISCOVERY", logger)
 
     domains = load_lines("data/company_domains.txt")
+    learned = get_learned()
 
-    # -------- DOMAIN ATS DISCOVERY --------
+    # ---------------- DOMAIN ATS DISCOVERY ----------------
+
+    logger.info("Domain-based ATS detection")
 
     domain_discovered = discover_from_domains(domains)
 
-    learned = get_learned()
-
     for ats, companies in domain_discovered.items():
         learned[ats].update(companies)
-        logger.info(f"{ats}: {len(companies)} discovered")
+        logger.info(f"{ats:15} {len(companies)} discovered via domains")
 
-    # -------- CAREER PAGE ATS DETECTION --------
+    # ---------------- CAREER PAGE ATS DETECTION ----------------
 
-    logger.info("Running career page ATS detection...")
+    logger.info("")
+    logger.info("Career page ATS detection")
 
     career_discovered = asyncio.run(
         detect_ats_from_domains(domains)
     )
 
-    logger.info("Career ATS detection results:")
-
     for ats, companies in career_discovered.items():
         learned[ats].update(companies)
-        logger.info(f"{ats}: {len(companies)} discovered")
+        logger.info(f"{ats:15} {len(companies)} discovered via career pages")
 
-    # -------- ATS NETWORK DISCOVERY --------
+    # ---------------- ATS NETWORK DISCOVERY ----------------
 
-    logger.info("Running ATS network discovery...")
+    logger.info("")
+    logger.info("ATS network discovery")
 
     network_discovered = asyncio.run(
         discover_from_existing_boards()
@@ -136,7 +136,14 @@ def run_discovery():
 
     for ats, companies in network_discovered.items():
         learned[ats].update(companies)
-        logger.info(f"{ats}: {len(companies)} discovered from ATS network")
+        logger.info(f"{ats:15} {len(companies)} discovered via ATS network")
 
-    #Final common persisting
+    logger.info("")
+    logger.info("SmartRecruiters global discovery")
+
+    sr_found = discover_smartrecruiters_companies()
+
+    logger.info(f"{'smartrecruiters':15} {len(sr_found)} companies discovered from global feed")
+
+    # Final common persisting
     persist_discovered_companies()

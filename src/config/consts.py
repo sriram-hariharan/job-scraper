@@ -234,5 +234,9 @@ ATS_REGEX = {
 
     "workday": [
         re.compile(r"myworkdayjobs\.com/([^/]+)/", re.I)
-    ]
+    ],
+
+    "smartrecruiters": [
+    re.compile(r"jobs\.smartrecruiters\.com/([a-zA-Z0-9\-_]+)", re.I)
+    ],
 }

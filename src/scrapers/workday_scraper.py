@@ -202,7 +202,7 @@ def scrape_company(board_url):
 
             if normalized:
                 learn_from_job_url(normalized)
-                
+
             jobs.append(
                 Job(
                     title=title,
@@ -241,9 +241,5 @@ def scrape_all_workday():
         max_workers=5,
         desc="Workday scraping"
     )
-
-    logger.info("Workday summary")
-    logger.info("------------------")
-    logger.info(f"Total jobs collected: {len(all_jobs)}")
 
     return all_jobs

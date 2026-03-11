@@ -1,9 +1,9 @@
-import re
 import aiohttp
 import asyncio
 from src.config.consts import CAREER_PATHS, ATS_REGEX
 from src.utils.logging import get_logger
 from tqdm import tqdm
+from aiohttp import ClientConnectorError
 
 logger = get_logger(__name__)
 
@@ -42,6 +42,10 @@ async def detect_greenhouse_slug_from_domain(session, domain):
 
                 return found if found else None
 
+        except ClientConnectorError:
+            continue
+        except asyncio.TimeoutError:
+            continue
         except Exception:
             continue
 
@@ -49,7 +53,7 @@ async def detect_greenhouse_slug_from_domain(session, domain):
 
 async def detect_ats_from_domains(domains):
 
-    connector = aiohttp.TCPConnector(limit=50)
+    connector = aiohttp.TCPConnector(limit=50, ttl_dns_cache=300)
 
     results = {
         "greenhouse": set(),

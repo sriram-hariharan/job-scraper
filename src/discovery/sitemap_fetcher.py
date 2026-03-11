@@ -4,8 +4,10 @@ from src.config.consts import ATS_REGEX, CAREER_PATHS, CAREER_SUBDOMAINS, SITEMA
 from src.utils.http_retry import http_get
 
 def extract_sitemap_urls(xml):
-
-    root = ElementTree.fromstring(xml)
+    try:
+        root = ElementTree.fromstring(xml)
+    except Exception:
+        return []
 
     urls = []
 

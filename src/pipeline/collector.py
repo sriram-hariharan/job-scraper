@@ -13,6 +13,7 @@ from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
 
 from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
+from src.pipeline.job_ranker import rank_jobs
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.logging import get_logger
 from src.discovery.persist_discovered import persist_discovered_companies
@@ -87,9 +88,14 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     deduped_jobs = dedupe_jobs(filtered_jobs)
     logger.info(f"Jobs after dedupe: {len(deduped_jobs)}")
 
+    #----- RANKING -----
+    section("RANKING", logger)
+    ranked_jobs = rank_jobs(deduped_jobs)
+    logger.info(f"Jobs after ranking: {len(ranked_jobs)}")
+
     # ----- CACHE FILTER -----
     section("CACHE FILTER", logger)
-    new_jobs, new_job_ids = filter_new_jobs(deduped_jobs, seen_job_ids)
+    new_jobs, new_job_ids = filter_new_jobs(ranked_jobs, seen_job_ids)
     logger.info(f"New jobs after cache filtering: {len(new_jobs)}")
 
     # ----- SAVE CACHE -----

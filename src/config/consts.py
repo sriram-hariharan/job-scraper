@@ -8,13 +8,11 @@ TITLE_INCLUDE_PATTERNS = [
     r"ai engineer",
     r"applied scientist",
     r"research scientist",
-    r"research engineer",
     r"data analyst",
     r"decision scientist",
     r"ml scientist",
     r"analytics engineer",
     r"deep learning engineer",
-    r"computer vision engineer",
     r"nlp engineer",
     r"\bgenai\b",
 ]
@@ -240,6 +238,8 @@ ATS_REGEX = {
     re.compile(r"jobs\.smartrecruiters\.com/([a-zA-Z0-9\-_]+)", re.I)
     ],
 }
+
+#RANKING
 
 #Misc.
 

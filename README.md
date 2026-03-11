@@ -491,14 +491,4 @@ Potential enhancements:
 * fuzzy job matching
 * cross-ATS duplicate detection
 
----
 
-If you want, I can also show you **how to make this README look *much* more professional on GitHub** (like top engineering repos) by adding:
-
-• badges
-• collapsible sections
-• centered architecture diagrams
-• screenshots of scraper logs
-• repo stats
-
-It will make the repo look **10x more polished**.

@@ -134,7 +134,7 @@ def scrape_all_smartrecruiters():
         logger.warning(f"SmartRecruiters feed failed: {e}")
 
     # -------------------------
-    # 2. COMPANY BOARD SCRAPE
+    # 2. COMPANY BOARD SCRAPE   
     # -------------------------
     companies = load_lines("data/smartrecruiters_companies.txt")
     companies = list(set(companies))

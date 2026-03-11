@@ -58,5 +58,8 @@ pilotcompany
 sgs
 westerndigital
 Kataai
-OceanaGold
-WesternDigital
+aubergecollection
+deliveryhero
+hmgroup
+rhg
+

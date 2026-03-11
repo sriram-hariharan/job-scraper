@@ -5,7 +5,7 @@ from src.config.consts import GREENHOUSE_API
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.logging import get_logger
-from src.discovery.learned_companies import learn_from_job_url, get_learned
+from src.discovery.learned_companies import learn_from_job_url
 from src.discovery.crawl_scheduler import (
     load_schedule,
     save_schedule,

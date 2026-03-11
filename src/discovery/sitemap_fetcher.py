@@ -1,9 +1,11 @@
-import requests
 from xml.etree import ElementTree
 from src.config.consts import ATS_REGEX, CAREER_PATHS, CAREER_SUBDOMAINS, SITEMAP_PATHS
 from src.utils.http_retry import http_get
+from src.discovery.learned_companies import learn_company
+
 
 def extract_sitemap_urls(xml):
+
     try:
         root = ElementTree.fromstring(xml)
     except Exception:
@@ -12,10 +14,11 @@ def extract_sitemap_urls(xml):
     urls = []
 
     for elem in root.iter():
-        if elem.tag.endswith("loc"):
-            urls.append(elem.text)
+        if elem.tag.endswith("loc") and elem.text:
+            urls.append(elem.text.strip())
 
     return urls
+
 
 def fetch_sitemap(domain):
 
@@ -34,6 +37,7 @@ def fetch_sitemap(domain):
 
     return None
 
+
 def filter_career_urls(urls):
 
     career_urls = []
@@ -42,16 +46,15 @@ def filter_career_urls(urls):
 
         u = url.lower()
 
-        # match known career paths
         if any(path in u for path in CAREER_PATHS):
             career_urls.append(url)
             continue
 
-        # match career subdomains
         if any(f"{sub}." in u for sub in CAREER_SUBDOMAINS):
             career_urls.append(url)
 
     return list(set(career_urls))
+
 
 def detect_ats_from_urls(urls):
 
@@ -72,6 +75,7 @@ def detect_ats_from_urls(urls):
 
     return found
 
+
 def discover_from_sitemap(domain):
 
     xml = fetch_sitemap(domain)
@@ -80,10 +84,11 @@ def discover_from_sitemap(domain):
         return {}
 
     urls = extract_sitemap_urls(xml)
-    career_urls = filter_career_urls(urls)
 
     if not urls:
         return {}
+
+    career_urls = filter_career_urls(urls)
 
     if not career_urls:
         return {}

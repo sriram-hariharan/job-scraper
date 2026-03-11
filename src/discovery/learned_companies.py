@@ -66,4 +66,16 @@ def learn_from_job_url(url):
     if ats and slug:
         _DISCOVERED[ats].add(slug)
 
+def learn_company(ats, slug):
+
+    if not ats or not slug:
+        return
+
+    if ats not in _DISCOVERED:
+        return
+
+    slug = slug.strip().lower()
+
+    _DISCOVERED[ats].add(slug)
+
 

@@ -12,8 +12,17 @@ async def detect_greenhouse_slug_from_domain(session, domain):
     if not domain:
         return None
 
-    domain = domain.strip().lower().replace("https://", "").replace("http://", "").strip("/")
+    domain = (
+        domain.strip()
+        .lower()
+        .replace("https://", "")
+        .replace("http://", "")
+        .split("/")[0]
+    )
 
+    if "." not in domain:
+        return None
+    
     headers = {"User-Agent": "Mozilla/5.0"}
 
     for path in CAREER_PATHS:
@@ -40,7 +49,8 @@ async def detect_greenhouse_slug_from_domain(session, domain):
                             found[ats] = slug
                             break
 
-                return found if found else None
+                if found:
+                    return found
 
         except ClientConnectorError:
             continue
@@ -53,7 +63,7 @@ async def detect_greenhouse_slug_from_domain(session, domain):
 
 async def detect_ats_from_domains(domains):
 
-    connector = aiohttp.TCPConnector(limit=50, ttl_dns_cache=300)
+    connector = aiohttp.TCPConnector(limit=20, ttl_dns_cache=300)
 
     results = {
         "greenhouse": set(),

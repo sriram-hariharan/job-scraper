@@ -1,16 +1,11 @@
-import re
+import json
 
-valid = []
+with open("data/debug_greenhouse_details.json", "r") as f:
+    data = json.load(f)
 
-with open("data/workday_companies.txt") as f:
-    for line in f:
-        line = line.strip()
-
-        if re.match(r"https://.*\.myworkdayjobs\.com/.*", line):
-            valid.append(line)
-
-valid = sorted(set(valid))
-
-with open("data/workday_companies.txt", "w") as f:
-    for v in valid:
-        f.write(v + "\n")
+count = 0
+print(len(data))
+for d in data:
+    if "description_snippet" in d:
+        count += 1
+print(count)

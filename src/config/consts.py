@@ -159,7 +159,6 @@ FRESHNESS_HOURS = 24
 SLUG_REGEX = re.compile(r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)")
 
 CAREER_PATHS = [
-    "",
     "/careers",
     "/jobs",
     "/careers/jobs",
@@ -239,7 +238,15 @@ ATS_REGEX = {
     ],
 }
 
-#RANKING
+#SITEMAP
+SITEMAP_PATHS = [
+    "/sitemap.xml",
+    "/sitemap_index.xml",
+    "/sitemap-index.xml",
+    "/sitemap1.xml",
+    "/sitemap-careers.xml",
+    "/sitemap_jobs.xml"
+]
 
 #Misc.
 

@@ -5,6 +5,7 @@ from src.discovery.career_ats_detector import detect_ats_from_domains
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.discovery.learned_companies import get_learned
 from src.discovery.smartrecruiters_discovery import discover_smartrecruiters_companies
+from src.discovery.sitemap_discovery import run_sitemap_discovery
 from src.utils.log_sections import section
 import asyncio
 import aiohttp
@@ -138,12 +139,24 @@ def run_discovery():
         learned[ats].update(companies)
         logger.info(f"{ats:15} {len(companies)} discovered via ATS network")
 
+    # ---------------- SMARTRECRUITERS GLOBAL DISCOVERY ----------------
     logger.info("")
     logger.info("SmartRecruiters global discovery")
 
     sr_found = discover_smartrecruiters_companies()
-
+    learned["smartrecruiters"].update(sr_found)
     logger.info(f"{'smartrecruiters':15} {len(sr_found)} companies discovered from global feed")
+
+    # ---------------- SITEMAP DISCOVERY ----------------
+
+    logger.info("")
+    logger.info("Sitemap discovery")
+
+    sitemap_found = run_sitemap_discovery()
+
+    for ats, companies in sitemap_found.items():
+        learned[ats].update(companies)
+        logger.info(f"{ats:15} {len(companies)} discovered via sitemap")
 
     # Final common persisting
     persist_discovered_companies()

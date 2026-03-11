@@ -6,6 +6,7 @@ from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
+from src.utils.http_retry import http_post
 
 logger = get_logger("ashby")
 
@@ -30,7 +31,7 @@ def fetch_ashby_timestamp(company, job_id):
     }
 
     try:
-        r = requests.post(
+        r = http_post(
             ASHBY_URL,
             json=payload,
             headers=HEADERS,
@@ -63,7 +64,7 @@ def fetch_company_jobs(company):
         "variables": {"organizationHostedJobsPageName": company}
     }
     try:
-        r = requests.post(
+        r = http_post(
             ASHBY_URL,
             json=payload,
             headers=HEADERS,

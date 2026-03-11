@@ -4,6 +4,7 @@ from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
+from src.utils.http_retry import http_get
 
 logger = get_logger("smartrecruiters")
 
@@ -15,7 +16,7 @@ def fetch_company_board(company):
     url = COMPANY_API.format(company=company)
 
     try:
-        r = requests.get(url, timeout=10)
+        r = http_get(url, timeout=10)
 
         if r.status_code != 200:
             return []
@@ -72,7 +73,7 @@ def fetch_company_jobs(company):
     url = API.format(company=company)
 
     try:
-        r = requests.get(url, timeout=10)
+        r = http_get(url, timeout=10)
 
         if r.status_code != 200:
             return []

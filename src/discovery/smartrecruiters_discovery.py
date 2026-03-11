@@ -1,5 +1,6 @@
 import requests
 from src.discovery.learned_companies import get_learned
+from src.utils.http_retry import http_get
 
 API = "https://jobs.smartrecruiters.com/sr-jobs/search?limit=100&offset={}"
 
@@ -13,7 +14,7 @@ def discover_smartrecruiters_companies():
 
     # while True:
     for offset in range(0, 3000, 100):
-        r = requests.get(API.format(offset), timeout=10)
+        r = http_get(API.format(offset), timeout=10)
 
         if r.status_code != 200:
             break

@@ -1,7 +1,7 @@
 import requests
 from xml.etree import ElementTree
 from src.config.consts import ATS_REGEX, CAREER_PATHS, CAREER_SUBDOMAINS, SITEMAP_PATHS
-from src.discovery.learned_companies import learn_company
+from src.utils.http_retry import http_get
 
 def extract_sitemap_urls(xml):
 
@@ -22,7 +22,7 @@ def fetch_sitemap(domain):
         url = f"https://{domain}{path}"
 
         try:
-            r = requests.get(url, timeout=10)
+            r = http_get(url, timeout=10)
 
             if r.status_code == 200 and ("<urlset" in r.text or "<sitemapindex" in r.text):
                 return r.text

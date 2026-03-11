@@ -1,6 +1,6 @@
 import time
 import functools
-
+import requests
 
 def retry_request(retries=2, delay=0.5, retry_status=(500, 502, 503, 504)):
 
@@ -35,3 +35,12 @@ def retry_request(retries=2, delay=0.5, retry_status=(500, 502, 503, 504)):
         return wrapper
 
     return decorator
+
+@retry_request(retries=2)
+def http_get(url, **kwargs):
+    return requests.get(url, **kwargs)
+
+
+@retry_request(retries=2)
+def http_post(url, **kwargs):
+    return requests.post(url, **kwargs)

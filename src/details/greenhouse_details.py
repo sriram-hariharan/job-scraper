@@ -4,8 +4,43 @@ from bs4 import BeautifulSoup
 import json
 import html
 import re
+from threading import Lock
 
 logger = get_logger("greenhouse_details")
+company_cache_lock = Lock()
+
+def fetch_greenhouse_company_jobs(company):
+
+    url = f"https://boards-api.greenhouse.io/v1/boards/{company}/jobs?content=true"
+
+    try:
+        resp = http_get(url)
+    except Exception:
+        return {}
+
+    if not resp or resp.status_code != 200:
+        return {}
+
+    try:
+        data = resp.json()
+    except Exception:
+        return {}
+
+    job_map = {}
+
+    for job in data.get("jobs", []):
+
+        job_id = job.get("id")
+
+        content = job.get("content")
+
+        if job_id and content:
+
+            text = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
+
+            job_map[str(job_id)] = (content, text)
+
+    return job_map
 
 def extract_greenhouse_slug(url):
 
@@ -43,11 +78,58 @@ def fetch_greenhouse_api(company, job_id):
     
 def fetch_greenhouse_details(job):
 
+    if not hasattr(fetch_greenhouse_details, "_company_cache"):
+        fetch_greenhouse_details._company_cache = {}
+
+    cache = fetch_greenhouse_details._company_cache
+
+    company = job.get("company")
+    job_id = job.get("job_id")
     url = job.get("url")
 
     if not url:
         job["_details_fetched"] = "failed"
         return job
+
+    # -----------------------------
+    # 1️⃣ Company batch API FIRST
+    # -----------------------------
+
+    if company not in cache:
+        with company_cache_lock:
+            if company not in cache:
+                company_jobs = fetch_greenhouse_company_jobs(company)
+                cache[company] = company_jobs
+
+    company_jobs = cache.get(company, {})
+
+    clean_id = job_id.replace("gh_", "") if job_id else None
+
+    if clean_id and clean_id in company_jobs:
+
+        desc, text = company_jobs[clean_id]
+
+        job["description_html"] = desc
+        job["description_text"] = text
+        job["_details_fetched"] = "company_api"
+
+        return job
+
+    # -----------------------------
+    # 2️⃣ Job-level Greenhouse API
+    # -----------------------------
+
+    api_desc = fetch_greenhouse_api(company, job_id)
+
+    if api_desc:
+        job["description_html"] = api_desc
+        job["description_text"] = BeautifulSoup(api_desc, "html.parser").get_text(" ", strip=True)
+        job["_details_fetched"] = "api"
+        return job
+
+    # -----------------------------
+    # 3️⃣ Fetch page only if APIs fail
+    # -----------------------------
 
     try:
         r = http_get(url, timeout=10)
@@ -62,10 +144,11 @@ def fetch_greenhouse_details(job):
         job["_details_fetched"] = "failed"
         return job
 
-
-    # ---------- Next.js JSON extraction ----------
-
     soup = BeautifulSoup(page_html, "html.parser")
+
+    # -----------------------------
+    # 4️⃣ Next.js extraction
+    # -----------------------------
 
     next_data = soup.find("script", {"id": "__NEXT_DATA__"})
 
@@ -75,22 +158,25 @@ def fetch_greenhouse_details(job):
 
             page_props = data.get("props", {}).get("pageProps", {})
 
-            # case 1: job list
             jobs = page_props.get("jobs")
 
             if isinstance(jobs, dict):
                 for j in jobs.values():
                     if j.get("url") and j.get("url") in url:
-                        job["description_html"] = j.get("content")
-                        job["description_text"] = BeautifulSoup(j.get("content"), "html.parser").get_text(" ", strip=True)
-                        job["_details_fetched"] = "nextjs"
-                        return job
 
-            # case 2: single job
+                        content = j.get("content")
+
+                        if content:
+                            job["description_html"] = content
+                            job["description_text"] = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
+                            job["_details_fetched"] = "nextjs"
+                            return job
+
             single_job = page_props.get("job")
 
             if single_job and single_job.get("content"):
                 dec_html = single_job.get("content")
+
                 job["description_html"] = dec_html
                 job["description_text"] = BeautifulSoup(dec_html, "html.parser").get_text(" ", strip=True)
                 job["_details_fetched"] = "nextjs"
@@ -99,8 +185,9 @@ def fetch_greenhouse_details(job):
         except Exception:
             pass
 
-
-    # ---------- Classic Greenhouse HTML extraction ----------
+    # -----------------------------
+    # 5️⃣ Classic HTML extraction
+    # -----------------------------
 
     desc = soup.find("div", {"id": "job-description"})
 
@@ -111,28 +198,16 @@ def fetch_greenhouse_details(job):
         desc = soup.find("div", {"class": "section-wrapper"})
 
     if desc:
+
         text = desc.get_text(" ", strip=True)
 
-        # reject tiny containers
         if len(text) >= 200:
             job["description_html"] = str(desc)
             job["description_text"] = text
             job["_details_fetched"] = "html"
             return job
 
-    # ---------- Greenhouse API fallback ----------
-
-    company = job.get("company")
-    job_id = job.get("job_id")
-
-    api_desc = fetch_greenhouse_api(company, job_id)
-
-    if api_desc:
-        job["description_html"] = api_desc
-        job["description_text"] = BeautifulSoup(api_desc, "html.parser").get_text(" ", strip=True)
-        job["_details_fetched"] = "api"
-        return job
-
     logger.warning(f"Greenhouse description not found: {url}")
+
     job["_details_fetched"] = "failed"
     return job

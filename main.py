@@ -7,7 +7,7 @@ logger = get_logger(__name__)
 
 def main():
 
-    # run_discovery()
+    run_discovery()
  
     logger.info("=============================")
     logger.info("SCRAPING JOBS")
@@ -15,10 +15,10 @@ def main():
 
     jobs = collect_all_jobs()
     
-    # if jobs:
-    #     write_jobs_to_sheet(jobs)
+    if jobs:
+        write_jobs_to_sheet(jobs)
 
-    # logger.info("Final jobs: %s", len(jobs))
+    logger.info("Final jobs: %s", len(jobs))
 
 if __name__ == "__main__":
     main()

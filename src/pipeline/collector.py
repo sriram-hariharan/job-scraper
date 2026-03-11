@@ -98,6 +98,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     # ----- JOB DETAIL ENRICHMENT -----
     section("JOB DETAILS", logger)
     detailed_jobs = enrich_job_details(ranked_jobs)
+    # detailed_jobs = enrich_job_details(all_jobs)
 
     logger.info(f"Jobs after detail enrichment: {len(detailed_jobs)}")
 
@@ -107,10 +108,9 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     logger.info(f"New jobs after cache filtering: {len(new_jobs)}")
 
     # ----- SAVE CACHE -----
-    save_new_job_ids(detailed_jobs)
+    save_new_job_ids(new_jobs)
 
     # ----- SAVE DISCOVERED COMPANIES -----
     persist_discovered_companies()
 
-    # return new_job_ids
-    return detailed_jobs
+    return new_job_ids

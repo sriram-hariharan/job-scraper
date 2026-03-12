@@ -131,15 +131,15 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     ranked_jobs = rank_jobs(deduped_jobs)
     ranked_counts = log_stage_metrics("RANKED", ranked_jobs)
 
-    # ----- JOB DETAIL ENRICHMENT -----
-    section("JOB DETAILS", logger)
-    detailed_jobs = enrich_job_details(ranked_jobs)
-    details_counts = log_stage_metrics("DETAILS", detailed_jobs)
-
     # ----- CACHE FILTER -----
     section("CACHE FILTER", logger)
-    new_jobs, new_job_ids = filter_new_jobs(detailed_jobs, seen_job_ids)
+    new_jobs, new_job_ids = filter_new_jobs(ranked_jobs, seen_job_ids)
     logger.info(f"New jobs after cache filtering: {len(new_jobs)}")
+
+    # ----- JOB DETAIL ENRICHMENT -----
+    section("JOB DETAILS", logger)
+    detailed_jobs = enrich_job_details(new_jobs)
+    details_counts = log_stage_metrics("DETAILS", detailed_jobs)
 
     # ----- SAVE CACHE -----
     save_new_job_ids(new_job_ids)
@@ -186,4 +186,4 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     record_ats_counts(run_id, "DETAILS", details_counts)
     logger.info("Pipeline metrics stored")
 
-    return new_jobs
+    return detailed_jobs

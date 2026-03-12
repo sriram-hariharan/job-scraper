@@ -9,16 +9,16 @@ def main():
 
     run_discovery()
  
-    # logger.info("=============================")
-    # logger.info("SCRAPING JOBS")
-    # logger.info("=============================\n")
+    logger.info("=============================")
+    logger.info("SCRAPING JOBS")
+    logger.info("=============================\n")
 
-    # jobs = collect_all_jobs()
+    jobs = collect_all_jobs()
     
-    # if jobs:
-    #     write_jobs_to_sheet(jobs)
+    if jobs:
+        write_jobs_to_sheet(jobs)
 
-    # logger.info("Final jobs: %s", len(jobs))
+    logger.info("Final jobs: %s", len(jobs))
 
 if __name__ == "__main__":
     main()

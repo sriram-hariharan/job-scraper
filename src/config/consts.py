@@ -178,6 +178,13 @@ CAREER_PATHS = [
     "/company/careers",
     "/join",
     "/careers.html",
+    "/open-roles",
+    "/roles",
+    "/positions",
+    "/opportunities",
+    "/hiring",
+    "/careers-at",
+    "/join-the-team",
 ]
 
 CAREER_SUBDOMAINS = [
@@ -191,7 +198,9 @@ CAREER_SUBDOMAINS = [
     "careers-uk",
     "careers-eu",
     "talent",
-    "opportunities"
+    "opportunities",
+    "hiring",
+    "team"
 ]
 
 WORKDAY_REGEX = re.compile(

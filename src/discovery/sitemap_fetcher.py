@@ -22,8 +22,12 @@ def extract_sitemap_urls(xml):
 
 def fetch_sitemap(domain):
 
+    domain = domain.replace("https://", "").replace("http://", "").strip("/")
+    if "." not in domain:
+        return None
+    
     for path in SITEMAP_PATHS:
-
+        
         url = f"https://{domain}{path}"
 
         try:
@@ -75,9 +79,37 @@ def detect_ats_from_urls(urls):
 
     return found
 
+def expand_nested_sitemaps(urls, limit=10):
+
+    expanded = []
+
+    for url in urls:
+
+        if not url.endswith(".xml"):
+            expanded.append(url)
+            continue
+
+        try:
+            r = http_get(url, timeout=10)
+
+            if r.status_code == 200:
+                nested_urls = extract_sitemap_urls(r.text)
+
+                if nested_urls:
+                    expanded.extend(nested_urls)
+                else:
+                    expanded.append(url)
+
+        except Exception:
+            expanded.append(url)
+
+        if len(expanded) > limit * 100:
+            break
+
+    return expanded
 
 def discover_from_sitemap(domain):
-
+    
     xml = fetch_sitemap(domain)
 
     if not xml:
@@ -87,6 +119,9 @@ def discover_from_sitemap(domain):
 
     if not urls:
         return {}
+
+    # expand nested sitemaps
+    urls = expand_nested_sitemaps(urls)
 
     career_urls = filter_career_urls(urls)
 

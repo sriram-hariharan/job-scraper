@@ -135,3 +135,24 @@ def record_ats_counts(run_id, stage, counts):
 
     conn.commit()
     conn.close()
+
+def get_last_ats_counts(stage):
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT ats, count
+    FROM ats_metrics
+    WHERE run_id = (
+        SELECT id FROM pipeline_runs
+        ORDER BY id DESC
+        LIMIT 1
+    )
+    AND stage = ?
+    """, (stage,))
+
+    rows = cur.fetchall()
+    conn.close()
+
+    return {ats: count for ats, count in rows}

@@ -16,13 +16,19 @@ from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
-from src.utils.ats_health import check_ats_health, check_pipeline_regression
+from src.utils.ats_health import (
+    check_ats_health,
+    check_pipeline_regression,
+    check_ats_failure
+)
 from src.discovery.persist_discovered import persist_discovered_companies
+from src.discovery.domain_learner import learn_domains_from_jobs
 from src.utils.metrics_store import (
     init_metrics_db,
     record_pipeline_run,
     record_ats_counts,
-    get_last_run
+    get_last_run,
+    get_last_ats_counts
 )
 
 from src.utils.log_sections import section
@@ -97,6 +103,10 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     logger.info(f"Total scraping time: {total_elapsed}s")
     scraped_counts = log_stage_metrics("SCRAPED", all_jobs)
 
+    # ---- DOMAIN LEARNING ----
+    learn_domains_from_jobs(all_jobs)
+
+    # ---- ATTS HEALTH CHECK ----
     check_ats_health(all_jobs)
 
     # ----- FILTER -----
@@ -142,6 +152,8 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     logger.info(f"Total pipeline runtime: {pipeline_runtime}s")
 
     prev_run = get_last_run()
+    prev_ats_counts = get_last_ats_counts("SCRAPED")
+
     current_metrics = {
         "scraped": len(all_jobs),
         "filtered": len(filtered_jobs),
@@ -150,6 +162,8 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
         "details": len(detailed_jobs),
         "drop_pct": drop_pct
     }
+    
+    check_ats_failure(prev_ats_counts, scraped_counts, logger)
 
     section("PIPELINE HEALTH", logger)
     check_pipeline_regression(prev_run, current_metrics, logger)

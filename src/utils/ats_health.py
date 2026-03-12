@@ -53,3 +53,24 @@ def check_pipeline_regression(prev_run, current_metrics, logger):
         logger.info("Pipeline health OK — no regressions detected")
 
     logger.info("")
+
+
+def check_ats_failure(prev_counts, current_counts, logger):
+
+    if not prev_counts:
+        return
+
+    logger.info("")
+    logger.info("ATS FAILURE CHECK")
+    logger.info("-----------------")
+
+    for ats, prev_count in prev_counts.items():
+
+        current_count = current_counts.get(ats, 0)
+
+        if prev_count > 0 and current_count == 0:
+            logger.warning(
+                f"{ats} dropped from {prev_count} → 0 (scraper may be broken)"
+            )
+
+    logger.info("")

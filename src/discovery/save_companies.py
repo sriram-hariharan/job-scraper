@@ -1,7 +1,12 @@
 import os
 import re
+from src.utils.logging import get_logger
+
+logger = get_logger("discovery_persist")
 
 def append_new_companies(file_path, companies):
+
+    ats = os.path.basename(file_path).replace("_companies.txt", "")
 
     if not companies:
         return
@@ -26,9 +31,12 @@ def append_new_companies(file_path, companies):
     new = companies - existing
 
     if not new:
+        logger.info(f"{ats:15} 0 new companies persisted")
         return
 
     # append new ones
     with open(file_path, "a") as f:
         for c in sorted(new):
             f.write(c + "\n")
+
+    logger.info(f"{ats:15} {len(new)} new companies persisted")

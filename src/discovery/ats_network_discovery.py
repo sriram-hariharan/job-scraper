@@ -1,6 +1,5 @@
 import re
 from urllib.parse import urlparse
-
 def discover_greenhouse_neighbors(html: str):
 
     if not html:

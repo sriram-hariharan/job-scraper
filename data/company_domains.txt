@@ -376,3 +376,11 @@ welocalize.com
 stripe.com
 coinbase.com
 databricks.com
+asana.com
+careers.roblox.com
+careers.withwaymo.com
+coreweave.com
+inovalon.com
+pinterestcareers.com
+veracyte.com
+weareroku.com

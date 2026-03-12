@@ -9,6 +9,7 @@ from src.discovery.sitemap_discovery import run_sitemap_discovery
 from src.utils.log_sections import section
 import asyncio
 import aiohttp
+from src.discovery.discovery_progress import get_next_batch
 
 from src.discovery.ats_network_discovery import (
     discover_greenhouse_neighbors,
@@ -33,7 +34,9 @@ async def discover_from_existing_boards():
     }
 
     semaphore = asyncio.Semaphore(20)   # limit concurrent requests
-    async with aiohttp.ClientSession() as session:
+    connector = aiohttp.TCPConnector(limit=20, ttl_dns_cache=300)
+
+    async with aiohttp.ClientSession(connector=connector) as session:
 
         async def scan(url):
 
@@ -71,7 +74,8 @@ async def discover_from_existing_boards():
                             discover_jobvite_neighbors(html)
                         )
 
-                except Exception:
+                except Exception as e:
+                    logger.debug(f"Discovery scan failed: {url} | {e}")
                     return
 
         ATS_BOARD_URLS = {
@@ -86,8 +90,11 @@ async def discover_from_existing_boards():
         for ats, (file_path, url_template) in ATS_BOARD_URLS.items():
 
             companies = load_lines(file_path)
+            batch = get_next_batch(companies, ats, batch_size=100)
 
-            for slug in companies[:100]:   # safety limit
+            logger.info(f"{ats:12} scanning {len(batch)} companies for network discovery")
+
+            for slug in batch:
                 url = url_template.format(slug)
                 tasks.append(scan(url))
 

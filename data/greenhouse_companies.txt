@@ -392,3 +392,5 @@ teads
 tenet
 ada
 centriahealthcare
+vsco
+bioptimus

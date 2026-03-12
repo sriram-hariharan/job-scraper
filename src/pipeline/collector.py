@@ -1,6 +1,7 @@
 from typing import List, Dict, Any
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from collections import Counter
 
 from src.scrapers.workday_scraper import scrape_all_workday
 from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
@@ -15,11 +16,17 @@ from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
-from src.utils.ats_health import check_ats_health
-from src.utils.logging import get_logger
+from src.utils.ats_health import check_ats_health, check_pipeline_regression
 from src.discovery.persist_discovered import persist_discovered_companies
+from src.utils.metrics_store import (
+    init_metrics_db,
+    record_pipeline_run,
+    record_ats_counts,
+    get_last_run
+)
+
 from src.utils.log_sections import section
-from collections import Counter
+from src.utils.logging import get_logger
 
 logger = get_logger("collector")
 
@@ -41,6 +48,8 @@ def log_company_hiring(jobs, logger):
     logger.info("")
 
 def collect_all_jobs() -> List[Dict[str, Any]]:
+
+    init_metrics_db()
 
     scrapers = [
         ("workday", scrape_all_workday),
@@ -81,11 +90,12 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
                 elapsed = round(time.time() - start, 2)
                 logger.error(f"[collector] {name} failed | time={elapsed}s | error={e}")
 
-    total_elapsed = round(time.time() - start_total, 2)
+    
 
     section("SCRAPER RESULTS", logger)
+    total_elapsed = round(time.time() - start_total, 2)
     logger.info(f"Total scraping time: {total_elapsed}s")
-    log_stage_metrics("SCRAPED", all_jobs)
+    scraped_counts = log_stage_metrics("SCRAPED", all_jobs)
 
     check_ats_health(all_jobs)
 
@@ -93,7 +103,7 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     section("FILTER PIPELINE", logger)
     filtered_jobs = filter_jobs(all_jobs)
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
-    log_stage_metrics("FILTERED", filtered_jobs)
+    filtered_counts = log_stage_metrics("FILTERED", filtered_jobs)
 
     drop_pct = 0
     if all_jobs:
@@ -104,17 +114,17 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     section("DEDUPLICATION", logger)
     deduped_jobs = dedupe_jobs(filtered_jobs)
     log_company_hiring(deduped_jobs, logger)
-    log_stage_metrics("DEDUPED", deduped_jobs)
+    deduped_counts = log_stage_metrics("DEDUPED", deduped_jobs)
 
     #----- RANKING -----
     section("RANKING", logger)
     ranked_jobs = rank_jobs(deduped_jobs)
-    log_stage_metrics("RANKED", ranked_jobs)
+    ranked_counts = log_stage_metrics("RANKED", ranked_jobs)
 
     # ----- JOB DETAIL ENRICHMENT -----
     section("JOB DETAILS", logger)
     detailed_jobs = enrich_job_details(ranked_jobs)
-    log_stage_metrics("DETAILS", detailed_jobs)
+    details_counts = log_stage_metrics("DETAILS", detailed_jobs)
 
     # ----- CACHE FILTER -----
     section("CACHE FILTER", logger)
@@ -126,5 +136,40 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
 
     # ----- SAVE DISCOVERED COMPANIES -----
     persist_discovered_companies()
+
+    # ----- METRICS -----
+    pipeline_runtime = round(time.time() - start_total, 2)
+    logger.info(f"Total pipeline runtime: {pipeline_runtime}s")
+
+    prev_run = get_last_run()
+    current_metrics = {
+        "scraped": len(all_jobs),
+        "filtered": len(filtered_jobs),
+        "deduped": len(deduped_jobs),
+        "ranked": len(ranked_jobs),
+        "details": len(detailed_jobs),
+        "drop_pct": drop_pct
+    }
+
+    section("PIPELINE HEALTH", logger)
+    check_pipeline_regression(prev_run, current_metrics, logger)
+
+    run_id = record_pipeline_run(
+    runtime=pipeline_runtime,
+    scraped=len(all_jobs),
+    filtered=len(filtered_jobs),
+    deduped=len(deduped_jobs),
+    ranked=len(ranked_jobs),
+    details=len(detailed_jobs),
+    new_jobs=len(new_jobs),
+    drop_pct=drop_pct
+    )
+
+    record_ats_counts(run_id, "SCRAPED", scraped_counts)
+    record_ats_counts(run_id, "FILTERED", filtered_counts)
+    record_ats_counts(run_id, "DEDUPED", deduped_counts)
+    record_ats_counts(run_id, "RANKED", ranked_counts)
+    record_ats_counts(run_id, "DETAILS", details_counts)
+    logger.info("Pipeline metrics stored")
 
     return new_jobs

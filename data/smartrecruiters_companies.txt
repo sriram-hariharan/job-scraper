@@ -229,3 +229,5 @@ finmo
 snv
 villagegreen
 xppower
+louisdreyfuscompany
+sampoernaschoolssystem

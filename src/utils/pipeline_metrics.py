@@ -15,3 +15,5 @@ def log_stage_metrics(stage_name, jobs):
 
     logger.info(f"TOTAL: {len(jobs)}")
     logger.info("")
+
+    return counts

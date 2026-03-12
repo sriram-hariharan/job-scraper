@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import re
+from collections import Counter
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.config.consts import (
@@ -118,6 +119,7 @@ def filter_jobs(jobs):
     title_pass = 0
     location_pass = 0
     prefiltered = []
+    rejection_reasons = Counter()
 
     for job in jobs:
 
@@ -127,10 +129,12 @@ def filter_jobs(jobs):
         locations = location_field if isinstance(location_field, list) else [location_field]
 
         if not title_matches(title):
+            rejection_reasons["title_mismatch"] += 1
             continue
         title_pass += 1
 
         if not any(us_location(loc, job.get("source")) for loc in locations):
+            rejection_reasons["location_not_us"] += 1
             continue
         
         location_pass += 1
@@ -216,6 +220,7 @@ def filter_jobs(jobs):
             continue
 
         if not posted_within_24h(posted):
+            rejection_reasons["not_recent"] += 1
             continue
         
         freshness_pass += 1
@@ -223,5 +228,13 @@ def filter_jobs(jobs):
 
     for job in filtered:
         job.pop("_job_id", None)
+
+    logger.info("")
+    logger.info("FILTER DROP ANALYSIS")
+
+    for reason, count in rejection_reasons.items():
+        logger.info(f"{reason:20} {count}")
+
+    logger.info("")
 
     return filtered

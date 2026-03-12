@@ -77,7 +77,6 @@ async def scrape_all_greenhouse_async():
 
     # companies = load_lines("data/greenhouse_companies.txt")
     companies = load_lines("data/greenhouse_companies.txt")
-    logger.info(f"Greenhouse companies loaded: {len(companies)}")
 
     # remove duplicates
     companies = list(set(companies))

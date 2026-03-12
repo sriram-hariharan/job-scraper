@@ -31,6 +31,14 @@ TITLE_EXCLUDE_PATTERNS = [
     r"architect",
 ]
 
+TITLE_CANONICAL = {
+    "ml": "machine learning",
+    "ai": "artificial intelligence",
+    "eng": "engineer",
+    "sr": "senior",
+    "jr": "junior",
+}
+
 #Ashby queries
 ASHBY_QUERY = """
 query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {

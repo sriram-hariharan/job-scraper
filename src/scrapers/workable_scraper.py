@@ -209,5 +209,5 @@ def scrape_all_workable():
         max_workers=5,
         desc="Workable scraping"
         )
-
+    
     return all_jobs

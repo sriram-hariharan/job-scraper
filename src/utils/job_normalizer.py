@@ -1,5 +1,5 @@
 import re
-from src.config.consts import COMPANY_SUFFIXES
+from src.config.consts import COMPANY_SUFFIXES, TITLE_CANONICAL
 import hashlib
 
 def normalize_company(company: str) -> str:
@@ -14,18 +14,27 @@ def normalize_company(company: str) -> str:
 
     return " ".join(parts).strip()
 
-
 def normalize_title(title: str) -> str:
+
     if not title:
         return ""
 
-    t = title.lower()
+    t = title.lower().strip()
+
+    # remove brackets
     t = re.sub(r"\(.*?\)", "", t)
-    t = re.sub(r"[^\w\s]", "", t)
+
+    # remove punctuation
+    t = re.sub(r"[^\w\s]", " ", t)
+
+    # canonical replacements
+    for k, v in TITLE_CANONICAL.items():
+        t = re.sub(rf"\b{k}\b", v, t)
+
+    # normalize spaces
     t = re.sub(r"\s+", " ", t)
 
     return t.strip()
-
 
 def normalize_location(location: str) -> str:
 
@@ -48,15 +57,12 @@ def normalize_location(location: str) -> str:
 
 def job_fingerprint(job: dict) -> str:
     """
-    Generate stable fingerprint for a job.
-    Used for deduplication across ATS sources.
+    Generate stable fingerprint for fallback dedupe.
     """
 
     company = normalize_company(job.get("company", ""))
     title = normalize_title(job.get("title", ""))
-    location = normalize_location(job.get("location", ""))
-    url = job.get("url", "").lower().strip()
 
-    key = f"{company}|{title}|{location}|{url}"
+    key = f"{company}|{title}"
 
     return hashlib.sha1(key.encode("utf-8")).hexdigest()

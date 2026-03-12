@@ -1,53 +1,61 @@
 from src.utils.logging import get_logger
-from src.utils.job_normalizer import job_fingerprint
+from src.utils.job_normalizer import normalize_company, normalize_title
 
 logger = get_logger("dedupe")
 
-def normalize(text):
-    #Old implementation
+def title_key(job):
 
-    if not text:
-        return ""
+    company = normalize_company(job.get("company", ""))
+    title = normalize_title(job.get("title", ""))
 
-    # handle Workday multi-location lists
-    if isinstance(text, list):
-        text = " ".join(sorted(text))
+    return f"{company}|{title}"
 
-    text = text.lower().strip()
 
-    return text
-
-def job_identity(job: dict) -> str:
+def job_identity(job):
     """
-    Determine best identity key for a job.
-    Priority:
-    1. ATS job ID
-    2. URL
-    3. fingerprint fallback
+    Primary identity for fast dedupe
     """
 
-    if job.get("job_id"):
-        return f"id:{job['job_id']}"
+    job_id = job.get("job_id")
+    url = job.get("url")
 
-    if job.get("url"):
-        return f"url:{job['url'].strip().lower()}"
+    if job_id:
+        return f"id:{job_id}"
 
-    return f"fp:{job_fingerprint(job)}"
+    if url:
+        return f"url:{url.strip().lower()}"
+
+    return None
+
 
 def dedupe_jobs(jobs):
 
-    seen = set()
+    seen_ids = set()
+    seen_titles = set()
+
     unique_jobs = []
 
     for job in jobs:
-        fingerprint = job_fingerprint(job)
 
-        if fingerprint in seen:
+        # ---------- Layer 1: job_id / url ----------
+        identity = job_identity(job)
+
+        if identity and identity in seen_ids:
             continue
 
-        seen.add(fingerprint)
+        if identity:
+            seen_ids.add(identity)
+
+        # ---------- Layer 2: company + title ----------
+        key = title_key(job)
+
+        if key in seen_titles:
+            continue
+
+        seen_titles.add(key)
         unique_jobs.append(job)
 
     logger.info(f"Jobs before dedupe: {len(jobs)}")
     logger.info(f"Jobs after dedupe: {len(unique_jobs)}")
+
     return unique_jobs

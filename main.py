@@ -7,7 +7,7 @@ logger = get_logger(__name__)
 
 def main():
 
-    run_discovery()
+    # run_discovery()
  
     logger.info("=============================")
     logger.info("SCRAPING JOBS")

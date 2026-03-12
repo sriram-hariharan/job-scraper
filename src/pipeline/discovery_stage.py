@@ -10,6 +10,9 @@ from src.utils.log_sections import section
 import asyncio
 import aiohttp
 from src.discovery.discovery_progress import get_next_batch
+from src.discovery.greenhouse_api_discovery import validate_greenhouse_companies
+from src.discovery.greenhouse_embed_discovery import discover_greenhouse_embed
+from src.discovery.github_discovery import run_github_discovery
 
 from src.discovery.ats_network_discovery import (
     discover_greenhouse_neighbors,
@@ -110,60 +113,91 @@ def run_discovery():
     domains = load_lines("data/company_domains.txt")
     learned = get_learned()
 
-    # ---------------- DOMAIN ATS DISCOVERY ----------------
+    # # ---------------- DOMAIN ATS DISCOVERY ----------------
 
-    logger.info("Domain-based ATS detection")
+    # logger.info("Domain-based ATS detection")
 
-    domain_discovered = discover_from_domains(domains)
+    # domain_discovered = discover_from_domains(domains)
 
-    for ats, companies in domain_discovered.items():
-        learned[ats].update(companies)
-        logger.info(f"{ats:15} {len(companies)} discovered via domains")
+    # for ats, companies in domain_discovered.items():
+    #     learned[ats].update(companies)
+    #     logger.info(f"{ats:15} {len(companies)} discovered via domains")
 
-    # ---------------- CAREER PAGE ATS DETECTION ----------------
+    # # ---------------- CAREER PAGE ATS DETECTION ----------------
+
+    # logger.info("")
+    # logger.info("Career page ATS detection")
+
+    # career_discovered = asyncio.run(
+    #     detect_ats_from_domains(domains)
+    # )
+
+    # for ats, companies in career_discovered.items():
+    #     learned[ats].update(companies)
+    #     logger.info(f"{ats:15} {len(companies)} discovered via career pages")
+
+    # # ---------------- ATS NETWORK DISCOVERY ----------------
+
+    # logger.info("")
+    # logger.info("ATS network discovery")
+
+    # network_discovered = asyncio.run(
+    #     discover_from_existing_boards()
+    # )
+
+    # for ats, companies in network_discovered.items():
+
+    #     if ats == "greenhouse":
+    #         companies = validate_greenhouse_companies(companies)
+
+    #     learned[ats].update(companies)
+    #     logger.info(f"{ats:15} {len(companies)} discovered via ATS network")
+
+    # # ---------------- GREENHOUSE EMBED GRAPH DISCOVERY ----------------
+
+    # logger.info("")
+    # logger.info("Greenhouse embed graph discovery")
+
+    # greenhouse_companies = load_lines("data/greenhouse_companies.txt")
+    # batch = get_next_batch(greenhouse_companies, "greenhouse_embed", batch_size=50)
+
+    # logger.info(f"{'greenhouse':15} scanning {len(batch)} companies for embed discovery")
+
+    # embed_found = discover_greenhouse_embed(batch)
+    # embed_found = validate_greenhouse_companies(embed_found)
+
+    # learned["greenhouse"].update(embed_found)
+    # logger.info(f"{'greenhouse':15} {len(embed_found)} discovered via embed graph")
+
+    # # ---------------- SMARTRECRUITERS GLOBAL DISCOVERY ----------------
+    # logger.info("")
+    # logger.info("SmartRecruiters global discovery")
+
+    # sr_found = discover_smartrecruiters_companies()
+    # learned["smartrecruiters"].update(sr_found)
+    # logger.info(f"{'smartrecruiters':15} {len(sr_found)} companies discovered from global feed")
+
+    # ---------------- GITHUB DISCOVERY ----------------
 
     logger.info("")
-    logger.info("Career page ATS detection")
+    logger.info("GitHub ATS discovery")
 
-    career_discovered = asyncio.run(
-        detect_ats_from_domains(domains)
-    )
+    github_found = run_github_discovery()
 
-    for ats, companies in career_discovered.items():
+    for ats, companies in github_found.items():
         learned[ats].update(companies)
-        logger.info(f"{ats:15} {len(companies)} discovered via career pages")
+        logger.info(f"{ats:15} {len(companies)} discovered via github")
+        
+    # # ---------------- SITEMAP DISCOVERY ----------------
 
-    # ---------------- ATS NETWORK DISCOVERY ----------------
+    # logger.info("")
+    # logger.info("Sitemap discovery")
 
-    logger.info("")
-    logger.info("ATS network discovery")
+    # sitemap_found = run_sitemap_discovery()
 
-    network_discovered = asyncio.run(
-        discover_from_existing_boards()
-    )
-
-    for ats, companies in network_discovered.items():
-        learned[ats].update(companies)
-        logger.info(f"{ats:15} {len(companies)} discovered via ATS network")
-
-    # ---------------- SMARTRECRUITERS GLOBAL DISCOVERY ----------------
-    logger.info("")
-    logger.info("SmartRecruiters global discovery")
-
-    sr_found = discover_smartrecruiters_companies()
-    learned["smartrecruiters"].update(sr_found)
-    logger.info(f"{'smartrecruiters':15} {len(sr_found)} companies discovered from global feed")
-
-    # ---------------- SITEMAP DISCOVERY ----------------
-
-    logger.info("")
-    logger.info("Sitemap discovery")
-
-    sitemap_found = run_sitemap_discovery()
-
-    for ats, companies in sitemap_found.items():
-        learned[ats].update(companies)
-        logger.info(f"{ats:15} {len(companies)} discovered via sitemap")
+    # for ats, companies in sitemap_found.items():
+    #     learned[ats].update(companies)
+    #     logger.info(f"{ats:15} {len(companies)} discovered via sitemap")
 
     # Final common persisting
     persist_discovered_companies()

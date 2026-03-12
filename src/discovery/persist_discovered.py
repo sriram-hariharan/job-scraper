@@ -1,6 +1,7 @@
 from src.discovery.learned_companies import get_learned
 from src.discovery.save_companies import append_new_companies
 import re
+from src.config.consts import INVALID_SLUGS
 
 ATS_FILES = {
     "greenhouse": "data/greenhouse_companies.txt",
@@ -31,6 +32,11 @@ def persist_discovered_companies():
                 normalize_company_slug(c)
                 for c in companies
                 if c
+            }
+            # remove junk slugs
+            normalized = {
+                c for c in normalized
+                if c not in INVALID_SLUGS
             }
 
             append_new_companies(path, normalized)

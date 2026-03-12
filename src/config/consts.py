@@ -167,6 +167,18 @@ FRESHNESS_HOURS = 24
 #ATS Detection and discovery
 SLUG_REGEX = re.compile(r"boards\.greenhouse\.io/([a-zA-Z0-9_-]+)")
 
+INVALID_SLUGS = {
+    "careers",
+    "jobs",
+    "job",
+    "apply",
+    "board",
+    "boards",
+    "hiring",
+    "-----",
+    "------"
+}
+
 CAREER_PATHS = [
     "/careers",
     "/jobs",
@@ -271,4 +283,49 @@ SITEMAP_PATHS = [
 COMPANY_SUFFIXES = [
     "inc", "inc.", "llc", "l.l.c", "corp", "corporation",
     "co", "company", "ltd", "limited", "plc"
+]
+
+#SEARCH ENGINE DISCOVERY
+SEARCH_URL = "https://lite.duckduckgo.com/lite/?q={}&s={}"
+
+ATS_PATTERNS = {
+    "lever": re.compile(r"jobs\.lever\.co/([a-zA-Z0-9\-]+)"),
+    "ashby": re.compile(r"jobs\.ashbyhq\.com/([a-zA-Z0-9\-]+)"),
+    "workable": re.compile(r"apply\.workable\.com/([a-zA-Z0-9\-]+)"),
+    "jobvite": re.compile(r"jobs\.jobvite\.com/([a-zA-Z0-9\-]+)")
+}
+
+ATS_SITES = {
+    "lever": "site:jobs.lever.co",
+    "ashby": "site:jobs.ashbyhq.com",
+    "workable": "site:apply.workable.com",
+    "jobvite": "site:jobs.jobvite.com"
+}
+
+SEARCH_JOB_TITLES = [
+    "software engineer",
+    "data scientist",
+    "machine learning engineer",
+    # "ai engineer",
+    # "data analyst",
+    # "research scientist",
+    # "applied scientist",
+]
+
+#GITHUB SEARCH DISCOVERY
+
+GITHUB_SEARCH = "https://api.github.com/search/code?q={}&per_page=100"
+
+ATS_PATTERNS = {
+    "greenhouse": re.compile(r"boards\.greenhouse\.io/([a-zA-Z0-9\-]+)"),
+    "lever": re.compile(r"jobs\.lever\.co/([a-zA-Z0-9\-]+)"),
+    "ashby": re.compile(r"jobs\.ashbyhq\.com/([a-zA-Z0-9\-]+)"),
+    "workable": re.compile(r"apply\.workable\.com/([a-zA-Z0-9\-]+)"),
+}
+
+QUERIES = [
+    "boards.greenhouse.io",
+    "jobs.lever.co",
+    "jobs.ashbyhq.com",
+    "apply.workable.com"
 ]

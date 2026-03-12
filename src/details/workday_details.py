@@ -3,7 +3,7 @@ import re
 import requests
 
 from bs4 import BeautifulSoup
-
+from html import unescape
 from src.utils.http_retry import retry_request
 from src.utils.logging import get_logger
 
@@ -101,7 +101,7 @@ def fetch_workday_company_jobs(job_url):
         external_path = job.get("externalPath")
 
         desc = job.get("jobDescription")
-
+        desc = unescape(desc)
         if external_path and desc:
             text = clean_text(
                 BeautifulSoup(desc, "html.parser").get_text(" ", strip=True)
@@ -139,7 +139,7 @@ def extract_from_workday_api(job_url):
     except Exception:
         return None, None, None
 
-    desc = data.get("jobPostingInfo", {}).get("jobDescription")
+    desc = unescape(data.get("jobPostingInfo", {}).get("jobDescription", ""))
 
     if desc:
         text = clean_text(BeautifulSoup(desc, "html.parser").get_text(" ", strip=True))

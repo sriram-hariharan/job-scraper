@@ -29,13 +29,13 @@ def filter_new_jobs(jobs, seen_ids):
     for job in jobs:
 
         job_id = job.get("job_id") or job.get("url")
+        source = job.get("source")
 
         if not job_id:
             new_jobs.append(job)
             continue
 
-        # cache_key = f"{job['source']}|{job_id}"
-        cache_key = job_id
+        cache_key = f"{source}:{job_id}"
 
         if cache_key in seen_ids:
             continue

@@ -32,13 +32,13 @@ def fetch_greenhouse_company_jobs(company):
 
         job_id = job.get("id")
 
-        content = job.get("content")
+        content = html.unescape(job.get("content", ""))
 
         if job_id and content:
 
             text = BeautifulSoup(content, "html.parser").get_text(" ", strip=True)
 
-            job_map[str(job_id)] = (content, text)
+            job_map[job_id] = (content, text)
 
     return job_map
 
@@ -97,6 +97,9 @@ def fetch_greenhouse_details(job):
 
     if company not in cache:
         with company_cache_lock:
+            if not company:
+                job["_details_fetched"] = "failed"
+                return job
             if company not in cache:
                 company_jobs = fetch_greenhouse_company_jobs(company)
                 cache[company] = company_jobs
@@ -164,7 +167,7 @@ def fetch_greenhouse_details(job):
                 for j in jobs.values():
                     if j.get("url") and j.get("url") in url:
 
-                        content = j.get("content")
+                        content = html.unescape(j.get("content", ""))
 
                         if content:
                             job["description_html"] = content
@@ -175,7 +178,7 @@ def fetch_greenhouse_details(job):
             single_job = page_props.get("job")
 
             if single_job and single_job.get("content"):
-                dec_html = single_job.get("content")
+                dec_html = html.unescape(single_job.get("content", ""))
 
                 job["description_html"] = dec_html
                 job["description_text"] = BeautifulSoup(dec_html, "html.parser").get_text(" ", strip=True)

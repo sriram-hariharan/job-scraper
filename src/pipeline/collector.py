@@ -108,9 +108,9 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     logger.info(f"New jobs after cache filtering: {len(new_jobs)}")
 
     # ----- SAVE CACHE -----
-    save_new_job_ids(new_jobs)
+    save_new_job_ids(new_job_ids)
 
     # ----- SAVE DISCOVERED COMPANIES -----
     persist_discovered_companies()
 
-    return new_job_ids
+    return new_jobs

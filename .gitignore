@@ -1,3 +1,14 @@
+# database / cache
+*.db
+*.sqlite
+*.sqlite3
+*.db-journal
+*.db-wal
+*.db-shm
+
+# pipeline runtime cache
+data/description_cache.db
+data/seen_job_ids.txt
 
 # Python cache
 __pycache__/

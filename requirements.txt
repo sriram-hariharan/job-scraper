@@ -11,3 +11,4 @@ tqdm
 python-dateutil
 pycountry
 geotext
+sqlite3

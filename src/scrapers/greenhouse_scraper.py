@@ -17,7 +17,7 @@ from src.config.settings import SCRAPER_DEV_MODE
 
 logger = get_logger("greenhouse")
 
-async def fetch_company_jobs(session, company, schedule):
+async def fetch_company_jobs(session, company):
 
     url = GREENHOUSE_API.format(company)
 
@@ -69,17 +69,10 @@ async def fetch_company_jobs(session, company, schedule):
     except Exception:
         return jobs
 
-    finally:
-        # ALWAYS mark company as crawled
-        mark_scraped(company, schedule)
-
 async def scrape_all_greenhouse_async():
 
-    # companies = load_lines("data/greenhouse_companies.txt")
-    companies = load_lines("data/greenhouse_companies.txt")
+    companies = sorted(set(load_lines("data/greenhouse_companies.txt")))
 
-    # remove duplicates
-    companies = list(set(companies))
     schedule = load_schedule()
 
     # scheduler filtering
@@ -95,14 +88,15 @@ async def scrape_all_greenhouse_async():
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        tasks = [fetch_company_jobs(session, c, schedule) for c in companies]
+        tasks = [fetch_company_jobs(session, c) for c in companies]
 
-        for future in tqdm(asyncio.as_completed(tasks),
-                        total=len(tasks),
-                        desc="Greenhouse scraping"):
-
+        for company, future in zip(
+            companies,
+            tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Greenhouse scraping")
+        ):
             jobs = await future
             all_jobs.extend(jobs)
+            mark_scraped(company, schedule)
             
     save_schedule(schedule)
     return all_jobs

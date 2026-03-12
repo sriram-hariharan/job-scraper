@@ -78,7 +78,9 @@ async def detect_ats_from_domains(domains):
     async with aiohttp.ClientSession(connector=connector) as session:
 
         tasks = [
+            asyncio.create_task(
             detect_greenhouse_slug_from_domain(session, d)
+            )
             for d in domains
         ]
 

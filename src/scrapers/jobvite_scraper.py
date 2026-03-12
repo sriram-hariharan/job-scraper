@@ -8,6 +8,12 @@ from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
+from src.discovery.crawl_scheduler import (
+    load_schedule,
+    save_schedule,
+    should_scrape,
+    mark_scraped
+)
 
 logger = get_logger("jobvite")
 
@@ -119,14 +125,32 @@ def fetch_company_jobs(company):
 def scrape_all_jobvite():
 
     companies = load_lines("data/jobvite_companies.txt")
+    schedule = load_schedule()
+
+    companies = [
+        c for c in companies
+        if should_scrape(c, schedule)
+    ]
 
     # remove duplicates
     companies = list(set(companies))
-    all_jobs = run_parallel(
+    results = run_parallel(
         companies,
         fetch_company_jobs,
         max_workers=8,
         desc="Jobvite scraping"
         )
+    
+    all_jobs = []
+
+    for company, jobs in zip(companies, results):
+
+        if isinstance(jobs, list):
+            all_jobs.extend(jobs)
+
+            # only mark if scrape succeeded
+            mark_scraped(company, schedule)
+
+    save_schedule(schedule)
 
     return all_jobs

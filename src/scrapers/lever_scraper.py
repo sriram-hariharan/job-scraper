@@ -11,6 +11,12 @@ from src.pipeline.job_filter import (
     us_location,
     posted_within_24h
 )
+from src.discovery.crawl_scheduler import (
+    load_schedule,
+    save_schedule,
+    should_scrape,
+    mark_scraped
+)
 
 logger = get_logger("lever")
 
@@ -70,7 +76,13 @@ async def fetch_company_jobs(session, company):
 async def scrape_all_lever_async():
 
     companies = load_lines("data/lever_companies.txt")
+    schedule = load_schedule()
 
+    companies = [
+    c for c in companies
+    if should_scrape(c, schedule)
+    ]
+    
     # remove duplicates
     companies = list(set(companies))
 
@@ -85,15 +97,23 @@ async def scrape_all_lever_async():
             async with sem:
                 return await fetch_company_jobs(session, company)
 
-        tasks = [limited_fetch(c) for c in companies]
+        task_map = {
+            asyncio.create_task(limited_fetch(c)): c
+            for c in companies
+        }
 
-        for future in tqdm(asyncio.as_completed(tasks),
-                           total=len(tasks),
-                           desc="Lever scraping"):
+        for task in tqdm(asyncio.as_completed(task_map),
+                        total=len(task_map),
+                        desc="Lever scraping"):
 
-            jobs = await future
+            company = task_map[task]
+
+            jobs = await task
             all_jobs.extend(jobs)
 
+            mark_scraped(company, schedule)
+
+    save_schedule(schedule)
     return all_jobs
 
 

@@ -15,6 +15,12 @@ from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.pipeline.job_filter import title_matches, posted_within_24h
 from src.discovery.learned_companies import learn_from_job_url
 from src.utils.url_normalizer import normalize_workday_url
+from src.discovery.crawl_scheduler import (
+    load_schedule,
+    save_schedule,
+    should_scrape,
+    mark_scraped
+)
 
 logger = get_logger("workday")
 
@@ -239,12 +245,28 @@ def scrape_company(board_url):
 def scrape_all_workday():
 
     companies = load_lines("data/workday_companies.txt")
+    schedule = load_schedule()
 
-    all_jobs = run_parallel(
+    companies = [
+        c for c in companies
+        if should_scrape(c, schedule)
+    ]
+
+    results = run_parallel(
         companies,
         scrape_company,
         max_workers=5,
         desc="Workday scraping"
     )
+    all_jobs = []
 
+    for company, jobs in zip(companies, results):
+
+        if isinstance(jobs, list):
+            all_jobs.extend(jobs)
+
+        # mark company as scraped
+        mark_scraped(company, schedule)
+
+    save_schedule(schedule)
     return all_jobs

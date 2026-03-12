@@ -7,6 +7,12 @@ from src.utils.parallel import run_parallel
 from src.utils.logging import get_logger
 from src.discovery.learned_companies import learn_from_job_url
 from src.utils.http_retry import http_post
+from src.discovery.crawl_scheduler import (
+    load_schedule,
+    save_schedule,
+    should_scrape,
+    mark_scraped
+)
 
 logger = get_logger("ashby")
 
@@ -117,9 +123,16 @@ def fetch_company_jobs(company):
 
 def scrape_all_ashby():
     companies = load_lines("data/ashby_companies.txt")
+    schedule = load_schedule()
+
+    companies = [
+    c for c in companies
+    if should_scrape(c, schedule)
+    ]
 
     # remove duplicates
     companies = list(set(companies))
+
 
     results = run_parallel(
     companies,
@@ -128,6 +141,9 @@ def scrape_all_ashby():
     desc="Ashby scraping"   
     )
 
+    for company in companies:
+        mark_scraped(company, schedule)
+
     all_jobs = []
     for r in results:
         if isinstance(r, list):
@@ -135,4 +151,6 @@ def scrape_all_ashby():
         elif isinstance(r, dict):
             all_jobs.append(r)
 
+    save_schedule(schedule)
+    
     return all_jobs

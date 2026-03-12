@@ -15,6 +15,7 @@ from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
+from src.utils.ats_health import check_ats_health
 from src.utils.logging import get_logger
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.utils.log_sections import section
@@ -85,6 +86,8 @@ def collect_all_jobs() -> List[Dict[str, Any]]:
     section("SCRAPER RESULTS", logger)
     logger.info(f"Total scraping time: {total_elapsed}s")
     log_stage_metrics("SCRAPED", all_jobs)
+
+    check_ats_health(all_jobs)
 
     # ----- FILTER -----
     section("FILTER PIPELINE", logger)

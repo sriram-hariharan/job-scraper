@@ -226,3 +226,6 @@ enviricorporation
 tomra
 ghobashgroup
 finmo
+snv
+villagegreen
+xppower

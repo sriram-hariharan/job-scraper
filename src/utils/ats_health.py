@@ -22,35 +22,42 @@ def check_ats_health(jobs):
 def check_pipeline_regression(prev_run, current_metrics, logger):
 
     if not prev_run:
-        logger.info("First run — no historical metrics to compare")
+        logger.info("Pipeline regression check skipped (no previous run)")
         return
 
-    issues_found = False
-
     logger.info("")
-    logger.info("PIPELINE HEALTH CHECK")
-    logger.info("---------------------")
+    logger.info("PIPELINE REGRESSION CHECK")
+    logger.info("-------------------------")
 
-    if current_metrics["drop_pct"] - prev_run["drop_pct"] > 5:
-        logger.warning(
-            f"Filter drop increased {prev_run['drop_pct']}% → {current_metrics['drop_pct']}%"
-        )
-        issues_found = True
+    stages = ["scraped", "filtered", "deduped", "ranked", "details"]
 
-    if current_metrics["scraped"] < prev_run["scraped"] * 0.5:
-        logger.warning(
-            f"Scraped jobs dropped {prev_run['scraped']} → {current_metrics['scraped']}"
-        )
-        issues_found = True
+    for stage in stages:
 
-    if current_metrics["filtered"] < prev_run["filtered"] * 0.5:
-        logger.warning(
-            f"Filtered jobs dropped {prev_run['filtered']} → {current_metrics['filtered']}"
-        )
-        issues_found = True
+        prev_val = prev_run.get(stage, 0)
+        curr_val = current_metrics.get(stage, 0)
 
-    if not issues_found:
-        logger.info("Pipeline health OK — no regressions detected")
+        if prev_val == 0:
+            logger.info(f"{stage:10} baseline unavailable")
+            continue
+
+        change = round((curr_val - prev_val) / prev_val * 100, 2)
+
+        # massive drop
+        if curr_val < prev_val * 0.4:
+            logger.warning(
+                f"⚠ PIPELINE DROP: {stage} dropped from {prev_val} → {curr_val} ({change}%)"
+            )
+
+        # massive spike (usually bug)
+        elif curr_val > prev_val * 2.5:
+            logger.warning(
+                f"⚠ PIPELINE SPIKE: {stage} jumped from {prev_val} → {curr_val} ({change}%)"
+            )
+
+        else:
+            logger.info(
+                f"{stage:10} OK ({prev_val} → {curr_val})"
+            )
 
     logger.info("")
 
@@ -58,19 +65,32 @@ def check_pipeline_regression(prev_run, current_metrics, logger):
 def check_ats_failure(prev_counts, current_counts, logger):
 
     if not prev_counts:
+        logger.info("ATS failure check skipped (no previous run)")
         return
 
     logger.info("")
     logger.info("ATS FAILURE CHECK")
-    logger.info("-----------------")
+    logger.info("----------------")
 
     for ats, prev_count in prev_counts.items():
 
         current_count = current_counts.get(ats, 0)
 
-        if prev_count > 0 and current_count == 0:
+        # scraper likely broken
+        if prev_count >= 10 and current_count == 0:
             logger.warning(
-                f"{ats} dropped from {prev_count} → 0 (scraper may be broken)"
+                f"⚠ POSSIBLE SCRAPER BREAK: {ats} dropped from {prev_count} → {current_count}"
+            )
+
+        # major drop
+        elif prev_count >= 20 and current_count < prev_count * 0.25:
+            logger.warning(
+                f"⚠ ATS DROP DETECTED: {ats} dropped from {prev_count} → {current_count}"
+            )
+
+        else:
+            logger.info(
+                f"{ats:15} OK ({prev_count} → {current_count})"
             )
 
     logger.info("")

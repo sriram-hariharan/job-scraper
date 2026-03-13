@@ -1,11 +1,13 @@
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 DB_PATH = Path("data/pipeline_metrics.db")
 
 
 def init_metrics_db():
+
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
@@ -26,10 +28,12 @@ def init_metrics_db():
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS ats_metrics (
-        run_id INTEGER,
-        stage TEXT,
-        ats TEXT,
-        count INTEGER
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id INTEGER NOT NULL,
+        stage TEXT NOT NULL,
+        ats TEXT NOT NULL,
+        count INTEGER NOT NULL,
+        FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
     )
     """)
 
@@ -104,7 +108,7 @@ def record_pipeline_run(runtime, scraped, filtered, deduped, ranked, details, ne
     )
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     """, (
-        datetime.utcnow().isoformat(),
+        datetime.now(timezone.utc).isoformat(),
         runtime,
         scraped,
         filtered,
@@ -135,24 +139,3 @@ def record_ats_counts(run_id, stage, counts):
 
     conn.commit()
     conn.close()
-
-def get_last_ats_counts(stage):
-
-    conn = sqlite3.connect(DB_PATH)
-    cur = conn.cursor()
-
-    cur.execute("""
-    SELECT ats, count
-    FROM ats_metrics
-    WHERE run_id = (
-        SELECT id FROM pipeline_runs
-        ORDER BY id DESC
-        LIMIT 1
-    )
-    AND stage = ?
-    """, (stage,))
-
-    rows = cur.fetchall()
-    conn.close()
-
-    return {ats: count for ats, count in rows}

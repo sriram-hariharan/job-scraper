@@ -2,11 +2,14 @@ from src.pipeline.collector import collect_all_jobs
 from src.pipeline.excel_writer import write_jobs_to_sheet
 from src.utils.logging import get_logger
 from src.pipeline.discovery_stage import run_discovery
+from src.metrics.metrics_store import init_metrics_db
 
 logger = get_logger(__name__)
 
 def main():
 
+    init_metrics_db()
+    
     # run_discovery()
  
     logger.info("=============================")

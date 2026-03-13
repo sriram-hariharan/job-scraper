@@ -23,8 +23,7 @@ from src.utils.ats_health import (
 )
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.discovery.domain_learner import learn_domains_from_jobs
-from src.utils.metrics_store import (
-    init_metrics_db,
+from src.metrics.metrics_store import (
     record_pipeline_run,
     record_ats_counts,
     get_last_run,
@@ -54,8 +53,6 @@ def log_company_hiring(jobs, logger):
     logger.info("")
 
 def collect_all_jobs() -> List[Dict[str, Any]]:
-
-    init_metrics_db()
 
     scrapers = [
         ("workday", scrape_all_workday),

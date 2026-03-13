@@ -384,3 +384,7 @@ inovalon.com
 pinterestcareers.com
 veracyte.com
 weareroku.com
+careers.airbnb.com
+hubspot.com
+mongodb.com
+sofi.com

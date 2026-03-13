@@ -8,18 +8,23 @@ from src.utils.logging import get_logger
 logger = get_logger("excel_writer")
 
 def format_sheet(sheet):
+
     # Freeze header row
     sheet.freeze(rows=1)
 
     # Make the link column wider
     sheet.format(
-    "H:H",
-    {
-        "wrapStrategy": "CLIP"
-    })
+        "H:H",
+        {
+            "wrapStrategy": "CLIP"
+        }
+    )
 
-    # Auto sort newest entries by Date + Time
-    sheet.sort((5, "des"))
+    # Sort by priority score first, then newest posting
+    sheet.sort(
+        (5, "des"),  # Posted At
+        (9, "des")   # Priority score
+    )
 
 def write_jobs_to_sheet(jobs):
     scope = [
@@ -44,7 +49,8 @@ def write_jobs_to_sheet(jobs):
         "Posted At",
         "Posted",
         "Run Timestamp",
-        "Link"
+        "Link",
+        "Priority Score"
     ]
 
     existing_data = sheet.get_all_values()
@@ -55,7 +61,7 @@ def write_jobs_to_sheet(jobs):
         sheet.clear()
         sheet.append_row(headers)
         sheet.format(
-            "A1:H1",
+            "A1:I1",
             {
                 "backgroundColor": {
                     "red": 0.15,
@@ -74,7 +80,7 @@ def write_jobs_to_sheet(jobs):
         existing_urls = set()
 
         for row in existing_data[1:]:
-            if len(row) >= 8:
+            if len(row) >= 9:
                 existing_urls.add(row[7])
 
     rows_to_add = []
@@ -99,13 +105,14 @@ def write_jobs_to_sheet(jobs):
             raw_posted,
             relative_posted,
             run_time,
-            job.get("url")
+            job.get("url"),
+            job.get("priority_score", 0)
         ])
     if not rows_to_add:
         logger.info("No new jobs found")
         return
 
-    sheet.append_rows(rows_to_add)
+    sheet.append_rows(rows_to_add, value_input_option="USER_ENTERED")
     format_sheet(sheet)
     
     logger.info(f"{len(rows_to_add)} new jobs written to sheet")

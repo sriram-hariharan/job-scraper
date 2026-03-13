@@ -16,6 +16,7 @@ from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
 from src.pipeline.job_intelligence import enrich_job_intelligence
+from src.pipeline.application_scorer import score_jobs
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -205,6 +206,12 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     intelligent_jobs = enrich_job_intelligence(detailed_jobs)
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
 
+    # ----- APPLICATION PRIORITY -----
+    section("APPLICATION PRIORITY", logger)
+
+    scored_jobs = score_jobs(intelligent_jobs)
+    logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
+
     # ----- JOB MARKET INSIGHTS -----
     log_market_insights(detailed_jobs)
 
@@ -266,4 +273,4 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         for company, ats, prev, curr, delta in momentum[:10]:
             logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
 
-    return intelligent_jobs
+    return scored_jobs

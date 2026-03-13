@@ -4,6 +4,7 @@ from src.config.consts import CAREER_PATHS, ATS_REGEX
 from src.utils.logging import get_logger
 from tqdm import tqdm
 from aiohttp import ClientConnectorError
+from urllib.parse import urlparse
 
 logger = get_logger(__name__)
 
@@ -97,3 +98,50 @@ async def detect_ats_from_domains(domains):
                     results[ats].add(slug)
 
     return results
+
+def detect_ats_from_url(url):
+    """
+    Detect ATS platform and company slug from a career/job URL
+    """
+
+    if not url:
+        return None, None
+
+    try:
+
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        path = parsed.path.strip("/").split("/")
+
+        # Greenhouse
+        if "greenhouse.io" in domain and len(path) >= 1:
+            return "greenhouse", path[0]
+
+        # Lever
+        if "lever.co" in domain and len(path) >= 1:
+            return "lever", path[0]
+
+        # Ashby
+        if "ashbyhq.com" in domain and len(path) >= 1:
+            return "ashby", path[0]
+
+        # SmartRecruiters
+        if "smartrecruiters.com" in domain and len(path) >= 1:
+            return "smartrecruiters", path[0]
+
+        # Workable
+        if "apply.workable.com" in domain and len(path) >= 1:
+            return "workable", path[0]
+
+        # Jobvite
+        if "jobvite.com" in domain and len(path) >= 1:
+            return "jobvite", path[0]
+
+        # Workday
+        if "myworkdayjobs.com" in domain and len(path) >= 1:
+            return "workday", path[0]
+
+        return None, None
+
+    except Exception:
+        return None, None

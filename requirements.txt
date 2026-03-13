@@ -12,3 +12,5 @@ python-dateutil
 pycountry
 geotext
 sqlite3
+tavily-python
+tldextract

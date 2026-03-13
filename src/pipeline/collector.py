@@ -15,6 +15,7 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
+from src.pipeline.job_intelligence import enrich_job_intelligence
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -35,11 +36,47 @@ from src.metrics.metrics_store import (
     record_company_hiring,
     get_hiring_momentum,
 )
+from src.metrics.job_market_insights import (
+    detect_hot_companies,
+    detect_ai_hiring_surges,
+    detect_emerging_tech,
+)
 
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
+
+
+def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
+    section("JOB MARKET INSIGHTS", logger)
+
+    hot_companies = detect_hot_companies(jobs)
+
+    logger.info("")
+    logger.info("HOT COMPANIES")
+    logger.info("-------------")
+
+    for company, count in hot_companies:
+        logger.info(f"{company:25} {count}")
+
+    ai_surges = detect_ai_hiring_surges(jobs)
+
+    logger.info("")
+    logger.info("AI HIRING SURGES")
+    logger.info("----------------")
+
+    for company, count in ai_surges:
+        logger.info(f"{company:25} {count}")
+
+    emerging_tech = detect_emerging_tech(jobs)
+
+    logger.info("")
+    logger.info("EMERGING TECH STACK")
+    logger.info("-------------------")
+
+    for tech, count in emerging_tech:
+        logger.info(f"{tech:20} {count}")
 
 
 def log_company_hiring(jobs: List[Dict[str, Any]], logger) -> None:
@@ -146,6 +183,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     # ----- RANKING -----
     section("RANKING", logger)
+
     ranked_jobs = rank_jobs(deduped_jobs)
     ranked_counts = log_stage_metrics("RANKED", ranked_jobs)
 
@@ -160,6 +198,15 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     detailed_jobs = enrich_job_details(new_jobs)
     details_counts = log_stage_metrics("DETAILS", detailed_jobs)
+
+    # ----- JOB INTELLIGENCE -----
+    section("JOB INTELLIGENCE", logger)
+
+    intelligent_jobs = enrich_job_intelligence(detailed_jobs)
+    logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
+
+    # ----- JOB MARKET INSIGHTS -----
+    log_market_insights(detailed_jobs)
 
     # ----- SAVE CACHE -----
     save_new_job_ids(new_job_ids)
@@ -219,4 +266,4 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         for company, ats, prev, curr, delta in momentum[:10]:
             logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
 
-    return detailed_jobs
+    return intelligent_jobs

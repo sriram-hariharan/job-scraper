@@ -1,4 +1,4 @@
-from src.pipeline.collector_async import collect_all_jobs_async
+from src.pipeline.collector import collect_all_jobs_async
 from src.pipeline.excel_writer import write_jobs_to_sheet
 from src.utils.logging import get_logger
 from src.pipeline.discovery_stage import run_discovery
@@ -9,6 +9,7 @@ logger = get_logger(__name__)
 
 async def main_async():
 
+    print("INIT METRICS DB")    
     init_metrics_db()
 
     # run_discovery()

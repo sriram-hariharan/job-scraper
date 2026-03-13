@@ -1,6 +1,6 @@
 import json
 
-with open("data/debug_greenhouse_details.json", "r") as f:
+with open("data/company_crawl_state.json", "r") as f:
     data = json.load(f)
 
 count = 0

@@ -1,3 +1,5 @@
+# 
+
 from datetime import datetime, timezone
 from src.config.consts import TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
 
@@ -43,19 +45,43 @@ def recency_score(posted_at):
     return 0
 
 
-def score_job(job):
+def momentum_score(company, momentum_map):
+
+    if not company:
+        return 0
+
+    company = company.lower()
+
+    delta = momentum_map.get(company, 0)
+
+    if delta >= 20:
+        return 20
+    elif delta >= 10:
+        return 10
+    elif delta >= 5:
+        return 5
+
+    return 0
+
+
+def score_job(job, momentum_map):
 
     score = 0
 
     score += title_score(job.get("title",""))
     score += recency_score(job.get("posted_at"))
+    score += momentum_score(job.get("company"), momentum_map)
 
     return score
 
-def rank_jobs(jobs):
+
+def rank_jobs(jobs, momentum_map=None):
+
+    if momentum_map is None:
+        momentum_map = {}
 
     for job in jobs:
-        job["_score"] = score_job(job)
+        job["_score"] = score_job(job, momentum_map)
 
     jobs.sort(key=lambda x: x["_score"], reverse=True)
 

@@ -69,6 +69,10 @@ async def fetch_company_jobs(session, company):
     except Exception:
         return jobs
 
+async def run_company(session, company):
+    jobs = await fetch_company_jobs(session, company)
+    return company, jobs
+
 async def scrape_all_greenhouse_async():
 
     companies = sorted(set(load_lines("data/greenhouse_companies.txt")))
@@ -88,14 +92,21 @@ async def scrape_all_greenhouse_async():
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        tasks = [fetch_company_jobs(session, c) for c in companies]
+        tasks = [
+            asyncio.create_task(run_company(session, c))
+            for c in companies
+        ]
 
-        for company, future in zip(
-            companies,
-            tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Greenhouse scraping")
+        for task in tqdm(
+            asyncio.as_completed(tasks),
+            total=len(tasks),
+            desc="Greenhouse scraping"
         ):
-            jobs = await future
+
+            company, jobs = await task
+
             all_jobs.extend(jobs)
+
             mark_scraped(company, schedule)
             
     save_schedule(schedule)

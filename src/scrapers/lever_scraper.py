@@ -97,18 +97,23 @@ async def scrape_all_lever_async():
             async with sem:
                 return await fetch_company_jobs(session, company)
 
-        task_map = {
-            asyncio.create_task(limited_fetch(c)): c
+        async def run_company(company):
+            jobs = await limited_fetch(company)
+            return company, jobs
+
+        tasks = [
+            asyncio.create_task(run_company(c))
             for c in companies
-        }
+        ]
 
-        for task in tqdm(asyncio.as_completed(task_map),
-                        total=len(task_map),
-                        desc="Lever scraping"):
+        for task in tqdm(
+            asyncio.as_completed(tasks),
+            total=len(tasks),
+            desc="Lever scraping"
+        ):
 
-            company = task_map[task]
+            company, jobs = await task
 
-            jobs = await task
             all_jobs.extend(jobs)
 
             mark_scraped(company, schedule)

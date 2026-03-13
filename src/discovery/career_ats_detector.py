@@ -77,22 +77,23 @@ async def detect_ats_from_domains(domains):
 
     async with aiohttp.ClientSession(connector=connector) as session:
 
-        tasks = [
+        task_map = {
             asyncio.create_task(
-            detect_greenhouse_slug_from_domain(session, d)
-            )
+                detect_greenhouse_slug_from_domain(session, d)
+            ): d
             for d in domains
-        ]
+        }
 
-        for future in tqdm(
-            asyncio.as_completed(tasks),
-            total=len(tasks),
+        for task in tqdm(
+            asyncio.as_completed(task_map.keys()),
+            total=len(task_map),
             desc="Career page scan"
         ):
-            r = await future
 
-            if r:
-                for ats, slug in r.items():
+            result = await task
+
+            if result:
+                for ats, slug in result.items():
                     results[ats].add(slug)
 
     return results

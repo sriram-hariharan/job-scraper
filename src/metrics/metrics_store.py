@@ -37,6 +37,17 @@ def init_metrics_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS company_hiring_metrics (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id INTEGER NOT NULL,
+        company TEXT NOT NULL,
+        ats TEXT NOT NULL,
+        job_count INTEGER NOT NULL,
+        FOREIGN KEY (run_id) REFERENCES pipeline_runs(id)
+    )
+    """)
+
     conn.commit()
     conn.close()
 
@@ -139,3 +150,79 @@ def record_ats_counts(run_id, stage, counts):
 
     conn.commit()
     conn.close()
+
+def record_company_hiring(run_id, jobs):
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    company_counts = {}
+
+    for job in jobs:
+
+        company = job.get("company")
+        ats = job.get("source")
+
+        if not company or not ats:
+            continue
+
+        key = (company, ats)
+
+        company_counts[key] = company_counts.get(key, 0) + 1
+
+    rows = [
+        (run_id, company, ats, count)
+        for (company, ats), count in company_counts.items()
+    ]
+
+    cur.executemany("""
+    INSERT INTO company_hiring_metrics (run_id, company, ats, job_count)
+    VALUES (?, ?, ?, ?)
+    """, rows)
+
+    conn.commit()
+    conn.close()
+
+
+def get_hiring_momentum():
+
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT
+        c1.company,
+        c1.ats,
+        c1.job_count AS current_jobs,
+        COALESCE(c2.job_count, 0) AS previous_jobs
+    FROM company_hiring_metrics c1
+    LEFT JOIN company_hiring_metrics c2
+        ON c1.company = c2.company
+        AND c1.ats = c2.ats
+        AND c2.run_id = (
+            SELECT id FROM pipeline_runs
+            ORDER BY id DESC
+            LIMIT 1 OFFSET 1
+        )
+    WHERE c1.run_id = (
+        SELECT id FROM pipeline_runs
+        ORDER BY id DESC
+        LIMIT 1
+    )
+    """)
+
+    rows = cur.fetchall()
+    conn.close()
+
+    momentum = []
+
+    for company, ats, current_jobs, previous_jobs in rows:
+
+        delta = current_jobs - previous_jobs
+
+        if delta != 0:
+            momentum.append((company, ats, previous_jobs, current_jobs, delta))
+
+    momentum.sort(key=lambda x: x[4], reverse=True)
+
+    return momentum

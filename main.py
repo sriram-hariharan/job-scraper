@@ -1,27 +1,29 @@
-from src.pipeline.collector import collect_all_jobs
+from src.pipeline.collector_async import collect_all_jobs_async
 from src.pipeline.excel_writer import write_jobs_to_sheet
 from src.utils.logging import get_logger
 from src.pipeline.discovery_stage import run_discovery
 from src.metrics.metrics_store import init_metrics_db
+import asyncio
 
 logger = get_logger(__name__)
 
-def main():
+async def main_async():
 
     init_metrics_db()
-    
+
     # run_discovery()
- 
+
     logger.info("=============================")
     logger.info("SCRAPING JOBS")
     logger.info("=============================\n")
 
-    jobs = collect_all_jobs()
-    
+    jobs = await collect_all_jobs_async()
+
     if jobs:
         write_jobs_to_sheet(jobs)
 
     logger.info("Final jobs: %s", len(jobs))
 
+
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())

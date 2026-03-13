@@ -7,8 +7,9 @@
 *.db-shm
 
 # pipeline runtime cache
-data/description_cache.db
 data/seen_job_ids.txt
+data/*.db
+data/*cache*
 
 # Python cache
 __pycache__/

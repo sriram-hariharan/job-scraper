@@ -3,6 +3,7 @@ from src.config.consts import TITLE_INCLUDE_PATTERNS
 from typing import List, Dict, Any
 from src.utils.logging import get_logger
 from src.storage.skill_db import get_existing_skills
+from src.ai.job_fit_evaluator import detect_visa_sponsorship
 from src.config.consts import (
     TITLE_INCLUDE_PATTERNS,
     BASE_SKILL_PATTERNS,
@@ -122,6 +123,8 @@ def build_job_intelligence(job):
 
     text = f"{title} {description}"
 
+    visa_signal = detect_visa_sponsorship(description)
+
     intelligence = {
         "skills": extract_skills(text),
         "frameworks": extract_frameworks(text),
@@ -129,7 +132,8 @@ def build_job_intelligence(job):
         "role_family": detect_role_family(title),
         "seniority": detect_seniority(title),
         "years_required": extract_years(text),
-        "ai_flags": detect_ai_flags(text)
+        "ai_flags": detect_ai_flags(text),
+        "visa_sponsorship": visa_signal
     }
 
     job["intelligence"] = intelligence

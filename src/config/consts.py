@@ -372,3 +372,25 @@ BASE_SENIORITY_PATTERNS = {
     "mid": ["engineer", "scientist"],
     "junior": ["junior", "associate"]
 }
+
+#visa sponsorship detection
+NEGATIVE_VISA_PATTERNS = [
+    r"must be authorized to work",
+    r"must have authorization to work",
+    r"no visa sponsorship",
+    r"cannot sponsor",
+    r"unable to sponsor",
+    r"we do not sponsor",
+    r"without sponsorship",
+    r"not provide visa sponsorship",
+    r"authorized to work in the (united states|us|u\.s\.)"
+]
+
+POSITIVE_VISA_PATTERNS = [
+    r"h-?1b",
+    r"visa sponsorship",
+    r"sponsor",
+    r"work authorization.*provided",
+    r"opt",
+    r"cpt"
+]

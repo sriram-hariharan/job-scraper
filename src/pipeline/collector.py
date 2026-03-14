@@ -17,6 +17,7 @@ from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
 from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
 from src.pipeline.application_scorer import score_jobs
+from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
 
 from src.ai.job_fit_evaluator import evaluate_jobs
 from src.ai.resume_matcher import match_resumes
@@ -202,7 +203,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     detailed_jobs = enrich_job_details(new_jobs)
     details_counts = log_stage_metrics("DETAILS", detailed_jobs)
-    # logger.info("DETAIL SAMPLE: %s", detailed_jobs[0])
 
     # ----- SKILL DISCOVERY -----
     section("SKILL DISCOVERY", logger)
@@ -220,33 +220,57 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
 
     # ----- AI EVALUATION FILTER -----
+    section("AI EVALUATION FILTER", logger)
+
     evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)
+    logger.info(f"Jobs eligible for AI evaluation: {len(evaluable_jobs)}")
+
+    # ----- EMBEDDING PREFILTER -----
+    MAX_EVAL_JOBS = 40
+
+    section("EMBEDDING PREFILTER", logger)
+
+    prefilter_input_count = len(evaluable_jobs)
+    evaluable_jobs = prefilter_jobs_by_embedding(
+        evaluable_jobs,
+        top_n=MAX_EVAL_JOBS,
+    )
+    prefilter_output_count = len(evaluable_jobs)
+
+    logger.info(
+        f"Embedding prefilter reduced AI candidates: "
+        f"{prefilter_input_count} -> {prefilter_output_count}"
+    )
+
+    # --- PREFILTER DEBUG (TOP JOBS) ---
+    for job in evaluable_jobs[:5]:
+        logger.info(
+            "PREFILTER | %.4f | %s | %s",
+            job.get("prefilter_similarity", 0),
+            job.get("company"),
+            job.get("title"),
+        )
+    # --- END PREFILTER DEBUG ---
+    
+    if prefilter_input_count:
+        reduction_pct = round(
+            (1 - prefilter_output_count / prefilter_input_count) * 100,
+            2,
+        )
+        logger.info(f"AI candidate reduction rate: {reduction_pct}%")
 
     # ----- AI JOB EVALUATION -----
-    MAX_EVAL_JOBS = 40
-    evaluable_jobs = evaluable_jobs[:MAX_EVAL_JOBS]
-
     section("AI JOB EVALUATION", logger)
 
     ai_jobs = evaluate_jobs(evaluable_jobs)
     logger.info(f"AI evaluated {len(ai_jobs)} jobs")
 
     # ----- RESUME MATCHING -----
-
     section("RESUME MATCHING", logger)
+
     ai_jobs = match_resumes(ai_jobs)
     logger.info("Resume matching completed")
 
-    # --- DEBUG START ---
-    for job in ai_jobs[:10]:
-        logger.info(
-            "RESUME MATCH | %s | %s | %.4f",
-            job.get("title"),
-            job.get("best_resume"),
-            job.get("resume_match_score") or -1
-        )
-    # --- DEBUG END ---
-    
     # ----- APPLICATION PRIORITY -----
     section("APPLICATION PRIORITY", logger)
 

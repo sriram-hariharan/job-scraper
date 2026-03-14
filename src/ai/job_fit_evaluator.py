@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
 from dotenv import load_dotenv
 from threading import Lock
+from src.config.consts import NEGATIVE_VISA_PATTERNS, POSITIVE_VISA_PATTERNS
 
 request_lock = Lock()
 last_request_time = 0
@@ -67,23 +68,29 @@ Example:
 
 def extract_json_from_response(response):
 
+    if not response:
+        return None
+
     response = response.replace("```json", "").replace("```", "").strip()
 
+    # Attempt direct parse first
     try:
-        return json.loads(response)
-    except:
+        parsed = json.loads(response)
+        if isinstance(parsed, dict) and "results" in parsed:
+            return parsed
+    except Exception:
         pass
 
-    # matches = re.findall(r"\{[\s\S]*?\}", response)
-    matches = re.search(r"\{[\s\S]*\}", response)
+    # Extract largest JSON block
+    match = re.search(r"\{[\s\S]*\}", response)
 
-    for m in matches:
+    if match:
         try:
-            parsed = json.loads(m)
+            parsed = json.loads(match.group())
             if "results" in parsed:
                 return parsed
-        except:
-            continue
+        except Exception:
+            pass
 
     return None
 
@@ -275,16 +282,6 @@ def evaluate_jobs(jobs):
 # FUTURE VISA DETECTION SUPPORT
 # --------------------------------------------------------
 
-VISA_PATTERNS = [
-    r"h-?1b",
-    r"visa sponsorship",
-    r"sponsor",
-    r"work authorization",
-    r"opt",
-    r"cpt",
-]
-
-
 def detect_visa_sponsorship(text):
 
     if not text:
@@ -292,7 +289,13 @@ def detect_visa_sponsorship(text):
 
     text = text.lower()
 
-    for p in VISA_PATTERNS:
+    # check explicit NO first
+    for p in NEGATIVE_VISA_PATTERNS:
+        if re.search(p, text):
+            return "no"
+
+    # check possible sponsorship
+    for p in POSITIVE_VISA_PATTERNS:
         if re.search(p, text):
             return "possible"
 

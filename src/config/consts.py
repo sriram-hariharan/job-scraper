@@ -329,3 +329,46 @@ QUERIES = [
     "jobs.ashbyhq.com",
     "apply.workable.com"
 ]
+
+
+# AI AGENTS EVAL
+
+BASE_SKILL_PATTERNS = [
+    "python",
+    "pytorch",
+    "tensorflow",
+    "sql",
+    "spark",
+    "scikit",
+    "pandas",
+    "numpy"
+]
+
+BASE_FRAMEWORK_PATTERNS = [
+    "langchain",
+    "llamaindex",
+    "transformers",
+    "huggingface"
+]
+
+BASE_CLOUD_PATTERNS = [
+    "aws",
+    "gcp",
+    "azure",
+    "kubernetes",
+    "docker"
+]
+
+BASE_AI_FLAG_PATTERNS = {
+    "genai": ["generative ai", "genai"],
+    "llm": ["large language model", "llm"],
+    "rag": ["retrieval augmented", "rag"],
+    "ml_platform": ["ml platform", "mlops"],
+    "research": ["research scientist", "research"]
+}
+
+BASE_SENIORITY_PATTERNS = {
+    "senior": ["senior", "staff", "principal"],
+    "mid": ["engineer", "scientist"],
+    "junior": ["junior", "associate"]
+}

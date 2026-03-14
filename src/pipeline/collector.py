@@ -15,8 +15,9 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
-from src.pipeline.job_intelligence import enrich_job_intelligence
+from src.pipeline.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
 from src.pipeline.application_scorer import score_jobs
+from src.ai.job_fit_evaluator import evaluate_jobs
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -42,7 +43,7 @@ from src.metrics.job_market_insights import (
     detect_ai_hiring_surges,
     detect_emerging_tech,
 )
-
+from src.metrics.skill_discovery import discover_new_skills
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
@@ -199,17 +200,41 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     detailed_jobs = enrich_job_details(new_jobs)
     details_counts = log_stage_metrics("DETAILS", detailed_jobs)
+    # logger.info("DETAIL SAMPLE: %s", detailed_jobs[0])
+
+    # ----- SKILL DISCOVERY -----
+    section("SKILL DISCOVERY", logger)
+
+    new_skills = discover_new_skills(detailed_jobs)
+
+    if new_skills:
+        logger.info(f"New skills discovered: {len(new_skills)}")
+        logger.info(", ".join(new_skills[:10]))
 
     # ----- JOB INTELLIGENCE -----
     section("JOB INTELLIGENCE", logger)
 
-    intelligent_jobs = enrich_job_intelligence(detailed_jobs)
+    intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
+    import json
+    logger.info("INTEL SAMPLE:\n%s", json.dumps(intelligent_jobs[0], indent=2))
+
+    # ----- AI EVALUATION FILTER -----
+    evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)
+
+    # ----- AI JOB EVALUATION -----
+    MAX_EVAL_JOBS = 40
+    evaluable_jobs = evaluable_jobs[:MAX_EVAL_JOBS]
+
+    section("AI JOB EVALUATION", logger)
+
+    ai_jobs = evaluate_jobs(evaluable_jobs)
+    logger.info(f"AI evaluated {len(ai_jobs)} jobs")
 
     # ----- APPLICATION PRIORITY -----
     section("APPLICATION PRIORITY", logger)
 
-    scored_jobs = score_jobs(intelligent_jobs)
+    scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
 
     # ----- JOB MARKET INSIGHTS -----

@@ -1,87 +1,167 @@
 import re
+from src.config.consts import TITLE_INCLUDE_PATTERNS
 from typing import List, Dict, Any
+from src.utils.logging import get_logger
+from src.metrics.skill_db import get_existing_skills
+from src.config.consts import (
+    TITLE_INCLUDE_PATTERNS,
+    BASE_SKILL_PATTERNS,
+    BASE_FRAMEWORK_PATTERNS,
+    BASE_CLOUD_PATTERNS,
+    BASE_AI_FLAG_PATTERNS,
+    BASE_SENIORITY_PATTERNS
+)
 
-SKILL_PATTERNS = {
-    "python": r"\bpython\b",
-    "pytorch": r"\bpytorch\b",
-    "tensorflow": r"\btensorflow\b",
-    "sql": r"\bsql\b",
-    "spark": r"\bspark\b",
-    "aws": r"\baws\b",
-    "gcp": r"\bgcp\b",
-    "azure": r"\bazure\b",
-    "docker": r"\bdocker\b",
-    "kubernetes": r"\bkubernetes\b",
-    "llm": r"\b(llm|large language model)\b",
-    "transformers": r"\btransformer(s)?\b",
-    "pandas": r"\bpandas\b",
-    "numpy": r"\bnumpy\b",
-    "scikit-learn": r"\bscikit[- ]learn\b",
-}
+logger = get_logger("ai_eval_filter")
 
-SENIORITY_PATTERNS = {
-    "intern": r"\bintern\b",
-    "junior": r"\bjunior\b",
-    "mid": r"\bmid[- ]level\b",
-    "senior": r"\bsenior\b",
-    "staff": r"\bstaff\b",
-    "principal": r"\bprincipal\b",
-    "lead": r"\blead\b",
-}
+SKILL_PATTERNS = BASE_SKILL_PATTERNS
+FRAMEWORK_PATTERNS = BASE_FRAMEWORK_PATTERNS
+CLOUD_PATTERNS = BASE_CLOUD_PATTERNS
+AI_FLAG_PATTERNS = BASE_AI_FLAG_PATTERNS
+SENIORITY_PATTERNS = BASE_SENIORITY_PATTERNS
 
 
-def extract_skills(text: str) -> List[str]:
-
-    if not text:
-        return []
+def extract_skills(text):
 
     text = text.lower()
 
     skills = []
 
-    for skill, pattern in SKILL_PATTERNS.items():
-        if re.search(pattern, text):
-            skills.append(skill)
+    # static patterns from config
+    for s in SKILL_PATTERNS:
+        if s in text:
+            skills.append(s)
 
-    return skills
+    # dynamically discovered skills
+    discovered = get_existing_skills()
+
+    for s in discovered:
+        if s in text:
+            skills.append(s)
+
+    return list(set(skills))
 
 
-def extract_seniority(title: str, description: str) -> str:
+def extract_frameworks(text):
 
-    combined = f"{title} {description}".lower()
+    text = text.lower()
 
-    for level, pattern in SENIORITY_PATTERNS.items():
-        if re.search(pattern, combined):
+    frameworks = []
+
+    for f in FRAMEWORK_PATTERNS:
+        if f in text:
+            frameworks.append(f)
+
+    return list(set(frameworks))
+
+
+def extract_cloud(text):
+
+    text = text.lower()
+
+    cloud = []
+
+    for c in CLOUD_PATTERNS:
+        if c in text:
+            cloud.append(c)
+
+    return list(set(cloud))
+
+
+def detect_ai_flags(text):
+
+    text = text.lower()
+
+    flags = {}
+
+    for flag, patterns in AI_FLAG_PATTERNS.items():
+
+        flags[flag] = any(p in text for p in patterns)
+
+    return flags
+
+
+def detect_seniority(title):
+
+    title = title.lower()
+
+    for level, patterns in SENIORITY_PATTERNS.items():
+
+        if any(p in title for p in patterns):
             return level
 
     return "unknown"
 
 
-def detect_remote(description: str) -> bool:
+def detect_role_family(title):
 
-    if not description:
-        return False
+    title = title.lower()
 
-    description = description.lower()
+    for pattern in TITLE_INCLUDE_PATTERNS:
 
-    if "remote" in description:
-        return True
+        if re.search(pattern, title):
+            return pattern
 
-    if "work from home" in description:
-        return True
-
-    return False
+    return "other"
 
 
-def enrich_job_intelligence(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def extract_years(text):
+
+    match = re.search(r"(\d+)\+?\s+years", text.lower())
+
+    if match:
+        return int(match.group(1))
+
+    return None
+
+
+def build_job_intelligence(job):
+
+    description = job.get("description_text", "") or ""
+    title = job.get("title", "") or ""
+
+    text = f"{title} {description}"
+
+    intelligence = {
+        "skills": extract_skills(text),
+        "frameworks": extract_frameworks(text),
+        "cloud_tools": extract_cloud(text),
+        "role_family": detect_role_family(title),
+        "seniority": detect_seniority(title),
+        "years_required": extract_years(text),
+        "ai_flags": detect_ai_flags(text)
+    }
+
+    job["intelligence"] = intelligence
+
+    return job
+
+def filter_jobs_for_ai_evaluation(jobs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+
+    evaluable_jobs = []
 
     for job in jobs:
 
-        desc = job.get("description", "")
-        title = job.get("title", "")
+        intel = job.get("intelligence", {})
 
-        job["skills"] = extract_skills(desc)
-        job["seniority"] = extract_seniority(title, desc)
-        job["remote"] = detect_remote(desc)
+        has_description = bool((job.get("description_text") or "").strip())
 
-    return jobs
+        has_structured_signals = any([
+            intel.get("skills"),
+            intel.get("frameworks"),
+            intel.get("cloud_tools"),
+            any(intel.get("ai_flags", {}).values()),
+            intel.get("years_required") is not None,
+        ])
+
+        if has_description or has_structured_signals:
+            evaluable_jobs.append(job)
+
+        else:
+            job["ai_fit"] = "SKIPPED_NO_EVIDENCE"
+            job["ai_fit_score"] = 0
+            job["ai_fit_reason"] = "No JD evidence available for evaluation"
+
+    logger.info(f"Jobs with enough evidence for AI evaluation: {len(evaluable_jobs)}")
+
+    return evaluable_jobs

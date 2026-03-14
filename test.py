@@ -1,11 +1,15 @@
-import json
+from dotenv import load_dotenv
+import os
+from groq import Groq
 
-with open("data/company_crawl_state.json", "r") as f:
-    data = json.load(f)
+load_dotenv()
+print(os.getenv("GROQ_API_KEY"))    
 
-count = 0
-print(len(data))
-for d in data:
-    if "description_snippet" in d:
-        count += 1
-print(count)
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+r = client.chat.completions.create(
+    model="llama-3.1-8b-instant",
+    messages=[{"role":"user","content":"say hello"}]
+)
+
+print(r.choices[0].message.content)

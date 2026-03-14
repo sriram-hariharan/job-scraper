@@ -13,4 +13,4 @@ pycountry
 geotext
 sqlite3
 tavily-python
-tldextract
+groq

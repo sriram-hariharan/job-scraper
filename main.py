@@ -8,8 +8,7 @@ import asyncio
 logger = get_logger(__name__)
 
 async def main_async():
-
-    print("INIT METRICS DB")    
+  
     init_metrics_db()
 
     # run_discovery()

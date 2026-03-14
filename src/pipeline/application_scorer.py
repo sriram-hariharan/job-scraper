@@ -1,29 +1,38 @@
 from datetime import datetime
 from src.metrics.metrics_store import get_hiring_momentum
 
+
 def score_job(job):
 
-    score = 0
+    base_score = 0
 
     title = (job.get("title") or "").lower()
     company = (job.get("company") or "").lower()
 
+    # -----------------------------
     # Seniority scoring
-    if "senior" in title:
-        score += 3
-    elif "staff" in title or "principal" in title:
-        score += 4
+    # -----------------------------
+    if "principal" in title or "staff" in title:
+        base_score += 4
+    elif "senior" in title:
+        base_score += 3
     else:
-        score += 2
+        base_score += 2
 
-    # Company quality
+    # -----------------------------
+    # Company hiring momentum
+    # -----------------------------
     momentum = get_hiring_momentum()
-    hot_companies = {c for c, _, _, _, _ in momentum[:10]}
+    hot_companies = {c.lower() for c, _, _, _, _ in momentum[:10]}
 
     if company in hot_companies:
-        score += 5
+        base_score += 5
 
+    # -----------------------------
     # Recency bonus
+    # -----------------------------
+    recency_score = 0
+
     posted_at = job.get("posted_at")
 
     if posted_at:
@@ -32,19 +41,42 @@ def score_job(job):
             hours_old = (datetime.utcnow() - posted_time).total_seconds() / 3600
 
             if hours_old < 6:
-                score += 4
+                recency_score = 4
             elif hours_old < 24:
-                score += 2
+                recency_score = 2
 
         except Exception:
             pass
 
-    return score
+    base_score += recency_score
+
+    # -----------------------------
+    # AI SIGNAL SCORE
+    # -----------------------------
+    ai_signal_score = (
+        job.get("ai_relevance", 0) * 0.35 +
+        job.get("skill_match", 0) * 0.25 +
+        job.get("seniority_match", 0) * 0.20 +
+        job.get("learning_opportunity", 0) * 0.20
+    )
+
+    # -----------------------------
+    # FINAL PRIORITY SCORE
+    # -----------------------------
+    priority_score = (
+        0.50 * ai_signal_score +
+        0.50 * base_score
+    )
+
+    job["ai_signal_score"] = round(ai_signal_score, 2)
+    job["priority_score"] = round(priority_score, 2)
+
+    return job
 
 
 def score_jobs(jobs):
 
     for job in jobs:
-        job["priority_score"] = score_job(job)
+        score_job(job)
 
     return jobs

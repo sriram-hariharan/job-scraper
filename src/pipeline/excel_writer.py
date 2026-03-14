@@ -11,10 +11,9 @@ logger = get_logger("excel_writer")
 
 def format_sheet(sheet):
 
-    # Freeze header row
     sheet.freeze(rows=1)
 
-    # Force priority column to numeric
+    # Priority column numeric
     sheet.format(
         "G:G",
         {
@@ -25,15 +24,26 @@ def format_sheet(sheet):
         }
     )
 
-    # Make the link column wider
+    # Resume similarity numeric
     sheet.format(
-        "J:J",
+        "I:I",
+        {
+            "numberFormat": {
+                "type": "NUMBER",
+                "pattern": "0.00"
+            }
+        }
+    )
+
+    # Make link column wider
+    sheet.format(
+        "O:O",
         {
             "wrapStrategy": "CLIP"
         }
     )
 
-    # Sort by newest posting first, then priority score
+    # Sort newest first, then priority
     sheet.sort(
         (5, "des"),  # Posted At
         (7, "des")   # Priority Score
@@ -64,6 +74,11 @@ def write_jobs_to_sheet(jobs):
         "Posted At",
         "Posted",
         "Priority Score",
+        "AI Score",
+        "Resume Match",
+        "Visa",
+        "Role Family",
+        "Best Resume",
         "AI Evaluation",
         "Run Timestamp",
         "Link"
@@ -78,7 +93,7 @@ def write_jobs_to_sheet(jobs):
         sheet.append_row(headers)
 
         sheet.format(
-            "A1:J1",
+            "A1:O1",
             {
                 "backgroundColor": {
                     "red": 0.15,
@@ -98,8 +113,8 @@ def write_jobs_to_sheet(jobs):
         existing_urls = set()
 
         for row in existing_data[1:]:
-            if len(row) >= 10:
-                existing_urls.add(row[9])
+            if len(row) >= 15:
+                existing_urls.add(row[14])
 
     rows_to_add = []
 
@@ -118,12 +133,22 @@ def write_jobs_to_sheet(jobs):
         location = normalize_location(job.get("location"))
         raw_posted = job.get("posted_at")
         relative_posted = time_ago(raw_posted)
+
         priority = job.get("priority_score", 0)
+        ai_score = job.get("ai_signal_score", 0)
+        resume_match = job.get("resume_match_score", 0)
 
         try:
             priority = float(priority)
         except Exception:
             priority = 0.0
+
+        try:
+            resume_match = float(resume_match)
+        except Exception:
+            resume_match = 0.0
+
+        intelligence = job.get("intelligence", {})
 
         rows_to_add.append([
             job.get("source"),
@@ -133,7 +158,12 @@ def write_jobs_to_sheet(jobs):
             raw_posted,
             relative_posted,
             priority,
-            job.get("ai_fit", ""),
+            ai_score,
+            resume_match,
+            intelligence.get("visa_sponsorship"),
+            intelligence.get("role_family"),
+            job.get("best_resume"),
+            job.get("ai_fit"),
             run_time,
             url
         ])

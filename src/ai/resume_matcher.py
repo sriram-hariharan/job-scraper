@@ -18,8 +18,6 @@ def build_job_embedding_text(job: Dict) -> str:
     title = job.get("title", "")
 
     skills = ", ".join(intel.get("skills", []))
-    frameworks = ", ".join(intel.get("frameworks", []))
-    cloud = ", ".join(intel.get("cloud_tools", []))
 
     seniority = intel.get("seniority", "")
 
@@ -27,10 +25,6 @@ def build_job_embedding_text(job: Dict) -> str:
     {title}
 
     skills: {skills}
-
-    frameworks: {frameworks}
-
-    cloud: {cloud}
 
     seniority: {seniority}
     """

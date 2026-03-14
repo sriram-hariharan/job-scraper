@@ -15,7 +15,6 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
-from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
 from src.pipeline.application_scorer import score_jobs
 from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
 
@@ -47,6 +46,9 @@ from src.intelligence.market_insights import (
     detect_emerging_tech,
 )
 from src.intelligence.skill_discovery import discover_new_skills
+from src.intelligence.role_family_classifier import classify_roles
+from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
@@ -219,6 +221,19 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
 
+    # ---- DEBUG START ----
+    for job in intelligent_jobs[6:11]:
+
+        intel = job.get("intelligence", {})
+        skills = intel.get("skills", {})
+
+        logger.info(
+            f"INTEL SAMPLE | {job.get('company')} | {job.get('title')} | "
+            f"required={skills.get('required')} | preferred={skills.get('preferred')}"
+        )
+
+    # ---- DEBUG END ----
+
     # ----- AI EVALUATION FILTER -----
     section("AI EVALUATION FILTER", logger)
 
@@ -251,7 +266,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             job.get("title"),
         )
     # --- END PREFILTER DEBUG ---
-    
+
     if prefilter_input_count:
         reduction_pct = round(
             (1 - prefilter_output_count / prefilter_input_count) * 100,

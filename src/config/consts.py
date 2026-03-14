@@ -344,21 +344,6 @@ BASE_SKILL_PATTERNS = [
     "numpy"
 ]
 
-BASE_FRAMEWORK_PATTERNS = [
-    "langchain",
-    "llamaindex",
-    "transformers",
-    "huggingface"
-]
-
-BASE_CLOUD_PATTERNS = [
-    "aws",
-    "gcp",
-    "azure",
-    "kubernetes",
-    "docker"
-]
-
 BASE_AI_FLAG_PATTERNS = {
     "genai": ["generative ai", "genai"],
     "llm": ["large language model", "llm"],
@@ -377,6 +362,8 @@ BASE_SENIORITY_PATTERNS = {
 NEGATIVE_VISA_PATTERNS = [
     r"must be authorized to work",
     r"must have authorization to work",
+    r"must be legally authorized to work",
+    r"unrestricted work authorization",
     r"no visa sponsorship",
     r"cannot sponsor",
     r"unable to sponsor",
@@ -394,3 +381,65 @@ POSITIVE_VISA_PATTERNS = [
     r"opt",
     r"cpt"
 ]
+
+#SKILLS extraction
+
+SECTION_PATTERNS = {
+    "required": [
+        r"minimum qualifications",
+        r"basic qualifications",
+        r"required qualifications",
+        r"requirements",
+        r"what you'll need",
+        r"must have"
+    ],
+    "preferred": [
+        r"preferred qualifications",
+        r"nice to have",
+        r"bonus qualifications",
+        r"good to have",
+        r"plus"
+    ]
+}
+
+SKILL_STOPWORDS = {
+    "model",
+    "models",
+    "modeling",
+    "maintain",
+    "detail",
+    "details",
+    "paid",
+    "available",
+    "language",
+    "languages",
+    "seamless",
+    "blair",
+}
+
+TRUSTED_CORE_SKILLS = {
+    "python",
+    "sql",
+    "pandas",
+    "spark",
+    "pytorch",
+    "tensorflow",
+    "airflow",
+    "aws",
+    "gcp",
+    "azure",
+    "databricks",
+    "snowflake",
+    "tableau",
+    "powerbi",
+    "scikit-learn",
+    "xgboost",
+    "langchain"
+}
+
+# Words that should never appear as skills
+INVALID_SKILL_WORDS = {
+    "build","create","obtain","maintain","raise","improve","support",
+    "entertainment","industry","business","domain","team","stakeholder",
+    "ability","experience","understanding","knowledge"
+}

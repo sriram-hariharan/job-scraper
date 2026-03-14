@@ -11,6 +11,8 @@ tqdm
 python-dateutil
 pycountry
 geotext
-sqlite3
 tavily-python
 groq
+pdfminer.six
+sentence-transformers
+numpy

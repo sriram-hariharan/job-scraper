@@ -15,9 +15,11 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
-from intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
 from src.pipeline.application_scorer import score_jobs
+
 from src.ai.job_fit_evaluator import evaluate_jobs
+from src.ai.resume_matcher import match_resumes
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -38,12 +40,12 @@ from src.storage.metrics_store import (
     record_company_hiring,
     get_hiring_momentum,
 )
-from intelligence.market_insights import (
+from src.intelligence.market_insights import (
     detect_hot_companies,
     detect_ai_hiring_surges,
     detect_emerging_tech,
 )
-from intelligence.skill_discovery import discover_new_skills
+from src.intelligence.skill_discovery import discover_new_skills
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
@@ -216,8 +218,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
-    import json
-    logger.info("INTEL SAMPLE:\n%s", json.dumps(intelligent_jobs[0], indent=2))
 
     # ----- AI EVALUATION FILTER -----
     evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)
@@ -231,6 +231,22 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     ai_jobs = evaluate_jobs(evaluable_jobs)
     logger.info(f"AI evaluated {len(ai_jobs)} jobs")
 
+    # ----- RESUME MATCHING -----
+
+    section("RESUME MATCHING", logger)
+    ai_jobs = match_resumes(ai_jobs)
+    logger.info("Resume matching completed")
+
+    # --- DEBUG START ---
+    for job in ai_jobs[:10]:
+        logger.info(
+            "RESUME MATCH | %s | %s | %.4f",
+            job.get("title"),
+            job.get("best_resume"),
+            job.get("resume_match_score") or -1
+        )
+    # --- DEBUG END ---
+    
     # ----- APPLICATION PRIORITY -----
     section("APPLICATION PRIORITY", logger)
 

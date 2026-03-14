@@ -2,7 +2,7 @@ from src.pipeline.collector import collect_all_jobs_async
 from src.pipeline.excel_writer import write_jobs_to_sheet
 from src.utils.logging import get_logger
 from src.pipeline.discovery_stage import run_discovery
-from src.metrics.metrics_store import init_metrics_db
+from src.storage.metrics_store import init_metrics_db
 import asyncio
 
 logger = get_logger(__name__)

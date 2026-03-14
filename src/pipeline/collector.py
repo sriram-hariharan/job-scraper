@@ -15,7 +15,7 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
-from src.pipeline.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+from intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
 from src.pipeline.application_scorer import score_jobs
 from src.ai.job_fit_evaluator import evaluate_jobs
 
@@ -30,7 +30,7 @@ from src.utils.ats_health import (
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.discovery.domain_learner import learn_domains_from_jobs
 
-from src.metrics.metrics_store import (
+from src.storage.metrics_store import (
     record_pipeline_run,
     record_ats_counts,
     get_last_run,
@@ -38,12 +38,12 @@ from src.metrics.metrics_store import (
     record_company_hiring,
     get_hiring_momentum,
 )
-from src.metrics.job_market_insights import (
+from intelligence.market_insights import (
     detect_hot_companies,
     detect_ai_hiring_surges,
     detect_emerging_tech,
 )
-from src.metrics.skill_discovery import discover_new_skills
+from intelligence.skill_discovery import discover_new_skills
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 

@@ -1,5 +1,5 @@
 from datetime import datetime
-from src.metrics.metrics_store import get_hiring_momentum
+from src.storage.metrics_store import get_hiring_momentum
 
 
 def score_job(job):

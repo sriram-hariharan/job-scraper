@@ -1,7 +1,7 @@
 import re
 from collections import Counter
 
-from src.metrics.skill_db import (
+from src.storage.skill_db import (
     init_skill_db,
     get_existing_skills,
     insert_or_update_skill

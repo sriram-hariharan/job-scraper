@@ -2,7 +2,7 @@ import re
 from src.config.consts import TITLE_INCLUDE_PATTERNS
 from typing import List, Dict, Any
 from src.utils.logging import get_logger
-from src.metrics.skill_db import get_existing_skills
+from src.storage.skill_db import get_existing_skills
 from src.config.consts import (
     TITLE_INCLUDE_PATTERNS,
     BASE_SKILL_PATTERNS,

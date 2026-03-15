@@ -3,11 +3,11 @@ import json
 import os
 import re
 
-from groq import Groq
 from dotenv import load_dotenv
 from tqdm import tqdm
 from threading import Lock
 
+from src.ai.llm_client import run_chat_completion, get_default_model
 from src.storage.skill_corpus_store import (
     get_cached_llm_skills,
     store_cached_llm_skills,
@@ -18,7 +18,7 @@ load_dotenv()
 
 logger = get_logger("ai_eval_filter")
 
-MODEL = "llama-3.1-8b-instant"
+MODEL = get_default_model()
 SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").strip().lower()
 VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
 
@@ -31,8 +31,6 @@ skill_cache_metrics = {
     "cache_only_skips": 0,
     "live_failures": 0,
 }
-
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # progress bar for LLM calls
 llm_bar = tqdm(desc="LLM skill extraction", unit="job")
@@ -222,17 +220,15 @@ def enrich_skills_with_llm(job_text):
 
     try:
 
-        completion = client.chat.completions.create(
+        response = run_chat_completion(
             model=MODEL,
             temperature=0,
             max_tokens=500,
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": prompt}
-            ]
+            ],
         )
-
-        response = completion.choices[0].message.content
 
     except Exception as e:
         increment_skill_cache_metric("live_failures")

@@ -4,12 +4,12 @@ import time
 import re
 import random
 import hashlib
-from groq import Groq
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from threading import Semaphore
 from dotenv import load_dotenv
 from threading import Lock
+from src.ai.llm_client import run_chat_completion, get_default_model
 from src.config.consts import NEGATIVE_VISA_PATTERNS, POSITIVE_VISA_PATTERNS
 from src.storage.skill_corpus_store import (
     get_cached_job_evaluation,
@@ -21,19 +21,13 @@ last_request_time = 0
 
 load_dotenv()
 
-MODEL = "llama-3.1-8b-instant"
+MODEL = get_default_model()
 BATCH_SIZE = 5
 MIN_REQUEST_INTERVAL = 2.0
 GROQ_CONCURRENCY_LIMIT = 1
 
 EVAL_MODE = os.getenv("EVAL_MODE", "cache_prefer_live").strip().lower()
 VALID_EVAL_MODES = {"cache_prefer_live", "cache_only", "live_only"}
-
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-client = Groq(api_key=GROQ_API_KEY)
-
-if not GROQ_API_KEY:
-    raise RuntimeError("GROQ_API_KEY not found in environment")
 
 groq_semaphore = Semaphore(GROQ_CONCURRENCY_LIMIT)
 
@@ -256,17 +250,15 @@ def evaluate_batch(batch):
 
                     last_request_time = time.time()
 
-                completion = client.chat.completions.create(
+                response = run_chat_completion(
                     model=MODEL,
                     temperature=0,
                     max_tokens=600,
                     messages=[
                         {"role": "system", "content": SYSTEM_PROMPT},
                         {"role": "user", "content": prompt}
-                    ]
+                    ],
                 )
-
-            response = completion.choices[0].message.content
 
         except Exception as e:
 

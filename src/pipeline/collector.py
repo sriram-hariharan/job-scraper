@@ -313,11 +313,12 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     # ----- EVAL CACHE SUMMARY -----
     eval_cache_summary = get_eval_cache_metrics()
     logger.info(
-        "EVAL CACHE SUMMARY | hits=%s | misses=%s | stores=%s | live_failures=%s",
-        eval_cache_summary["eval_cache_hits"],
-        eval_cache_summary["eval_cache_misses"],
-        eval_cache_summary["eval_cache_stores"],
-        eval_cache_summary["eval_live_failures"],
+    "EVAL CACHE SUMMARY | hits=%s | misses=%s | stores=%s | cache_only_skips=%s | live_failures=%s",
+    eval_cache_summary["eval_cache_hits"],
+    eval_cache_summary["eval_cache_misses"],
+    eval_cache_summary["eval_cache_stores"],
+    eval_cache_summary["eval_cache_only_skips"],
+    eval_cache_summary["eval_live_failures"],
     )
 
     # ----- RESUME MATCHING -----

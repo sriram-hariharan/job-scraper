@@ -26,6 +26,9 @@ BATCH_SIZE = 5
 MIN_REQUEST_INTERVAL = 2.0
 GROQ_CONCURRENCY_LIMIT = 1
 
+EVAL_MODE = os.getenv("EVAL_MODE", "cache_prefer_live").strip().lower()
+VALID_EVAL_MODES = {"cache_prefer_live", "cache_only", "live_only"}
+
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
 
@@ -40,6 +43,7 @@ eval_cache_metrics = {
     "eval_cache_hits": 0,
     "eval_cache_misses": 0,
     "eval_cache_stores": 0,
+    "eval_cache_only_skips": 0,
     "eval_live_failures": 0,
 }
 
@@ -174,6 +178,17 @@ def apply_evaluation_to_job(job, evaluation_data):
         f"Learning {learning_opportunity}"
     )
 
+def mark_job_eval_skipped(job):
+
+    job["ai_relevance"] = 0
+    job["skill_match"] = 0
+    job["seniority_match"] = 0
+    job["learning_opportunity"] = 0
+    job["ai_fit_score"] = 0
+    job["visa_sponsorship_signal"] = "unknown"
+    job["ai_fit_reason"] = "Skipped live evaluation (cache_only mode)"
+    job["ai_fit"] = "EVAL_SKIPPED_CACHE_ONLY"
+
 def build_batch_prompt(batch):
 
     blocks = []
@@ -306,7 +321,9 @@ def evaluate_batch(batch):
             apply_evaluation_to_job(batch[idx], evaluation_data)
 
             cache_key = batch[idx].get("_eval_cache_key")
-            if cache_key:
+            eval_mode = batch[idx].get("_eval_mode", "cache_prefer_live")
+
+            if cache_key and eval_mode != "live_only":
                 store_cached_job_evaluation(
                     cache_key=cache_key,
                     model=MODEL,
@@ -333,18 +350,31 @@ def evaluate_jobs(jobs):
 
     reset_eval_cache_metrics()
 
+    if EVAL_MODE not in VALID_EVAL_MODES:
+        mode = "cache_prefer_live"
+    else:
+        mode = EVAL_MODE
+
     indexed_jobs = []
 
     for i, job in enumerate(jobs):
         job["_eval_original_index"] = i
         cache_key = build_job_eval_cache_key(job)
         job["_eval_cache_key"] = cache_key
+        job["_eval_mode"] = mode
 
-        cached = get_cached_job_evaluation(cache_key)
+        if mode != "live_only":
+            cached = get_cached_job_evaluation(cache_key)
 
-        if cached is not None:
-            increment_eval_cache_metric("eval_cache_hits")
-            apply_evaluation_to_job(job, cached)
+            if cached is not None:
+                increment_eval_cache_metric("eval_cache_hits")
+                apply_evaluation_to_job(job, cached)
+            else:
+                increment_eval_cache_metric("eval_cache_misses")
+
+                if mode == "cache_only":
+                    increment_eval_cache_metric("eval_cache_only_skips")
+                    mark_job_eval_skipped(job)
         else:
             increment_eval_cache_metric("eval_cache_misses")
 
@@ -383,7 +413,12 @@ def evaluate_jobs(jobs):
 
     all_results = [
         job for job in indexed_jobs
-        if "ai_fit_score" in job or job.get("ai_fit") in {"LLM_CALL_FAIL", "PARSE_ERROR", "RATE_LIMIT_FAIL"}
+        if "ai_fit_score" in job or job.get("ai_fit") in {
+            "LLM_CALL_FAIL",
+            "PARSE_ERROR",
+            "RATE_LIMIT_FAIL",
+            "EVAL_SKIPPED_CACHE_ONLY",
+        }
     ]
 
     all_results.sort(key=lambda job: job.get("_eval_original_index", 0))
@@ -391,6 +426,7 @@ def evaluate_jobs(jobs):
     for job in all_results:
         job.pop("_eval_original_index", None)
         job.pop("_eval_cache_key", None)
+        job.pop("_eval_mode", None)
 
     return all_results
 

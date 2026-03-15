@@ -57,6 +57,8 @@ from src.intelligence.role_family_classifier import classify_roles
 from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
 from src.intelligence.skill_frequency import top_skills
 
+from src.rag.export_job_corpus import export_job_corpus
+
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
@@ -345,6 +347,13 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
+
+    # ----- RAG EXPORT -----
+    rag_export_count = export_job_corpus(
+    scored_jobs,
+    "data/rag/job_corpus.jsonl",
+    )
+    logger.info(f"RAG corpus exported: {rag_export_count} documents")
 
     # ----- JOB MARKET INSIGHTS -----
     log_market_insights(detailed_jobs)

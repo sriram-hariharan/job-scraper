@@ -25,6 +25,7 @@ from src.ai.skill_llm_enricher import (
     reset_skill_cache_metrics,
     get_skill_cache_metrics,
 )
+from src.ai.llm_client import reset_provider_metrics, get_provider_metrics
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -214,6 +215,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     details_counts = log_stage_metrics("DETAILS", detailed_jobs)
 
     # ----- JOB INTELLIGENCE -----
+    reset_provider_metrics()
     section("JOB INTELLIGENCE", logger)
 
     reset_skill_cache_metrics()
@@ -308,6 +310,18 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     ai_jobs = evaluate_jobs(evaluable_jobs)
     logger.info(f"AI evaluated {len(ai_jobs)} jobs")
+
+    # ----- LLM PROVIDER SUMMARY -----
+    provider_summary = get_provider_metrics()
+    logger.info(
+        "LLM PROVIDER SUMMARY | primary_attempts=%s | fallback_attempts=%s | groq_calls=%s | gemini_calls=%s | fallback_successes=%s | provider_failures=%s",
+        provider_summary["primary_attempts"],
+        provider_summary["fallback_attempts"],
+        provider_summary["groq_calls"],
+        provider_summary["gemini_calls"],
+        provider_summary["fallback_successes"],
+        provider_summary["provider_failures"],
+    )
 
     # ----- EVAL CACHE SUMMARY -----
     eval_cache_summary = get_eval_cache_metrics()

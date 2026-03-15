@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from src.utils.logging import get_logger
 from src.storage.skill_db import get_existing_skills
 from src.ai.job_fit_evaluator import detect_visa_sponsorship
-from ai.skill_llm_enricher_regex import enrich_skills_with_llm
+from archive.skill_llm_enricher_regex import enrich_skills_with_llm
 
 from src.config.consts import (
     TITLE_INCLUDE_PATTERNS,

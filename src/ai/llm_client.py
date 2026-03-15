@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from groq import Groq
 from google import genai
 from google.genai import types
+from threading import Lock
 
 load_dotenv()
 
@@ -16,6 +17,16 @@ FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "gemini-2.5-flash").strip()
 _groq_client = None
 _gemini_client = None
 
+_provider_metrics_lock = Lock()
+
+_provider_metrics = {
+    "primary_attempts": 0,
+    "fallback_attempts": 0,
+    "groq_calls": 0,
+    "gemini_calls": 0,
+    "fallback_successes": 0,
+    "provider_failures": 0,
+}
 
 def get_default_provider():
     return DEFAULT_PROVIDER
@@ -23,6 +34,22 @@ def get_default_provider():
 
 def get_default_model():
     return DEFAULT_MODEL
+
+def reset_provider_metrics():
+    with _provider_metrics_lock:
+        for key in _provider_metrics:
+            _provider_metrics[key] = 0
+
+
+def get_provider_metrics():
+    with _provider_metrics_lock:
+        return dict(_provider_metrics)
+
+
+def increment_provider_metric(metric_name: str):
+    with _provider_metrics_lock:
+        if metric_name in _provider_metrics:
+            _provider_metrics[metric_name] += 1
 
 
 def get_groq_client():
@@ -69,6 +96,7 @@ def _messages_to_gemini_prompt(messages):
 
 
 def _run_groq_chat_completion(messages, model, temperature, max_tokens):
+    increment_provider_metric("groq_calls")
     client = get_groq_client()
 
     completion = client.chat.completions.create(
@@ -82,6 +110,7 @@ def _run_groq_chat_completion(messages, model, temperature, max_tokens):
 
 
 def _run_gemini_chat_completion(messages, model, temperature, max_tokens):
+    increment_provider_metric("gemini_calls")
     client = get_gemini_client()
     prompt = _messages_to_gemini_prompt(messages)
 
@@ -120,9 +149,11 @@ def run_chat_completion(
     temperature=0,
     max_tokens=500,
     provider=None,
-):  
+):
     primary_provider = (provider or DEFAULT_PROVIDER).strip().lower()
     primary_model = model or DEFAULT_MODEL
+
+    increment_provider_metric("primary_attempts")
 
     try:
         return _run_single_provider(
@@ -139,17 +170,24 @@ def run_chat_completion(
             not FALLBACK_ENABLED
             or primary_provider == FALLBACK_PROVIDER
         ):
+            increment_provider_metric("provider_failures")
             raise primary_error
 
+        increment_provider_metric("fallback_attempts")
+
         try:
-            return _run_single_provider(
+            result = _run_single_provider(
                 provider_name=FALLBACK_PROVIDER,
                 messages=messages,
                 model=FALLBACK_MODEL,
                 temperature=temperature,
                 max_tokens=max_tokens,
             )
+            increment_provider_metric("fallback_successes")
+            return result
+
         except Exception as fallback_error:
+            increment_provider_metric("provider_failures")
             raise RuntimeError(
                 f"Primary provider failed ({primary_provider}/{primary_model}): {primary_error} | "
                 f"Fallback provider failed ({FALLBACK_PROVIDER}/{FALLBACK_MODEL}): {fallback_error}"

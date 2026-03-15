@@ -180,7 +180,6 @@ def clean_llm_skills(skills):
 def process_result(response):
 
     response = response.replace("```json", "").replace("```", "").strip()
-    logger.info("LLM RAW RESPONSE | %s", response)
 
     # --- robust JSON extraction ---
     start = response.find("{")

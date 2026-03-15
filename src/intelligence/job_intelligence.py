@@ -1,6 +1,8 @@
 from typing import List, Dict, Any
 
 from src.utils.logging import get_logger
+from src.utils.skill_normalizer import normalize_skills
+
 from src.ai.skill_llm_enricher import enrich_skills_with_llm
 from src.ai.job_fit_evaluator import detect_visa_sponsorship
 
@@ -30,15 +32,15 @@ def build_job_intelligence(job: Dict[str, Any]) -> Dict[str, Any]:
     # ---- LLM skill extraction ----
     llm_result = enrich_skills_with_llm(description)
 
-    required_skills = llm_result.get("required_skills", [])
-    preferred_skills = llm_result.get("preferred_skills", [])
+    required_skills = normalize_skills(llm_result.get("required_skills", []))
+    preferred_skills = normalize_skills(llm_result.get("preferred_skills", []))
 
-    logger.info(
-        "LLM SKILLS | %s | required=%s | preferred=%s",
-        title,
-        required_skills,
-        preferred_skills
-    )
+    preferred_skills = [s for s in preferred_skills if s not in required_skills]
+
+    if required_skills or preferred_skills:
+        logger.info("LLM enrichment applied")
+    else:
+        logger.info("LLM enrichment empty")
 
     # ---- visa detection (kept because it is independent) ----
     visa_signal = detect_visa_sponsorship(description)

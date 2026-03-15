@@ -623,3 +623,38 @@ GENERIC_SKILL_PHRASES = {
     "cloud computing",
     "ml frameworks",
 }
+
+# Exact drops based on corpus-proven junk.
+DROP_EXACT = {
+    "fintech",
+    "financial services",
+    "payments",
+    "phd",
+    "models",
+    "real-time alerts",
+    "data pipelines",
+    "llm-based tools",
+    "machine learning techniques",
+    "noisy, unstructured data",
+    "distributed training of ml models",
+    "ci/cd pipelines",
+}
+
+
+# Safe alias normalization.
+ALIAS_MAP = {
+    "ab testing": "a/b testing",
+    "ab tests": "a/b testing",
+    "gen ai": "generative ai",
+    "claud code": "claude code",
+    "air flow": "airflow",
+    "regression basics": "regression",
+    "machine learning techniques": "machine learning",
+}
+
+
+SQL_FRAGMENT_TERMS = {
+    "joins",
+    "window functions",
+    "ctes",
+}

@@ -1,9 +1,16 @@
+import hashlib
 import json
 import os
+import re
+
 from groq import Groq
 from dotenv import load_dotenv
 from tqdm import tqdm
 
+from src.storage.skill_corpus_store import (
+    get_cached_llm_skills,
+    store_cached_llm_skills,
+)
 from src.utils.logging import get_logger
 
 load_dotenv()
@@ -116,8 +123,6 @@ def extract_json_from_response(response: str):
 
     response = response.replace("```json", "").replace("```", "").strip()
 
-    logger.info("LLM RAW RESPONSE | %s", response)
-
     start = response.find("{")
     end = response.rfind("}")
 
@@ -129,8 +134,27 @@ def extract_json_from_response(response: str):
     return json.loads(json_str)
 
 
+def build_skill_cache_key(job_text: str) -> str:
+    """
+    Stable cache key from normalized JD text.
+    Lowercasing + whitespace collapsing prevents
+    meaningless cache misses from formatting changes.
+    """
+
+    normalized = re.sub(r"\s+", " ", (job_text or "").strip().lower())
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
 def enrich_skills_with_llm(job_text):
 
+    cache_key = build_skill_cache_key(job_text)
+    cached = get_cached_llm_skills(cache_key)
+
+    if cached is not None:
+        logger.info("LLM skill cache hit")
+        return cached
+
+    logger.info("LLM skill cache miss")
     llm_bar.update(1)
 
     prompt = f"""
@@ -173,19 +197,24 @@ JOB DESCRIPTION:
 
         preferred = [s for s in preferred if s not in required]
 
-        required = list(set(required))
-        preferred = list(set(preferred))
+        required = sorted(set(required))
+        preferred = sorted(set(preferred))
 
-        logger.info(    
-            "LLM PARSED | required=%s | preferred=%s",
-            required,
-            preferred
-        )
-
-        return {
+        result = {
             "required_skills": required,
             "preferred_skills": preferred
         }
+
+        store_cached_llm_skills(
+            cache_key=cache_key,
+            model=MODEL,
+            required_skills=required,
+            preferred_skills=preferred,
+        )
+
+        logger.info("LLM skill cache stored")
+
+        return result
 
     except Exception as e:
 

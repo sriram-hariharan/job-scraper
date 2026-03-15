@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 import asyncio
 import time
 from collections import Counter
+from uuid import uuid4
 
 from src.scrapers.workday_scraper import scrape_all_workday
 from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
@@ -32,6 +33,7 @@ from src.utils.ats_health import (
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.discovery.domain_learner import learn_domains_from_jobs
 
+from src.storage.skill_corpus_store import store_job_skills, get_top_corpus_skills
 from src.storage.metrics_store import (
     record_pipeline_run,
     record_ats_counts,
@@ -48,6 +50,7 @@ from src.intelligence.market_insights import (
 from src.intelligence.skill_discovery import discover_new_skills
 from src.intelligence.role_family_classifier import classify_roles
 from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+from src.intelligence.skill_frequency import top_skills
 
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
@@ -222,6 +225,27 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             f"INTEL SAMPLE | {job.get('company')} | {job.get('title')} | "
             f"required={skills.get('required')} | preferred={skills.get('preferred')}"
         )
+
+    # ----- JOB SKILLS STORE -----
+    skill_run_id = str(uuid4())
+    store_job_skills(skill_run_id, intelligent_jobs)
+
+    # ----- TOP SKILLS -----
+
+    logger.info("")
+    logger.info("TOP EXTRACTED SKILLS")
+    logger.info("--------------------")
+
+    for skill, count in top_skills(intelligent_jobs, top_n=50):
+        logger.info(f"{count:3} | {skill}")
+
+    # ---- DEBUG TOP CORPUS SKILLS -----
+    logger.info("")
+    logger.info("TOP CORPUS SKILLS")
+    logger.info("-----------------")
+
+    for skill, count in get_top_corpus_skills(limit=100):
+        logger.info(f"{count:3} | {skill}")
 
     # ----- SKILL DISCOVERY -----
     section("SKILL DISCOVERY", logger)

@@ -1,5 +1,5 @@
-import re
 from collections import Counter
+import re
 
 from src.storage.skill_db import (
     init_skill_db,
@@ -7,28 +7,32 @@ from src.storage.skill_db import (
     insert_or_update_skill
 )
 
-MIN_OCCURRENCES = 3
+from src.config.consts import NORMALIZATION_MAP
+
+MIN_OCCURRENCES = 2
 
 
-def extract_candidate_skills(text):
+def normalize_skill(skill: str) -> str:
 
-    text = text.lower()
+    if not skill:
+        return ""
 
-    tokens = re.findall(r"[a-z][a-z0-9\-\+\.]{2,}", text)
+    skill = skill.lower().strip()
 
-    candidates = []
+    # normalize whitespace
+    skill = re.sub(r"\s+", " ", skill)
 
-    for token in tokens:
+    # canonical map
+    skill = NORMALIZATION_MAP.get(skill, skill)
 
-        if token.isdigit():
-            continue
+    # singular/plural normalization
+    if skill.endswith(" databases"):
+        skill = skill.replace(" databases", " database")
 
-        if len(token) < 3:
-            continue
+    if skill.endswith(" embeddings"):
+        skill = skill.replace(" embeddings", " embedding")
 
-        candidates.append(token)
-
-    return candidates
+    return skill
 
 
 def discover_new_skills(jobs):
@@ -39,38 +43,34 @@ def discover_new_skills(jobs):
 
     for job in jobs:
 
-        desc = job.get("description_text", "")
+        intel = job.get("intelligence", {}) or {}
 
-        if not desc:
-            continue
+        skills = intel.get("skills", {}) or {}
 
-        tokens = extract_candidate_skills(desc)
+        required = skills.get("required", []) or []
+        preferred = skills.get("preferred", []) or []
 
-        counter.update(tokens)
+        for skill in required + preferred:
+
+            skill = normalize_skill(skill)
+
+            if not skill:
+                continue
+
+            counter[skill] += 1
 
     existing = get_existing_skills()
 
     new_skills = []
 
-    for token, count in counter.items():
+    for skill, count in counter.items():
 
         if count < MIN_OCCURRENCES:
             continue
 
-        if any(x in token for x in [
-            "ai",
-            "ml",
-            "model",
-            "vector",
-            "tensor",
-            "torch",
-            "lang",
-            "transformer"
-        ]):
+        insert_or_update_skill(skill)
 
-            insert_or_update_skill(token)
+        if skill not in existing:
+            new_skills.append(skill)
 
-            if token not in existing:
-                new_skills.append(token)
-
-    return new_skills
+    return sorted(new_skills)

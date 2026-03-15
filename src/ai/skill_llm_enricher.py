@@ -1,12 +1,10 @@
 import json
 import os
-import re
 from groq import Groq
 from dotenv import load_dotenv
 from tqdm import tqdm
 
 from src.utils.logging import get_logger
-from src.config.consts import SKILL_STOPWORDS
 
 load_dotenv()
 
@@ -16,58 +14,93 @@ MODEL = "llama-3.1-8b-instant"
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-# Progress bar for LLM calls
+# progress bar for LLM calls
 llm_bar = tqdm(desc="LLM skill extraction", unit="job")
 
 
 SYSTEM_PROMPT = """
-You extract technical skills from job descriptions.
+You analyze job descriptions and extract concrete technical skills.
 
-Return ONLY actual technical skills.
+A valid skill must be one of the following:
 
-STRICT RULES:
+TECHNOLOGY
+Specific tools, programming languages, frameworks, libraries, or platforms.
+Examples: python, sql, spark, pytorch, tensorflow, airflow, dbt, kafka,
+snowflake, databricks, kubernetes, docker, terraform, tableau, looker
 
-Only include:
-- programming languages
-- ML/AI frameworks
-- data engineering tools
-- databases
-- cloud platforms
-- analytics tools
-- ML techniques
+ML_CONCEPT
+Machine learning or AI concepts used in model development.
+Examples: machine learning, deep learning, computer vision, nlp,
+transformers, embeddings, vector databases, rag, large language models
 
-NEVER include:
-- verbs (build, create, obtain, maintain, raise)
-- generic nouns (business, domain, industry, entertainment)
-- soft skills
-- responsibilities
-- sentences
-- company names
+METHOD
+Statistical or experimentation methods.
+Examples: a/b testing, causal inference, bayesian inference,
+statistical modeling, forecasting, hypothesis testing,
+experimental design, time series analysis
 
-Skills must be concrete technologies.
+════════════════════════════════════════
+STRICT RULES
+════════════════════════════════════════
 
-GOOD examples:
-python
-pytorch
-tensorflow
-sql
-spark
-dbt
-snowflake
-aws
-pandas
-numpy
-langchain
-huggingface
+RULE 1 — Extract ONLY skills explicitly written in the job description.
 
-BAD examples:
-build models
-obtain insights
-entertainment industry
-business strategy
+RULE 2 — A skill must be a single specific technology, ML concept, or method.
+         It must map to something a developer would import, install, or learn as a discipline.
 
-Return JSON ONLY in this format:
+RULE 3 — NEVER extract the following. If you are unsure, DO NOT include it:
 
+  ✗ Generic categories       → "cloud data platforms", "bi tools", "data pipelines"
+  ✗ Engineering activities   → "deployment", "monitoring", "fine-tuning", "optimization",
+                               "distributed training", "inference optimization",
+                               "application development", "ci/cd pipelines"
+  ✗ Vague descriptors        → "noisy data", "analysis-ready tables", "regression basics",
+                               "sql/python code", "deep specialization"
+  ✗ Business/domain terms    → "fintech", "healthcare", "payments", "marketing"
+  ✗ Soft skills              → "stakeholder management", "communication", "collaboration",
+                               "confident presenting", "clear writing", "structured thinking",
+                               "problem solving", "qa/validation"
+  ✗ Experience requirements  → "5+ years", "advanced sql proficiency", "strong cs fundamentals"
+  ✗ Education requirements   → "bachelor's degree", "master's degree", "phd", "ms in cs"
+  ✗ Compound skill phrases   → anything with more than 3 words describing an activity
+
+RULE 4 — If a phrase describes WHAT YOU DO with a skill rather than the skill itself, ignore it.
+  ✗ BAD: "distributed training of ml models"   ✓ GOOD: (nothing — this is an activity)
+  ✗ BAD: "sql/python code"                     ✓ GOOD: sql, python
+  ✗ BAD: "statistical modeling/forecasting"    ✓ GOOD: statistical modeling, forecasting
+  ✗ BAD: "causal inference/experimentation"    ✓ GOOD: causal inference, experimental design
+
+RULE 5 — Split slash-separated compound terms into individual skills only if EACH part is valid.
+
+RULE 6 — Return skills exactly as they appear in the job description (lowercase).
+
+RULE 7 — When in doubt, leave it out.
+
+════════════════════════════════════════
+EXAMPLE
+════════════════════════════════════════
+
+Job description snippet:
+"We need strong SQL and Python skills, experience with Airflow for pipeline orchestration,
+stakeholder management, and 5+ years in fintech. A/B testing and causal inference experience
+preferred. Must have a bachelor's degree."
+
+Correct output:
+{
+  "required_skills": ["sql", "python", "airflow", "a/b testing", "causal inference"],
+  "preferred_skills": []
+}
+
+Wrong output (DO NOT do this):
+{
+  "required_skills": ["sql", "python", "airflow", "pipeline orchestration",
+                      "stakeholder management", "fintech", "5+ years"],
+  "preferred_skills": ["a/b testing", "causal inference", "bachelor's degree"]
+}
+
+════════════════════════════════════════
+
+Return ONLY valid JSON with no explanation:
 {
   "required_skills": [],
   "preferred_skills": []
@@ -75,39 +108,37 @@ Return JSON ONLY in this format:
 """
 
 
-def clean_llm_skills(skills):
+def extract_json_from_response(response: str):
+    """
+    Extract JSON safely from LLM responses even if
+    the model adds extra text before or after.
+    """
 
-    cleaned = []
+    response = response.replace("```json", "").replace("```", "").strip()
 
-    for skill in skills:
+    logger.info("LLM RAW RESPONSE | %s", response)
 
-        if not skill:
-            continue
+    start = response.find("{")
+    end = response.rfind("}")
 
-        skill = skill.lower().strip()
+    if start == -1 or end == -1:
+        raise ValueError("No JSON object found in LLM response")
 
-        # remove punctuation
-        skill = re.sub(r"[^\w\s\+\#\.]", "", skill)
+    json_str = response[start:end + 1]
 
-        if len(skill) < 2:
-            continue
+    return json.loads(json_str)
 
-        if skill in SKILL_STOPWORDS:
-            continue
-
-        cleaned.append(skill)
-
-    return list(set(cleaned))
 
 def enrich_skills_with_llm(job_text):
 
     llm_bar.update(1)
 
     prompt = f"""
-Extract technical skills from the following job description.
+Extract REQUIRED and PREFERRED technical skills
+from the following job description.
 
 JOB DESCRIPTION:
-{job_text[:6000]}
+{job_text[:4500]}
 """
 
     try:
@@ -135,12 +166,21 @@ JOB DESCRIPTION:
 
     try:
 
-        response = response.replace("```json", "").replace("```", "").strip()
+        parsed = extract_json_from_response(response)
 
-        parsed = json.loads(response)
+        required = [s.lower().strip() for s in parsed.get("required_skills", [])]
+        preferred = [s.lower().strip() for s in parsed.get("preferred_skills", [])]
 
-        required = clean_llm_skills(parsed.get("required_skills", []))
-        preferred = clean_llm_skills(parsed.get("preferred_skills", []))
+        preferred = [s for s in preferred if s not in required]
+
+        required = list(set(required))
+        preferred = list(set(preferred))
+
+        logger.info(    
+            "LLM PARSED | required=%s | preferred=%s",
+            required,
+            preferred
+        )
 
         return {
             "required_skills": required,

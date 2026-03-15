@@ -30,16 +30,18 @@ def init_skill_db():
 
 def get_existing_skills():
 
-    conn = get_conn()
+    init_skill_db()   # ensure table exists
+
+    conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
     cur.execute("SELECT skill FROM discovered_skills")
 
-    skills = {row[0] for row in cur.fetchall()}
+    rows = cur.fetchall()
 
     conn.close()
 
-    return skills
+    return {r[0] for r in rows}
 
 
 def insert_or_update_skill(skill):
@@ -52,7 +54,7 @@ def insert_or_update_skill(skill):
     VALUES (?,1)
     ON CONFLICT(skill)
     DO UPDATE SET occurrences = occurrences + 1
-    """, (skill,))
+    """, (skill.lower(),))
 
     conn.commit()
     conn.close()

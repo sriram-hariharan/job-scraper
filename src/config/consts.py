@@ -407,6 +407,7 @@ SKILL_STOPWORDS = {
     "models",
     "modeling",
     "maintain",
+    "maintaining",
     "detail",
     "details",
     "paid",
@@ -414,9 +415,27 @@ SKILL_STOPWORDS = {
     "language",
     "languages",
     "seamless",
-    "blair",
+    "blair"
 }
 
+DOMAIN_STOPWORDS = {
+    "obtain",
+    "entertainment",
+    "domain",
+    "domains",
+    "industry",
+    "business",
+    "operations",
+    "scientist",
+    "engineering",
+    "research",
+    "strategy",
+    "constraints",
+    "imbalances",
+    "metrics",
+    "organization",
+    "company"
+}
 TRUSTED_CORE_SKILLS = {
     "python",
     "sql",
@@ -439,7 +458,168 @@ TRUSTED_CORE_SKILLS = {
 
 # Words that should never appear as skills
 INVALID_SKILL_WORDS = {
-    "build","create","obtain","maintain","raise","improve","support",
-    "entertainment","industry","business","domain","team","stakeholder",
-    "ability","experience","understanding","knowledge"
+    "build",
+    "create",
+    "obtain",
+    "maintain",
+    "raise",
+    "improve",
+    "support",
+    "entertainment",
+    "industry",
+    "business",
+    "domain",
+    "team",
+    "stakeholder",
+    "ability",
+    "experience",
+    "understanding",
+    "knowledge",
+    "training",
+    "emailing",
+    "deployment",
+    "validation",
+    "development",
+    "processing",
+    "pipeline",
+    "monitoring",
+}
+
+# Technology taxonomy examples (used only to guide LLM reasoning)
+
+TECH_CATEGORY_EXAMPLES = {
+
+    "programming_languages": [
+        "python",
+        "r",
+        "scala",
+        "java",
+        "c++",
+        "go",
+        "rust"
+    ],
+
+    "data_libraries": [
+        "pandas",
+        "numpy",
+        "scipy",
+        "scikit-learn",
+        "xgboost",
+        "lightgbm"
+    ],
+
+    "deep_learning": [
+        "pytorch",
+        "tensorflow",
+        "keras"
+    ],
+
+    "llm_ai": [
+        "transformers",
+        "huggingface",
+        "langchain",
+        "rag",
+        "embeddings",
+        "vector databases"
+    ],
+
+    "data_engineering": [
+        "spark",
+        "flink",
+        "kafka",
+        "dbt",
+        "airflow",
+        "dagster",
+        "prefect"
+    ],
+
+    "databases": [
+        "postgres",
+        "mysql",
+        "snowflake",
+        "bigquery",
+        "redshift",
+        "duckdb"
+    ],
+
+    "cloud_platforms": [
+        "aws",
+        "gcp",
+        "azure"
+    ],
+
+    "infrastructure": [
+        "docker",
+        "kubernetes",
+        "terraform",
+        "ray"
+    ],
+
+    "visualization": [
+        "tableau",
+        "powerbi",
+        "looker"
+    ],
+
+    "version_control": [
+        "git",
+        "github",
+        "gitlab"
+    ],
+
+    # NEW
+    "data_science_methods": [
+        "a/b testing",
+        "causal inference",
+        "bayesian inference",
+        "hypothesis testing",
+        "experimental design",
+        "statistical modeling",
+        "time series forecasting",
+        "time series analysis",
+        "feature engineering",
+        "model evaluation",
+        "cross validation"
+    ]
+}
+
+NORMALIZATION_MAP = {
+    "llm apis": "llm",
+    "large language models": "llm",
+    "retrievalbased ai systems": "rag",
+    "vector databases": "vector db",
+    "scikitlearn": "scikit-learn",
+    "scikit": "scikit-learn",
+    "sklearn": "scikit-learn",
+}
+
+TECH_KEYWORDS = [
+    "python",
+    "spark",
+    "pytorch",
+    "tensorflow",
+    "langchain",
+    "transformer",
+    "huggingface",
+    "vector",
+    "embedding",
+    "rag",
+    "llm",
+    "scikit",
+    "xgboost",
+]
+
+COMMON_WORDS = {
+"coverage","leverage","platform","enable","support",
+"analysis","pipeline","system","service","solution"
+}
+
+GENERIC_SKILL_PHRASES = {
+    "model training",
+    "model validation",
+    "data preprocessing",
+    "pipeline development",
+    "distributed systems",
+    "cloud computing",
+    "ml frameworks",
 }

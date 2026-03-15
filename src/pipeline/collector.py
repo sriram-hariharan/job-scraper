@@ -206,23 +206,14 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     detailed_jobs = enrich_job_details(new_jobs)
     details_counts = log_stage_metrics("DETAILS", detailed_jobs)
 
-    # ----- SKILL DISCOVERY -----
-    section("SKILL DISCOVERY", logger)
-
-    new_skills = discover_new_skills(detailed_jobs)
-
-    if new_skills:
-        logger.info(f"New skills discovered: {len(new_skills)}")
-        logger.info(", ".join(new_skills[:10]))
-
     # ----- JOB INTELLIGENCE -----
     section("JOB INTELLIGENCE", logger)
 
     intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
 
-    # ---- DEBUG START ----
-    for job in intelligent_jobs[6:11]:
+    # ----- DEBUG SAMPLE -----
+    for job in intelligent_jobs:
 
         intel = job.get("intelligence", {})
         skills = intel.get("skills", {})
@@ -232,7 +223,14 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             f"required={skills.get('required')} | preferred={skills.get('preferred')}"
         )
 
-    # ---- DEBUG END ----
+    # ----- SKILL DISCOVERY -----
+    section("SKILL DISCOVERY", logger)
+
+    new_skills = discover_new_skills(intelligent_jobs)
+
+    if new_skills:
+        logger.info(f"New skills discovered: {len(new_skills)}")
+        logger.info(", ".join(new_skills[:10]))
 
     # ----- AI EVALUATION FILTER -----
     section("AI EVALUATION FILTER", logger)

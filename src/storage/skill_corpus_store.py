@@ -108,7 +108,76 @@ def store_cached_llm_skills(
     conn.commit()
     conn.close()
 
+def init_llm_job_eval_cache_table():
+    conn = get_conn()
+    cur = conn.cursor()
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS llm_job_eval_cache (
+        cache_key TEXT PRIMARY KEY,
+        model TEXT NOT NULL,
+        evaluation_json TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_llm_job_eval_cache_model
+    ON llm_job_eval_cache(model)
+    """)
+
+    conn.commit()
+    conn.close()
+
+
+def get_cached_job_evaluation(cache_key: str) -> Optional[Dict[str, Any]]:
+    init_llm_job_eval_cache_table()
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    SELECT evaluation_json
+    FROM llm_job_eval_cache
+    WHERE cache_key = ?
+    """, (cache_key,))
+
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    (evaluation_json,) = row
+    return json.loads(evaluation_json)
+
+
+def store_cached_job_evaluation(
+    cache_key: str,
+    model: str,
+    evaluation: Dict[str, Any],
+):
+    init_llm_job_eval_cache_table()
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("""
+    INSERT OR REPLACE INTO llm_job_eval_cache (
+        cache_key,
+        model,
+        evaluation_json
+    )
+    VALUES (?, ?, ?)
+    """, (
+        cache_key,
+        model,
+        json.dumps(evaluation, ensure_ascii=False, sort_keys=True),
+    ))
+
+    conn.commit()
+    conn.close()
+    
 def store_job_skills(run_id: str, jobs: List[Dict[str, Any]]):
     init_skill_corpus_table()
 

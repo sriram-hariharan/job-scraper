@@ -21,6 +21,11 @@ from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
 
 from src.ai.job_fit_evaluator import evaluate_jobs
 from src.ai.resume_matcher import match_resumes
+from src.ai.skill_llm_enricher import (
+    reset_skill_cache_metrics,
+    get_skill_cache_metrics,
+)
+from src.ai.job_fit_evaluator import get_eval_cache_metrics
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -212,11 +217,24 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     # ----- JOB INTELLIGENCE -----
     section("JOB INTELLIGENCE", logger)
 
+    reset_skill_cache_metrics()
     intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
     logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
 
+    skill_cache_summary = get_skill_cache_metrics()
+
+    # ----- SKILL CACHE SUMMARY -----
+    logger.info(
+        "SKILL CACHE SUMMARY | hits=%s | misses=%s | stores=%s | cache_only_skips=%s | live_failures=%s",
+        skill_cache_summary["cache_hits"],
+        skill_cache_summary["cache_misses"],
+        skill_cache_summary["cache_stores"],
+        skill_cache_summary["cache_only_skips"],
+        skill_cache_summary["live_failures"],
+    )
+
     # ----- DEBUG SAMPLE -----
-    for job in intelligent_jobs:
+    for job in intelligent_jobs[:5]:
 
         intel = job.get("intelligence", {})
         skills = intel.get("skills", {})
@@ -279,16 +297,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         f"{prefilter_input_count} -> {prefilter_output_count}"
     )
 
-    # --- PREFILTER DEBUG (TOP JOBS) ---
-    for job in evaluable_jobs[:5]:
-        logger.info(
-            "PREFILTER | %.4f | %s | %s",
-            job.get("prefilter_similarity", 0),
-            job.get("company"),
-            job.get("title"),
-        )
-    # --- END PREFILTER DEBUG ---
-
     if prefilter_input_count:
         reduction_pct = round(
             (1 - prefilter_output_count / prefilter_input_count) * 100,
@@ -301,6 +309,16 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     ai_jobs = evaluate_jobs(evaluable_jobs)
     logger.info(f"AI evaluated {len(ai_jobs)} jobs")
+
+    # ----- EVAL CACHE SUMMARY -----
+    eval_cache_summary = get_eval_cache_metrics()
+    logger.info(
+        "EVAL CACHE SUMMARY | hits=%s | misses=%s | stores=%s | live_failures=%s",
+        eval_cache_summary["eval_cache_hits"],
+        eval_cache_summary["eval_cache_misses"],
+        eval_cache_summary["eval_cache_stores"],
+        eval_cache_summary["eval_live_failures"],
+    )
 
     # ----- RESUME MATCHING -----
     section("RESUME MATCHING", logger)

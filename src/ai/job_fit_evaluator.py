@@ -3,6 +3,7 @@ import json
 import time
 import re
 import random
+import hashlib
 from groq import Groq
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -10,6 +11,10 @@ from threading import Semaphore
 from dotenv import load_dotenv
 from threading import Lock
 from src.config.consts import NEGATIVE_VISA_PATTERNS, POSITIVE_VISA_PATTERNS
+from src.storage.skill_corpus_store import (
+    get_cached_job_evaluation,
+    store_cached_job_evaluation,
+)
 
 request_lock = Lock()
 last_request_time = 0
@@ -17,9 +22,9 @@ last_request_time = 0
 load_dotenv()
 
 MODEL = "llama-3.1-8b-instant"
-BATCH_SIZE = 5                  # Fewer calls, more jobs per call
-MIN_REQUEST_INTERVAL = 2.0      # More breathing room between requests
-GROQ_CONCURRENCY_LIMIT = 1      # Match this to max_workers to avoid confusion
+BATCH_SIZE = 5
+MIN_REQUEST_INTERVAL = 2.0
+GROQ_CONCURRENCY_LIMIT = 1
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 client = Groq(api_key=GROQ_API_KEY)
@@ -28,6 +33,15 @@ if not GROQ_API_KEY:
     raise RuntimeError("GROQ_API_KEY not found in environment")
 
 groq_semaphore = Semaphore(GROQ_CONCURRENCY_LIMIT)
+
+eval_cache_metrics_lock = Lock()
+
+eval_cache_metrics = {
+    "eval_cache_hits": 0,
+    "eval_cache_misses": 0,
+    "eval_cache_stores": 0,
+    "eval_live_failures": 0,
+}
 
 SYSTEM_PROMPT = """
 You evaluate data, machine learning, and AI job opportunities.
@@ -73,7 +87,6 @@ def extract_json_from_response(response):
 
     response = response.replace("```json", "").replace("```", "").strip()
 
-    # Attempt direct parse first
     try:
         parsed = json.loads(response)
         if isinstance(parsed, dict) and "results" in parsed:
@@ -81,7 +94,6 @@ def extract_json_from_response(response):
     except Exception:
         pass
 
-    # Extract largest JSON block
     match = re.search(r"\{[\s\S]*\}", response)
 
     if match:
@@ -94,6 +106,73 @@ def extract_json_from_response(response):
 
     return None
 
+def reset_eval_cache_metrics():
+    with eval_cache_metrics_lock:
+        for key in eval_cache_metrics:
+            eval_cache_metrics[key] = 0
+
+
+def get_eval_cache_metrics():
+    with eval_cache_metrics_lock:
+        return dict(eval_cache_metrics)
+
+
+def increment_eval_cache_metric(metric_name: str):
+    with eval_cache_metrics_lock:
+        if metric_name in eval_cache_metrics:
+            eval_cache_metrics[metric_name] += 1
+
+
+def build_job_eval_cache_key(job):
+
+    intel = job.get("intelligence", {}) or {}
+    skills = intel.get("skills", {}) or {}
+
+    required_skills = sorted(skills.get("required", []) or [])
+    preferred_skills = sorted(skills.get("preferred", []) or [])
+    seniority = intel.get("seniority", "") or ""
+
+    flags = intel.get("ai_flags", {}) or {}
+    enabled_ai_flags = sorted([k for k, v in flags.items() if v])
+
+    payload = {
+        "title": (job.get("title") or "").strip(),
+        "company": (job.get("company") or "").strip(),
+        "skills_required": required_skills,
+        "skills_preferred": preferred_skills,
+        "seniority": seniority.strip(),
+        "ai_flags": enabled_ai_flags,
+    }
+
+    normalized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def apply_evaluation_to_job(job, evaluation_data):
+
+    ai_relevance = evaluation_data.get("ai_relevance", 0)
+    skill_match = evaluation_data.get("skill_match", 0)
+    seniority_match = evaluation_data.get("seniority_match", 0)
+    learning_opportunity = evaluation_data.get("learning_opportunity", 0)
+    overall_score = evaluation_data.get("overall_score", 0)
+    visa_signal = evaluation_data.get("visa_sponsorship_signal", "unknown")
+    reason = evaluation_data.get("reason", "No explanation")
+
+    job["ai_relevance"] = ai_relevance
+    job["skill_match"] = skill_match
+    job["seniority_match"] = seniority_match
+    job["learning_opportunity"] = learning_opportunity
+    job["ai_fit_score"] = overall_score
+    job["visa_sponsorship_signal"] = visa_signal
+    job["ai_fit_reason"] = reason
+
+    job["ai_fit"] = (
+        f"{overall_score}/10 | "
+        f"AI {ai_relevance}, "
+        f"Skill {skill_match}, "
+        f"Seniority {seniority_match}, "
+        f"Learning {learning_opportunity}"
+    )
 
 def build_batch_prompt(batch):
 
@@ -101,39 +180,41 @@ def build_batch_prompt(batch):
 
     for i, job in enumerate(batch):
 
-        intel = job.get("intelligence", {})
+        intel = job.get("intelligence", {}) or {}
 
-        skills = intel.get("skills", [])
+        skills = intel.get("skills", {}) or {}
+        required_skills = skills.get("required", []) or []
+        preferred_skills = skills.get("preferred", []) or []
+        combined_skills = required_skills + [s for s in preferred_skills if s not in required_skills]
+
         seniority = intel.get("seniority", "")
 
-        flags = intel.get("ai_flags", {})
+        flags = intel.get("ai_flags", {}) or {}
         ai_signals = [k for k, v in flags.items() if v]
 
         blocks.append(
             f"""
-            JOB {i}
+JOB {i}
 
-            Title: {job.get("title")}
-            Company: {job.get("company")}
+Title: {job.get("title")}
+Company: {job.get("company")}
 
-            AI signals:
-            {", ".join(ai_signals)}
+AI signals:
+{", ".join(ai_signals) if ai_signals else "none"}
 
-            Skills:
-            {", ".join(skills)}
+Skills:
+{", ".join(combined_skills) if combined_skills else "none"}
 
-            Seniority:
-            {seniority}
-            """
+Seniority:
+{seniority if seniority else "unknown"}
+"""
         )
 
     return f"""
-    {SYSTEM_PROMPT}
+Evaluate the following jobs and return STRICT JSON.
 
-    Evaluate the following jobs and return STRICT JSON.
-
-    {"".join(blocks)}
-    """
+{"".join(blocks)}
+"""
 
 
 def evaluate_batch(batch):
@@ -180,6 +261,8 @@ def evaluate_batch(batch):
                 time.sleep(wait)
                 continue
 
+            increment_eval_cache_metric("eval_live_failures")
+
             for job in batch:
                 job["ai_fit"] = "LLM_CALL_FAIL"
 
@@ -195,6 +278,8 @@ def evaluate_batch(batch):
                 time.sleep(wait)
                 continue
             else:
+                increment_eval_cache_metric("eval_live_failures")
+
                 for job in batch:
                     job["ai_fit"] = "PARSE_ERROR"
                 return batch
@@ -208,38 +293,35 @@ def evaluate_batch(batch):
             if idx is None or idx >= len(batch):
                 continue
 
-            ai_relevance = item.get("ai_relevance", 0)
-            skill_match = item.get("skill_match", 0)
-            seniority_match = item.get("seniority_match", 0)
-            learning_opportunity = item.get("learning_opportunity", 0)
-            overall_score = item.get("overall_score", 0)
-            visa_signal = item.get("visa_sponsorship_signal", "unknown")
+            evaluation_data = {
+                "ai_relevance": item.get("ai_relevance", 0),
+                "skill_match": item.get("skill_match", 0),
+                "seniority_match": item.get("seniority_match", 0),
+                "learning_opportunity": item.get("learning_opportunity", 0),
+                "overall_score": item.get("overall_score", 0),
+                "visa_sponsorship_signal": item.get("visa_sponsorship_signal", "unknown"),
+                "reason": item.get("reason", "No explanation"),
+            }
 
-            reason = item.get("reason", "No explanation")
+            apply_evaluation_to_job(batch[idx], evaluation_data)
 
-            batch[idx]["ai_relevance"] = ai_relevance
-            batch[idx]["skill_match"] = skill_match
-            batch[idx]["seniority_match"] = seniority_match
-            batch[idx]["learning_opportunity"] = learning_opportunity
-            batch[idx]["ai_fit_score"] = overall_score
-            batch[idx]["visa_sponsorship_signal"] = visa_signal
-            batch[idx]["ai_fit_reason"] = reason
-
-            batch[idx]["ai_fit"] = (
-                f"{overall_score}/10 | "
-                f"AI {ai_relevance}, "
-                f"Skill {skill_match}, "
-                f"Seniority {seniority_match}, "
-                f"Learning {learning_opportunity}"
-            )
+            cache_key = batch[idx].get("_eval_cache_key")
+            if cache_key:
+                store_cached_job_evaluation(
+                    cache_key=cache_key,
+                    model=MODEL,
+                    evaluation=evaluation_data,
+                )
+                increment_eval_cache_metric("eval_cache_stores")
 
         return batch
+
+    increment_eval_cache_metric("eval_live_failures")
 
     for job in batch:
         job["ai_fit"] = "RATE_LIMIT_FAIL"
 
     return batch
-
 
 def chunk_jobs(jobs, size):
 
@@ -249,33 +331,68 @@ def chunk_jobs(jobs, size):
 
 def evaluate_jobs(jobs):
 
-    results = []
+    reset_eval_cache_metrics()
 
-    batches = list(chunk_jobs(jobs, BATCH_SIZE))
+    indexed_jobs = []
 
-    random.shuffle(batches)
+    for i, job in enumerate(jobs):
+        job["_eval_original_index"] = i
+        cache_key = build_job_eval_cache_key(job)
+        job["_eval_cache_key"] = cache_key
 
-    with ThreadPoolExecutor(max_workers=1) as executor:
+        cached = get_cached_job_evaluation(cache_key)
 
-        futures = {
-            executor.submit(evaluate_batch, batch): i
-            for i, batch in enumerate(batches)
-        }
+        if cached is not None:
+            increment_eval_cache_metric("eval_cache_hits")
+            apply_evaluation_to_job(job, cached)
+        else:
+            increment_eval_cache_metric("eval_cache_misses")
 
-        batch_results = [None] * len(batches)
+        indexed_jobs.append(job)
 
-        for future in tqdm(
-            as_completed(futures),
-            total=len(futures),
-            desc="AI batch evaluation"
-        ):
-            idx = futures[future]
-            batch_results[idx] = future.result()
+    uncached_jobs = [
+        job for job in indexed_jobs
+        if "ai_fit_score" not in job
+    ]
 
-        for r in batch_results:
-            results.extend(r)
+    live_results = []
 
-    return results
+    if uncached_jobs:
+        batches = list(chunk_jobs(uncached_jobs, BATCH_SIZE))
+        random.shuffle(batches)
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+
+            futures = {
+                executor.submit(evaluate_batch, batch): i
+                for i, batch in enumerate(batches)
+            }
+
+            batch_results = [None] * len(batches)
+
+            for future in tqdm(
+                as_completed(futures),
+                total=len(futures),
+                desc="AI batch evaluation"
+            ):
+                idx = futures[future]
+                batch_results[idx] = future.result()
+
+            for r in batch_results:
+                live_results.extend(r)
+
+    all_results = [
+        job for job in indexed_jobs
+        if "ai_fit_score" in job or job.get("ai_fit") in {"LLM_CALL_FAIL", "PARSE_ERROR", "RATE_LIMIT_FAIL"}
+    ]
+
+    all_results.sort(key=lambda job: job.get("_eval_original_index", 0))
+
+    for job in all_results:
+        job.pop("_eval_original_index", None)
+        job.pop("_eval_cache_key", None)
+
+    return all_results
 
 
 # --------------------------------------------------------
@@ -289,12 +406,10 @@ def detect_visa_sponsorship(text):
 
     text = text.lower()
 
-    # check explicit NO first
     for p in NEGATIVE_VISA_PATTERNS:
         if re.search(p, text):
             return "no"
 
-    # check possible sponsorship
     for p in POSITIVE_VISA_PATTERNS:
         if re.search(p, text):
             return "possible"

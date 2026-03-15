@@ -6,6 +6,7 @@ import re
 from groq import Groq
 from dotenv import load_dotenv
 from tqdm import tqdm
+from threading import Lock
 
 from src.storage.skill_corpus_store import (
     get_cached_llm_skills,
@@ -20,6 +21,16 @@ logger = get_logger("ai_eval_filter")
 MODEL = "llama-3.1-8b-instant"
 SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").strip().lower()
 VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
+
+skill_cache_metrics_lock = Lock()
+
+skill_cache_metrics = {
+    "cache_hits": 0,
+    "cache_misses": 0,
+    "cache_stores": 0,
+    "cache_only_skips": 0,
+    "live_failures": 0,
+}
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -152,6 +163,22 @@ def get_empty_skill_result():
         "preferred_skills": []
     }
 
+def reset_skill_cache_metrics():
+    with skill_cache_metrics_lock:
+        for key in skill_cache_metrics:
+            skill_cache_metrics[key] = 0
+
+
+def get_skill_cache_metrics():
+    with skill_cache_metrics_lock:
+        return dict(skill_cache_metrics)
+
+
+def increment_skill_cache_metric(metric_name: str):
+    with skill_cache_metrics_lock:
+        if metric_name in skill_cache_metrics:
+            skill_cache_metrics[metric_name] += 1
+
 def enrich_skills_with_llm(job_text):
 
     if SKILL_EXTRACTION_MODE not in VALID_EXTRACTION_MODES:
@@ -168,12 +195,15 @@ def enrich_skills_with_llm(job_text):
     if mode != "live_only":
         cached = get_cached_llm_skills(cache_key)
         if cached is not None:
+            increment_skill_cache_metric("cache_hits")
             logger.info("LLM skill cache hit")
             return cached
 
+        increment_skill_cache_metric("cache_misses")
         logger.info("LLM skill cache miss")
 
         if mode == "cache_only":
+            increment_skill_cache_metric("cache_only_skips")
             logger.info("LLM live extraction skipped (cache_only mode)")
             return get_empty_skill_result()
 
@@ -205,7 +235,7 @@ def enrich_skills_with_llm(job_text):
         response = completion.choices[0].message.content
 
     except Exception as e:
-
+        increment_skill_cache_metric("live_failures")
         logger.warning(f"LLM skill extraction failed: {e}")
 
         return get_empty_skill_result()
@@ -234,6 +264,7 @@ def enrich_skills_with_llm(job_text):
                 required_skills=required,
                 preferred_skills=preferred,
             )
+            increment_skill_cache_metric("cache_stores")
             logger.info("LLM skill cache stored")
 
         return result

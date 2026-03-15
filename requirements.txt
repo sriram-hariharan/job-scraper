@@ -16,3 +16,4 @@ groq
 pdfminer.six
 sentence-transformers
 numpy
+google-genai

@@ -19,13 +19,12 @@ from src.pipeline.job_details import enrich_job_details
 from src.pipeline.application_scorer import score_jobs
 from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
 
-from src.ai.job_fit_evaluator import evaluate_jobs
+from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
 from src.ai.resume_matcher import match_resumes
 from src.ai.skill_llm_enricher import (
     reset_skill_cache_metrics,
     get_skill_cache_metrics,
 )
-from src.ai.job_fit_evaluator import get_eval_cache_metrics
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics

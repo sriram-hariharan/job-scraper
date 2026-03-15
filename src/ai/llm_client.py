@@ -1,13 +1,20 @@
 import os
 from dotenv import load_dotenv
 from groq import Groq
+from google import genai
+from google.genai import types
 
 load_dotenv()
 
 DEFAULT_PROVIDER = os.getenv("LLM_PROVIDER", "groq").strip().lower()
 DEFAULT_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant").strip()
 
+FALLBACK_ENABLED = os.getenv("LLM_FALLBACK_ENABLED", "false").strip().lower() == "true"
+FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "gemini").strip().lower()
+FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "gemini-2.5-flash").strip()
+
 _groq_client = None
+_gemini_client = None
 
 
 def get_default_provider():
@@ -30,26 +37,120 @@ def get_groq_client():
     return _groq_client
 
 
+def get_gemini_client():
+    global _gemini_client
+
+    if _gemini_client is None:
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            raise RuntimeError("GEMINI_API_KEY not found in environment")
+        _gemini_client = genai.Client(api_key=gemini_api_key)
+
+    return _gemini_client
+
+
+def _messages_to_gemini_prompt(messages):
+    parts = []
+
+    for message in messages:
+        role = (message.get("role") or "").strip().lower()
+        content = message.get("content") or ""
+
+        if role == "system":
+            parts.append(f"SYSTEM:\n{content}")
+        elif role == "user":
+            parts.append(f"USER:\n{content}")
+        elif role == "assistant":
+            parts.append(f"ASSISTANT:\n{content}")
+        else:
+            parts.append(str(content))
+
+    return "\n\n".join(parts)
+
+
+def _run_groq_chat_completion(messages, model, temperature, max_tokens):
+    client = get_groq_client()
+
+    completion = client.chat.completions.create(
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        messages=messages,
+    )
+
+    return completion.choices[0].message.content
+
+
+def _run_gemini_chat_completion(messages, model, temperature, max_tokens):
+    client = get_gemini_client()
+    prompt = _messages_to_gemini_prompt(messages)
+
+    response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=types.GenerateContentConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+            response_mime_type="application/json",
+        ),
+    )
+
+    text = getattr(response, "text", None)
+    if text:
+        return text
+
+    raise RuntimeError("Gemini returned no text content")
+
+
+def _run_single_provider(provider_name, messages, model, temperature, max_tokens):
+    provider_name = provider_name.strip().lower()
+
+    if provider_name == "groq":
+        return _run_groq_chat_completion(messages, model, temperature, max_tokens)
+
+    if provider_name == "gemini":
+        return _run_gemini_chat_completion(messages, model, temperature, max_tokens)
+
+    raise ValueError(f"Unsupported LLM provider: {provider_name}")
+
+
 def run_chat_completion(
     messages,
     model=None,
     temperature=0,
     max_tokens=500,
     provider=None,
-):
-    provider_name = (provider or DEFAULT_PROVIDER).strip().lower()
-    model_name = model or DEFAULT_MODEL
+):  
+    primary_provider = (provider or DEFAULT_PROVIDER).strip().lower()
+    primary_model = model or DEFAULT_MODEL
 
-    if provider_name == "groq":
-        client = get_groq_client()
-
-        completion = client.chat.completions.create(
-            model=model_name,
+    try:
+        return _run_single_provider(
+            provider_name=primary_provider,
+            messages=messages,
+            model=primary_model,
             temperature=temperature,
             max_tokens=max_tokens,
-            messages=messages,
         )
 
-        return completion.choices[0].message.content
+    except Exception as primary_error:
 
-    raise ValueError(f"Unsupported LLM provider: {provider_name}")
+        if (
+            not FALLBACK_ENABLED
+            or primary_provider == FALLBACK_PROVIDER
+        ):
+            raise primary_error
+
+        try:
+            return _run_single_provider(
+                provider_name=FALLBACK_PROVIDER,
+                messages=messages,
+                model=FALLBACK_MODEL,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+        except Exception as fallback_error:
+            raise RuntimeError(
+                f"Primary provider failed ({primary_provider}/{primary_model}): {primary_error} | "
+                f"Fallback provider failed ({FALLBACK_PROVIDER}/{FALLBACK_MODEL}): {fallback_error}"
+            ) from fallback_error

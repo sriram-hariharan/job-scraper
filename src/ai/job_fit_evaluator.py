@@ -268,6 +268,7 @@ def evaluate_batch(batch):
                 time.sleep(wait)
                 continue
 
+            print(f"AI evaluation failed: {e}")
             increment_eval_cache_metric("eval_live_failures")
 
             for job in batch:
@@ -281,7 +282,7 @@ def evaluate_batch(batch):
 
             if attempt < max_retries - 1:
                 wait = retry_delay * (2 ** attempt)
-                print(f"Parse failed. Retrying in {wait}s")
+                print(f"AI evaluation parse failed. Retrying in {wait}s")
                 time.sleep(wait)
                 continue
             else:

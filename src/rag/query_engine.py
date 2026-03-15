@@ -1,8 +1,11 @@
 import json
-from typing import List, Dict, Any, Optional
 import re
+from typing import List, Dict, Any, Optional
 
 from src.rag.retriever import retrieve_jobs
+from src.utils.logging import get_logger
+
+logger = get_logger("rag.query_engine")
 
 
 def _normalize_text(value: Any) -> str:
@@ -35,6 +38,11 @@ def _score_value(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
 
+def _top_score_summary(results: List[Dict[str, Any]], limit: int = 5) -> List[float]:
+    return [
+        round(_score_value(result.get("score")), 4)
+        for result in results[:limit]
+    ]
 
 def _dedupe_key(result: Dict[str, Any]) -> str:
     metadata = result.get("metadata", {}) or {}
@@ -122,19 +130,36 @@ def _query_overlap_count(query_terms: List[str], result: Dict[str, Any]) -> int:
     searchable = _searchable_text(result)
     return sum(1 for term in query_terms if term in searchable)
 
-
-def _passes_retrieval_gate(query: str, results: List[Dict[str, Any]]) -> bool:
+def _get_retrieval_gate_metrics(query: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
     if not results:
-        return False
+        return {
+            "query_terms": [],
+            "required_overlap": 0,
+            "max_overlap": 0,
+            "passed": False,
+        }
 
     query_terms = _extract_query_terms(query)
     if not query_terms:
-        return True
+        return {
+            "query_terms": [],
+            "required_overlap": 0,
+            "max_overlap": 0,
+            "passed": True,
+        }
 
     required_overlap = 1 if len(query_terms) <= 2 else 2
     max_overlap = max(_query_overlap_count(query_terms, result) for result in results)
 
-    return max_overlap >= required_overlap
+    return {
+        "query_terms": query_terms,
+        "required_overlap": required_overlap,
+        "max_overlap": max_overlap,
+        "passed": max_overlap >= required_overlap,
+    }
+
+def _passes_retrieval_gate(query: str, results: List[Dict[str, Any]]) -> bool:
+    return _get_retrieval_gate_metrics(query, results)["passed"]
 
 
 def _matches_filters(result: Dict[str, Any], filters: Optional[Dict[str, Any]]) -> bool:
@@ -238,12 +263,41 @@ def search_jobs(
     ]
 
     deduped_results = _dedupe_results(filtered_results)
+    gate_metrics = _get_retrieval_gate_metrics(query, deduped_results)
 
-    if not _passes_retrieval_gate(query, deduped_results):
+    logger.info(
+        "RAG retrieval | query=%r | fetch_k=%s | raw=%s | filtered=%s | deduped=%s | "
+        "gate_pass=%s | max_overlap=%s | required_overlap=%s | top_scores=%s",
+        query,
+        fetch_k,
+        len(raw_results),
+        len(filtered_results),
+        len(deduped_results),
+        gate_metrics["passed"],
+        gate_metrics["max_overlap"],
+        gate_metrics["required_overlap"],
+        _top_score_summary(deduped_results),
+    )
+
+    if not gate_metrics["passed"]:
+        logger.info(
+            "RAG retrieval gate rejected results | query=%r | query_terms=%s",
+            query,
+            gate_metrics["query_terms"],
+        )
         return []
 
     formatted_results = [_format_result(result) for result in deduped_results]
-    return formatted_results[:top_k]
+    final_results = formatted_results[:top_k]
+
+    logger.info(
+        "RAG retrieval return | query=%r | returned=%s | doc_ids=%s",
+        query,
+        len(final_results),
+        [result.get("doc_id", "") for result in final_results],
+    )
+
+    return final_results
 
 
 if __name__ == "__main__":

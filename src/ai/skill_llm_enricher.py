@@ -18,6 +18,8 @@ load_dotenv()
 logger = get_logger("ai_eval_filter")
 
 MODEL = "llama-3.1-8b-instant"
+SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").strip().lower()
+VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
 
 client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
@@ -144,26 +146,49 @@ def build_skill_cache_key(job_text: str) -> str:
     normalized = re.sub(r"\s+", " ", (job_text or "").strip().lower())
     return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
+def get_empty_skill_result():
+    return {
+        "required_skills": [],
+        "preferred_skills": []
+    }
 
 def enrich_skills_with_llm(job_text):
 
+    if SKILL_EXTRACTION_MODE not in VALID_EXTRACTION_MODES:
+        logger.warning(
+            f"Invalid SKILL_EXTRACTION_MODE='{SKILL_EXTRACTION_MODE}'. "
+            "Falling back to 'cache_prefer_live'."
+        )
+        mode = "cache_prefer_live"
+    else:
+        mode = SKILL_EXTRACTION_MODE
+
     cache_key = build_skill_cache_key(job_text)
-    cached = get_cached_llm_skills(cache_key)
 
-    if cached is not None:
-        logger.info("LLM skill cache hit")
-        return cached
+    if mode != "live_only":
+        cached = get_cached_llm_skills(cache_key)
+        if cached is not None:
+            logger.info("LLM skill cache hit")
+            return cached
 
-    logger.info("LLM skill cache miss")
+        logger.info("LLM skill cache miss")
+
+        if mode == "cache_only":
+            logger.info("LLM live extraction skipped (cache_only mode)")
+            return get_empty_skill_result()
+
+    elif mode == "live_only":
+        logger.info("LLM cache bypassed (live_only mode)")
+
     llm_bar.update(1)
 
     prompt = f"""
-Extract REQUIRED and PREFERRED technical skills
-from the following job description.
+    Extract REQUIRED and PREFERRED technical skills
+    from the following job description.
 
-JOB DESCRIPTION:
-{job_text[:4500]}
-"""
+    JOB DESCRIPTION:
+    {job_text[:4500]}
+    """
 
     try:
 
@@ -183,10 +208,7 @@ JOB DESCRIPTION:
 
         logger.warning(f"LLM skill extraction failed: {e}")
 
-        return {
-            "required_skills": [],
-            "preferred_skills": []
-        }
+        return get_empty_skill_result()
 
     try:
 
@@ -205,14 +227,14 @@ JOB DESCRIPTION:
             "preferred_skills": preferred
         }
 
-        store_cached_llm_skills(
-            cache_key=cache_key,
-            model=MODEL,
-            required_skills=required,
-            preferred_skills=preferred,
-        )
-
-        logger.info("LLM skill cache stored")
+        if mode != "live_only":
+            store_cached_llm_skills(
+                cache_key=cache_key,
+                model=MODEL,
+                required_skills=required,
+                preferred_skills=preferred,
+            )
+            logger.info("LLM skill cache stored")
 
         return result
 
@@ -220,7 +242,4 @@ JOB DESCRIPTION:
 
         logger.warning(f"Failed to parse LLM skill output: {e}")
 
-        return {
-            "required_skills": [],
-            "preferred_skills": []
-        }
+        return get_empty_skill_result()

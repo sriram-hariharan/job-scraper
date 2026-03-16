@@ -1,12 +1,27 @@
 import json
 import re
 from typing import List, Dict, Any, Optional
+from functools import lru_cache
+from pathlib import Path
 
 from src.rag.retriever import retrieve_jobs
 from src.utils.logging import get_logger
 
 logger = get_logger("rag.query_engine")
 
+CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
+
+HYBRID_SEMANTIC_WEIGHT = 0.65
+HYBRID_LEXICAL_WEIGHT = 0.35
+
+QUERY_STOPWORDS = {
+    "a", "an", "and", "are", "as", "at", "be", "best", "by", "find",
+    "for", "from", "in", "into", "is", "job", "jobs", "look", "looks",
+    "of", "on", "or", "role", "roles", "that", "the", "their", "these",
+    "this", "to", "using", "what", "which", "with", "work", "working",
+    "strongest", "retrieved", "emphasize", "emphasizes", "focused",
+    "about", "requirement", "requirements",
+}
 
 def _normalize_text(value: Any) -> str:
     return str(value or "").strip().lower()
@@ -23,15 +38,6 @@ def _list_contains(values: Any, needle: Any) -> bool:
     needle_norm = _normalize_text(needle)
     return any(_normalize_text(v) == needle_norm for v in values)
 
-QUERY_STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "best", "by", "find",
-    "for", "from", "in", "into", "is", "job", "jobs", "look", "looks",
-    "of", "on", "or", "role", "roles", "that", "the", "their", "these",
-    "this", "to", "using", "what", "which", "with", "work", "working",
-    "strongest", "retrieved", "emphasize", "emphasizes", "focused",
-}
-
-
 def _score_value(value: Any) -> float:
     try:
         return float(value)
@@ -43,6 +49,24 @@ def _top_score_summary(results: List[Dict[str, Any]], limit: int = 5) -> List[fl
         round(_score_value(result.get("score")), 4)
         for result in results[:limit]
     ]
+
+@lru_cache(maxsize=1)
+def _load_job_corpus() -> List[Dict[str, Any]]:
+    if not CORPUS_PATH.exists():
+        logger.warning("RAG lexical corpus missing | path=%s", CORPUS_PATH)
+        return []
+
+    docs: List[Dict[str, Any]] = []
+
+    with CORPUS_PATH.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            docs.append(json.loads(line))
+
+    logger.info("RAG lexical corpus loaded | path=%s | docs=%s", CORPUS_PATH, len(docs))
+    return docs
 
 def _dedupe_key(result: Dict[str, Any]) -> str:
     metadata = result.get("metadata", {}) or {}
@@ -88,11 +112,11 @@ def _dedupe_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def _extract_query_terms(query: str) -> List[str]:
-    terms = re.findall(r"[a-z0-9\+\#\-]+", _normalize_text(query))
+    terms = re.findall(r"[a-z0-9\+\#\/\.\-]+", _normalize_text(query))
     unique_terms: List[str] = []
 
     for term in terms:
-        term = term.strip("-")
+        term = term.strip("-./")
         if len(term) < 3:
             continue
         if term in QUERY_STOPWORDS:
@@ -157,6 +181,181 @@ def _get_retrieval_gate_metrics(query: str, results: List[Dict[str, Any]]) -> Di
         "max_overlap": max_overlap,
         "passed": max_overlap >= required_overlap,
     }
+
+def _build_query_phrases(query_terms: List[str]) -> List[str]:
+    phrases: List[str] = []
+
+    for i in range(len(query_terms) - 1):
+        phrase = f"{query_terms[i]} {query_terms[i + 1]}".strip()
+        if phrase and phrase not in phrases:
+            phrases.append(phrase)
+
+    return phrases
+
+
+def _skill_text(job_doc: Dict[str, Any]) -> str:
+    return " | ".join(_normalize_text(skill) for skill in (job_doc.get("all_skills") or []))
+
+
+def _lexical_match_score(query: str, job_doc: Dict[str, Any]) -> float:
+    query_norm = _normalize_text(query)
+    query_terms = _extract_query_terms(query)
+    query_phrases = _build_query_phrases(query_terms)
+
+    title = _normalize_text(job_doc.get("title", ""))
+    company = _normalize_text(job_doc.get("company", ""))
+    location = _normalize_text(job_doc.get("location", ""))
+    role_family = _normalize_text(job_doc.get("role_family", ""))
+    seniority = _normalize_text(job_doc.get("seniority", ""))
+    skills_text = _skill_text(job_doc)
+    searchable = _normalize_text(job_doc.get("retrieval_text", ""))
+
+    score = 0.0
+
+    if query_norm and query_norm in searchable:
+        score += 6.0
+
+    for phrase in query_phrases:
+        if phrase in title:
+            score += 4.0
+        elif phrase in skills_text:
+            score += 3.0
+        elif phrase in searchable:
+            score += 2.0
+
+    for term in query_terms:
+        if term in title:
+            score += 2.5
+        elif term in role_family or term in seniority:
+            score += 1.5
+
+        if any(term == _normalize_text(skill) or term in _normalize_text(skill) for skill in (job_doc.get("all_skills") or [])):
+            score += 2.0
+        elif term in company or term in location:
+            score += 1.0
+        elif term in searchable:
+            score += 0.75
+
+    return score
+
+
+def _build_lexical_result(job_doc: Dict[str, Any], normalized_score: float) -> Dict[str, Any]:
+    metadata = {
+        "doc_id": job_doc.get("doc_id", ""),
+        "company": job_doc.get("company", ""),
+        "title": job_doc.get("title", ""),
+        "location": job_doc.get("location", ""),
+        "source": job_doc.get("source", ""),
+        "job_url": job_doc.get("job_url", ""),
+        "posted_at": job_doc.get("posted_at", ""),
+        "role_family": job_doc.get("role_family", ""),
+        "seniority": job_doc.get("seniority", ""),
+        "required_skills": job_doc.get("required_skills", []),
+        "preferred_skills": job_doc.get("preferred_skills", []),
+        "all_skills": job_doc.get("all_skills", []),
+        "visa_sponsorship": job_doc.get("visa_sponsorship", ""),
+        "ai_fit_score": job_doc.get("ai_fit_score"),
+    }
+
+    return {
+        "score": normalized_score,
+        "text": job_doc.get("retrieval_text", "") or "",
+        "metadata": metadata,
+    }
+
+
+def _lexical_search(
+    query: str,
+    top_k: int,
+    filters: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    docs = _load_job_corpus()
+    scored: List[Any] = []
+
+    for job_doc in docs:
+        candidate = {
+            "score": 0.0,
+            "text": job_doc.get("retrieval_text", "") or "",
+            "metadata": job_doc,
+        }
+
+        if not _matches_filters(candidate, filters):
+            continue
+
+        raw_score = _lexical_match_score(query, job_doc)
+        if raw_score <= 0:
+            continue
+
+        scored.append((raw_score, job_doc))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+
+    if not scored:
+        return []
+
+    top_scored = scored[:top_k]
+    max_score = top_scored[0][0]
+
+    results: List[Dict[str, Any]] = []
+
+    for raw_score, job_doc in top_scored:
+        normalized_score = raw_score / max_score if max_score > 0 else 0.0
+        results.append(_build_lexical_result(job_doc, normalized_score))
+
+    return results
+
+
+def _merge_hybrid_results(
+    semantic_results: List[Dict[str, Any]],
+    lexical_results: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    merged: Dict[str, Dict[str, Any]] = {}
+    ordered_keys: List[str] = []
+
+    def _upsert(result: Dict[str, Any], semantic_score: float = 0.0, lexical_score: float = 0.0) -> None:
+        key = _dedupe_key(result)
+        existing = merged.get(key)
+
+        if existing is None:
+            existing = {
+                "score": 0.0,
+                "text": result.get("text", "") or "",
+                "metadata": result.get("metadata", {}) or {},
+                "_semantic_score": 0.0,
+                "_lexical_score": 0.0,
+            }
+            merged[key] = existing
+            ordered_keys.append(key)
+
+        if semantic_score > 0 and result.get("text"):
+            existing["text"] = result.get("text", "") or ""
+        elif not existing.get("text") and result.get("text"):
+            existing["text"] = result.get("text", "") or ""
+
+        if result.get("metadata"):
+            existing["metadata"] = result.get("metadata", {}) or existing["metadata"]
+
+        existing["_semantic_score"] = max(existing["_semantic_score"], semantic_score)
+        existing["_lexical_score"] = max(existing["_lexical_score"], lexical_score)
+
+    for result in semantic_results:
+        _upsert(result, semantic_score=_score_value(result.get("score")))
+
+    for result in lexical_results:
+        _upsert(result, lexical_score=_score_value(result.get("score")))
+
+    hybrid_results: List[Dict[str, Any]] = []
+
+    for key in ordered_keys:
+        item = merged[key]
+        item["score"] = (
+            HYBRID_SEMANTIC_WEIGHT * item["_semantic_score"] +
+            HYBRID_LEXICAL_WEIGHT * item["_lexical_score"]
+        )
+        hybrid_results.append(item)
+
+    hybrid_results.sort(key=lambda item: _score_value(item.get("score")), reverse=True)
+    return hybrid_results
 
 def _passes_retrieval_gate(query: str, results: List[Dict[str, Any]]) -> bool:
     return _get_retrieval_gate_metrics(query, results)["passed"]
@@ -255,28 +454,38 @@ def search_jobs(
         Keep this > top_k when using filters.
     """
 
-    raw_results = retrieve_jobs(query=query, top_k=fetch_k)
+    semantic_raw_results = retrieve_jobs(query=query, top_k=fetch_k)
 
-    filtered_results = [
-        result for result in raw_results
+    semantic_filtered_results = [
+        result for result in semantic_raw_results
         if _matches_filters(result, filters)
     ]
 
-    deduped_results = _dedupe_results(filtered_results)
-    gate_metrics = _get_retrieval_gate_metrics(query, deduped_results)
+    semantic_deduped_results = _dedupe_results(semantic_filtered_results)
+    lexical_results = _lexical_search(query=query, top_k=fetch_k, filters=filters)
+
+    hybrid_results = _merge_hybrid_results(
+        semantic_results=semantic_deduped_results,
+        lexical_results=lexical_results,
+    )
+
+    gate_metrics = _get_retrieval_gate_metrics(query, hybrid_results)
 
     logger.info(
-        "RAG retrieval | query=%r | fetch_k=%s | raw=%s | filtered=%s | deduped=%s | "
-        "gate_pass=%s | max_overlap=%s | required_overlap=%s | top_scores=%s",
+        "RAG retrieval | query=%r | fetch_k=%s | semantic_raw=%s | semantic_filtered=%s | "
+        "semantic_deduped=%s | lexical=%s | hybrid=%s | gate_pass=%s | max_overlap=%s | "
+        "required_overlap=%s | top_scores=%s",
         query,
         fetch_k,
-        len(raw_results),
-        len(filtered_results),
-        len(deduped_results),
+        len(semantic_raw_results),
+        len(semantic_filtered_results),
+        len(semantic_deduped_results),
+        len(lexical_results),
+        len(hybrid_results),
         gate_metrics["passed"],
         gate_metrics["max_overlap"],
         gate_metrics["required_overlap"],
-        _top_score_summary(deduped_results),
+        _top_score_summary(hybrid_results),
     )
 
     if not gate_metrics["passed"]:
@@ -287,7 +496,7 @@ def search_jobs(
         )
         return []
 
-    formatted_results = [_format_result(result) for result in deduped_results]
+    formatted_results = [_format_result(result) for result in hybrid_results]
     final_results = formatted_results[:top_k]
 
     logger.info(

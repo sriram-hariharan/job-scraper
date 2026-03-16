@@ -8,8 +8,9 @@ from src.config.consts import (
     TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
     TOOLING_SIGNAL_PATTERNS,
+    _ANALYTICS_ML_GENERIC_SIGNALS,
     _ANALYTICS_ML_SIGNAL_CANONICAL,
-    _ANALYTICS_ML_GENERIC_SIGNALS
+    _SKILL_ALIASES,
 )
 from src.matching.dimensions import get_match_dimensions
 from src.matching.job_models import JobEvidence
@@ -24,17 +25,7 @@ from src.matching.prefilter import run_prefilter
 from src.resume.models import ResumeEvidence
 
 
-_SKILL_ALIASES = {
-    "ab testing": "a/b testing",
-    "a b testing": "a/b testing",
-    "a/b test": "a/b testing",
-    "ml": "machine learning",
-    "powerbi": "power bi",
-}
-
-_UNIMPLEMENTED_DIMENSIONS = {
-    "evidence_strength",
-}
+_UNIMPLEMENTED_DIMENSIONS = set()
 
 
 def _normalize_text(value: str) -> str:
@@ -67,11 +58,10 @@ def _unique_preserve_order(values: List[str]) -> List[str]:
 
 
 def _normalized_skill_list(values: List[str]) -> List[str]:
-    return _unique_preserve_order([
-        _normalize_text(value)
-        for value in values
-        if _normalize_text(value)
-    ])
+    return _unique_preserve_order(
+        [_normalize_text(value) for value in values if _normalize_text(value)]
+    )
+
 
 def _canonicalize_signal(signal: str, canonical_map: Dict[str, str]) -> str:
     normalized = _normalize_text(signal)
@@ -79,11 +69,9 @@ def _canonicalize_signal(signal: str, canonical_map: Dict[str, str]) -> str:
 
 
 def _canonicalize_signals(values: List[str], canonical_map: Dict[str, str]) -> List[str]:
-    return _unique_preserve_order([
-        _canonicalize_signal(value, canonical_map)
-        for value in values
-        if _canonicalize_signal(value, canonical_map)
-    ])
+    return _unique_preserve_order(
+        [_canonicalize_signal(value, canonical_map) for value in values if _canonicalize_signal(value, canonical_map)]
+    )
 
 
 def _resume_skill_set(resume: ResumeEvidence) -> Set[str]:
@@ -100,11 +88,8 @@ def _resume_skill_set(resume: ResumeEvidence) -> Set[str]:
     for entry in resume.project_entries:
         values.extend(entry.normalized_skills)
 
-    return {
-        _normalize_text(value)
-        for value in values
-        if _normalize_text(value)
-    }
+    return {_normalize_text(value) for value in values if _normalize_text(value)}
+
 
 def _resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
     values: List[str] = []
@@ -116,11 +101,8 @@ def _resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
     for entry in resume.project_entries:
         values.extend(entry.normalized_skills)
 
-    return {
-        _normalize_text(value)
-        for value in values
-        if _normalize_text(value)
-    }
+    return {_normalize_text(value) for value in values if _normalize_text(value)}
+
 
 def _title_tokens(value: str) -> Set[str]:
     return {
@@ -157,6 +139,7 @@ def _resume_titles(resume: ResumeEvidence) -> List[str]:
     titles.extend(entry.title for entry in resume.experience_entries if entry.title)
     return _unique_preserve_order(titles)
 
+
 def _contains_signal(text: str, signal: str) -> bool:
     return re.search(rf"\b{re.escape(_normalize_text(signal))}\b", text) is not None
 
@@ -181,16 +164,14 @@ def _job_signal_hits(
     job_text_norm = _normalize_text(" ".join(parts))
     return [pattern for pattern in patterns if _contains_signal(job_text_norm, pattern)]
 
+
 def _project_signal_hits(project_text: str, patterns: List[str]) -> List[str]:
     project_text_norm = _normalize_text(project_text)
     return [pattern for pattern in patterns if _contains_signal(project_text_norm, pattern)]
 
+
 def _explicit_signal_hits(values: Set[str], patterns: List[str]) -> List[str]:
-    normalized_values = {
-        _normalize_text(value)
-        for value in values
-        if _normalize_text(value)
-    }
+    normalized_values = {_normalize_text(value) for value in values if _normalize_text(value)}
 
     hits: List[str] = []
     for pattern in patterns:
@@ -204,6 +185,7 @@ def _prune_generic_analytics_signals(signals: List[str]) -> List[str]:
     ordered = _unique_preserve_order(signals)
     specific = [signal for signal in ordered if signal not in _ANALYTICS_ML_GENERIC_SIGNALS]
     return specific if specific else ordered
+
 
 def _weighted_dimension(
     definition: MatchDimensionDefinition,
@@ -260,12 +242,7 @@ def _score_skill_alignment(
 ) -> MatchDimensionScore:
     normalized_targets = _normalized_skill_list(targets)
     if not normalized_targets:
-        return _weighted_dimension(
-            definition,
-            0.5,
-            empty_reason,
-            [],
-        )
+        return _weighted_dimension(definition, 0.5, empty_reason, [])
 
     matches = [skill for skill in normalized_targets if skill in resume_skill_set]
     coverage = len(matches) / len(normalized_targets)
@@ -329,27 +306,6 @@ def _score_signal_alignment(
         matches,
     )
 
-def _score_canonical_signal_alignment(
-    definition: MatchDimensionDefinition,
-    resume_signals: List[str],
-    job_signals: List[str],
-    empty_reason: str,
-    canonical_map: Dict[str, str],
-) -> MatchDimensionScore:
-    normalized_resume = set(_canonicalize_signals(resume_signals, canonical_map))
-    normalized_job = _canonicalize_signals(job_signals, canonical_map)
-
-    if not normalized_job:
-        return _weighted_dimension(definition, 0.5, empty_reason, [])
-
-    matches = [signal for signal in normalized_job if signal in normalized_resume]
-    coverage = len(matches) / len(normalized_job)
-    return _weighted_dimension(
-        definition,
-        coverage,
-        f"Matched {len(matches)}/{len(normalized_job)} canonical job signals.",
-        matches,
-    )
 
 def _score_analytics_ml_depth(
     definition: MatchDimensionDefinition,
@@ -398,7 +354,6 @@ def _score_analytics_ml_depth(
     ) / len(canonical_job)
 
     score = min(1.0, (0.8 * explicit_coverage) + (0.2 * inferred_total_coverage))
-
     evidence = _unique_preserve_order(explicit_matches + inferred_only_matches)
 
     return _weighted_dimension(
@@ -410,6 +365,7 @@ def _score_analytics_ml_depth(
         ),
         evidence,
     )
+
 
 def _score_project_relevance(
     definition: MatchDimensionDefinition,
@@ -440,27 +396,18 @@ def _score_project_relevance(
     best_evidence: List[str] = []
 
     for entry in resume.project_entries:
-        project_text = " ".join(
-            [entry.name] + entry.bullets
-        ).strip()
+        project_text = " ".join([entry.name] + entry.bullets).strip()
 
         project_skill_set = set(_normalized_skill_list(entry.normalized_skills))
-        skill_matches = [
-            skill for skill in job_skill_targets
-            if skill in project_skill_set
-        ]
-        skill_coverage = (
-            len(skill_matches) / len(job_skill_targets)
-            if job_skill_targets else 0.0
-        )
+        skill_matches = [skill for skill in job_skill_targets if skill in project_skill_set]
+        skill_coverage = len(skill_matches) / len(job_skill_targets) if job_skill_targets else 0.0
 
         project_analytics_hits = _canonicalize_signals(
             _project_signal_hits(project_text, ANALYTICS_ML_SIGNAL_PATTERNS),
             _ANALYTICS_ML_SIGNAL_CANONICAL,
         )
         analytics_matches = [
-            signal for signal in canonical_job_analytics
-            if signal in set(project_analytics_hits)
+            signal for signal in canonical_job_analytics if signal in set(project_analytics_hits)
         ]
         analytics_coverage = (
             len(analytics_matches) / len(canonical_job_analytics)
@@ -471,8 +418,7 @@ def _score_project_relevance(
             _project_signal_hits(project_text, EXPERIMENTATION_SIGNAL_PATTERNS)
         )
         experimentation_matches = [
-            signal for signal in canonical_job_experimentation
-            if signal in set(project_experimentation_hits)
+            signal for signal in canonical_job_experimentation if signal in set(project_experimentation_hits)
         ]
         experimentation_coverage = (
             len(experimentation_matches) / len(canonical_job_experimentation)
@@ -531,6 +477,7 @@ def _score_project_relevance(
         best_evidence,
     )
 
+
 def _neutral_unimplemented_dimension(definition: MatchDimensionDefinition) -> MatchDimensionScore:
     return _weighted_dimension(
         definition,
@@ -585,19 +532,17 @@ def score_resume_job_match(
         )
 
     resume_skill_set = _resume_skill_set(resume)
-
     resume_explicit_skill_set = _resume_explicit_skill_set(resume)
 
     job_analytics_ml_signals = _job_signal_hits(
-    job,
-    ANALYTICS_ML_SIGNAL_PATTERNS,
-    include_retrieval_text=False,
+        job,
+        ANALYTICS_ML_SIGNAL_PATTERNS,
+        include_retrieval_text=False,
     )
-
     job_experimentation_signals = _job_signal_hits(
-    job,
-    EXPERIMENTATION_SIGNAL_PATTERNS,
-    include_retrieval_text=True,
+        job,
+        EXPERIMENTATION_SIGNAL_PATTERNS,
+        include_retrieval_text=True,
     )
     job_domain_signals = _job_signal_hits(
         job,

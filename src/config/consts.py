@@ -622,6 +622,8 @@ _SKILL_ALIASES = {
     "a/b test": "a/b testing",
     "ml": "machine learning",
     "powerbi": "power bi",
+    "experiment": "experimentation",
+    
 }
 
 _ANALYTICS_ML_SIGNAL_CANONICAL = {

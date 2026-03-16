@@ -1,7 +1,7 @@
 import re
 from typing import List, Set, Tuple
 
-from src.config.consts import SENIORITY_HINTS, TITLE_CANONICAL
+from src.config.consts import TITLE_CANONICAL
 from src.matching.job_models import JobEvidence
 from src.matching.models import MatchPrefilterResult
 from src.resume.models import ResumeEvidence
@@ -145,13 +145,22 @@ def run_prefilter(
     reasons: List[str] = []
     failed_reasons: List[str] = []
 
-    if best_title_score >= 0.45 or matched_any:
+    minimum_overlap_passed = False
+    if best_title_score >= 0.80 and len(matched_any) >= 2:
+        minimum_overlap_passed = True
+    elif best_title_score >= 0.45 and len(matched_any) >= 3:
+        minimum_overlap_passed = True
+    elif len(matched_required) >= 3:
+        minimum_overlap_passed = True
+
+    if minimum_overlap_passed:
         reasons.append(
-            f"Minimum overlap passed: best_title_score={best_title_score:.2f}, matched_skills={len(matched_any)}."
+            f"Minimum overlap passed: best_title_score={best_title_score:.2f}, "
+            f"matched_skills={len(matched_any)}, matched_required={len(matched_required)}."
         )
     else:
         failed_reasons.append(
-            "Failed minimum overlap: no meaningful title alignment and no job-skill overlap."
+            "Failed minimum overlap: title alignment and skill overlap are too weak for deterministic scoring."
         )
 
     required_coverage = (
@@ -159,13 +168,17 @@ def run_prefilter(
         if required_skills
         else 0.0
     )
-    if len(required_skills) >= 6 and required_coverage < 0.15:
+    if len(required_skills) >= 10 and required_coverage < 0.30 and len(matched_required) < 4:
         failed_reasons.append(
             f"Failed required-skill floor: matched {len(matched_required)}/{len(required_skills)} required skills."
         )
-    elif 3 <= len(required_skills) < 6 and not matched_required:
+    elif 6 <= len(required_skills) < 10 and required_coverage < 0.25:
         failed_reasons.append(
-            f"Failed required-skill floor: matched 0/{len(required_skills)} required skills."
+            f"Failed required-skill floor: matched {len(matched_required)}/{len(required_skills)} required skills."
+        )
+    elif 3 <= len(required_skills) < 6 and len(matched_required) < 2:
+        failed_reasons.append(
+            f"Failed required-skill floor: matched {len(matched_required)}/{len(required_skills)} required skills."
         )
     elif required_skills:
         reasons.append(
@@ -173,7 +186,7 @@ def run_prefilter(
         )
     else:
         reasons.append("Required-skill coverage skipped: job has no explicit required skills.")
-
+    
     reasons.append("Seniority is reserved for manual review and is not used in automated prefiltering.")
 
     passed = not failed_reasons

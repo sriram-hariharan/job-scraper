@@ -1,5 +1,6 @@
 import argparse
 import json
+import csv
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List
@@ -91,6 +92,11 @@ def main() -> None:
         default="",
         help="Optional case-insensitive substring filter on resume filename.",
     )
+    parser.add_argument(
+        "--output-csv",
+        default="matching_smoke_results.csv",
+        help="Path to write the pairwise matching audit CSV.",
+    )
     args = parser.parse_args()
 
     job_corpus_path = Path(args.job_corpus)
@@ -116,12 +122,14 @@ def main() -> None:
 
     results_by_resume: Dict[str, List] = defaultdict(list)
     results_by_job: Dict[str, List] = defaultdict(list)
+    all_results: List = []
 
     for resume_evidence in resume_evidence_list:
         for job_evidence in job_evidence_list:
             result = score_resume_job_match(resume_evidence, job_evidence)
             results_by_resume[resume_evidence.document.resume_id].append(result)
             results_by_job[job_evidence.job_doc_id].append(result)
+            all_results.append(result)
 
     total_pairs = sum(len(results) for results in results_by_resume.values())
 
@@ -220,6 +228,76 @@ def main() -> None:
     print("=" * 100)
     print("DONE")
     print("=" * 100)
+
+    output_csv_path = Path(args.output_csv)
+
+    dimension_names = []
+    if all_results:
+        dimension_names = [dim.name for dim in all_results[0].dimension_scores]
+
+    fieldnames = [
+        "resume_id",
+        "resume_name",
+        "job_doc_id",
+        "job_company",
+        "job_title",
+        "prefilter_passed",
+        "prefilter_reasons",
+        "matched_terms",
+        "missing_requirements",
+        "final_score",
+        "match_bucket",
+    ]
+
+    for name in dimension_names:
+        fieldnames.extend([
+            f"{name}_score",
+            f"{name}_weighted_score",
+            f"{name}_reason",
+            f"{name}_evidence",
+        ])
+
+    with output_csv_path.open("w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for result in sorted(
+            all_results,
+            key=lambda r: (
+                r.pair.resume_name.lower(),
+                -int(r.prefilter.passed),
+                -r.final_score,
+                r.pair.job_company.lower(),
+                r.pair.job_title.lower(),
+            ),
+        ):
+            row = {
+                "resume_id": result.pair.resume_id,
+                "resume_name": result.pair.resume_name,
+                "job_doc_id": result.pair.job_doc_id,
+                "job_company": result.pair.job_company,
+                "job_title": result.pair.job_title,
+                "prefilter_passed": result.prefilter.passed,
+                "prefilter_reasons": " | ".join(result.prefilter.reasons),
+                "matched_terms": " | ".join(result.prefilter.matched_terms),
+                "missing_requirements": " | ".join(result.prefilter.missing_requirements),
+                "final_score": f"{result.final_score:.6f}",
+                "match_bucket": result.match_bucket,
+            }
+
+            dim_map = {dim.name: dim for dim in result.dimension_scores}
+            for name in dimension_names:
+                dim = dim_map[name]
+                row[f"{name}_score"] = f"{dim.score:.6f}"
+                row[f"{name}_weighted_score"] = f"{dim.weighted_score:.6f}"
+                row[f"{name}_reason"] = dim.reason
+                row[f"{name}_evidence"] = " | ".join(dim.evidence)
+
+            writer.writerow(row)
+
+    print()
+    print(f"CSV written: {output_csv_path}")
+    print()
 
 
 if __name__ == "__main__":

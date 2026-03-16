@@ -7,21 +7,14 @@ from pathlib import Path
 from src.rag.retriever import retrieve_jobs
 from src.utils.logging import get_logger
 
+from src.config.consts import QUERY_STOPWORDS
+
 logger = get_logger("rag.query_engine")
 
 CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 
 HYBRID_SEMANTIC_WEIGHT = 0.65
 HYBRID_LEXICAL_WEIGHT = 0.35
-
-QUERY_STOPWORDS = {
-    "a", "an", "and", "are", "as", "at", "be", "best", "by", "find",
-    "for", "from", "in", "into", "is", "job", "jobs", "look", "looks",
-    "of", "on", "or", "role", "roles", "that", "the", "their", "these",
-    "this", "to", "using", "what", "which", "with", "work", "working",
-    "strongest", "retrieved", "emphasize", "emphasizes", "focused",
-    "about", "requirement", "requirements",
-}
 
 def _normalize_text(value: Any) -> str:
     return str(value or "").strip().lower()
@@ -328,7 +321,29 @@ def _query_overlap_count(query_terms: List[str], result: Dict[str, Any]) -> int:
     searchable = _searchable_text(result)
     return sum(1 for term in query_terms if term in searchable)
 
-def _get_retrieval_gate_metrics(query: str, results: List[Dict[str, Any]]) -> Dict[str, Any]:
+def _required_overlap_count(
+    query_terms: List[str],
+    effective_filters: Optional[Dict[str, Any]] = None,
+) -> int:
+    
+    if not query_terms:
+        return 0
+
+    if len(query_terms) <= 2:
+        return 1
+
+    has_filters = bool(effective_filters)
+
+    if len(query_terms) >= 5 and not has_filters:
+        return 3
+
+    return 2
+
+def _get_retrieval_gate_metrics(
+    query: str,
+    results: List[Dict[str, Any]],
+    effective_filters: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
     if not results:
         return {
             "query_terms": [],
@@ -346,7 +361,7 @@ def _get_retrieval_gate_metrics(query: str, results: List[Dict[str, Any]]) -> Di
             "passed": True,
         }
 
-    required_overlap = 1 if len(query_terms) <= 2 else 2
+    required_overlap = _required_overlap_count(query_terms, effective_filters)
     max_overlap = max(_query_overlap_count(query_terms, result) for result in results)
 
     return {
@@ -370,6 +385,50 @@ def _build_query_phrases(query_terms: List[str]) -> List[str]:
 def _skill_text(job_doc: Dict[str, Any]) -> str:
     return " | ".join(_normalize_text(skill) for skill in (job_doc.get("all_skills") or []))
 
+def _metadata_text(job_doc: Dict[str, Any]) -> str:
+    return " | ".join(
+        _normalize_text(value)
+        for value in [
+            job_doc.get("company", ""),
+            job_doc.get("title", ""),
+            job_doc.get("location", ""),
+            job_doc.get("source", ""),
+            job_doc.get("role_family", ""),
+            job_doc.get("seniority", ""),
+            job_doc.get("visa_sponsorship", ""),
+        ]
+    )
+
+def _has_strong_lexical_signal(query: str, job_doc: Dict[str, Any]) -> bool:
+    query_norm = _normalize_text(query)
+    query_terms = _extract_query_terms(query)
+    query_phrases = _build_query_phrases(query_terms)
+
+    if not query_terms:
+        return False
+
+    title = _normalize_text(job_doc.get("title", ""))
+    skills_text = _skill_text(job_doc)
+    metadata_text = _metadata_text(job_doc)
+    searchable = _normalize_text(job_doc.get("retrieval_text", ""))
+
+    if query_norm and query_norm in searchable:
+        return True
+
+    if any(phrase in title or phrase in skills_text for phrase in query_phrases):
+        return True
+
+    title_skill_hits = sum(
+        1 for term in query_terms
+        if term in title or term in skills_text
+    )
+
+    metadata_hits = sum(
+        1 for term in query_terms
+        if term in metadata_text
+    )
+
+    return title_skill_hits >= 1 or metadata_hits >= 2
 
 def _lexical_match_score(query: str, job_doc: Dict[str, Any]) -> float:
     query_norm = _normalize_text(query)
@@ -460,6 +519,9 @@ def _lexical_search(
         if raw_score <= 0:
             continue
 
+        if not _has_strong_lexical_signal(query, job_doc):
+            continue
+
         scored.append((raw_score, job_doc))
 
     scored.sort(key=lambda item: item[0], reverse=True)
@@ -531,8 +593,12 @@ def _merge_hybrid_results(
     hybrid_results.sort(key=lambda item: _score_value(item.get("score")), reverse=True)
     return hybrid_results
 
-def _passes_retrieval_gate(query: str, results: List[Dict[str, Any]]) -> bool:
-    return _get_retrieval_gate_metrics(query, results)["passed"]
+def _passes_retrieval_gate(
+    query: str,
+    results: List[Dict[str, Any]],
+    effective_filters: Optional[Dict[str, Any]] = None,
+) -> bool:
+    return _get_retrieval_gate_metrics(query, results, effective_filters)["passed"]
 
 
 def _matches_filters(result: Dict[str, Any], filters: Optional[Dict[str, Any]]) -> bool:
@@ -665,7 +731,11 @@ def search_jobs(
         lexical_results=lexical_results,
     )
 
-    gate_metrics = _get_retrieval_gate_metrics(query, hybrid_results)
+    gate_metrics = _get_retrieval_gate_metrics(
+        query,
+        hybrid_results,
+        effective_filters,
+    )
 
     logger.info(
         "RAG retrieval | query=%r | fetch_k=%s | semantic_raw=%s | semantic_filtered=%s | "

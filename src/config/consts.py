@@ -380,3 +380,18 @@ SQL_FRAGMENT_TERMS = {
     "window functions",
     "ctes",
 }
+
+# ============================================================
+# QUERY ENGINE
+# ============================================================
+
+QUERY_STOPWORDS = {
+    "a", "about", "an", "and", "are", "as", "at", "be", "best", "by",
+    "engineer", "engineers", "find", "for", "from", "hiring", "in",
+    "into", "is", "job", "jobs", "look", "looks", "new", "of", "on",
+    "opening", "openings", "opportunity", "opportunities", "or",
+    "position", "positions", "requirement", "requirements", "role",
+    "roles", "team", "teams", "that", "the", "their", "these", "this",
+    "to", "using", "what", "which", "with", "work", "working",
+    "strongest", "retrieved", "emphasize", "emphasizes", "focused",
+}

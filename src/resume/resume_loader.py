@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 from typing import List, Dict
 from pdfminer.high_level import extract_text
@@ -16,59 +17,69 @@ RESUME_DIR = Path(RESUME_DIR)
 
 def normalize_text(text: str) -> str:
     """
-    Clean resume text for embedding / analysis.
+    Clean resume text for embedding / broad analysis.
+    Keeps semantic content but removes layout/newline structure.
     """
     text = text.replace("\n", " ")
     text = " ".join(text.split())
-    return text
+    return text.strip()
 
 
-def extract_resume_text(pdf_path: Path) -> str:
+def normalize_raw_layout_text(text: str) -> str:
     """
-    Extract text from a resume PDF.
+    Light cleanup that preserves line structure for section parsing.
+    """
+    if not text:
+        return ""
+
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
+
+
+def extract_resume_texts(pdf_path: Path) -> Dict[str, str]:
+    """
+    Extract both raw-layout text and normalized flat text from a resume PDF.
     """
     try:
-        text = extract_text(str(pdf_path))
-        return normalize_text(text)
+        raw_text = extract_text(str(pdf_path))
+        raw_text = normalize_raw_layout_text(raw_text)
+        normalized_text = normalize_text(raw_text)
+
+        return {
+            "raw_text": raw_text,
+            "text": normalized_text,
+        }
     except Exception as e:
         print(f"Failed to parse resume {pdf_path}: {e}")
-        return ""
+        return {
+            "raw_text": "",
+            "text": "",
+        }
 
 
 def load_resumes() -> List[Dict]:
-    """
-    Load all resumes from RESUME_DIR.
-
-    Returns:
-    [
-        {
-            "resume_name": "...pdf",
-            "path": "...",
-            "text": "resume text..."
-        }
-    ]
-    """
-
     resumes = []
 
     if not RESUME_DIR.exists():
         raise RuntimeError(f"Resume directory not found: {RESUME_DIR}")
 
     for file in RESUME_DIR.iterdir():
-
         if file.suffix.lower() != ".pdf":
             continue
 
-        text = extract_resume_text(file)
+        extracted = extract_resume_texts(file)
 
-        if not text:
+        if not extracted["raw_text"]:
             continue
 
         resumes.append(
             {
                 "resume_name": file.name,
                 "path": str(file),
-                "text": text,
+                "raw_text": extracted["raw_text"],
+                "text": extracted["text"],
             }
         )
 
@@ -76,32 +87,26 @@ def load_resumes() -> List[Dict]:
 
 
 def load_resumes_by_name(names: List[str]) -> List[Dict]:
-    """
-    Load only specific resumes by filename.
-
-    Used by resume matcher when filtering by role family.
-    """
-
     resumes = []
 
     for name in names:
-
         path = RESUME_DIR / name
 
         if not path.exists():
             print(f"Resume missing: {name}")
             continue
 
-        text = extract_resume_text(path)
+        extracted = extract_resume_texts(path)
 
-        if not text:
+        if not extracted["raw_text"]:
             continue
 
         resumes.append(
             {
                 "resume_name": name,
                 "path": str(path),
-                "text": text,
+                "raw_text": extracted["raw_text"],
+                "text": extracted["text"],
             }
         )
 

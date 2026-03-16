@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from src.rag.rag_tools import (
     answer_job_query_tool,
@@ -19,6 +19,7 @@ def _error_payload(
     error_type: str = "routing_error",
     intent: str = "unknown",
     details: Optional[Dict[str, Any]] = None,
+    suggestions: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     payload: Dict[str, Any] = {
         "ok": False,
@@ -30,6 +31,9 @@ def _error_payload(
 
     if details:
         payload["details"] = details
+
+    if suggestions:
+        payload["suggestions"] = suggestions
 
     return payload
 
@@ -125,6 +129,38 @@ def classify_rag_intent(request: str) -> str:
     return "unknown"
 
 
+def _routing_suggestions(natural_intent: str) -> List[str]:
+    if natural_intent == "search_jobs":
+        return ["search_jobs"]
+
+    if natural_intent == "answer_job_query":
+        return ["answer_job_query"]
+
+    return ["search_jobs", "answer_job_query"]
+
+
+def _override_warning(
+    natural_intent: str,
+    final_intent: str,
+    intent_override: Optional[str],
+) -> Optional[Dict[str, Any]]:
+    if not intent_override:
+        return None
+
+    if natural_intent == final_intent:
+        return None
+
+    return {
+        "warning_type": "intent_override_mismatch",
+        "message": (
+            f"intent_override forced '{final_intent}' "
+            f"but natural classification was '{natural_intent}'"
+        ),
+        "natural_intent": natural_intent,
+        "forced_intent": final_intent,
+    }
+
+
 def execute_rag_request(
     request: str,
     top_k: int = 5,
@@ -142,9 +178,10 @@ def execute_rag_request(
             error_type="validation_error",
         )
 
-    intent = intent_override or classify_rag_intent(request_norm)
+    natural_intent = classify_rag_intent(request_norm)
+    final_intent = intent_override or natural_intent
 
-    if intent not in ALLOWED_RAG_INTENTS:
+    if final_intent not in ALLOWED_RAG_INTENTS:
         return _error_payload(
             request=request_norm,
             error=f"intent_override must be one of {sorted(ALLOWED_RAG_INTENTS)}",
@@ -152,15 +189,23 @@ def execute_rag_request(
             details={"intent_override": intent_override},
         )
 
-    if intent == "unknown":
+    if final_intent == "unknown":
         return _error_payload(
             request=request_norm,
             error="Could not classify request as search_jobs or answer_job_query",
             error_type="routing_error",
             intent="unknown",
+            details={"natural_intent": natural_intent},
+            suggestions=_routing_suggestions(natural_intent),
         )
 
-    if intent == "search_jobs":
+    warning = _override_warning(
+        natural_intent=natural_intent,
+        final_intent=final_intent,
+        intent_override=intent_override,
+    )
+
+    if final_intent == "search_jobs":
         response = search_jobs_tool(
             query=request_norm,
             top_k=top_k,
@@ -169,29 +214,36 @@ def execute_rag_request(
             include_diagnostics=include_diagnostics,
             output_mode=output_mode,
         )
-        return {
+        payload = {
             "ok": response.get("ok", False),
             "intent": "search_jobs",
+            "natural_intent": natural_intent,
             "tool_name": "search_jobs",
             "request": request_norm,
             "response": response,
         }
+    else:
+        response = answer_job_query_tool(
+            question=request_norm,
+            top_k=top_k,
+            fetch_k=fetch_k,
+            filters=filters,
+            include_diagnostics=include_diagnostics,
+            output_mode=output_mode,
+        )
+        payload = {
+            "ok": response.get("ok", False),
+            "intent": "answer_job_query",
+            "natural_intent": natural_intent,
+            "tool_name": "answer_job_query",
+            "request": request_norm,
+            "response": response,
+        }
 
-    response = answer_job_query_tool(
-        question=request_norm,
-        top_k=top_k,
-        fetch_k=fetch_k,
-        filters=filters,
-        include_diagnostics=include_diagnostics,
-        output_mode=output_mode,
-    )
-    return {
-        "ok": response.get("ok", False),
-        "intent": "answer_job_query",
-        "tool_name": "answer_job_query",
-        "request": request_norm,
-        "response": response,
-    }
+    if warning:
+        payload["warning"] = warning
+
+    return payload
 
 
 if __name__ == "__main__":

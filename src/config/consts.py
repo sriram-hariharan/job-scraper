@@ -395,3 +395,204 @@ QUERY_STOPWORDS = {
     "to", "using", "what", "which", "with", "work", "working",
     "strongest", "retrieved", "emphasize", "emphasizes", "focused",
 }
+
+# ============================================================
+# RESUME EVIDENCE BUILDER
+# ============================================================  
+
+COMMON_SKILL_PATTERNS = [
+    "python",
+    "sql",
+    "r",
+    "sas",
+    "tableau",
+    "looker",
+    "power bi",
+    "excel",
+    "airflow",
+    "dbt",
+    "snowflake",
+    "bigquery",
+    "databricks",
+    "spark",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "tensorflow",
+    "pytorch",
+    "machine learning",
+    "deep learning",
+    "a/b testing",
+    "bayesian inference",
+    "causal inference",
+    "experimental design",
+    "hypothesis testing",
+    "regression",
+    "classification",
+    "forecasting",
+    "statistical modeling",
+    "data science",
+    "data analysis",
+    "analytics",
+    "generative ai",
+    "llm",
+]
+
+TITLE_PATTERNS = [
+    "senior data scientist",
+    "research data scientist",
+    "staff data scientist",
+    "principal data scientist",
+    "data scientist",
+    "senior data analyst",
+    "data analyst",
+    "senior machine learning engineer",
+    "machine learning engineer",
+    "ai engineer",
+    "applied scientist",
+    "research scientist",
+    "analytics engineer",
+    "product analyst",
+    "business analyst",
+    "sr. data scientist",
+    "sr. data analyst",
+    "data scientist ii",
+    "data analyst ii",
+    "data analyst i",
+    "machine learning intern",
+    "machine learning",
+]
+
+DOMAIN_SIGNAL_PATTERNS = [
+    "fintech",
+    "finance",
+    "payments",
+    "fraud",
+    "risk",
+    "insurance",
+    "healthcare",
+    "retail",
+    "e-commerce",
+    "supply chain",
+    "logistics",
+    "transportation",
+    "media",
+    "streaming",
+    "advertising",
+    "marketplace",
+]
+
+ANALYTICS_ML_SIGNAL_PATTERNS = [
+    "machine learning",
+    "modeling",
+    "forecasting",
+    "prediction",
+    "classification",
+    "regression",
+    "statistics",
+    "statistical",
+    "analytics",
+    "analysis",
+    "data science",
+]
+
+EXPERIMENTATION_SIGNAL_PATTERNS = [
+    "a/b test",
+    "a/b testing",
+    "experiment",
+    "experimentation",
+    "causal inference",
+    "bayesian",
+    "hypothesis testing",
+    "incrementality",
+    "quasi-experimental",
+    "diff-in-diff",
+    "propensity",
+    "synthetic control",
+]
+
+TOOLING_SIGNAL_PATTERNS = [
+    "python",
+    "sql",
+    "r",
+    "sas",
+    "tableau",
+    "looker",
+    "power bi",
+    "airflow",
+    "dbt",
+    "snowflake",
+    "bigquery",
+    "databricks",
+    "spark",
+    "pytorch",
+    "tensorflow",
+]
+
+SECTION_ALIASES = {
+    "experience": [
+        "experience",
+        "work experience",
+        "professional experience",
+        "employment history",
+        "professional background",
+    ],
+    "projects": [
+        "projects",
+        "project experience",
+        "relevant projects",
+        "academic projects",
+    ],
+    "education": [
+        "education",
+        "academic background",
+    ],
+    "skills": [
+        "skills",
+        "technical skills",
+        "core skills",
+        "skills summary",
+    ],
+}
+
+DATE_PATTERN = re.compile(
+    r"(?i)\b("
+    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}"
+    r"|"
+    r"\d{4}"
+    r")\b"
+)
+
+DATE_RANGE_PATTERN = re.compile(
+    r"(?i)\b("
+    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}"
+    r"|"
+    r"\d{4}"
+    r")\b.*\b("
+    r"(present|current|now)"
+    r"|"
+    r"(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}"
+    r"|"
+    r"\d{4}"
+    r")\b"
+)
+
+ROLE_WORD_HINTS = [
+    "scientist",
+    "analyst",
+    "engineer",
+    "intern",
+    "manager",
+    "consultant",
+    "researcher",
+    "specialist",
+]
+
+SENIORITY_HINTS = [
+    "principal",
+    "staff",
+    "senior",
+    "lead",
+    "junior",
+    "intern",
+]

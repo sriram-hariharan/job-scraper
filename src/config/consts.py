@@ -596,3 +596,52 @@ SENIORITY_HINTS = [
     "junior",
     "intern",
 ]
+
+TITLE_NOISE_TOKENS = {
+    "a",
+    "an",
+    "and",
+    "for",
+    "of",
+    "the",
+    "jr",
+    "junior",
+    "sr",
+    "senior",
+    "lead",
+    "staff",
+    "principal",
+    "ii",
+    "iii",
+    "iv",
+}
+
+_SKILL_ALIASES = {
+    "ab testing": "a/b testing",
+    "a b testing": "a/b testing",
+    "a/b test": "a/b testing",
+    "ml": "machine learning",
+    "powerbi": "power bi",
+}
+
+_ANALYTICS_ML_SIGNAL_CANONICAL = {
+    "analysis": "analytics",
+    "analytics": "analytics",
+    "statistics": "statistics",
+    "statistical": "statistics",
+}
+
+_ANALYTICS_ML_GENERIC_SIGNALS = {
+    "analytics",
+    "data science",
+}
+
+_SENIORITY_RANKS = {
+    "intern": 0,
+    "junior": 1,
+    "": 2,
+    "senior": 3,
+    "lead": 4,
+    "staff": 4,
+    "principal": 5,
+}

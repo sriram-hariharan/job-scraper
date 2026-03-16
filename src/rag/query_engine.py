@@ -68,6 +68,180 @@ def _load_job_corpus() -> List[Dict[str, Any]]:
     logger.info("RAG lexical corpus loaded | path=%s | docs=%s", CORPUS_PATH, len(docs))
     return docs
 
+@lru_cache(maxsize=1)
+def _build_metadata_catalog() -> Dict[str, Any]:
+    docs = _load_job_corpus()
+
+    companies: Dict[str, str] = {}
+    sources: Dict[str, str] = {}
+    titles: Dict[str, str] = {}
+    role_families: Dict[str, str] = {}
+    seniorities: Dict[str, str] = {}
+    locations: Dict[str, str] = {}
+
+    for doc in docs:
+        company = str(doc.get("company") or "").strip()
+        source = str(doc.get("source") or "").strip()
+        title = str(doc.get("title") or "").strip()
+        role_family = str(doc.get("role_family") or "").strip()
+        seniority = str(doc.get("seniority") or "").strip()
+        location = str(doc.get("location") or "").strip()
+
+        if company:
+            companies[_normalize_text(company)] = company
+
+        if source:
+            sources[_normalize_text(source)] = source
+
+        if title:
+            titles[_normalize_text(title)] = title
+
+        if role_family:
+            role_families[_normalize_text(role_family)] = role_family
+
+        if seniority:
+            seniorities[_normalize_text(seniority)] = seniority
+
+        if location:
+            locations[_normalize_text(location)] = location
+            for part in [p.strip() for p in location.split(",") if p.strip()]:
+                if len(part) >= 3:
+                    locations[_normalize_text(part)] = part
+
+    return {
+        "companies": companies,
+        "sources": sources,
+        "titles": titles,
+        "role_families": role_families,
+        "seniorities": seniorities,
+        "locations": locations,
+    }
+
+def _tokenize_for_match(value: Any) -> List[str]:
+    return re.findall(r"[a-z0-9]+", _normalize_text(value))
+
+
+def _contains_token_sequence(query_tokens: List[str], candidate_tokens: List[str]) -> bool:
+    if not query_tokens or not candidate_tokens:
+        return False
+
+    candidate_len = len(candidate_tokens)
+    query_len = len(query_tokens)
+
+    if candidate_len > query_len:
+        return False
+
+    for i in range(query_len - candidate_len + 1):
+        if query_tokens[i:i + candidate_len] == candidate_tokens:
+            return True
+
+    return False
+
+def _match_known_value(query_norm: str, candidates: Dict[str, str]) -> Optional[str]:
+    query_tokens = _tokenize_for_match(query_norm)
+
+    matches = []
+
+    for candidate_norm, candidate_value in candidates.items():
+        candidate_tokens = _tokenize_for_match(candidate_norm)
+        if not candidate_tokens:
+            continue
+
+        if _contains_token_sequence(query_tokens, candidate_tokens):
+            matches.append((len(candidate_tokens), len(candidate_norm), candidate_value))
+
+    if not matches:
+        return None
+
+    matches.sort(key=lambda item: (item[0], item[1]), reverse=True)
+    return matches[0][2]
+
+
+def _infer_seniority_from_query(query_norm: str, catalog: Dict[str, Any]) -> Optional[str]:
+    seniority_keywords = [
+        "principal",
+        "staff",
+        "senior",
+        "lead",
+        "junior",
+        "intern",
+    ]
+
+    for keyword in seniority_keywords:
+        if keyword in query_norm:
+            return keyword
+
+    return _match_known_value(query_norm, catalog["seniorities"])
+
+
+def _infer_visa_sponsorship_from_query(query_norm: str) -> Optional[str]:
+    visa_terms = [
+        "visa sponsorship",
+        "sponsorship",
+        "sponsor",
+        "h1b",
+        "h-1b",
+        "opt",
+        "stem opt",
+    ]
+
+    if any(term in query_norm for term in visa_terms):
+        return "possible"
+
+    return None
+
+
+def _infer_metadata_filters(query: str) -> Dict[str, Any]:
+    query_norm = _normalize_text(query)
+    catalog = _build_metadata_catalog()
+
+    inferred: Dict[str, Any] = {}
+
+    company = _match_known_value(query_norm, catalog["companies"])
+    if company:
+        inferred["company"] = company
+
+    source = _match_known_value(query_norm, catalog["sources"])
+    if source:
+        inferred["source"] = source
+
+    location = _match_known_value(query_norm, catalog["locations"])
+    if location:
+        inferred["location"] = location
+
+    title_contains = _match_known_value(query_norm, catalog["titles"])
+    if title_contains:
+        inferred["title_contains"] = title_contains
+
+    role_family = _match_known_value(query_norm, catalog["role_families"])
+    if role_family:
+        inferred["role_family"] = role_family
+
+    seniority = _infer_seniority_from_query(query_norm, catalog)
+    if seniority:
+        inferred["seniority"] = seniority
+
+    visa_sponsorship = _infer_visa_sponsorship_from_query(query_norm)
+    if visa_sponsorship:
+        inferred["visa_sponsorship"] = visa_sponsorship
+
+    return inferred
+
+
+def _merge_filters(
+    explicit_filters: Optional[Dict[str, Any]],
+    inferred_filters: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    merged: Dict[str, Any] = {}
+
+    if inferred_filters:
+        merged.update({k: v for k, v in inferred_filters.items() if v not in (None, "", [])})
+
+    if explicit_filters:
+        merged.update({k: v for k, v in explicit_filters.items() if v not in (None, "", [])})
+
+    return merged
+
 def _dedupe_key(result: Dict[str, Any]) -> str:
     metadata = result.get("metadata", {}) or {}
     doc_id = str(metadata.get("doc_id") or "").strip()
@@ -371,6 +545,8 @@ def _matches_filters(result: Dict[str, Any], filters: Optional[Dict[str, Any]]) 
     source = filters.get("source")
     location = filters.get("location")
     title_contains = filters.get("title_contains")
+    role_family = filters.get("role_family")
+    seniority = filters.get("seniority")
     required_skill = filters.get("required_skill")
     any_skill = filters.get("any_skill")
     visa_sponsorship = filters.get("visa_sponsorship")
@@ -386,6 +562,15 @@ def _matches_filters(result: Dict[str, Any], filters: Optional[Dict[str, Any]]) 
         return False
 
     if title_contains and not _contains_text(metadata.get("title"), title_contains):
+        return False
+
+    if role_family and not _contains_text(metadata.get("role_family"), role_family):
+        return False
+
+    if seniority and not (
+        _contains_text(metadata.get("seniority"), seniority)
+        or _contains_text(metadata.get("title"), seniority)
+    ):
         return False
 
     if required_skill and not _list_contains(metadata.get("required_skills", []), required_skill):
@@ -454,15 +639,26 @@ def search_jobs(
         Keep this > top_k when using filters.
     """
 
+    inferred_filters = _infer_metadata_filters(query)
+    effective_filters = _merge_filters(filters, inferred_filters)
+
+    logger.info(
+        "RAG inferred filters | query=%r | inferred=%s | explicit=%s | effective=%s",
+        query,
+        inferred_filters,
+        filters or {},
+        effective_filters,
+    )
+
     semantic_raw_results = retrieve_jobs(query=query, top_k=fetch_k)
 
     semantic_filtered_results = [
         result for result in semantic_raw_results
-        if _matches_filters(result, filters)
+        if _matches_filters(result, effective_filters)
     ]
 
     semantic_deduped_results = _dedupe_results(semantic_filtered_results)
-    lexical_results = _lexical_search(query=query, top_k=fetch_k, filters=filters)
+    lexical_results = _lexical_search(query=query, top_k=fetch_k, filters=effective_filters)
 
     hybrid_results = _merge_hybrid_results(
         semantic_results=semantic_deduped_results,

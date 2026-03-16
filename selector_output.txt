@@ -1,0 +1,60 @@
+====================================================================================================
+BEST RESUME VARIANT SELECTOR
+====================================================================================================
+JOB: roku | Senior Data Scientist
+JOB DOC ID: https://www.weareroku.com/jobs/7116545?gh_jid=7116545
+Resume variants considered: 14
+Passed prefilter: 14 | Filtered out: 0
+
+----------------------------------------------------------------------------------------------------
+WINNER
+----------------------------------------------------------------------------------------------------
+Sriram_Neelakantan_Product_Data_Scientist.pdf | score=0.749 | bucket=solid | prefilter=PASS
+Prefilter reasons: ['Minimum overlap passed: best_title_score=1.00, matched_skills=7, matched_required=7.', 'Required-skill coverage passed: matched 7/9 required skills.', 'Seniority is reserved for manual review and is not used in automated prefiltering.']
+Matched terms: ['Data Scientist II', 'a/b testing', 'forecasting', 'looker', 'python', 'r', 'sql', 'tableau']
+Missing requirements: ['sas', 'statistical modeling']
+Top dimensions: title_alignment=1.00/0.209, required_skills_alignment=0.78/0.199, experimentation_depth=1.00/0.093, tooling_alignment=0.83/0.078, analytics_ml_depth=0.47/0.054, domain_relevance=0.50/0.047
+
+----------------------------------------------------------------------------------------------------
+RUNNER-UP
+----------------------------------------------------------------------------------------------------
+Sriram_Neelakantan_Data_Analyst.pdf | score=0.705 | bucket=solid | prefilter=PASS
+Prefilter reasons: ['Minimum overlap passed: best_title_score=1.00, matched_skills=6, matched_required=6.', 'Required-skill coverage passed: matched 6/9 required skills.', 'Seniority is reserved for manual review and is not used in automated prefiltering.']
+Matched terms: ['Data Scientist II', 'a/b testing', 'forecasting', 'python', 'r', 'sql', 'tableau']
+Missing requirements: ['looker', 'sas', 'statistical modeling']
+Top dimensions: title_alignment=1.00/0.209, required_skills_alignment=0.67/0.171, experimentation_depth=1.00/0.093, tooling_alignment=0.67/0.062, analytics_ml_depth=0.47/0.054, domain_relevance=0.50/0.047
+
+----------------------------------------------------------------------------------------------------
+WHY THE WINNER WON
+----------------------------------------------------------------------------------------------------
+Score gap: 0.044
+required_skills_alignment: +0.028 (winner=0.199, runner_up=0.171)
+tooling_alignment: +0.016 (winner=0.078, runner_up=0.062)
+analytics_ml_depth: +0.000 (winner=0.054, runner_up=0.054)
+domain_relevance: +0.000 (winner=0.047, runner_up=0.047)
+experimentation_depth: +0.000 (winner=0.093, runner_up=0.093)
+
+----------------------------------------------------------------------------------------------------
+APPLICATION RECOMMENDATION
+----------------------------------------------------------------------------------------------------
+Use: Sriram_Neelakantan_Product_Data_Scientist.pdf
+Why: highest deterministic match score (0.749) for roku | Senior Data Scientist.
+Strongest matched terms: Data Scientist II, a/b testing, forecasting, looker, python, r
+Main remaining gaps: sas, statistical modeling
+Best backup: Sriram_Neelakantan_Data_Analyst.pdf (score 0.705, gap 0.044).
+
+----------------------------------------------------------------------------------------------------
+TOP 3 VARIANTS
+----------------------------------------------------------------------------------------------------
+ 1. Sriram_Neelakantan_Product_Data_Scientist.pdf | score=0.749 | bucket=solid | prefilter=PASS
+    top_dims: title_alignment=1.00/0.209, required_skills_alignment=0.78/0.199, experimentation_depth=1.00/0.093, tooling_alignment=0.83/0.078, analytics_ml_depth=0.47/0.054, domain_relevance=0.50/0.047
+    missing_required: ['sas', 'statistical modeling']
+
+ 2. Sriram_Neelakantan_Data_Analyst.pdf | score=0.705 | bucket=solid | prefilter=PASS
+    top_dims: title_alignment=1.00/0.209, required_skills_alignment=0.67/0.171, experimentation_depth=1.00/0.093, tooling_alignment=0.67/0.062, analytics_ml_depth=0.47/0.054, domain_relevance=0.50/0.047
+    missing_required: ['looker', 'sas', 'statistical modeling']
+
+ 3. Neelakantan_SriramHariharan_Resume_MLE_v3.pdf | score=0.698 | bucket=solid | prefilter=PASS
+    top_dims: title_alignment=1.00/0.209, required_skills_alignment=0.67/0.171, experimentation_depth=1.00/0.093, tooling_alignment=0.67/0.062, analytics_ml_depth=0.40/0.047, domain_relevance=0.50/0.047
+    missing_required: ['looker', 'sas', 'statistical modeling']
+

@@ -8,6 +8,7 @@ from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
 
+TIE_EPSILON = 0.005
 
 def _load_job_records(job_corpus_path: Path) -> List[dict]:
     if not job_corpus_path.exists():
@@ -119,14 +120,38 @@ def _top_dimension_deltas(top_result, runner_up_result, max_dims: int = 5) -> Li
         )
     return formatted
 
+def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_EPSILON) -> bool:
+    if runner_up is None:
+        return False
+    return abs(winner.final_score - runner_up.final_score) <= epsilon
+
 def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
     lines = []
+    is_tie = _is_effective_tie(winner, runner_up)
 
-    lines.append(f"Use: {winner.pair.resume_name}")
-    lines.append(
-        f"Why: highest deterministic match score ({winner.final_score:.3f}) "
-        f"for {winner.pair.job_company} | {winner.pair.job_title}."
-    )
+    if is_tie:
+        lines.append(
+            f"Tie: {winner.pair.resume_name} and {runner_up.pair.resume_name} "
+            f"are effectively equivalent for {winner.pair.job_company} | {winner.pair.job_title}."
+        )
+        lines.append(
+            f"Why: score gap is only {winner.final_score - runner_up.final_score:.3f}, "
+            f"which is within the tie threshold of {TIE_EPSILON:.3f}."
+        )
+        lines.append(f"Top-ranked variant by deterministic ordering: {winner.pair.resume_name}")
+        lines.append(f"Equivalent backup variant: {runner_up.pair.resume_name}")
+    else:
+        lines.append(f"Use: {winner.pair.resume_name}")
+        lines.append(
+            f"Why: highest deterministic match score ({winner.final_score:.3f}) "
+            f"for {winner.pair.job_company} | {winner.pair.job_title}."
+        )
+
+        if runner_up is not None:
+            lines.append(
+                f"Best backup: {runner_up.pair.resume_name} "
+                f"(score {runner_up.final_score:.3f}, gap {winner.final_score - runner_up.final_score:.3f})."
+            )
 
     if winner.prefilter.matched_terms:
         lines.append(
@@ -139,12 +164,6 @@ def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
         )
     else:
         lines.append("Main remaining gaps: none explicitly identified.")
-
-    if runner_up is not None:
-        lines.append(
-            f"Best backup: {runner_up.pair.resume_name} "
-            f"(score {runner_up.final_score:.3f}, gap {winner.final_score - runner_up.final_score:.3f})."
-        )
 
     return lines
 
@@ -267,6 +286,7 @@ def main() -> None:
 
     winner = selected[0]
     runner_up: Optional[object] = selected[1] if len(selected) > 1 else None
+    is_tie = _is_effective_tie(winner, runner_up)
 
     print("-" * 100)
     print("WINNER")
@@ -304,11 +324,23 @@ def main() -> None:
         print()
 
         print("-" * 100)
-        print("WHY THE WINNER WON")
-        print("-" * 100)
-        print(f"Score gap: {winner.final_score - runner_up.final_score:.3f}")
-        for item in _top_dimension_deltas(winner, runner_up):
-            print(item)
+        if is_tie:
+            print("TIE STATUS")
+            print("-" * 100)
+            print(
+                f"{winner.pair.resume_name} and {runner_up.pair.resume_name} "
+                f"are effectively tied."
+            )
+            print(
+                f"Score gap: {winner.final_score - runner_up.final_score:.3f} "
+                f"(tie threshold {TIE_EPSILON:.3f})"
+            )
+        else:
+            print("WHY THE WINNER WON")
+            print("-" * 100)
+            print(f"Score gap: {winner.final_score - runner_up.final_score:.3f}")
+            for item in _top_dimension_deltas(winner, runner_up):
+                print(item)
         print()
     
     print("-" * 100)
@@ -369,7 +401,13 @@ def main() -> None:
             "runner_up": _result_to_dict(runner_up) if runner_up is not None else None,
             "winner_vs_runner_up": {
                 "score_gap": (winner.final_score - runner_up.final_score) if runner_up is not None else None,
-                "top_dimension_deltas": _top_dimension_deltas(winner, runner_up) if runner_up is not None else [],
+                "is_tie": is_tie,
+                "tie_epsilon": TIE_EPSILON,
+                "top_dimension_deltas": (
+                    _top_dimension_deltas(winner, runner_up)
+                    if runner_up is not None and not is_tie
+                    else []
+                ),
             },
             "ranked_variants": [_result_to_dict(result) for result in selected],
             "filtered_out_variants": [_result_to_dict(result) for result in failed_results],

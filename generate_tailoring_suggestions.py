@@ -468,15 +468,17 @@ def _run_live_llm_tailoring(
     packet: Dict[str, Any],
     payload: Dict[str, Any],
     output_llm_json: str = "",
+    refresh_llm_cache: bool = False,
 ) -> Dict[str, Any]:
     cache_meta = _compute_live_llm_cache_meta(packet)
 
-    cached_result = _load_live_llm_cache(
-        output_llm_json=output_llm_json,
-        expected_meta=cache_meta,
-    )
-    if cached_result is not None:
-        return cached_result
+    if not refresh_llm_cache:
+        cached_result = _load_live_llm_cache(
+            output_llm_json=output_llm_json,
+            expected_meta=cache_meta,
+        )
+        if cached_result is not None:
+            return cached_result
 
     prompt = payload["llm_prompt"]
 
@@ -757,6 +759,11 @@ def main() -> None:
         default="",
         help="Optional path to write the live LLM tailoring output JSON.",
     )
+    parser.add_argument(
+        "--refresh-llm-cache",
+        action="store_true",
+        help="Ignore any existing live LLM cache and regenerate the LLM tailoring output.",
+    )
     args = parser.parse_args()
 
     packet = _load_packet(Path(args.packet_json))
@@ -812,6 +819,7 @@ def main() -> None:
             packet=packet,
             payload=payload,
             output_llm_json=args.output_llm_json or "",
+            refresh_llm_cache=args.refresh_llm_cache,
         )
 
         print("-" * 100)

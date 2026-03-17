@@ -190,6 +190,11 @@ def main() -> None:
         help="Also generate live LLM tailoring JSON for selected shortlist actions.",
     )
     parser.add_argument(
+        "--refresh-llm-tailoring",
+        action="store_true",
+        help="Force regeneration of live LLM tailoring outputs instead of reusing cached LLM JSON.",
+    )
+    parser.add_argument(
         "--llm-tailoring-actions",
         default="APPLY,APPLY_REVIEW_VARIANTS",
         help="Comma-separated shortlist actions eligible for live LLM tailoring.",
@@ -336,6 +341,8 @@ def main() -> None:
                             str(tailoring_llm_json_path),
                         ]
                     )
+                    if args.refresh_llm_tailoring:
+                        tailoring_cmd.append("--refresh-llm-cache")
                 else:
                     llm_status["llm_tailoring_status"] = "skipped_action_filter"
 
@@ -420,7 +427,7 @@ def main() -> None:
     print(f"Live LLM tailoring  : {'enabled' if args.generate_llm_tailoring else 'disabled'}")
     if args.generate_llm_tailoring:
         print(f"LLM tailoring acts  : {','.join(sorted(llm_tailoring_actions))}")
-    print()
+        print(f"LLM refresh mode    : {'enabled' if args.refresh_llm_tailoring else 'disabled'}")
 
 if __name__ == "__main__":
     main()

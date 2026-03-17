@@ -146,7 +146,20 @@ def main() -> None:
         action="store_true",
         help="Also generate grounded tailoring JSON/Markdown for each created JD packet.",
     )
+    parser.add_argument(
+        "--generate-llm-tailoring",
+        action="store_true",
+        help="Also generate live LLM tailoring JSON for selected shortlist actions.",
+    )
+    parser.add_argument(
+        "--llm-tailoring-actions",
+        default="APPLY,APPLY_REVIEW_VARIANTS",
+        help="Comma-separated shortlist actions eligible for live LLM tailoring.",
+    )
     args = parser.parse_args()
+
+    if args.generate_llm_tailoring:
+        args.generate_tailoring = True
 
     job_corpus_path = Path(args.job_corpus)
     output_dir = Path(args.output_dir)
@@ -204,6 +217,11 @@ def main() -> None:
         for action in args.include_actions.split(",")
         if action.strip()
     }
+    llm_tailoring_actions = {
+        action.strip()
+        for action in args.llm_tailoring_actions.split(",")
+        if action.strip()
+    }
     selected = _selected_rows(
         shortlist_rows,
         include_actions=include_actions,
@@ -246,6 +264,7 @@ def main() -> None:
 
         tailoring_json_path = ""
         tailoring_md_path = ""
+        tailoring_llm_json_path = ""
 
         if args.generate_tailoring:
             tailoring_json_path = job_packets_dir / f"{file_slug}__tailoring.json"
@@ -261,6 +280,20 @@ def main() -> None:
                 "--output-md",
                 str(tailoring_md_path),
             ]
+
+            if (
+                args.generate_llm_tailoring
+                and row["action"] in llm_tailoring_actions
+            ):
+                tailoring_llm_json_path = job_packets_dir / f"{file_slug}__tailoring_llm.json"
+                tailoring_cmd.extend(
+                    [
+                        "--use-llm",
+                        "--output-llm-json",
+                        str(tailoring_llm_json_path),
+                    ]
+                )
+
             _run_cmd(tailoring_cmd)
 
         manifest_rows.append(
@@ -278,6 +311,9 @@ def main() -> None:
                 "packet_json": str(packet_json_path),
                 "tailoring_json": str(tailoring_json_path) if tailoring_json_path else "",
                 "tailoring_md": str(tailoring_md_path) if tailoring_md_path else "",
+                "tailoring_llm_json": (
+                    str(tailoring_llm_json_path) if tailoring_llm_json_path else ""
+                ),
             }
         )
 
@@ -296,6 +332,7 @@ def main() -> None:
         "packet_json",
         "tailoring_json",
         "tailoring_md",
+        "tailoring_llm_json",
     ]
     with manifest_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -312,7 +349,10 @@ def main() -> None:
     print(f"Packet manifest  : {manifest_csv}")
     print(f"Job packets dir  : {job_packets_dir}")
     print(f"Packets created  : {len(manifest_rows)}")
-    print(f"Tailoring step  : {'enabled' if args.generate_tailoring else 'disabled'}")
+    print(f"Tailoring step      : {'enabled' if args.generate_tailoring else 'disabled'}")
+    print(f"Live LLM tailoring  : {'enabled' if args.generate_llm_tailoring else 'disabled'}")
+    if args.generate_llm_tailoring:
+        print(f"LLM tailoring acts  : {','.join(sorted(llm_tailoring_actions))}")
     print()
 
 

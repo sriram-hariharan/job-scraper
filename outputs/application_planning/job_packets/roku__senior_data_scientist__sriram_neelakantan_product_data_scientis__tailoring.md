@@ -66,10 +66,10 @@ Best existing bullets to reuse/review:
 
 Guardrail: Only add or strengthen resume language when it is already truthful and supported by your actual work.
 
-Return:
-1. A 2-3 sentence recruiter-facing summary for why this resume is the best current variant.
-2. A short keep/emphasize list grounded in the evidence.
-3. A short tailoring list describing what to strengthen or make more explicit, only if truthful.
-4. A do-not-claim list for unsupported gaps.
-5. 3-5 bullet rewrite directions grounded only in the provided bullets.
+Return compact JSON only with:
+1. recruiter_summary: max 2 sentences
+2. keep_emphasize: max 4 items
+3. tailoring_actions: max 4 items
+4. do_not_claim: max 4 items
+5. rewrite_directions: max 3 items
 ```

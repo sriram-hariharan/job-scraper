@@ -1,15 +1,95 @@
+import argparse
+import asyncio
+import os
+import subprocess
+import sys
+
 from src.pipeline.collector import collect_all_jobs_async
 from src.pipeline.excel_writer import write_jobs_to_sheet
 from src.utils.logging import get_logger
 from src.pipeline.discovery_stage import run_discovery
 from src.storage.metrics_store import init_metrics_db
 from src.ai.embedding_model import get_model
-import asyncio
-import os
 
 logger = get_logger(__name__)
 
-async def main_async():
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="Run the main scraping pipeline and optionally trigger downstream application planning."
+    )
+    parser.add_argument(
+        "--run-application-planning",
+        action="store_true",
+        help="After the main pipeline finishes and exports the job corpus, run application planning as a downstream step.",
+    )
+    parser.add_argument(
+        "--application-planning-job-limit",
+        type=int,
+        default=50,
+        help="Job limit to pass to run_application_planning.py.",
+    )
+    parser.add_argument(
+        "--application-planning-job-packet-limit",
+        type=int,
+        default=0,
+        help="Packet limit to pass to run_application_planning.py. Use 0 for all selected rows.",
+    )
+    parser.add_argument(
+        "--application-planning-output-dir",
+        default="outputs/application_planning",
+        help="Output directory to pass to run_application_planning.py.",
+    )
+    parser.add_argument(
+        "--application-planning-generate-tailoring",
+        action="store_true",
+        help="Pass --generate-tailoring to run_application_planning.py.",
+    )
+    parser.add_argument(
+        "--application-planning-generate-llm-tailoring",
+        action="store_true",
+        help="Pass --generate-llm-tailoring to run_application_planning.py.",
+    )
+    parser.add_argument(
+        "--application-planning-refresh-llm-tailoring",
+        action="store_true",
+        help="Pass --refresh-llm-tailoring to run_application_planning.py.",
+    )
+    return parser.parse_args()
+
+
+def _run_cmd(cmd):
+    logger.info("")
+    logger.info("RUNNING: %s", " ".join(cmd))
+    logger.info("")
+    subprocess.run(cmd, check=True)
+
+
+def _run_application_planning(args):
+    cmd = [
+        sys.executable,
+        "run_application_planning.py",
+        "--job-corpus",
+        "data/rag/job_corpus.jsonl",
+        "--job-limit",
+        str(args.application_planning_job_limit),
+        "--job-packet-limit",
+        str(args.application_planning_job_packet_limit),
+        "--output-dir",
+        args.application_planning_output_dir,
+    ]
+
+    if args.application_planning_generate_tailoring:
+        cmd.append("--generate-tailoring")
+
+    if args.application_planning_generate_llm_tailoring:
+        cmd.append("--generate-llm-tailoring")
+
+    if args.application_planning_refresh_llm_tailoring:
+        cmd.append("--refresh-llm-tailoring")
+
+    _run_cmd(cmd)
+
+async def main_async(args):
 
     # ----- Delete seen data? -----
 
@@ -43,6 +123,13 @@ async def main_async():
 
     jobs = await collect_all_jobs_async()
 
+    if args.run_application_planning:
+        logger.info("")
+        logger.info("=============================")
+        logger.info("APPLICATION PLANNING")
+        logger.info("=============================")
+        _run_application_planning(args)
+
     # if jobs:
     #     write_jobs_to_sheet(jobs)
 
@@ -50,4 +137,5 @@ async def main_async():
 
 
 if __name__ == "__main__":
-    asyncio.run(main_async())
+    args = _parse_args()
+    asyncio.run(main_async(args))

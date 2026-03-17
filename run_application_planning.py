@@ -88,6 +88,44 @@ def _selected_rows(
 
     return filtered
 
+def _read_llm_tailoring_status(llm_json_path: Path) -> Dict[str, str]:
+    if not llm_json_path.exists():
+        return {
+            "llm_tailoring_status": "missing",
+            "llm_cache_hit": "",
+            "llm_parse_ok": "",
+            "llm_provider": "",
+            "llm_model": "",
+        }
+
+    try:
+        data = json.loads(llm_json_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {
+            "llm_tailoring_status": "unreadable",
+            "llm_cache_hit": "",
+            "llm_parse_ok": "",
+            "llm_provider": "",
+            "llm_model": "",
+        }
+
+    parse_ok = bool(data.get("parse_ok"))
+    cache_hit = bool(data.get("cache_hit"))
+
+    if parse_ok and cache_hit:
+        status = "cached"
+    elif parse_ok:
+        status = "generated"
+    else:
+        status = "failed"
+
+    return {
+        "llm_tailoring_status": status,
+        "llm_cache_hit": str(cache_hit),
+        "llm_parse_ok": str(parse_ok),
+        "llm_provider": str(data.get("provider", "")),
+        "llm_model": str(data.get("model", "")),
+    }
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -265,6 +303,13 @@ def main() -> None:
         tailoring_json_path = ""
         tailoring_md_path = ""
         tailoring_llm_json_path = ""
+        llm_status = {
+            "llm_tailoring_status": "disabled",
+            "llm_cache_hit": "",
+            "llm_parse_ok": "",
+            "llm_provider": "",
+            "llm_model": "",
+        }
 
         if args.generate_tailoring:
             tailoring_json_path = job_packets_dir / f"{file_slug}__tailoring.json"
@@ -281,20 +326,32 @@ def main() -> None:
                 str(tailoring_md_path),
             ]
 
-            if (
-                args.generate_llm_tailoring
-                and row["action"] in llm_tailoring_actions
-            ):
-                tailoring_llm_json_path = job_packets_dir / f"{file_slug}__tailoring_llm.json"
-                tailoring_cmd.extend(
-                    [
-                        "--use-llm",
-                        "--output-llm-json",
-                        str(tailoring_llm_json_path),
-                    ]
-                )
+            if args.generate_llm_tailoring:
+                if row["action"] in llm_tailoring_actions:
+                    tailoring_llm_json_path = job_packets_dir / f"{file_slug}__tailoring_llm.json"
+                    tailoring_cmd.extend(
+                        [
+                            "--use-llm",
+                            "--output-llm-json",
+                            str(tailoring_llm_json_path),
+                        ]
+                    )
+                else:
+                    llm_status["llm_tailoring_status"] = "skipped_action_filter"
 
             _run_cmd(tailoring_cmd)
+
+            if tailoring_llm_json_path:
+                llm_status = _read_llm_tailoring_status(tailoring_llm_json_path)
+
+        print(
+            "PACKET STATUS:",
+            f"action={row['action']}",
+            f"company={company}",
+            f"title={title}",
+            f"llm_status={llm_status['llm_tailoring_status']}",
+            f"llm_cache_hit={llm_status['llm_cache_hit'] or '-'}",
+        )
 
         manifest_rows.append(
             {
@@ -314,6 +371,11 @@ def main() -> None:
                 "tailoring_llm_json": (
                     str(tailoring_llm_json_path) if tailoring_llm_json_path else ""
                 ),
+                "llm_tailoring_status": llm_status["llm_tailoring_status"],
+                "llm_cache_hit": llm_status["llm_cache_hit"],
+                "llm_parse_ok": llm_status["llm_parse_ok"],
+                "llm_provider": llm_status["llm_provider"],
+                "llm_model": llm_status["llm_model"],
             }
         )
 
@@ -333,6 +395,11 @@ def main() -> None:
         "tailoring_json",
         "tailoring_md",
         "tailoring_llm_json",
+        "llm_tailoring_status",
+        "llm_cache_hit",
+        "llm_parse_ok",
+        "llm_provider",
+        "llm_model",
     ]
     with manifest_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -354,7 +421,6 @@ def main() -> None:
     if args.generate_llm_tailoring:
         print(f"LLM tailoring acts  : {','.join(sorted(llm_tailoring_actions))}")
     print()
-
 
 if __name__ == "__main__":
     main()

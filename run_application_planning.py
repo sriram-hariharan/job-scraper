@@ -88,6 +88,43 @@ def _selected_rows(
 
     return filtered
 
+def _classify_llm_failure(parse_error: str) -> Dict[str, str]:
+    text = str(parse_error or "").lower()
+
+    if any(token in text for token in [
+        "resource_exhausted",
+        "quota exceeded",
+        "rate limit",
+        "429",
+        "retrydelay",
+    ]):
+        return {
+            "llm_tailoring_status": "rate_limited",
+            "llm_error_type": "quota_exhausted",
+            "llm_retryable": "True",
+        }
+
+    if any(token in text for token in [
+        "timed out",
+        "timeout",
+        "deadline exceeded",
+        "temporarily unavailable",
+        "unavailable",
+        "503",
+        "internal error",
+    ]):
+        return {
+            "llm_tailoring_status": "transient_error",
+            "llm_error_type": "transient_provider_error",
+            "llm_retryable": "True",
+        }
+
+    return {
+        "llm_tailoring_status": "failed",
+        "llm_error_type": "other_failure",
+        "llm_retryable": "False",
+    }
+
 def _read_llm_tailoring_status(llm_json_path: Path) -> Dict[str, str]:
     if not llm_json_path.exists():
         return {
@@ -96,6 +133,9 @@ def _read_llm_tailoring_status(llm_json_path: Path) -> Dict[str, str]:
             "llm_parse_ok": "",
             "llm_provider": "",
             "llm_model": "",
+            "llm_error_type": "",
+            "llm_retryable": "",
+            "llm_retry_used": "",
         }
 
     try:
@@ -107,17 +147,29 @@ def _read_llm_tailoring_status(llm_json_path: Path) -> Dict[str, str]:
             "llm_parse_ok": "",
             "llm_provider": "",
             "llm_model": "",
+            "llm_error_type": "unreadable_json",
+            "llm_retryable": "False",
+            "llm_retry_used": "",
         }
 
     parse_ok = bool(data.get("parse_ok"))
     cache_hit = bool(data.get("cache_hit"))
+    retry_used = bool(data.get("retry_used"))
+    parse_error = str(data.get("parse_error", ""))
 
     if parse_ok and cache_hit:
         status = "cached"
+        error_type = ""
+        retryable = ""
     elif parse_ok:
         status = "generated"
+        error_type = ""
+        retryable = ""
     else:
-        status = "failed"
+        failure = _classify_llm_failure(parse_error)
+        status = failure["llm_tailoring_status"]
+        error_type = failure["llm_error_type"]
+        retryable = failure["llm_retryable"]
 
     return {
         "llm_tailoring_status": status,
@@ -125,6 +177,9 @@ def _read_llm_tailoring_status(llm_json_path: Path) -> Dict[str, str]:
         "llm_parse_ok": str(parse_ok),
         "llm_provider": str(data.get("provider", "")),
         "llm_model": str(data.get("model", "")),
+        "llm_error_type": error_type,
+        "llm_retryable": retryable,
+        "llm_retry_used": str(retry_used),
     }
 
 def main() -> None:
@@ -314,6 +369,9 @@ def main() -> None:
             "llm_parse_ok": "",
             "llm_provider": "",
             "llm_model": "",
+            "llm_error_type": "",
+            "llm_retryable": "",
+            "llm_retry_used": "",
         }
 
         if args.generate_tailoring:
@@ -358,6 +416,7 @@ def main() -> None:
             f"title={title}",
             f"llm_status={llm_status['llm_tailoring_status']}",
             f"llm_cache_hit={llm_status['llm_cache_hit'] or '-'}",
+            f"llm_error_type={llm_status['llm_error_type'] or '-'}",
         )
 
         manifest_rows.append(
@@ -383,6 +442,9 @@ def main() -> None:
                 "llm_parse_ok": llm_status["llm_parse_ok"],
                 "llm_provider": llm_status["llm_provider"],
                 "llm_model": llm_status["llm_model"],
+                "llm_error_type": llm_status["llm_error_type"],
+                "llm_retryable": llm_status["llm_retryable"],
+                "llm_retry_used": llm_status["llm_retry_used"],
             }
         )
 
@@ -407,6 +469,9 @@ def main() -> None:
         "llm_parse_ok",
         "llm_provider",
         "llm_model",
+        "llm_error_type",
+        "llm_retryable",
+        "llm_retry_used",
     ]
     with manifest_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

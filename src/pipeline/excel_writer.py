@@ -9,49 +9,89 @@ from src.utils.logging import get_logger
 logger = get_logger("excel_writer")
 
 
-def format_sheet(sheet):
+def _column_letter(index: int) -> str:
+    result = ""
+    while index > 0:
+        index, remainder = divmod(index - 1, 26)
+        result = chr(65 + remainder) + result
+    return result
 
+
+def _header_index(headers, name: str) -> int:
+    return headers.index(name) + 1
+
+
+def _header_letter(headers, name: str) -> str:
+    return _column_letter(_header_index(headers, name))
+
+
+def format_sheet(sheet, headers):
     sheet.freeze(rows=1)
 
-    # Priority column numeric
-    sheet.format(
-        "G:G",
-        {
-            "numberFormat": {
-                "type": "NUMBER",
-                "pattern": "0.00"
+    numeric_formats = {
+        "Planning Winner Score": "0.000",
+        "Priority Score": "0.00",
+        "Resume Match": "0.00",
+        "AI Score": "0.00",
+        "Planning Runner Up Score": "0.000",
+        "Planning Score Gap": "0.000",
+        "Queue Rank": "0",
+        "Missing Requirement Count": "0",
+    }
+
+    for header, pattern in numeric_formats.items():
+        col = _header_letter(headers, header)
+        sheet.format(
+            f"{col}:{col}",
+            {
+                "numberFormat": {
+                    "type": "NUMBER",
+                    "pattern": pattern
+                }
             }
-        }
-    )
+        )
 
-    # Resume similarity numeric
-    sheet.format(
-        "I:I",
-        {
-            "numberFormat": {
-                "type": "NUMBER",
-                "pattern": "0.00"
+    wrap_columns = [
+        "Title",
+        "Queue Priority Reason",
+    ]
+
+    clip_columns = [
+        "Link",
+        "AI Evaluation",
+        "Packet JSON",
+        "Tailoring Markdown",
+        "Tailoring LLM JSON",
+    ]
+
+    for header in wrap_columns:
+        col = _header_letter(headers, header)
+        sheet.format(
+            f"{col}:{col}",
+            {
+                "wrapStrategy": "WRAP"
             }
-        }
-    )
+        )
 
-    # Make link column wider
-    sheet.format(
-        "O:O",
-        {
-            "wrapStrategy": "CLIP"
-        }
-    )
+    for header in clip_columns:
+        col = _header_letter(headers, header)
+        sheet.format(
+            f"{col}:{col}",
+            {
+                "wrapStrategy": "CLIP"
+            }
+        )
 
-    # Sort newest first, then priority
+    posted_at_col = _header_index(headers, "Posted At")
+    priority_col = _header_index(headers, "Priority Score")
+
     sheet.sort(
-        (5, "des"),  # Posted At
-        (7, "des")   # Priority Score
+        (posted_at_col, "des"),
+        (priority_col, "des")
     )
 
 
 def write_jobs_to_sheet(jobs):
-
     scope = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
@@ -67,33 +107,48 @@ def write_jobs_to_sheet(jobs):
     sheet = client.open("AI Job Scraper").sheet1
 
     headers = [
-        "Source",
         "Company",
         "Title",
+        "Link",
         "Location",
         "Posted At",
         "Posted",
+        "Best Resume",
+        "Planning Winner Resume",
+        "Planning Runner Up Resume",
+        "Planning Winner Score",
         "Priority Score",
-        "AI Score",
         "Resume Match",
+        "AI Score",
+        "Planning Runner Up Score",
+        "Planning Score Gap",
+        "Source",
+        "Planning Action",
+        "Planning Is Tie",
+        "Needs Variant Review",
+        "Queue Rank",
+        "Missing Requirement Count",
+        "Queue Priority Reason",
         "Visa",
         "Role Family",
-        "Best Resume",
+        "LLM Tailoring Status",
+        "LLM Error Type",
         "AI Evaluation",
+        "Packet JSON",
+        "Tailoring Markdown",
+        "Tailoring LLM JSON",
         "Run Timestamp",
-        "Link"
     ]
 
     existing_data = sheet.get_all_values()
+    link_index = headers.index("Link")
 
-    # ---------- HEADER CHECK ----------
     if not existing_data or existing_data[0] != headers:
-
         sheet.clear()
         sheet.append_row(headers)
 
         sheet.format(
-            "A1:O1",
+            f"A1:{_column_letter(len(headers))}1",
             {
                 "backgroundColor": {
                     "red": 0.15,
@@ -107,21 +162,17 @@ def write_jobs_to_sheet(jobs):
         )
 
         existing_urls = set()
-
     else:
-
         existing_urls = set()
 
         for row in existing_data[1:]:
-            if len(row) >= 15:
-                existing_urls.add(row[14])
+            if len(row) > link_index:
+                existing_urls.add(row[link_index])
 
     rows_to_add = []
-
     run_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for job in jobs:
-
         url = job.get("url")
 
         if not url:
@@ -144,28 +195,50 @@ def write_jobs_to_sheet(jobs):
             priority = 0.0
 
         try:
+            ai_score = float(ai_score)
+        except Exception:
+            ai_score = 0.0
+
+        try:
             resume_match = float(resume_match)
         except Exception:
             resume_match = 0.0
 
         intelligence = job.get("intelligence", {})
+        planning = job.get("application_planning", {}) or {}
 
         rows_to_add.append([
-            job.get("source"),
             job.get("company"),
             job.get("title"),
+            url,
             location,
             raw_posted,
             relative_posted,
+            job.get("best_resume"),
+            planning.get("winner_resume", ""),
+            planning.get("runner_up_resume", ""),
+            planning.get("winner_score", ""),
             priority,
-            ai_score,
             resume_match,
+            ai_score,
+            planning.get("runner_up_score", ""),
+            planning.get("score_gap", ""),
+            job.get("source"),
+            planning.get("action", ""),
+            planning.get("is_tie", ""),
+            planning.get("needs_variant_review", ""),
+            planning.get("queue_rank", ""),
+            planning.get("missing_requirement_count", ""),
+            planning.get("queue_priority_reason", ""),
             intelligence.get("visa_sponsorship"),
             intelligence.get("role_family"),
-            job.get("best_resume"),
+            planning.get("llm_tailoring_status", ""),
+            planning.get("llm_error_type", ""),
             job.get("ai_fit"),
+            planning.get("packet_json", ""),
+            planning.get("tailoring_md", ""),
+            planning.get("tailoring_llm_json", ""),
             run_time,
-            url
         ])
 
     if not rows_to_add:
@@ -177,6 +250,6 @@ def write_jobs_to_sheet(jobs):
         value_input_option="RAW"
     )
 
-    format_sheet(sheet)
+    format_sheet(sheet, headers)
 
     logger.info(f"{len(rows_to_add)} new jobs written to sheet")

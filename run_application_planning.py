@@ -20,6 +20,16 @@ def _slugify(value: str, max_len: int = 80) -> str:
         text = "item"
     return text[:max_len]
 
+def _job_corpus_has_records(job_corpus_path: Path) -> bool:
+    if not job_corpus_path.exists():
+        return False
+
+    with job_corpus_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                return True
+
+    return False
 
 def _run_cmd(cmd: List[str]) -> None:
     print()
@@ -74,14 +84,6 @@ def _selected_rows(
     packet_limit: int,
 ) -> List[dict]:
     filtered = [row for row in rows if row.get("action", "") in include_actions]
-    filtered.sort(
-        key=lambda row: (
-            row["action"],
-            -float(row.get("winner_score", "0") or 0),
-            _normalize_text(row.get("job_company", "")),
-            _normalize_text(row.get("job_title", "")),
-        )
-    )
 
     if packet_limit > 0:
         filtered = filtered[:packet_limit]
@@ -182,6 +184,13 @@ def _read_llm_tailoring_status(llm_json_path: Path) -> Dict[str, str]:
         "llm_retry_used": str(retry_used),
     }
 
+def _count_by(rows: List[dict], key: str) -> Dict[str, int]:
+    counts: Dict[str, int] = {}
+    for row in rows:
+        value = str(row.get(key, "") or "").strip() or "<empty>"
+        counts[value] = counts.get(value, 0) + 1
+    return dict(sorted(counts.items(), key=lambda item: (item[0] != "<empty>", item[0])))
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run the application-planning workflow: batch best-variant selection, shortlist generation, and JD diff packets."
@@ -256,10 +265,21 @@ def main() -> None:
     )
     args = parser.parse_args()
 
+    job_corpus_path = Path(args.job_corpus)
+
+    if not _job_corpus_has_records(job_corpus_path):
+        print()
+        print("=" * 100)
+        print("APPLICATION PLANNING WORKFLOW SKIPPED")
+        print("=" * 100)
+        print(f"Reason          : empty or missing job corpus")
+        print(f"Job corpus path : {job_corpus_path}")
+        print(f"Output dir      : {args.output_dir}")
+        return
+
     if args.generate_llm_tailoring:
         args.generate_tailoring = True
 
-    job_corpus_path = Path(args.job_corpus)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -268,6 +288,7 @@ def main() -> None:
 
     best_variant_csv = output_dir / "best_resume_variant_by_job.csv"
     shortlist_csv = output_dir / "application_shortlist_by_job.csv"
+    execution_queue_csv = output_dir / "application_execution_queue.csv"
 
     batch_selector_cmd = [
         sys.executable,
@@ -307,8 +328,20 @@ def main() -> None:
 
     _run_cmd(shortlist_cmd)
 
+    execution_queue_cmd = [
+        sys.executable,
+        "application_execution_queue.py",
+        "--input-csv",
+        str(shortlist_csv),
+        "--output-csv",
+        str(execution_queue_csv),
+        "--top-k-console",
+        str(args.top_k_console),
+    ]
+    _run_cmd(execution_queue_cmd)
+
     job_doc_id_to_index = _load_job_doc_id_to_index(job_corpus_path)
-    shortlist_rows = _load_shortlist_rows(shortlist_csv)
+    shortlist_rows = _load_shortlist_rows(execution_queue_csv)
 
     include_actions = {
         action.strip()
@@ -421,6 +454,10 @@ def main() -> None:
 
         manifest_rows.append(
             {
+                "queue_rank": row.get("queue_rank", ""),
+                "needs_variant_review": row.get("needs_variant_review", ""),
+                "missing_requirement_count": row.get("missing_requirement_count", ""),
+                "queue_priority_reason": row.get("queue_priority_reason", ""),
                 "job_doc_id": job_doc_id,
                 "job_company": company,
                 "job_title": title,
@@ -450,6 +487,10 @@ def main() -> None:
 
     manifest_csv = output_dir / "job_packet_manifest.csv"
     fieldnames = [
+        "queue_rank",
+        "needs_variant_review",
+        "missing_requirement_count",
+        "queue_priority_reason",
         "job_doc_id",
         "job_company",
         "job_title",
@@ -478,6 +519,9 @@ def main() -> None:
         writer.writeheader()
         for manifest_row in manifest_rows:
             writer.writerow(manifest_row)
+    
+    action_counts = _count_by(manifest_rows, "action")
+    llm_status_counts = _count_by(manifest_rows, "llm_tailoring_status")
 
     print()
     print("=" * 100)
@@ -485,6 +529,7 @@ def main() -> None:
     print("=" * 100)
     print(f"Best-variant CSV : {best_variant_csv}")
     print(f"Shortlist CSV    : {shortlist_csv}")
+    print(f"Execution queue  : {execution_queue_csv}")
     print(f"Packet manifest  : {manifest_csv}")
     print(f"Job packets dir  : {job_packets_dir}")
     print(f"Packets created  : {len(manifest_rows)}")
@@ -493,6 +538,16 @@ def main() -> None:
     if args.generate_llm_tailoring:
         print(f"LLM tailoring acts  : {','.join(sorted(llm_tailoring_actions))}")
         print(f"LLM refresh mode    : {'enabled' if args.refresh_llm_tailoring else 'disabled'}")
+
+    print()
+    print("Action counts:")
+    for action, count in action_counts.items():
+        print(f"  {action}: {count}")
+
+    print()
+    print("LLM status counts:")
+    for status, count in llm_status_counts.items():
+        print(f"  {status}: {count}")
 
 if __name__ == "__main__":
     main()

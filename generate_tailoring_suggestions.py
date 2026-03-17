@@ -2,6 +2,8 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any, Dict, List
+import hashlib
+from datetime import datetime, timezone
 
 from src.ai.llm_client import run_chat_completion
 
@@ -9,6 +11,7 @@ LLM_TAILOR_PROVIDER = "gemini"
 LLM_TAILOR_MODEL = "gemini-2.5-flash"
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
+LLM_TAILOR_PROMPT_VERSION = "v1"
 
 TAILORING_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -355,8 +358,126 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "rewrite_directions": _normalize_string_list(parsed.get("rewrite_directions", [])),
     }
 
+def _canonical_json(value: Any) -> str:
+    return json.dumps(
+        value,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
 
-def _run_live_llm_tailoring(payload: Dict[str, Any]) -> Dict[str, Any]:
+
+def _sha256_text(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, str]:
+    packet_sha256 = _sha256_text(_canonical_json(packet))
+
+    job_doc_id = str(
+        packet.get("job_doc_id")
+        or packet.get("job_id")
+        or ""
+    ).strip()
+
+    selected_resume = str(
+        packet.get("selected_resume")
+        or packet.get("selected_resume_name")
+        or packet.get("resume_name")
+        or ""
+    ).strip()
+
+    cache_key_material = _canonical_json(
+        {
+            "job_doc_id": job_doc_id,
+            "selected_resume": selected_resume,
+            "packet_sha256": packet_sha256,
+            "provider": LLM_TAILOR_PROVIDER,
+            "model": LLM_TAILOR_MODEL,
+            "prompt_version": LLM_TAILOR_PROMPT_VERSION,
+        }
+    )
+
+    return {
+        "job_doc_id": job_doc_id,
+        "selected_resume": selected_resume,
+        "packet_sha256": packet_sha256,
+        "cache_key": _sha256_text(cache_key_material),
+        "prompt_version": LLM_TAILOR_PROMPT_VERSION,
+    }
+
+
+def _load_live_llm_cache(
+    output_llm_json: str,
+    expected_meta: Dict[str, str],
+) -> Optional[Dict[str, Any]]:
+    if not output_llm_json:
+        return None
+
+    path = Path(output_llm_json)
+    if not path.exists():
+        return None
+
+    try:
+        cached = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+    if not isinstance(cached, dict):
+        return None
+
+    if not cached.get("parse_ok"):
+        return None
+
+    if cached.get("cache_key") != expected_meta["cache_key"]:
+        return None
+
+    if cached.get("packet_sha256") != expected_meta["packet_sha256"]:
+        return None
+
+    if cached.get("provider") != LLM_TAILOR_PROVIDER:
+        return None
+
+    if cached.get("model") != LLM_TAILOR_MODEL:
+        return None
+
+    if cached.get("prompt_version") != LLM_TAILOR_PROMPT_VERSION:
+        return None
+
+    cached["cache_hit"] = True
+    return cached
+
+
+def _attach_live_llm_cache_meta(
+    result: Dict[str, Any],
+    cache_meta: Dict[str, str],
+    *,
+    cache_hit: bool,
+) -> Dict[str, Any]:
+    enriched = dict(result)
+    enriched.update(cache_meta)
+    enriched["cache_hit"] = cache_hit
+    enriched.setdefault(
+        "generated_at",
+        datetime.now(timezone.utc).isoformat(),
+    )
+    return enriched
+
+def _run_live_llm_tailoring(
+    packet: Dict[str, Any],
+    payload: Dict[str, Any],
+    output_llm_json: str = "",
+) -> Dict[str, Any]:
+    cache_meta = _compute_live_llm_cache_meta(packet)
+
+    cached_result = _load_live_llm_cache(
+        output_llm_json=output_llm_json,
+        expected_meta=cache_meta,
+    )
+    if cached_result is not None:
+        return cached_result
+
     prompt = payload["llm_prompt"]
 
     primary_system_prompt = """
@@ -414,7 +535,26 @@ You MUST obey these rules:
     ) -> Dict[str, Any]:
         if isinstance(value, dict):
             normalized = _normalize_live_llm_parsed(value)
-            return {
+            return _attach_live_llm_cache_meta(
+                {
+                    "provider": LLM_TAILOR_PROVIDER,
+                    "model": LLM_TAILOR_MODEL,
+                    "parse_ok": True,
+                    "parse_error": "",
+                    "retry_used": retry_used,
+                    "raw_response": raw_response,
+                    "retry_raw_response": retry_raw_response,
+                    "parsed": normalized,
+                },
+                cache_meta,
+                cache_hit=False,
+            )
+
+        raw = _raw_text(value)
+        parsed = _extract_json_from_llm_response(raw)
+        normalized = _normalize_live_llm_parsed(parsed)
+        return _attach_live_llm_cache_meta(
+            {
                 "provider": LLM_TAILOR_PROVIDER,
                 "model": LLM_TAILOR_MODEL,
                 "parse_ok": True,
@@ -423,35 +563,28 @@ You MUST obey these rules:
                 "raw_response": raw_response,
                 "retry_raw_response": retry_raw_response,
                 "parsed": normalized,
-            }
-
-        raw = _raw_text(value)
-        parsed = _extract_json_from_llm_response(raw)
-        normalized = _normalize_live_llm_parsed(parsed)
-        return {
-            "provider": LLM_TAILOR_PROVIDER,
-            "model": LLM_TAILOR_MODEL,
-            "parse_ok": True,
-            "parse_error": "",
-            "retry_used": retry_used,
-            "raw_response": raw_response,
-            "retry_raw_response": retry_raw_response,
-            "parsed": normalized,
-        }
+            },
+            cache_meta,
+            cache_hit=False,
+        )
 
     try:
         primary_response = _call_llm(primary_system_prompt, prompt)
     except Exception as exc:
-        return {
-            "provider": LLM_TAILOR_PROVIDER,
-            "model": LLM_TAILOR_MODEL,
-            "parse_ok": False,
-            "parse_error": f"Primary LLM call failed: {exc}",
-            "retry_used": False,
-            "raw_response": "",
-            "retry_raw_response": "",
-            "parsed": _empty_live_llm_parsed(),
-        }
+        return _attach_live_llm_cache_meta(
+            {
+                "provider": LLM_TAILOR_PROVIDER,
+                "model": LLM_TAILOR_MODEL,
+                "parse_ok": False,
+                "parse_error": f"Primary LLM call failed: {exc}",
+                "retry_used": False,
+                "raw_response": "",
+                "retry_raw_response": "",
+                "parsed": _empty_live_llm_parsed(),
+            },
+            cache_meta,
+            cache_hit=False,
+        )
 
     primary_raw = _raw_text(primary_response)
 
@@ -474,19 +607,23 @@ You MUST obey these rules:
         try:
             retry_response = _call_llm(retry_system_prompt, retry_prompt)
         except Exception as retry_exc:
-            return {
-                "provider": LLM_TAILOR_PROVIDER,
-                "model": LLM_TAILOR_MODEL,
-                "parse_ok": False,
-                "parse_error": (
-                    f"Primary parse failed: {primary_parse_exc}. "
-                    f"Retry LLM call failed: {retry_exc}"
-                ),
-                "retry_used": True,
-                "raw_response": primary_raw,
-                "retry_raw_response": "",
-                "parsed": _empty_live_llm_parsed(),
-            }
+            return _attach_live_llm_cache_meta(
+                {
+                    "provider": LLM_TAILOR_PROVIDER,
+                    "model": LLM_TAILOR_MODEL,
+                    "parse_ok": False,
+                    "parse_error": (
+                        f"Primary parse failed: {primary_parse_exc}. "
+                        f"Retry LLM call failed: {retry_exc}"
+                    ),
+                    "retry_used": True,
+                    "raw_response": primary_raw,
+                    "retry_raw_response": "",
+                    "parsed": _empty_live_llm_parsed(),
+                },
+                cache_meta,
+                cache_hit=False,
+            )
 
         retry_raw = _raw_text(retry_response)
 
@@ -498,19 +635,23 @@ You MUST obey these rules:
                 retry_raw_response=retry_raw,
             )
         except Exception as retry_parse_exc:
-            return {
-                "provider": LLM_TAILOR_PROVIDER,
-                "model": LLM_TAILOR_MODEL,
-                "parse_ok": False,
-                "parse_error": (
-                    f"Primary parse failed: {primary_parse_exc}. "
-                    f"Retry parse failed: {retry_parse_exc}"
-                ),
-                "retry_used": True,
-                "raw_response": primary_raw,
-                "retry_raw_response": retry_raw,
-                "parsed": _empty_live_llm_parsed(),
-            }
+            return _attach_live_llm_cache_meta(
+                {
+                    "provider": LLM_TAILOR_PROVIDER,
+                    "model": LLM_TAILOR_MODEL,
+                    "parse_ok": False,
+                    "parse_error": (
+                        f"Primary parse failed: {primary_parse_exc}. "
+                        f"Retry parse failed: {retry_parse_exc}"
+                    ),
+                    "retry_used": True,
+                    "raw_response": primary_raw,
+                    "retry_raw_response": retry_raw,
+                    "parsed": _empty_live_llm_parsed(),
+                },
+                cache_meta,
+                cache_hit=False,
+            )
 
 def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     recruiter_summary = _build_recruiter_summary(packet)
@@ -667,7 +808,11 @@ def main() -> None:
         print(f"Markdown written: {output_md_path}")
     
     if args.use_llm:
-        llm_output = _run_live_llm_tailoring(payload)
+        llm_output = _run_live_llm_tailoring(
+            packet=packet,
+            payload=payload,
+            output_llm_json=args.output_llm_json or "",
+        )
 
         print("-" * 100)
         print("LIVE LLM TAILORING OUTPUT")
@@ -675,6 +820,7 @@ def main() -> None:
         print(f"Provider: {llm_output['provider']}")
         print(f"Model: {llm_output['model']}")
         print(f"Parse OK: {llm_output['parse_ok']}")
+        print(f"Cache hit: {llm_output.get('cache_hit', False)}")
         if llm_output["parse_error"]:
             print(f"Parse error: {llm_output['parse_error']}")
         print()

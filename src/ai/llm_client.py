@@ -109,36 +109,83 @@ def _run_groq_chat_completion(messages, model, temperature, max_tokens):
     return completion.choices[0].message.content
 
 
-def _run_gemini_chat_completion(messages, model, temperature, max_tokens):
+def _run_gemini_chat_completion(
+    messages,
+    model,
+    temperature,
+    max_tokens,
+    response_mime_type=None,
+    response_schema=None,
+    return_parsed=False,
+    thinking_budget=None,
+):
     increment_provider_metric("gemini_calls")
     client = get_gemini_client()
     prompt = _messages_to_gemini_prompt(messages)
 
+    config_kwargs = {
+        "temperature": temperature,
+        "max_output_tokens": max_tokens,
+    }
+
+    if response_mime_type:
+        config_kwargs["response_mime_type"] = response_mime_type
+
+    if response_schema is not None:
+        config_kwargs["response_schema"] = response_schema
+    
+    if thinking_budget is not None:
+        config_kwargs["thinking_config"] = types.ThinkingConfig(
+            thinking_budget=thinking_budget
+        )
+
     response = client.models.generate_content(
         model=model,
         contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-            response_mime_type="application/json",
-        ),
+        config=types.GenerateContentConfig(**config_kwargs),
     )
+
+    if return_parsed:
+        parsed = getattr(response, "parsed", None)
+        if parsed is not None:
+            return parsed
 
     text = getattr(response, "text", None)
     if text:
         return text
 
-    raise RuntimeError("Gemini returned no text content")
+    raise RuntimeError("Gemini returned no parsed or text content")
 
 
-def _run_single_provider(provider_name, messages, model, temperature, max_tokens):
+def _run_single_provider(
+    provider_name,
+    messages,
+    model,
+    temperature,
+    max_tokens,
+    response_mime_type=None,
+    response_schema=None,
+    return_parsed=False,
+    thinking_budget=None,
+):
     provider_name = provider_name.strip().lower()
 
     if provider_name == "groq":
+        if return_parsed or response_schema is not None:
+            raise ValueError("Structured parsed output is not supported through the Groq wrapper")
         return _run_groq_chat_completion(messages, model, temperature, max_tokens)
 
     if provider_name == "gemini":
-        return _run_gemini_chat_completion(messages, model, temperature, max_tokens)
+        return _run_gemini_chat_completion(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
+            return_parsed=return_parsed,
+            thinking_budget=thinking_budget,
+        )
 
     raise ValueError(f"Unsupported LLM provider: {provider_name}")
 
@@ -149,6 +196,10 @@ def run_chat_completion(
     temperature=0,
     max_tokens=500,
     provider=None,
+    response_mime_type=None,
+    response_schema=None,
+    return_parsed=False,
+    thinking_budget=None,
 ):
     primary_provider = (provider or DEFAULT_PROVIDER).strip().lower()
     primary_model = model or DEFAULT_MODEL
@@ -162,6 +213,10 @@ def run_chat_completion(
             model=primary_model,
             temperature=temperature,
             max_tokens=max_tokens,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
+            return_parsed=return_parsed,
+            thinking_budget=thinking_budget,
         )
 
     except Exception as primary_error:
@@ -182,6 +237,10 @@ def run_chat_completion(
                 model=FALLBACK_MODEL,
                 temperature=temperature,
                 max_tokens=max_tokens,
+                response_mime_type=response_mime_type,
+                response_schema=response_schema,
+                return_parsed=return_parsed,
+                thinking_budget=thinking_budget,
             )
             increment_provider_metric("fallback_successes")
             return result

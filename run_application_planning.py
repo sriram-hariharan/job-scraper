@@ -141,6 +141,11 @@ def main() -> None:
         default=0,
         help="Optional cap on how many JD diff packets to generate. Use 0 for all selected shortlist rows.",
     )
+    parser.add_argument(
+        "--generate-tailoring",
+        action="store_true",
+        help="Also generate grounded tailoring JSON/Markdown for each created JD packet.",
+    )
     args = parser.parse_args()
 
     job_corpus_path = Path(args.job_corpus)
@@ -239,6 +244,25 @@ def main() -> None:
 
         _run_cmd(diff_cmd)
 
+        tailoring_json_path = ""
+        tailoring_md_path = ""
+
+        if args.generate_tailoring:
+            tailoring_json_path = job_packets_dir / f"{file_slug}__tailoring.json"
+            tailoring_md_path = job_packets_dir / f"{file_slug}__tailoring.md"
+
+            tailoring_cmd = [
+                sys.executable,
+                "generate_tailoring_suggestions.py",
+                "--packet-json",
+                str(packet_json_path),
+                "--output-json",
+                str(tailoring_json_path),
+                "--output-md",
+                str(tailoring_md_path),
+            ]
+            _run_cmd(tailoring_cmd)
+
         manifest_rows.append(
             {
                 "job_doc_id": job_doc_id,
@@ -252,6 +276,8 @@ def main() -> None:
                 "score_gap": row["score_gap"],
                 "is_tie": row["is_tie"],
                 "packet_json": str(packet_json_path),
+                "tailoring_json": str(tailoring_json_path) if tailoring_json_path else "",
+                "tailoring_md": str(tailoring_md_path) if tailoring_md_path else "",
             }
         )
 
@@ -268,6 +294,8 @@ def main() -> None:
         "score_gap",
         "is_tie",
         "packet_json",
+        "tailoring_json",
+        "tailoring_md",
     ]
     with manifest_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -284,6 +312,7 @@ def main() -> None:
     print(f"Packet manifest  : {manifest_csv}")
     print(f"Job packets dir  : {job_packets_dir}")
     print(f"Packets created  : {len(manifest_rows)}")
+    print(f"Tailoring step  : {'enabled' if args.generate_tailoring else 'disabled'}")
     print()
 
 

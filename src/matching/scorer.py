@@ -5,6 +5,7 @@ from src.config.consts import (
     ANALYTICS_ML_SIGNAL_PATTERNS,
     DOMAIN_SIGNAL_PATTERNS,
     EXPERIMENTATION_SIGNAL_PATTERNS,
+    ROLE_WORD_HINTS,
     TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
     TOOLING_SIGNAL_PATTERNS,
@@ -30,7 +31,95 @@ _UNIMPLEMENTED_DIMENSIONS = set()
 _ANALYTICS_TITLE_TOKENS = {"analytics", "analyst", "bi", "insights"}
 _DATA_TITLE_TOKENS = {"data", "scientist", "science"}
 _ML_TITLE_TOKENS = {"ai", "ml", "machine", "learning"}
+_VARIANT_TITLE_ABBREVIATIONS = {
+    "ai": "ai engineer",
+    "mle": "machine learning engineer",
+    "ml": "machine learning engineer",
+    "ds": "data scientist",
+    "da": "data analyst",
+    "ae": "analytics engineer",
+}
 
+
+def _looks_roleish(text: str) -> bool:
+    normalized = _normalize_text(text)
+    return any(
+        re.search(rf"\b{re.escape(word)}\b", normalized)
+        for word in ROLE_WORD_HINTS
+    )
+
+
+def _resume_name_title_candidates(resume_name: str) -> List[str]:
+    stem = re.sub(r"\.[^.]+$", "", str(resume_name or ""))
+    raw_tokens = [token for token in re.split(r"[^A-Za-z0-9]+", stem) if token]
+
+    if not raw_tokens:
+        return []
+
+    tokens: List[str] = []
+    for token in raw_tokens:
+        token_norm = _normalize_text(re.sub(r"\d+$", "", token))
+        if not token_norm:
+            continue
+        if re.fullmatch(r"v\d*", token_norm):
+            continue
+        tokens.append(token_norm)
+
+    if not tokens:
+        return []
+
+    if "resume" in tokens:
+        start = max(idx for idx, token in enumerate(tokens) if token == "resume") + 1
+        candidate_tokens = tokens[start:]
+    else:
+        start = next(
+            (
+                idx for idx, token in enumerate(tokens)
+                if token in _VARIANT_TITLE_ABBREVIATIONS or _looks_roleish(token)
+            ),
+            len(tokens),
+        )
+        candidate_tokens = tokens[start:]
+
+    if not candidate_tokens:
+        return []
+
+    phrase_tokens = [_VARIANT_TITLE_ABBREVIATIONS.get(token, token) for token in candidate_tokens]
+    phrase = " ".join(phrase_tokens).strip()
+
+    if not phrase or not _looks_roleish(phrase):
+        return []
+
+    return [phrase]
+
+
+def _resume_header_title_candidates(raw_text: str) -> List[str]:
+    lines = [line.strip() for line in str(raw_text or "").splitlines() if line.strip()]
+    candidates: List[str] = []
+
+    for line in lines[:10]:
+        normalized = _normalize_text(line)
+
+        if not normalized or len(normalized) > 80:
+            continue
+
+        if "@" in line or "linkedin" in normalized or "github" in normalized or "http" in normalized or "www" in normalized:
+            continue
+
+        if re.search(r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b", line):
+            continue
+
+        if _looks_roleish(line):
+            candidates.append(line)
+
+    return _unique_preserve_order(candidates)
+
+
+def _resume_variant_titles(resume: ResumeEvidence) -> List[str]:
+    return _unique_preserve_order(
+        _resume_header_title_candidates(resume.document.raw_text)
+        + _resume_name_title_candidates(resume.document.resume_name)
+    )
 
 def _role_family_title_adjustment(role_family: str, title: str) -> Tuple[float, List[str]]:
     role_family_norm = _normalize_text(role_family)
@@ -260,48 +349,104 @@ def _score_title_alignment(
     resume: ResumeEvidence,
     job: JobEvidence,
 ) -> MatchDimensionScore:
-    best_score = 0.0
-    best_title = ""
-    best_base_score = 0.0
-    best_adjustment = 0.0
-    best_adjustment_reasons: List[str] = []
+    HISTORY_WEIGHT = 0.70
+    VARIANT_WEIGHT = 0.30
 
-    for title in _resume_titles(resume):
-        base_score = _title_similarity(title, job.title)
-        adjustment, adjustment_reasons = _role_family_title_adjustment(job.role_family, title)
-        adjusted_score = max(0.0, min(1.0, base_score + adjustment))
+    def _best_title_score(titles: List[str]) -> Tuple[float, str, float, float, List[str]]:
+        best_score = 0.0
+        best_title = ""
+        best_base_score = 0.0
+        best_adjustment = 0.0
+        best_adjustment_reasons: List[str] = []
 
-        if adjusted_score > best_score:
-            best_score = adjusted_score
-            best_title = title
-            best_base_score = base_score
-            best_adjustment = adjustment
-            best_adjustment_reasons = adjustment_reasons
+        for title in titles:
+            base_score = _title_similarity(title, job.title)
+            adjustment, adjustment_reasons = _role_family_title_adjustment(job.role_family, title)
+            adjusted_score = max(0.0, min(1.0, base_score + adjustment))
 
-    if not best_title:
-        return _weighted_dimension(
-            definition,
-            0.0,
-            "No resume titles were extracted, so title alignment could not be established.",
-            [],
+            if adjusted_score > best_score:
+                best_score = adjusted_score
+                best_title = title
+                best_base_score = base_score
+                best_adjustment = adjustment
+                best_adjustment_reasons = adjustment_reasons
+
+        return (
+            best_score,
+            best_title,
+            best_base_score,
+            best_adjustment,
+            best_adjustment_reasons,
         )
 
-    adjustment_suffix = (
-        f" Role-family adjustment={best_adjustment:+.2f} ({', '.join(best_adjustment_reasons)})."
-        if best_adjustment_reasons
-        else ""
-    )
+    variant_titles = _resume_variant_titles(resume)
+    history_titles = _resume_titles(resume)
+
+    variant_score, variant_title, variant_base, variant_adjustment, variant_reasons = _best_title_score(variant_titles)
+    history_score, history_title, history_base, history_adjustment, history_reasons = _best_title_score(history_titles)
+
+    if variant_title and history_title:
+        final_score = (HISTORY_WEIGHT * history_score) + (VARIANT_WEIGHT * variant_score)
+        explanation = (
+            f"Best title alignment scored {final_score:.2f} using blended history/variant evidence "
+            f"(history={history_score:.2f} from '{history_title}', variant={variant_score:.2f} from '{variant_title}'). "
+            f"Blend weights: history={HISTORY_WEIGHT:.2f}, variant={VARIANT_WEIGHT:.2f}."
+        )
+
+        if history_reasons:
+            explanation += (
+                f" History adjustment={history_adjustment:+.2f} ({', '.join(history_reasons)})."
+            )
+        if variant_reasons:
+            explanation += (
+                f" Variant adjustment={variant_adjustment:+.2f} ({', '.join(variant_reasons)})."
+            )
+
+        return _weighted_dimension(
+            definition,
+            final_score,
+            explanation,
+            [history_title, variant_title, job.title, job.role_family],
+        )
+
+    if history_title:
+        explanation = (
+            f"Best title alignment scored {history_score:.2f} from history title '{history_title}'."
+        )
+        if history_reasons:
+            explanation += (
+                f" Role-family adjustment={history_adjustment:+.2f} ({', '.join(history_reasons)})."
+            )
+
+        return _weighted_dimension(
+            definition,
+            history_score,
+            explanation,
+            [history_title, job.title, job.role_family],
+        )
+
+    if variant_title:
+        explanation = (
+            f"Best title alignment scored {variant_score:.2f} from variant title '{variant_title}'."
+        )
+        if variant_reasons:
+            explanation += (
+                f" Role-family adjustment={variant_adjustment:+.2f} ({', '.join(variant_reasons)})."
+            )
+
+        return _weighted_dimension(
+            definition,
+            variant_score,
+            explanation,
+            [variant_title, job.title, job.role_family],
+        )
 
     return _weighted_dimension(
         definition,
-        best_score,
-        (
-            f"Best resume title match against the job title scored {best_score:.2f} "
-            f"(base={best_base_score:.2f}).{adjustment_suffix}"
-        ),
-        [best_title, job.title, job.role_family],
+        0.0,
+        "No resume titles were extracted, so title alignment could not be established.",
+        [],
     )
-
 
 def _score_skill_alignment(
     definition: MatchDimensionDefinition,

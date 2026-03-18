@@ -1,16 +1,25 @@
 import re
 from typing import List, Set, Tuple
 
-from src.config.consts import TITLE_CANONICAL
 from src.matching.job_models import JobEvidence
 from src.matching.models import MatchPrefilterResult
 from src.resume.models import ResumeEvidence
 
 from src.config.consts import (
-    _SKILL_ALIASES,
+    ROLE_WORD_HINTS,
     TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
+    _SKILL_ALIASES,
 )
+
+_VARIANT_TITLE_ABBREVIATIONS = {
+    "ai": "ai engineer",
+    "mle": "machine learning engineer",
+    "ml": "machine learning engineer",
+    "ds": "data scientist",
+    "da": "data analyst",
+    "ae": "analytics engineer",
+}
 
 
 def _normalize_text(value: str) -> str:
@@ -48,6 +57,92 @@ def _unique_preserve_order(values: List[str]) -> List[str]:
     return ordered
 
 
+def _looks_roleish(text: str) -> bool:
+    normalized = _normalize_text(text)
+    return any(
+        re.search(rf"\b{re.escape(word)}\b", normalized)
+        for word in ROLE_WORD_HINTS
+    )
+
+
+def _resume_name_title_candidates(resume_name: str) -> List[str]:
+    stem = re.sub(r"\.[^.]+$", "", str(resume_name or ""))
+    raw_tokens = [token for token in re.split(r"[^A-Za-z0-9]+", stem) if token]
+
+    if not raw_tokens:
+        return []
+
+    tokens: List[str] = []
+    for token in raw_tokens:
+        token_norm = _normalize_text(re.sub(r"\d+$", "", token))
+        if not token_norm:
+            continue
+        if re.fullmatch(r"v\d*", token_norm):
+            continue
+        tokens.append(token_norm)
+
+    if not tokens:
+        return []
+
+    if "resume" in tokens:
+        start = max(idx for idx, token in enumerate(tokens) if token == "resume") + 1
+        candidate_tokens = tokens[start:]
+    else:
+        start = next(
+            (
+                idx for idx, token in enumerate(tokens)
+                if token in _VARIANT_TITLE_ABBREVIATIONS or _looks_roleish(token)
+            ),
+            len(tokens),
+        )
+        candidate_tokens = tokens[start:]
+
+    if not candidate_tokens:
+        return []
+
+    phrase_tokens = [_VARIANT_TITLE_ABBREVIATIONS.get(token, token) for token in candidate_tokens]
+    phrase = " ".join(phrase_tokens).strip()
+
+    if not phrase or not _looks_roleish(phrase):
+        return []
+
+    return [phrase]
+
+
+def _resume_header_title_candidates(raw_text: str) -> List[str]:
+    lines = [line.strip() for line in str(raw_text or "").splitlines() if line.strip()]
+    candidates: List[str] = []
+
+    for line in lines[:10]:
+        normalized = _normalize_text(line)
+
+        if not normalized or len(normalized) > 80:
+            continue
+
+        if (
+            "@" in line
+            or "linkedin" in normalized
+            or "github" in normalized
+            or "http" in normalized
+            or "www" in normalized
+        ):
+            continue
+
+        if re.search(r"\b\d{3}[-.\s]?\d{3}[-.\s]?\d{4}\b", line):
+            continue
+
+        if _looks_roleish(line):
+            candidates.append(line)
+
+    return _unique_preserve_order(candidates)
+
+
+def _resume_variant_titles(resume: ResumeEvidence) -> List[str]:
+    return _unique_preserve_order(
+        _resume_header_title_candidates(resume.document.raw_text)
+        + _resume_name_title_candidates(resume.document.resume_name)
+    )
+
 def _title_similarity(left: str, right: str) -> float:
     left_norm = _normalize_text(left)
     right_norm = _normalize_text(right)
@@ -72,9 +167,11 @@ def _title_similarity(left: str, right: str) -> float:
 
 
 def _best_resume_title_match(resume: ResumeEvidence, job: JobEvidence) -> Tuple[float, str]:
-    candidates = _unique_preserve_order(resume.titles)
-    if not candidates:
-        candidates = [entry.title for entry in resume.experience_entries if entry.title]
+    candidates = _unique_preserve_order(
+        _resume_variant_titles(resume)
+        + list(resume.titles)
+        + [entry.title for entry in resume.experience_entries if entry.title]
+    )
 
     best_score = 0.0
     best_title = ""

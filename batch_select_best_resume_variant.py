@@ -9,7 +9,9 @@ from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
 
-TIE_EPSILON = 0.005
+TIE_EPSILON = 0.010
+TITLE_ONLY_TIE_EPSILON = 0.015
+NON_TITLE_DELTA_EPSILON = 0.002
 
 def _load_job_records(job_corpus_path: Path, limit: int) -> List[dict]:
     if not job_corpus_path.exists():
@@ -67,19 +69,57 @@ def _dimension_snapshot(result, max_dims: int = 5) -> str:
         for dim in ordered[:max_dims]
     )
 
+def _is_title_only_edge(
+    winner,
+    runner_up: Optional[object],
+    non_title_epsilon: float = NON_TITLE_DELTA_EPSILON,
+) -> bool:
+    if runner_up is None:
+        return False
+
+    winner_map = {dim.name: dim for dim in winner.dimension_scores}
+    runner_map = {dim.name: dim for dim in runner_up.dimension_scores}
+
+    saw_title_delta = False
+
+    for name, winner_dim in winner_map.items():
+        runner_dim = runner_map.get(name)
+        if runner_dim is None:
+            continue
+
+        delta = abs(winner_dim.weighted_score - runner_dim.weighted_score)
+
+        if name == "title_alignment":
+            if delta > 0.0:
+                saw_title_delta = True
+            continue
+
+        if delta > non_title_epsilon:
+            return False
+
+    return saw_title_delta
 
 def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
     lines = []
     is_tie = _is_effective_tie(winner, runner_up)
 
+    score_gap = abs(winner.final_score - runner_up.final_score) if runner_up is not None else 0.0
+
     if is_tie:
+        if score_gap <= TIE_EPSILON:
+            tie_reason = f"which is within the tie threshold of {TIE_EPSILON:.3f}."
+        else:
+            tie_reason = (
+                f"which is above the base tie threshold of {TIE_EPSILON:.3f} "
+                f"but still qualifies as an effective tie because only title alignment separates the variants."
+            )
+
         lines.append(
             f"Tie: {winner.pair.resume_name} and {runner_up.pair.resume_name} "
             f"are effectively equivalent for {winner.pair.job_company} | {winner.pair.job_title}."
         )
         lines.append(
-            f"Why: score gap is only {winner.final_score - runner_up.final_score:.3f}, "
-            f"which is within the tie threshold of {TIE_EPSILON:.3f}."
+            f"Why: score gap is only {score_gap:.3f}, {tie_reason}"
         )
         lines.append(f"Top-ranked variant by deterministic ordering: {winner.pair.resume_name}")
         lines.append(f"Equivalent backup variant: {runner_up.pair.resume_name}")
@@ -93,7 +133,7 @@ def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
         if runner_up is not None:
             lines.append(
                 f"Best backup: {runner_up.pair.resume_name} "
-                f"(score {runner_up.final_score:.3f}, gap {winner.final_score - runner_up.final_score:.3f})."
+                f"(score {runner_up.final_score:.3f}, gap {score_gap:.3f})."
             )
 
     if winner.prefilter.matched_terms:
@@ -113,7 +153,16 @@ def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
 def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_EPSILON) -> bool:
     if runner_up is None:
         return False
-    return abs(winner.final_score - runner_up.final_score) <= epsilon
+
+    score_gap = abs(winner.final_score - runner_up.final_score)
+
+    if score_gap <= epsilon:
+        return True
+
+    return (
+        score_gap <= TITLE_ONLY_TIE_EPSILON
+        and _is_title_only_edge(winner, runner_up)
+    )
 
 def _has_credible_match(passed_results: List[object]) -> bool:
     return len(passed_results) > 0

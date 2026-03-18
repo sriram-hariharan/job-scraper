@@ -25,6 +25,11 @@ def _count_missing_requirements(value: str) -> int:
 def _normalize_text(value: str) -> str:
     return " ".join(str(value or "").lower().split()).strip()
 
+HIGH_CONFIDENCE_APPLY_SCORE = 0.70
+STRONG_TIE_REVIEW_SCORE = 0.64
+GOOD_MATCH_SCORE = 0.58
+MAX_DIRECT_APPLY_MISSING_REQUIREMENTS = 4
+MAX_STRONG_TIE_MISSING_REQUIREMENTS = 4
 
 def _classify_action(row: dict) -> tuple[str, str]:
     winner_score = _parse_float(row.get("winner_score", "0"))
@@ -50,35 +55,38 @@ def _classify_action(row: dict) -> tuple[str, str]:
         else 0.0
     )
 
-    # Strong recommendation
-    if winner_score >= 0.70 and not is_tie and missing_count <= 4:
+    if (
+        winner_score >= HIGH_CONFIDENCE_APPLY_SCORE
+        and not is_tie
+        and missing_count <= MAX_DIRECT_APPLY_MISSING_REQUIREMENTS
+    ):
         return (
             "APPLY",
             f"High winner score ({winner_score:.3f}), clear lead over backup (gap {score_gap:.3f}), and manageable missing requirements ({missing_count}).",
         )
 
-    # Strong but tied: still viable, but review top tied variants
-    if winner_score >= 0.68 and is_tie:
+    if (
+        is_tie
+        and winner_score >= STRONG_TIE_REVIEW_SCORE
+        and missing_count <= MAX_STRONG_TIE_MISSING_REQUIREMENTS
+    ):
         return (
             "APPLY_REVIEW_VARIANTS",
-            f"High winner score ({winner_score:.3f}) but top variants are effectively tied; review the tied resume options before applying.",
+            f"Strong deterministic match ({winner_score:.3f}) but top variants are effectively tied (gap {score_gap:.3f}); review the tied resume options before applying.",
         )
 
-    # Good fit, but some tailoring likely helps
-    if winner_score >= 0.58:
+    if winner_score >= GOOD_MATCH_SCORE:
         return (
             "MAYBE_TAILOR",
             f"Good deterministic match ({winner_score:.3f}) but not decisive enough for a straight apply; tailor around the missing requirements ({missing_count}).",
         )
 
-    # Borderline, but might still be worth a look if the selector was selective
     if winner_score >= 0.50 and pass_rate < 0.50:
         return (
             "MAYBE_TAILOR",
             f"Borderline score ({winner_score:.3f}) but the job was selective across resume variants (pass rate {pass_rate:.2%}); worth reviewing manually.",
         )
 
-    # Low-confidence / broad mismatch
     return (
         "SKIP_FOR_NOW",
         f"Winner score is too weak ({winner_score:.3f}) for a confident application recommendation.",

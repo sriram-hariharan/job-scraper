@@ -68,7 +68,12 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
 
     required_skills = skills.get("required", []) or []
     preferred_skills = skills.get("preferred", []) or []
-    all_skills = _dedupe_keep_order(required_skills + preferred_skills)
+    stored_all_skills = skills.get("all", []) or []
+
+    if stored_all_skills:
+        all_skills = _dedupe_keep_order(stored_all_skills)
+    else:
+        all_skills = _dedupe_keep_order(required_skills + preferred_skills)
 
     job_doc = {
         "doc_id": build_job_doc_id(job),

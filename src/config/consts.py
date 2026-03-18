@@ -712,6 +712,7 @@ REQUIRED_CONTEXT_PATTERNS = [
     r"\bwhat we're looking for\b",
     r"\bwhat you need\b",
     r"\bwhat you'll need\b",
+    r"\bbecause you have\b",
 ]
 
 PREFERRED_CONTEXT_PATTERNS = [

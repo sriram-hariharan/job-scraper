@@ -8,7 +8,6 @@ from src.resume.models import ResumeEvidence
 
 from src.config.consts import (
     _SKILL_ALIASES,
-    _SKILL_ALIASES,
     TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
 )
@@ -149,6 +148,8 @@ def run_prefilter(
     if best_title_score >= 0.80 and len(matched_any) >= 2:
         minimum_overlap_passed = True
     elif best_title_score >= 0.45 and len(matched_any) >= 3:
+        minimum_overlap_passed = True
+    elif len(required_skills) <= 2 and required_skills and len(matched_required) == len(required_skills) and len(matched_any) >= 3:
         minimum_overlap_passed = True
     elif len(matched_required) >= 3:
         minimum_overlap_passed = True

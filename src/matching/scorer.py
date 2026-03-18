@@ -1,5 +1,5 @@
 import re
-from typing import Callable, Dict, List, Set
+from typing import Callable, Dict, List, Set, Tuple
 
 from src.config.consts import (
     ANALYTICS_ML_SIGNAL_PATTERNS,
@@ -27,6 +27,57 @@ from src.resume.models import ResumeEvidence
 
 _UNIMPLEMENTED_DIMENSIONS = set()
 
+_ANALYTICS_TITLE_TOKENS = {"analytics", "analyst", "bi", "insights"}
+_DATA_TITLE_TOKENS = {"data", "scientist", "science"}
+_ML_TITLE_TOKENS = {"ai", "ml", "machine", "learning"}
+
+
+def _role_family_title_adjustment(role_family: str, title: str) -> Tuple[float, List[str]]:
+    role_family_norm = _normalize_text(role_family)
+    title_tokens = _title_tokens(title)
+
+    has_analytics = bool(title_tokens & _ANALYTICS_TITLE_TOKENS)
+    has_data = bool(title_tokens & _DATA_TITLE_TOKENS)
+    has_ml = bool(title_tokens & _ML_TITLE_TOKENS)
+    has_engineer = "engineer" in title_tokens
+
+    adjustment = 0.0
+    reasons: List[str] = []
+
+    if role_family_norm in {"analytics engineer", "data analyst", "analytics"}:
+        if has_analytics:
+            adjustment += 0.20
+            reasons.append("analytics-family title bonus")
+        elif has_data and has_engineer:
+            adjustment += 0.10
+            reasons.append("data-engineering adjacent title bonus")
+
+        if has_ml and not has_analytics:
+            adjustment -= 0.20
+            reasons.append("analytics-family title mismatch penalty")
+
+    elif role_family_norm in {"ml engineer", "machine learning engineer"}:
+        if has_ml:
+            adjustment += 0.20
+            reasons.append("ml-family title bonus")
+
+        if has_analytics and not has_ml:
+            adjustment -= 0.20
+            reasons.append("ml-family title mismatch penalty")
+
+    elif role_family_norm == "data scientist":
+        if "scientist" in title_tokens or "science" in title_tokens:
+            adjustment += 0.15
+            reasons.append("data-scientist title bonus")
+        elif has_analytics:
+            adjustment += 0.05
+            reasons.append("analytics-adjacent title bonus")
+
+        if has_ml and not has_data and "scientist" not in title_tokens and "science" not in title_tokens:
+            adjustment -= 0.10
+            reasons.append("pure-ml vs data-scientist title penalty")
+
+    return adjustment, reasons
 
 def _normalize_text(value: str) -> str:
     text = str(value or "").lower().strip()
@@ -211,12 +262,21 @@ def _score_title_alignment(
 ) -> MatchDimensionScore:
     best_score = 0.0
     best_title = ""
+    best_base_score = 0.0
+    best_adjustment = 0.0
+    best_adjustment_reasons: List[str] = []
 
     for title in _resume_titles(resume):
-        similarity = _title_similarity(title, job.title)
-        if similarity > best_score:
-            best_score = similarity
+        base_score = _title_similarity(title, job.title)
+        adjustment, adjustment_reasons = _role_family_title_adjustment(job.role_family, title)
+        adjusted_score = max(0.0, min(1.0, base_score + adjustment))
+
+        if adjusted_score > best_score:
+            best_score = adjusted_score
             best_title = title
+            best_base_score = base_score
+            best_adjustment = adjustment
+            best_adjustment_reasons = adjustment_reasons
 
     if not best_title:
         return _weighted_dimension(
@@ -226,11 +286,20 @@ def _score_title_alignment(
             [],
         )
 
+    adjustment_suffix = (
+        f" Role-family adjustment={best_adjustment:+.2f} ({', '.join(best_adjustment_reasons)})."
+        if best_adjustment_reasons
+        else ""
+    )
+
     return _weighted_dimension(
         definition,
         best_score,
-        f"Best resume title match against the job title scored {best_score:.2f}.",
-        [best_title, job.title],
+        (
+            f"Best resume title match against the job title scored {best_score:.2f} "
+            f"(base={best_base_score:.2f}).{adjustment_suffix}"
+        ),
+        [best_title, job.title, job.role_family],
     )
 
 

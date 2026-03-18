@@ -8,12 +8,13 @@ from tqdm import tqdm
 from threading import Lock
 
 from src.ai.llm_client import run_chat_completion, get_default_model
+from src.utils.skill_normalizer import normalize_extracted_skills
+
 from src.storage.skill_corpus_store import (
     get_cached_llm_skills,
     store_cached_llm_skills,
 )
 from src.config.consts import (
-    INVALID_SKILL_PATTERNS,
     REQUIRED_CONTEXT_PATTERNS,
     PREFERRED_CONTEXT_PATTERNS,
     EMBEDDED_SKILL_PATTERNS
@@ -183,32 +184,56 @@ def extract_json_from_response(response: str):
 
 
 def _clean_skill_item(item: str) -> str:
-    item = re.sub(r"^[\-\*\u2022\d\.\)\s]+", "", item or "").strip().lower()
+    item = (item or "").strip().lower()
+    item = re.sub(r"^[\-\*\u2022\d\.\)\s]+", "", item)
+    item = item.strip().strip('"\''"`")
     item = re.sub(r"\s+", " ", item)
     item = item.rstrip(".,:;")
     return item
 
 def _expand_skill_candidates(raw_skill: str):
-    text = _clean_skill_item(raw_skill)
-    if not text:
+    raw_text = (raw_skill or "").strip()
+    if not raw_text:
         return []
 
     candidates = []
 
-    simplified = re.sub(r"\s*\(([^)]*)\)", "", text).strip()
+    cleaned_full = _clean_skill_item(raw_text)
+    if cleaned_full:
+        candidates.append(cleaned_full)
+
+    # If the model emitted explicit quoted skills, salvage them directly.
+    for quoted in re.findall(r'"([^"]+)"', raw_text):
+        cleaned = _clean_skill_item(quoted)
+        if cleaned:
+            candidates.append(cleaned)
+
+    # If the model emitted canonicalized targets after "->", salvage the RHS skills.
+    if "->" in raw_text:
+        rhs = raw_text.split("->", 1)[1]
+        for part in re.split(r"[;,]", rhs):
+            cleaned = _clean_skill_item(part)
+            if cleaned:
+                candidates.append(cleaned)
+
+    # Keep the old parenthetical simplification
+    simplified = re.sub(r"\s*\(([^)]*)\)", "", cleaned_full).strip()
     if simplified:
         candidates.append(simplified)
-    else:
-        candidates.append(text)
 
-    # Normalize known parenthetical forms to their canonical skill
-    if "machine learning" in text and "machine learning" not in candidates:
+    parenthetical_matches = re.findall(r"\(([^)]*)\)", cleaned_full)
+    for inner in parenthetical_matches:
+        cleaned = _clean_skill_item(inner)
+        if cleaned:
+            candidates.append(cleaned)
+
+    # Normalize known acronym + canonical pairs
+    if simplified == "ml" and "machine learning" in candidates:
         candidates.append("machine learning")
 
-    # Only salvage explicitly known embedded tools/technologies.
-    # Do NOT do generic slash splitting; it creates garbage fragments.
+    # Salvage explicitly known embedded tools/technologies only
     for pattern, canonical in EMBEDDED_SKILL_PATTERNS:
-        if re.search(pattern, text):
+        if re.search(pattern, cleaned_full):
             candidates.append(canonical)
 
     expanded = []
@@ -223,57 +248,109 @@ def _normalize_for_match(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "").strip().lower())
 
 
-def _skill_appears_in_job_text(skill: str, job_text: str) -> bool:
-    skill_norm = _normalize_for_match(skill)
-    job_norm = _normalize_for_match(job_text)
-
-    if not skill_norm or not job_norm:
-        return False
-
-    candidates = [skill_norm]
-
-    simplified = re.sub(r"\s*\([^)]*\)", "", skill_norm).strip()
-    if simplified and simplified not in candidates:
-        candidates.append(simplified)
-
-    for candidate in candidates:
-        pattern = rf"(?<![a-z0-9]){re.escape(candidate)}(?![a-z0-9])"
-        if re.search(pattern, job_norm):
-            return True
-
-    return False
-
-
-def _is_valid_skill_candidate(skill: str, job_text: str) -> bool:
-    skill = _clean_skill_item(skill)
-
-    if not skill:
-        return False
-
-    if len(skill.split()) > 4:
-        return False
-
-    if any(re.search(pattern, skill) for pattern in INVALID_SKILL_PATTERNS):
-        return False
-
-    if not _skill_appears_in_job_text(skill, job_text):
-        return False
-
-    return True
-
-
 def _filter_skill_candidates(skills, job_text: str):
-    filtered = []
+    expanded = []
 
     for raw_skill in skills:
-        for candidate in _expand_skill_candidates(raw_skill):
-            if not _is_valid_skill_candidate(candidate, job_text):
-                continue
-            filtered.append(candidate)
+        expanded.extend(_expand_skill_candidates(raw_skill))
 
-    return sorted(set(filtered))
+    return normalize_extracted_skills(expanded, job_text)
 
-def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 500):
+def _nearest_preceding_section_bucket(job_norm: str, position: int, max_backscan: int = 2500):
+    nearest = None  # (start_idx, bucket)
+
+    for pattern in REQUIRED_CONTEXT_PATTERNS:
+        for match in re.finditer(pattern, job_norm):
+            if match.start() <= position and position - match.start() <= max_backscan:
+                if nearest is None or match.start() > nearest[0]:
+                    nearest = (match.start(), "required")
+
+    for pattern in PREFERRED_CONTEXT_PATTERNS:
+        for match in re.finditer(pattern, job_norm):
+            if match.start() <= position and position - match.start() <= max_backscan:
+                if nearest is None or match.start() > nearest[0]:
+                    nearest = (match.start(), "preferred")
+
+    return nearest[1] if nearest is not None else None
+
+
+def _has_inline_preferred_context(context: str) -> bool:
+    return any(
+        re.search(pattern, context)
+        for pattern in [
+            r"\bis a plus\b",
+            r"\ba plus\b",
+            r"\bnice to have\b",
+            r"\bbonus points\b",
+            r"\bpreferred qualifications\b",
+            r"\bpreferred\b",
+        ]
+    )
+
+
+def _has_inline_required_context(context: str) -> bool:
+    return any(
+        re.search(pattern, context)
+        for pattern in [
+            r"\brequired qualifications\b",
+            r"\bminimum qualifications\b",
+            r"\bbasic qualifications\b",
+            r"\bmust have\b",
+            r"\bwhat we're looking for\b",
+            r"\bwhat you need\b",
+            r"\bwhat you'll need\b",
+        ]
+    )
+def _build_explicit_section_spans(job_norm: str):
+    required_headers = [
+        r"\brequired qualifications\b",
+        r"\bminimum qualifications\b",
+        r"\bbasic qualifications\b",
+        r"\bwhat we're looking for\b",
+        r"\bwhat you need\b",
+        r"\bwhat you'll need\b",
+        r"\bbecause you have\b",
+    ]
+
+    preferred_headers = [
+        r"\bpreferred qualifications\b",
+        r"\bnice to have\b",
+        r"\bbonus points\b",
+    ]
+
+    headers = []
+
+    for pattern in required_headers:
+        for match in re.finditer(pattern, job_norm):
+            headers.append((match.start(), match.end(), "required"))
+
+    for pattern in preferred_headers:
+        for match in re.finditer(pattern, job_norm):
+            headers.append((match.start(), match.end(), "preferred"))
+
+    headers.sort(key=lambda x: x[0])
+
+    spans = []
+    for idx, (start, end, bucket) in enumerate(headers):
+        next_start = headers[idx + 1][0] if idx + 1 < len(headers) else len(job_norm)
+        spans.append((start, next_start, bucket))
+
+    return spans
+
+
+def _inline_preferred_override(context: str) -> bool:
+    return any(
+        re.search(pattern, context)
+        for pattern in [
+            r"\bis a plus\b",
+            r"\ba plus\b",
+            r"\bnice to have\b",
+            r"\bbonus points\b",
+            r"\bpreferred\b",
+        ]
+    )
+
+def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 220):
     skill_norm = _normalize_for_match(skill)
     job_norm = _normalize_for_match(job_text)
 
@@ -286,6 +363,8 @@ def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 500
     if simplified and simplified not in candidates:
         candidates.append(simplified)
 
+    spans = _build_explicit_section_spans(job_norm)
+
     saw_required = False
     saw_preferred = False
 
@@ -296,15 +375,26 @@ def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 500
             end = min(len(job_norm), match.end() + window_chars)
             context = job_norm[start:end]
 
-            if any(re.search(p, context) for p in REQUIRED_CONTEXT_PATTERNS):
-                saw_required = True
-            if any(re.search(p, context) for p in PREFERRED_CONTEXT_PATTERNS):
+            # Inline preferred language wins for that specific occurrence.
+            if _inline_preferred_override(context):
                 saw_preferred = True
+                continue
 
-    if saw_preferred and not saw_required:
-        return "preferred"
-    if saw_required and not saw_preferred:
+            # Otherwise only use explicit section spans.
+            for span_start, span_end, bucket in spans:
+                if span_start <= match.start() < span_end:
+                    if bucket == "required":
+                        saw_required = True
+                    elif bucket == "preferred":
+                        saw_preferred = True
+                    break
+
+    if saw_required and saw_preferred:
         return "required"
+    if saw_required:
+        return "required"
+    if saw_preferred:
+        return "preferred"
     return None
 
 
@@ -312,16 +402,22 @@ def _reassign_skills_by_context(required, preferred, job_text: str):
     req = set(required)
     pref = set(preferred)
 
-    for skill in list(req | pref):
+    pref = {s for s in pref if s not in req}
+
+    for skill in list(req):
         bucket = _context_bucket_for_skill(skill, job_text)
         if bucket == "preferred":
             req.discard(skill)
             pref.add(skill)
-        elif bucket == "required":
+
+    for skill in list(pref):
+        bucket = _context_bucket_for_skill(skill, job_text)
+        if bucket == "required":
             pref.discard(skill)
             req.add(skill)
 
-    return sorted(req), sorted(s for s in pref if s not in req)
+    pref = {s for s in pref if s not in req}
+    return sorted(req), sorted(pref)
 
 def _drop_shadowed_generic_skills(required, preferred):
     req = set(required)

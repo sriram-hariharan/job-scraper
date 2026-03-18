@@ -30,13 +30,13 @@ def format_sheet(sheet, headers):
 
     numeric_formats = {
         "Planning Winner Score": "0.000",
-        "Priority Score": "0.00",
-        "Resume Match": "0.00",
-        "AI Score": "0.00",
         "Planning Runner Up Score": "0.000",
         "Planning Score Gap": "0.000",
         "Queue Rank": "0",
         "Missing Requirement Count": "0",
+        "Resume Match": "0.00",
+        "Priority Score": "0.00",
+        "AI Signal Score": "0.00",
     }
 
     for header, pattern in numeric_formats.items():
@@ -58,7 +58,7 @@ def format_sheet(sheet, headers):
 
     clip_columns = [
         "Link",
-        "AI Evaluation",
+        "LLM Job Triage",
         "Packet JSON",
         "Tailoring Markdown",
         "Tailoring LLM JSON",
@@ -82,12 +82,12 @@ def format_sheet(sheet, headers):
             }
         )
 
+    planning_score_col = _header_index(headers, "Planning Winner Score")
     posted_at_col = _header_index(headers, "Posted At")
-    priority_col = _header_index(headers, "Priority Score")
 
     sheet.sort(
+        (planning_score_col, "des"),
         (posted_at_col, "des"),
-        (priority_col, "des")
     )
 
 
@@ -107,41 +107,42 @@ def write_jobs_to_sheet(jobs):
     sheet = client.open("AI Job Scraper").sheet1
 
     headers = [
-        "Company",
-        "Title",
-        "Link",
-        "Location",
-        "Posted At",
-        "Posted",
-        "Best Resume",
-        "Planning Winner Resume",
-        "Planning Runner Up Resume",
-        "Planning Winner Score",
-        "Priority Score",
-        "Resume Match",
-        "AI Score",
-        "Planning Runner Up Score",
-        "Planning Score Gap",
-        "Source",
-        "Planning Action",
-        "Planning Is Tie",
-        "Needs Variant Review",
-        "Queue Rank",
-        "Missing Requirement Count",
-        "Queue Priority Reason",
-        "Visa",
-        "Role Family",
-        "LLM Tailoring Status",
-        "LLM Error Type",
-        "AI Evaluation",
-        "Packet JSON",
-        "Tailoring Markdown",
-        "Tailoring LLM JSON",
-        "Run Timestamp",
+    "Company",
+    "Title",
+    "Link",
+    "Posted At",
+    "Posted",
+    "Location",
+    "Planning Winner Resume",
+    "Planning Winner Score",
+    "Planning Runner Up Resume",
+    "Planning Runner Up Score",
+    "Planning Score Gap",
+    "Planning Action",
+    "Queue Rank",
+    "Needs Variant Review",
+    "Missing Requirement Count",
+    "Planning Is Tie",
+    "Queue Priority Reason",
+    "Embedding Best Resume",
+    "Resume Match",
+    "Priority Score",
+    "AI Signal Score",
+    "LLM Job Triage",
+    "Visa",
+    "Role Family",
+    "Source",
+    "LLM Tailoring Status",
+    "LLM Error Type",
+    "Packet JSON",
+    "Tailoring Markdown",
+    "Tailoring LLM JSON",
+    "Run Timestamp",
     ]
 
     existing_data = sheet.get_all_values()
     link_index = headers.index("Link")
+    last_col_letter = _column_letter(len(headers))
 
     if not existing_data or existing_data[0] != headers:
         sheet.clear()
@@ -161,24 +162,24 @@ def write_jobs_to_sheet(jobs):
             }
         )
 
-        existing_urls = set()
-    else:
-        existing_urls = set()
+        existing_data = [headers]
 
-        for row in existing_data[1:]:
-            if len(row) > link_index:
-                existing_urls.add(row[link_index])
+    existing_url_to_row = {}
+
+    for row_number, row in enumerate(existing_data[1:], start=2):
+        if len(row) > link_index:
+            existing_url = row[link_index].strip()
+            if existing_url and existing_url not in existing_url_to_row:
+                existing_url_to_row[existing_url] = row_number
 
     rows_to_add = []
+    row_updates = []
     run_time = datetime.now().strftime("%Y-%m-%d %H:%M")
 
     for job in jobs:
-        url = job.get("url")
+        url = job.get("url") or job.get("job_doc_id") or job.get("link")
 
         if not url:
-            continue
-
-        if url in existing_urls:
             continue
 
         location = normalize_location(job.get("location"))
@@ -207,49 +208,68 @@ def write_jobs_to_sheet(jobs):
         intelligence = job.get("intelligence", {})
         planning = job.get("application_planning", {}) or {}
 
-        rows_to_add.append([
+        row_values = [
             job.get("company"),
             job.get("title"),
             url,
-            location,
             raw_posted,
             relative_posted,
-            job.get("best_resume"),
+            location,
             planning.get("winner_resume", ""),
-            planning.get("runner_up_resume", ""),
             planning.get("winner_score", ""),
-            priority,
-            resume_match,
-            ai_score,
+            planning.get("runner_up_resume", ""),
             planning.get("runner_up_score", ""),
             planning.get("score_gap", ""),
-            job.get("source"),
             planning.get("action", ""),
-            planning.get("is_tie", ""),
-            planning.get("needs_variant_review", ""),
             planning.get("queue_rank", ""),
+            planning.get("needs_variant_review", ""),
             planning.get("missing_requirement_count", ""),
+            planning.get("is_tie", ""),
             planning.get("queue_priority_reason", ""),
+            job.get("best_resume"),
+            resume_match,
+            priority,
+            ai_score,
+            job.get("ai_fit"),
             intelligence.get("visa_sponsorship"),
             intelligence.get("role_family"),
+            job.get("source"),
             planning.get("llm_tailoring_status", ""),
             planning.get("llm_error_type", ""),
-            job.get("ai_fit"),
             planning.get("packet_json", ""),
             planning.get("tailoring_md", ""),
             planning.get("tailoring_llm_json", ""),
             run_time,
-        ])
+        ]
 
-    if not rows_to_add:
-        logger.info("No new jobs found")
+        if url in existing_url_to_row:
+            row_number = existing_url_to_row[url]
+            row_updates.append(
+                {
+                    "range": f"A{row_number}:{last_col_letter}{row_number}",
+                    "values": [row_values],
+                }
+            )
+        else:
+            rows_to_add.append(row_values)
+
+    if not row_updates and not rows_to_add:
+        logger.info("No sheet changes needed")
         return
 
-    sheet.append_rows(
-        rows_to_add,
-        value_input_option="RAW"
-    )
+    if row_updates:
+        sheet.batch_update(row_updates)
+
+    if rows_to_add:
+        sheet.append_rows(
+            rows_to_add,
+            value_input_option="RAW"
+        )
 
     format_sheet(sheet, headers)
 
-    logger.info(f"{len(rows_to_add)} new jobs written to sheet")
+    logger.info(
+        "Sheet sync complete: %s updated, %s appended",
+        len(row_updates),
+        len(rows_to_add),
+    )

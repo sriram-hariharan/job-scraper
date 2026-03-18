@@ -2,10 +2,10 @@
 
 **Job:** stripe | Machine Learning Engineer, Payments ML Accelerator
 **Selected resume:** Sriram_Neelakantan_AI2.pdf
-**Selected score:** 0.563
+**Selected score:** 0.605
 
 ## Recruiter Summary
-Sriram_Neelakantan_AI2.pdf is the selected variant for stripe | Machine Learning Engineer, Payments ML Accelerator with a deterministic score of 0.563. It already aligns on deep learning, python, spark. The main explicit gaps still showing are llm/foundation models, scala.
+Sriram_Neelakantan_AI2.pdf is the selected variant for stripe | Machine Learning Engineer, Payments ML Accelerator with a deterministic score of 0.605. It already aligns on deep learning, python, spark. The main explicit gaps still showing are llm/foundation models, scala.
 
 ## Keep / Emphasize
 - Keep explicit required-skill evidence visible: deep learning, python, spark.
@@ -19,7 +19,7 @@ Sriram_Neelakantan_AI2.pdf is the selected variant for stripe | Machine Learning
 
 ## Do Not Claim
 - Do not claim missing required skills unless you can support them truthfully: llm/foundation models, scala.
-- Do not add unsupported preferred-skill claims: data manipulation, defining metrics, evaluating niche and upcoming machine learning solutions, querying data, slicing and dicing data.
+- Do not add unsupported preferred-skill claims: defining metrics, querying data, slicing and dicing data.
 - Only add or strengthen resume language when it is already truthful and supported by your actual work.
 
 ## Bullet Reuse Candidates
@@ -48,14 +48,14 @@ Do not invent skills, tools, projects, outcomes, or responsibilities.
 Job company: stripe
 Job title: Machine Learning Engineer, Payments ML Accelerator
 Selected resume: Sriram_Neelakantan_AI2.pdf
-Selected score: 0.563
+Selected score: 0.605
 
 Matched required skills: ['deep learning', 'python', 'spark']
 Missing required skills: ['llm/foundation models', 'scala']
 Matched preferred skills: []
-Missing preferred skills: ['data manipulation', 'defining metrics', 'evaluating niche and upcoming machine learning solutions', 'querying data', 'slicing and dicing data']
+Missing preferred skills: ['defining metrics', 'querying data', 'slicing and dicing data']
 Matched terms: ['deep learning', 'python', 'spark']
-Top dimensions: required_skills_alignment=0.60/0.153, analytics_ml_depth=1.00/0.116, experimentation_depth=1.00/0.093, tooling_alignment=1.00/0.093, title_alignment=0.40/0.084, project_relevance=0.50/0.023
+Top dimensions: required_skills_alignment=0.60/0.153, title_alignment=0.60/0.126, analytics_ml_depth=1.00/0.116, experimentation_depth=1.00/0.093, tooling_alignment=1.00/0.093, project_relevance=0.50/0.023
 
 Best existing bullets to reuse/review:
 1. [experience] Data Analyst I @ Accenture | overlaps=['python'] | bullet=Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%

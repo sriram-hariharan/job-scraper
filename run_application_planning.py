@@ -385,8 +385,6 @@ def main() -> None:
             str(job_corpus_path),
             "--job-index",
             str(job_index),
-            "--resume-name-contains",
-            winner_resume,
             "--output-json",
             str(packet_json_path),
         ]

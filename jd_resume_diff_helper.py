@@ -10,7 +10,9 @@ from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
 
-TIE_EPSILON = 0.005
+TIE_EPSILON = 0.010
+TITLE_ONLY_TIE_EPSILON = 0.015
+NON_TITLE_DELTA_EPSILON = 0.002
 
 
 def _load_job_records(job_corpus_path: Path) -> List[dict]:
@@ -126,7 +128,16 @@ def _result_sort_key(result):
 def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_EPSILON) -> bool:
     if runner_up is None:
         return False
-    return abs(winner.final_score - runner_up.final_score) <= epsilon
+
+    score_gap = abs(winner.final_score - runner_up.final_score)
+
+    if score_gap <= epsilon:
+        return True
+
+    return (
+        score_gap <= TITLE_ONLY_TIE_EPSILON
+        and _is_title_only_edge(winner, runner_up)
+    )
 
 
 def _resume_explicit_skill_set(resume) -> Set[str]:
@@ -247,6 +258,35 @@ def _top_dimension_deltas(top_result, runner_up_result, max_dims: int = 5) -> Li
         )
     return formatted
 
+def _is_title_only_edge(
+    winner,
+    runner_up: Optional[object],
+    non_title_epsilon: float = NON_TITLE_DELTA_EPSILON,
+) -> bool:
+    if runner_up is None:
+        return False
+
+    winner_map = {dim.name: dim for dim in winner.dimension_scores}
+    runner_map = {dim.name: dim for dim in runner_up.dimension_scores}
+
+    saw_title_delta = False
+
+    for name, winner_dim in winner_map.items():
+        runner_dim = runner_map.get(name)
+        if runner_dim is None:
+            continue
+
+        delta = abs(winner_dim.weighted_score - runner_dim.weighted_score)
+
+        if name == "title_alignment":
+            if delta > 0.0:
+                saw_title_delta = True
+            continue
+
+        if delta > non_title_epsilon:
+            return False
+
+    return saw_title_delta
 
 def _payload_for_json(
     job_evidence,

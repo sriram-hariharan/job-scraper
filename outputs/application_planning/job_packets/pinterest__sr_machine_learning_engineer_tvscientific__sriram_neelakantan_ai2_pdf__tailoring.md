@@ -1,30 +1,35 @@
 # Tailoring Suggestions
 
-**Job:** roku | Senior Machine Learning Engineer, Platform
+**Job:** pinterest | Sr. Machine Learning Engineer, tvScientific
 **Selected resume:** Sriram_Neelakantan_AI2.pdf
-**Selected score:** 0.670
+**Selected score:** 0.732
 
 ## Recruiter Summary
-Sriram_Neelakantan_AI2.pdf is the selected variant for roku | Senior Machine Learning Engineer, Platform with a deterministic score of 0.670. It already aligns on core requirements. The main explicit gaps still showing are no major explicit gaps.
+Sriram_Neelakantan_AI2.pdf is the selected variant for pinterest | Sr. Machine Learning Engineer, tvScientific with a deterministic score of 0.732. It already aligns on causal inference, llm, python, spark. The main explicit gaps still showing are aws, experimentation.
 
 ## Keep / Emphasize
-- Preserve the strongest JD-aligned language already present: machine learning.
+- Keep explicit required-skill evidence visible: causal inference, llm, python, spark.
+- Preserve the strongest JD-aligned language already present: machine learning, causal inference, experimentation, llm, python, spark.
 
 ## Tailoring Actions
-- Reuse or strengthen bullets that already prove these JD-aligned terms: machine learning, spark, python.
+- Move the strongest already-supported required skills higher in the resume or summary: causal inference, llm, python, spark.
+- Reuse or strengthen bullets that already prove these JD-aligned terms: aws, python, spark, machine learning.
+- Review whether you have truthful evidence for the missing required skills before editing anything: aws, experimentation.
+- If you do have truthful evidence for any missing requirement, add it explicitly in bullets/skills; otherwise leave the gap visible instead of inventing coverage.
 
 ## Do Not Claim
+- Do not claim missing required skills unless you can support them truthfully: aws, experimentation.
 - Only add or strengthen resume language when it is already truthful and supported by your actual work.
 
 ## Bullet Reuse Candidates
-- **[experience] Data Analyst II @ Accenture** | overlaps=['machine learning', 'spark']
+- **[experience] Data Analyst I @ Accenture** | overlaps=['aws', 'python']
+  - Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records
+  - Reuse/review this bullet because it already supports: aws, python
+- **[experience] Data Analyst II @ Accenture** | overlaps=['spark', 'machine learning']
   - Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns
-  - Reuse/review this bullet because it already supports: machine learning, spark
+  - Reuse/review this bullet because it already supports: spark, machine learning
 - **[experience] Data Analyst I @ Accenture** | overlaps=['python']
   - Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%
-  - Reuse/review this bullet because it already supports: python
-- **[experience] Data Analyst I @ Accenture** | overlaps=['python']
-  - Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records
   - Reuse/review this bullet because it already supports: python
 - **[experience] Data Analyst I @ Accenture** | overlaps=['python']
   - Manipulated and analyzed large-scale clinical and real-world datasets (trial records, biomarker studies) using Python, SQL, and Databricks, ensuring compliance with regulatory standards and improving early risk detection by 10%
@@ -39,22 +44,22 @@ You are helping tailor a resume for one job.
 You must stay grounded only in the provided evidence.
 Do not invent skills, tools, projects, outcomes, or responsibilities.
 
-Job company: roku
-Job title: Senior Machine Learning Engineer, Platform
+Job company: pinterest
+Job title: Sr. Machine Learning Engineer, tvScientific
 Selected resume: Sriram_Neelakantan_AI2.pdf
-Selected score: 0.670
+Selected score: 0.732
 
-Matched required skills: []
-Missing required skills: []
+Matched required skills: ['causal inference', 'llm', 'python', 'spark']
+Missing required skills: ['aws', 'experimentation']
 Matched preferred skills: []
 Missing preferred skills: []
-Matched terms: ['machine learning']
-Top dimensions: title_alignment=0.70/0.147, required_skills_alignment=0.50/0.128, analytics_ml_depth=1.00/0.116, experimentation_depth=1.00/0.093, tooling_alignment=0.75/0.070, domain_relevance=0.50/0.047
+Matched terms: ['machine learning', 'causal inference', 'experimentation', 'llm', 'python', 'spark']
+Top dimensions: required_skills_alignment=0.83/0.213, title_alignment=0.70/0.147, analytics_ml_depth=1.00/0.116, tooling_alignment=1.00/0.093, domain_relevance=0.50/0.047, experimentation_depth=0.50/0.047
 
 Best existing bullets to reuse/review:
-1. [experience] Data Analyst II @ Accenture | overlaps=['machine learning', 'spark'] | bullet=Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns
-2. [experience] Data Analyst I @ Accenture | overlaps=['python'] | bullet=Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%
-3. [experience] Data Analyst I @ Accenture | overlaps=['python'] | bullet=Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records
+1. [experience] Data Analyst I @ Accenture | overlaps=['aws', 'python'] | bullet=Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records
+2. [experience] Data Analyst II @ Accenture | overlaps=['spark', 'machine learning'] | bullet=Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns
+3. [experience] Data Analyst I @ Accenture | overlaps=['python'] | bullet=Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%
 4. [experience] Data Analyst I @ Accenture | overlaps=['python'] | bullet=Manipulated and analyzed large-scale clinical and real-world datasets (trial records, biomarker studies) using Python, SQL, and Databricks, ensuring compliance with regulatory standards and improving early risk detection by 10%
 5. [experience] Data Analyst II @ Accenture | overlaps=['python'] | bullet=Conducted portfolio exposure analysis using Python for scenario modeling, SQL for data aggregation, & Tableau for risk visualization, informing pricing, design changes that improved profitability by 10% and reduced lapse risk by 12%
 6. [experience] Data Analyst II @ Accenture | overlaps=['python'] | bullet=Drove lapse and retention risk assessments using Python (gradient boosting) and customer segmentation with SQL, uncovering key drivers of early terminations that informed policy changes and reduced early-lapse rates by 15% Improved quarterly risk assessment accuracy by 12% by implementing a gradient boosting model that predicts policyholder default probabilities, using demographic & historical claim data to refine risk mitigation strategies

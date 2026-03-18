@@ -36,11 +36,31 @@ DATA_ENGINEERING_SKILLS = {
     "data warehouse",
 }
 
+def _extract_job_skills(job):
+    raw_skills = []
+
+    intelligence_skills = job.get("intelligence", {}).get("skills", {})
+
+    if isinstance(intelligence_skills, dict):
+        raw_skills.extend(intelligence_skills.get("required", []) or [])
+        raw_skills.extend(intelligence_skills.get("preferred", []) or [])
+    elif isinstance(intelligence_skills, list):
+        raw_skills.extend(intelligence_skills)
+
+    raw_skills.extend(job.get("required_skills", []) or [])
+    raw_skills.extend(job.get("preferred_skills", []) or [])
+    raw_skills.extend(job.get("all_skills", []) or [])
+
+    return {
+        str(skill).lower().strip()
+        for skill in raw_skills
+        if str(skill).strip()
+    }
 
 def classify_role_family(job):
 
     title = (job.get("title") or "").lower()
-    skills = set(s.lower() for s in job.get("intelligence", {}).get("skills", []))
+    skills = _extract_job_skills(job)
 
     # -------------------------
     # Title-based strong signals

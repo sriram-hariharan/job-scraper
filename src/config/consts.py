@@ -647,3 +647,90 @@ _SENIORITY_RANKS = {
     "staff": 4,
     "principal": 5,
 }
+
+
+# ============================================================
+# SKILL EXTRACTOR
+# ============================================================  
+
+INVALID_SKILL_PATTERNS = [
+    r"\bability to\b",
+    r"\bstrong\b",
+    r"\bexcellent\b",
+    r"\bbackground in\b",
+    r"\bbackground\b",
+    r"\bexperience\b",
+    r"\bproficiency\b",
+    r"\bskills?\b",
+    r"\bcommunication\b",
+    r"\bleadership\b",
+    r"\bstakeholder\b",
+    r"\bbusiness\b",
+    r"\bproblem[- ]solving\b",
+    r"\bstructured thinking\b",
+    r"\battention to detail\b",
+    r"\bownership\b",
+    r"\bservice\b",
+    r"\bperformance\b",
+    r"\bdata quality\b",
+    r"\bdata integrity\b",
+    r"\bdata products?\b",
+    r"\bdata pipelines?\b",
+    r"\brobust data pipelines?\b",
+    r"\bscalable processes?\b",
+    r"\bdata models?\b",
+    r"\bautomation solutions?\b",
+    r"\betl pipelines?\b",
+    r"\bdata analysis\b",
+    r"\bdata science\b",
+    r"\bdata visualization\b",
+    r"\bquantitative analysis\b",
+    r"\bscripting language\b",
+    r"\bsql queries?\b",
+    r"\bstatistical techniques\b",
+    r"\bml fundamentals\b",
+    r"\bbig data experience\b",
+    r"\bteaching experience\b",
+    r"\badtech\b",
+    r"\bctv\b",
+    r"\bai capabilities\b",
+    r"\bideally\b",
+    r"\brigor\b",
+    r"\bdevops\b",
+    r"\bci/cd practices\b",
+    r"\btools\b",
+    r"\bdata platforms?\b",
+    r"\bscalable data platforms?\b",
+]
+
+REQUIRED_CONTEXT_PATTERNS = [
+    r"\brequired qualifications\b",
+    r"\bminimum qualifications\b",
+    r"\bbasic qualifications\b",
+    r"\brequirements\b",
+    r"\bmust have\b",
+    r"\bwhat we're looking for\b",
+    r"\bwhat you need\b",
+    r"\bwhat you'll need\b",
+]
+
+PREFERRED_CONTEXT_PATTERNS = [
+    r"\bpreferred qualifications\b",
+    r"\bbonus points\b",
+    r"\bnice to have\b",
+    r"\bpreferred\b",
+    r"\ba plus\b",
+    r"\bis a plus\b",
+]
+
+EMBEDDED_SKILL_PATTERNS = [
+    (r"\baws athena\b", "aws athena"),
+    (r"\bapache spark\b", "apache spark"),
+    (r"\bapache beam\b", "apache beam"),
+    (r"\bgoogle sheets\b", "google sheets"),
+    (r"\binfrastructure as code\b", "infrastructure as code"),
+    (r"\bci/cd\b", "ci/cd"),
+    (r"\baws\b", "aws"),
+    (r"\bsigma\b", "sigma"),
+    (r"\btableau\b", "tableau"),
+]

@@ -6,6 +6,8 @@ from src.utils.skill_normalizer import normalize_skills
 from src.ai.skill_llm_enricher import enrich_skills_with_llm
 from src.ai.job_fit_evaluator import detect_visa_sponsorship
 
+from src.intelligence.role_family_classifier import classify_role_family
+
 logger = get_logger("ai_eval_filter")
 
 
@@ -54,6 +56,7 @@ def build_job_intelligence(job: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     job["intelligence"] = intelligence
+    job["role_family"] = classify_role_family(job)
 
     return job
 

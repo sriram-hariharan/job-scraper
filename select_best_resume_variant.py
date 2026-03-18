@@ -10,6 +10,7 @@ from src.resume.evidence_builder import build_resume_evidence
 
 TIE_EPSILON = 0.005
 
+
 def _load_job_records(job_corpus_path: Path) -> List[dict]:
     if not job_corpus_path.exists():
         raise RuntimeError(f"Missing job corpus: {job_corpus_path}")
@@ -120,10 +121,39 @@ def _top_dimension_deltas(top_result, runner_up_result, max_dims: int = 5) -> Li
         )
     return formatted
 
+
 def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_EPSILON) -> bool:
     if runner_up is None:
         return False
     return abs(winner.final_score - runner_up.final_score) <= epsilon
+
+
+def _has_credible_match(passed_results: List[object]) -> bool:
+    return len(passed_results) > 0
+
+
+def _no_credible_match_lines(top_result) -> List[str]:
+    lines = [
+        f"No credible resume match: all resume variants failed deterministic prefilter for "
+        f"{top_result.pair.job_company} | {top_result.pair.job_title}.",
+        f"Closest diagnostic variant by deterministic ordering: "
+        f"{top_result.pair.resume_name} (score {top_result.final_score:.3f}).",
+    ]
+
+    if top_result.prefilter.matched_terms:
+        lines.append(
+            f"Strongest matched terms: {', '.join(top_result.prefilter.matched_terms[:6])}"
+        )
+
+    if top_result.prefilter.missing_requirements:
+        lines.append(
+            f"Main remaining gaps: {', '.join(top_result.prefilter.missing_requirements[:6])}"
+        )
+    else:
+        lines.append("Main remaining gaps: none explicitly identified.")
+
+    return lines
+
 
 def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
     lines = []
@@ -167,6 +197,7 @@ def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
 
     return lines
 
+
 def _dimension_to_dict(dim) -> dict:
     return {
         "name": dim.name,
@@ -193,6 +224,7 @@ def _result_to_dict(result) -> dict:
         "match_bucket": result.match_bucket,
         "dimension_scores": [_dimension_to_dict(dim) for dim in result.dimension_scores],
     }
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -286,70 +318,98 @@ def main() -> None:
 
     winner = selected[0]
     runner_up: Optional[object] = selected[1] if len(selected) > 1 else None
-    is_tie = _is_effective_tie(winner, runner_up)
 
-    print("-" * 100)
-    print("WINNER")
-    print("-" * 100)
-    print(
-        f"{winner.pair.resume_name} | "
-        f"score={winner.final_score:.3f} | "
-        f"bucket={winner.match_bucket} | "
-        f"prefilter={'PASS' if winner.prefilter.passed else 'FAIL'}"
-    )
-    print(f"Prefilter reasons: {winner.prefilter.reasons}")
-    if winner.prefilter.matched_terms:
-        print(f"Matched terms: {winner.prefilter.matched_terms[:10]}")
-    if winner.prefilter.missing_requirements:
-        print(f"Missing requirements: {winner.prefilter.missing_requirements[:12]}")
-    print(f"Top dimensions: {_dimension_snapshot(winner)}")
-    print()
+    has_credible_match = _has_credible_match(passed_results)
+    if not has_credible_match:
+        runner_up = None
 
-    if runner_up is not None:
+    is_tie = _is_effective_tie(winner, runner_up) if has_credible_match else False
+
+    if has_credible_match:
         print("-" * 100)
-        print("RUNNER-UP")
+        print("WINNER")
         print("-" * 100)
         print(
-            f"{runner_up.pair.resume_name} | "
-            f"score={runner_up.final_score:.3f} | "
-            f"bucket={runner_up.match_bucket} | "
-            f"prefilter={'PASS' if runner_up.prefilter.passed else 'FAIL'}"
+            f"{winner.pair.resume_name} | "
+            f"score={winner.final_score:.3f} | "
+            f"bucket={winner.match_bucket} | "
+            f"prefilter={'PASS' if winner.prefilter.passed else 'FAIL'}"
         )
-        print(f"Prefilter reasons: {runner_up.prefilter.reasons}")
-        if runner_up.prefilter.matched_terms:
-            print(f"Matched terms: {runner_up.prefilter.matched_terms[:10]}")
-        if runner_up.prefilter.missing_requirements:
-            print(f"Missing requirements: {runner_up.prefilter.missing_requirements[:12]}")
-        print(f"Top dimensions: {_dimension_snapshot(runner_up)}")
+        print(f"Prefilter reasons: {winner.prefilter.reasons}")
+        if winner.prefilter.matched_terms:
+            print(f"Matched terms: {winner.prefilter.matched_terms[:10]}")
+        if winner.prefilter.missing_requirements:
+            print(f"Missing requirements: {winner.prefilter.missing_requirements[:12]}")
+        print(f"Top dimensions: {_dimension_snapshot(winner)}")
         print()
 
+        if runner_up is not None:
+            print("-" * 100)
+            print("RUNNER-UP")
+            print("-" * 100)
+            print(
+                f"{runner_up.pair.resume_name} | "
+                f"score={runner_up.final_score:.3f} | "
+                f"bucket={runner_up.match_bucket} | "
+                f"prefilter={'PASS' if runner_up.prefilter.passed else 'FAIL'}"
+            )
+            print(f"Prefilter reasons: {runner_up.prefilter.reasons}")
+            if runner_up.prefilter.matched_terms:
+                print(f"Matched terms: {runner_up.prefilter.matched_terms[:10]}")
+            if runner_up.prefilter.missing_requirements:
+                print(f"Missing requirements: {runner_up.prefilter.missing_requirements[:12]}")
+            print(f"Top dimensions: {_dimension_snapshot(runner_up)}")
+            print()
+
+            print("-" * 100)
+            if is_tie:
+                print("TIE STATUS")
+                print("-" * 100)
+                print(
+                    f"{winner.pair.resume_name} and {runner_up.pair.resume_name} "
+                    f"are effectively tied."
+                )
+                print(
+                    f"Score gap: {winner.final_score - runner_up.final_score:.3f} "
+                    f"(tie threshold {TIE_EPSILON:.3f})"
+                )
+            else:
+                print("WHY THE WINNER WON")
+                print("-" * 100)
+                print(f"Score gap: {winner.final_score - runner_up.final_score:.3f}")
+                for item in _top_dimension_deltas(winner, runner_up):
+                    print(item)
+            print()
+    else:
         print("-" * 100)
-        if is_tie:
-            print("TIE STATUS")
-            print("-" * 100)
-            print(
-                f"{winner.pair.resume_name} and {runner_up.pair.resume_name} "
-                f"are effectively tied."
-            )
-            print(
-                f"Score gap: {winner.final_score - runner_up.final_score:.3f} "
-                f"(tie threshold {TIE_EPSILON:.3f})"
-            )
-        else:
-            print("WHY THE WINNER WON")
-            print("-" * 100)
-            print(f"Score gap: {winner.final_score - runner_up.final_score:.3f}")
-            for item in _top_dimension_deltas(winner, runner_up):
-                print(item)
+        print("NO CREDIBLE MATCH")
+        print("-" * 100)
+        print(
+            f"Closest diagnostic variant: {winner.pair.resume_name} | "
+            f"score={winner.final_score:.3f} | "
+            f"bucket={winner.match_bucket} | "
+            f"prefilter=FAIL"
+        )
+        print(f"Prefilter reasons: {winner.prefilter.reasons}")
+        if winner.prefilter.matched_terms:
+            print(f"Matched terms: {winner.prefilter.matched_terms[:10]}")
+        if winner.prefilter.missing_requirements:
+            print(f"Missing requirements: {winner.prefilter.missing_requirements[:12]}")
+        print(f"Top dimensions: {_dimension_snapshot(winner)}")
         print()
-    
+
     print("-" * 100)
     print("APPLICATION RECOMMENDATION")
     print("-" * 100)
-    for line in _recommendation_lines(winner, runner_up):
+    recommendation_lines = (
+        _recommendation_lines(winner, runner_up)
+        if has_credible_match
+        else _no_credible_match_lines(winner)
+    )
+    for line in recommendation_lines:
         print(line)
-    print()
 
+    print()
     print("-" * 100)
     print(f"TOP {min(args.top_k, len(selected))} VARIANTS")
     print("-" * 100)
@@ -396,9 +456,10 @@ def main() -> None:
                 "passed_prefilter": len(passed_results),
                 "filtered_out": len(failed_results),
             },
-            "application_recommendation": _recommendation_lines(winner, runner_up),
-            "winner": _result_to_dict(winner),
-            "runner_up": _result_to_dict(runner_up) if runner_up is not None else None,
+            "application_recommendation": recommendation_lines,
+            "winner": _result_to_dict(winner) if has_credible_match else None,
+            "runner_up": _result_to_dict(runner_up) if has_credible_match and runner_up is not None else None,
+            "diagnostic_top_variant": _result_to_dict(winner) if not has_credible_match else None,
             "winner_vs_runner_up": {
                 "score_gap": (winner.final_score - runner_up.final_score) if runner_up is not None else None,
                 "is_tie": is_tie,
@@ -415,6 +476,7 @@ def main() -> None:
 
         output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"JSON written: {output_path}")
+
 
 if __name__ == "__main__":
     main()

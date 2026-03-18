@@ -35,6 +35,15 @@ def _classify_action(row: dict) -> tuple[str, str]:
     resume_variants_considered = int(row.get("resume_variants_considered", "0"))
     missing_count = _count_missing_requirements(row.get("winner_missing_requirements", ""))
 
+    winner_resume = str(row.get("winner_resume", "")).strip()
+    winner_bucket = _normalize_text(row.get("winner_bucket", ""))
+
+    if passed_prefilter == 0 or winner_bucket == "filtered_out" or not winner_resume:
+        return (
+            "SKIP_FOR_NOW",
+            "No credible deterministic resume match; all resume variants failed prefilter.",
+        )
+
     pass_rate = (
         passed_prefilter / resume_variants_considered
         if resume_variants_considered > 0

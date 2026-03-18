@@ -12,6 +12,12 @@ from src.storage.skill_corpus_store import (
     get_cached_llm_skills,
     store_cached_llm_skills,
 )
+from src.config.consts import (
+    INVALID_SKILL_PATTERNS,
+    REQUIRED_CONTEXT_PATTERNS,
+    PREFERRED_CONTEXT_PATTERNS,
+    EMBEDDED_SKILL_PATTERNS
+)
 from src.utils.logging import get_logger
 
 load_dotenv()
@@ -21,6 +27,8 @@ logger = get_logger("ai_eval_filter")
 MODEL = get_default_model()
 SKILL_EXTRACTION_MODE = os.getenv("SKILL_EXTRACTION_MODE", "cache_prefer_live").strip().lower()
 VALID_EXTRACTION_MODES = {"cache_prefer_live", "cache_only", "live_only"}
+
+SKILL_EXTRACTION_PROMPT_VERSION = "v6_postfilter_cleanup"
 
 skill_cache_metrics_lock = Lock()
 
@@ -94,36 +102,65 @@ RULE 6 — Return skills exactly as they appear in the job description (lowercas
 
 RULE 7 — When in doubt, leave it out.
 
+RULE 8 — Preserve requirement level exactly as written in the job description.
+
+  • Skills from sections or phrases like:
+    "required qualifications", "minimum qualifications", "basic qualifications",
+    "must have", "requirements", "secondary qualifications"
+    → put in "required_skills"
+
+  • Skills from sections or phrases like:
+    "preferred qualifications", "bonus points", "nice to have", "plus", "preferred"
+    → put in "preferred_skills"
+
+RULE 9 — NEVER upgrade a preferred / bonus skill into required just because it is technical.
+
+RULE 10 — If the same skill appears in both required and preferred contexts,
+          keep it only in "required_skills".
+
 ════════════════════════════════════════
-EXAMPLE
+EXAMPLE 1
 ════════════════════════════════════════
 
 Job description snippet:
-"We need strong SQL and Python skills, experience with Airflow for pipeline orchestration,
-stakeholder management, and 5+ years in fintech. A/B testing and causal inference experience
-preferred. Must have a bachelor's degree."
+"We need strong SQL and Python skills, experience with Airflow for pipeline orchestration.
+A/B testing and causal inference experience preferred. Must have a bachelor's degree."
 
 Correct output:
+{
+  "required_skills": ["sql", "python", "airflow"],
+  "preferred_skills": ["a/b testing", "causal inference"]
+}
+
+Wrong output (DO NOT do this):
 {
   "required_skills": ["sql", "python", "airflow", "a/b testing", "causal inference"],
   "preferred_skills": []
 }
 
-Wrong output (DO NOT do this):
-{
-  "required_skills": ["sql", "python", "airflow", "pipeline orchestration",
-                      "stakeholder management", "fintech", "5+ years"],
-  "preferred_skills": ["a/b testing", "causal inference", "bachelor's degree"]
-}
-
+════════════════════════════════════════
+EXAMPLE 2
 ════════════════════════════════════════
 
-Return ONLY valid JSON with no explanation:
+Job description snippet:
+"Required Qualifications:
+- advanced user of excel / google sheets
+
+Bonus Points:
+- experience working with netsuite, floqast, cryptio"
+
+Correct output:
 {
-  "required_skills": [],
-  "preferred_skills": []
+  "required_skills": ["excel", "google sheets"],
+  "preferred_skills": ["netsuite", "floqast", "cryptio"]
 }
 """
+
+def _response_preview(response: str, limit: int = 500) -> str:
+    text = (response or "").replace("\n", "\\n").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit] + "...[truncated]"
 
 
 def extract_json_from_response(response: str):
@@ -145,21 +182,264 @@ def extract_json_from_response(response: str):
     return json.loads(json_str)
 
 
+def _clean_skill_item(item: str) -> str:
+    item = re.sub(r"^[\-\*\u2022\d\.\)\s]+", "", item or "").strip().lower()
+    item = re.sub(r"\s+", " ", item)
+    item = item.rstrip(".,:;")
+    return item
+
+def _expand_skill_candidates(raw_skill: str):
+    text = _clean_skill_item(raw_skill)
+    if not text:
+        return []
+
+    candidates = []
+
+    simplified = re.sub(r"\s*\(([^)]*)\)", "", text).strip()
+    if simplified:
+        candidates.append(simplified)
+    else:
+        candidates.append(text)
+
+    # Normalize known parenthetical forms to their canonical skill
+    if "machine learning" in text and "machine learning" not in candidates:
+        candidates.append("machine learning")
+
+    # Only salvage explicitly known embedded tools/technologies.
+    # Do NOT do generic slash splitting; it creates garbage fragments.
+    for pattern, canonical in EMBEDDED_SKILL_PATTERNS:
+        if re.search(pattern, text):
+            candidates.append(canonical)
+
+    expanded = []
+    for candidate in candidates:
+        cleaned = _clean_skill_item(candidate)
+        if cleaned:
+            expanded.append(cleaned)
+
+    return list(dict.fromkeys(expanded))
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "").strip().lower())
+
+
+def _skill_appears_in_job_text(skill: str, job_text: str) -> bool:
+    skill_norm = _normalize_for_match(skill)
+    job_norm = _normalize_for_match(job_text)
+
+    if not skill_norm or not job_norm:
+        return False
+
+    candidates = [skill_norm]
+
+    simplified = re.sub(r"\s*\([^)]*\)", "", skill_norm).strip()
+    if simplified and simplified not in candidates:
+        candidates.append(simplified)
+
+    for candidate in candidates:
+        pattern = rf"(?<![a-z0-9]){re.escape(candidate)}(?![a-z0-9])"
+        if re.search(pattern, job_norm):
+            return True
+
+    return False
+
+
+def _is_valid_skill_candidate(skill: str, job_text: str) -> bool:
+    skill = _clean_skill_item(skill)
+
+    if not skill:
+        return False
+
+    if len(skill.split()) > 4:
+        return False
+
+    if any(re.search(pattern, skill) for pattern in INVALID_SKILL_PATTERNS):
+        return False
+
+    if not _skill_appears_in_job_text(skill, job_text):
+        return False
+
+    return True
+
+
+def _filter_skill_candidates(skills, job_text: str):
+    filtered = []
+
+    for raw_skill in skills:
+        for candidate in _expand_skill_candidates(raw_skill):
+            if not _is_valid_skill_candidate(candidate, job_text):
+                continue
+            filtered.append(candidate)
+
+    return sorted(set(filtered))
+
+def _context_bucket_for_skill(skill: str, job_text: str, window_chars: int = 500):
+    skill_norm = _normalize_for_match(skill)
+    job_norm = _normalize_for_match(job_text)
+
+    if not skill_norm or not job_norm:
+        return None
+
+    candidates = [skill_norm]
+
+    simplified = re.sub(r"\s*\([^)]*\)", "", skill_norm).strip()
+    if simplified and simplified not in candidates:
+        candidates.append(simplified)
+
+    saw_required = False
+    saw_preferred = False
+
+    for candidate in candidates:
+        pattern = rf"(?<![a-z0-9]){re.escape(candidate)}(?![a-z0-9])"
+        for match in re.finditer(pattern, job_norm):
+            start = max(0, match.start() - window_chars)
+            end = min(len(job_norm), match.end() + window_chars)
+            context = job_norm[start:end]
+
+            if any(re.search(p, context) for p in REQUIRED_CONTEXT_PATTERNS):
+                saw_required = True
+            if any(re.search(p, context) for p in PREFERRED_CONTEXT_PATTERNS):
+                saw_preferred = True
+
+    if saw_preferred and not saw_required:
+        return "preferred"
+    if saw_required and not saw_preferred:
+        return "required"
+    return None
+
+
+def _reassign_skills_by_context(required, preferred, job_text: str):
+    req = set(required)
+    pref = set(preferred)
+
+    for skill in list(req | pref):
+        bucket = _context_bucket_for_skill(skill, job_text)
+        if bucket == "preferred":
+            req.discard(skill)
+            pref.add(skill)
+        elif bucket == "required":
+            pref.discard(skill)
+            req.add(skill)
+
+    return sorted(req), sorted(s for s in pref if s not in req)
+
+def _drop_shadowed_generic_skills(required, preferred):
+    req = set(required)
+    pref = set(preferred)
+
+    def remove_shadowed(skill_set):
+        items = sorted(skill_set, key=len, reverse=True)
+        keep = set(items)
+
+        for item in items:
+            if item == "aws" and any(s.startswith("aws ") for s in items if s != item):
+                keep.discard(item)
+            if item == "ci/cd practices" and "ci/cd" in items:
+                keep.discard(item)
+
+        return sorted(keep)
+
+    req = set(remove_shadowed(req))
+    pref = set(remove_shadowed(pref))
+
+    pref = {s for s in pref if s not in req}
+    return sorted(req), sorted(pref)
+
+def _parse_sectioned_skill_response(response: str):
+    """
+    Parse common non-JSON LLM responses like:
+
+    **REQUIRED SKILLS:**
+    * python
+    * sql
+
+    **PREFERRED SKILLS:**
+    * tableau
+    * causal inference
+    """
+
+    lines = (response or "").splitlines()
+
+    required_header_patterns = [
+        r"required skills?",
+        r"required qualifications?",
+        r"minimum qualifications?",
+        r"basic qualifications?",
+        r"requirements?",
+    ]
+
+    preferred_header_patterns = [
+        r"preferred skills?",
+        r"preferred qualifications?",
+        r"bonus points?",
+        r"nice to have",
+        r"preferred",
+    ]
+
+    current_section = None
+    required = []
+    preferred = []
+
+    def _is_header(line: str, patterns):
+        normalized = re.sub(r"[*_`:#\-\s]+", " ", line.strip().lower()).strip()
+        return any(re.fullmatch(pattern, normalized) for pattern in patterns)
+
+    for raw_line in lines:
+        line = raw_line.strip()
+
+        if not line:
+            continue
+
+        if _is_header(line, required_header_patterns):
+            current_section = "required"
+            continue
+
+        if _is_header(line, preferred_header_patterns):
+            current_section = "preferred"
+            continue
+
+        if current_section is None:
+            continue
+
+        if re.match(r"^[-*\u2022]\s+", line) or re.match(r"^\d+[\.\)]\s+", line):
+            item = _clean_skill_item(line)
+            if not item:
+                continue
+
+            if current_section == "required":
+                required.append(item)
+            else:
+                preferred.append(item)
+
+    required = sorted(set(required))
+    preferred = sorted(set(s for s in preferred if s not in required))
+
+    if not required and not preferred:
+        raise ValueError("No sectioned skill lists found in LLM response")
+
+    return {
+        "required_skills": required,
+        "preferred_skills": preferred,
+    }
+
+
 def build_skill_cache_key(job_text: str) -> str:
     """
-    Stable cache key from normalized JD text.
-    Lowercasing + whitespace collapsing prevents
-    meaningless cache misses from formatting changes.
+    Stable cache key from normalized JD text + extraction strategy version.
+    Lowercasing + whitespace collapsing prevents meaningless cache misses from formatting changes.
     """
 
     normalized = re.sub(r"\s+", " ", (job_text or "").strip().lower())
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    payload = f"{SKILL_EXTRACTION_PROMPT_VERSION}::{normalized}"
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 
 def get_empty_skill_result():
     return {
         "required_skills": [],
         "preferred_skills": []
     }
+
 
 def reset_skill_cache_metrics():
     with skill_cache_metrics_lock:
@@ -176,6 +456,97 @@ def increment_skill_cache_metric(metric_name: str):
     with skill_cache_metrics_lock:
         if metric_name in skill_cache_metrics:
             skill_cache_metrics[metric_name] += 1
+
+
+def _build_skill_extraction_text(
+    job_text: str,
+    head_chars: int = 2500,
+    tail_chars: int = 1800,
+    window_chars: int = 900,
+    max_keyword_windows: int = 10,
+) -> str:
+    text = (job_text or "").strip()
+    if not text:
+        return ""
+
+    if len(text) <= 7000:
+        return text
+
+    priority_patterns = [
+        r"\brequired qualifications\b",
+        r"\bpreferred qualifications\b",
+        r"\bminimum qualifications\b",
+        r"\bbasic qualifications\b",
+        r"\bnice to have\b",
+        r"\bbonus points\b",
+        r"\bmust have\b",
+        r"\bwhat you'll need\b",
+        r"\bwhat you need\b",
+    ]
+
+    fallback_patterns = [
+        r"\brequirements\b",
+        r"\bqualifications\b",
+    ]
+
+    snippets = []
+    seen_ranges = []
+
+    def add_window(label: str, start: int, end: int):
+        overlaps_existing = any(not (end < s or start > e) for s, e in seen_ranges)
+        if overlaps_existing:
+            return False
+
+        seen_ranges.append((start, end))
+        snippet = text[start:end].strip()
+        if snippet:
+            snippets.append((label, snippet))
+            return True
+        return False
+
+    head = text[:head_chars].strip()
+    if head:
+        snippets.append(("HEAD", head))
+
+    # First pass: always prioritize explicit skill-section headers
+    for pattern in priority_patterns:
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            start = max(0, match.start() - window_chars)
+            end = min(len(text), match.end() + window_chars)
+            add_window(f"PRIORITY:{pattern}", start, end)
+
+    # Second pass: fill remaining budget with generic section words
+    current_windows = len(seen_ranges)
+    remaining = max(0, max_keyword_windows - current_windows)
+
+    if remaining > 0:
+        for pattern in fallback_patterns:
+            for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+                if remaining <= 0:
+                    break
+                start = max(0, match.start() - window_chars)
+                end = min(len(text), match.end() + window_chars)
+                if add_window(f"FALLBACK:{pattern}", start, end):
+                    remaining -= 1
+            if remaining <= 0:
+                break
+
+    tail = text[-tail_chars:].strip()
+    if tail:
+        snippets.append(("TAIL", tail))
+
+    parts = []
+    seen_bodies = set()
+
+    for label, body in snippets:
+        normalized = re.sub(r"\s+", " ", body).strip().lower()
+        if not normalized or normalized in seen_bodies:
+            continue
+        seen_bodies.add(normalized)
+        parts.append(f"[{label}]\n{body}")
+
+    return "\n\n".join(parts)
+
 
 def enrich_skills_with_llm(job_text):
 
@@ -210,16 +581,17 @@ def enrich_skills_with_llm(job_text):
 
     llm_bar.update(1)
 
+    extraction_text = _build_skill_extraction_text(job_text)
+
     prompt = f"""
     Extract REQUIRED and PREFERRED technical skills
     from the following job description.
 
     JOB DESCRIPTION:
-    {job_text[:4500]}
+    {extraction_text}
     """
 
     try:
-
         response = run_chat_completion(
             model=MODEL,
             temperature=0,
@@ -233,20 +605,15 @@ def enrich_skills_with_llm(job_text):
     except Exception as e:
         increment_skill_cache_metric("live_failures")
         logger.warning(f"LLM skill extraction failed: {e}")
-
         return get_empty_skill_result()
 
-    try:
-
-        parsed = extract_json_from_response(response)
-
-        required = [s.lower().strip() for s in parsed.get("required_skills", [])]
-        preferred = [s.lower().strip() for s in parsed.get("preferred_skills", [])]
+    def _finalize_skill_result(parsed_obj):
+        required = _filter_skill_candidates(parsed_obj.get("required_skills", []), job_text)
+        preferred = _filter_skill_candidates(parsed_obj.get("preferred_skills", []), job_text)
 
         preferred = [s for s in preferred if s not in required]
-
-        required = sorted(set(required))
-        preferred = sorted(set(preferred))
+        required, preferred = _reassign_skills_by_context(required, preferred, job_text)
+        required, preferred = _drop_shadowed_generic_skills(required, preferred)
 
         result = {
             "required_skills": required,
@@ -265,8 +632,50 @@ def enrich_skills_with_llm(job_text):
 
         return result
 
-    except Exception as e:
+    try:
+        parsed = extract_json_from_response(response)
+        return _finalize_skill_result(parsed)
 
-        logger.warning(f"Failed to parse LLM skill output: {e}")
+    except Exception as json_error:
+        logger.warning(
+            "Failed JSON parse on first attempt: %s | response_preview=%s",
+            json_error,
+            _response_preview(response),
+        )
 
+    try:
+        parsed_sectioned = _parse_sectioned_skill_response(response)
+        logger.info("LLM skill extraction section-parser succeeded on first attempt")
+        return _finalize_skill_result(parsed_sectioned)
+
+    except Exception as section_error:
+        logger.warning(
+            "Failed section-parser on first attempt: %s | response_preview=%s",
+            section_error,
+            _response_preview(response),
+        )
+
+    retry_prompt = prompt + "\n\nReturn ONLY valid JSON. No prose. No markdown. No explanation."
+
+    try:
+        retry_response = run_chat_completion(
+            model=MODEL,
+            temperature=0,
+            max_tokens=500,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": retry_prompt}
+            ],
+        )
+
+        parsed_retry = extract_json_from_response(retry_response)
+        logger.info("LLM skill extraction parse retry succeeded")
+        return _finalize_skill_result(parsed_retry)
+
+    except Exception as retry_error:
+        logger.warning(
+            "Failed to parse LLM skill output after retry: %s | retry_response_preview=%s",
+            retry_error,
+            _response_preview(retry_response if 'retry_response' in locals() else ""),
+        )
         return get_empty_skill_result()

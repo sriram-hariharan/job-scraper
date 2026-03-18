@@ -115,6 +115,32 @@ def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_
         return False
     return abs(winner.final_score - runner_up.final_score) <= epsilon
 
+def _has_credible_match(passed_results: List[object]) -> bool:
+    return len(passed_results) > 0
+
+
+def _no_credible_match_lines(top_result) -> List[str]:
+    lines = [
+        f"No credible resume match: all resume variants failed deterministic prefilter for "
+        f"{top_result.pair.job_company} | {top_result.pair.job_title}.",
+        f"Closest diagnostic variant by deterministic ordering: "
+        f"{top_result.pair.resume_name} (score {top_result.final_score:.3f}).",
+    ]
+
+    if top_result.prefilter.matched_terms:
+        lines.append(
+            f"Strongest matched terms: {', '.join(top_result.prefilter.matched_terms[:6])}"
+        )
+
+    if top_result.prefilter.missing_requirements:
+        lines.append(
+            f"Main remaining gaps: {', '.join(top_result.prefilter.missing_requirements[:6])}"
+        )
+    else:
+        lines.append("Main remaining gaps: none explicitly identified.")
+
+    return lines
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Batch-select the best resume variant for multiple jobs."
@@ -206,7 +232,12 @@ def main() -> None:
         selected = passed_results if passed_results else results
         winner = selected[0]
         runner_up = selected[1] if len(selected) > 1 else None
-        is_tie = _is_effective_tie(winner, runner_up)
+
+        has_credible_match = _has_credible_match(passed_results)
+        if not has_credible_match:
+            runner_up = None
+
+        is_tie = _is_effective_tie(winner, runner_up) if has_credible_match else False
 
         output_rows.append(
             {
@@ -216,18 +247,34 @@ def main() -> None:
                 "resume_variants_considered": len(results),
                 "passed_prefilter": len(passed_results),
                 "filtered_out": len(failed_results),
-                "winner_resume": winner.pair.resume_name,
+                "winner_resume": winner.pair.resume_name if has_credible_match else "",
                 "winner_score": f"{winner.final_score:.6f}",
                 "winner_bucket": winner.match_bucket,
                 "winner_top_dims": _dimension_snapshot(winner),
                 "winner_missing_requirements": " | ".join(winner.prefilter.missing_requirements),
                 "winner_matched_terms": " | ".join(winner.prefilter.matched_terms),
-                "runner_up_resume": runner_up.pair.resume_name if runner_up is not None else "",
-                "runner_up_score": f"{runner_up.final_score:.6f}" if runner_up is not None else "",
-                "score_gap": f"{(winner.final_score - runner_up.final_score):.6f}" if runner_up is not None else "",
+                "runner_up_resume": (
+                    runner_up.pair.resume_name
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_score": (
+                    f"{runner_up.final_score:.6f}"
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "score_gap": (
+                    f"{(winner.final_score - runner_up.final_score):.6f}"
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
                 "is_tie": is_tie,
                 "tie_epsilon": f"{TIE_EPSILON:.6f}",
-                "recommendation_summary": " ".join(_recommendation_lines(winner, runner_up)),
+                "recommendation_summary": (
+                                    " ".join(_recommendation_lines(winner, runner_up))
+                                    if has_credible_match
+                                    else " ".join(_no_credible_match_lines(winner))
+                                ),            
             }
         )
 
@@ -280,7 +327,10 @@ def main() -> None:
     for row in output_rows[:args.top_k_console]:
         print("-" * 100)
         print(f"{row['job_company']} | {row['job_title']}")
-        print(f"Winner: {row['winner_resume']} | score={float(row['winner_score']):.3f} | bucket={row['winner_bucket']}")
+        if row["winner_resume"]:
+            print(f"Winner: {row['winner_resume']} | score={float(row['winner_score']):.3f} | bucket={row['winner_bucket']}")
+        else:
+            print(f"No credible resume match | score={float(row['winner_score']):.3f} | bucket={row['winner_bucket']}")        
         if row["runner_up_resume"]:
             if str(row["is_tie"]).lower() == "true":
                 print(

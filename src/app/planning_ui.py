@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from src.app.ui_shell import render_top_shell
+
 router = APIRouter()
 
 
 @router.get("/planning", response_class=HTMLResponse)
 def planning_dashboard() -> str:
-    return """
+    return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +18,7 @@ def planning_dashboard() -> str:
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+{render_top_shell("/planning")}
   <div class="page">
     <header class="page-header">
       <div>
@@ -151,6 +154,7 @@ def planning_dashboard() -> str:
     </div>
   </section>
 
+  <script src="/static/shell.js"></script>
   <script src="/static/planning.js"></script>
 </body>
 </html>

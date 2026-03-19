@@ -16,9 +16,15 @@ def _make_args(**kwargs):
 
 
 def health_payload() -> Dict[str, Any]:
+    from src.rag.retriever import get_semantic_status
+
+    semantic_status = get_semantic_status()
+
     return {
         "ok": True,
         "service": "job-operator-api",
+        "semantic_retrieval": semantic_status,
+        "rag_answer_ready": bool(semantic_status.get("ready", False)),
     }
 
 

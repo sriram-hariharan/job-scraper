@@ -49,15 +49,15 @@ def intelligence_dashboard() -> str:
         </div>
 
         <div class="control-group">
-        <label for="ragTopKInput">Results to Return</label>
-        <input type="number" id="ragTopKInput" value="5" min="1" max="20" />
-        <div class="control-help">How many final jobs or sources to show.</div>
+          <label for="ragTopKInput">Results to Return</label>
+          <input type="number" id="ragTopKInput" value="5" min="1" max="20" />
+          <div class="control-help">How many final jobs or sources to show.</div>
         </div>
 
         <div class="control-group">
-        <label for="ragFetchKInput">Candidates to Scan</label>
-        <input type="number" id="ragFetchKInput" value="15" min="1" max="50" />
-        <div class="control-help">How many jobs to search before narrowing to the best matches.</div>
+          <label for="ragFetchKInput">Candidates to Scan</label>
+          <input type="number" id="ragFetchKInput" value="15" min="1" max="50" />
+          <div class="control-help">How many jobs to search before narrowing to the best matches.</div>
         </div>
 
         <div class="control-group checkbox-group">
@@ -72,6 +72,21 @@ def intelligence_dashboard() -> str:
           <button class="ghost-btn" id="clearRagBtn">Clear</button>
         </div>
       </div>
+    </section>
+
+    <section class="stats-grid">
+      <section class="card stat-card">
+        <div class="stat-label">Results Returned</div>
+        <div class="stat-value" id="ragResultsReturned">0</div>
+      </section>
+      <section class="card stat-card">
+        <div class="stat-label">Candidates Considered</div>
+        <div class="stat-value" id="ragCandidatesConsidered">0</div>
+      </section>
+      <section class="card stat-card">
+        <div class="stat-label">Sources Used</div>
+        <div class="stat-value" id="ragSourcesUsed">0</div>
+      </section>
     </section>
 
     <section class="results-grid">
@@ -95,6 +110,36 @@ def intelligence_dashboard() -> str:
       </section>
     </section>
   </div>
+
+  <section class="modal-backdrop hidden" id="applicationActionModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Update application status</h3>
+          <div class="subtext" id="applicationModalMeta">Choose what happened after opening the job.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="closeApplicationModalBtn" type="button">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="info-pair">
+          <span class="label">Company</span>
+          <span id="applicationModalCompany">-</span>
+        </div>
+        <div class="info-pair">
+          <span class="label">Title</span>
+          <span id="applicationModalTitle">-</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED">Applied</button>
+        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED">Save for later</button>
+        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED">Not applied</button>
+        <button type="button" class="ghost-btn" data-status-action="DISMISSED">Dismiss</button>
+      </div>
+    </div>
+  </section>
 
   <script src="/static/intelligence.js"></script>
 </body>

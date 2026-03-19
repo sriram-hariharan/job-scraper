@@ -3,49 +3,50 @@ from fastapi.responses import HTMLResponse
 
 router = APIRouter()
 
+
 @router.get("/", response_class=HTMLResponse)
-def dashboard_home() -> str:
+def executive_dashboard() -> str:
     return """
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Job Operator Dashboard</title>
+  <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
   <div class="page">
     <header class="page-header">
       <div>
-        <h1>Job Operator Dashboard</h1>
-        <p class="subtext">Executive queue view for review and action.</p>
+        <h1>Executive Queue</h1>
+        <p class="subtext">High-signal operator dashboard for direct apply and review decisions.</p>
       </div>
       <div class="header-actions">
+        <button id="refreshStatusBtn">Refresh</button>
         <a class="ghost-link-btn" href="/planning">Planning Detail</a>
         <a class="ghost-link-btn" href="/decisions-ui">Decisions</a>
         <a class="ghost-link-btn" href="/intelligence">Intelligence</a>
-        <button class="ghost-btn" id="refreshStatusBtn">Refresh Status</button>
       </div>
     </header>
 
-    <section class="stats-grid" id="statsGrid">
-      <div class="card stat-card">
+    <section class="stats-grid">
+      <section class="card stat-card">
         <div class="stat-label">Queue Rows</div>
         <div class="stat-value" id="statQueueRows">-</div>
-      </div>
-      <div class="card stat-card">
+      </section>
+      <section class="card stat-card">
         <div class="stat-label">Operator Decisions</div>
         <div class="stat-value" id="statDecisionRows">-</div>
-      </div>
-      <div class="card stat-card">
+      </section>
+      <section class="card stat-card">
         <div class="stat-label">Undecided Apply Review</div>
         <div class="stat-value" id="statUndecidedApplyReview">-</div>
-      </div>
-      <div class="card stat-card">
+      </section>
+      <section class="card stat-card">
         <div class="stat-label">Undecided Maybe Tailor</div>
         <div class="stat-value" id="statUndecidedMaybeTailor">-</div>
-      </div>
+      </section>
     </section>
 
     <section class="card controls-card">
@@ -79,17 +80,17 @@ def dashboard_home() -> str:
         </div>
       </div>
 
-      <div class="quick-actions">
-        <button class="quick-view-btn" data-view="direct_apply_pending">Direct Apply Pending</button>
-        <button class="quick-view-btn" data-view="undecided_apply_review">Undecided Apply Review</button>
-        <button class="quick-view-btn" data-view="undecided_maybe_tailor">Undecided Maybe Tailor</button>
-        <button class="quick-view-btn" data-view="runner_up_selected">Runner-Up Selected</button>
+      <div class="controls-row quick-view-row">
+        <button class="ghost-btn quick-view-btn" data-view="direct_apply_pending">Direct Apply Pending</button>
+        <button class="ghost-btn quick-view-btn" data-view="variant_review_pending">Variant Review Pending</button>
+        <button class="ghost-btn quick-view-btn" data-view="tailor_pending">Tailor Pending</button>
+        <button class="ghost-btn quick-view-btn" data-view="applied_jobs">Applied Jobs</button>
       </div>
     </section>
 
     <section class="card table-card">
       <div class="section-header">
-        <h2>Executive Queue</h2>
+        <h2>Queue Table</h2>
         <div class="subtext" id="tableMeta">Loading...</div>
       </div>
 
@@ -109,14 +110,44 @@ def dashboard_home() -> str:
               <th>Operator Decision</th>
               <th>Selected Resume</th>
               <th>Priority Reason</th>
+              <th class="sticky-apply-col">Apply</th>
             </tr>
           </thead>
-          <tbody id="queueTableBody">
-          </tbody>
+          <tbody id="queueTableBody"></tbody>
         </table>
       </div>
     </section>
   </div>
+
+  <section class="modal-backdrop hidden" id="applicationActionModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Update application status</h3>
+          <div class="subtext" id="applicationModalMeta">Choose what happened after opening the job.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="closeApplicationModalBtn" type="button">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="info-pair">
+          <span class="label">Company</span>
+          <span id="applicationModalCompany">-</span>
+        </div>
+        <div class="info-pair">
+          <span class="label">Title</span>
+          <span id="applicationModalTitle">-</span>
+        </div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="status-action-btn applied-action-btn" data-status-action="APPLIED">Applied</button>
+        <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED">Save for later</button>
+        <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED">Not applied</button>
+        <button type="button" class="ghost-btn" data-status-action="DISMISSED">Dismiss</button>
+      </div>
+    </div>
+  </section>
 
   <script src="/static/app.js"></script>
 </body>

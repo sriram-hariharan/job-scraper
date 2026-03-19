@@ -1,3 +1,5 @@
+const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -10,6 +12,13 @@ function escapeHtml(value) {
 
 function qs(id) {
   return document.getElementById(id);
+}
+
+function setTextIfPresent(id, value) {
+  const el = qs(id);
+  if (el) {
+    el.textContent = String(value);
+  }
 }
 
 function countPlanningActiveFilters() {
@@ -34,17 +43,27 @@ function renderTableLoading(colspan, label) {
 }
 
 function updatePlanningStats(rowCount) {
-  qs("planningJobsShown").textContent = String(rowCount ?? 0);
-  qs("planningActiveFilters").textContent = String(countPlanningActiveFilters());
+  setTextIfPresent("planningJobsShown", rowCount ?? 0);
+  setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
 }
 
-async function fetchJson(url) {
-  const response = await fetch(url);
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`HTTP ${response.status}: ${text}`);
   }
   return response.json();
+}
+
+async function postJson(url, payload) {
+  return fetchJson(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 function buildPlanningUrl() {
@@ -62,6 +81,109 @@ function buildPlanningUrl() {
   return `/browse?${params.toString()}`;
 }
 
+function buildApplicationPayloadFromRow(row) {
+  return {
+    job_doc_id: row.job_doc_id || "",
+    job_url: row.job_url || row.job_doc_id || "",
+    job_company: row.job_company || "",
+    job_title: row.job_title || "",
+    source_view: "planning",
+  };
+}
+
+function buildApplicationButtonHtml(row) {
+  const isApplied = Boolean(row.is_applied);
+  const label = escapeHtml(row.application_label || (isApplied ? "Applied" : "Apply"));
+  const buttonClass = isApplied ? "job-apply-btn applied-btn" : "job-apply-btn apply-btn";
+  const disabledAttr = isApplied ? "disabled" : "";
+
+  return `
+    <button
+      type="button"
+      class="${buttonClass}"
+      ${disabledAttr}
+      data-apply-job="true"
+      data-job-doc-id="${escapeHtml(row.job_doc_id || "")}"
+      data-job-url="${escapeHtml(row.job_url || row.job_doc_id || "")}"
+      data-job-company="${escapeHtml(row.job_company || "")}"
+      data-job-title="${escapeHtml(row.job_title || "")}"
+    >
+      ${label}
+    </button>
+  `;
+}
+
+function persistPendingApplication(job) {
+  sessionStorage.setItem(PENDING_APPLICATION_STORAGE_KEY, JSON.stringify(job));
+}
+
+function loadPendingApplicationFromStorage() {
+  const raw = sessionStorage.getItem(PENDING_APPLICATION_STORAGE_KEY);
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch {
+    sessionStorage.removeItem(PENDING_APPLICATION_STORAGE_KEY);
+    return null;
+  }
+}
+
+function clearPendingApplication() {
+  sessionStorage.removeItem(PENDING_APPLICATION_STORAGE_KEY);
+}
+
+function getApplicationModal() {
+  return qs("applicationActionModal");
+}
+
+function openApplicationModal(job) {
+  if (!job) return;
+  qs("applicationModalCompany").textContent = job.job_company || "-";
+  qs("applicationModalTitle").textContent = job.job_title || "-";
+  getApplicationModal().classList.remove("hidden");
+}
+
+function closeApplicationModal() {
+  getApplicationModal().classList.add("hidden");
+}
+
+async function submitApplicationStatus(status) {
+  const job = loadPendingApplicationFromStorage();
+  if (!job) return;
+
+  await postJson("/application-actions", {
+    ...job,
+    application_status: status,
+  });
+
+  clearPendingApplication();
+  closeApplicationModal();
+  await loadPlanningTable();
+}
+
+async function handleApplyClick(button) {
+  const payload = {
+    job_doc_id: button.dataset.jobDocId || "",
+    job_url: button.dataset.jobUrl || "",
+    job_company: button.dataset.jobCompany || "",
+    job_title: button.dataset.jobTitle || "",
+    source_view: "planning",
+  };
+
+  await postJson("/application-actions", {
+    ...payload,
+    application_status: "OPENED",
+  });
+
+  persistPendingApplication(payload);
+
+  const targetUrl = payload.job_url || payload.job_doc_id;
+  if (targetUrl) {
+    window.open(targetUrl, "_blank", "noopener,noreferrer");
+  }
+}
+
 function renderPlanningRows(rows, metaLabel) {
   const tbody = qs("planningTableBody");
   const safeRows = Array.isArray(rows) ? rows : [];
@@ -69,10 +191,11 @@ function renderPlanningRows(rows, metaLabel) {
   if (!safeRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="18" class="empty-state">No rows found.</td>
+        <td colspan="19" class="empty-state">No rows found.</td>
       </tr>
     `;
     qs("planningTableMeta").textContent = metaLabel;
+    updatePlanningStats(0);
     return;
   }
 
@@ -103,14 +226,20 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(row.operator_decision || "")}</td>
         <td>${escapeHtml(row.operator_selected_resume || "")}</td>
         <td class="reason-cell">${escapeHtml(row.queue_priority_reason || "")}</td>
+        <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
       </tr>
     `;
   }).join("");
 
   qs("planningTableMeta").textContent = metaLabel;
+  updatePlanningStats(safeRows.length);
 }
 
 async function loadPlanningTable() {
+  const tbody = qs("planningTableBody");
+  tbody.innerHTML = renderTableLoading(19, "Loading planning rows...");
+  qs("planningTableMeta").textContent = "Loading...";
+
   const url = buildPlanningUrl();
   const data = await fetchJson(url);
   const count = data.count ?? 0;
@@ -126,6 +255,7 @@ function clearPlanningFilters() {
   qs("planningWinnerBucket").value = "";
   qs("planningUndecidedOnly").checked = false;
   qs("planningLimitInput").value = "50";
+  updatePlanningStats(0);
 }
 
 function attachPlanningHandlers() {
@@ -144,6 +274,48 @@ function attachPlanningHandlers() {
     } catch (err) {
       alert(`Failed to reload planning table: ${err.message}`);
     }
+  });
+
+  qs("planningTableBody").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-apply-job='true']");
+    if (!button || button.disabled) return;
+
+    try {
+      await handleApplyClick(button);
+    } catch (err) {
+      alert(`Failed to open apply workflow: ${err.message}`);
+    }
+  });
+
+  qs("closeApplicationModalBtn").addEventListener("click", () => {
+    clearPendingApplication();
+    closeApplicationModal();
+  });
+
+  getApplicationModal().addEventListener("click", (event) => {
+    if (event.target === getApplicationModal()) {
+      clearPendingApplication();
+      closeApplicationModal();
+    }
+  });
+
+  document.querySelectorAll("[data-status-action]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const status = btn.dataset.statusAction;
+      if (!status) return;
+
+      try {
+        await submitApplicationStatus(status);
+      } catch (err) {
+        alert(`Failed to update application status: ${err.message}`);
+      }
+    });
+  });
+
+  window.addEventListener("focus", () => {
+    const pending = loadPendingApplicationFromStorage();
+    if (!pending || !getApplicationModal().classList.contains("hidden")) return;
+    openApplicationModal(pending);
   });
 }
 

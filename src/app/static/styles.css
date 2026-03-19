@@ -635,3 +635,185 @@ tbody tr:hover {
 .evidence-scroll::-webkit-scrollbar-track {
   background: transparent;
 }
+
+.apply-cell {
+  min-width: 130px;
+}
+
+.job-apply-btn {
+  min-width: 96px;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+}
+
+.job-apply-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.apply-btn {
+  background: rgba(120, 166, 255, 0.16);
+  color: #dbe6ff;
+  border: 1px solid rgba(120, 166, 255, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(120, 166, 255, 0.08);
+}
+
+.applied-btn {
+  background: rgba(145, 242, 195, 0.14);
+  color: #d7f8ea;
+  border: 1px solid rgba(145, 242, 195, 0.28);
+  box-shadow: inset 0 0 0 1px rgba(145, 242, 195, 0.06);
+  cursor: default;
+}
+
+.applied-btn:disabled {
+  opacity: 1;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 10, 20, 0.72);
+  backdrop-filter: blur(4px);
+}
+
+.modal-backdrop.hidden {
+  display: none;
+}
+
+.modal-card {
+  width: min(560px, 100%);
+  background: rgba(18, 25, 51, 0.98);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+  padding: 20px;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.modal-header h3 {
+  margin: 0 0 6px 0;
+  font-size: 22px;
+}
+
+.modal-close-btn {
+  white-space: nowrap;
+}
+
+.modal-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.status-action-btn {
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.applied-action-btn {
+  background: rgba(145, 242, 195, 0.16);
+  color: #d7f8ea;
+  border: 1px solid rgba(145, 242, 195, 0.3);
+}
+
+.saved-action-btn {
+  background: rgba(120, 166, 255, 0.14);
+  color: #dbe6ff;
+  border: 1px solid rgba(120, 166, 255, 0.3);
+}
+
+.not-applied-action-btn {
+  background: rgba(255, 143, 143, 0.12);
+  color: #ffd7d7;
+  border: 1px solid rgba(255, 143, 143, 0.22);
+}
+
+.sticky-apply-col {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: rgba(12, 18, 36, 0.98);
+  box-shadow: -10px 0 18px rgba(0, 0, 0, 0.18);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+thead .sticky-apply-col {
+  z-index: 4;
+  background: rgba(16, 22, 44, 0.99);
+}
+
+.table-wrap {
+  overflow-x: auto;
+  position: relative;
+}
+
+.result-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.result-title {
+  flex: 1;
+}
+
+.result-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+}
+
+.table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+  position: relative;
+}
+
+#queueTable,
+#planningTable,
+#decisionsTable {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.sticky-apply-col {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: rgba(12, 18, 36, 0.98);
+  box-shadow: -12px 0 18px rgba(0, 0, 0, 0.22);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+thead .sticky-apply-col {
+  z-index: 5;
+  background: rgba(16, 22, 44, 0.99);
+}
+
+.apply-cell {
+  min-width: 130px;
+}

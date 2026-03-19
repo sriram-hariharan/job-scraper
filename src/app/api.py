@@ -1,16 +1,16 @@
 from pathlib import Path
-
 from fastapi import FastAPI, HTTPException, Query
-
 from src.app import services
-
+from fastapi.staticfiles import StaticFiles
+from src.app.ui import router as ui_router
 
 app = FastAPI(
     title="Job Operator API",
     version="0.1.0",
     description="Thin API shell over deterministic operator workflows and local job RAG.",
 )
-
+app.mount("/static", StaticFiles(directory="src/app/static"), name="static")
+app.include_router(ui_router)
 
 @app.get("/health")
 def health():

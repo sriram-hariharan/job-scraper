@@ -41,6 +41,10 @@ function buildQueueRowHtml(row) {
   const action = escapeHtml(row.action || "");
   const company = escapeHtml(row.job_company || "");
   const title = escapeHtml(row.job_title || "");
+  const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
+  const titleHtml = jobUrl
+    ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+    : title;
   const winnerResume = escapeHtml(row.winner_resume || "");
   const winnerScore = escapeHtml(row.winner_score || "");
   const runnerUpResume = escapeHtml(row.runner_up_resume || "");
@@ -55,7 +59,7 @@ function buildQueueRowHtml(row) {
       <td>${queueRank}</td>
       <td><span class="pill">${action || "-"}</span></td>
       <td>${company}</td>
-      <td class="title-cell">${title}</td>
+      <td class="title-cell">${titleHtml}</td>
       <td>${winnerResume}</td>
       <td>${winnerScore}</td>
       <td>${runnerUpResume}</td>

@@ -22,6 +22,7 @@ def dashboard_home() -> str:
         <p class="subtext">Executive queue view for review and action.</p>
       </div>
       <div class="header-actions">
+        <a class="ghost-link-btn" href="/planning">Planning Detail</a>
         <button class="ghost-btn" id="refreshStatusBtn">Refresh Status</button>
       </div>
     </header>

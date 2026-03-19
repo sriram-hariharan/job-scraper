@@ -192,6 +192,16 @@ table {
   border-collapse: collapse;
   min-width: 1350px;
 }
+.job-link {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.job-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
 
 thead {
   background: rgba(255, 255, 255, 0.03);
@@ -259,4 +269,22 @@ tbody tr:hover {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+.ghost-link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-weight: 700;
+}
+
+.ghost-link-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }

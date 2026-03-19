@@ -6,11 +6,27 @@ from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
 from src.app.intelligence_ui import router as intelligence_ui_router
+from contextlib import asynccontextmanager
+
+from src.utils.logging import get_logger
+
+logger = get_logger("app.api")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    from src.rag.retriever import warm_semantic_retrieval
+
+    try:
+        warm_semantic_retrieval(top_ks=(5, 15))
+    except Exception:
+        logger.exception("RAG semantic warmup failed during API startup")
+    yield
 
 app = FastAPI(
     title="Job Operator API",
     version="0.1.0",
     description="Thin API shell over deterministic operator workflows and local job RAG.",
+    lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory="src/app/static"), name="static")
 app.include_router(ui_router)
@@ -193,3 +209,12 @@ def rag_answer(
         output_mode=output_mode,
         include_diagnostics=include_diagnostics,
     )
+
+@app.on_event("startup")
+def warm_rag_semantic_stack():
+    from src.rag.retriever import warm_semantic_retrieval
+
+    try:
+        warm_semantic_retrieval(top_ks=(5, 15))
+    except Exception:
+        logger.exception("RAG semantic warmup failed during API startup")

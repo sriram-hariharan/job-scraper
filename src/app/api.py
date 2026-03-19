@@ -6,6 +6,10 @@ from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
 from src.app.intelligence_ui import router as intelligence_ui_router
+from src.app.applied_ui import router as applied_ui_router
+from src.app.saved_ui import router as saved_ui_router
+from src.app.application_hub_ui import router as application_hub_ui_router
+
 from contextlib import asynccontextmanager
 
 from src.utils.logging import get_logger
@@ -33,6 +37,9 @@ app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
 app.include_router(intelligence_ui_router)
+app.include_router(applied_ui_router)
+app.include_router(saved_ui_router)
+app.include_router(application_hub_ui_router)
 
 @app.get("/health")
 def health():

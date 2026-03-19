@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from src.app.ui_shell import render_top_shell
+
 router = APIRouter()
 
 
 @router.get("/", response_class=HTMLResponse)
 def executive_dashboard() -> str:
-    return """
+    return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +18,7 @@ def executive_dashboard() -> str:
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+  {render_top_shell("/")}
   <div class="page">
     <header class="page-header">
       <div>
@@ -148,7 +151,8 @@ def executive_dashboard() -> str:
       </div>
     </div>
   </section>
-
+  
+  <script src="/static/shell.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

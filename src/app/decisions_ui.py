@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from src.app.ui_shell import render_top_shell
+
 router = APIRouter()
 
 
 @router.get("/decisions-ui", response_class=HTMLResponse)
 def decisions_dashboard() -> str:
-    return """
+    return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +18,7 @@ def decisions_dashboard() -> str:
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+{render_top_shell("/decisions-ui")}
   <div class="page">
     <header class="page-header">
       <div>
@@ -129,6 +132,7 @@ def decisions_dashboard() -> str:
     </div>
   </section>
 
+  <script src="/static/shell.js"></script>
   <script src="/static/decisions.js"></script>
 </body>
 </html>

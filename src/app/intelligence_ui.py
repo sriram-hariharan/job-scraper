@@ -1,12 +1,14 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
+from src.app.ui_shell import render_top_shell
+
 router = APIRouter()
 
 
 @router.get("/intelligence", response_class=HTMLResponse)
 def intelligence_dashboard() -> str:
-    return """
+    return f"""
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -16,6 +18,7 @@ def intelligence_dashboard() -> str:
   <link rel="stylesheet" href="/static/styles.css" />
 </head>
 <body>
+{render_top_shell("/intelligence")}
   <div class="page">
     <header class="page-header">
       <div>
@@ -141,6 +144,7 @@ def intelligence_dashboard() -> str:
     </div>
   </section>
 
+  <script src="/static/shell.js"></script>
   <script src="/static/intelligence.js"></script>
 </body>
 </html>

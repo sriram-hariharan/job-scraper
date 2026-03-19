@@ -150,6 +150,38 @@ def _build_lexical_result(job_doc: Dict[str, Any], normalized_score: float) -> D
         "metadata": metadata,
     }
 
+def _metadata_only_fallback_results(
+    docs: List[Dict[str, Any]],
+    top_k: int,
+    filters: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    matched_docs: List[Dict[str, Any]] = []
+
+    for job_doc in docs:
+        candidate = {
+            "score": 0.0,
+            "text": job_doc.get("retrieval_text", "") or "",
+            "metadata": job_doc,
+        }
+
+        if not _matches_filters(candidate, filters):
+            continue
+
+        matched_docs.append(job_doc)
+
+    if not matched_docs:
+        return []
+
+    matched_docs.sort(
+        key=lambda doc: str(doc.get("posted_at", "") or ""),
+        reverse=True,
+    )
+
+    results: List[Dict[str, Any]] = []
+    for job_doc in matched_docs[:top_k]:
+        results.append(_build_lexical_result(job_doc, 1.0))
+
+    return results
 
 def _lexical_search(
     query: str,
@@ -181,6 +213,8 @@ def _lexical_search(
     scored.sort(key=lambda item: item[0], reverse=True)
 
     if not scored:
+        if filters:
+            return _metadata_only_fallback_results(docs, top_k=top_k, filters=filters)
         return []
 
     top_scored = scored[:top_k]

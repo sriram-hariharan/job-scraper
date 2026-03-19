@@ -1,0 +1,384 @@
+--- /dev/null	2026-03-19 04:36:22.950864878 +0000
++++ job_app.py	2026-03-19 04:39:52.551949231 +0000
+@@ -0,0 +1,381 @@
++import argparse
++import csv
++import json
++import subprocess
++import sys
++from collections import Counter
++from pathlib import Path
++from typing import Dict, List, Optional
++
++
++DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
++DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
++
++
++def _run_cmd(cmd: List[str]) -> None:
++    print()
++    print("RUNNING:", " ".join(cmd))
++    print()
++    subprocess.run(cmd, check=True)
++
++
++def _normalize_text(value: str) -> str:
++    return " ".join(str(value or "").strip().lower().split())
++
++
++def _load_csv_rows(path: Path) -> List[dict]:
++    if not path.exists():
++        return []
++
++    with path.open("r", encoding="utf-8", newline="") as f:
++        return list(csv.DictReader(f))
++
++
++def _count_jsonl_rows(path: Path) -> int:
++    if not path.exists():
++        return 0
++
++    count = 0
++    with path.open("r", encoding="utf-8") as f:
++        for line in f:
++            if line.strip():
++                count += 1
++    return count
++
++
++def _parse_float(value: str) -> float:
++    try:
++        return float(value)
++    except (TypeError, ValueError):
++        return 0.0
++
++
++def _build_main_cmd(args, planning_only: bool) -> List[str]:
++    cmd = [sys.executable, "main.py"]
++
++    if args.run_application_planning:
++        cmd.append("--run-application-planning")
++        cmd.extend([
++            "--application-planning-job-limit", str(args.job_limit),
++            "--application-planning-job-packet-limit", str(args.job_packet_limit),
++            "--application-planning-output-dir", args.output_dir,
++            "--application-planning-llm-actions", args.llm_actions,
++        ])
++
++        if args.generate_tailoring:
++            cmd.append("--application-planning-generate-tailoring")
++        if args.generate_llm_tailoring:
++            cmd.append("--application-planning-generate-llm-tailoring")
++        if args.refresh_llm_tailoring:
++            cmd.append("--application-planning-refresh-llm-tailoring")
++        if args.generate_llm_fallback:
++            cmd.append("--application-planning-generate-llm-fallback")
++
++    if planning_only:
++        cmd.append("--application-planning-only")
++
++    return cmd
++
++
++def _status(args) -> None:
++    output_dir = Path(args.output_dir)
++    corpus_path = Path(args.job_corpus)
++
++    best_rows = _load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
++    shortlist_rows = _load_csv_rows(output_dir / "application_shortlist_by_job.csv")
++    queue_rows = _load_csv_rows(output_dir / "application_execution_queue.csv")
++    manifest_rows = _load_csv_rows(output_dir / "job_packet_manifest.csv")
++
++    print("=" * 100)
++    print("JOB APP STATUS")
++    print("=" * 100)
++    print(f"Job corpus                 : {corpus_path}")
++    print(f"Job corpus rows            : {_count_jsonl_rows(corpus_path)}")
++    print(f"Planning output dir        : {output_dir}")
++    print(f"Best-variant rows          : {len(best_rows)}")
++    print(f"Shortlist rows             : {len(shortlist_rows)}")
++    print(f"Execution queue rows       : {len(queue_rows)}")
++    print(f"Packet manifest rows       : {len(manifest_rows)}")
++    print()
++
++    if best_rows:
++        winner_bucket_counts = Counter(
++            str(row.get("winner_bucket", "") or "<empty>")
++            for row in best_rows
++        )
++        print("WINNER BUCKET COUNTS")
++        print("--------------------")
++        for key, count in sorted(winner_bucket_counts.items()):
++            print(f"{key:25} {count}")
++        print()
++
++        fallback_status_counts = Counter(
++            str(row.get("llm_fallback_status", "") or "<empty>")
++            for row in best_rows
++        )
++        print("LLM FALLBACK STATUS COUNTS")
++        print("--------------------------")
++        for key, count in sorted(fallback_status_counts.items()):
++            print(f"{key:25} {count}")
++        print()
++
++    if queue_rows:
++        action_counts = Counter(
++            str(row.get("action", "") or "<empty>")
++            for row in queue_rows
++        )
++        print("QUEUE ACTION COUNTS")
++        print("-------------------")
++        for key, count in sorted(action_counts.items()):
++            print(f"{key:25} {count}")
++        print()
++
++        print("TOP QUEUE ROWS")
++        print("--------------")
++        top_rows = sorted(
++            queue_rows,
++            key=lambda row: (
++                int(str(row.get("queue_rank", "999999") or "999999")),
++                -_parse_float(row.get("winner_score", "0")),
++            ),
++        )[: args.top_k]
++
++        for row in top_rows:
++            print(
++                f"#{row.get('queue_rank', '')} | {row.get('action', '')} | "
++                f"{row.get('job_company', '')} | {row.get('job_title', '')}"
++            )
++            print(
++                f"  winner={row.get('winner_resume', '')} "
++                f"score={_parse_float(row.get('winner_score', '0')):.3f} "
++                f"tie={row.get('is_tie', '')} "
++                f"review={row.get('needs_variant_review', '')}"
++            )
++            print(
++                f"  missing={row.get('missing_requirement_count', '')} | "
++                f"reason={row.get('queue_priority_reason', '')}"
++            )
++            print()
++
++    if manifest_rows:
++        llm_tailoring_counts = Counter(
++            str(row.get("llm_tailoring_status", "") or "<empty>")
++            for row in manifest_rows
++        )
++        print("LLM TAILORING STATUS COUNTS")
++        print("---------------------------")
++        for key, count in sorted(llm_tailoring_counts.items()):
++            print(f"{key:25} {count}")
++        print()
++
++
++def _build_job_index(output_dir: Path) -> List[Dict[str, str]]:
++    best_rows = _load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
++    queue_rows = _load_csv_rows(output_dir / "application_execution_queue.csv")
++    manifest_rows = _load_csv_rows(output_dir / "job_packet_manifest.csv")
++
++    merged: Dict[str, Dict[str, str]] = {}
++
++    for source_rows in [best_rows, queue_rows, manifest_rows]:
++        for row in source_rows:
++            job_doc_id = str(row.get("job_doc_id", "") or "").strip()
++            company = str(row.get("job_company", "") or "").strip()
++            title = str(row.get("job_title", "") or "").strip()
++
++            key = job_doc_id or f"{_normalize_text(company)}||{_normalize_text(title)}"
++            if not key.strip("|"):
++                continue
++
++            if key not in merged:
++                merged[key] = {}
++            merged[key].update(row)
++
++    return list(merged.values())
++
++
++def _select_inspect_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
++    selected = rows
++
++    if args.job_doc_id:
++        target = _normalize_text(args.job_doc_id)
++        selected = [
++            row for row in selected
++            if _normalize_text(row.get("job_doc_id", "")) == target
++        ]
++
++    if args.company_contains:
++        needle = _normalize_text(args.company_contains)
++        selected = [
++            row for row in selected
++            if needle in _normalize_text(row.get("job_company", ""))
++        ]
++
++    if args.title_contains:
++        needle = _normalize_text(args.title_contains)
++        selected = [
++            row for row in selected
++            if needle in _normalize_text(row.get("job_title", ""))
++        ]
++
++    selected.sort(
++        key=lambda row: (
++            int(str(row.get("queue_rank", "999999") or "999999")),
++            -_parse_float(row.get("winner_score", "0")),
++            _normalize_text(row.get("job_company", "")),
++            _normalize_text(row.get("job_title", "")),
++        )
++    )
++    return selected[: args.limit]
++
++
++def _print_packet_summary(packet_json_path: str) -> None:
++    path = Path(packet_json_path)
++    if not packet_json_path or not path.exists():
++        print("Packet JSON                : <missing>")
++        return
++
++    print(f"Packet JSON                : {path}")
++    try:
++        data = json.loads(path.read_text(encoding="utf-8"))
++    except Exception as exc:
++        print(f"Packet JSON read error     : {exc}")
++        return
++
++    top_keys = ", ".join(sorted(data.keys())[:15])
++    print(f"Packet JSON keys           : {top_keys}")
++
++    for key in [
++        "job_summary",
++        "recruiter_summary",
++        "tailoring_focus",
++        "resume_gaps",
++        "missing_requirements",
++    ]:
++        value = data.get(key)
++        if isinstance(value, list):
++            preview = " | ".join(str(item) for item in value[:5])
++        elif isinstance(value, dict):
++            preview = ", ".join(list(value.keys())[:8])
++        else:
++            preview = str(value or "")
++
++        if preview:
++            print(f"{key:26} {preview[:220]}")
++
++
++def _inspect(args) -> None:
++    rows = _build_job_index(Path(args.output_dir))
++    selected = _select_inspect_rows(rows, args)
++
++    if not selected:
++        raise SystemExit("No matching jobs found in application-planning outputs.")
++
++    print("=" * 100)
++    print("JOB APP INSPECT")
++    print("=" * 100)
++
++    for row in selected:
++        print(f"Job doc id                 : {row.get('job_doc_id', '')}")
++        print(f"Company                    : {row.get('job_company', '')}")
++        print(f"Title                      : {row.get('job_title', '')}")
++        print(f"Action                     : {row.get('action', '')}")
++        print(f"Queue rank                 : {row.get('queue_rank', '')}")
++        print(f"Winner                     : {row.get('winner_resume', '')}")
++        print(f"Winner score               : {_parse_float(row.get('winner_score', '0')):.3f}")
++        print(f"Runner up                  : {row.get('runner_up_resume', '')}")
++        print(f"Runner up score            : {_parse_float(row.get('runner_up_score', '0')):.3f}")
++        print(f"Score gap                  : {_parse_float(row.get('score_gap', '0')):.3f}")
++        print(f"Needs variant review       : {row.get('needs_variant_review', '')}")
++        print(f"Queue priority reason      : {row.get('queue_priority_reason', '')}")
++        print(f"Fallback best              : {row.get('llm_fallback_best_resume', '')}")
++        print(f"Fallback best score        : {_parse_float(row.get('llm_fallback_best_score', '0')):.3f}")
++        print(f"Fallback backup            : {row.get('llm_fallback_backup_resume', '')}")
++        print(f"Fallback status            : {row.get('llm_fallback_status', '')}")
++        print(f"Fallback reason            : {row.get('llm_fallback_reason', '')}")
++        print(f"LLM tailoring status       : {row.get('llm_tailoring_status', '')}")
++        print(f"LLM error type             : {row.get('llm_error_type', '')}")
++        print(f"Tailoring markdown         : {row.get('tailoring_md', '') or '<missing>'}")
++        print(f"Tailoring LLM JSON         : {row.get('tailoring_llm_json', '') or '<missing>'}")
++        _print_packet_summary(row.get('packet_json', ''))
++        print("-" * 100)
++
++
++def _parse_args():
++    parser = argparse.ArgumentParser(
++        description="Thin operator CLI for the existing job pipeline and application-planning outputs."
++    )
++    subparsers = parser.add_subparsers(dest="command", required=True)
++
++    run_parser = subparsers.add_parser(
++        "run",
++        help="Run the main pipeline, optionally with downstream application planning.",
++    )
++    run_parser.add_argument("--run-application-planning", action="store_true")
++    run_parser.add_argument("--job-limit", type=int, default=50)
++    run_parser.add_argument("--job-packet-limit", type=int, default=0)
++    run_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
++    run_parser.add_argument("--llm-actions", default="APPLY,APPLY_REVIEW_VARIANTS")
++    run_parser.add_argument("--generate-tailoring", action="store_true")
++    run_parser.add_argument("--generate-llm-tailoring", action="store_true")
++    run_parser.add_argument("--refresh-llm-tailoring", action="store_true")
++    run_parser.add_argument("--generate-llm-fallback", action="store_true")
++
++    planning_parser = subparsers.add_parser(
++        "plan",
++        help="Run planning-only mode against the existing exported job corpus.",
++    )
++    planning_parser.add_argument("--run-application-planning", action="store_true", default=True)
++    planning_parser.add_argument("--job-limit", type=int, default=50)
++    planning_parser.add_argument("--job-packet-limit", type=int, default=0)
++    planning_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
++    planning_parser.add_argument("--llm-actions", default="APPLY,APPLY_REVIEW_VARIANTS")
++    planning_parser.add_argument("--generate-tailoring", action="store_true")
++    planning_parser.add_argument("--generate-llm-tailoring", action="store_true")
++    planning_parser.add_argument("--refresh-llm-tailoring", action="store_true")
++    planning_parser.add_argument("--generate-llm-fallback", action="store_true")
++
++    status_parser = subparsers.add_parser(
++        "status",
++        help="Summarize the current job corpus and application-planning outputs.",
++    )
++    status_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
++    status_parser.add_argument("--job-corpus", default=str(DEFAULT_CORPUS_PATH))
++    status_parser.add_argument("--top-k", type=int, default=10)
++
++    inspect_parser = subparsers.add_parser(
++        "inspect",
++        help="Inspect one or more jobs from existing application-planning outputs.",
++    )
++    inspect_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
++    inspect_parser.add_argument("--job-doc-id", default="")
++    inspect_parser.add_argument("--company-contains", default="")
++    inspect_parser.add_argument("--title-contains", default="")
++    inspect_parser.add_argument("--limit", type=int, default=5)
++
++    return parser.parse_args()
++
++
++def main() -> None:
++    args = _parse_args()
++
++    if args.command == "run":
++        _run_cmd(_build_main_cmd(args, planning_only=False))
++        return
++
++    if args.command == "plan":
++        _run_cmd(_build_main_cmd(args, planning_only=True))
++        return
++
++    if args.command == "status":
++        _status(args)
++        return
++
++    if args.command == "inspect":
++        _inspect(args)
++        return
++
++    raise SystemExit(f"Unsupported command: {args.command}")
++
++
++if __name__ == "__main__":
++    main()

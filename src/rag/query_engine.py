@@ -107,12 +107,22 @@ def search_jobs(
     )
 
     if not gate_metrics["passed"]:
-        logger.info(
-            "RAG retrieval gate rejected results | query=%r | query_terms=%s",
-            query,
-            gate_metrics["query_terms"],
-        )
-        return []
+        if effective_filters and hybrid_results:
+            logger.info(
+                "RAG retrieval gate bypassed for metadata-filtered query | query=%r | "
+                "effective_filters=%s | hybrid=%s | query_terms=%s",
+                query,
+                effective_filters,
+                len(hybrid_results),
+                gate_metrics["query_terms"],
+            )
+        else:
+            logger.info(
+                "RAG retrieval gate rejected results | query=%r | query_terms=%s",
+                query,
+                gate_metrics["query_terms"],
+            )
+            return []
 
     formatted_results = [_format_result(result) for result in hybrid_results]
     final_results = formatted_results[:top_k]

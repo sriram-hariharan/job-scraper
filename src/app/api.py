@@ -4,6 +4,7 @@ from src.app import services
 from fastapi.staticfiles import StaticFiles
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
+from src.app.decisions_ui import router as decisions_ui_router
 
 app = FastAPI(
     title="Job Operator API",
@@ -13,6 +14,7 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="src/app/static"), name="static")
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
+app.include_router(decisions_ui_router)
 
 @app.get("/health")
 def health():

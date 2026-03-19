@@ -122,6 +122,10 @@ def _shape_answer_payload(result: Dict[str, Any], output_mode: str) -> Dict[str,
         "source_count": len(compact_sources),
         "sources": compact_sources,
         "retrieved_count": result.get("retrieved_count", 0),
+        "llm_provider": result.get("llm_provider", ""),
+        "llm_model": result.get("llm_model", ""),
+        "llm_fallback_used": result.get("llm_fallback_used", False),
+        "retrieval_lanes_used": result.get("retrieval_lanes_used", []),
     }
 
 

@@ -49,13 +49,15 @@ def intelligence_dashboard() -> str:
         </div>
 
         <div class="control-group">
-          <label for="ragTopKInput">Top K</label>
-          <input type="number" id="ragTopKInput" value="5" min="1" max="20" />
+        <label for="ragTopKInput">Results to Return</label>
+        <input type="number" id="ragTopKInput" value="5" min="1" max="20" />
+        <div class="control-help">How many final jobs or sources to show.</div>
         </div>
 
         <div class="control-group">
-          <label for="ragFetchKInput">Fetch K</label>
-          <input type="number" id="ragFetchKInput" value="15" min="1" max="50" />
+        <label for="ragFetchKInput">Candidates to Scan</label>
+        <input type="number" id="ragFetchKInput" value="15" min="1" max="50" />
+        <div class="control-help">How many jobs to search before narrowing to the best matches.</div>
         </div>
 
         <div class="control-group checkbox-group">

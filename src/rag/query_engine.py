@@ -46,6 +46,7 @@ def _format_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "ai_fit_score": metadata.get("ai_fit_score"),
         "preview": _build_preview(text),
         "retrieval_text": text,
+        "retrieval_lanes": result.get("retrieval_lanes", []),
     }
 
 def _retrieve_jobs_with_timeout(query: str, top_k: int) -> List[Dict[str, Any]]:
@@ -110,6 +111,18 @@ def search_jobs(
         filters=effective_filters,
     )
 
+    semantic_doc_ids = {
+        ((result.get("metadata", {}) or {}).get("doc_id", ""))
+        for result in semantic_deduped_results
+        if ((result.get("metadata", {}) or {}).get("doc_id", ""))
+    }
+
+    lexical_doc_ids = {
+        ((result.get("metadata", {}) or {}).get("doc_id", ""))
+        for result in lexical_results
+        if ((result.get("metadata", {}) or {}).get("doc_id", ""))
+    }
+
     hybrid_results = _merge_hybrid_results(
         semantic_results=semantic_deduped_results,
         lexical_results=lexical_results,
@@ -156,7 +169,23 @@ def search_jobs(
             )
             return []
 
-    formatted_results = [_format_result(result) for result in hybrid_results]
+    annotated_hybrid_results = []
+
+    for result in hybrid_results:
+        metadata = result.get("metadata", {}) or {}
+        doc_id = metadata.get("doc_id", "")
+
+        retrieval_lanes = []
+        if doc_id in semantic_doc_ids:
+            retrieval_lanes.append("semantic")
+        if doc_id in lexical_doc_ids:
+            retrieval_lanes.append("lexical")
+
+        annotated_result = dict(result)
+        annotated_result["retrieval_lanes"] = retrieval_lanes
+        annotated_hybrid_results.append(annotated_result)
+
+    formatted_results = [_format_result(result) for result in annotated_hybrid_results]
     final_results = formatted_results[:top_k]
 
     logger.info(

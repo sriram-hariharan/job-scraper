@@ -2,7 +2,7 @@ import json
 from typing import Any, Dict, List, Optional
 import re
 
-from src.ai.llm_client import run_chat_completion, get_default_model
+from src.ai.llm_client import run_chat_completion_with_metadata, get_default_model
 from src.rag.query_engine import search_jobs
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
@@ -190,10 +190,10 @@ def _extract_inline_source_ids(answer: str, valid_source_ids: List[str]) -> List
 
     return ordered
 
-def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> str:
+def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     executor = ThreadPoolExecutor(max_workers=1)
     future = executor.submit(
-        run_chat_completion,
+        run_chat_completion_with_metadata,
         model=MODEL,
         temperature=0,
         max_tokens=500,
@@ -241,6 +241,12 @@ def answer_job_query(
             "retrieved_count": 0,
         }
 
+    retrieval_lanes_used = sorted({
+        lane
+        for result in results
+        for lane in result.get("retrieval_lanes", [])
+        if lane in {"semantic", "lexical"}
+    })
     if not results:
         return {
             "question": question,
@@ -255,13 +261,16 @@ def answer_job_query(
     valid_source_ids = [source["source_id"] for source in prompt_sources]
 
     try:
-        response = _run_chat_completion_with_timeout(
+        llm_result = _run_chat_completion_with_timeout(
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": _build_user_prompt(question, prompt_sources)},
             ]
         )
-        parsed = _extract_json_from_response(response)
+        parsed = _extract_json_from_response(llm_result["content"])
+        llm_provider = llm_result.get("provider", "")
+        llm_model = llm_result.get("model", "")
+        llm_fallback_used = bool(llm_result.get("fallback_used", False))
     except TimeoutError:
         return {
             "question": question,
@@ -270,6 +279,10 @@ def answer_job_query(
             "used_source_ids": [],
             "sources": [],
             "retrieved_count": len(results),
+            "llm_provider": "",
+            "llm_model": "",
+            "llm_fallback_used": False,
+            "retrieval_lanes_used": [],
         }
     except Exception as exc:
         return {
@@ -279,6 +292,10 @@ def answer_job_query(
             "used_source_ids": [],
             "sources": [],
             "retrieved_count": len(results),
+            "llm_provider": "",
+            "llm_model": "",
+            "llm_fallback_used": False,
+            "retrieval_lanes_used": [],
         }
 
     answer = str(parsed.get("answer") or "").strip()
@@ -312,6 +329,10 @@ def answer_job_query(
         "used_source_ids": used_source_ids,
         "sources": _build_output_sources(prompt_sources, used_source_ids) if not insufficient_evidence else [],
         "retrieved_count": len(results),
+        "llm_provider": llm_provider,
+        "llm_model": llm_model,
+        "llm_fallback_used": llm_fallback_used,
+        "retrieval_lanes_used": retrieval_lanes_used,
     }
 
 

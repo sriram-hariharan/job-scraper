@@ -12,6 +12,76 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function titleCase(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function getProviderLogoUrl(provider) {
+  const normalized = String(provider || "").trim().toLowerCase();
+  if (normalized === "groq") return "/static/provider_logos/groq_ai.png";
+  if (normalized === "gemini") return "/static/provider_logos/gemini.png";
+  return "";
+}
+
+function buildRetrievalChips(retrievalLanes) {
+  const lanes = Array.isArray(retrievalLanes) ? retrievalLanes : [];
+  if (!lanes.length) {
+    return `<span class="summary-chip chip-muted">No retrieval lane</span>`;
+  }
+
+  return lanes.map((lane) => {
+    const normalized = String(lane || "").trim().toLowerCase();
+    const label = titleCase(normalized);
+    return `<span class="summary-chip retrieval-chip retrieval-${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
+  }).join("");
+}
+
+function buildProviderBadge(provider, model, fallbackUsed) {
+  const normalized = String(provider || "").trim().toLowerCase();
+  if (!normalized) {
+    return `<span class="summary-chip chip-muted">LLM not invoked</span>`;
+  }
+
+  const logoUrl = getProviderLogoUrl(normalized);
+  const providerLabel = titleCase(normalized);
+  const fallbackHtml = fallbackUsed
+    ? `<span class="summary-chip chip-small chip-muted">Fallback</span>`
+    : "";
+
+  const logoHtml = logoUrl
+    ? `<img class="provider-logo" src="${logoUrl}" alt="${escapeHtml(providerLabel)} logo" title="${escapeHtml(providerLabel)}" />`
+    : `<span class="provider-name">${escapeHtml(providerLabel)}</span>`;
+
+  return `
+    <span class="summary-powered-label">Powered by</span>
+    <span class="summary-chip provider-chip provider-chip-logo-only">
+      ${logoHtml}
+    </span>
+    ${model ? `<span class="summary-model-text">${escapeHtml(model)}</span>` : ""}
+    ${fallbackHtml}
+  `;
+}
+
+function buildAnswerMetaHtml(sourceCount, retrievalLanes, llmProvider, llmModel, llmFallbackUsed) {
+  return `
+    <div class="summary-meta-wrap">
+      <span class="summary-meta-text">Answer mode</span>
+      <span class="summary-meta-sep">•</span>
+      <span class="summary-meta-text">${escapeHtml(String(sourceCount || 0))} source${sourceCount === 1 ? "" : "s"}</span>
+      <span class="summary-meta-sep">•</span>
+      <div class="summary-chip-row">
+        ${buildRetrievalChips(retrievalLanes)}
+      </div>
+      <span class="summary-meta-sep">•</span>
+      <div class="summary-chip-row">
+        ${buildProviderBadge(llmProvider, llmModel, llmFallbackUsed)}
+      </div>
+    </div>
+  `;
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) {
@@ -63,7 +133,13 @@ function renderSummary(payload, mode) {
   if (mode === "search") {
     const count = payload.result_count ?? 0;
     const inferredFilters = payload.inferred_filters || {};
-    meta.textContent = `Search mode · ${count} result${count === 1 ? "" : "s"}`;
+    meta.innerHTML = `
+      <div class="summary-meta-wrap">
+        <span class="summary-meta-text">Search mode</span>
+        <span class="summary-meta-sep">•</span>
+        <span class="summary-meta-text">${escapeHtml(String(count))} result${count === 1 ? "" : "s"}</span>
+      </div>
+    `;
     summary.innerHTML = `
       <div class="info-pair"><span class="label">Request</span><span>${escapeHtml(payload.request || "")}</span></div>
       <div class="info-pair"><span class="label">Mode</span><span>${escapeHtml(payload.mode || "search_lite")}</span></div>
@@ -78,16 +154,30 @@ function renderSummary(payload, mode) {
   const retrievedCount = response.retrieved_count ?? "";
   const sourceCount = response.source_count ?? "";
   const insufficient = response.insufficient_evidence ?? "";
+  const retrievalLanes = Array.isArray(response.retrieval_lanes_used)
+    ? response.retrieval_lanes_used
+    : [];
 
-  meta.textContent = `Answer mode · ${sourceCount || 0} source${sourceCount === 1 ? "" : "s"}`;
+  const llmProvider = response.llm_provider || "";
+  const llmModel = response.llm_model || "";
+  const llmFallbackUsed = Boolean(response.llm_fallback_used);
+
+  meta.innerHTML = buildAnswerMetaHtml(
+    sourceCount,
+    retrievalLanes,
+    llmProvider,
+    llmModel,
+    llmFallbackUsed
+  );
+
   summary.innerHTML = `
     <div class="info-pair"><span class="label">Question</span><span>${escapeHtml(response.question || payload.request || "")}</span></div>
-    <div class="info-pair"><span class="label">Retrieved Count</span><span>${escapeHtml(String(retrievedCount))}</span></div>
-    <div class="info-pair"><span class="label">Source Count</span><span>${escapeHtml(String(sourceCount))}</span></div>
-    <div class="info-pair"><span class="label">Insufficient Evidence</span><span>${escapeHtml(String(insufficient || "false"))}</span></div>
+    <div class="info-pair"><span class="label">Jobs Considered</span><span>${escapeHtml(String(retrievedCount))}</span></div>
+    <div class="info-pair"><span class="label">Sources Used in Answer</span><span>${escapeHtml(String(sourceCount))}</span></div>
+    <div class="info-pair"><span class="label">Insufficient Evidence</span><span>${escapeHtml(insufficient ? "Yes" : "No")}</span></div>
     <div class="answer-block">${escapeHtml(answer)}</div>
   `;
-}
+  }
 
 function renderSearchResults(results) {
   const container = qs("ragResults");

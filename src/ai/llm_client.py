@@ -189,8 +189,7 @@ def _run_single_provider(
 
     raise ValueError(f"Unsupported LLM provider: {provider_name}")
 
-
-def run_chat_completion(
+def run_chat_completion_with_metadata(
     messages,
     model=None,
     temperature=0,
@@ -207,7 +206,7 @@ def run_chat_completion(
     increment_provider_metric("primary_attempts")
 
     try:
-        return _run_single_provider(
+        content = _run_single_provider(
             provider_name=primary_provider,
             messages=messages,
             model=primary_model,
@@ -218,9 +217,14 @@ def run_chat_completion(
             return_parsed=return_parsed,
             thinking_budget=thinking_budget,
         )
+        return {
+            "content": content,
+            "provider": primary_provider,
+            "model": primary_model,
+            "fallback_used": False,
+        }
 
     except Exception as primary_error:
-
         if (
             not FALLBACK_ENABLED
             or primary_provider == FALLBACK_PROVIDER
@@ -231,7 +235,7 @@ def run_chat_completion(
         increment_provider_metric("fallback_attempts")
 
         try:
-            result = _run_single_provider(
+            content = _run_single_provider(
                 provider_name=FALLBACK_PROVIDER,
                 messages=messages,
                 model=FALLBACK_MODEL,
@@ -243,7 +247,12 @@ def run_chat_completion(
                 thinking_budget=thinking_budget,
             )
             increment_provider_metric("fallback_successes")
-            return result
+            return {
+                "content": content,
+                "provider": FALLBACK_PROVIDER,
+                "model": FALLBACK_MODEL,
+                "fallback_used": True,
+            }
 
         except Exception as fallback_error:
             increment_provider_metric("provider_failures")
@@ -251,3 +260,27 @@ def run_chat_completion(
                 f"Primary provider failed ({primary_provider}/{primary_model}): {primary_error} | "
                 f"Fallback provider failed ({FALLBACK_PROVIDER}/{FALLBACK_MODEL}): {fallback_error}"
             ) from fallback_error
+        
+def run_chat_completion(
+    messages,
+    model=None,
+    temperature=0,
+    max_tokens=500,
+    provider=None,
+    response_mime_type=None,
+    response_schema=None,
+    return_parsed=False,
+    thinking_budget=None,
+):
+    result = run_chat_completion_with_metadata(
+        messages=messages,
+        model=model,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        provider=provider,
+        response_mime_type=response_mime_type,
+        response_schema=response_schema,
+        return_parsed=return_parsed,
+        thinking_budget=thinking_budget,
+    )
+    return result["content"]

@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
 
+from src.rag.rag_executor import execute_rag_request
+
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
@@ -621,6 +623,55 @@ def _print_relevant_bullets(values, limit: int = 3) -> None:
         if item.get("text"):
             print(_wrap_block(item.get("text"), indent="      "))
 
+def _print_rag_search_results(results: List[Dict[str, str]]) -> None:
+    if not results:
+        print("No search results returned.")
+        return
+
+    print("SEARCH RESULTS")
+    print("--------------")
+    for idx, row in enumerate(results, start=1):
+        print(
+            f"{idx}. {row.get('company', '')} | {row.get('title', '')} | "
+            f"score={row.get('score', '')}"
+        )
+        print(
+            f"   location={row.get('location', '') or '<empty>'} | "
+            f"source={row.get('source', '') or '<empty>'}"
+        )
+        print(
+            f"   job_url={row.get('job_url', '') or '<empty>'}"
+        )
+        if row.get("posted_at"):
+            print(f"   posted_at={row.get('posted_at', '')}")
+        if row.get("visa_sponsorship"):
+            print(f"   visa_sponsorship={row.get('visa_sponsorship', '')}")
+        if row.get("ai_fit_score") not in (None, ""):
+            print(f"   ai_fit_score={row.get('ai_fit_score')}")
+        print()
+
+
+def _print_rag_answer_response(response: Dict[str, str]) -> None:
+    _print_wrapped_field("Question", response.get("question", ""))
+    _print_wrapped_field("Retrieved count", response.get("retrieved_count", ""))
+    _print_wrapped_field("Source count", response.get("source_count", ""))
+    _print_wrapped_field("Insufficient evidence", response.get("insufficient_evidence", ""))
+
+    print("ANSWER")
+    print(_wrap_block(response.get("answer", "")))
+
+    sources = response.get("sources", []) or []
+    if sources:
+        print("SOURCES")
+        for source in sources:
+            print(
+                _wrap_block(
+                    f"{source.get('source_id', '')} | "
+                    f"{source.get('company', '')} | "
+                    f"{source.get('title', '')} | "
+                    f"{source.get('job_url', '')}"
+                )
+            )
 
 def _print_packet_summary(packet_json_path: str) -> None:
     path = Path(packet_json_path)
@@ -1237,6 +1288,68 @@ def _export_review_queue(args) -> None:
     _print_wrapped_field("Company contains", args.company_contains or "<any>")
     _print_wrapped_field("Title contains", args.title_contains or "<any>")
 
+def _rag(args) -> None:
+    payload = execute_rag_request(
+        request=args.request,
+        top_k=args.top_k,
+        fetch_k=args.fetch_k,
+        filters=None,
+        output_mode=args.output_mode,
+        include_diagnostics=args.include_diagnostics,
+        intent_override=args.intent or None,
+    )
+
+    print("=" * 100)
+    print("JOB APP RAG")
+    print("=" * 100)
+    _print_wrapped_field("Request", args.request)
+    _print_wrapped_field("Intent override", args.intent or "<auto>")
+
+    if "natural_intent" in payload:
+        _print_wrapped_field("Natural intent", payload.get("natural_intent", ""))
+    if "intent" in payload:
+        _print_wrapped_field("Final intent", payload.get("intent", ""))
+    if "tool_name" in payload:
+        _print_wrapped_field("Tool name", payload.get("tool_name", ""))
+    _print_wrapped_field("OK", payload.get("ok", False))
+
+    warning = payload.get("warning")
+    if warning:
+        _print_wrapped_field("Warning", warning.get("message", ""))
+
+    if not payload.get("ok", False):
+        _print_wrapped_field("Error", payload.get("error", ""))
+        _print_wrapped_field("Error type", payload.get("error_type", ""))
+        suggestions = payload.get("suggestions", []) or []
+        if suggestions:
+            _print_wrapped_field("Suggestions", ", ".join(suggestions))
+        details = payload.get("details")
+        if details:
+            _print_wrapped_field("Details", json.dumps(details, ensure_ascii=False))
+        return
+
+    response = payload.get("response", {}) or {}
+    intent = payload.get("intent", "")
+
+    if args.include_diagnostics and response.get("diagnostics"):
+        _print_wrapped_field(
+            "Diagnostics",
+            json.dumps(response.get("diagnostics", {}), ensure_ascii=False),
+        )
+
+    if intent == "search_jobs":
+        _print_wrapped_field("Result count", response.get("result_count", 0))
+        print()
+        _print_rag_search_results(response.get("results", []) or [])
+        return
+
+    if intent == "answer_job_query":
+        print()
+        _print_rag_answer_response(response)
+        return
+
+    _print_wrapped_field("Unhandled response", json.dumps(payload, ensure_ascii=False))
+
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="Thin operator CLI for the existing job pipeline and application-planning outputs."
@@ -1373,6 +1486,22 @@ def _parse_args():
     export_review_parser.add_argument("--undecided-only", default="true")
     export_review_parser.add_argument("--limit", type=int, default=500)
 
+    rag_parser = subparsers.add_parser(
+        "rag",
+        help="Query the local job RAG layer through the existing executor.",
+    )
+    rag_parser.add_argument("request")
+    rag_parser.add_argument(
+        "--intent",
+        default="",
+        choices=["", "search_jobs", "answer_job_query"],
+        help="Optional intent override. Leave blank for automatic routing.",
+    )
+    rag_parser.add_argument("--top-k", type=int, default=5)
+    rag_parser.add_argument("--fetch-k", type=int, default=15)
+    rag_parser.add_argument("--output-mode", default="compact", choices=["compact", "full"])
+    rag_parser.add_argument("--include-diagnostics", action="store_true")
+
     return parser.parse_args()
 
 
@@ -1413,6 +1542,10 @@ def main() -> None:
 
     if args.command == "export-review-queue":
         _export_review_queue(args)
+        return
+
+    if args.command == "rag":
+        _rag(args)
         return
 
     raise SystemExit(f"Unsupported command: {args.command}")

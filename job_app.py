@@ -500,6 +500,69 @@ def _select_review_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]
     )
     return selected[: args.limit]
 
+def _workflow_view_rows(rows: List[Dict[str, str]], view: str) -> List[Dict[str, str]]:
+    normalized_view = _normalize_text(view)
+
+    def has_decision(row: Dict[str, str]) -> bool:
+        return bool(str(row.get("operator_decision", "") or "").strip())
+
+    def selected_runner_up(row: Dict[str, str]) -> bool:
+        selected = str(row.get("operator_selected_resume", "") or "").strip()
+        runner_up = str(row.get("runner_up_resume", "") or "").strip()
+        return bool(selected and runner_up and selected == runner_up)
+
+    if normalized_view == "undecided_apply_review":
+        filtered = [
+            row for row in rows
+            if _normalize_text(row.get("action", "")) == "apply_review_variants"
+            and _matches_bool_filter(row.get("needs_variant_review", ""), True)
+            and not has_decision(row)
+        ]
+    elif normalized_view == "undecided_maybe_tailor":
+        filtered = [
+            row for row in rows
+            if _normalize_text(row.get("action", "")) == "maybe_tailor"
+            and _matches_bool_filter(row.get("needs_variant_review", ""), True)
+            and not has_decision(row)
+        ]
+    elif normalized_view == "decided_apply":
+        filtered = [
+            row for row in rows
+            if _normalize_text(row.get("operator_decision", "")) == "apply"
+        ]
+    elif normalized_view == "decided_tailor":
+        filtered = [
+            row for row in rows
+            if _normalize_text(row.get("operator_decision", "")) == "tailor"
+        ]
+    elif normalized_view == "runner_up_selected":
+        filtered = [
+            row for row in rows
+            if selected_runner_up(row)
+        ]
+    elif normalized_view == "direct_apply_pending":
+        filtered = [
+            row for row in rows
+            if _normalize_text(row.get("action", "")) == "apply"
+            and not has_decision(row)
+        ]
+    else:
+        raise SystemExit(
+            "Unsupported workflow view. Use one of: "
+            "undecided_apply_review, undecided_maybe_tailor, decided_apply, "
+            "decided_tailor, runner_up_selected, direct_apply_pending"
+        )
+
+    filtered.sort(
+        key=lambda row: (
+            int(str(row.get("queue_rank", "999999") or "999999")),
+            -_parse_float(row.get("winner_score", "0")),
+            _normalize_text(row.get("job_company", "")),
+            _normalize_text(row.get("job_title", "")),
+        )
+    )
+    return filtered
+
 def _build_review_export_rows(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     export_rows: List[Dict[str, str]] = []
 
@@ -1288,6 +1351,43 @@ def _export_review_queue(args) -> None:
     _print_wrapped_field("Company contains", args.company_contains or "<any>")
     _print_wrapped_field("Title contains", args.title_contains or "<any>")
 
+def _workflow(args) -> None:
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    selected = _workflow_view_rows(rows, args.view)[: args.limit]
+
+    if not selected:
+        raise SystemExit("No matching workflow rows found.")
+
+    print("=" * 100)
+    print("JOB APP WORKFLOW")
+    print("=" * 100)
+    _print_wrapped_field("View", args.view)
+    _print_wrapped_field("Rows returned", len(selected))
+    print()
+
+    for row in selected:
+        print(
+            f"#{row.get('queue_rank', '')} | {row.get('action', '')} | "
+            f"{row.get('job_company', '')} | {row.get('job_title', '')}"
+        )
+        print(
+            f"  winner={row.get('winner_resume', '') or '<empty>'} | "
+            f"runner_up={row.get('runner_up_resume', '') or '<empty>'}"
+        )
+        print(
+            f"  winner_score={_parse_float(row.get('winner_score', '0')):.3f} | "
+            f"gap={_parse_float(row.get('score_gap', '0')):.3f} | "
+            f"review={row.get('needs_variant_review', '') or '<empty>'}"
+        )
+        print(
+            f"  operator_decision={row.get('operator_decision', '') or '<empty>'} | "
+            f"operator_selected_resume={row.get('operator_selected_resume', '') or '<empty>'}"
+        )
+        print(
+            f"  reason={row.get('queue_priority_reason', '') or '<empty>'}"
+        )
+        print()
+
 def _rag(args) -> None:
     payload = execute_rag_request(
         request=args.request,
@@ -1502,6 +1602,26 @@ def _parse_args():
     rag_parser.add_argument("--output-mode", default="compact", choices=["compact", "full"])
     rag_parser.add_argument("--include-diagnostics", action="store_true")
 
+    workflow_parser = subparsers.add_parser(
+        "workflow",
+        help="Query planning and decision workflow views from merged operator data.",
+    )
+    workflow_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    workflow_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    workflow_parser.add_argument(
+        "--view",
+        required=True,
+        choices=[
+            "undecided_apply_review",
+            "undecided_maybe_tailor",
+            "decided_apply",
+            "decided_tailor",
+            "runner_up_selected",
+            "direct_apply_pending",
+        ],
+    )
+    workflow_parser.add_argument("--limit", type=int, default=20)
+
     return parser.parse_args()
 
 
@@ -1546,6 +1666,10 @@ def main() -> None:
 
     if args.command == "rag":
         _rag(args)
+        return
+    
+    if args.command == "workflow":
+        _workflow(args)
         return
 
     raise SystemExit(f"Unsupported command: {args.command}")

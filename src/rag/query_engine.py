@@ -11,8 +11,11 @@ from src.rag.retrieval_ranker import (
 from src.rag.retriever import retrieve_jobs
 from src.utils.logging import get_logger
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
+
 logger = get_logger("rag.query_engine")
 
+SEMANTIC_RETRIEVAL_TIMEOUT_SECONDS = 10
 
 def _build_preview(text: str, max_length: int = 400) -> str:
     text = (text or "").strip()
@@ -45,6 +48,18 @@ def _format_result(result: Dict[str, Any]) -> Dict[str, Any]:
         "retrieval_text": text,
     }
 
+def _retrieve_jobs_with_timeout(query: str, top_k: int) -> List[Dict[str, Any]]:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(retrieve_jobs, query, top_k)
+    try:
+        return future.result(timeout=SEMANTIC_RETRIEVAL_TIMEOUT_SECONDS)
+    except FuturesTimeoutError as exc:
+        future.cancel()
+        raise TimeoutError(
+            f"Semantic retrieval timed out after {SEMANTIC_RETRIEVAL_TIMEOUT_SECONDS} seconds"
+        ) from exc
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 def search_jobs(
     query: str,
@@ -63,7 +78,24 @@ def search_jobs(
         effective_filters,
     )
 
-    semantic_raw_results = retrieve_jobs(query=query, top_k=fetch_k)
+    try:
+        semantic_raw_results = _retrieve_jobs_with_timeout(query=query, top_k=fetch_k)
+    except TimeoutError:
+        logger.warning(
+            "RAG semantic retrieval timeout | query=%r | fetch_k=%s | effective_filters=%s",
+            query,
+            fetch_k,
+            effective_filters,
+        )
+        raise
+    except Exception:
+        logger.exception(
+            "RAG semantic retrieval failed | query=%r | fetch_k=%s | effective_filters=%s",
+            query,
+            fetch_k,
+            effective_filters,
+        )
+        raise
 
     semantic_filtered_results = [
         result for result in semantic_raw_results

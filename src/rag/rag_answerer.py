@@ -4,8 +4,9 @@ import re
 
 from src.ai.llm_client import run_chat_completion, get_default_model
 from src.rag.query_engine import search_jobs
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
-
+ANSWER_LLM_TIMEOUT_SECONDS = 25
 MODEL = get_default_model()
 MAX_SOURCE_CHARS = 2500
 
@@ -189,18 +190,56 @@ def _extract_inline_source_ids(answer: str, valid_source_ids: List[str]) -> List
 
     return ordered
 
+def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> str:
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(
+        run_chat_completion,
+        model=MODEL,
+        temperature=0,
+        max_tokens=500,
+        messages=messages,
+    )
+    try:
+        return future.result(timeout=ANSWER_LLM_TIMEOUT_SECONDS)
+    except FuturesTimeoutError as exc:
+        future.cancel()
+        raise TimeoutError(
+            f"LLM answer generation timed out after {ANSWER_LLM_TIMEOUT_SECONDS} seconds"
+        ) from exc
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
+        
 def answer_job_query(
     question: str,
     top_k: int = 5,
     fetch_k: int = 15,
     filters: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    results = search_jobs(
-        query=question,
-        top_k=top_k,
-        fetch_k=fetch_k,
-        filters=filters,
-    )
+    try:
+        results = search_jobs(
+            query=question,
+            top_k=top_k,
+            fetch_k=fetch_k,
+            filters=filters,
+        )
+    except TimeoutError:
+        return {
+            "question": question,
+            "answer": "I could not answer this because semantic retrieval timed out.",
+            "insufficient_evidence": True,
+            "used_source_ids": [],
+            "sources": [],
+            "retrieved_count": 0,
+        }
+    except Exception as exc:
+        return {
+            "question": question,
+            "answer": f"I could not answer this because retrieval failed: {exc}",
+            "insufficient_evidence": True,
+            "used_source_ids": [],
+            "sources": [],
+            "retrieved_count": 0,
+        }
 
     if not results:
         return {
@@ -215,17 +254,32 @@ def answer_job_query(
     prompt_sources = _build_prompt_sources(results)
     valid_source_ids = [source["source_id"] for source in prompt_sources]
 
-    response = run_chat_completion(
-        model=MODEL,
-        temperature=0,
-        max_tokens=500,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": _build_user_prompt(question, prompt_sources)},
-        ],
-    )
-
-    parsed = _extract_json_from_response(response)
+    try:
+        response = _run_chat_completion_with_timeout(
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": _build_user_prompt(question, prompt_sources)},
+            ]
+        )
+        parsed = _extract_json_from_response(response)
+    except TimeoutError:
+        return {
+            "question": question,
+            "answer": f"I could not answer this because the LLM timed out after {ANSWER_LLM_TIMEOUT_SECONDS} seconds.",
+            "insufficient_evidence": True,
+            "used_source_ids": [],
+            "sources": [],
+            "retrieved_count": len(results),
+        }
+    except Exception as exc:
+        return {
+            "question": question,
+            "answer": f"I could not answer this because grounded answer generation failed: {exc}",
+            "insufficient_evidence": True,
+            "used_source_ids": [],
+            "sources": [],
+            "retrieved_count": len(results),
+        }
 
     answer = str(parsed.get("answer") or "").strip()
     insufficient_evidence = bool(parsed.get("insufficient_evidence", False))

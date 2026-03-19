@@ -170,6 +170,60 @@ function buildRagUrl() {
   return `/rag/answer?${params.toString()}`;
 }
 
+function renderJobEvidence(jobEvidence) {
+  const rows = Array.isArray(jobEvidence) ? jobEvidence : [];
+
+  if (!rows.length) {
+    return `
+      <div class="evidence-section">
+        <div class="evidence-section-label">Evidence by Job</div>
+        <div class="evidence-scroll">
+          <div class="empty-state">No structured evidence was returned for this answer.</div>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="evidence-section">
+      <div class="evidence-section-label">Evidence by Job</div>
+      <div class="evidence-scroll">
+        ${rows.map((row) => {
+          const sourceId = escapeHtml(row.source_id || "");
+          const title = escapeHtml(row.title || "");
+          const company = escapeHtml(row.company || "");
+          const jobUrl = escapeHtml(row.job_url || "");
+          const titleHtml = jobUrl
+            ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+            : title;
+
+          const bullets = Array.isArray(row.evidence_points) ? row.evidence_points : [];
+          const bulletsHtml = bullets.length
+            ? `
+              <ul class="evidence-list">
+                ${bullets.map((point) => `<li>${escapeHtml(point)}</li>`).join("")}
+              </ul>
+            `
+            : `<div class="evidence-empty">No structured evidence returned for this job.</div>`;
+
+          return `
+            <div class="evidence-card">
+              <div class="evidence-card-header">
+                <div class="evidence-source-badge">${sourceId}</div>
+                <div class="evidence-heading">
+                  <div class="evidence-title">${titleHtml}</div>
+                  <div class="evidence-company">${company}</div>
+                </div>
+              </div>
+              ${bulletsHtml}
+            </div>
+          `;
+        }).join("")}
+      </div>
+    </div>
+  `;
+}
+
 function renderSummary(payload, mode) {
   const summary = qs("ragSummary");
   const meta = qs("ragMeta");
@@ -209,6 +263,9 @@ function renderSummary(payload, mode) {
   const retrievalLanes = Array.isArray(response.retrieval_lanes_used)
     ? response.retrieval_lanes_used
     : [];
+  const jobEvidence = Array.isArray(response.job_evidence)
+    ? response.job_evidence
+    : [];
   const llmProvider = response.llm_provider || "";
   const llmModel = response.llm_model || "";
   const llmFallbackUsed = Boolean(response.llm_fallback_used);
@@ -226,7 +283,7 @@ function renderSummary(payload, mode) {
     <div class="info-pair"><span class="label">Jobs Considered</span><span>${escapeHtml(String(retrievedCount))}</span></div>
     <div class="info-pair"><span class="label">Sources Used in Answer</span><span>${escapeHtml(String(sourceCount))}</span></div>
     <div class="info-pair"><span class="label">Insufficient Evidence</span><span>${escapeHtml(insufficient ? "Yes" : "No")}</span></div>
-    <div class="answer-block">${escapeHtml(answer)}</div>
+    ${renderJobEvidence(jobEvidence)}
   `;
 }
 

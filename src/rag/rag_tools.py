@@ -126,6 +126,7 @@ def _shape_answer_payload(result: Dict[str, Any], output_mode: str) -> Dict[str,
         "llm_model": result.get("llm_model", ""),
         "llm_fallback_used": result.get("llm_fallback_used", False),
         "retrieval_lanes_used": result.get("retrieval_lanes_used", []),
+        "job_evidence": result.get("job_evidence", []),
     }
 
 

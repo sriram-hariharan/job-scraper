@@ -1,0 +1,1318 @@
+import argparse
+import csv
+import json
+import subprocess
+import sys
+import textwrap
+from collections import Counter
+from pathlib import Path
+from typing import Dict, List
+from datetime import datetime
+
+
+DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
+DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
+WRAP_WIDTH = 100
+DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
+
+DECISION_HEADERS = [
+    "decision_timestamp",
+    "queue_rank",
+    "job_doc_id",
+    "job_company",
+    "job_title",
+    "planning_action",
+    "winner_resume",
+    "winner_score",
+    "runner_up_resume",
+    "runner_up_score",
+    "selected_resume",
+    "decision",
+    "note",
+]
+
+OPERATOR_DECISION_OVERLAY_FIELDS = [
+    "operator_decision_timestamp",
+    "operator_decision",
+    "operator_selected_resume",
+    "operator_note",
+]
+
+def _run_cmd(cmd: List[str]) -> None:
+    print()
+    print("RUNNING:", " ".join(cmd))
+    print()
+    subprocess.run(cmd, check=True)
+
+
+def _normalize_text(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _load_csv_rows(path: Path) -> List[dict]:
+    if not path.exists():
+        return []
+
+    with path.open("r", encoding="utf-8", newline="") as f:
+        return list(csv.DictReader(f))
+
+def _ensure_parent_dir(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _append_csv_row(path: Path, headers: List[str], row: Dict[str, str]) -> None:
+    _ensure_parent_dir(path)
+    file_exists = path.exists()
+
+    with path.open("a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({header: row.get(header, "") for header in headers})
+
+def _count_jsonl_rows(path: Path) -> int:
+    if not path.exists():
+        return 0
+
+    count = 0
+    with path.open("r", encoding="utf-8") as f:
+        for line in f:
+            if line.strip():
+                count += 1
+    return count
+
+
+def _parse_float(value: str) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _wrap_block(text: str, width: int = WRAP_WIDTH, indent: str = "    ") -> str:
+    text = " ".join(str(text or "").split())
+    if not text:
+        return f"{indent}<empty>"
+    return textwrap.fill(text, width=width, initial_indent=indent, subsequent_indent=indent)
+
+
+def _print_wrapped_field(label: str, value, width: int = WRAP_WIDTH) -> None:
+    label_width = 28
+    prefix = f"{label:<{label_width}}: "
+    text = " ".join(str(value or "").split())
+    if not text:
+        print(f"{prefix}<empty>")
+        return
+    wrapped = textwrap.fill(
+        text,
+        width=width,
+        initial_indent=prefix,
+        subsequent_indent=" " * len(prefix),
+    )
+    print(wrapped)
+
+
+def _build_main_cmd(args, planning_only: bool) -> List[str]:
+    cmd = [sys.executable, "main.py"]
+
+    if args.run_application_planning:
+        cmd.append("--run-application-planning")
+        cmd.extend([
+            "--application-planning-job-limit", str(args.job_limit),
+            "--application-planning-job-packet-limit", str(args.job_packet_limit),
+            "--application-planning-output-dir", args.output_dir,
+            "--application-planning-llm-actions", args.llm_actions,
+        ])
+
+        if args.generate_tailoring:
+            cmd.append("--application-planning-generate-tailoring")
+        if args.generate_llm_tailoring:
+            cmd.append("--application-planning-generate-llm-tailoring")
+        if args.refresh_llm_tailoring:
+            cmd.append("--application-planning-refresh-llm-tailoring")
+        if args.generate_llm_fallback:
+            cmd.append("--application-planning-generate-llm-fallback")
+
+    if planning_only:
+        cmd.append("--application-planning-only")
+
+    return cmd
+
+
+def _status(args) -> None:
+    output_dir = Path(args.output_dir)
+    corpus_path = Path(args.job_corpus)
+    decisions_path = Path(args.decisions_path)
+
+    best_rows = _load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
+    shortlist_rows = _load_csv_rows(output_dir / "application_shortlist_by_job.csv")
+    queue_rows = _load_csv_rows(output_dir / "application_execution_queue.csv")
+    manifest_rows = _load_csv_rows(output_dir / "job_packet_manifest.csv")
+    decision_rows = _load_csv_rows(decisions_path)
+
+    merged_rows = _build_job_index(output_dir, decisions_path)
+    undecided_review_counts = _count_undecided_review_rows(merged_rows)
+
+    print("=" * 100)
+    print("JOB APP STATUS")
+    print("=" * 100)
+    print(f"Job corpus                 : {corpus_path}")
+    print(f"Job corpus rows            : {_count_jsonl_rows(corpus_path)}")
+    print(f"Planning output dir        : {output_dir}")
+    print(f"Best-variant rows          : {len(best_rows)}")
+    print(f"Shortlist rows             : {len(shortlist_rows)}")
+    print(f"Execution queue rows       : {len(queue_rows)}")
+    print(f"Packet manifest rows       : {len(manifest_rows)}")
+    print(f"Operator decisions file    : {decisions_path}")
+    print(f"Operator decisions rows    : {len(decision_rows)}")
+    print()
+
+    if best_rows:
+        winner_bucket_counts = Counter(
+            str(row.get("winner_bucket", "") or "<empty>")
+            for row in best_rows
+        )
+        print("WINNER BUCKET COUNTS")
+        print("--------------------")
+        for key, count in sorted(winner_bucket_counts.items()):
+            print(f"{key:25} {count}")
+        print()
+
+        fallback_status_counts = Counter(
+            str(row.get("llm_fallback_status", "") or "<empty>")
+            for row in best_rows
+        )
+        print("LLM FALLBACK STATUS COUNTS")
+        print("--------------------------")
+        for key, count in sorted(fallback_status_counts.items()):
+            print(f"{key:25} {count}")
+        print()
+
+    if queue_rows:
+        action_counts = Counter(
+            str(row.get("action", "") or "<empty>")
+            for row in queue_rows
+        )
+        print("QUEUE ACTION COUNTS")
+        print("-------------------")
+        for key, count in sorted(action_counts.items()):
+            print(f"{key:25} {count}")
+        print()
+
+        print("TOP QUEUE ROWS")
+        print("--------------")
+        top_rows = sorted(
+            queue_rows,
+            key=lambda row: (
+                int(str(row.get("queue_rank", "999999") or "999999")),
+                -_parse_float(row.get("winner_score", "0")),
+            ),
+        )[: args.top_k]
+
+        latest_by_key = _load_latest_decision_overlay(decisions_path)
+
+        for row in top_rows:
+            overlay_row = dict(row)
+            for field in OPERATOR_DECISION_OVERLAY_FIELDS:
+                overlay_row.setdefault(field, "")
+
+            key_candidates = [
+                _decision_row_key(row),
+                f"queue_rank::{str(row.get('queue_rank', '') or '').strip()}",
+                (
+                    f"title::{_normalize_text(row.get('job_company', ''))}"
+                    f"||{_normalize_text(row.get('job_title', ''))}"
+                ),
+            ]
+
+            for key in key_candidates:
+                if key and key in latest_by_key:
+                    overlay_row.update(latest_by_key[key])
+                    break
+
+            print(
+                f"#{overlay_row.get('queue_rank', '')} | {overlay_row.get('action', '')} | "
+                f"{overlay_row.get('job_company', '')} | {overlay_row.get('job_title', '')}"
+            )
+            print(
+                f"  winner={overlay_row.get('winner_resume', '')} "
+                f"score={_parse_float(overlay_row.get('winner_score', '0')):.3f} "
+                f"tie={overlay_row.get('is_tie', '')} "
+                f"review={overlay_row.get('needs_variant_review', '')}"
+            )
+            print(
+                f"  missing={overlay_row.get('missing_requirement_count', '')} | "
+                f"reason={overlay_row.get('queue_priority_reason', '')}"
+            )
+            print(
+                f"  operator_decision={overlay_row.get('operator_decision', '') or '<empty>'} | "
+                f"operator_selected_resume={overlay_row.get('operator_selected_resume', '') or '<empty>'}"
+            )
+            print()
+
+    if decision_rows:
+        decision_counts = Counter(
+            str(row.get("decision", "") or "<empty>")
+            for row in decision_rows
+        )
+        print("OPERATOR DECISION COUNTS")
+        print("------------------------")
+        for key, count in sorted(decision_counts.items()):
+            print(f"{key:25} {count}")
+        print()
+
+    if undecided_review_counts:
+        print("UNDECIDED REVIEW COUNTS")
+        print("-----------------------")
+        for key, count in sorted(undecided_review_counts.items()):
+            print(f"{key:25} {count}")
+        print()
+    else:
+        print("UNDECIDED REVIEW COUNTS")
+        print("-----------------------")
+        print(f"{'<empty>':25} 0")
+        print()
+
+    if manifest_rows:
+        llm_tailoring_counts = Counter(
+            str(row.get("llm_tailoring_status", "") or "<empty>")
+            for row in manifest_rows
+        )
+        print("LLM TAILORING STATUS COUNTS")
+        print("---------------------------")
+        for key, count in sorted(llm_tailoring_counts.items()):
+            print(f"{key:25} {count}")
+        print()
+
+
+def _build_job_index(
+    output_dir: Path,
+    decisions_path: Path = DEFAULT_DECISIONS_PATH,
+) -> List[Dict[str, str]]:
+    best_rows = _load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
+    queue_rows = _load_csv_rows(output_dir / "application_execution_queue.csv")
+    manifest_rows = _load_csv_rows(output_dir / "job_packet_manifest.csv")
+
+    merged: Dict[str, Dict[str, str]] = {}
+
+    for source_rows in [best_rows, queue_rows, manifest_rows]:
+        for row in source_rows:
+            job_doc_id = str(row.get("job_doc_id", "") or "").strip()
+            company = str(row.get("job_company", "") or "").strip()
+            title = str(row.get("job_title", "") or "").strip()
+
+            key = job_doc_id or f"{_normalize_text(company)}||{_normalize_text(title)}"
+            if not key.strip("|"):
+                continue
+
+            if key not in merged:
+                merged[key] = {}
+            merged[key].update(row)
+
+    merged_rows = list(merged.values())
+    return _overlay_operator_decisions(merged_rows, Path(decisions_path))
+
+
+def _select_inspect_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
+    selected = rows
+
+    if args.queue_rank is not None:
+        selected = [
+            row for row in selected
+            if str(row.get("queue_rank", "") or "").strip() == str(args.queue_rank)
+        ]
+
+    if args.job_doc_id:
+        target = _normalize_text(args.job_doc_id)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("job_doc_id", "")) == target
+        ]
+
+    if args.company_contains:
+        needle = _normalize_text(args.company_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_company", ""))
+        ]
+
+    if args.title_contains:
+        needle = _normalize_text(args.title_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_title", ""))
+        ]
+
+    selected.sort(
+        key=lambda row: (
+            int(str(row.get("queue_rank", "999999") or "999999")),
+            -_parse_float(row.get("winner_score", "0")),
+            _normalize_text(row.get("job_company", "")),
+            _normalize_text(row.get("job_title", "")),
+        )
+    )
+    return selected[: args.limit]
+
+def _parse_bool_flag(value: str):
+    raw = _normalize_text(value)
+    if raw in {"true", "1", "yes", "y"}:
+        return True
+    if raw in {"false", "0", "no", "n"}:
+        return False
+    return None
+
+
+def _matches_bool_filter(row_value, expected) -> bool:
+    if expected is None:
+        return True
+    actual = _parse_bool_flag(str(row_value or ""))
+    return actual is expected
+
+
+def _select_browse_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
+    selected = rows
+
+    if args.action:
+        action_target = _normalize_text(args.action)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("action", "")) == action_target
+        ]
+
+    if args.fallback_status:
+        fallback_target = _normalize_text(args.fallback_status)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("llm_fallback_status", "")) == fallback_target
+        ]
+
+    if args.winner_bucket:
+        bucket_target = _normalize_text(args.winner_bucket)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("winner_bucket", "")) == bucket_target
+        ]
+
+    needs_review = _parse_bool_flag(args.needs_review)
+    if needs_review is not None:
+        selected = [
+            row for row in selected
+            if _matches_bool_filter(row.get("needs_variant_review", ""), needs_review)
+        ]
+
+    is_tie = _parse_bool_flag(args.is_tie)
+    if is_tie is not None:
+        selected = [
+            row for row in selected
+            if _matches_bool_filter(row.get("is_tie", ""), is_tie)
+        ]
+
+    if args.company_contains:
+        needle = _normalize_text(args.company_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_company", ""))
+        ]
+
+    if args.title_contains:
+        needle = _normalize_text(args.title_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_title", ""))
+        ]
+
+    undecided_only = _parse_bool_flag(args.undecided_only)
+    if undecided_only is True:
+        selected = [
+            row for row in selected
+            if not str(row.get("operator_decision", "") or "").strip()
+        ]
+
+    selected.sort(
+        key=lambda row: (
+            int(str(row.get("queue_rank", "999999") or "999999")),
+            -_parse_float(row.get("winner_score", "0")),
+            _normalize_text(row.get("job_company", "")),
+            _normalize_text(row.get("job_title", "")),
+        )
+    )
+    return selected[: args.limit]
+
+def _select_review_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
+    selected = rows
+
+    if args.action:
+        action_target = _normalize_text(args.action)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("action", "")) == action_target
+        ]
+    if args.queue_rank is not None:
+        selected = [
+            row for row in selected
+            if str(row.get("queue_rank", "") or "").strip() == str(args.queue_rank)
+        ]
+
+    if args.job_doc_id:
+        target = _normalize_text(args.job_doc_id)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("job_doc_id", "")) == target
+        ]
+
+    if args.company_contains:
+        needle = _normalize_text(args.company_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_company", ""))
+        ]
+
+    if args.title_contains:
+        needle = _normalize_text(args.title_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_title", ""))
+        ]
+
+    if not args.include_non_review:
+        selected = [
+            row for row in selected
+            if _matches_bool_filter(row.get("needs_variant_review", ""), True)
+        ]
+    
+    undecided_only = _parse_bool_flag(args.undecided_only)
+    if undecided_only is True:
+        selected = [
+            row for row in selected
+            if not str(row.get("operator_decision", "") or "").strip()
+        ]
+
+    selected.sort(
+        key=lambda row: (
+            int(str(row.get("queue_rank", "999999") or "999999")),
+            -_parse_float(row.get("winner_score", "0")),
+            _normalize_text(row.get("job_company", "")),
+            _normalize_text(row.get("job_title", "")),
+        )
+    )
+    return selected[: args.limit]
+
+def _as_list(value) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    return [str(value)]
+
+
+def _print_string_list(title: str, values, limit: int = 5) -> None:
+    items = _as_list(values)
+    if not items:
+        return
+    print(title)
+    for item in items[:limit]:
+        print(_wrap_block(item))
+
+
+def _print_kv_block(title: str, mapping, keys: List[str]) -> None:
+    if not isinstance(mapping, dict):
+        if mapping not in (None, "", []):
+            print(title)
+            print(_wrap_block(mapping))
+        return
+
+    lines = []
+    for key in keys:
+        value = mapping.get(key)
+        if value in (None, "", []):
+            continue
+        lines.append(f"{key}={value}")
+
+    if not lines:
+        return
+
+    print(title)
+    for line in lines:
+        print(_wrap_block(line))
+
+def _print_any_block(title: str, value) -> None:
+    if value in (None, "", []):
+        return
+
+    if isinstance(value, dict):
+        _print_kv_block(title, value, list(value.keys()))
+        return
+
+    if isinstance(value, list):
+        if not value:
+            return
+        print(title)
+        for item in value:
+            print(_wrap_block(item))
+        return
+
+    print(title)
+    print(_wrap_block(value))
+    
+def _print_dimension_deltas(values, limit: int = 5) -> None:
+    if not isinstance(values, list) or not values:
+        return
+    print("TOP DIMENSION DELTAS")
+    for item in values[:limit]:
+        if not isinstance(item, dict):
+            print(_wrap_block(item))
+            continue
+        dimension = item.get("dimension", "<unknown>")
+        delta = item.get("delta")
+        selected_score = item.get("selected_score")
+        backup_score = item.get("backup_score")
+        text = (
+            f"{dimension}: delta={delta}, selected={selected_score}, backup={backup_score}"
+        )
+        print(_wrap_block(text))
+
+
+def _print_relevant_bullets(values, limit: int = 3) -> None:
+    if not isinstance(values, list) or not values:
+        return
+    print("TOP RELEVANT BULLETS")
+    for idx, item in enumerate(values[:limit], start=1):
+        if not isinstance(item, dict):
+            print(_wrap_block(f"{idx}. {item}"))
+            continue
+        header_parts = []
+        for key in ["section", "source_title", "source_company"]:
+            if item.get(key):
+                header_parts.append(f"{key}={item.get(key)}")
+        if header_parts:
+            print(_wrap_block(f"{idx}. " + " | ".join(header_parts)))
+        if item.get("text"):
+            print(_wrap_block(item.get("text"), indent="      "))
+
+
+def _print_packet_summary(packet_json_path: str) -> None:
+    path = Path(packet_json_path)
+    if not packet_json_path or not path.exists():
+        _print_wrapped_field("Packet JSON", "<missing>")
+        return
+
+    _print_wrapped_field("Packet JSON", path)
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        _print_wrapped_field("Packet JSON read error", exc)
+        return
+
+    _print_wrapped_field("Packet JSON keys", ", ".join(sorted(data.keys())[:15]))
+
+    summary = data.get("summary")
+    selection = data.get("selection")
+    guardrail = data.get("guardrail")
+
+    if isinstance(summary, dict):
+        summary_lines = []
+        for key in [
+            "selection_rationale",
+            "tailoring_focus",
+            "recruiter_summary",
+            "job_summary",
+        ]:
+            if summary.get(key):
+                summary_lines.append(f"{key}: {summary.get(key)}")
+
+        if summary_lines or summary.get("resume_gaps") or summary.get("missing_requirements"):
+            print("SUMMARY")
+            for line in summary_lines:
+                print(_wrap_block(line))
+
+            _print_string_list("RESUME GAPS", summary.get("resume_gaps"), limit=6)
+            _print_string_list("MISSING REQUIREMENTS", summary.get("missing_requirements"), limit=6)
+    elif summary not in (None, "", []):
+        _print_any_block("SUMMARY", summary)
+
+    _print_kv_block(
+        "SELECTION",
+        selection,
+        [
+            "winner_resume",
+            "winner_score",
+            "runner_up_resume",
+            "runner_up_score",
+            "score_gap",
+            "is_tie",
+            "needs_variant_review",
+        ],
+    )
+
+    if isinstance(guardrail, dict):
+        _print_kv_block(
+            "GUARDRAIL",
+            guardrail,
+            [
+                "guardrail_status",
+                "guardrail_reason",
+                "missing_requirement_count",
+            ],
+        )
+    else:
+        _print_any_block("GUARDRAIL", guardrail)
+
+    _print_dimension_deltas(data.get("top_dimension_deltas_vs_backup"), limit=5)
+    _print_relevant_bullets(data.get("top_relevant_bullets"), limit=3)
+
+def _load_packet_json(packet_json_path: str):
+    path = Path(packet_json_path)
+    if not packet_json_path or not path.exists():
+        return None
+
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+def _decision_row_key(row: Dict[str, str]) -> str:
+    job_doc_id = str(row.get("job_doc_id", "") or "").strip()
+    if job_doc_id:
+        return f"job_doc_id::{job_doc_id}"
+
+    queue_rank = str(row.get("queue_rank", "") or "").strip()
+    if queue_rank:
+        return f"queue_rank::{queue_rank}"
+
+    company = _normalize_text(row.get("job_company", ""))
+    title = _normalize_text(row.get("job_title", ""))
+    if company or title:
+        return f"title::{company}||{title}"
+
+    return ""
+
+
+def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, str]]:
+    rows = _load_csv_rows(decisions_path)
+    latest_by_key: Dict[str, Dict[str, str]] = {}
+
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: (
+            str(row.get("decision_timestamp", "") or ""),
+            str(row.get("queue_rank", "") or ""),
+        ),
+    )
+
+    for row in sorted_rows:
+        key = _decision_row_key(row)
+        if not key:
+            continue
+
+        latest_by_key[key] = {
+            "operator_decision_timestamp": str(row.get("decision_timestamp", "") or ""),
+            "operator_decision": str(row.get("decision", "") or ""),
+            "operator_selected_resume": str(row.get("selected_resume", "") or ""),
+            "operator_note": str(row.get("note", "") or ""),
+        }
+
+    return latest_by_key
+
+
+def _overlay_operator_decisions(
+    rows: List[Dict[str, str]],
+    decisions_path: Path,
+) -> List[Dict[str, str]]:
+    latest_by_key = _load_latest_decision_overlay(decisions_path)
+    if not latest_by_key:
+        return rows
+
+    overlaid_rows: List[Dict[str, str]] = []
+
+    for row in rows:
+        merged = dict(row)
+        for field in OPERATOR_DECISION_OVERLAY_FIELDS:
+            merged.setdefault(field, "")
+
+        key_candidates = [
+            _decision_row_key(row),
+            f"queue_rank::{str(row.get('queue_rank', '') or '').strip()}",
+            (
+                f"title::{_normalize_text(row.get('job_company', ''))}"
+                f"||{_normalize_text(row.get('job_title', ''))}"
+            ),
+        ]
+
+        overlay = None
+        for key in key_candidates:
+            if key and key in latest_by_key:
+                overlay = latest_by_key[key]
+                break
+
+        if overlay:
+            merged.update(overlay)
+
+        overlaid_rows.append(merged)
+
+    return overlaid_rows
+
+def _find_single_job_row(rows: List[Dict[str, str]], args) -> Dict[str, str]:
+    selected = rows
+
+    if args.queue_rank is not None:
+        selected = [
+            row for row in selected
+            if str(row.get("queue_rank", "") or "").strip() == str(args.queue_rank)
+        ]
+
+    if args.job_doc_id:
+        target = _normalize_text(args.job_doc_id)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("job_doc_id", "")) == target
+        ]
+
+    if args.company_contains:
+        needle = _normalize_text(args.company_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_company", ""))
+        ]
+
+    if args.title_contains:
+        needle = _normalize_text(args.title_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_title", ""))
+        ]
+
+    selected.sort(
+        key=lambda row: (
+            int(str(row.get("queue_rank", "999999") or "999999")),
+            -_parse_float(row.get("winner_score", "0")),
+            _normalize_text(row.get("job_company", "")),
+            _normalize_text(row.get("job_title", "")),
+        )
+    )
+
+    if not selected:
+        raise SystemExit("No matching job found in application-planning outputs.")
+
+    if len(selected) > 1:
+        raise SystemExit(
+            "Decision target is ambiguous. Use --queue-rank or --job-doc-id to select exactly one row."
+        )
+
+    return selected[0]
+
+def _select_decision_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
+    selected = rows
+
+    if args.queue_rank is not None:
+        selected = [
+            row for row in selected
+            if str(row.get("queue_rank", "") or "").strip() == str(args.queue_rank)
+        ]
+
+    if args.decision:
+        target = _normalize_text(args.decision)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("decision", "")) == target
+        ]
+
+    if args.selected_resume:
+        target = _normalize_text(args.selected_resume)
+        selected = [
+            row for row in selected
+            if _normalize_text(row.get("selected_resume", "")) == target
+        ]
+
+    if args.company_contains:
+        needle = _normalize_text(args.company_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_company", ""))
+        ]
+
+    if args.title_contains:
+        needle = _normalize_text(args.title_contains)
+        selected = [
+            row for row in selected
+            if needle in _normalize_text(row.get("job_title", ""))
+        ]
+
+    selected.sort(
+        key=lambda row: (
+            str(row.get("decision_timestamp", "") or ""),
+            str(row.get("queue_rank", "") or ""),
+        ),
+        reverse=True,
+    )
+    return selected[: args.limit]
+
+def _count_undecided_review_rows(rows: List[Dict[str, str]]) -> Dict[str, int]:
+    counts = Counter()
+
+    for row in rows:
+        action = str(row.get("action", "") or "").strip()
+        needs_review = _matches_bool_filter(row.get("needs_variant_review", ""), True)
+        operator_decision = str(row.get("operator_decision", "") or "").strip()
+
+        if not action or not needs_review:
+            continue
+        if operator_decision:
+            continue
+
+        counts[action] += 1
+
+    return dict(counts)
+
+def _validate_selected_resume(row: Dict[str, str], selected_resume: str) -> str:
+    selected = str(selected_resume or "").strip()
+    if not selected:
+        raise SystemExit("--selected-resume is required.")
+
+    allowed = {
+        str(row.get("winner_resume", "") or "").strip(),
+        str(row.get("runner_up_resume", "") or "").strip(),
+    }
+    allowed = {value for value in allowed if value}
+
+    if allowed and selected not in allowed:
+        raise SystemExit(
+            f"--selected-resume must match one of the compared variants: {sorted(allowed)}"
+        )
+
+    return selected
+
+def _inspect(args) -> None:
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    selected = _select_inspect_rows(rows, args)
+
+    if not selected:
+        raise SystemExit("No matching jobs found in application-planning outputs.")
+
+    print("=" * 100)
+    print("JOB APP INSPECT")
+    print("=" * 100)
+
+    for row in selected:
+        _print_wrapped_field("Job doc id", row.get("job_doc_id", ""))
+        _print_wrapped_field("Company", row.get("job_company", ""))
+        _print_wrapped_field("Title", row.get("job_title", ""))
+        _print_wrapped_field("Action", row.get("action", ""))
+        _print_wrapped_field("Queue rank", row.get("queue_rank", ""))
+        _print_wrapped_field("Winner", row.get("winner_resume", ""))
+        _print_wrapped_field("Winner score", f"{_parse_float(row.get('winner_score', '0')):.3f}")
+        _print_wrapped_field("Runner up", row.get("runner_up_resume", ""))
+        _print_wrapped_field("Runner up score", f"{_parse_float(row.get('runner_up_score', '0')):.3f}")
+        _print_wrapped_field("Score gap", f"{_parse_float(row.get('score_gap', '0')):.3f}")
+        _print_wrapped_field("Needs variant review", row.get("needs_variant_review", ""))
+        _print_wrapped_field("Queue priority reason", row.get("queue_priority_reason", ""))
+        _print_wrapped_field("Fallback best", row.get("llm_fallback_best_resume", ""))
+        _print_wrapped_field("Fallback best score", f"{_parse_float(row.get('llm_fallback_best_score', '0')):.3f}")
+        _print_wrapped_field("Fallback backup", row.get("llm_fallback_backup_resume", ""))
+        _print_wrapped_field("Fallback status", row.get("llm_fallback_status", ""))
+        _print_wrapped_field("Fallback reason", row.get("llm_fallback_reason", ""))
+        _print_wrapped_field("LLM tailoring status", row.get("llm_tailoring_status", ""))
+        _print_wrapped_field("LLM error type", row.get("llm_error_type", ""))
+        _print_wrapped_field("Tailoring markdown", row.get("tailoring_md", "") or "<missing>")
+        _print_wrapped_field("Tailoring LLM JSON", row.get("tailoring_llm_json", "") or "<missing>")
+        _print_wrapped_field("Operator decision", row.get("operator_decision", ""))
+        _print_wrapped_field("Operator selected resume", row.get("operator_selected_resume", ""))
+        _print_wrapped_field("Operator decision timestamp", row.get("operator_decision_timestamp", ""))
+        _print_wrapped_field("Operator note", row.get("operator_note", ""))
+        _print_packet_summary(row.get("packet_json", ""))
+        print("-" * 100)
+
+def _browse(args) -> None:
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    selected = _select_browse_rows(rows, args)
+
+    if not selected:
+        raise SystemExit("No matching jobs found in application-planning outputs.")
+
+    print("=" * 100)
+    print("JOB APP BROWSE")
+    print("=" * 100)
+    _print_wrapped_field("Rows returned", len(selected))
+    _print_wrapped_field("Action filter", args.action or "<any>")
+    _print_wrapped_field("Needs review filter", args.needs_review or "<any>")
+    _print_wrapped_field("Tie filter", args.is_tie or "<any>")
+    _print_wrapped_field("Fallback status filter", args.fallback_status or "<any>")
+    _print_wrapped_field("Winner bucket filter", args.winner_bucket or "<any>")
+    _print_wrapped_field("Company contains", args.company_contains or "<any>")
+    _print_wrapped_field("Title contains", args.title_contains or "<any>")
+    _print_wrapped_field("Undecided only", args.undecided_only or "<any>")
+    print()
+
+    for row in selected:
+        queue_rank = row.get("queue_rank", "")
+        action = row.get("action", "")
+        company = row.get("job_company", "")
+        title = row.get("job_title", "")
+        winner = row.get("winner_resume", "")
+        winner_score = _parse_float(row.get("winner_score", "0"))
+        runner_up = row.get("runner_up_resume", "")
+        score_gap = _parse_float(row.get("score_gap", "0"))
+        is_tie = row.get("is_tie", "")
+        needs_review = row.get("needs_variant_review", "")
+        fallback_best = row.get("llm_fallback_best_resume", "")
+        fallback_status = row.get("llm_fallback_status", "")
+        operator_decision = row.get("operator_decision", "")
+        operator_selected_resume = row.get("operator_selected_resume", "")
+        operator_decision_timestamp = row.get("operator_decision_timestamp", "")
+
+        print(f"#{queue_rank} | {action} | {company} | {title}")
+        print(
+            f"  winner={winner or '<empty>'} | "
+            f"score={winner_score:.3f} | "
+            f"runner_up={runner_up or '<empty>'}"
+        )
+        print(
+            f"  gap={score_gap:.3f} | "
+            f"tie={is_tie or '<empty>'} | "
+            f"review={needs_review or '<empty>'}"
+        )
+        print(
+            f"  fallback_best={fallback_best or '<empty>'} | "
+            f"fallback_status={fallback_status or '<empty>'}"
+        )
+        print(
+            f"  operator_decision={operator_decision or '<empty>'} | "
+            f"operator_selected_resume={operator_selected_resume or '<empty>'}"
+        )
+        print(
+            f"  operator_decision_timestamp={operator_decision_timestamp or '<empty>'}"
+        )
+        print()
+
+def _review(args) -> None:
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    selected = _select_review_rows(rows, args)
+
+    if not selected:
+        raise SystemExit("No matching review rows found in application-planning outputs.")
+
+    print("=" * 100)
+    print("JOB APP REVIEW")
+    print("=" * 100)
+
+    _print_wrapped_field("Action filter", args.action or "<any>")
+    _print_wrapped_field("Undecided only", args.undecided_only or "<any>")
+    print()
+
+    for row in selected:
+        _print_wrapped_field("Queue rank", row.get("queue_rank", ""))
+        _print_wrapped_field("Job doc id", row.get("job_doc_id", ""))
+        _print_wrapped_field("Company", row.get("job_company", ""))
+        _print_wrapped_field("Title", row.get("job_title", ""))
+        _print_wrapped_field("Action", row.get("action", ""))
+        _print_wrapped_field("Needs variant review", row.get("needs_variant_review", ""))
+        _print_wrapped_field("Is tie", row.get("is_tie", ""))
+        _print_wrapped_field("Queue priority reason", row.get("queue_priority_reason", ""))
+        _print_wrapped_field("Operator decision", row.get("operator_decision", ""))
+        _print_wrapped_field("Operator selected resume", row.get("operator_selected_resume", ""))
+        _print_wrapped_field("Operator decision timestamp", row.get("operator_decision_timestamp", ""))
+        _print_wrapped_field("Operator note", row.get("operator_note", ""))
+        print("VARIANT COMPARISON")
+        print(
+            _wrap_block(
+                f"winner_resume={row.get('winner_resume', '') or '<empty>'} | "
+                f"winner_score={_parse_float(row.get('winner_score', '0')):.3f}"
+            )
+        )
+        print(
+            _wrap_block(
+                f"runner_up_resume={row.get('runner_up_resume', '') or '<empty>'} | "
+                f"runner_up_score={_parse_float(row.get('runner_up_score', '0')):.3f}"
+            )
+        )
+        print(
+            _wrap_block(
+                f"score_gap={_parse_float(row.get('score_gap', '0')):.3f}"
+            )
+        )
+
+        _print_wrapped_field("Tailoring markdown", row.get("tailoring_md", "") or "<missing>")
+        _print_wrapped_field("Packet JSON", row.get("packet_json", "") or "<missing>")
+
+        packet = _load_packet_json(row.get("packet_json", "")) or {}
+        summary = packet.get("summary")
+        selection = packet.get("selection")
+        top_dimension_deltas = packet.get("top_dimension_deltas_vs_backup")
+        top_relevant_bullets = packet.get("top_relevant_bullets")
+
+        if isinstance(summary, dict):
+            rationale_lines = []
+            for key in ["selection_rationale", "tailoring_focus", "recruiter_summary", "job_summary"]:
+                if summary.get(key):
+                    rationale_lines.append(f"{key}: {summary.get(key)}")
+            if rationale_lines:
+                print("PACKET SUMMARY")
+                for line in rationale_lines:
+                    print(_wrap_block(line))
+            _print_string_list("RESUME GAPS", summary.get("resume_gaps"), limit=6)
+            _print_string_list("MISSING REQUIREMENTS", summary.get("missing_requirements"), limit=6)
+        elif summary not in (None, "", []):
+            _print_any_block("PACKET SUMMARY", summary)
+
+        if selection:
+            _print_kv_block(
+                "PACKET SELECTION",
+                selection,
+                [
+                    "winner_resume",
+                    "winner_score",
+                    "runner_up_resume",
+                    "runner_up_score",
+                    "score_gap",
+                    "is_tie",
+                    "needs_variant_review",
+                ],
+            )
+
+        _print_dimension_deltas(top_dimension_deltas, limit=5)
+        _print_relevant_bullets(top_relevant_bullets, limit=5)
+        print("-" * 100)
+
+def _decide(args) -> None:
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    row = _find_single_job_row(rows, args)
+    selected_resume = _validate_selected_resume(row, args.selected_resume)
+
+    decision_row = {
+        "decision_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "queue_rank": str(row.get("queue_rank", "") or ""),
+        "job_doc_id": str(row.get("job_doc_id", "") or ""),
+        "job_company": str(row.get("job_company", "") or ""),
+        "job_title": str(row.get("job_title", "") or ""),
+        "planning_action": str(row.get("action", "") or ""),
+        "winner_resume": str(row.get("winner_resume", "") or ""),
+        "winner_score": str(row.get("winner_score", "") or ""),
+        "runner_up_resume": str(row.get("runner_up_resume", "") or ""),
+        "runner_up_score": str(row.get("runner_up_score", "") or ""),
+        "selected_resume": selected_resume,
+        "decision": str(args.decision or "").strip(),
+        "note": str(args.note or "").strip(),
+    }
+
+    decisions_path = Path(args.decisions_path)
+    _append_csv_row(decisions_path, DECISION_HEADERS, decision_row)
+
+    print("=" * 100)
+    print("JOB APP DECIDE")
+    print("=" * 100)
+    _print_wrapped_field("Decisions file", decisions_path)
+    _print_wrapped_field("Queue rank", decision_row["queue_rank"])
+    _print_wrapped_field("Company", decision_row["job_company"])
+    _print_wrapped_field("Title", decision_row["job_title"])
+    _print_wrapped_field("Planning action", decision_row["planning_action"])
+    _print_wrapped_field("Winner resume", decision_row["winner_resume"])
+    _print_wrapped_field("Runner up resume", decision_row["runner_up_resume"])
+    _print_wrapped_field("Selected resume", decision_row["selected_resume"])
+    _print_wrapped_field("Decision", decision_row["decision"])
+    _print_wrapped_field("Note", decision_row["note"] or "<empty>")
+
+def _decisions(args) -> None:
+    decisions_path = Path(args.decisions_path)
+    rows = _load_csv_rows(decisions_path)
+    selected = _select_decision_rows(rows, args)
+
+    if not selected:
+        raise SystemExit("No matching operator decisions found.")
+
+    print("=" * 100)
+    print("JOB APP DECISIONS")
+    print("=" * 100)
+    _print_wrapped_field("Decisions file", decisions_path)
+    _print_wrapped_field("Rows returned", len(selected))
+    _print_wrapped_field("Decision filter", args.decision or "<any>")
+    _print_wrapped_field("Selected resume filter", args.selected_resume or "<any>")
+    _print_wrapped_field("Company contains", args.company_contains or "<any>")
+    _print_wrapped_field("Title contains", args.title_contains or "<any>")
+    _print_wrapped_field("Queue rank filter", args.queue_rank if args.queue_rank is not None else "<any>")
+    print()
+
+    for row in selected:
+        print(
+            f"{row.get('decision_timestamp', '')} | "
+            f"#{row.get('queue_rank', '')} | "
+            f"{row.get('decision', '')} | "
+            f"{row.get('job_company', '')} | "
+            f"{row.get('job_title', '')}"
+        )
+        print(
+            f"  selected_resume={row.get('selected_resume', '') or '<empty>'} | "
+            f"planning_action={row.get('planning_action', '') or '<empty>'}"
+        )
+        print(
+            f"  winner={row.get('winner_resume', '') or '<empty>'} | "
+            f"runner_up={row.get('runner_up_resume', '') or '<empty>'}"
+        )
+        print(
+            f"  note={row.get('note', '') or '<empty>'}"
+        )
+        print()
+
+def _parse_args():
+    parser = argparse.ArgumentParser(
+        description="Thin operator CLI for the existing job pipeline and application-planning outputs."
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    run_parser = subparsers.add_parser(
+        "run",
+        help="Run the main pipeline, optionally with downstream application planning.",
+    )
+    run_parser.add_argument("--run-application-planning", action="store_true")
+    run_parser.add_argument("--job-limit", type=int, default=50)
+    run_parser.add_argument("--job-packet-limit", type=int, default=0)
+    run_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    run_parser.add_argument("--llm-actions", default="APPLY,APPLY_REVIEW_VARIANTS")
+    run_parser.add_argument("--generate-tailoring", action="store_true")
+    run_parser.add_argument("--generate-llm-tailoring", action="store_true")
+    run_parser.add_argument("--refresh-llm-tailoring", action="store_true")
+    run_parser.add_argument("--generate-llm-fallback", action="store_true")
+
+    planning_parser = subparsers.add_parser(
+        "plan",
+        help="Run planning-only mode against the existing exported job corpus.",
+    )
+    planning_parser.add_argument("--run-application-planning", action="store_true", default=True)
+    planning_parser.add_argument("--job-limit", type=int, default=50)
+    planning_parser.add_argument("--job-packet-limit", type=int, default=0)
+    planning_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    planning_parser.add_argument("--llm-actions", default="APPLY,APPLY_REVIEW_VARIANTS")
+    planning_parser.add_argument("--generate-tailoring", action="store_true")
+    planning_parser.add_argument("--generate-llm-tailoring", action="store_true")
+    planning_parser.add_argument("--refresh-llm-tailoring", action="store_true")
+    planning_parser.add_argument("--generate-llm-fallback", action="store_true")
+
+    status_parser = subparsers.add_parser(
+        "status",
+        help="Summarize the current job corpus and application-planning outputs.",
+    )
+    status_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    status_parser.add_argument("--job-corpus", default=str(DEFAULT_CORPUS_PATH))
+    status_parser.add_argument("--top-k", type=int, default=10)
+    status_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+
+    inspect_parser = subparsers.add_parser(
+        "inspect",
+        help="Inspect one or more jobs from existing application-planning outputs.",
+    )
+    inspect_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    inspect_parser.add_argument("--job-doc-id", default="")
+    inspect_parser.add_argument("--queue-rank", type=int)
+    inspect_parser.add_argument("--company-contains", default="")
+    inspect_parser.add_argument("--title-contains", default="")
+    inspect_parser.add_argument("--limit", type=int, default=5)
+    inspect_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+
+    browse_parser = subparsers.add_parser(
+        "browse",
+        help="Browse queue/planning rows with compact operator-friendly filters.",
+    )
+    browse_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    browse_parser.add_argument("--action", default="")
+    browse_parser.add_argument("--needs-review", default="")
+    browse_parser.add_argument("--is-tie", default="")
+    browse_parser.add_argument("--fallback-status", default="")
+    browse_parser.add_argument("--winner-bucket", default="")
+    browse_parser.add_argument("--company-contains", default="")
+    browse_parser.add_argument("--title-contains", default="")
+    browse_parser.add_argument("--limit", type=int, default=20)
+    browse_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    browse_parser.add_argument("--undecided-only", default="")
+
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Review tied or manual-variant-selection rows in a decision-friendly format.",
+    )
+    review_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    review_parser.add_argument("--queue-rank", type=int)
+    review_parser.add_argument("--job-doc-id", default="")
+    review_parser.add_argument("--company-contains", default="")
+    review_parser.add_argument("--title-contains", default="")
+    review_parser.add_argument("--include-non-review", action="store_true")
+    review_parser.add_argument("--limit", type=int, default=5)
+    review_parser.add_argument("--action", default="")
+    review_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    review_parser.add_argument("--undecided-only", default="")
+
+    decide_parser = subparsers.add_parser(
+        "decide",
+        help="Append a human decision for one reviewed queue row.",
+    )
+    decide_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    decide_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    decide_parser.add_argument("--queue-rank", type=int)
+    decide_parser.add_argument("--job-doc-id", default="")
+    decide_parser.add_argument("--company-contains", default="")
+    decide_parser.add_argument("--title-contains", default="")
+    decide_parser.add_argument(
+        "--selected-resume",
+        required=True,
+        help="Chosen resume variant. Must match the winner or runner-up resume when both are present.",
+    )
+    decide_parser.add_argument(
+        "--decision",
+        required=True,
+        choices=["APPLY", "SKIP", "TAILOR", "HOLD"],
+    )
+    decide_parser.add_argument("--note", default="")
+
+    decisions_parser = subparsers.add_parser(
+        "decisions",
+        help="Browse previously recorded operator decisions.",
+    )
+    decisions_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    decisions_parser.add_argument("--queue-rank", type=int)
+    decisions_parser.add_argument("--decision", default="")
+    decisions_parser.add_argument("--selected-resume", default="")
+    decisions_parser.add_argument("--company-contains", default="")
+    decisions_parser.add_argument("--title-contains", default="")
+    decisions_parser.add_argument("--limit", type=int, default=20)
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = _parse_args()
+
+    if args.command == "run":
+        _run_cmd(_build_main_cmd(args, planning_only=False))
+        return
+
+    if args.command == "plan":
+        _run_cmd(_build_main_cmd(args, planning_only=True))
+        return
+
+    if args.command == "status":
+        _status(args)
+        return
+
+    if args.command == "inspect":
+        _inspect(args)
+        return
+
+    if args.command == "browse":
+        _browse(args)
+        return
+    
+    if args.command == "review":
+        _review(args)
+        return
+    
+    if args.command == "decide":
+        _decide(args)
+        return
+    
+    if args.command == "decisions":
+        _decisions(args)
+        return
+
+    raise SystemExit(f"Unsupported command: {args.command}")
+
+
+if __name__ == "__main__":
+    main()

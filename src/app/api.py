@@ -1,5 +1,5 @@
 from pathlib import Path
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query
 from src.app import services
 from fastapi.staticfiles import StaticFiles
 from src.app.ui import router as ui_router
@@ -166,6 +166,56 @@ def decisions(
         limit=limit,
     )
 
+@app.get("/application-actions")
+def application_actions(
+    actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),
+    application_status: str = "",
+    company_contains: str = "",
+    title_contains: str = "",
+    limit: int = 100,
+):
+    return services.application_actions_payload(
+        actions_path=Path(actions_path),
+        application_status=application_status,
+        company_contains=company_contains,
+        title_contains=title_contains,
+        limit=limit,
+    )
+
+
+@app.post("/application-actions")
+def record_application_action(
+    payload: dict = Body(...),
+    actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),
+):
+    try:
+        return services.record_application_action_payload(
+            actions_path=Path(actions_path),
+            job_doc_id=str(payload.get("job_doc_id", "") or ""),
+            job_url=str(payload.get("job_url", "") or ""),
+            job_company=str(payload.get("job_company", "") or ""),
+            job_title=str(payload.get("job_title", "") or ""),
+            application_status=str(payload.get("application_status", "") or ""),
+            source_view=str(payload.get("source_view", "") or ""),
+            note=str(payload.get("note", "") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/applied-jobs")
+def applied_jobs(
+    actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),
+    company_contains: str = "",
+    title_contains: str = "",
+    limit: int = 100,
+):
+    return services.applied_jobs_payload(
+        actions_path=Path(actions_path),
+        company_contains=company_contains,
+        title_contains=title_contains,
+        limit=limit,
+    )
 
 @app.get("/rag/search")
 def rag_search(

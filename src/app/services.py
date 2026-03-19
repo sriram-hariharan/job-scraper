@@ -1,11 +1,32 @@
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict
+from typing import Any, Dict, List
+from datetime import datetime, timezone
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
+DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv"
+
+APPLICATION_ACTION_HEADERS = [
+    "action_timestamp",
+    "job_doc_id",
+    "job_url",
+    "job_company",
+    "job_title",
+    "application_status",
+    "source_view",
+    "note",
+]
+
+ALLOWED_APPLICATION_STATUSES = {
+    "OPENED",
+    "APPLIED",
+    "SAVED",
+    "NOT_APPLIED",
+    "DISMISSED",
+}
 
 def _job_app():
     import job_app
@@ -14,6 +35,69 @@ def _job_app():
 def _make_args(**kwargs):
     return SimpleNamespace(**kwargs)
 
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _normalize_application_status(value: Any) -> str:
+    normalized = _clean_text(value).upper().replace(" ", "_")
+    if not normalized:
+        raise ValueError("application_status is required.")
+    if normalized not in ALLOWED_APPLICATION_STATUSES:
+        allowed = ", ".join(sorted(ALLOWED_APPLICATION_STATUSES))
+        raise ValueError(f"Invalid application_status={normalized!r}. Allowed values: {allowed}")
+    return normalized
+
+
+def _application_action_key(row: Dict[str, Any]) -> str:
+    ja = _job_app()
+
+    job_doc_id = _clean_text(row.get("job_doc_id"))
+    if job_doc_id:
+        return f"job_doc_id::{job_doc_id}"
+
+    job_url = _clean_text(row.get("job_url"))
+    if job_url:
+        return f"job_url::{job_url}"
+
+    company = ja._normalize_text(row.get("job_company", ""))
+    title = ja._normalize_text(row.get("job_title", ""))
+    if company or title:
+        return f"title::{company}||{title}"
+
+    return ""
+
+
+def _validate_application_identity(row: Dict[str, Any]) -> None:
+    if not _application_action_key(row):
+        raise ValueError(
+            "Application action requires job_doc_id, job_url, or job_company + job_title."
+        )
+
+
+def _load_latest_application_actions(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+) -> List[Dict[str, str]]:
+    ja = _job_app()
+    rows = ja._load_csv_rows(actions_path)
+    latest_by_key: Dict[str, Dict[str, str]] = {}
+
+    for row in rows:
+        key = _application_action_key(row)
+        if not key:
+            continue
+        latest_by_key[key] = dict(row)
+
+    latest_rows = list(latest_by_key.values())
+    latest_rows.sort(
+        key=lambda row: (
+            str(row.get("action_timestamp", "") or ""),
+            _clean_text(row.get("job_company")),
+            _clean_text(row.get("job_title")),
+        ),
+        reverse=True,
+    )
+    return latest_rows
 
 def health_payload() -> Dict[str, Any]:
     from src.rag.retriever import get_semantic_status
@@ -199,6 +283,99 @@ def decisions_payload(
         "count": len(selected),
         "decisions_path": str(decisions_path),
     }
+
+def record_application_action_payload(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+    job_doc_id: str = "",
+    job_url: str = "",
+    job_company: str = "",
+    job_title: str = "",
+    application_status: str = "",
+    source_view: str = "",
+    note: str = "",
+) -> Dict[str, Any]:
+    ja = _job_app()
+
+    row = {
+        "action_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "job_doc_id": _clean_text(job_doc_id),
+        "job_url": _clean_text(job_url),
+        "job_company": _clean_text(job_company),
+        "job_title": _clean_text(job_title),
+        "application_status": _normalize_application_status(application_status),
+        "source_view": _clean_text(source_view),
+        "note": _clean_text(note),
+    }
+
+    _validate_application_identity(row)
+    ja._append_csv_row(actions_path, APPLICATION_ACTION_HEADERS, row)
+
+    return {
+        "ok": True,
+        "row": row,
+        "actions_path": str(actions_path),
+    }
+
+
+def application_actions_payload(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+    application_status: str = "",
+    company_contains: str = "",
+    title_contains: str = "",
+    limit: int = 100,
+) -> Dict[str, Any]:
+    ja = _job_app()
+    rows = _load_latest_application_actions(actions_path)
+
+    if application_status:
+        status_target = _normalize_application_status(application_status)
+        rows = [
+            row for row in rows
+            if _clean_text(row.get("application_status")) == status_target
+        ]
+
+    if company_contains:
+        needle = ja._normalize_text(company_contains)
+        rows = [
+            row for row in rows
+            if needle in ja._normalize_text(row.get("job_company", ""))
+        ]
+
+    if title_contains:
+        needle = ja._normalize_text(title_contains)
+        rows = [
+            row for row in rows
+            if needle in ja._normalize_text(row.get("job_title", ""))
+        ]
+
+    selected = rows[:limit]
+
+    return {
+        "filters": {
+            "application_status": application_status,
+            "company_contains": company_contains,
+            "title_contains": title_contains,
+            "limit": limit,
+        },
+        "rows": selected,
+        "count": len(selected),
+        "actions_path": str(actions_path),
+    }
+
+
+def applied_jobs_payload(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+    company_contains: str = "",
+    title_contains: str = "",
+    limit: int = 100,
+) -> Dict[str, Any]:
+    return application_actions_payload(
+        actions_path=actions_path,
+        application_status="APPLIED",
+        company_contains=company_contains,
+        title_contains=title_contains,
+        limit=limit,
+    )
 
 def jobs_search_lite_payload(
     request: str,

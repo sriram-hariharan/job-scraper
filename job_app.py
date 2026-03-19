@@ -62,11 +62,11 @@ def _ensure_parent_dir(path: Path) -> None:
 
 def _append_csv_row(path: Path, headers: List[str], row: Dict[str, str]) -> None:
     _ensure_parent_dir(path)
-    file_exists = path.exists()
+    needs_header = (not path.exists()) or path.stat().st_size == 0
 
     with path.open("a", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=headers)
-        if not file_exists:
+        if needs_header:
             writer.writeheader()
         writer.writerow({header: row.get(header, "") for header in headers})
 

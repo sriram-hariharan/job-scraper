@@ -8,6 +8,41 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function distinctDecisionJobCount(rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  const keys = new Set();
+
+  for (const row of safeRows) {
+    const key = [
+      row.job_doc_id || row.job_url || "",
+      row.job_company || "",
+      row.job_title || "",
+    ].join("||");
+    if (key !== "||||") keys.add(key);
+  }
+
+  return keys.size;
+}
+
+function renderTableLoading(colspan, label) {
+  return `
+    <tr>
+      <td colspan="${colspan}">
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">${escapeHtml(label)}</div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function updateDecisionStats(rows) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+  qs("decisionsShownCount").textContent = String(safeRows.length);
+  qs("decisionsJobsTouched").textContent = String(distinctDecisionJobCount(safeRows));
+}
+
 function qs(id) {
   return document.getElementById(id);
 }

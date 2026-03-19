@@ -21,15 +21,24 @@ STRICT RULES
 4. Every substantive claim must be grounded in at least one source.
 5. Cite sources inline using bracketed source IDs like [S1] or [S2].
 6. If comparing or ranking jobs, explain the evidence for each selected job.
-7. Return ONLY valid JSON.
+7. For each cited source, include 2 to 4 short evidence points that directly explain why the job matches the question.
+8. Evidence points must be concrete and source-grounded, such as title fit, required skills, domain context, ML/LLM/RAG/agentic language, experimentation, modeling, or platform signals.
+9. Return ONLY valid JSON.
 
 Return this exact JSON shape:
 {
   "answer": "string",
   "insufficient_evidence": true,
-  "used_source_ids": ["S1"]
+  "used_source_ids": ["S1"],
+  "job_evidence": [
+    {
+      "source_id": "S1",
+      "evidence_points": ["string", "string"]
+    }
+  ]
 }
 """.strip()
+
 
 
 def _extract_json_from_response(response: str) -> Dict[str, Any]:
@@ -151,6 +160,86 @@ def _normalize_used_source_ids(
 
     return normalized
 
+def _normalize_evidence_points(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+
+    normalized: List[str] = []
+    for item in value:
+        point = str(item or "").strip()
+        if point and point not in normalized:
+            normalized.append(point)
+
+    return normalized[:4]
+
+
+def _normalize_job_evidence(
+    value: Any,
+    valid_source_ids: List[str],
+) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+
+    valid = set(valid_source_ids)
+    normalized: List[Dict[str, Any]] = []
+    seen_source_ids: set[str] = set()
+
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+
+        source_id = str(item.get("source_id") or "").strip()
+        if not source_id or source_id not in valid or source_id in seen_source_ids:
+            continue
+
+        evidence_points = _normalize_evidence_points(item.get("evidence_points"))
+        if not evidence_points:
+            continue
+
+        normalized.append(
+            {
+                "source_id": source_id,
+                "evidence_points": evidence_points,
+            }
+        )
+        seen_source_ids.add(source_id)
+
+    return normalized
+
+
+def _build_job_evidence_output(
+    prompt_sources: List[Dict[str, Any]],
+    job_evidence: List[Dict[str, Any]],
+    allowed_source_ids: List[str],
+) -> List[Dict[str, Any]]:
+    source_lookup = {
+        source["source_id"]: source
+        for source in prompt_sources
+    }
+    allowed = set(allowed_source_ids)
+
+    output: List[Dict[str, Any]] = []
+    for item in job_evidence:
+        source_id = item.get("source_id", "")
+        if source_id not in allowed:
+            continue
+
+        source = source_lookup.get(source_id)
+        if not source:
+            continue
+
+        output.append(
+            {
+                "source_id": source_id,
+                "title": source.get("title", ""),
+                "company": source.get("company", ""),
+                "job_url": source.get("job_url", ""),
+                "evidence_points": item.get("evidence_points", []),
+            }
+        )
+
+    return output
+
 def _ensure_inline_citations(answer: str, used_source_ids: List[str]) -> str:
     answer = (answer or "").strip()
     if not answer or not used_source_ids:
@@ -255,6 +344,7 @@ def answer_job_query(
             "used_source_ids": [],
             "sources": [],
             "retrieved_count": 0,
+            "job_evidence": [],
         }
 
     prompt_sources = _build_prompt_sources(results)
@@ -283,6 +373,7 @@ def answer_job_query(
             "llm_model": "",
             "llm_fallback_used": False,
             "retrieval_lanes_used": [],
+            "job_evidence": [],
         }
     except Exception as exc:
         return {
@@ -296,12 +387,17 @@ def answer_job_query(
             "llm_model": "",
             "llm_fallback_used": False,
             "retrieval_lanes_used": [],
+            "job_evidence": [],
         }
 
     answer = str(parsed.get("answer") or "").strip()
     insufficient_evidence = bool(parsed.get("insufficient_evidence", False))
     model_used_source_ids = _normalize_used_source_ids(
         parsed.get("used_source_ids", []),
+        valid_source_ids,
+    )
+    normalized_job_evidence = _normalize_job_evidence(
+        parsed.get("job_evidence", []),
         valid_source_ids,
     )
 
@@ -322,6 +418,15 @@ def answer_job_query(
         answer = _strip_inline_citations(answer)
         answer = _normalize_insufficient_answer(answer)
 
+    if insufficient_evidence:
+        job_evidence_output = []
+    else:
+        job_evidence_output = _build_job_evidence_output(
+            prompt_sources=prompt_sources,
+            job_evidence=normalized_job_evidence,
+            allowed_source_ids=used_source_ids,
+        )
+
     return {
         "question": question,
         "answer": answer,
@@ -333,6 +438,7 @@ def answer_job_query(
         "llm_model": llm_model,
         "llm_fallback_used": llm_fallback_used,
         "retrieval_lanes_used": retrieval_lanes_used,
+        "job_evidence": job_evidence_output,
     }
 
 

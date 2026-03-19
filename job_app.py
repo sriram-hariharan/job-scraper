@@ -14,6 +14,7 @@ DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 WRAP_WIDTH = 100
 DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
+DEFAULT_REVIEW_EXPORT_PATH = DEFAULT_OUTPUT_DIR / "operator_review_queue.csv"
 
 DECISION_HEADERS = [
     "decision_timestamp",
@@ -497,6 +498,35 @@ def _select_review_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]
     )
     return selected[: args.limit]
 
+def _build_review_export_rows(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
+    export_rows: List[Dict[str, str]] = []
+
+    for row in rows:
+        export_rows.append({
+            "queue_rank": str(row.get("queue_rank", "") or ""),
+            "job_doc_id": str(row.get("job_doc_id", "") or ""),
+            "job_company": str(row.get("job_company", "") or ""),
+            "job_title": str(row.get("job_title", "") or ""),
+            "action": str(row.get("action", "") or ""),
+            "needs_variant_review": str(row.get("needs_variant_review", "") or ""),
+            "is_tie": str(row.get("is_tie", "") or ""),
+            "winner_resume": str(row.get("winner_resume", "") or ""),
+            "winner_score": str(row.get("winner_score", "") or ""),
+            "runner_up_resume": str(row.get("runner_up_resume", "") or ""),
+            "runner_up_score": str(row.get("runner_up_score", "") or ""),
+            "score_gap": str(row.get("score_gap", "") or ""),
+            "missing_requirement_count": str(row.get("missing_requirement_count", "") or ""),
+            "queue_priority_reason": str(row.get("queue_priority_reason", "") or ""),
+            "tailoring_md": str(row.get("tailoring_md", "") or ""),
+            "packet_json": str(row.get("packet_json", "") or ""),
+            "operator_decision": str(row.get("operator_decision", "") or ""),
+            "operator_selected_resume": str(row.get("operator_selected_resume", "") or ""),
+            "operator_decision_timestamp": str(row.get("operator_decision_timestamp", "") or ""),
+            "operator_note": str(row.get("operator_note", "") or ""),
+        })
+
+    return export_rows
+
 def _as_list(value) -> List[str]:
     if value is None:
         return []
@@ -865,6 +895,15 @@ def _count_undecided_review_rows(rows: List[Dict[str, str]]) -> Dict[str, int]:
 
     return dict(counts)
 
+def _export_csv_rows(path: Path, headers: List[str], rows: List[Dict[str, str]]) -> None:
+    _ensure_parent_dir(path)
+
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=headers)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({header: row.get(header, "") for header in headers})
+
 def _validate_selected_resume(row: Dict[str, str], selected_resume: str) -> str:
     selected = str(selected_resume or "").strip()
     if not selected:
@@ -1153,6 +1192,51 @@ def _decisions(args) -> None:
         )
         print()
 
+def _export_review_queue(args) -> None:
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    selected = _select_review_rows(rows, args)
+
+    if not selected:
+        raise SystemExit("No matching review rows found to export.")
+
+    export_rows = _build_review_export_rows(selected)
+    export_path = Path(args.export_path)
+
+    headers = [
+        "queue_rank",
+        "job_doc_id",
+        "job_company",
+        "job_title",
+        "action",
+        "needs_variant_review",
+        "is_tie",
+        "winner_resume",
+        "winner_score",
+        "runner_up_resume",
+        "runner_up_score",
+        "score_gap",
+        "missing_requirement_count",
+        "queue_priority_reason",
+        "tailoring_md",
+        "packet_json",
+        "operator_decision",
+        "operator_selected_resume",
+        "operator_decision_timestamp",
+        "operator_note",
+    ]
+
+    _export_csv_rows(export_path, headers, export_rows)
+
+    print("=" * 100)
+    print("JOB APP EXPORT REVIEW QUEUE")
+    print("=" * 100)
+    _print_wrapped_field("Export path", export_path)
+    _print_wrapped_field("Rows exported", len(export_rows))
+    _print_wrapped_field("Action filter", args.action or "<any>")
+    _print_wrapped_field("Undecided only", args.undecided_only or "<any>")
+    _print_wrapped_field("Company contains", args.company_contains or "<any>")
+    _print_wrapped_field("Title contains", args.title_contains or "<any>")
+
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="Thin operator CLI for the existing job pipeline and application-planning outputs."
@@ -1273,6 +1357,22 @@ def _parse_args():
     decisions_parser.add_argument("--title-contains", default="")
     decisions_parser.add_argument("--limit", type=int, default=20)
 
+    export_review_parser = subparsers.add_parser(
+        "export-review-queue",
+        help="Export the current decision-aware human review queue to CSV.",
+    )
+    export_review_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    export_review_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    export_review_parser.add_argument("--export-path", default=str(DEFAULT_REVIEW_EXPORT_PATH))
+    export_review_parser.add_argument("--queue-rank", type=int)
+    export_review_parser.add_argument("--job-doc-id", default="")
+    export_review_parser.add_argument("--company-contains", default="")
+    export_review_parser.add_argument("--title-contains", default="")
+    export_review_parser.add_argument("--include-non-review", action="store_true")
+    export_review_parser.add_argument("--action", default="")
+    export_review_parser.add_argument("--undecided-only", default="true")
+    export_review_parser.add_argument("--limit", type=int, default=500)
+
     return parser.parse_args()
 
 
@@ -1309,6 +1409,10 @@ def main() -> None:
     
     if args.command == "decisions":
         _decisions(args)
+        return
+
+    if args.command == "export-review-queue":
+        _export_review_queue(args)
         return
 
     raise SystemExit(f"Unsupported command: {args.command}")

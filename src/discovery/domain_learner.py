@@ -19,6 +19,37 @@ ATS_DOMAINS = {
     "myworkdayjobs.com"
 }
 
+def extract_company_from_ats(url):
+
+    if not url:
+        return None
+
+    try:
+        parsed = urlparse(url)
+        domain = parsed.netloc.lower()
+        path = parsed.path.strip("/").split("/")
+
+        # Greenhouse
+        if "greenhouse.io" in domain and len(path) >= 1:
+            return path[0]
+
+        # Lever
+        if "lever.co" in domain and len(path) >= 1:
+            return path[0]
+
+        # Ashby
+        if "ashbyhq.com" in domain and len(path) >= 1:
+            return path[0]
+
+        # SmartRecruiters
+        if "smartrecruiters.com" in domain and len(path) >= 1:
+            return path[0]
+
+        return None
+
+    except Exception:
+        return None
+    
 def extract_domain(url):
 
     if not url:
@@ -62,10 +93,20 @@ def learn_domains_from_jobs(jobs):
     for job in jobs:
 
         url = job.get("url")
+
         domain = extract_domain(url)
 
         if domain and domain not in existing:
             learned.add(domain)
+
+        # learn company from ATS path
+        company_slug = extract_company_from_ats(url)
+
+        if company_slug:
+            guessed_domain = f"{company_slug}.com"
+
+            if guessed_domain not in existing:
+                learned.add(guessed_domain)
 
     if not learned:
         return
@@ -75,3 +116,4 @@ def learn_domains_from_jobs(jobs):
             f.write(d + "\n")
 
     logger.info(f"{len(learned)} new company domains learned")
+

@@ -2,6 +2,7 @@ from typing import List, Dict, Any
 import asyncio
 import time
 from collections import Counter
+from uuid import uuid4
 
 from src.scrapers.workday_scraper import scrape_all_workday
 from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
@@ -15,6 +16,16 @@ from src.pipeline.job_filter import filter_jobs
 from src.pipeline.dedupe import dedupe_jobs
 from src.pipeline.job_ranker import rank_jobs
 from src.pipeline.job_details import enrich_job_details
+from src.pipeline.application_scorer import score_jobs
+from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
+
+from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
+from src.ai.resume_matcher import match_resumes
+from src.ai.skill_llm_enricher import (
+    reset_skill_cache_metrics,
+    get_skill_cache_metrics,
+)
+from src.ai.llm_client import reset_provider_metrics, get_provider_metrics
 
 from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
 from src.utils.pipeline_metrics import log_stage_metrics
@@ -27,7 +38,8 @@ from src.utils.ats_health import (
 from src.discovery.persist_discovered import persist_discovered_companies
 from src.discovery.domain_learner import learn_domains_from_jobs
 
-from src.metrics.metrics_store import (
+from src.storage.skill_corpus_store import store_job_skills, get_top_corpus_skills
+from src.storage.metrics_store import (
     record_pipeline_run,
     record_ats_counts,
     get_last_run,
@@ -35,11 +47,53 @@ from src.metrics.metrics_store import (
     record_company_hiring,
     get_hiring_momentum,
 )
+from src.intelligence.market_insights import (
+    detect_hot_companies,
+    detect_ai_hiring_surges,
+    detect_emerging_tech,
+)
+from src.intelligence.skill_discovery import discover_new_skills
+from src.intelligence.role_family_classifier import classify_roles
+from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+from src.intelligence.skill_frequency import top_skills
+
+from src.rag.export_job_corpus import export_job_corpus
 
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
+
+
+def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
+    section("JOB MARKET INSIGHTS", logger)
+
+    hot_companies = detect_hot_companies(jobs)
+
+    logger.info("")
+    logger.info("HOT COMPANIES")
+    logger.info("-------------")
+
+    for company, count in hot_companies:
+        logger.info(f"{company:25} {count}")
+
+    ai_surges = detect_ai_hiring_surges(jobs)
+
+    logger.info("")
+    logger.info("AI HIRING SURGES")
+    logger.info("----------------")
+
+    for company, count in ai_surges:
+        logger.info(f"{company:25} {count}")
+
+    emerging_tech = detect_emerging_tech(jobs)
+
+    logger.info("")
+    logger.info("EMERGING TECH STACK")
+    logger.info("-------------------")
+
+    for tech, count in emerging_tech:
+        logger.info(f"{tech:20} {count}")
 
 
 def log_company_hiring(jobs: List[Dict[str, Any]], logger) -> None:
@@ -146,6 +200,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     # ----- RANKING -----
     section("RANKING", logger)
+
     ranked_jobs = rank_jobs(deduped_jobs)
     ranked_counts = log_stage_metrics("RANKED", ranked_jobs)
 
@@ -160,6 +215,132 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     detailed_jobs = enrich_job_details(new_jobs)
     details_counts = log_stage_metrics("DETAILS", detailed_jobs)
+
+    # ----- JOB INTELLIGENCE -----
+    reset_provider_metrics()
+    section("JOB INTELLIGENCE", logger)
+
+    reset_skill_cache_metrics()
+    intelligent_jobs = [build_job_intelligence(job) for job in detailed_jobs]
+    logger.info(f"Intelligence extracted for {len(intelligent_jobs)} jobs")
+
+    skill_cache_summary = get_skill_cache_metrics()
+
+    # ----- SKILL CACHE SUMMARY -----
+    logger.info(
+        "SKILL CACHE SUMMARY | hits=%s | misses=%s | stores=%s | cache_only_skips=%s | live_failures=%s",
+        skill_cache_summary["cache_hits"],
+        skill_cache_summary["cache_misses"],
+        skill_cache_summary["cache_stores"],
+        skill_cache_summary["cache_only_skips"],
+        skill_cache_summary["live_failures"],
+    )
+
+    # ----- JOB SKILLS STORE -----
+    skill_run_id = str(uuid4())
+    store_job_skills(skill_run_id, intelligent_jobs)
+
+    # ----- TOP SKILLS -----
+
+    logger.info("")
+    logger.info("TOP EXTRACTED SKILLS")
+    logger.info("--------------------")
+
+    for skill, count in top_skills(intelligent_jobs, top_n=50):
+        logger.info(f"{count:3} | {skill}")
+
+    for skill, count in get_top_corpus_skills(limit=100):
+        logger.info(f"{count:3} | {skill}")
+
+    # ----- SKILL DISCOVERY -----
+    section("SKILL DISCOVERY", logger)
+
+    new_skills = discover_new_skills(intelligent_jobs)
+
+    if new_skills:
+        logger.info(f"New skills discovered: {len(new_skills)}")
+        logger.info(", ".join(new_skills[:10]))
+
+    # ----- AI EVALUATION FILTER -----
+    section("AI EVALUATION FILTER", logger)
+
+    evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)
+    logger.info(f"Jobs eligible for AI evaluation: {len(evaluable_jobs)}")
+
+    # ----- EMBEDDING PREFILTER -----
+    MAX_EVAL_JOBS = None
+
+    section("EMBEDDING PREFILTER", logger)
+
+    prefilter_input_count = len(evaluable_jobs)
+    evaluable_jobs = prefilter_jobs_by_embedding(
+        evaluable_jobs,
+        top_n=MAX_EVAL_JOBS,
+    )
+    prefilter_output_count = len(evaluable_jobs)
+
+    logger.info(
+        f"Embedding prefilter reduced AI candidates: "
+        f"{prefilter_input_count} -> {prefilter_output_count}"
+    )
+
+    if prefilter_input_count:
+        reduction_pct = round(
+            (1 - prefilter_output_count / prefilter_input_count) * 100,
+            2,
+        )
+        logger.info(f"AI candidate reduction rate: {reduction_pct}%")
+
+    # ----- AI JOB EVALUATION -----
+    section("AI JOB EVALUATION", logger)
+
+    ai_jobs = evaluate_jobs(evaluable_jobs)
+    logger.info(f"AI evaluated {len(ai_jobs)} jobs")
+
+    # ----- LLM PROVIDER SUMMARY -----
+    provider_summary = get_provider_metrics()
+    logger.info(
+        "LLM PROVIDER SUMMARY | primary_attempts=%s | fallback_attempts=%s | groq_calls=%s | gemini_calls=%s | fallback_successes=%s | provider_failures=%s",
+        provider_summary["primary_attempts"],
+        provider_summary["fallback_attempts"],
+        provider_summary["groq_calls"],
+        provider_summary["gemini_calls"],
+        provider_summary["fallback_successes"],
+        provider_summary["provider_failures"],
+    )
+
+    # ----- EVAL CACHE SUMMARY -----
+    eval_cache_summary = get_eval_cache_metrics()
+    logger.info(
+    "EVAL CACHE SUMMARY | hits=%s | misses=%s | stores=%s | cache_only_skips=%s | live_failures=%s",
+    eval_cache_summary["eval_cache_hits"],
+    eval_cache_summary["eval_cache_misses"],
+    eval_cache_summary["eval_cache_stores"],
+    eval_cache_summary["eval_cache_only_skips"],
+    eval_cache_summary["eval_live_failures"],
+    )
+
+    # ----- RESUME MATCHING -----
+    section("RESUME MATCHING", logger)
+
+    ai_jobs = match_resumes(ai_jobs)
+    logger.info("Resume matching completed")
+
+    # ----- APPLICATION PRIORITY -----
+    section("APPLICATION PRIORITY", logger)
+
+    scored_jobs = score_jobs(ai_jobs)
+    logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
+
+    # ----- RAG EXPORT -----
+    rag_export_count = export_job_corpus(
+    scored_jobs,
+    "data/rag/job_corpus.jsonl",
+    )
+    logger.info(f"RAG corpus exported: {rag_export_count} documents")
+
+    # ----- JOB MARKET INSIGHTS -----
+    log_market_insights(detailed_jobs)
 
     # ----- SAVE CACHE -----
     save_new_job_ids(new_job_ids)
@@ -219,4 +400,4 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         for company, ats, prev, curr, delta in momentum[:10]:
             logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
 
-    return detailed_jobs
+    return scored_jobs

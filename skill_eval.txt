@@ -1,0 +1,1443 @@
+
+============================================================================================================================================
+doordashusa | Machine Learning Engineer, Reinforcement Learning
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "causal inference",
+    "machine learning",
+    "experimentation",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "causal inference",
+    "machine learning",
+    "experimentation",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel"
+  ]
+}
+missed=['contextual bandits', 'deep reinforcement learning', 'experimentation techniques', 'markov decision processes', 'multi-armed bandits', 'reinforcement learning']
+extra=['excel', 'experimentation']
+2026-03-18 02:27:39,144 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "causal inference",
+    "experimentation techniques",
+    "production-level machine learning"
+  ],
+  "preferred_skills": [
+    "computer science",
+    "contextual bandits",
+    "deep reinforcement learning",
+    "economics",
+    "flexible experimentation",
+    "intuitive models",
+    "machine learning",
+    "markov decision processes",
+    "math",
+    "multi-armed bandits",
+    "operations research",
+    "physics",
+    "python",
+    "reinforcement learning",
+    "scalable models",
+    "statistics"
+  ]
+}
+missed=['pytorch', 'tensorflow']
+extra=['computer science', 'economics', 'flexible experimentation', 'intuitive models', 'math', 'operations research', 'physics', 'production-level machine learning', 'scalable models', 'statistics']
+2026-03-18 02:27:39,168 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "causal inference",
+    "excel",
+    "experimentation",
+    "experimentation techniques",
+    "machine learning",
+    "python",
+    "pytorch",
+    "scalable models",
+    "tensorflow"
+  ],
+  "preferred_skills": [
+    "computer science",
+    "economics",
+    "math",
+    "operations research",
+    "physics",
+    "reinforcement learning",
+    "statistics"
+  ],
+  "all_skills": [
+    "causal inference",
+    "excel",
+    "experimentation",
+    "experimentation techniques",
+    "machine learning",
+    "python",
+    "pytorch",
+    "scalable models",
+    "tensorflow",
+    "computer science",
+    "economics",
+    "math",
+    "operations research",
+    "physics",
+    "reinforcement learning",
+    "statistics"
+  ]
+}
+missed=['contextual bandits', 'deep reinforcement learning', 'markov decision processes', 'multi-armed bandits']
+extra=['computer science', 'economics', 'excel', 'experimentation', 'math', 'operations research', 'physics', 'scalable models', 'statistics']
+
+============================================================================================================================================
+doordashusa | Machine Learning Engineer, Marketplace Optimization
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "machine learning",
+    "experimentation",
+    "incrementality",
+    "forecasting",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "machine learning",
+    "experimentation",
+    "incrementality",
+    "forecasting",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel"
+  ]
+}
+missed=['auction systems', 'bidding', 'budget optimization', 'c++', 'experimentation science', 'lift tests', 'marketplace incrementality', 'xgboost']
+extra=['excel', 'experimentation', 'incrementality', 'machine learning']
+2026-03-18 02:27:39,206 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "experimentation science",
+    "lift tests",
+    "marketplace incrementality"
+  ],
+  "preferred_skills": [
+    "auction systems",
+    "bidding",
+    "budget optimization",
+    "c++",
+    "familiarity with experimentation science",
+    "forecasting",
+    "python",
+    "pytorch",
+    "tensorflow",
+    "xgboost"
+  ]
+}
+extra=['familiarity with experimentation science']
+2026-03-18 02:27:39,230 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "c++",
+    "excel",
+    "experimentation",
+    "forecasting",
+    "incrementality",
+    "machine learning",
+    "python",
+    "pytorch",
+    "tensorflow",
+    "xgboost"
+  ],
+  "preferred_skills": [
+    "auction systems",
+    "bidding",
+    "budget optimization",
+    "experimentation science",
+    "lift tests",
+    "marketplace incrementality"
+  ],
+  "all_skills": [
+    "c++",
+    "excel",
+    "experimentation",
+    "forecasting",
+    "incrementality",
+    "machine learning",
+    "python",
+    "pytorch",
+    "tensorflow",
+    "xgboost",
+    "auction systems",
+    "bidding",
+    "budget optimization",
+    "experimentation science",
+    "lift tests",
+    "marketplace incrementality"
+  ]
+}
+extra=['excel', 'experimentation', 'incrementality', 'machine learning']
+
+============================================================================================================================================
+andurilindustries | Machine Learning Engineer, Quality Analytics
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "machine learning",
+    "scikit-learn",
+    "pandas",
+    "python",
+    "numpy",
+    "sql"
+  ],
+  "preferred_skills": [
+    "deep learning",
+    "databricks",
+    "tensorflow",
+    "pytorch"
+  ],
+  "all_skills": [
+    "machine learning",
+    "scikit-learn",
+    "pandas",
+    "python",
+    "numpy",
+    "sql",
+    "deep learning",
+    "databricks",
+    "tensorflow",
+    "pytorch"
+  ]
+}
+missed=['computer vision', 'kubeflow', 'mlflow', 'palantir foundry', 'random forest']
+extra=['deep learning']
+2026-03-18 02:27:39,265 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [],
+  "preferred_skills": []
+}
+missed=['computer vision', 'databricks', 'kubeflow', 'machine learning', 'mlflow', 'numpy', 'palantir foundry', 'pandas', 'python', 'pytorch', 'random forest', 'scikit-learn', 'sql', 'tensorflow']
+2026-03-18 02:27:39,288 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "machine learning",
+    "numpy",
+    "pandas",
+    "python",
+    "scikit-learn",
+    "sql"
+  ],
+  "preferred_skills": [
+    "databricks",
+    "deep learning",
+    "pytorch",
+    "tensorflow"
+  ],
+  "all_skills": [
+    "machine learning",
+    "numpy",
+    "pandas",
+    "python",
+    "scikit-learn",
+    "sql",
+    "databricks",
+    "deep learning",
+    "pytorch",
+    "tensorflow"
+  ]
+}
+missed=['computer vision', 'kubeflow', 'mlflow', 'palantir foundry', 'random forest']
+extra=['deep learning']
+
+============================================================================================================================================
+pinterest | Sr. Data Scientist, tvScientific
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "python",
+    "spark"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "python",
+    "spark"
+  ]
+}
+extra=['python', 'spark']
+2026-03-18 02:27:39,302 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "ml",
+    "python",
+    "statistics"
+  ],
+  "preferred_skills": [
+    "apache beam",
+    "apache spark",
+    "aws athena",
+    "scala"
+  ]
+}
+extra=['apache beam', 'apache spark', 'aws athena', 'ml', 'python', 'scala', 'statistics']
+2026-03-18 02:27:39,315 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "ml",
+    "python",
+    "spark",
+    "statistics"
+  ],
+  "preferred_skills": [
+    "apache beam",
+    "apache spark",
+    "aws athena",
+    "scala"
+  ],
+  "all_skills": [
+    "ml",
+    "python",
+    "spark",
+    "statistics",
+    "apache beam",
+    "apache spark",
+    "aws athena",
+    "scala"
+  ]
+}
+extra=['apache beam', 'apache spark', 'aws athena', 'ml', 'python', 'scala', 'spark', 'statistics']
+
+============================================================================================================================================
+doordashusa | Analytics Engineer, GTM Data Infrastructure
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "python",
+    "sql"
+  ],
+  "preferred_skills": [
+    "tableau",
+    "excel"
+  ],
+  "all_skills": [
+    "python",
+    "sql",
+    "tableau",
+    "excel"
+  ]
+}
+extra=['excel', 'python', 'sql', 'tableau']
+2026-03-18 02:27:39,349 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "airflow",
+    "python",
+    "sql"
+  ],
+  "preferred_skills": [
+    "aws",
+    "ci/cd",
+    "infrastructure as code",
+    "sigma",
+    "tableau"
+  ]
+}
+extra=['airflow', 'aws', 'ci/cd', 'infrastructure as code', 'python', 'sigma', 'sql', 'tableau']
+2026-03-18 02:27:39,379 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "python",
+    "sql"
+  ],
+  "preferred_skills": [
+    "aws",
+    "excel",
+    "infrastructure as code",
+    "sigma",
+    "tableau"
+  ],
+  "all_skills": [
+    "python",
+    "sql",
+    "aws",
+    "excel",
+    "infrastructure as code",
+    "sigma",
+    "tableau"
+  ]
+}
+extra=['aws', 'excel', 'infrastructure as code', 'python', 'sigma', 'sql', 'tableau']
+
+============================================================================================================================================
+consensys | Onchain Data Analyst
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "excel"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "excel"
+  ]
+}
+extra=['excel']
+2026-03-18 02:27:39,408 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "excel",
+    "google sheets"
+  ],
+  "preferred_skills": [
+    "cryptio",
+    "crypto accounting concepts",
+    "floqast",
+    "netsuite"
+  ]
+}
+extra=['cryptio', 'crypto accounting concepts', 'excel', 'floqast', 'google sheets', 'netsuite']
+2026-03-18 02:27:39,430 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "excel",
+    "google sheets"
+  ],
+  "preferred_skills": [
+    "cryptio",
+    "crypto accounting concepts",
+    "floqast",
+    "netsuite"
+  ],
+  "all_skills": [
+    "excel",
+    "google sheets",
+    "cryptio",
+    "crypto accounting concepts",
+    "floqast",
+    "netsuite"
+  ]
+}
+extra=['cryptio', 'crypto accounting concepts', 'excel', 'floqast', 'google sheets', 'netsuite']
+
+============================================================================================================================================
+doordashusa | Machine Learning Engineer, Computer Vision
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "causal inference",
+    "machine learning",
+    "experimentation",
+    "classification",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel",
+    "spark"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "causal inference",
+    "machine learning",
+    "experimentation",
+    "classification",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel",
+    "spark"
+  ]
+}
+extra=['causal inference', 'classification', 'excel', 'experimentation', 'machine learning', 'python', 'pytorch', 'spark', 'tensorflow']
+2026-03-18 02:27:39,459 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "attribute extraction",
+    "category classification",
+    "causal inference",
+    "entity recognition",
+    "entity resolution",
+    "experimentation techniques",
+    "image classification",
+    "metric learning",
+    "object detection",
+    "segmentation"
+  ],
+  "preferred_skills": [
+    "computer vision",
+    "machine learning",
+    "production systems",
+    "python",
+    "scalable models",
+    "spark",
+    "tensorflow"
+  ]
+}
+extra=['attribute extraction', 'category classification', 'causal inference', 'computer vision', 'entity recognition', 'entity resolution', 'experimentation techniques', 'image classification', 'machine learning', 'metric learning', 'object detection', 'production systems', 'python', 'scalable models', 'segmentation', 'spark', 'tensorflow']
+2026-03-18 02:27:39,482 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "causal inference",
+    "classification",
+    "excel",
+    "experimentation",
+    "experimentation techniques",
+    "machine learning",
+    "object detection",
+    "production systems",
+    "python",
+    "pytorch",
+    "scalable models",
+    "segmentation",
+    "spark",
+    "tensorflow"
+  ],
+  "preferred_skills": [
+    "computer vision"
+  ],
+  "all_skills": [
+    "causal inference",
+    "classification",
+    "excel",
+    "experimentation",
+    "experimentation techniques",
+    "machine learning",
+    "object detection",
+    "production systems",
+    "python",
+    "pytorch",
+    "scalable models",
+    "segmentation",
+    "spark",
+    "tensorflow",
+    "computer vision"
+  ]
+}
+extra=['causal inference', 'classification', 'computer vision', 'excel', 'experimentation', 'experimentation techniques', 'machine learning', 'object detection', 'production systems', 'python', 'pytorch', 'scalable models', 'segmentation', 'spark', 'tensorflow']
+
+============================================================================================================================================
+andurilindustries | Senior Machine Learning Engineer, Sentry Tower
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "r"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "r"
+  ]
+}
+extra=['deep learning', 'machine learning', 'python', 'pytorch', 'r', 'tensorflow']
+2026-03-18 02:27:39,516 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "machine learning"
+  ],
+  "preferred_skills": []
+}
+extra=['machine learning']
+2026-03-18 02:27:39,538 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "deep learning",
+    "machine learning",
+    "python",
+    "pytorch",
+    "r",
+    "tensorflow"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "deep learning",
+    "machine learning",
+    "python",
+    "pytorch",
+    "r",
+    "tensorflow"
+  ]
+}
+extra=['deep learning', 'machine learning', 'python', 'pytorch', 'r', 'tensorflow']
+
+============================================================================================================================================
+andurilindustries | Senior Master Data Analyst, Supply Chain
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "power bi",
+    "tableau",
+    "python",
+    "excel",
+    "sql",
+    "r"
+  ],
+  "all_skills": [
+    "power bi",
+    "tableau",
+    "python",
+    "excel",
+    "sql",
+    "r"
+  ]
+}
+extra=['excel', 'power bi', 'python', 'r', 'sql', 'tableau']
+2026-03-18 02:27:39,561 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "data warehousing",
+    "excel",
+    "power bi",
+    "python",
+    "r",
+    "sql",
+    "supply chain intelligence platforms",
+    "tableau"
+  ]
+}
+extra=['data warehousing', 'excel', 'power bi', 'python', 'r', 'sql', 'supply chain intelligence platforms', 'tableau']
+2026-03-18 02:27:39,585 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "data warehousing",
+    "excel",
+    "power bi",
+    "python",
+    "r",
+    "sql",
+    "tableau"
+  ],
+  "all_skills": [
+    "data warehousing",
+    "excel",
+    "power bi",
+    "python",
+    "r",
+    "sql",
+    "tableau"
+  ]
+}
+extra=['data warehousing', 'excel', 'power bi', 'python', 'r', 'sql', 'tableau']
+
+============================================================================================================================================
+doordashusa | Analytics Engineer
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "experimentation",
+    "a/b testing",
+    "databricks",
+    "snowflake",
+    "airflow",
+    "excel",
+    "dbt"
+  ],
+  "all_skills": [
+    "experimentation",
+    "a/b testing",
+    "databricks",
+    "snowflake",
+    "airflow",
+    "excel",
+    "dbt"
+  ]
+}
+extra=['a/b testing', 'airflow', 'databricks', 'dbt', 'excel', 'experimentation', 'snowflake']
+2026-03-18 02:27:39,615 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "great expectations",
+    "hive",
+    "looker",
+    "pydeequ",
+    "python",
+    "s3",
+    "scala",
+    "sigma",
+    "spark",
+    "sql",
+    "tableau",
+    "trino"
+  ],
+  "preferred_skills": [
+    "a/b testing",
+    "airflow",
+    "dagster",
+    "dbt",
+    "experimentation concepts",
+    "modern data warehousing platforms"
+  ]
+}
+extra=['a/b testing', 'airflow', 'dagster', 'dbt', 'experimentation concepts', 'great expectations', 'hive', 'looker', 'modern data warehousing platforms', 'pydeequ', 'python', 's3', 'scala', 'sigma', 'spark', 'sql', 'tableau', 'trino']
+2026-03-18 02:27:39,638 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "a/b testing",
+    "airflow",
+    "dagster",
+    "databricks",
+    "dbt",
+    "excel",
+    "experimentation",
+    "experimentation concepts",
+    "snowflake"
+  ],
+  "all_skills": [
+    "a/b testing",
+    "airflow",
+    "dagster",
+    "databricks",
+    "dbt",
+    "excel",
+    "experimentation",
+    "experimentation concepts",
+    "snowflake"
+  ]
+}
+extra=['a/b testing', 'airflow', 'dagster', 'databricks', 'dbt', 'excel', 'experimentation', 'experimentation concepts', 'snowflake']
+
+============================================================================================================================================
+andurilindustries | Senior Analytics Engineer
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "tableau",
+    "looker",
+    "python",
+    "dbt",
+    "sql"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "tableau",
+    "looker",
+    "python",
+    "dbt",
+    "sql"
+  ]
+}
+extra=['dbt', 'looker', 'python', 'sql', 'tableau']
+2026-03-18 02:27:39,677 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "apache iceberg",
+    "athena",
+    "dbt",
+    "flyte",
+    "looker",
+    "palantir foundry",
+    "python",
+    "redshift",
+    "sql",
+    "sqlmesh",
+    "tableau"
+  ],
+  "preferred_skills": []
+}
+extra=['apache iceberg', 'athena', 'dbt', 'flyte', 'looker', 'palantir foundry', 'python', 'redshift', 'sql', 'sqlmesh', 'tableau']
+2026-03-18 02:27:39,697 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "dbt",
+    "looker",
+    "palantir foundry",
+    "python",
+    "redshift",
+    "sql",
+    "tableau"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "dbt",
+    "looker",
+    "palantir foundry",
+    "python",
+    "redshift",
+    "sql",
+    "tableau"
+  ]
+}
+extra=['dbt', 'looker', 'palantir foundry', 'python', 'redshift', 'sql', 'tableau']
+
+============================================================================================================================================
+doordashusa | Machine Learning Engineer - New Verticals - Search & Recommendations
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "causal inference",
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "causal inference",
+    "machine learning",
+    "deep learning",
+    "tensorflow",
+    "pytorch",
+    "python",
+    "excel"
+  ]
+}
+extra=['causal inference', 'deep learning', 'excel', 'machine learning', 'python', 'pytorch', 'tensorflow']
+2026-03-18 02:27:39,726 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "causal inference techniques",
+    "computer science",
+    "deep learning",
+    "economics",
+    "explore/exploit/mab algorithms",
+    "ir",
+    "kotlin",
+    "llms",
+    "machine learning",
+    "math",
+    "nlp",
+    "operations research",
+    "physics",
+    "python",
+    "pytorch",
+    "recsys",
+    "scala",
+    "search",
+    "statistics",
+    "tensorflow"
+  ]
+}
+extra=['causal inference techniques', 'computer science', 'deep learning', 'economics', 'explore/exploit/mab algorithms', 'ir', 'kotlin', 'llms', 'machine learning', 'math', 'nlp', 'operations research', 'physics', 'python', 'pytorch', 'recsys', 'scala', 'search', 'statistics', 'tensorflow']
+2026-03-18 02:27:39,747 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "causal inference",
+    "computer science",
+    "deep learning",
+    "economics",
+    "excel",
+    "machine learning",
+    "math",
+    "operations research",
+    "physics",
+    "python",
+    "pytorch",
+    "statistics",
+    "tensorflow"
+  ],
+  "preferred_skills": [
+    "causal inference techniques",
+    "ir",
+    "kotlin",
+    "llms",
+    "nlp",
+    "recsys",
+    "scala",
+    "search"
+  ],
+  "all_skills": [
+    "causal inference",
+    "computer science",
+    "deep learning",
+    "economics",
+    "excel",
+    "machine learning",
+    "math",
+    "operations research",
+    "physics",
+    "python",
+    "pytorch",
+    "statistics",
+    "tensorflow",
+    "causal inference techniques",
+    "ir",
+    "kotlin",
+    "llms",
+    "nlp",
+    "recsys",
+    "scala",
+    "search"
+  ]
+}
+extra=['causal inference', 'causal inference techniques', 'computer science', 'deep learning', 'economics', 'excel', 'ir', 'kotlin', 'llms', 'machine learning', 'math', 'nlp', 'operations research', 'physics', 'python', 'pytorch', 'recsys', 'scala', 'search', 'statistics', 'tensorflow']
+
+============================================================================================================================================
+doordashusa | Data Scientist / Senior Data Scientist
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "hypothesis testing",
+    "experimentation",
+    "a/b testing",
+    "regression",
+    "tableau",
+    "looker",
+    "python",
+    "excel",
+    "sas",
+    "sql",
+    "r"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "hypothesis testing",
+    "experimentation",
+    "a/b testing",
+    "regression",
+    "tableau",
+    "looker",
+    "python",
+    "excel",
+    "sas",
+    "sql",
+    "r"
+  ]
+}
+extra=['a/b testing', 'excel', 'experimentation', 'hypothesis testing', 'looker', 'python', 'r', 'regression', 'sas', 'sql', 'tableau']
+2026-03-18 02:27:39,779 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "a/b testing",
+    "chartio",
+    "cohort analyses",
+    "etl",
+    "funnel optimization",
+    "hypothesis testing",
+    "looker",
+    "matlab",
+    "python",
+    "r",
+    "regression models",
+    "sas",
+    "scripting",
+    "sql",
+    "tableau",
+    "time series analyses",
+    "user segmentation"
+  ],
+  "preferred_skills": [
+    "experimentation",
+    "regressions",
+    "statistical analysis",
+    "statistical packages"
+  ]
+}
+extra=['a/b testing', 'chartio', 'cohort analyses', 'etl', 'experimentation', 'funnel optimization', 'hypothesis testing', 'looker', 'matlab', 'python', 'r', 'regression models', 'regressions', 'sas', 'scripting', 'sql', 'statistical analysis', 'statistical packages', 'tableau', 'time series analyses', 'user segmentation']
+2026-03-18 02:27:39,801 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "a/b testing",
+    "chartio",
+    "cohort analyses",
+    "etl",
+    "excel",
+    "experimentation",
+    "funnel optimization",
+    "hypothesis testing",
+    "looker",
+    "matlab",
+    "python",
+    "r",
+    "regression",
+    "regression models",
+    "regressions",
+    "sas",
+    "sql",
+    "statistical analysis",
+    "statistical packages",
+    "tableau",
+    "time series analyses",
+    "user segmentation"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "a/b testing",
+    "chartio",
+    "cohort analyses",
+    "etl",
+    "excel",
+    "experimentation",
+    "funnel optimization",
+    "hypothesis testing",
+    "looker",
+    "matlab",
+    "python",
+    "r",
+    "regression",
+    "regression models",
+    "regressions",
+    "sas",
+    "sql",
+    "statistical analysis",
+    "statistical packages",
+    "tableau",
+    "time series analyses",
+    "user segmentation"
+  ]
+}
+extra=['a/b testing', 'chartio', 'cohort analyses', 'etl', 'excel', 'experimentation', 'funnel optimization', 'hypothesis testing', 'looker', 'matlab', 'python', 'r', 'regression', 'regression models', 'regressions', 'sas', 'sql', 'statistical analysis', 'statistical packages', 'tableau', 'time series analyses', 'user segmentation']
+
+============================================================================================================================================
+gitlab | Senior Fullstack Engineer (TypeScript), AI Engineering: Editor Extensions
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+2026-03-18 02:27:39,828 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "gitlab duo cli",
+    "gitlab language server",
+    "kotlin",
+    "typescript",
+    "vue"
+  ],
+  "preferred_skills": []
+}
+extra=['gitlab duo cli', 'gitlab language server', 'kotlin', 'typescript', 'vue']
+2026-03-18 02:27:39,843 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+
+============================================================================================================================================
+accenturefederalservices | AI / ML Engineer
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "hypothesis testing",
+    "machine learning",
+    "scikit-learn",
+    "regression",
+    "tensorflow",
+    "pandas",
+    "numpy",
+    "python"
+  ],
+  "all_skills": [
+    "hypothesis testing",
+    "machine learning",
+    "scikit-learn",
+    "regression",
+    "tensorflow",
+    "pandas",
+    "numpy",
+    "python"
+  ]
+}
+extra=['hypothesis testing', 'machine learning', 'numpy', 'pandas', 'python', 'regression', 'scikit-learn', 'tensorflow']
+2026-03-18 02:27:39,868 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [],
+  "preferred_skills": []
+}
+2026-03-18 02:27:39,888 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "hypothesis testing",
+    "machine learning",
+    "numpy",
+    "pandas",
+    "python",
+    "regression",
+    "scikit-learn",
+    "tensorflow"
+  ],
+  "all_skills": [
+    "hypothesis testing",
+    "machine learning",
+    "numpy",
+    "pandas",
+    "python",
+    "regression",
+    "scikit-learn",
+    "tensorflow"
+  ]
+}
+extra=['hypothesis testing', 'machine learning', 'numpy', 'pandas', 'python', 'regression', 'scikit-learn', 'tensorflow']
+
+============================================================================================================================================
+andurilindustries | Senior Machine Learning Engineer, Image Processing
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [
+    "machine learning",
+    "deep learning",
+    "pytorch",
+    "python"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "machine learning",
+    "deep learning",
+    "pytorch",
+    "python"
+  ]
+}
+extra=['deep learning', 'machine learning', 'python', 'pytorch']
+2026-03-18 02:27:39,909 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "deep learning",
+    "image processing",
+    "machine learning",
+    "python",
+    "pytorch"
+  ],
+  "preferred_skills": [
+    "classical techniques",
+    "computer vision",
+    "data preparation",
+    "deployment",
+    "model training",
+    "validation"
+  ]
+}
+extra=['classical techniques', 'computer vision', 'data preparation', 'deep learning', 'deployment', 'image processing', 'machine learning', 'model training', 'python', 'pytorch', 'validation']
+2026-03-18 02:27:39,929 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [
+    "classical techniques",
+    "computer vision",
+    "data preparation",
+    "deep learning",
+    "image processing",
+    "machine learning",
+    "model training",
+    "python",
+    "pytorch",
+    "validation"
+  ],
+  "preferred_skills": [],
+  "all_skills": [
+    "classical techniques",
+    "computer vision",
+    "data preparation",
+    "deep learning",
+    "image processing",
+    "machine learning",
+    "model training",
+    "python",
+    "pytorch",
+    "validation"
+  ]
+}
+extra=['classical techniques', 'computer vision', 'data preparation', 'deep learning', 'image processing', 'machine learning', 'model training', 'python', 'pytorch', 'validation']
+
+============================================================================================================================================
+roku | Data Scientist
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "causal inference",
+    "experimentation"
+  ],
+  "all_skills": [
+    "causal inference",
+    "experimentation"
+  ]
+}
+extra=['causal inference', 'experimentation']
+2026-03-18 02:27:39,951 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "causal inference",
+    "experimentation"
+  ]
+}
+extra=['causal inference', 'experimentation']
+2026-03-18 02:27:39,966 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [
+    "causal inference",
+    "experimentation"
+  ],
+  "all_skills": [
+    "causal inference",
+    "experimentation"
+  ]
+}
+extra=['causal inference', 'experimentation']
+
+============================================================================================================================================
+roku | Research Data Scientist
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+2026-03-18 02:27:39,982 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "data engineering",
+    "experimentation",
+    "python",
+    "sql",
+    "statistical methods"
+  ],
+  "preferred_skills": [
+    "a/b testing",
+    "causal inference",
+    "machine learning"
+  ]
+}
+extra=['a/b testing', 'causal inference', 'data engineering', 'experimentation', 'machine learning', 'python', 'sql', 'statistical methods']
+2026-03-18 02:27:39,997 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+
+============================================================================================================================================
+roku | Senior Data Scientist
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+2026-03-18 02:27:40,015 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [
+    "forecasting",
+    "looker",
+    "python",
+    "r",
+    "sas",
+    "sql",
+    "statistical modeling",
+    "tableau"
+  ],
+  "preferred_skills": [
+    "a/b testing",
+    "statistical modeling/forecasting"
+  ]
+}
+extra=['a/b testing', 'forecasting', 'looker', 'python', 'r', 'sas', 'sql', 'statistical modeling', 'statistical modeling/forecasting', 'tableau']
+2026-03-18 02:27:40,027 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+
+============================================================================================================================================
+asana | Data Scientist
+============================================================================================================================================
+
+[deterministic]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+2026-03-18 02:27:40,047 | INFO | ai_eval_filter | LLM skill cache hit
+
+[groq_first]
+{
+  "required_skills": [],
+  "preferred_skills": []
+}
+2026-03-18 02:27:40,061 | INFO | ai_eval_filter | LLM skill cache hit
+
+[hybrid]
+{
+  "required_skills": [],
+  "preferred_skills": [],
+  "all_skills": []
+}
+
+############################################################################################################################################
+SUMMARY
+############################################################################################################################################
+
+----------------------------------------------------------------------------------------------------
+deterministic
+----------------------------------------------------------------------------------------------------
+overall_precision=0.186
+overall_recall=0.486
+overall_f1=0.269
+required_precision=0.191
+required_recall=0.812
+required_f1=0.310
+preferred_precision=0.103
+preferred_recall=0.143
+preferred_f1=0.120
+bucket_accuracy_on_matched_skills=0.889
+
+----------------------------------------------------------------------------------------------------
+groq_first
+----------------------------------------------------------------------------------------------------
+overall_precision=0.114
+overall_recall=0.568
+overall_f1=0.189
+required_precision=0.000
+required_recall=0.000
+required_f1=0.000
+preferred_precision=0.082
+preferred_recall=0.381
+preferred_f1=0.136
+bucket_accuracy_on_matched_skills=0.381
+
+----------------------------------------------------------------------------------------------------
+hybrid
+----------------------------------------------------------------------------------------------------
+overall_precision=0.165
+overall_recall=0.757
+overall_f1=0.271
+required_precision=0.143
+required_recall=0.938
+required_f1=0.248
+preferred_precision=0.138
+preferred_recall=0.429
+preferred_f1=0.209
+bucket_accuracy_on_matched_skills=0.857

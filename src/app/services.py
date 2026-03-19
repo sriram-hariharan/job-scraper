@@ -1,16 +1,15 @@
 from collections import Counter
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-import job_app
-from src.rag.rag_executor import execute_rag_request
+DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
+DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
+DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
 
-
-DEFAULT_OUTPUT_DIR = Path(job_app.DEFAULT_OUTPUT_DIR)
-DEFAULT_CORPUS_PATH = Path(job_app.DEFAULT_CORPUS_PATH)
-DEFAULT_DECISIONS_PATH = Path(job_app.DEFAULT_DECISIONS_PATH)
-
+def _job_app():
+    import job_app
+    return job_app
 
 def _make_args(**kwargs):
     return SimpleNamespace(**kwargs)
@@ -29,14 +28,15 @@ def status_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     top_k: int = 10,
 ) -> Dict[str, Any]:
-    best_rows = job_app._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
-    shortlist_rows = job_app._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
-    queue_rows = job_app._load_csv_rows(output_dir / "application_execution_queue.csv")
-    manifest_rows = job_app._load_csv_rows(output_dir / "job_packet_manifest.csv")
-    decision_rows = job_app._load_csv_rows(decisions_path)
+    ja = _job_app()
+    best_rows = ja._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
+    shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
+    queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
+    manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
+    decision_rows = ja._load_csv_rows(decisions_path)
 
-    merged_rows = job_app._build_job_index(output_dir, decisions_path)
-    undecided_review_counts = job_app._count_undecided_review_rows(merged_rows)
+    merged_rows = ja._build_job_index(output_dir, decisions_path)
+    undecided_review_counts = ja._count_undecided_review_rows(merged_rows)
 
     winner_bucket_counts = Counter(
         str(row.get("winner_bucket", "") or "<empty>")
@@ -59,28 +59,28 @@ def status_payload(
         for row in decision_rows
     )
 
-    latest_by_key = job_app._load_latest_decision_overlay(decisions_path)
+    latest_by_key = ja._load_latest_decision_overlay(decisions_path)
 
     top_rows = sorted(
         queue_rows,
         key=lambda row: (
             int(str(row.get("queue_rank", "999999") or "999999")),
-            -job_app._parse_float(row.get("winner_score", "0")),
+            -ja._parse_float(row.get("winner_score", "0")),
         ),
     )[:top_k]
 
     top_queue = []
     for row in top_rows:
         overlay_row = dict(row)
-        for field in job_app.OPERATOR_DECISION_OVERLAY_FIELDS:
+        for field in ja.OPERATOR_DECISION_OVERLAY_FIELDS:
             overlay_row.setdefault(field, "")
 
         key_candidates = [
-            job_app._decision_row_key(row),
+            ja._decision_row_key(row),
             f"queue_rank::{str(row.get('queue_rank', '') or '').strip()}",
             (
-                f"title::{job_app._normalize_text(row.get('job_company', ''))}"
-                f"||{job_app._normalize_text(row.get('job_title', ''))}"
+                f"title::{ja._normalize_text(row.get('job_company', ''))}"
+                f"||{ja._normalize_text(row.get('job_title', ''))}"
             ),
         ]
 
@@ -94,7 +94,7 @@ def status_payload(
     return {
         "summary": {
             "job_corpus_path": str(job_corpus),
-            "job_corpus_rows": job_app._count_jsonl_rows(job_corpus),
+            "job_corpus_rows": ja._count_jsonl_rows(job_corpus),
             "planning_output_dir": str(output_dir),
             "best_variant_rows": len(best_rows),
             "shortlist_rows": len(shortlist_rows),
@@ -118,9 +118,10 @@ def browse_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     **filters: Any,
 ) -> Dict[str, Any]:
-    rows = job_app._build_job_index(output_dir, decisions_path)
+    ja = _job_app()
+    rows = ja._build_job_index(output_dir, decisions_path)
     args = _make_args(**filters)
-    selected = job_app._select_browse_rows(rows, args)
+    selected = ja._select_browse_rows(rows, args)
     return {
         "filters": filters,
         "rows": selected,
@@ -133,9 +134,10 @@ def review_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     **filters: Any,
 ) -> Dict[str, Any]:
-    rows = job_app._build_job_index(output_dir, decisions_path)
+    ja = _job_app()
+    rows = ja._build_job_index(output_dir, decisions_path)
     args = _make_args(**filters)
-    selected = job_app._select_review_rows(rows, args)
+    selected = ja._select_review_rows(rows, args)
     return {
         "filters": filters,
         "rows": selected,
@@ -149,8 +151,9 @@ def workflow_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
 ) -> Dict[str, Any]:
-    rows = job_app._build_job_index(output_dir, decisions_path)
-    selected = job_app._workflow_view_rows(rows, view)[:limit]
+    ja = _job_app()
+    rows = ja._build_job_index(output_dir, decisions_path)
+    selected = ja._workflow_view_rows(rows, view)[:limit]
     return {
         "view": view,
         "rows": selected,
@@ -164,9 +167,10 @@ def planner_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
 ) -> Dict[str, Any]:
-    view = job_app._infer_planner_view(request)
-    rows = job_app._build_job_index(output_dir, decisions_path)
-    selected = job_app._workflow_view_rows(rows, view)[:limit]
+    ja = _job_app()
+    view = ja._infer_planner_view(request)
+    rows = ja._build_job_index(output_dir, decisions_path)
+    selected = ja._workflow_view_rows(rows, view)[:limit]
     return {
         "request": request,
         "resolved_view": view,
@@ -179,9 +183,10 @@ def decisions_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     **filters: Any,
 ) -> Dict[str, Any]:
-    rows = job_app._load_csv_rows(decisions_path)
+    ja = _job_app()
+    rows = ja._load_csv_rows(decisions_path)
     args = _make_args(**filters)
-    selected = job_app._select_decision_rows(rows, args)
+    selected = ja._select_decision_rows(rows, args)
     return {
         "filters": filters,
         "rows": selected,
@@ -197,6 +202,8 @@ def rag_search_payload(
     output_mode: str = "compact",
     include_diagnostics: bool = False,
 ) -> Dict[str, Any]:
+    from src.rag.rag_executor import execute_rag_request
+
     return execute_rag_request(
         request=request,
         top_k=top_k,
@@ -207,7 +214,6 @@ def rag_search_payload(
         intent_override="search_jobs",
     )
 
-
 def rag_answer_payload(
     request: str,
     top_k: int = 5,
@@ -215,6 +221,8 @@ def rag_answer_payload(
     output_mode: str = "compact",
     include_diagnostics: bool = False,
 ) -> Dict[str, Any]:
+    from src.rag.rag_executor import execute_rag_request
+
     return execute_rag_request(
         request=request,
         top_k=top_k,

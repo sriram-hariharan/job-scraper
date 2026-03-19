@@ -9,9 +9,6 @@ from pathlib import Path
 from typing import Dict, List
 from datetime import datetime
 
-from src.rag.rag_executor import execute_rag_request
-
-
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 WRAP_WIDTH = 100
@@ -1466,6 +1463,8 @@ def _planner(args) -> None:
         print()
 
 def _rag(args) -> None:
+    from src.rag.rag_executor import execute_rag_request
+
     payload = execute_rag_request(
         request=args.request,
         top_k=args.top_k,

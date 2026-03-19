@@ -12,6 +12,48 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function setTextIfPresent(id, value) {
+  const el = qs(id);
+  if (el) {
+    el.textContent = String(value);
+  }
+}
+
+function loadingPanelMarkup(label = "Loading...") {
+  return `
+    <div class="loading-state panel-loading">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">${escapeHtml(label)}</div>
+    </div>
+  `;
+}
+
+function resetIntelligenceStats() {
+  setTextIfPresent("ragResultsReturned", "0");
+  setTextIfPresent("ragCandidatesConsidered", "0");
+  setTextIfPresent("ragSourcesUsed", "0");
+}
+
+function updateIntelligenceStats({ mode, payload }) {
+  if (!payload || typeof payload !== "object") {
+    resetIntelligenceStats();
+    return;
+  }
+
+  if (mode === "search") {
+    const resultCount = payload.result_count ?? 0;
+    setTextIfPresent("ragResultsReturned", resultCount);
+    setTextIfPresent("ragCandidatesConsidered", resultCount);
+    setTextIfPresent("ragSourcesUsed", 0);
+    return;
+  }
+
+  const response = payload.response || {};
+  setTextIfPresent("ragResultsReturned", response.source_count ?? 0);
+  setTextIfPresent("ragCandidatesConsidered", response.retrieved_count ?? 0);
+  setTextIfPresent("ragSourcesUsed", response.source_count ?? 0);
+}
+
 function titleCase(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return "";
@@ -31,11 +73,13 @@ function buildRetrievalChips(retrievalLanes) {
     return `<span class="summary-chip chip-muted">No retrieval lane</span>`;
   }
 
-  return lanes.map((lane) => {
-    const normalized = String(lane || "").trim().toLowerCase();
-    const label = titleCase(normalized);
-    return `<span class="summary-chip retrieval-chip retrieval-${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
-  }).join("");
+  return lanes
+    .map((lane) => {
+      const normalized = String(lane || "").trim().toLowerCase();
+      const label = titleCase(normalized);
+      return `<span class="summary-chip retrieval-chip retrieval-${escapeHtml(normalized)}">${escapeHtml(label)}</span>`;
+    })
+    .join("");
 }
 
 function buildProviderBadge(provider, model, fallbackUsed) {
@@ -64,7 +108,13 @@ function buildProviderBadge(provider, model, fallbackUsed) {
   `;
 }
 
-function buildAnswerMetaHtml(sourceCount, retrievalLanes, llmProvider, llmModel, llmFallbackUsed) {
+function buildAnswerMetaHtml(
+  sourceCount,
+  retrievalLanes,
+  llmProvider,
+  llmModel,
+  llmFallbackUsed
+) {
   return `
     <div class="summary-meta-wrap">
       <span class="summary-meta-text">Answer mode</span>
@@ -109,15 +159,15 @@ function buildRagUrl() {
     include_diagnostics: includeDiagnostics,
   });
 
-    if (mode === "search") {
+  if (mode === "search") {
     const liteParams = new URLSearchParams({
       request,
       top_k: topK,
     });
     return `/jobs/search-lite?${liteParams.toString()}`;
-    }
+  }
 
-    return `/rag/answer?${params.toString()}`;
+  return `/rag/answer?${params.toString()}`;
 }
 
 function renderSummary(payload, mode) {
@@ -133,6 +183,7 @@ function renderSummary(payload, mode) {
   if (mode === "search") {
     const count = payload.result_count ?? 0;
     const inferredFilters = payload.inferred_filters || {};
+
     meta.innerHTML = `
       <div class="summary-meta-wrap">
         <span class="summary-meta-text">Search mode</span>
@@ -140,6 +191,7 @@ function renderSummary(payload, mode) {
         <span class="summary-meta-text">${escapeHtml(String(count))} result${count === 1 ? "" : "s"}</span>
       </div>
     `;
+
     summary.innerHTML = `
       <div class="info-pair"><span class="label">Request</span><span>${escapeHtml(payload.request || "")}</span></div>
       <div class="info-pair"><span class="label">Mode</span><span>${escapeHtml(payload.mode || "search_lite")}</span></div>
@@ -157,7 +209,6 @@ function renderSummary(payload, mode) {
   const retrievalLanes = Array.isArray(response.retrieval_lanes_used)
     ? response.retrieval_lanes_used
     : [];
-
   const llmProvider = response.llm_provider || "";
   const llmModel = response.llm_model || "";
   const llmFallbackUsed = Boolean(response.llm_fallback_used);
@@ -177,7 +228,7 @@ function renderSummary(payload, mode) {
     <div class="info-pair"><span class="label">Insufficient Evidence</span><span>${escapeHtml(insufficient ? "Yes" : "No")}</span></div>
     <div class="answer-block">${escapeHtml(answer)}</div>
   `;
-  }
+}
 
 function renderSearchResults(results) {
   const container = qs("ragResults");
@@ -188,33 +239,35 @@ function renderSearchResults(results) {
     return;
   }
 
-  container.innerHTML = rows.map((row, idx) => {
-    const title = escapeHtml(row.title || "");
-    const jobUrl = escapeHtml(row.job_url || row.doc_id || "");
-    const titleHtml = jobUrl
-      ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
-      : title;
+  container.innerHTML = rows
+    .map((row, idx) => {
+      const title = escapeHtml(row.title || "");
+      const jobUrl = escapeHtml(row.job_url || row.doc_id || "");
+      const titleHtml = jobUrl
+        ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+        : title;
 
-    return `
-      <div class="result-card">
-        <div class="result-header">
-          <div class="result-index">#${idx + 1}</div>
-          <div class="result-title">${titleHtml}</div>
+      return `
+        <div class="result-card">
+          <div class="result-header">
+            <div class="result-index">#${idx + 1}</div>
+            <div class="result-title">${titleHtml}</div>
+          </div>
+          <div class="result-meta">
+            <span>${escapeHtml(row.company || "")}</span>
+            <span>score=${escapeHtml(String(row.score ?? ""))}</span>
+            <span>${escapeHtml(row.location || "")}</span>
+          </div>
+          <div class="result-meta">
+            <span>source=${escapeHtml(row.source || "")}</span>
+            <span>posted_at=${escapeHtml(row.posted_at || "")}</span>
+            <span>visa=${escapeHtml(row.visa_sponsorship || "")}</span>
+            <span>ai_fit=${escapeHtml(String(row.ai_fit_score ?? ""))}</span>
+          </div>
         </div>
-        <div class="result-meta">
-          <span>${escapeHtml(row.company || "")}</span>
-          <span>score=${escapeHtml(String(row.score ?? ""))}</span>
-          <span>${escapeHtml(row.location || "")}</span>
-        </div>
-        <div class="result-meta">
-          <span>source=${escapeHtml(row.source || "")}</span>
-          <span>posted_at=${escapeHtml(row.posted_at || "")}</span>
-          <span>visa=${escapeHtml(row.visa_sponsorship || "")}</span>
-          <span>ai_fit=${escapeHtml(String(row.ai_fit_score ?? ""))}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
+      `;
+    })
+    .join("");
 }
 
 function renderAnswerSources(sources) {
@@ -226,26 +279,28 @@ function renderAnswerSources(sources) {
     return;
   }
 
-  container.innerHTML = rows.map((row, idx) => {
-    const title = escapeHtml(row.title || "");
-    const jobUrl = escapeHtml(row.job_url || "");
-    const titleHtml = jobUrl
-      ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
-      : title;
+  container.innerHTML = rows
+    .map((row, idx) => {
+      const title = escapeHtml(row.title || "");
+      const jobUrl = escapeHtml(row.job_url || "");
+      const titleHtml = jobUrl
+        ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+        : title;
 
-    return `
-      <div class="result-card">
-        <div class="result-header">
-          <div class="result-index">#${idx + 1}</div>
-          <div class="result-title">${titleHtml}</div>
+      return `
+        <div class="result-card">
+          <div class="result-header">
+            <div class="result-index">#${idx + 1}</div>
+            <div class="result-title">${titleHtml}</div>
+          </div>
+          <div class="result-meta">
+            <span>${escapeHtml(row.source_id || "")}</span>
+            <span>${escapeHtml(row.company || "")}</span>
+          </div>
         </div>
-        <div class="result-meta">
-          <span>${escapeHtml(row.source_id || "")}</span>
-          <span>${escapeHtml(row.company || "")}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
+      `;
+    })
+    .join("");
 }
 
 async function runRag() {
@@ -258,13 +313,14 @@ async function runRag() {
   runBtn.disabled = true;
   runBtn.textContent = "Running...";
   meta.textContent = "Running...";
-  summary.innerHTML = `<div class="empty-state">Running request...</div>`;
-  results.innerHTML = `<div class="empty-state">Loading results...</div>`;
+  summary.innerHTML = loadingPanelMarkup("Running request...");
+  results.innerHTML = loadingPanelMarkup("Loading results...");
 
   try {
     const url = buildRagUrl();
     const payload = await fetchJson(url);
 
+    updateIntelligenceStats({ mode, payload });
     renderSummary(payload, mode);
 
     if (mode === "search") {
@@ -287,6 +343,7 @@ function clearRag() {
   qs("ragSummary").innerHTML = `<div class="empty-state">Run a search or grounded question.</div>`;
   qs("ragResults").innerHTML = `<div class="empty-state">No results yet.</div>`;
   qs("ragMeta").textContent = "Idle";
+  resetIntelligenceStats();
 }
 
 function attachRagHandlers() {
@@ -316,4 +373,5 @@ function attachRagHandlers() {
 
 window.addEventListener("DOMContentLoaded", () => {
   attachRagHandlers();
+  resetIntelligenceStats();
 });

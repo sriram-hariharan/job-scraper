@@ -12,6 +12,32 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function countPlanningActiveFilters() {
+  let count = 0;
+  if (qs("planningActionFilter").value.trim()) count += 1;
+  if (qs("planningWinnerBucket").value.trim()) count += 1;
+  if (qs("planningUndecidedOnly").checked) count += 1;
+  return count;
+}
+
+function renderTableLoading(colspan, label) {
+  return `
+    <tr>
+      <td colspan="${colspan}">
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">${escapeHtml(label)}</div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function updatePlanningStats(rowCount) {
+  qs("planningJobsShown").textContent = String(rowCount ?? 0);
+  qs("planningActiveFilters").textContent = String(countPlanningActiveFilters());
+}
+
 async function fetchJson(url) {
   const response = await fetch(url);
   if (!response.ok) {

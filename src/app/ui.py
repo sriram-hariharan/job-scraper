@@ -23,6 +23,7 @@ def dashboard_home() -> str:
       </div>
       <div class="header-actions">
         <a class="ghost-link-btn" href="/planning">Planning Detail</a>
+        <a class="ghost-link-btn" href="/decisions-ui">Decisions</a>
         <button class="ghost-btn" id="refreshStatusBtn">Refresh Status</button>
       </div>
     </header>

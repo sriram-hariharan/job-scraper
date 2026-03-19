@@ -24,6 +24,7 @@ def planning_dashboard() -> str:
       </div>
       <div class="header-actions">
         <a class="ghost-link-btn" href="/">Executive Dashboard</a>
+        <a class="ghost-link-btn" href="/decisions-ui">Decisions</a>
       </div>
     </header>
 

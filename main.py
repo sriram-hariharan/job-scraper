@@ -68,6 +68,11 @@ def _parse_args():
         action="store_true",
         help="Skip scraping and run downstream application planning only, using the existing exported job corpus.",
     )
+    parser.add_argument(
+        "--application-planning-generate-llm-fallback",
+        action="store_true",
+        help="Pass --generate-llm-fallback to run_application_planning.py so filtered-out jobs get cached LLM fallback resume ranking.",
+    )
     return parser.parse_args()
 
 
@@ -96,6 +101,9 @@ def _run_application_planning(args):
 
     if args.application_planning_generate_tailoring:
         cmd.append("--generate-tailoring")
+    
+    if args.application_planning_generate_llm_fallback:
+        cmd.append("--generate-llm-fallback")
 
     if args.application_planning_generate_llm_tailoring:
         cmd.append("--generate-llm-tailoring")
@@ -125,6 +133,7 @@ def _validate_application_planning_only_args(args) -> None:
             "--application-planning-only requires --run-application-planning."
         )
 
+
 def _normalize_text(value: str) -> str:
     return " ".join(str(value or "").strip().lower().split())
 
@@ -135,6 +144,7 @@ def _company_title_key(company: str, title: str) -> str:
     if not company_norm or not title_norm:
         return ""
     return f"{company_norm}||{title_norm}"
+
 
 def _load_jobs_from_corpus(corpus_path: str):
     path = Path(corpus_path)
@@ -150,6 +160,57 @@ def _load_jobs_from_corpus(corpus_path: str):
             jobs.append(json.loads(line))
 
     return jobs
+
+
+def _load_best_variant_lookup(output_dir: str) -> dict:
+    batch_path = Path(output_dir) / "best_resume_variant_by_job.csv"
+    if not batch_path.exists():
+        return {}
+
+    with batch_path.open("r", encoding="utf-8", newline="") as f:
+        rows = list(csv.DictReader(f))
+
+    lookup = {}
+    for row in rows:
+        job_doc_id = str(row.get("job_doc_id", "") or "").strip()
+
+        payload = {
+            "job_doc_id": job_doc_id,
+            "winner_resume": row.get("winner_resume", ""),
+            "winner_score": row.get("winner_score", ""),
+            "winner_bucket": row.get("winner_bucket", ""),
+            "runner_up_resume": row.get("runner_up_resume", ""),
+            "runner_up_score": row.get("runner_up_score", ""),
+            "score_gap": row.get("score_gap", ""),
+            "is_tie": row.get("is_tie", ""),
+            "tie_epsilon": row.get("tie_epsilon", ""),
+            "passed_prefilter": row.get("passed_prefilter", ""),
+            "filtered_out": row.get("filtered_out", ""),
+            "llm_fallback_best_resume": row.get("llm_fallback_best_resume", ""),
+            "llm_fallback_best_score": row.get("llm_fallback_best_score", ""),
+            "llm_fallback_backup_resume": row.get("llm_fallback_backup_resume", ""),
+            "llm_fallback_backup_score": row.get("llm_fallback_backup_score", ""),
+            "llm_fallback_confidence": row.get("llm_fallback_confidence", ""),
+            "llm_fallback_reason": row.get("llm_fallback_reason", ""),
+            "llm_fallback_status": row.get("llm_fallback_status", ""),
+            "llm_fallback_parse_ok": row.get("llm_fallback_parse_ok", ""),
+            "llm_fallback_provider": row.get("llm_fallback_provider", ""),
+            "llm_fallback_model": row.get("llm_fallback_model", ""),
+            "llm_fallback_cache_hit": row.get("llm_fallback_cache_hit", ""),
+            "llm_fallback_error_type": row.get("llm_fallback_error_type", ""),
+        }
+
+        if job_doc_id:
+            lookup[job_doc_id] = payload
+
+        company_title = _company_title_key(
+            row.get("job_company", ""),
+            row.get("job_title", ""),
+        )
+        if company_title:
+            lookup[company_title] = payload
+
+    return lookup
 
 
 def _load_execution_queue_lookup(output_dir: str) -> dict:
@@ -229,6 +290,7 @@ def _load_packet_manifest_lookup(output_dir: str) -> dict:
 
 def _merge_application_planning_into_jobs(
     jobs,
+    best_variant_lookup: dict,
     execution_queue_lookup: dict,
     packet_manifest_lookup: dict,
 ) -> int:
@@ -243,6 +305,11 @@ def _merge_application_planning_into_jobs(
             str(job.get("link") or "").strip(),
             _company_title_key(job.get("company", ""), job.get("title", "")),
         ]
+
+        for key in key_candidates:
+            if key and key in best_variant_lookup:
+                planning.update(best_variant_lookup[key])
+                break
 
         for key in key_candidates:
             if key and key in execution_queue_lookup:
@@ -272,7 +339,6 @@ def _merge_application_planning_into_jobs(
 
 
 async def main_async(args):
-    # ----- Delete seen data? -----
     DELETE_SEEN_DATA = None
 
     while DELETE_SEEN_DATA not in ["y", "n", "yes", "no"]:
@@ -286,7 +352,6 @@ async def main_async(args):
             logger.info(f"Deleted seen data: {seen_file}")
         else:
             logger.info(f"Seen file not found: {seen_file}")
-    # ----- end of delete seen data -----
 
     init_metrics_db()
 
@@ -335,6 +400,9 @@ async def main_async(args):
         )
 
     if jobs and application_planning_ran:
+        best_variant_lookup = _load_best_variant_lookup(
+            args.application_planning_output_dir
+        )
         execution_queue_lookup = _load_execution_queue_lookup(
             args.application_planning_output_dir
         )
@@ -344,13 +412,15 @@ async def main_async(args):
 
         merged_count = _merge_application_planning_into_jobs(
             jobs,
+            best_variant_lookup=best_variant_lookup,
             execution_queue_lookup=execution_queue_lookup,
             packet_manifest_lookup=packet_manifest_lookup,
         )
 
         logger.info(
-            "Merged application-planning metadata into %s jobs from %s and %s",
+            "Merged application-planning metadata into %s jobs from %s, %s, and %s",
             merged_count,
+            Path(args.application_planning_output_dir) / "best_resume_variant_by_job.csv",
             Path(args.application_planning_output_dir) / "application_execution_queue.csv",
             Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
         )

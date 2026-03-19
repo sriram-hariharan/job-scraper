@@ -2,10 +2,10 @@
 
 **Job:** roku | Senior Data Scientist
 **Selected resume:** Sriram_Neelakantan_Product_Data_Scientist.pdf
-**Selected score:** 0.749
+**Selected score:** 0.727
 
 ## Recruiter Summary
-Sriram_Neelakantan_Product_Data_Scientist.pdf is the selected variant for roku | Senior Data Scientist with a deterministic score of 0.749. It already aligns on a/b testing, forecasting, looker, python, r, sql. The main explicit gaps still showing are sas, statistical modeling.
+Sriram_Neelakantan_Product_Data_Scientist.pdf is the selected variant for roku | Senior Data Scientist with a deterministic score of 0.727. It already aligns on a/b testing, forecasting, looker, python, r, sql. The main explicit gaps still showing are sas, statistical modeling.
 
 ## Keep / Emphasize
 - Keep explicit required-skill evidence visible: a/b testing, forecasting, looker, python, r, sql, tableau.
@@ -47,14 +47,14 @@ Do not invent skills, tools, projects, outcomes, or responsibilities.
 Job company: roku
 Job title: Senior Data Scientist
 Selected resume: Sriram_Neelakantan_Product_Data_Scientist.pdf
-Selected score: 0.749
+Selected score: 0.727
 
 Matched required skills: ['a/b testing', 'forecasting', 'looker', 'python', 'r', 'sql', 'tableau']
 Missing required skills: ['sas', 'statistical modeling']
 Matched preferred skills: []
 Missing preferred skills: []
 Matched terms: ['Data Scientist II', 'a/b testing', 'forecasting', 'looker', 'python', 'r', 'sql', 'tableau']
-Top dimensions: title_alignment=1.00/0.209, required_skills_alignment=0.78/0.199, experimentation_depth=1.00/0.093, tooling_alignment=0.83/0.078, analytics_ml_depth=0.47/0.054, domain_relevance=0.50/0.047
+Top dimensions: required_skills_alignment=0.78/0.199, title_alignment=0.90/0.187, experimentation_depth=1.00/0.093, tooling_alignment=0.83/0.078, analytics_ml_depth=0.47/0.054, domain_relevance=0.50/0.047
 
 Best existing bullets to reuse/review:
 1. [experience] Data Analyst II @ Accenture | overlaps=['python', 'sql', 'tableau'] | bullet=Conducted portfolio exposure analysis using Python for scenario modeling, SQL for data aggregation, & Tableau for risk visualization, informing pricing and design changes that improved profitability by 10% and reduced lapse risk by 12%

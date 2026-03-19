@@ -24,14 +24,26 @@ def _header_index(headers, name: str) -> int:
 def _header_letter(headers, name: str) -> str:
     return _column_letter(_header_index(headers, name))
 
+def _scale_score_100(value):
+    raw = str(value).strip() if value is not None else ""
+    if raw == "":
+        return ""
+
+    try:
+        return round(float(raw) * 100.0, 2)
+    except Exception:
+        return value
+
 
 def format_sheet(sheet, headers):
     sheet.freeze(rows=1)
 
     numeric_formats = {
-        "Planning Winner Score": "0.000",
-        "Planning Runner Up Score": "0.000",
-        "Planning Score Gap": "0.000",
+        "Planning Winner Score": "0.00",
+        "Planning Runner Up Score": "0.00",
+        "Planning Score Gap": "0.00",
+        "LLM Fallback Best Score": "0.00",
+        "LLM Fallback Backup Score": "0.00",
         "Queue Rank": "0",
         "Missing Requirement Count": "0",
         "Resume Match": "0.00",
@@ -54,6 +66,7 @@ def format_sheet(sheet, headers):
     wrap_columns = [
         "Title",
         "Queue Priority Reason",
+        "LLM Fallback Reason",
     ]
 
     clip_columns = [
@@ -107,37 +120,45 @@ def write_jobs_to_sheet(jobs):
     sheet = client.open("AI Job Scraper").sheet1
 
     headers = [
-    "Company",
-    "Title",
-    "Link",
-    "Posted At",
-    "Posted",
-    "Location",
-    "Planning Winner Resume",
-    "Planning Winner Score",
-    "Planning Runner Up Resume",
-    "Planning Runner Up Score",
-    "Planning Score Gap",
-    "Planning Action",
-    "Queue Rank",
-    "Needs Variant Review",
-    "Missing Requirement Count",
-    "Planning Is Tie",
-    "Queue Priority Reason",
-    "Embedding Best Resume",
-    "Resume Match",
-    "Priority Score",
-    "AI Signal Score",
-    "LLM Job Triage",
-    "Visa",
-    "Role Family",
-    "Source",
-    "LLM Tailoring Status",
-    "LLM Error Type",
-    "Packet JSON",
-    "Tailoring Markdown",
-    "Tailoring LLM JSON",
-    "Run Timestamp",
+        "Company",
+        "Title",
+        "Link",
+        "Posted At",
+        "Posted",
+        "Location",
+        "Planning Winner Resume",
+        "Planning Winner Score",
+        "Planning Runner Up Resume",
+        "Planning Runner Up Score",
+        "Planning Score Gap",
+        "Planning Action",
+        "Queue Rank",
+        "Needs Variant Review",
+        "Missing Requirement Count",
+        "Planning Is Tie",
+        "Queue Priority Reason",
+        "LLM Fallback Best Resume",
+        "LLM Fallback Best Score",
+        "LLM Fallback Backup Resume",
+        "LLM Fallback Backup Score",
+        "LLM Fallback Confidence",
+        "LLM Fallback Status",
+        "LLM Fallback Cache Hit",
+        "LLM Fallback Reason",
+        "Embedding Best Resume",
+        "Resume Match",
+        "Priority Score",
+        "AI Signal Score",
+        "LLM Job Triage",
+        "Visa",
+        "Role Family",
+        "Source",
+        "LLM Tailoring Status",
+        "LLM Error Type",
+        "Packet JSON",
+        "Tailoring Markdown",
+        "Tailoring LLM JSON",
+        "Run Timestamp",
     ]
 
     existing_data = sheet.get_all_values()
@@ -216,18 +237,26 @@ def write_jobs_to_sheet(jobs):
             relative_posted,
             location,
             planning.get("winner_resume", ""),
-            planning.get("winner_score", ""),
+            _scale_score_100(planning.get("winner_score", "")),
             planning.get("runner_up_resume", ""),
-            planning.get("runner_up_score", ""),
-            planning.get("score_gap", ""),
+            _scale_score_100(planning.get("runner_up_score", "")),
+            _scale_score_100(planning.get("score_gap", "")),
             planning.get("action", ""),
             planning.get("queue_rank", ""),
             planning.get("needs_variant_review", ""),
             planning.get("missing_requirement_count", ""),
             planning.get("is_tie", ""),
             planning.get("queue_priority_reason", ""),
+            planning.get("llm_fallback_best_resume", ""),
+            _scale_score_100(planning.get("llm_fallback_best_score", "")),
+            planning.get("llm_fallback_backup_resume", ""),
+            _scale_score_100(planning.get("llm_fallback_backup_score", "")),
+            planning.get("llm_fallback_confidence", ""),
+            planning.get("llm_fallback_status", ""),
+            planning.get("llm_fallback_cache_hit", ""),
+            planning.get("llm_fallback_reason", ""),
             job.get("best_resume"),
-            resume_match,
+            _scale_score_100(resume_match),
             priority,
             ai_score,
             job.get("ai_fit"),

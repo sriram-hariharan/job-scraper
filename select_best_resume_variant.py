@@ -171,6 +171,12 @@ def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_
 def _has_credible_match(passed_results: List[object]) -> bool:
     return len(passed_results) > 0
 
+def _fallback_top_pair(results: List[object]) -> tuple[Optional[object], Optional[object]]:
+    if not results:
+        return None, None
+    best = results[0]
+    backup = results[1] if len(results) > 1 else None
+    return best, backup
 
 def _no_credible_match_lines(top_result) -> List[str]:
     lines = [
@@ -360,6 +366,7 @@ def main() -> None:
     runner_up: Optional[object] = selected[1] if len(selected) > 1 else None
 
     has_credible_match = _has_credible_match(passed_results)
+    fallback_best, fallback_backup = _fallback_top_pair(results)
     if not has_credible_match:
         runner_up = None
 
@@ -381,6 +388,20 @@ def main() -> None:
         if winner.prefilter.missing_requirements:
             print(f"Missing requirements: {winner.prefilter.missing_requirements[:12]}")
         print(f"Top dimensions: {_dimension_snapshot(winner)}")
+        print()
+        if fallback_best is not None:
+            print("Fallback best available:")
+            print(
+                f"{fallback_best.pair.resume_name} | "
+                f"score={fallback_best.final_score:.3f} | "
+                f"bucket={fallback_best.match_bucket}"
+            )
+        if fallback_backup is not None:
+            print(
+                f"Fallback backup: {fallback_backup.pair.resume_name} | "
+                f"score={fallback_backup.final_score:.3f} | "
+                f"gap={fallback_best.final_score - fallback_backup.final_score:.3f}"
+            )
         print()
 
         if runner_up is not None:
@@ -500,6 +521,9 @@ def main() -> None:
             "winner": _result_to_dict(winner) if has_credible_match else None,
             "runner_up": _result_to_dict(runner_up) if has_credible_match and runner_up is not None else None,
             "diagnostic_top_variant": _result_to_dict(winner) if not has_credible_match else None,
+            "fallback_best_available": _result_to_dict(fallback_best) if fallback_best is not None else None,
+            "fallback_backup_available": _result_to_dict(fallback_backup) if fallback_backup is not None else None,
+            "fallback_source": "deterministic_relaxed_all_variants",
             "winner_vs_runner_up": {
                 "score_gap": (winner.final_score - runner_up.final_score) if runner_up is not None else None,
                 "is_tie": is_tie,

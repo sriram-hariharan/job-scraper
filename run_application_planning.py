@@ -263,6 +263,11 @@ def main() -> None:
         default="APPLY,APPLY_REVIEW_VARIANTS",
         help="Comma-separated shortlist actions eligible for live LLM tailoring.",
     )
+    parser.add_argument(
+        "--generate-llm-fallback",
+        action="store_true",
+        help="When batch selecting resume variants, run LLM fallback ranking for jobs with no credible deterministic winner.",
+    )
     args = parser.parse_args()
 
     job_corpus_path = Path(args.job_corpus)
@@ -308,6 +313,8 @@ def main() -> None:
         batch_selector_cmd.extend(["--title-contains", args.title_contains])
     if args.resume_name_contains.strip():
         batch_selector_cmd.extend(["--resume-name-contains", args.resume_name_contains])
+    if args.generate_llm_fallback:
+        batch_selector_cmd.append("--generate-llm-fallback")
 
     _run_cmd(batch_selector_cmd)
 

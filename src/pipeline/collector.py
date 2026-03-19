@@ -236,17 +236,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         skill_cache_summary["live_failures"],
     )
 
-    # ----- DEBUG SAMPLE -----
-    for job in intelligent_jobs[:5]:
-
-        intel = job.get("intelligence", {})
-        skills = intel.get("skills", {})
-
-        logger.info(
-            f"INTEL SAMPLE | {job.get('company')} | {job.get('title')} | "
-            f"required={skills.get('required')} | preferred={skills.get('preferred')}"
-        )
-
     # ----- JOB SKILLS STORE -----
     skill_run_id = str(uuid4())
     store_job_skills(skill_run_id, intelligent_jobs)
@@ -259,11 +248,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     for skill, count in top_skills(intelligent_jobs, top_n=50):
         logger.info(f"{count:3} | {skill}")
-
-    # ---- DEBUG TOP CORPUS SKILLS -----
-    logger.info("")
-    logger.info("TOP CORPUS SKILLS")
-    logger.info("-----------------")
 
     for skill, count in get_top_corpus_skills(limit=100):
         logger.info(f"{count:3} | {skill}")
@@ -284,7 +268,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info(f"Jobs eligible for AI evaluation: {len(evaluable_jobs)}")
 
     # ----- EMBEDDING PREFILTER -----
-    MAX_EVAL_JOBS = 40
+    MAX_EVAL_JOBS = None
 
     section("EMBEDDING PREFILTER", logger)
 

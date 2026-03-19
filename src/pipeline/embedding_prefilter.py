@@ -28,7 +28,7 @@ def build_job_embedding_text(job: Dict[str, Any]) -> str:
 
 def prefilter_jobs_by_embedding(
     jobs: List[Dict[str, Any]],
-    top_n: int = 40
+    top_n: int | None = None,
 ) -> List[Dict[str, Any]]:
 
     if not jobs:
@@ -64,8 +64,10 @@ def prefilter_jobs_by_embedding(
         reverse=True,
     )
 
+    kept = len(scored_jobs) if top_n is None else min(top_n, len(scored_jobs))
+
     logger.info(
-        f"Embedding prefilter: {len(jobs)} -> {min(top_n, len(scored_jobs))}"
+        f"Embedding prefilter: {len(jobs)} -> {kept}"
     )
 
-    return scored_jobs[:top_n]
+    return scored_jobs if top_n is None else scored_jobs[:top_n]

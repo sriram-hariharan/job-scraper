@@ -563,6 +563,44 @@ def _workflow_view_rows(rows: List[Dict[str, str]], view: str) -> List[Dict[str,
     )
     return filtered
 
+def _infer_planner_view(request: str) -> str:
+    text = _normalize_text(request)
+
+    if "runner up" in text or "runner-up" in text:
+        return "runner_up_selected"
+
+    if ("undecided" in text or "pending" in text) and (
+        "apply review" in text or "review variants" in text or "variant review" in text
+    ):
+        return "undecided_apply_review"
+
+    if ("undecided" in text or "pending" in text) and (
+        "maybe tailor" in text or "tailor" in text
+    ):
+        return "undecided_maybe_tailor"
+
+    if "direct apply" in text and ("pending" in text or "still pending" in text):
+        return "direct_apply_pending"
+
+    if "undecided" not in text and (
+        "decide apply" in text or "decided apply" in text or "already decide apply" in text
+    ):
+        return "decided_apply"
+
+    if "undecided" not in text and (
+        "decide tailor" in text or "decided tailor" in text or "already decide tailor" in text
+    ):
+        return "decided_tailor"
+
+    raise SystemExit(
+        "Could not map planner request to a workflow view. Try one of: "
+        "'show undecided apply review jobs', "
+        "'show undecided maybe tailor jobs', "
+        "'which jobs did i already decide apply', "
+        "'show jobs where i picked the runner up', "
+        "'show direct apply jobs still pending'."
+    )
+
 def _build_review_export_rows(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     export_rows: List[Dict[str, str]] = []
 
@@ -1388,6 +1426,45 @@ def _workflow(args) -> None:
         )
         print()
 
+def _planner(args) -> None:
+    inferred_view = _infer_planner_view(args.request)
+    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    selected = _workflow_view_rows(rows, inferred_view)[: args.limit]
+
+    if not selected:
+        raise SystemExit("No matching planner rows found.")
+
+    print("=" * 100)
+    print("JOB APP PLANNER")
+    print("=" * 100)
+    _print_wrapped_field("Request", args.request)
+    _print_wrapped_field("Resolved view", inferred_view)
+    _print_wrapped_field("Rows returned", len(selected))
+    print()
+
+    for row in selected:
+        print(
+            f"#{row.get('queue_rank', '')} | {row.get('action', '')} | "
+            f"{row.get('job_company', '')} | {row.get('job_title', '')}"
+        )
+        print(
+            f"  winner={row.get('winner_resume', '') or '<empty>'} | "
+            f"runner_up={row.get('runner_up_resume', '') or '<empty>'}"
+        )
+        print(
+            f"  winner_score={_parse_float(row.get('winner_score', '0')):.3f} | "
+            f"gap={_parse_float(row.get('score_gap', '0')):.3f} | "
+            f"review={row.get('needs_variant_review', '') or '<empty>'}"
+        )
+        print(
+            f"  operator_decision={row.get('operator_decision', '') or '<empty>'} | "
+            f"operator_selected_resume={row.get('operator_selected_resume', '') or '<empty>'}"
+        )
+        print(
+            f"  reason={row.get('queue_priority_reason', '') or '<empty>'}"
+        )
+        print()
+
 def _rag(args) -> None:
     payload = execute_rag_request(
         request=args.request,
@@ -1622,6 +1699,15 @@ def _parse_args():
     )
     workflow_parser.add_argument("--limit", type=int, default=20)
 
+    planner_parser = subparsers.add_parser(
+        "planner",
+        help="Resolve simple natural-language planning questions into deterministic workflow views.",
+    )
+    planner_parser.add_argument("request")
+    planner_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    planner_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
+    planner_parser.add_argument("--limit", type=int, default=20)
+
     return parser.parse_args()
 
 
@@ -1670,6 +1756,10 @@ def main() -> None:
     
     if args.command == "workflow":
         _workflow(args)
+        return
+
+    if args.command == "planner":
+        _planner(args)
         return
 
     raise SystemExit(f"Unsupported command: {args.command}")

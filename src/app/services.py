@@ -28,6 +28,12 @@ ALLOWED_APPLICATION_STATUSES = {
     "DISMISSED",
 }
 
+APPLICATION_ACTION_OVERLAY_FIELDS = [
+    "application_status",
+    "application_label",
+    "is_applied",
+]
+
 def _job_app():
     import job_app
     return job_app
@@ -99,6 +105,91 @@ def _load_latest_application_actions(
     )
     return latest_rows
 
+def _application_row_key_candidates(row: Dict[str, Any]) -> List[str]:
+    ja = _job_app()
+
+    key_candidates: List[str] = []
+
+    direct_key = _application_action_key(row)
+    if direct_key:
+        key_candidates.append(direct_key)
+
+    job_doc_id = _clean_text(row.get("job_doc_id"))
+    if job_doc_id:
+        key_candidates.append(f"job_doc_id::{job_doc_id}")
+
+    job_url = _clean_text(row.get("job_url"))
+    if job_url:
+        key_candidates.append(f"job_url::{job_url}")
+
+    company = ja._normalize_text(row.get("job_company", "") or row.get("company", ""))
+    title = ja._normalize_text(row.get("job_title", "") or row.get("title", ""))
+    if company or title:
+        key_candidates.append(f"title::{company}||{title}")
+
+    deduped: List[str] = []
+    for key in key_candidates:
+        if key and key not in deduped:
+            deduped.append(key)
+    return deduped
+
+
+def _application_overlay_from_row(action_row: Dict[str, Any]) -> Dict[str, Any]:
+    status = _clean_text(action_row.get("application_status")).upper()
+    is_applied = status == "APPLIED"
+
+    return {
+        "application_status": status,
+        "application_label": "Applied" if is_applied else "Apply",
+        "is_applied": is_applied,
+    }
+
+
+def _load_latest_application_action_overlay(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+) -> Dict[str, Dict[str, Any]]:
+    latest_rows = _load_latest_application_actions(actions_path)
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in latest_rows:
+        overlay = _application_overlay_from_row(row)
+        for key in _application_row_key_candidates(row):
+            latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _overlay_application_actions(
+    rows: List[Dict[str, Any]],
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+) -> List[Dict[str, Any]]:
+    latest_by_key = _load_latest_application_action_overlay(actions_path)
+
+    overlaid_rows: List[Dict[str, Any]] = []
+    for row in rows:
+        merged = dict(row)
+
+        for field in APPLICATION_ACTION_OVERLAY_FIELDS:
+            if field == "application_label":
+                merged.setdefault(field, "Apply")
+            elif field == "is_applied":
+                merged.setdefault(field, False)
+            else:
+                merged.setdefault(field, "")
+
+        overlay = None
+        for key in _application_row_key_candidates(row):
+            if key in latest_by_key:
+                overlay = latest_by_key[key]
+                break
+
+        if overlay:
+            merged.update(overlay)
+
+        overlaid_rows.append(merged)
+
+    return overlaid_rows
+
 def health_payload() -> Dict[str, Any]:
     from src.rag.retriever import get_semantic_status
 
@@ -150,6 +241,9 @@ def status_payload(
     )
 
     latest_by_key = ja._load_latest_decision_overlay(decisions_path)
+    application_overlay_by_key = _load_latest_application_action_overlay(
+        DEFAULT_APPLICATION_ACTIONS_PATH
+    )
 
     top_rows = sorted(
         queue_rows,
@@ -178,7 +272,20 @@ def status_payload(
             if key and key in latest_by_key:
                 overlay_row.update(latest_by_key[key])
                 break
+        
+        for field in APPLICATION_ACTION_OVERLAY_FIELDS:
+            if field == "application_label":
+                overlay_row.setdefault(field, "Apply")
+            elif field == "is_applied":
+                overlay_row.setdefault(field, False)
+            else:
+                overlay_row.setdefault(field, "")
 
+        for key in _application_row_key_candidates(overlay_row):
+            if key in application_overlay_by_key:
+                overlay_row.update(application_overlay_by_key[key])
+                break
+        
         top_queue.append(overlay_row)
 
     return {
@@ -212,6 +319,7 @@ def browse_payload(
     rows = ja._build_job_index(output_dir, decisions_path)
     args = _make_args(**filters)
     selected = ja._select_browse_rows(rows, args)
+    selected = _overlay_application_actions(selected)
     return {
         "filters": filters,
         "rows": selected,
@@ -228,6 +336,7 @@ def review_payload(
     rows = ja._build_job_index(output_dir, decisions_path)
     args = _make_args(**filters)
     selected = ja._select_review_rows(rows, args)
+    selected = _overlay_application_actions(selected)
     return {
         "filters": filters,
         "rows": selected,
@@ -244,6 +353,7 @@ def workflow_payload(
     ja = _job_app()
     rows = ja._build_job_index(output_dir, decisions_path)
     selected = ja._workflow_view_rows(rows, view)[:limit]
+    selected = _overlay_application_actions(selected)
     return {
         "view": view,
         "rows": selected,
@@ -261,6 +371,7 @@ def planner_payload(
     view = ja._infer_planner_view(request)
     rows = ja._build_job_index(output_dir, decisions_path)
     selected = ja._workflow_view_rows(rows, view)[:limit]
+    selected = _overlay_application_actions(selected)
     return {
         "request": request,
         "resolved_view": view,
@@ -277,6 +388,7 @@ def decisions_payload(
     rows = ja._load_csv_rows(decisions_path)
     args = _make_args(**filters)
     selected = ja._select_decision_rows(rows, args)
+    selected = _overlay_application_actions(selected)
     return {
         "filters": filters,
         "rows": selected,
@@ -408,6 +520,8 @@ def jobs_search_lite_payload(
             "ai_fit_score": metadata.get("ai_fit_score"),
         })
 
+    compact_results = _overlay_application_actions(compact_results)
+
     return {
         "ok": True,
         "request": request,
@@ -427,7 +541,7 @@ def rag_search_payload(
 ) -> Dict[str, Any]:
     from src.rag.rag_executor import execute_rag_request
 
-    return execute_rag_request(
+    payload = execute_rag_request(
         request=request,
         top_k=top_k,
         fetch_k=fetch_k,
@@ -436,6 +550,14 @@ def rag_search_payload(
         include_diagnostics=include_diagnostics,
         intent_override="search_jobs",
     )
+
+    if payload.get("ok") and isinstance(payload.get("response"), dict):
+        response = dict(payload.get("response", {}))
+        response["results"] = _overlay_application_actions(response.get("results", []) or [])
+        payload = dict(payload)
+        payload["response"] = response
+
+    return payload
 
 def rag_answer_payload(
     request: str,
@@ -446,7 +568,7 @@ def rag_answer_payload(
 ) -> Dict[str, Any]:
     from src.rag.rag_executor import execute_rag_request
 
-    return execute_rag_request(
+    payload = execute_rag_request(
         request=request,
         top_k=top_k,
         fetch_k=fetch_k,
@@ -455,3 +577,12 @@ def rag_answer_payload(
         include_diagnostics=include_diagnostics,
         intent_override="answer_job_query",
     )
+
+    if payload.get("ok") and isinstance(payload.get("response"), dict):
+        response = dict(payload.get("response", {}))
+        response["sources"] = _overlay_application_actions(response.get("sources", []) or [])
+        response["job_evidence"] = _overlay_application_actions(response.get("job_evidence", []) or [])
+        payload = dict(payload)
+        payload["response"] = response
+
+    return payload

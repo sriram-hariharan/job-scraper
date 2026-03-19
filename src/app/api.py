@@ -5,6 +5,7 @@ from fastapi.staticfiles import StaticFiles
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
+from src.app.intelligence_ui import router as intelligence_ui_router
 
 app = FastAPI(
     title="Job Operator API",
@@ -15,6 +16,7 @@ app.mount("/static", StaticFiles(directory="src/app/static"), name="static")
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
+app.include_router(intelligence_ui_router)
 
 @app.get("/health")
 def health():
@@ -157,6 +159,7 @@ def rag_search(
     output_mode: str = "compact",
     include_diagnostics: bool = False,
 ):
+    
     return services.rag_search_payload(
         request=request,
         top_k=top_k,
@@ -165,6 +168,15 @@ def rag_search(
         include_diagnostics=include_diagnostics,
     )
 
+@app.get("/jobs/search-lite")
+def jobs_search_lite(
+    request: str,
+    top_k: int = 10,
+):
+    return services.jobs_search_lite_payload(
+        request=request,
+        top_k=top_k,
+    )
 
 @app.get("/rag/answer")
 def rag_answer(

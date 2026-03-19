@@ -194,6 +194,46 @@ def decisions_payload(
         "decisions_path": str(decisions_path),
     }
 
+def jobs_search_lite_payload(
+    request: str,
+    top_k: int = 10,
+) -> Dict[str, Any]:
+    from src.rag.corpus_store import _load_job_corpus
+    from src.rag.lexical_retriever import _lexical_search
+    from src.rag.query_filters import _infer_metadata_filters
+
+    inferred_filters = _infer_metadata_filters(request)
+    lexical_results = _lexical_search(
+        query=request,
+        top_k=top_k,
+        filters=inferred_filters or None,
+    )
+
+    compact_results = []
+    for row in lexical_results:
+        metadata = row.get("metadata", {}) or {}
+        compact_results.append({
+            "score": row.get("score"),
+            "doc_id": metadata.get("doc_id", ""),
+            "company": metadata.get("company", ""),
+            "title": metadata.get("title", ""),
+            "location": metadata.get("location", ""),
+            "source": metadata.get("source", ""),
+            "job_url": metadata.get("job_url", ""),
+            "posted_at": metadata.get("posted_at", ""),
+            "visa_sponsorship": metadata.get("visa_sponsorship", ""),
+            "ai_fit_score": metadata.get("ai_fit_score"),
+        })
+
+    return {
+        "ok": True,
+        "request": request,
+        "mode": "search_lite",
+        "corpus_count": len(_load_job_corpus()),
+        "inferred_filters": inferred_filters,
+        "result_count": len(compact_results),
+        "results": compact_results,
+    }
 
 def rag_search_payload(
     request: str,

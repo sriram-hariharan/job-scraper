@@ -1,10 +1,12 @@
 from pathlib import Path
 from typing import List, Dict, Any
 from functools import lru_cache
+from time import perf_counter
 
 from llama_index.core import Settings, StorageContext, load_index_from_storage
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
+from src.utils.logging import get_logger
 
 INDEX_DIR = Path("data/rag/index")
 EMBED_MODEL_NAME = "BAAI/bge-small-en-v1.5"

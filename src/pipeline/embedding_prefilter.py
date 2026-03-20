@@ -1,8 +1,6 @@
 from typing import List, Dict, Any
 import numpy as np
 
-from src.ai.embedding_model import get_model
-from src.resume.resume_embeddings import get_embedding_matrix
 from src.utils.logging import get_logger
 
 logger = get_logger("embedding_prefilter")
@@ -31,6 +29,9 @@ def prefilter_jobs_by_embedding(
     top_n: int | None = None,
 ) -> List[Dict[str, Any]]:
 
+    from src.ai.embedding_model import get_model
+    from src.resume.resume_embeddings import get_embedding_matrix
+    
     if not jobs:
         return jobs
 

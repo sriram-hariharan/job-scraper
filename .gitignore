@@ -15,6 +15,7 @@ __pycache__/
 venv/
 .venv/
 job_scrap/
+job_scrap312/
 
 # local env / secrets
 .env

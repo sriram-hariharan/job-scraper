@@ -32,11 +32,15 @@ def _start_semantic_warmup_thread() -> None:
         name="rag-semantic-warmup",
     ).start()
 
+# @asynccontextmanager
+# async def lifespan(app: FastAPI):
+#     import asyncio
+
+#     asyncio.get_running_loop().call_soon(_start_semantic_warmup_thread)
+#     yield
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    import asyncio
-
-    asyncio.get_running_loop().call_soon(_start_semantic_warmup_thread)
     yield
 
 app = FastAPI(

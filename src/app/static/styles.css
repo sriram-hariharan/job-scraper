@@ -2294,3 +2294,107 @@ thead .sticky-apply-col {
   background: rgba(255, 143, 143, 0.2);
   transform: translateY(-1px);
 }
+
+/* === app error modal === */
+
+.app-error-modal-card {
+  width: min(760px, calc(100vw - 32px));
+  border: 1px solid rgba(255, 92, 92, 0.18);
+  box-shadow:
+    0 24px 80px rgba(0, 0, 0, 0.38),
+    inset 0 1px 0 rgba(255, 92, 92, 0.04);
+}
+
+.app-error-modal-header {
+  margin-bottom: 18px;
+}
+
+.app-error-panel {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 18px;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 92, 92, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 92, 92, 0.12);
+  margin-bottom: 20px;
+}
+
+.app-error-icon-wrap {
+  width: 88px;
+  height: 88px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at center, rgba(255, 92, 92, 0.12) 0%, rgba(255, 92, 92, 0.04) 68%, transparent 80%);
+  border: 1px solid rgba(255, 92, 92, 0.14);
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.app-error-icon-img {
+  width: 56px;
+  height: 56px;
+  display: block;
+  object-fit: contain;
+}
+
+.app-error-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.app-error-badge {
+  width: fit-content;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 92, 92, 0.12);
+  border: 1px solid rgba(255, 92, 92, 0.2);
+  color: #ffb3b3;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.app-error-message {
+  color: var(--text);
+  font-size: 17px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.app-error-actions {
+  justify-content: flex-start;
+}
+
+#appErrorOkBtn {
+  min-width: 110px;
+}
+
+@media (max-width: 700px) {
+  .app-error-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .app-error-icon-wrap {
+    width: 72px;
+    height: 72px;
+  }
+
+  .app-error-icon-img {
+    width: 46px;
+    height: 46px;
+  }
+
+  .app-error-message {
+    font-size: 15px;
+    line-height: 1.55;
+  }
+}

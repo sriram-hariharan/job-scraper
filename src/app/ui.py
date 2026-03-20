@@ -88,9 +88,9 @@ def executive_dashboard() -> str:
 
       <div class="controls-row quick-view-row">
         <button class="ghost-btn quick-view-btn" data-view="direct_apply_pending">Direct Apply Pending</button>
-        <button class="ghost-btn quick-view-btn" data-view="variant_review_pending">Variant Review Pending</button>
-        <button class="ghost-btn quick-view-btn" data-view="tailor_pending">Tailor Pending</button>
-        <button class="ghost-btn quick-view-btn" data-view="applied_jobs">Applied Jobs</button>
+        <button class="ghost-btn quick-view-btn" data-view="undecided_apply_review">Variant Review Pending</button>
+        <button class="ghost-btn quick-view-btn" data-view="undecided_maybe_tailor">Tailor Pending</button>
+        <button class="ghost-btn quick-view-btn" data-mode="applied_jobs">Applied Jobs</button>
       </div>
     </section>
 
@@ -437,8 +437,8 @@ def executive_dashboard() -> str:
           <img
               id="pipelineSuccessGif"
               class="pipeline-success-gif"
-              src="/static/gifs/success_check.gif"
-              data-src="/static/gifs/success_check.gif"
+              src="/static/media/success_check.gif"
+              data-src="/static/media/success_check.gif"
               alt="Pipeline completed successfully"
             />
           <div class="pipeline-success-static-check hidden" id="pipelineSuccessStaticCheck">✓</div>
@@ -459,7 +459,35 @@ def executive_dashboard() -> str:
       </div>
     </div>
   </section>
+  <section class="modal-backdrop hidden" id="appErrorModal">
+  <div class="modal-card app-error-modal-card">
+    <div class="modal-header app-error-modal-header">
+      <div>
+        <h3 id="appErrorTitle">Something went wrong</h3>
+        <div class="subtext" id="appErrorSubtitle">Review the message below.</div>
+      </div>
+      <button class="ghost-btn modal-close-btn" id="closeAppErrorModalBtn" type="button">Close</button>
+    </div>
 
+    <div class="app-error-panel">
+      <div class="app-error-icon-wrap" aria-hidden="true">
+        <img
+          class="app-error-icon-img"
+          src="/static/media/error_img.png"
+          alt=""
+        />
+      </div>
+      <div class="app-error-copy">
+        <div class="app-error-badge">Warning</div>
+        <div class="app-error-message" id="appErrorMessage"></div>
+      </div>
+    </div>
+
+    <div class="modal-actions app-error-actions">
+      <button type="button" id="appErrorOkBtn">OK</button>
+    </div>
+  </div>
+</section>
   <script src="/static/shell.js"></script>
   <script src="/static/app.js"></script>
 </body>

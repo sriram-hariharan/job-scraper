@@ -88,17 +88,18 @@ def pipeline_status():
 def run_live_pipeline(payload: dict = Body(...)):
     try:
         return services.run_live_pipeline_payload(
-            output_dir=Path(str(payload.get("output_dir", services.DEFAULT_OUTPUT_DIR))),
-            log_path=Path(str(payload.get("log_path", services.DEFAULT_PIPELINE_LOG_PATH))),
-            job_limit=int(payload.get("job_limit", 50)),
-            job_packet_limit=int(payload.get("job_packet_limit", 0)),
-            llm_actions=payload.get("llm_actions", ["APPLY", "APPLY_REVIEW_VARIANTS"]),
-            generate_tailoring=bool(payload.get("generate_tailoring", False)),
-            generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
-            refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
-            generate_llm_fallback=bool(payload.get("generate_llm_fallback", False)),
-            planning_only=bool(payload.get("planning_only", False)),
-        )
+        output_dir=Path(str(payload.get("output_dir", services.DEFAULT_OUTPUT_DIR))),
+        log_path=Path(str(payload.get("log_path", services.DEFAULT_PIPELINE_LOG_PATH))),
+        job_limit=int(payload.get("job_limit", 50)),
+        job_packet_limit=int(payload.get("job_packet_limit", 0)),
+        llm_actions=payload.get("llm_actions", ["APPLY", "APPLY_REVIEW_VARIANTS"]),
+        generate_tailoring=bool(payload.get("generate_tailoring", False)),
+        generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
+        refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
+        generate_llm_fallback=bool(payload.get("generate_llm_fallback", False)),
+        planning_only=bool(payload.get("planning_only", False)),
+        delete_seen_data=str(payload.get("delete_seen_data", "no") or "no"),
+    )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     

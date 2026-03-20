@@ -1122,3 +1122,115 @@ thead .sticky-apply-col {
   background: rgba(120, 166, 255, 0.14);
   border-color: rgba(120, 166, 255, 0.28);
 }
+
+.pipeline-modal-card {
+  width: min(760px, 100%);
+}
+
+.pipeline-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.pipeline-option-sections {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.pipeline-option-section {
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(42, 53, 99, 0.7);
+}
+
+.pipeline-option-title {
+  color: var(--muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 12px;
+}
+
+.pipeline-checkbox-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+}
+
+.pipeline-checkbox-grid label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.confirm-summary-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(42, 53, 99, 0.7);
+  margin-bottom: 18px;
+}
+
+.confirm-summary-line {
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.page-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 10, 20, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.page-loading-overlay.hidden {
+  display: none;
+}
+
+.page-loading-card {
+  width: min(420px, 100%);
+  padding: 28px;
+  border-radius: 20px;
+  background: rgba(18, 25, 51, 0.98);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.page-loading-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.page-loading-text {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .pipeline-form-grid,
+  .pipeline-checkbox-grid {
+    grid-template-columns: 1fr;
+  }
+}

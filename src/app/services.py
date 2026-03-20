@@ -1,13 +1,28 @@
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
-from datetime import datetime, timezone
+import subprocess
+
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
 DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv"
+DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
+
+_PIPELINE_RUN_STATE: Dict[str, Any] = {
+    "process": None,
+    "log_handle": None,
+    "status": "idle",
+    "started_at": "",
+    "finished_at": "",
+    "return_code": None,
+    "command": [],
+    "log_path": str(DEFAULT_PIPELINE_LOG_PATH),
+    "error": "",
+}
 
 APPLICATION_ACTION_HEADERS = [
     "action_timestamp",
@@ -40,6 +55,127 @@ def _job_app():
 
 def _make_args(**kwargs):
     return SimpleNamespace(**kwargs)
+
+def _normalize_pipeline_llm_actions(value: Any) -> str:
+    if isinstance(value, list):
+        actions = [str(item).strip() for item in value if str(item).strip()]
+    else:
+        raw = str(value or "").strip()
+        actions = [part.strip() for part in raw.split(",") if part.strip()]
+
+    if not actions:
+        actions = ["APPLY", "APPLY_REVIEW_VARIANTS"]
+
+    seen: List[str] = []
+    for action in actions:
+        if action not in seen:
+            seen.append(action)
+
+    return ",".join(seen)
+
+def _pipeline_status_snapshot() -> Dict[str, Any]:
+    process = _PIPELINE_RUN_STATE.get("process")
+    log_handle = _PIPELINE_RUN_STATE.get("log_handle")
+
+    if process is not None:
+        return_code = process.poll()
+        if return_code is None:
+            _PIPELINE_RUN_STATE["status"] = "running"
+        else:
+            _PIPELINE_RUN_STATE["status"] = "succeeded" if return_code == 0 else "failed"
+            _PIPELINE_RUN_STATE["finished_at"] = (
+                _PIPELINE_RUN_STATE.get("finished_at")
+                or datetime.now(timezone.utc).isoformat(timespec="seconds")
+            )
+            _PIPELINE_RUN_STATE["return_code"] = return_code
+            _PIPELINE_RUN_STATE["process"] = None
+
+            if log_handle is not None:
+                try:
+                    log_handle.close()
+                except Exception:
+                    pass
+                _PIPELINE_RUN_STATE["log_handle"] = None
+
+    return {
+        "status": _PIPELINE_RUN_STATE.get("status", "idle"),
+        "started_at": _PIPELINE_RUN_STATE.get("started_at", ""),
+        "finished_at": _PIPELINE_RUN_STATE.get("finished_at", ""),
+        "return_code": _PIPELINE_RUN_STATE.get("return_code"),
+        "command": _PIPELINE_RUN_STATE.get("command", []),
+        "log_path": _PIPELINE_RUN_STATE.get("log_path", str(DEFAULT_PIPELINE_LOG_PATH)),
+        "error": _PIPELINE_RUN_STATE.get("error", ""),
+        "is_running": _PIPELINE_RUN_STATE.get("status") == "running",
+    }
+
+
+def pipeline_status_payload() -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "pipeline": _pipeline_status_snapshot(),
+    }
+
+
+def run_live_pipeline_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    log_path: Path = DEFAULT_PIPELINE_LOG_PATH,
+    job_limit: int = 50,
+    job_packet_limit: int = 0,
+    llm_actions: Any = "APPLY,APPLY_REVIEW_VARIANTS",
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    planning_only: bool = False,
+) -> Dict[str, Any]:
+    snapshot = _pipeline_status_snapshot()
+    if snapshot.get("is_running"):
+        raise ValueError("A live pipeline run is already in progress.")
+
+    normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
+
+    ja = _job_app()
+    args = _make_args(
+        run_application_planning=True,
+        job_limit=int(job_limit),
+        job_packet_limit=int(job_packet_limit),
+        output_dir=str(output_dir),
+        llm_actions=normalized_llm_actions,
+        generate_tailoring=bool(generate_tailoring),
+        generate_llm_tailoring=bool(generate_llm_tailoring),
+        refresh_llm_tailoring=bool(refresh_llm_tailoring),
+        generate_llm_fallback=bool(generate_llm_fallback),
+    )
+    cmd = ja._build_main_cmd(args, planning_only=bool(planning_only))
+
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_handle = log_path.open("w", encoding="utf-8")
+
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+        )
+    except Exception:
+        log_handle.close()
+        raise
+
+    _PIPELINE_RUN_STATE["process"] = process
+    _PIPELINE_RUN_STATE["log_handle"] = log_handle
+    _PIPELINE_RUN_STATE["status"] = "running"
+    _PIPELINE_RUN_STATE["started_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _PIPELINE_RUN_STATE["finished_at"] = ""
+    _PIPELINE_RUN_STATE["return_code"] = None
+    _PIPELINE_RUN_STATE["command"] = cmd
+    _PIPELINE_RUN_STATE["log_path"] = str(log_path)
+    _PIPELINE_RUN_STATE["error"] = ""
+
+    return {
+        "ok": True,
+        "message": "Live pipeline started.",
+        "pipeline": _pipeline_status_snapshot(),
+    }
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()

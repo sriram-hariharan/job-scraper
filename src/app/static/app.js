@@ -3,9 +3,11 @@ const state = {
   workflowView: null,
   pendingApplicationJob: null,
   applicationModalOpen: false,
+  pendingPipelineConfig: null,
 };
 
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
+let pipelinePollTimer = null;
 
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
@@ -48,6 +50,166 @@ function renderStats(statusData) {
   qs("statDecisionRows").textContent = summary.operator_decisions_rows ?? "-";
   qs("statUndecidedApplyReview").textContent = undecided.APPLY_REVIEW_VARIANTS ?? 0;
   qs("statUndecidedMaybeTailor").textContent = undecided.MAYBE_TAILOR ?? 0;
+}
+
+function renderPipelineStatus(payload) {
+  const pipeline = (payload && payload.pipeline) || {};
+  const runBtn = qs("runPipelineBtn");
+  const meta = qs("pipelineRunMeta");
+
+  if (!runBtn || !meta) return;
+
+  const status = pipeline.status || "idle";
+  const logPath = pipeline.log_path || "";
+  const startedAt = pipeline.started_at || "";
+  const finishedAt = pipeline.finished_at || "";
+  const returnCode = pipeline.return_code;
+
+  if (status === "running") {
+    runBtn.disabled = true;
+    runBtn.textContent = "Pipeline Running...";
+    meta.textContent = startedAt
+      ? `Pipeline running since ${startedAt} · log: ${logPath}`
+      : `Pipeline running · log: ${logPath}`;
+    showPageLoadingOverlay(
+      "Running live pipeline...",
+      startedAt
+        ? `Started at ${startedAt} · log: ${logPath}`
+        : `Log: ${logPath}`
+    );
+    return;
+  }
+
+  runBtn.disabled = false;
+  runBtn.textContent = "Run Live Pipeline";
+  hidePageLoadingOverlay();
+
+  if (status === "succeeded") {
+    meta.textContent = finishedAt
+      ? `Pipeline finished successfully at ${finishedAt} · log: ${logPath}`
+      : `Pipeline finished successfully · log: ${logPath}`;
+  } else if (status === "failed") {
+    meta.textContent = finishedAt
+      ? `Pipeline failed at ${finishedAt} (code ${returnCode}) · log: ${logPath}`
+      : `Pipeline failed (code ${returnCode}) · log: ${logPath}`;
+  } else {
+    meta.textContent = "Pipeline idle.";
+  }
+}
+
+async function loadPipelineStatus() {
+  const data = await fetchJson("/pipeline/status");
+  renderPipelineStatus(data);
+  return data;
+}
+
+function getPipelineConfigModal() {
+  return qs("pipelineConfigModal");
+}
+
+function getPipelineConfirmModal() {
+  return qs("pipelineConfirmModal");
+}
+
+function getPageLoadingOverlay() {
+  return qs("pageLoadingOverlay");
+}
+
+function showPageLoadingOverlay(title, text) {
+  const overlay = getPageLoadingOverlay();
+  qs("pageLoadingTitle").textContent = title || "Running live pipeline...";
+  qs("pageLoadingText").textContent = text || "Preparing pipeline run.";
+  overlay.classList.remove("hidden");
+}
+
+function hidePageLoadingOverlay() {
+  getPageLoadingOverlay().classList.add("hidden");
+}
+
+function openPipelineConfigModal() {
+  getPipelineConfigModal().classList.remove("hidden");
+}
+
+function closePipelineConfigModal() {
+  getPipelineConfigModal().classList.add("hidden");
+}
+
+function openPipelineConfirmModal() {
+  getPipelineConfirmModal().classList.remove("hidden");
+}
+
+function closePipelineConfirmModal() {
+  getPipelineConfirmModal().classList.add("hidden");
+}
+
+function getSelectedPipelineLlmActions() {
+  return Array.from(document.querySelectorAll("[data-pipeline-llm-action]:checked"))
+    .map((el) => el.value)
+    .filter(Boolean);
+}
+
+function collectPipelineConfig() {
+  const llmActions = getSelectedPipelineLlmActions();
+  if (!llmActions.length) {
+    throw new Error("Select at least one LLM action.");
+  }
+
+  return {
+    job_limit: Number(qs("pipelineJobLimitInput").value || 50),
+    job_packet_limit: Number(qs("pipelineJobPacketLimitInput").value || 0),
+    output_dir: qs("pipelineOutputDirInput").value.trim() || "outputs/application_planning",
+    log_path: qs("pipelineLogPathInput").value.trim() || "outputs/application_planning/live_pipeline_run.log",
+    llm_actions: llmActions,
+    planning_only: qs("pipelinePlanningOnlyCheckbox").checked,
+    generate_tailoring: qs("pipelineGenerateTailoringCheckbox").checked,
+    generate_llm_tailoring: qs("pipelineGenerateLlmTailoringCheckbox").checked,
+    refresh_llm_tailoring: qs("pipelineRefreshLlmTailoringCheckbox").checked,
+    generate_llm_fallback: qs("pipelineGenerateLlmFallbackCheckbox").checked,
+  };
+}
+
+function renderPipelineConfirmSummary(config) {
+  const lines = [
+    `Job limit: ${config.job_limit}`,
+    `Job packet limit: ${config.job_packet_limit}`,
+    `Output directory: ${config.output_dir}`,
+    `Log path: ${config.log_path}`,
+    `LLM actions: ${config.llm_actions.join(", ")}`,
+    `Planning only: ${config.planning_only ? "Yes" : "No"}`,
+    `Generate tailoring: ${config.generate_tailoring ? "Yes" : "No"}`,
+    `Generate LLM tailoring: ${config.generate_llm_tailoring ? "Yes" : "No"}`,
+    `Refresh LLM tailoring: ${config.refresh_llm_tailoring ? "Yes" : "No"}`,
+    `Generate LLM fallback: ${config.generate_llm_fallback ? "Yes" : "No"}`,
+  ];
+
+  qs("pipelineConfirmSummary").innerHTML = lines
+    .map((line) => `<div class="confirm-summary-line">${escapeHtml(line)}</div>`)
+    .join("");
+}
+
+function stopPipelinePolling() {
+  if (pipelinePollTimer) {
+    clearInterval(pipelinePollTimer);
+    pipelinePollTimer = null;
+  }
+}
+
+function startPipelinePolling() {
+  stopPipelinePolling();
+
+  pipelinePollTimer = setInterval(async () => {
+    try {
+      const data = await loadPipelineStatus();
+      if (!data.pipeline || !data.pipeline.is_running) {
+        stopPipelinePolling();
+        await loadStatus();
+        await reloadCurrentTable();
+      }
+    } catch (err) {
+      stopPipelinePolling();
+      console.error(err);
+    }
+  }, 5000);
 }
 
 function buildApplicationPayloadFromRow(row) {
@@ -302,10 +464,62 @@ function attachApplicationHandlers() {
     closeApplicationModal();
   });
 
+    qs("runPipelineBtn").addEventListener("click", () => {
+    openPipelineConfigModal();
+  });
+
+  qs("closePipelineConfigModalBtn").addEventListener("click", closePipelineConfigModal);
+  qs("cancelPipelineConfigBtn").addEventListener("click", closePipelineConfigModal);
+
+  qs("openPipelineConfirmBtn").addEventListener("click", () => {
+    try {
+      const config = collectPipelineConfig();
+      state.pendingPipelineConfig = config;
+      renderPipelineConfirmSummary(config);
+      closePipelineConfigModal();
+      openPipelineConfirmModal();
+    } catch (err) {
+      alert(`Invalid pipeline configuration: ${err.message}`);
+    }
+  });
+
+  qs("closePipelineConfirmModalBtn").addEventListener("click", closePipelineConfirmModal);
+
+  qs("backToPipelineConfigBtn").addEventListener("click", () => {
+    closePipelineConfirmModal();
+    openPipelineConfigModal();
+  });
+
+  qs("confirmPipelineRunBtn").addEventListener("click", async () => {
+    try {
+      const config = state.pendingPipelineConfig || collectPipelineConfig();
+      closePipelineConfirmModal();
+      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...");
+      await postJson("/pipeline/run", config);
+      await loadPipelineStatus();
+      startPipelinePolling();
+    } catch (err) {
+      hidePageLoadingOverlay();
+      alert(`Failed to start live pipeline: ${err.message}`);
+    }
+  });
+
   getApplicationModal().addEventListener("click", (event) => {
     if (event.target === getApplicationModal()) {
       clearPendingApplication();
       closeApplicationModal();
+    }
+  });
+
+  getPipelineConfigModal().addEventListener("click", (event) => {
+    if (event.target === getPipelineConfigModal()) {
+      closePipelineConfigModal();
+    }
+  });
+
+  getPipelineConfirmModal().addEventListener("click", (event) => {
+    if (event.target === getPipelineConfirmModal()) {
+      closePipelineConfirmModal();
     }
   });
 
@@ -375,7 +589,12 @@ async function init() {
 
   try {
     await loadStatus();
+    await loadPipelineStatus();
     await loadBrowse();
+    const pipelineData = await fetchJson("/pipeline/status");
+    if (pipelineData.pipeline && pipelineData.pipeline.is_running) {
+      startPipelinePolling();
+    }
   } catch (err) {
     alert(`Failed to initialize dashboard: ${err.message}`);
   }

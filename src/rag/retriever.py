@@ -3,9 +3,6 @@ from typing import List, Dict, Any
 from functools import lru_cache
 from time import perf_counter
 
-from llama_index.core import Settings, StorageContext, load_index_from_storage
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-
 from src.utils.logging import get_logger
 
 INDEX_DIR = Path("data/rag/index")
@@ -26,20 +23,25 @@ _SEMANTIC_STATUS: Dict[str, Any] = {
 
 @lru_cache(maxsize=1)
 def _get_embed_model():
+    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
     return HuggingFaceEmbedding(model_name=EMBED_MODEL_NAME)
 
 
 @lru_cache(maxsize=1)
 def _load_index():
-    Settings.embed_model = _get_embed_model()
+    from llama_index.core import Settings, StorageContext, load_index_from_storage
 
+    Settings.embed_model = _get_embed_model()
     storage_context = StorageContext.from_defaults(
         persist_dir=str(INDEX_DIR)
     )
     return load_index_from_storage(storage_context)
 
+
 @lru_cache(maxsize=8)
 def get_retriever(top_k: int = 5):
+    from llama_index.core import Settings
+
     Settings.embed_model = _get_embed_model()
     index = _load_index()
     return index.as_retriever(similarity_top_k=top_k)

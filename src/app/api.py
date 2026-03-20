@@ -9,6 +9,7 @@ from src.app.intelligence_ui import router as intelligence_ui_router
 from src.app.applied_ui import router as applied_ui_router
 from src.app.saved_ui import router as saved_ui_router
 from src.app.application_hub_ui import router as application_hub_ui_router
+import threading
 
 from contextlib import asynccontextmanager
 
@@ -16,14 +17,21 @@ from src.utils.logging import get_logger
 
 logger = get_logger("app.api")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def _warm_semantic_retrieval_background() -> None:
     from src.rag.retriever import warm_semantic_retrieval
 
     try:
         warm_semantic_retrieval(top_ks=(5, 15))
     except Exception:
-        logger.exception("RAG semantic warmup failed during API startup")
+        logger.exception("RAG semantic warmup failed during background startup")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    threading.Thread(
+        target=_warm_semantic_retrieval_background,
+        daemon=True,
+        name="rag-semantic-warmup",
+    ).start()
     yield
 
 app = FastAPI(
@@ -60,7 +68,29 @@ def status(
         top_k=top_k,
     )
 
+@app.get("/pipeline/status")
+def pipeline_status():
+    return services.pipeline_status_payload()
 
+
+@app.post("/pipeline/run")
+def run_live_pipeline(payload: dict = Body(...)):
+    try:
+        return services.run_live_pipeline_payload(
+            output_dir=Path(str(payload.get("output_dir", services.DEFAULT_OUTPUT_DIR))),
+            log_path=Path(str(payload.get("log_path", services.DEFAULT_PIPELINE_LOG_PATH))),
+            job_limit=int(payload.get("job_limit", 50)),
+            job_packet_limit=int(payload.get("job_packet_limit", 0)),
+            llm_actions=payload.get("llm_actions", ["APPLY", "APPLY_REVIEW_VARIANTS"]),
+            generate_tailoring=bool(payload.get("generate_tailoring", False)),
+            generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
+            refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
+            generate_llm_fallback=bool(payload.get("generate_llm_fallback", False)),
+            planning_only=bool(payload.get("planning_only", False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.get("/browse")
 def browse(
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
@@ -266,12 +296,3 @@ def rag_answer(
         output_mode=output_mode,
         include_diagnostics=include_diagnostics,
     )
-
-@app.on_event("startup")
-def warm_rag_semantic_stack():
-    from src.rag.retriever import warm_semantic_retrieval
-
-    try:
-        warm_semantic_retrieval(top_ks=(5, 15))
-    except Exception:
-        logger.exception("RAG semantic warmup failed during API startup")

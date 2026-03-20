@@ -465,10 +465,12 @@ async def main_async(args):
     from src.storage.metrics_store import init_metrics_db
     init_metrics_db()
 
-    logger.info("Loading embedding model...")
-    from src.ai.embedding_model import get_model
-    get_model()
+    # logger.info("Loading embedding model...")
+    # from src.ai.embedding_model import get_model
+    # get_model()
 
+    logger.info("Skipping eager embedding preload; model will load lazily when first needed.")
+    
     jobs = []
     application_planning_ran = False
 

@@ -4,68 +4,78 @@ import time
 from collections import Counter
 from uuid import uuid4
 
-from src.scrapers.workday_scraper import scrape_all_workday
-from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
-from src.scrapers.lever_scraper import scrape_all_lever
-from src.scrapers.ashby_scraper import scrape_all_ashby
-from src.scrapers.workable_scraper import scrape_all_workable
-from src.scrapers.jobvite_scraper import scrape_all_jobvite
-from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
-
-from src.pipeline.job_filter import filter_jobs
-from src.pipeline.dedupe import dedupe_jobs
-from src.pipeline.job_ranker import rank_jobs
-from src.pipeline.job_details import enrich_job_details
-from src.pipeline.application_scorer import score_jobs
-from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
-
-from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
-from src.ai.resume_matcher import match_resumes
-from src.ai.skill_llm_enricher import (
-    reset_skill_cache_metrics,
-    get_skill_cache_metrics,
-)
-from src.ai.llm_client import reset_provider_metrics, get_provider_metrics
-
-from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
-from src.utils.pipeline_metrics import log_stage_metrics
-from src.utils.ats_health import (
-    check_ats_health,
-    check_pipeline_regression,
-    check_ats_failure,
-)
-
-from src.discovery.persist_discovered import persist_discovered_companies
-from src.discovery.domain_learner import learn_domains_from_jobs
-
-from src.storage.skill_corpus_store import store_job_skills, get_top_corpus_skills
-from src.storage.metrics_store import (
-    record_pipeline_run,
-    record_ats_counts,
-    get_last_run,
-    get_last_ats_counts,
-    record_company_hiring,
-    get_hiring_momentum,
-)
-from src.intelligence.market_insights import (
-    detect_hot_companies,
-    detect_ai_hiring_surges,
-    detect_emerging_tech,
-)
-from src.intelligence.skill_discovery import discover_new_skills
-from src.intelligence.role_family_classifier import classify_roles
-from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
-from src.intelligence.skill_frequency import top_skills
-
-from src.rag.export_job_corpus import export_job_corpus
-
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
+
+# from src.scrapers.workday_scraper import scrape_all_workday
+# from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
+# from src.scrapers.lever_scraper import scrape_all_lever
+# from src.scrapers.ashby_scraper import scrape_all_ashby
+# from src.scrapers.workable_scraper import scrape_all_workable
+# from src.scrapers.jobvite_scraper import scrape_all_jobvite
+# from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
+
+# from src.pipeline.job_filter import filter_jobs
+# from src.pipeline.dedupe import dedupe_jobs
+# from src.pipeline.job_ranker import rank_jobs
+# from src.pipeline.job_details import enrich_job_details
+# from src.pipeline.application_scorer import score_jobs
+# from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
+
+# from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
+# from src.ai.resume_matcher import match_resumes
+# from src.ai.skill_llm_enricher import (
+#     reset_skill_cache_metrics,
+#     get_skill_cache_metrics,
+# )
+# from src.ai.llm_client import reset_provider_metrics, get_provider_metrics
+
+# from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
+# from src.utils.pipeline_metrics import log_stage_metrics
+# from src.utils.ats_health import (
+#     check_ats_health,
+#     check_pipeline_regression,
+#     check_ats_failure,
+# )
+
+# from src.discovery.persist_discovered import persist_discovered_companies
+# from src.discovery.domain_learner import learn_domains_from_jobs
+
+# from src.storage.skill_corpus_store import store_job_skills, get_top_corpus_skills
+# from src.storage.metrics_store import (
+#     record_pipeline_run,
+#     record_ats_counts,
+#     get_last_run,
+#     get_last_ats_counts,
+#     record_company_hiring,
+#     get_hiring_momentum,
+# )
+# from src.intelligence.market_insights import (
+#     detect_hot_companies,
+#     detect_ai_hiring_surges,
+#     detect_emerging_tech,
+# )
+# from src.intelligence.skill_discovery import discover_new_skills
+# from src.intelligence.role_family_classifier import classify_roles
+# from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+# from src.intelligence.skill_frequency import top_skills
+
+# from src.rag.export_job_corpus import export_job_corpus
+
+# from src.utils.log_sections import section
+# from src.utils.logging import get_logger
 
 logger = get_logger("collector")
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
+
+    from src.intelligence.market_insights import (
+        detect_hot_companies,
+        detect_ai_hiring_surges,
+        detect_emerging_tech,
+    )
+
     section("JOB MARKET INSIGHTS", logger)
 
     hot_companies = detect_hot_companies(jobs)
@@ -114,6 +124,62 @@ def log_company_hiring(jobs: List[Dict[str, Any]], logger) -> None:
 
 
 async def collect_all_jobs_async() -> List[Dict[str, Any]]:
+    logger.info("[collector] entered collect_all_jobs_async()")
+    logger.info("[collector] importing scrapers")
+    from src.scrapers.workday_scraper import scrape_all_workday
+    from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
+    from src.scrapers.lever_scraper import scrape_all_lever
+    from src.scrapers.ashby_scraper import scrape_all_ashby
+    from src.scrapers.workable_scraper import scrape_all_workable
+    from src.scrapers.jobvite_scraper import scrape_all_jobvite
+    from src.scrapers.smartrecruiters_scraper import scrape_all_smartrecruiters
+    logger.info("[collector] scrapers imported")
+
+    logger.info("[collector] importing pipeline stages")
+    from src.pipeline.job_filter import filter_jobs
+    from src.pipeline.dedupe import dedupe_jobs
+    from src.pipeline.job_ranker import rank_jobs
+    from src.pipeline.job_details import enrich_job_details
+    from src.pipeline.application_scorer import score_jobs
+    from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
+    logger.info("[collector] pipeline stages imported")
+
+    logger.info("[collector] importing ai modules")
+    from src.ai.job_fit_evaluator import evaluate_jobs, get_eval_cache_metrics
+    from src.ai.resume_matcher import match_resumes
+    from src.ai.skill_llm_enricher import reset_skill_cache_metrics, get_skill_cache_metrics
+    from src.ai.llm_client import reset_provider_metrics, get_provider_metrics
+    logger.info("[collector] ai modules imported")
+
+    logger.info("[collector] importing utils + health + cache")
+    from src.utils.job_cache import load_seen_job_ids, save_new_job_ids, filter_new_jobs
+    from src.utils.pipeline_metrics import log_stage_metrics
+    from src.utils.ats_health import check_ats_health, check_pipeline_regression, check_ats_failure
+    logger.info("[collector] utils + health + cache imported")
+
+    logger.info("[collector] importing discovery + storage")
+    from src.discovery.persist_discovered import persist_discovered_companies
+    from src.discovery.domain_learner import learn_domains_from_jobs
+    from src.storage.skill_corpus_store import store_job_skills, get_top_corpus_skills
+    from src.storage.metrics_store import (
+        record_pipeline_run,
+        record_ats_counts,
+        get_last_run,
+        get_last_ats_counts,
+        record_company_hiring,
+        get_hiring_momentum,
+    )
+    logger.info("[collector] discovery + storage imported")
+
+    logger.info("[collector] importing intelligence + rag")
+    from src.intelligence.skill_discovery import discover_new_skills
+    from src.intelligence.job_intelligence import build_job_intelligence, filter_jobs_for_ai_evaluation
+    from src.intelligence.skill_frequency import top_skills
+    from src.rag.export_job_corpus import export_job_corpus
+    logger.info("[collector] intelligence + rag imported")
+
+    logger.info("[collector] local imports completed")
+    logger.info("[collector] local imports completed")
     scrapers = [
         ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),
@@ -123,10 +189,9 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         ("jobvite", scrape_all_jobvite),
         ("smartrecruiters", scrape_all_smartrecruiters),
     ]
-
+    logger.info("[collector] scraper registry built | count=%s", len(scrapers))
     all_jobs: List[Dict[str, Any]] = []
     seen_job_ids = load_seen_job_ids()
-
     logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
 
     start_total = time.time()
@@ -134,6 +199,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     async def run_scraper(name: str, fn):
         start = time.time()
+        logger.info("[collector] %s starting", name)
         try:
             jobs = await loop.run_in_executor(None, fn)
             elapsed = round(time.time() - start, 2)
@@ -141,12 +207,13 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         except Exception as e:
             elapsed = round(time.time() - start, 2)
             return name, [], elapsed, e
-
+    logger.info("[collector] creating scraper tasks")
     tasks = [
         asyncio.create_task(run_scraper(name, fn))
         for name, fn in scrapers
     ]
-
+    logger.info("[collector] scraper tasks created | count=%s", len(tasks))
+    logger.info("[collector] awaiting scraper task completion")
     for task in asyncio.as_completed(tasks):
         name, jobs, elapsed, err = await task
 

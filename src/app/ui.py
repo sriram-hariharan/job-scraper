@@ -156,105 +156,250 @@ def executive_dashboard() -> str:
   </section>
 
   <section class="modal-backdrop hidden" id="pipelineConfigModal">
-  <div class="modal-card pipeline-modal-card">
-    <div class="modal-header">
-      <div>
-        <h3>Run live pipeline</h3>
-        <div class="subtext">Choose limits and options before starting the run.</div>
-      </div>
-      <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button">Close</button>
-    </div>
-
-    <div class="pipeline-modal-scroll">
-      <div class="pipeline-form-grid">
-        <div class="control-group">
-          <label for="pipelineJobLimitInput">Job limit</label>
-          <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
-          <div class="control-help field-help-wide">How many jobs can enter this run.</div>
+    <div class="modal-card pipeline-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Run live pipeline</h3>
+          <div class="subtext">Choose limits and options before starting the run.</div>
         </div>
-
-        <div class="control-group">
-          <label for="pipelineJobPacketLimitInput">Job packet limit</label>
-          <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
-          <div class="control-help field-help-wide">How many detailed planning packets to build. 0 means all selected jobs.</div>
-        </div>
-
-        <div class="control-group wide-control">
-          <label for="pipelineOutputDirInput">Output directory</label>
-          <input type="text" id="pipelineOutputDirInput" value="outputs/application_planning" />
-          <div class="control-help field-help-wide">Where pipeline outputs and planning artifacts are written.</div>
-        </div>
-
-        <div class="control-group wide-control">
-          <label for="pipelineLogPathInput">Log path</label>
-          <input type="text" id="pipelineLogPathInput" value="outputs/application_planning/live_pipeline_run.log" />
-          <div class="control-help field-help-wide">Live pipeline log file written during the run.</div>
-        </div>
+        <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button">Close</button>
       </div>
 
-      <div class="pipeline-quick-row">
-        <div class="control-group pipeline-quick-limit-group">
-          <label>Quick limits</label>
-          <div class="pipeline-chip-row">
-            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
-            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
-            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
-            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
+      <div class="pipeline-modal-scroll">
+        <div class="pipeline-form-grid">
+          <div class="control-group pipeline-limit-group">
+            <label for="pipelineJobLimitInput">Job limit</label>
+            <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
+
+            <div class="pipeline-inline-helper">
+              <span class="pipeline-inline-helper-label">Quick presets</span>
+              <div class="pipeline-chip-row pipeline-chip-row--compact">
+                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
+                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
+                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
+                <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
+              </div>
+            </div>
+
+            <div class="control-help field-help-wide">How many jobs can enter this run.</div>
+          </div>
+
+          <div class="control-group">
+            <label for="pipelineJobPacketLimitInput">Job packet limit</label>
+            <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
+            <div class="control-help field-help-wide">How many detailed planning packets to build. 0 means all selected jobs.</div>
+          </div>
+
+          <div class="control-group wide-control pipeline-path-field">
+            <label for="pipelineOutputDirInput">Output directory</label>
+            <input type="text" id="pipelineOutputDirInput" value="outputs/application_planning" />
+            <div class="control-help field-help-wide">Where pipeline outputs and planning artifacts are written.</div>
+          </div>
+
+          <div class="control-group wide-control pipeline-path-field">
+            <label for="pipelineLogPathInput">Log path</label>
+            <input type="text" id="pipelineLogPathInput" value="outputs/application_planning/live_pipeline_run.log" />
+            <div class="control-help field-help-wide">Live pipeline log file written during the run.</div>
           </div>
         </div>
 
-        <div class="control-group pipeline-toggle-group">
-          <label>Delete seen data</label>
-          <div class="segmented-toggle" role="radiogroup" aria-label="Delete seen data">
-            <label class="segmented-option">
-              <input type="radio" name="pipelineDeleteSeenData" value="no" checked />
-              <span>No</span>
-            </label>
-            <label class="segmented-option">
-              <input type="radio" name="pipelineDeleteSeenData" value="yes" />
-              <span>Yes</span>
-            </label>
+        <div class="pipeline-support-row">
+          <div class="control-group pipeline-toggle-group">
+            <label>Delete seen data</label>
+            <div class="binary-toggle" role="radiogroup" aria-label="Delete seen data">
+              <label class="binary-toggle-option">
+                <input type="radio" name="pipelineDeleteSeenData" value="no" checked />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="pipelineDeleteSeenData" value="yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+            <div class="control-help field-help-wide">No keeps the seen-job cache. Yes reruns jobs that were already seen before.</div>
           </div>
-          <div class="control-help field-help-wide">No keeps the seen-job cache. Yes reruns jobs that were already seen before.</div>
         </div>
-      </div>
 
-      <div class="pipeline-option-sections compact-option-sections">
-        <div class="pipeline-option-section">
-          <div class="pipeline-option-section-header">
-            <div class="pipeline-option-title">LLM ACTIONS</div>
-            <div class="pipeline-inline-actions">
-              <button type="button" class="ghost-btn btn-sm" id="pipelineSelectAllActionsBtn">Select all</button>
-              <button type="button" class="ghost-btn btn-sm" id="pipelineClearAllActionsBtn">Clear all</button>
+        <div class="pipeline-option-sections compact-option-sections">
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-section-header">
+              <div class="pipeline-option-title">LLM ACTIONS</div>
+              <div class="pipeline-inline-actions">
+                <button type="button" class="ghost-btn btn-sm" id="pipelineSelectAllActionsBtn">Select all</button>
+                <button type="button" class="ghost-btn btn-sm" id="pipelineClearAllActionsBtn">Clear all</button>
+              </div>
+            </div>
+
+            <div class="pipeline-toggle-grid">
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">APPLY</div>
+                  <div class="pipeline-toggle-help">Include APPLY jobs in the LLM action pass.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="APPLY action">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionApply" data-pipeline-llm-action-toggle="APPLY" value="no" />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionApply" data-pipeline-llm-action-toggle="APPLY" value="yes" checked />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">APPLY_REVIEW_VARIANTS</div>
+                  <div class="pipeline-toggle-help">Include variant-review jobs in the LLM action pass.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="APPLY_REVIEW_VARIANTS action">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionApplyReviewVariants" data-pipeline-llm-action-toggle="APPLY_REVIEW_VARIANTS" value="no" />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionApplyReviewVariants" data-pipeline-llm-action-toggle="APPLY_REVIEW_VARIANTS" value="yes" checked />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">MAYBE_TAILOR</div>
+                  <div class="pipeline-toggle-help">Include maybe-tailor jobs in the LLM action pass.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="MAYBE_TAILOR action">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionMaybeTailor" data-pipeline-llm-action-toggle="MAYBE_TAILOR" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionMaybeTailor" data-pipeline-llm-action-toggle="MAYBE_TAILOR" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">SKIP_FOR_NOW</div>
+                  <div class="pipeline-toggle-help">Include skip-for-now jobs in the LLM action pass.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="SKIP_FOR_NOW action">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionSkipForNow" data-pipeline-llm-action-toggle="SKIP_FOR_NOW" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineLlmActionSkipForNow" data-pipeline-llm-action-toggle="SKIP_FOR_NOW" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="pipeline-checkbox-grid">
-            <label><input type="checkbox" data-pipeline-llm-action value="APPLY" checked /> APPLY</label>
-            <label><input type="checkbox" data-pipeline-llm-action value="APPLY_REVIEW_VARIANTS" checked /> APPLY_REVIEW_VARIANTS</label>
-            <label><input type="checkbox" data-pipeline-llm-action value="MAYBE_TAILOR" /> MAYBE_TAILOR</label>
-            <label><input type="checkbox" data-pipeline-llm-action value="SKIP_FOR_NOW" /> SKIP_FOR_NOW</label>
-          </div>
-        </div>
 
-        <div class="pipeline-option-section">
-          <div class="pipeline-option-title">RUN OPTIONS</div>
-          <div class="pipeline-checkbox-grid">
-            <label><input type="checkbox" id="pipelinePlanningOnlyCheckbox" /> Planning only</label>
-            <label><input type="checkbox" id="pipelineGenerateTailoringCheckbox" /> Generate tailoring</label>
-            <label><input type="checkbox" id="pipelineGenerateLlmTailoringCheckbox" /> Generate LLM tailoring</label>
-            <label><input type="checkbox" id="pipelineRefreshLlmTailoringCheckbox" /> Refresh LLM tailoring</label>
-            <label><input type="checkbox" id="pipelineGenerateLlmFallbackCheckbox" /> Generate LLM fallback</label>
+          <div class="pipeline-option-section">
+            <div class="pipeline-option-title">RUN OPTIONS</div>
+
+            <div class="pipeline-toggle-grid">
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Planning only</div>
+                  <div class="pipeline-toggle-help">Skip the scrape and run downstream planning only.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Planning only">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelinePlanningOnly" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelinePlanningOnly" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Generate tailoring</div>
+                  <div class="pipeline-toggle-help">Build deterministic tailoring artifacts.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate tailoring">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateTailoring" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateTailoring" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Generate LLM tailoring</div>
+                  <div class="pipeline-toggle-help">Run live LLM tailoring generation.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM tailoring">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmTailoring" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmTailoring" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Refresh LLM tailoring</div>
+                  <div class="pipeline-toggle-help">Force regeneration instead of reusing cached tailoring.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Refresh LLM tailoring">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineRefreshLlmTailoring" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineRefreshLlmTailoring" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Generate LLM fallback</div>
+                  <div class="pipeline-toggle-help">Run fallback ranking when needed.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM fallback">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmFallback" value="no" checked />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmFallback" value="yes" />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="modal-actions pipeline-modal-actions">
-      <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
-      <button type="button" id="openPipelineConfirmBtn">Continue</button>
+      <div class="modal-actions pipeline-modal-actions">
+        <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
+        <button type="button" id="openPipelineConfirmBtn">Continue</button>
+      </div>
     </div>
-  </div>
-</section>
+  </section>
 
   <section class="modal-backdrop hidden" id="pipelineConfirmModal">
     <div class="modal-card pipeline-confirm-card">

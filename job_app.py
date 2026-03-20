@@ -852,21 +852,27 @@ def _load_packet_json(packet_json_path: str):
     except Exception:
         return None
 
-def _decision_row_key(row: Dict[str, str]) -> str:
+def _decision_row_keys(row: Dict[str, str]) -> List[str]:
+    keys: List[str] = []
+
     job_doc_id = str(row.get("job_doc_id", "") or "").strip()
     if job_doc_id:
-        return f"job_doc_id::{job_doc_id}"
+        keys.append(f"job_doc_id::{job_doc_id}")
 
     queue_rank = str(row.get("queue_rank", "") or "").strip()
     if queue_rank:
-        return f"queue_rank::{queue_rank}"
+        keys.append(f"queue_rank::{queue_rank}")
 
     company = _normalize_text(row.get("job_company", ""))
     title = _normalize_text(row.get("job_title", ""))
     if company or title:
-        return f"title::{company}||{title}"
+        keys.append(f"title::{company}||{title}")
 
-    return ""
+    return keys
+
+def _decision_row_key(row: Dict[str, str]) -> str:
+    keys = _decision_row_keys(row)
+    return keys[0] if keys else ""
 
 
 def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, str]]:
@@ -882,16 +888,15 @@ def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, s
     )
 
     for row in sorted_rows:
-        key = _decision_row_key(row)
-        if not key:
-            continue
-
-        latest_by_key[key] = {
+        overlay = {
             "operator_decision_timestamp": str(row.get("decision_timestamp", "") or ""),
             "operator_decision": str(row.get("decision", "") or ""),
             "operator_selected_resume": str(row.get("selected_resume", "") or ""),
             "operator_note": str(row.get("note", "") or ""),
         }
+
+        for key in _decision_row_keys(row):
+            latest_by_key[key] = overlay
 
     return latest_by_key
 
@@ -911,14 +916,7 @@ def _overlay_operator_decisions(
         for field in OPERATOR_DECISION_OVERLAY_FIELDS:
             merged.setdefault(field, "")
 
-        key_candidates = [
-            _decision_row_key(row),
-            f"queue_rank::{str(row.get('queue_rank', '') or '').strip()}",
-            (
-                f"title::{_normalize_text(row.get('job_company', ''))}"
-                f"||{_normalize_text(row.get('job_title', ''))}"
-            ),
-        ]
+        key_candidates = _decision_row_keys(row)
 
         overlay = None
         for key in key_candidates:

@@ -55,7 +55,11 @@ def render_top_shell(active_href: str) -> str:
 
       <div class="profile-dropdown hidden" id="profileDropdown">
         <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
-        <button type="button" class="profile-dropdown-item ghost-btn" disabled>Log out</button>
+
+        <div class="profile-dropdown-actions">
+          <a class="profile-dropdown-link ghost-link-btn" href="/profile">My Profile</a>
+          <button type="button" class="profile-dropdown-item ghost-btn" disabled>Log out</button>
+        </div>
       </div>
     </div>
   </div>

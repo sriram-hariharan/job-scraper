@@ -4,10 +4,16 @@ const state = {
   pendingApplicationJob: null,
   applicationModalOpen: false,
   pendingPipelineConfig: null,
+  pipelineSuccessVisible: false,
+  currentPipelineSuccessKey: null,
+  acknowledgedPipelineSuccessKey: null,
 };
 
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
+const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
+const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 let pipelinePollTimer = null;
+let pipelineSuccessGifTimer = null;
 
 const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
 const DEFAULT_STAGE_ORDER = [
@@ -72,7 +78,7 @@ const PIPELINE_PRESETS = {
     job_limit: 50,
     job_packet_limit: 0,
     output_dir: DEFAULT_OUTPUT_DIR,
-    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS"],
+    llm_actions: [],
     planning_only: false,
     generate_tailoring: false,
     generate_llm_tailoring: false,
@@ -84,7 +90,7 @@ const PIPELINE_PRESETS = {
     job_limit: 50,
     job_packet_limit: 0,
     output_dir: DEFAULT_OUTPUT_DIR,
-    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS"],
+    llm_actions: [],
     planning_only: true,
     generate_tailoring: false,
     generate_llm_tailoring: false,
@@ -96,7 +102,7 @@ const PIPELINE_PRESETS = {
     job_limit: 50,
     job_packet_limit: 0,
     output_dir: DEFAULT_OUTPUT_DIR,
-    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR"],
+    llm_actions: ["MAYBE_TAILOR"],
     planning_only: true,
     generate_tailoring: false,
     generate_llm_tailoring: true,
@@ -256,66 +262,29 @@ function getPipelineDeleteSeenDataValue() {
   return getBinaryToggleValue("pipelineDeleteSeenData");
 }
 
+function setPipelineDeleteSeenDataValue(value) {
+  setBinaryToggleValue("pipelineDeleteSeenData", value);
+}
+
 function applyPipelinePreset(name) {
   const preset = PIPELINE_PRESETS[name];
   if (!preset) return;
 
-  qs("pipelineJobLimitInput").value = preset.job_limit;
-  qs("pipelineJobPacketLimitInput").value = preset.job_packet_limit;
-  qs("pipelineOutputDirInput").value = preset.output_dir;
+  const jobLimitInput = qs("pipelineJobLimitInput");
+  const jobPacketLimitInput = qs("pipelineJobPacketLimitInput");
+  const outputDirInput = qs("pipelineOutputDirInput");
+
+  if (jobLimitInput) jobLimitInput.value = preset.job_limit;
+  if (jobPacketLimitInput) jobPacketLimitInput.value = preset.job_packet_limit;
+  if (outputDirInput) outputDirInput.value = preset.output_dir;
 
   setBinaryToggleValue("pipelinePlanningOnly", preset.planning_only);
   setBinaryToggleValue("pipelineGenerateTailoring", preset.generate_tailoring);
   setBinaryToggleValue("pipelineGenerateLlmTailoring", preset.generate_llm_tailoring);
   setBinaryToggleValue("pipelineRefreshLlmTailoring", preset.refresh_llm_tailoring);
   setBinaryToggleValue("pipelineGenerateLlmFallback", preset.generate_llm_fallback);
-  setBinaryToggleValue("pipelineDeleteSeenData", preset.delete_seen_data);
-
-  setPipelineLlmActions(preset.llm_actions);
-  syncPipelinePathPreview();
-}
-
-function setPipelineLlmActions(actions) {
-  const selected = new Set(actions || []);
-  document.querySelectorAll("[data-pipeline-llm-action]").forEach((el) => {
-    el.checked = selected.has(el.value);
-  });
-}
-
-function getSelectedPipelineLlmActions() {
-  return Array.from(document.querySelectorAll("[data-pipeline-llm-action]:checked"))
-    .map((el) => el.value)
-    .filter(Boolean);
-}
-
-function getPipelineDeleteSeenDataValue() {
-  return document.querySelector("input[name='pipelineDeleteSeenData']:checked")?.value || "no";
-}
-
-function setPipelineDeleteSeenDataValue(value) {
-  const normalized = value ? "yes" : "no";
-  const radio = document.querySelector(
-    `input[name='pipelineDeleteSeenData'][value='${normalized}']`
-  );
-  if (radio) {
-    radio.checked = true;
-  }
-}
-
-function applyPipelinePreset(name) {
-  const preset = PIPELINE_PRESETS[name];
-  if (!preset) return;
-
-  qs("pipelineJobLimitInput").value = preset.job_limit;
-  qs("pipelineJobPacketLimitInput").value = preset.job_packet_limit;
-  qs("pipelineOutputDirInput").value = preset.output_dir;
-  qs("pipelinePlanningOnlyCheckbox").checked = preset.planning_only;
-  qs("pipelineGenerateTailoringCheckbox").checked = preset.generate_tailoring;
-  qs("pipelineGenerateLlmTailoringCheckbox").checked = preset.generate_llm_tailoring;
-  qs("pipelineRefreshLlmTailoringCheckbox").checked = preset.refresh_llm_tailoring;
-  qs("pipelineGenerateLlmFallbackCheckbox").checked = preset.generate_llm_fallback;
   setPipelineDeleteSeenDataValue(preset.delete_seen_data);
-  setPipelineLlmActions(preset.llm_actions);
+  setPipelineLlmActions(preset.llm_actions || []);
   syncPipelinePathPreview();
 }
 
@@ -361,7 +330,7 @@ function buildPipelineMetaText(pipeline) {
   return "Pipeline idle.";
 }
 
-function renderPipelineCounts(pipeline) {
+function buildPipelineCountsHtml(pipeline) {
   const counts = pipeline.counts || {};
   const entries = Object.entries(COUNT_LABELS)
     .map(([key, label]) => {
@@ -371,9 +340,13 @@ function renderPipelineCounts(pipeline) {
     })
     .filter(Boolean);
 
-  qs("pipelineLoadingCounts").innerHTML = entries.length
+  return entries.length
     ? entries.join("")
     : `<div class="pipeline-count-empty">No stage counts yet.</div>`;
+}
+
+function renderPipelineCounts(pipeline) {
+  qs("pipelineLoadingCounts").innerHTML = buildPipelineCountsHtml(pipeline);
 }
 
 function renderPipelineStageStepper(pipeline) {
@@ -411,17 +384,142 @@ function renderPipelineStageStepper(pipeline) {
   qs("pipelineStageStepper").innerHTML = html;
 }
 
+function getPipelineSuccessKey(pipeline = {}) {
+  return pipeline.finished_at || pipeline.started_at || pipeline.status || "succeeded";
+}
+
+function markPipelinePendingSuccess() {
+  sessionStorage.setItem(PIPELINE_PENDING_SUCCESS_KEY, "1");
+}
+
+function clearPipelinePendingSuccess() {
+  sessionStorage.removeItem(PIPELINE_PENDING_SUCCESS_KEY);
+}
+
+function hasPipelinePendingSuccess() {
+  return sessionStorage.getItem(PIPELINE_PENDING_SUCCESS_KEY) === "1";
+}
+
+function markPipelineSuccessShown(successKey) {
+  if (successKey) {
+    sessionStorage.setItem(PIPELINE_SHOWN_SUCCESS_KEY, successKey);
+  }
+}
+
+function wasPipelineSuccessAlreadyShown(successKey) {
+  if (!successKey) return false;
+  return sessionStorage.getItem(PIPELINE_SHOWN_SUCCESS_KEY) === successKey;
+}
+
+function renderPipelineSuccessSummary(pipeline = {}) {
+  const summaryMessage = pipeline.summary_message || "Run finished successfully.";
+  const metaBits = [
+    pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
+    pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
+    pipeline.final_job_count !== undefined && pipeline.final_job_count !== null
+      ? `Final jobs: ${pipeline.final_job_count}`
+      : "",
+  ].filter(Boolean);
+
+  const metaLine = metaBits.length
+    ? `<div class="pipeline-success-summary-text">${escapeHtml(metaBits.join(" · "))}</div>`
+    : "";
+
+  qs("pipelineSuccessTitle").textContent = "Pipeline completed";
+  qs("pipelineSuccessText").textContent = summaryMessage;
+  qs("pipelineSuccessSummary").innerHTML = `
+    ${metaLine}
+    <div class="pipeline-loading-counts">${buildPipelineCountsHtml(pipeline)}</div>
+  `;
+}
+
+function stopPipelineSuccessGifTimer() {
+  if (pipelineSuccessGifTimer) {
+    clearTimeout(pipelineSuccessGifTimer);
+    pipelineSuccessGifTimer = null;
+  }
+}
+
+function restartPipelineSuccessGif() {
+  const gif = qs("pipelineSuccessGif");
+  const staticCheck = qs("pipelineSuccessStaticCheck");
+  if (!gif || !staticCheck) return;
+
+  stopPipelineSuccessGifTimer();
+
+  staticCheck.classList.add("hidden");
+  gif.classList.remove("hidden");
+
+  const src = gif.dataset.src || gif.getAttribute("src");
+  if (!src) return;
+
+  gif.removeAttribute("src");
+  void gif.offsetWidth;
+
+  requestAnimationFrame(() => {
+    gif.setAttribute("src", src);
+
+    // Match this to the real GIF duration.
+    pipelineSuccessGifTimer = setTimeout(() => {
+      gif.classList.add("hidden");
+      staticCheck.classList.remove("hidden");
+    }, 1800);
+  });
+}
+
+function showPipelineSuccessOverlay(pipeline = {}) {
+  const overlay = qs("pageLoadingOverlay");
+  const loadingPane = qs("pipelineOverlayLoading");
+  const successPane = qs("pipelineOverlaySuccess");
+  const successKey = getPipelineSuccessKey(pipeline);
+
+  if (state.pipelineSuccessVisible && state.currentPipelineSuccessKey === successKey) {
+    overlay.classList.remove("hidden");
+    return;
+  }
+
+  loadingPane.classList.add("hidden");
+  successPane.classList.remove("hidden");
+
+  state.pipelineSuccessVisible = true;
+  state.currentPipelineSuccessKey = successKey;
+
+  renderPipelineSuccessSummary(pipeline);
+  restartPipelineSuccessGif();
+
+  overlay.classList.remove("hidden");
+}
+
 function showPageLoadingOverlay(title, text, pipeline = {}) {
   const overlay = qs("pageLoadingOverlay");
+  const loadingPane = qs("pipelineOverlayLoading");
+  const successPane = qs("pipelineOverlaySuccess");
+  const successGif = qs("pipelineSuccessGif");
+  const staticCheck = qs("pipelineSuccessStaticCheck");
+
+  stopPipelineSuccessGifTimer();
+
+  state.pipelineSuccessVisible = false;
+  state.currentPipelineSuccessKey = null;
+
+  loadingPane.classList.remove("hidden");
+  successPane.classList.add("hidden");
+
+  if (successGif) successGif.classList.remove("hidden");
+  if (staticCheck) staticCheck.classList.add("hidden");
+
   qs("pageLoadingTitle").textContent = title || "Running live pipeline...";
   qs("pageLoadingText").textContent = text || "Preparing pipeline run.";
   qs("pipelineLoadingMeta").textContent = buildPipelineMetaText(pipeline);
   renderPipelineCounts(pipeline);
   renderPipelineStageStepper(pipeline);
+
   overlay.classList.remove("hidden");
 }
 
 function hidePageLoadingOverlay() {
+  stopPipelineSuccessGifTimer();
+  state.pipelineSuccessVisible = false;
   qs("pageLoadingOverlay").classList.add("hidden");
 }
 
@@ -443,6 +541,33 @@ function renderPipelineStatus(payload) {
       pipeline.stage_message || "Pipeline is running.",
       pipeline
     );
+    return;
+  }
+
+  if (status === "succeeded") {
+    runBtn.disabled = false;
+    runBtn.textContent = "Run Live Pipeline";
+
+    const successKey = getPipelineSuccessKey(pipeline);
+    const shouldShowSuccess =
+      hasPipelinePendingSuccess() && !wasPipelineSuccessAlreadyShown(successKey);
+
+    if (shouldShowSuccess) {
+      markPipelineSuccessShown(successKey);
+      clearPipelinePendingSuccess();
+      showPipelineSuccessOverlay(pipeline);
+    } else if (!state.pipelineSuccessVisible) {
+      hidePageLoadingOverlay();
+    }
+
+    return;
+  }
+
+  if (status === "failed") {
+    runBtn.disabled = false;
+    runBtn.textContent = "Run Live Pipeline";
+    clearPipelinePendingSuccess();
+    hidePageLoadingOverlay();
     return;
   }
 
@@ -815,24 +940,31 @@ function attachApplicationHandlers() {
   });
 
   qs("confirmPipelineRunBtn").addEventListener("click", async () => {
-    try {
-      const config = state.pendingPipelineConfig || collectPipelineConfig();
-      closePipelineConfirmModal();
-      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
-        status: "running",
-        current_stage: "startup",
-        stage_message: "Launching pipeline subprocess",
-        stage_order: DEFAULT_STAGE_ORDER,
-        completed_stages: [],
-        counts: {},
-      });
-      await postJson("/pipeline/run", config);
-      await loadPipelineStatus();
-      startPipelinePolling();
-    } catch (err) {
+  try {
+    const config = state.pendingPipelineConfig || collectPipelineConfig();
+    closePipelineConfirmModal();
+    showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
+      status: "running",
+      current_stage: "startup",
+      stage_message: "Launching pipeline subprocess",
+      stage_order: DEFAULT_STAGE_ORDER,
+      completed_stages: [],
+      counts: {},
+    });
+    await postJson("/pipeline/run", config);
+    markPipelinePendingSuccess();
+    await loadPipelineStatus();
+    startPipelinePolling();
+  } catch (err) {
+    clearPipelinePendingSuccess();
       hidePageLoadingOverlay();
       alert(`Failed to start live pipeline: ${err.message}`);
     }
+  });
+
+  qs("pipelineSuccessOkBtn").addEventListener("click", () => {
+    state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
+    hidePageLoadingOverlay();
   });
 
   getApplicationModal().addEventListener("click", (event) => {
@@ -940,13 +1072,13 @@ function attachEventHandlers() {
 }
 
 async function init() {
-  attachEventHandlers();
-  attachApplicationHandlers();
-  attachPipelineConfigHandlers();
-  applyPipelinePreset("full");
-  syncPipelinePathPreview();
-
   try {
+    attachEventHandlers();
+    attachApplicationHandlers();
+    attachPipelineConfigHandlers();
+    applyPipelinePreset("full");
+    syncPipelinePathPreview();
+
     await loadStatus();
     await loadPipelineStatus();
     await loadBrowse();
@@ -956,6 +1088,7 @@ async function init() {
       startPipelinePolling();
     }
   } catch (err) {
+    console.error(err);
     alert(`Failed to initialize dashboard: ${err.message}`);
   }
 }

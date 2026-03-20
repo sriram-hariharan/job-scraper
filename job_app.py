@@ -113,7 +113,7 @@ def _print_wrapped_field(label: str, value, width: int = WRAP_WIDTH) -> None:
 
 
 def _build_main_cmd(args, planning_only: bool) -> List[str]:
-    cmd = [sys.executable, "main.py"]
+    cmd = [sys.executable, "-u", "main.py"]
 
     if args.run_application_planning:
         cmd.append("--run-application-planning")
@@ -122,6 +122,7 @@ def _build_main_cmd(args, planning_only: bool) -> List[str]:
             "--application-planning-job-packet-limit", str(args.job_packet_limit),
             "--application-planning-output-dir", args.output_dir,
             "--application-planning-llm-actions", args.llm_actions,
+            "--delete-seen-data", "no"
         ])
 
         if args.generate_tailoring:

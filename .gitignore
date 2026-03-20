@@ -42,3 +42,5 @@ outputs/application_planning/
 !outputs/skill_extraction_gold_template.jsonl
 !outputs/skill_extraction_gold_template_backup.jsonl
 !outputs/skill_extraction_gold_first3_only.jsonl
+*_trace.txt
+*.log

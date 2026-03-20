@@ -25,13 +25,18 @@ def _warm_semantic_retrieval_background() -> None:
     except Exception:
         logger.exception("RAG semantic warmup failed during background startup")
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+def _start_semantic_warmup_thread() -> None:
     threading.Thread(
         target=_warm_semantic_retrieval_background,
         daemon=True,
         name="rag-semantic-warmup",
     ).start()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    import asyncio
+
+    asyncio.get_running_loop().call_soon(_start_semantic_warmup_thread)
     yield
 
 app = FastAPI(

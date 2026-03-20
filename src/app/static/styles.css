@@ -2052,3 +2052,245 @@ thead .sticky-apply-col {
 .pipeline-success-static-check.hidden {
   display: none;
 }
+
+/* === profile / resumes === */
+
+.profile-dropdown-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.profile-dropdown-link {
+  width: 100%;
+  justify-content: flex-start;
+}
+
+.profile-section-card {
+  padding: 20px;
+}
+
+.profile-inline-status {
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(42, 53, 99, 0.7);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.profile-inline-status.hidden {
+  display: none;
+}
+
+.profile-inline-status.info {
+  border-color: rgba(120, 166, 255, 0.28);
+  background: rgba(120, 166, 255, 0.08);
+  color: #dbe6ff;
+}
+
+.profile-inline-status.success {
+  border-color: rgba(145, 242, 195, 0.28);
+  background: rgba(145, 242, 195, 0.08);
+  color: #d7f8ea;
+}
+
+.profile-inline-status.error {
+  border-color: rgba(255, 143, 143, 0.24);
+  background: rgba(255, 143, 143, 0.08);
+  color: #ffd7d7;
+}
+
+.resume-manager-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 340px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.resume-upload-panel,
+.resume-list-panel {
+  min-width: 0;
+}
+
+.resume-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 26px 20px;
+  min-height: 280px;
+  border-radius: 18px;
+  border: 1.5px dashed rgba(120, 166, 255, 0.28);
+  background: rgba(120, 166, 255, 0.05);
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.resume-dropzone:hover,
+.resume-dropzone.drag-active {
+  border-color: rgba(120, 166, 255, 0.48);
+  background: rgba(120, 166, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.resume-upload-input {
+  display: none;
+}
+
+.resume-dropzone-icon {
+  width: 56px;
+  height: 56px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: rgba(120, 166, 255, 0.16);
+  border: 1px solid rgba(120, 166, 255, 0.28);
+  color: #dbe6ff;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.resume-dropzone-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.resume-dropzone-text {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  max-width: 260px;
+}
+
+.resume-upload-actions {
+  display: flex;
+  justify-content: center;
+}
+
+.resume-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resume-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(42, 53, 99, 0.7);
+}
+
+.resume-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.resume-name {
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.resume-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.resume-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.resume-delete-btn {
+  border-color: rgba(255, 143, 143, 0.24);
+  color: #ffd7d7;
+  background: rgba(255, 143, 143, 0.08);
+}
+
+.resume-delete-btn:hover {
+  border-color: rgba(255, 143, 143, 0.34);
+  background: rgba(255, 143, 143, 0.12);
+}
+
+.resume-empty-state {
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px dashed rgba(42, 53, 99, 0.7);
+  color: var(--muted);
+  text-align: center;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+@media (max-width: 900px) {
+  .resume-manager-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-row {
+    grid-template-columns: 1fr;
+  }
+
+  .resume-row-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* === profile resume delete modal === */
+
+.resume-delete-modal-card {
+  max-width: 520px;
+}
+
+.resume-delete-modal-actions {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.resume-delete-cancel-btn {
+  border-color: rgba(120, 166, 255, 0.24);
+  color: #dbe6ff;
+  background: rgba(120, 166, 255, 0.08);
+}
+
+.resume-delete-cancel-btn:hover {
+  border-color: rgba(120, 166, 255, 0.34);
+  background: rgba(120, 166, 255, 0.12);
+}
+
+.resume-delete-confirm-btn {
+  min-width: 132px;
+  border: 1px solid rgba(255, 143, 143, 0.34);
+  background: rgba(255, 143, 143, 0.14);
+  color: #ffd7d7;
+  border-radius: 12px;
+  padding: 10px 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.resume-delete-confirm-btn:hover {
+  border-color: rgba(255, 143, 143, 0.44);
+  background: rgba(255, 143, 143, 0.2);
+  transform: translateY(-1px);
+}

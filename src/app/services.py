@@ -6,6 +6,7 @@ from typing import Any, Dict, List
 import json
 import os
 import subprocess
+import re
 
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
@@ -14,6 +15,9 @@ DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
 DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv"
 DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
 DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
+DEFAULT_PROFILE_RESUME_DIR = Path(
+    os.environ.get("PROFILE_RESUME_DIR", "data/profile_resumes")
+).expanduser()
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -55,6 +59,95 @@ APPLICATION_ACTION_OVERLAY_FIELDS = [
     "is_applied",
 ]
 
+def _get_resume_dir() -> Path:
+    resume_dir = DEFAULT_PROFILE_RESUME_DIR
+    resume_dir.mkdir(parents=True, exist_ok=True)
+    return resume_dir
+
+
+def _sanitize_resume_filename(value: str) -> str:
+    raw = str(value or "").strip()
+    safe = Path(raw).name
+
+    if not raw or not safe or safe != raw:
+        raise ValueError("Invalid resume filename.")
+
+    if Path(safe).suffix.lower() != ".pdf":
+        raise ValueError("Only PDF resumes are supported.")
+
+    if re.search(r"[/\\\\]", safe):
+        raise ValueError("Invalid resume filename.")
+
+    return safe
+
+
+def _resume_payload_for_path(path: Path) -> Dict[str, Any]:
+    stat = path.stat()
+    return {
+        "resume_name": path.name,
+        "path": str(path),
+        "size_bytes": stat.st_size,
+        "modified_at": datetime.fromtimestamp(
+            stat.st_mtime,
+            tz=timezone.utc,
+        ).isoformat(timespec="seconds"),
+    }
+
+
+def profile_resumes_payload() -> Dict[str, Any]:
+    resume_dir = _get_resume_dir()
+
+    pdf_paths = [path for path in resume_dir.iterdir() if path.is_file() and path.suffix.lower() == ".pdf"]
+    pdf_paths.sort(key=lambda path: (-path.stat().st_mtime, path.name.lower()))
+
+    resumes = [_resume_payload_for_path(path) for path in pdf_paths]
+
+    return {
+        "ok": True,
+        "resume_dir": str(resume_dir),
+        "count": len(resumes),
+        "resumes": resumes,
+    }
+
+
+def profile_upload_resume_payload(filename: str, file_bytes: bytes) -> Dict[str, Any]:
+    resume_dir = _get_resume_dir()
+    safe_name = _sanitize_resume_filename(filename)
+
+    if not file_bytes:
+        raise ValueError("Uploaded file is empty.")
+
+    target_path = resume_dir / safe_name
+    if target_path.exists():
+        raise ValueError(f"Resume already exists: {safe_name}")
+
+    target_path.write_bytes(file_bytes)
+
+    return {
+        "ok": True,
+        "message": "Resume uploaded.",
+        "resume": _resume_payload_for_path(target_path),
+    }
+
+
+def profile_delete_resume_payload(resume_name: str) -> Dict[str, Any]:
+    resume_dir = _get_resume_dir()
+    safe_name = _sanitize_resume_filename(resume_name)
+    target_path = resume_dir / safe_name
+
+    if not target_path.exists():
+        raise ValueError(f"Resume not found: {safe_name}")
+
+    if not target_path.is_file():
+        raise ValueError(f"Resume is not a file: {safe_name}")
+
+    target_path.unlink()
+
+    return {
+        "ok": True,
+        "message": "Resume deleted.",
+        "resume_name": safe_name,
+    }
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")

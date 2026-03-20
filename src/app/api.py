@@ -9,6 +9,7 @@ from src.app.intelligence_ui import router as intelligence_ui_router
 from src.app.applied_ui import router as applied_ui_router
 from src.app.saved_ui import router as saved_ui_router
 from src.app.application_hub_ui import router as application_hub_ui_router
+from src.app.profile_ui import router as profile_ui_router
 import threading
 
 from contextlib import asynccontextmanager
@@ -57,6 +58,7 @@ app.include_router(intelligence_ui_router)
 app.include_router(applied_ui_router)
 app.include_router(saved_ui_router)
 app.include_router(application_hub_ui_router)
+app.include_router(profile_ui_router)
 
 @app.get("/health")
 def health():
@@ -305,3 +307,29 @@ def rag_answer(
         output_mode=output_mode,
         include_diagnostics=include_diagnostics,
     )
+
+@app.get("/profile/resumes")
+def profile_resumes():
+    return services.profile_resumes_payload()
+
+
+@app.post("/profile/resumes/upload")
+def profile_upload_resume(
+    filename: str = Query(..., min_length=1),
+    file_bytes: bytes = Body(...),
+):
+    try:
+        return services.profile_upload_resume_payload(
+            filename=filename,
+            file_bytes=file_bytes,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/profile/resumes/{resume_name}")
+def profile_delete_resume(resume_name: str):
+    try:
+        return services.profile_delete_resume_payload(resume_name=resume_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -169,15 +169,110 @@ function derivePipelinePaths(outputDir) {
 }
 
 function syncPipelinePathPreview() {
-  const paths = derivePipelinePaths(qs("pipelineOutputDirInput").value);
+  const outputDirInput = qs("pipelineOutputDirInput");
+  if (!outputDirInput) return;
+
+  const paths = derivePipelinePaths(outputDirInput.value);
   const logPreview = qs("pipelineLogPathPreview");
   const statusPreview = qs("pipelineStatusPathPreview");
 
-  logPreview.textContent = paths.log_path;
-  logPreview.title = paths.log_path;
+  if (logPreview) {
+    logPreview.textContent = paths.log_path;
+    logPreview.title = paths.log_path;
+  }
 
-  statusPreview.textContent = paths.status_path;
-  statusPreview.title = paths.status_path;
+  if (statusPreview) {
+    statusPreview.textContent = paths.status_path;
+    statusPreview.title = paths.status_path;
+  }
+}
+
+function normalizeBinaryToggleValue(value) {
+  return value === true || value === "yes" ? "yes" : "no";
+}
+
+function getBinaryToggleValue(name) {
+  return document.querySelector(`input[name='${name}']:checked`)?.value || "no";
+}
+
+function getBinaryToggleBool(name) {
+  return getBinaryToggleValue(name) === "yes";
+}
+
+function setBinaryToggleValue(name, value) {
+  const normalized = normalizeBinaryToggleValue(value);
+  const radio = document.querySelector(`input[name='${name}'][value='${normalized}']`);
+  if (radio) {
+    radio.checked = true;
+  }
+}
+
+function setPipelineLlmActions(actions) {
+  const selected = new Set(actions || []);
+  const toggleInputs = document.querySelectorAll("[data-pipeline-llm-action-toggle]");
+
+  if (toggleInputs.length) {
+    const actionNames = Array.from(
+      new Set(
+        Array.from(toggleInputs)
+          .map((el) => el.dataset.pipelineLlmActionToggle)
+          .filter(Boolean)
+      )
+    );
+
+    actionNames.forEach((action) => {
+      const value = selected.has(action) ? "yes" : "no";
+      const radio = document.querySelector(
+        `[data-pipeline-llm-action-toggle='${action}'][value='${value}']`
+      );
+      if (radio) {
+        radio.checked = true;
+      }
+    });
+    return;
+  }
+
+  document.querySelectorAll("[data-pipeline-llm-action]").forEach((el) => {
+    el.checked = selected.has(el.value);
+  });
+}
+
+function getSelectedPipelineLlmActions() {
+  const toggleInputs = document.querySelectorAll("[data-pipeline-llm-action-toggle]");
+
+  if (toggleInputs.length) {
+    return Array.from(toggleInputs)
+      .filter((el) => el.checked && el.value === "yes")
+      .map((el) => el.dataset.pipelineLlmActionToggle)
+      .filter(Boolean);
+  }
+
+  return Array.from(document.querySelectorAll("[data-pipeline-llm-action]:checked"))
+    .map((el) => el.value)
+    .filter(Boolean);
+}
+
+function getPipelineDeleteSeenDataValue() {
+  return getBinaryToggleValue("pipelineDeleteSeenData");
+}
+
+function applyPipelinePreset(name) {
+  const preset = PIPELINE_PRESETS[name];
+  if (!preset) return;
+
+  qs("pipelineJobLimitInput").value = preset.job_limit;
+  qs("pipelineJobPacketLimitInput").value = preset.job_packet_limit;
+  qs("pipelineOutputDirInput").value = preset.output_dir;
+
+  setBinaryToggleValue("pipelinePlanningOnly", preset.planning_only);
+  setBinaryToggleValue("pipelineGenerateTailoring", preset.generate_tailoring);
+  setBinaryToggleValue("pipelineGenerateLlmTailoring", preset.generate_llm_tailoring);
+  setBinaryToggleValue("pipelineRefreshLlmTailoring", preset.refresh_llm_tailoring);
+  setBinaryToggleValue("pipelineGenerateLlmFallback", preset.generate_llm_fallback);
+  setBinaryToggleValue("pipelineDeleteSeenData", preset.delete_seen_data);
+
+  setPipelineLlmActions(preset.llm_actions);
+  syncPipelinePathPreview();
 }
 
 function setPipelineLlmActions(actions) {
@@ -197,6 +292,16 @@ function getPipelineDeleteSeenDataValue() {
   return document.querySelector("input[name='pipelineDeleteSeenData']:checked")?.value || "no";
 }
 
+function setPipelineDeleteSeenDataValue(value) {
+  const normalized = value ? "yes" : "no";
+  const radio = document.querySelector(
+    `input[name='pipelineDeleteSeenData'][value='${normalized}']`
+  );
+  if (radio) {
+    radio.checked = true;
+  }
+}
+
 function applyPipelinePreset(name) {
   const preset = PIPELINE_PRESETS[name];
   if (!preset) return;
@@ -209,7 +314,7 @@ function applyPipelinePreset(name) {
   qs("pipelineGenerateLlmTailoringCheckbox").checked = preset.generate_llm_tailoring;
   qs("pipelineRefreshLlmTailoringCheckbox").checked = preset.refresh_llm_tailoring;
   qs("pipelineGenerateLlmFallbackCheckbox").checked = preset.generate_llm_fallback;
-  qs("pipelineDeleteSeenDataCheckbox").checked = preset.delete_seen_data;
+  setPipelineDeleteSeenDataValue(preset.delete_seen_data);
   setPipelineLlmActions(preset.llm_actions);
   syncPipelinePathPreview();
 }
@@ -389,11 +494,11 @@ function collectPipelineConfig() {
     output_dir: qs("pipelineOutputDirInput").value.trim() || "outputs/application_planning",
     log_path: qs("pipelineLogPathInput").value.trim() || "outputs/application_planning/live_pipeline_run.log",
     llm_actions: llmActions,
-    planning_only: qs("pipelinePlanningOnlyCheckbox").checked,
-    generate_tailoring: qs("pipelineGenerateTailoringCheckbox").checked,
-    generate_llm_tailoring: qs("pipelineGenerateLlmTailoringCheckbox").checked,
-    refresh_llm_tailoring: qs("pipelineRefreshLlmTailoringCheckbox").checked,
-    generate_llm_fallback: qs("pipelineGenerateLlmFallbackCheckbox").checked,
+    planning_only: getBinaryToggleBool("pipelinePlanningOnly"),
+    generate_tailoring: getBinaryToggleBool("pipelineGenerateTailoring"),
+    generate_llm_tailoring: getBinaryToggleBool("pipelineGenerateLlmTailoring"),
+    refresh_llm_tailoring: getBinaryToggleBool("pipelineRefreshLlmTailoring"),
+    generate_llm_fallback: getBinaryToggleBool("pipelineGenerateLlmFallback"),
     delete_seen_data: getPipelineDeleteSeenDataValue(),
   };
 }

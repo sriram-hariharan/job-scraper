@@ -179,7 +179,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info("[collector] intelligence + rag imported")
 
     logger.info("[collector] local imports completed")
-    logger.info("[collector] local imports completed")
     scrapers = [
         ("workday", scrape_all_workday),
         ("greenhouse", scrape_all_greenhouse),

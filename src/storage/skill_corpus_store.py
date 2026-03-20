@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from threading import Lock
 
-DB_PATH = Path("data/market_intel.db")
+DB_PATH = Path("data/skill_corpus_store.db")
 _init_lock = Lock()
 _db_initialized = False
 _db_write_lock = Lock()

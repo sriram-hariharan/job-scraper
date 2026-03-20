@@ -1,12 +1,7 @@
 import numpy as np
 from typing import Dict
 from tqdm import tqdm
-from src.ai.embedding_model import get_model
-
 from src.config.resume_registry import get_candidate_resumes
-from src.resume.resume_embeddings import get_embedding_matrix
-from src.resume.resume_loader import load_resumes
-
 
 def build_job_embedding_text(job: Dict) -> str:
     """
@@ -75,6 +70,10 @@ def match_resume_for_job(job, job_embedding, resume_matrix, resume_names):
 
 def match_resumes(jobs):
 
+    from src.resume.resume_embeddings import get_embedding_matrix
+    from src.resume.resume_loader import load_resumes
+    from src.ai.embedding_model import get_model
+    
     resumes = load_resumes()
     candidate_resume_names = [r["resume_name"] for r in resumes]
     resume_matrix, resume_names = get_embedding_matrix(candidate_resume_names)

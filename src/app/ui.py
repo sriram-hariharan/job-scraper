@@ -33,7 +33,9 @@ def executive_dashboard() -> str:
         <button id="runPipelineBtn">Run Live Pipeline</button>
       </div>
     </header>
-    <div class="subtext" id="pipelineRunMeta">Pipeline idle.</div>
+
+    <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
+
     <section class="stats-grid">
       <section class="card stat-card">
         <div class="stat-label">Queue Rows</div>
@@ -152,7 +154,7 @@ def executive_dashboard() -> str:
       </div>
     </div>
   </section>
-  
+
   <section class="modal-backdrop hidden" id="pipelineConfigModal">
   <div class="modal-card pipeline-modal-card">
     <div class="modal-header">
@@ -163,84 +165,127 @@ def executive_dashboard() -> str:
       <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button">Close</button>
     </div>
 
-    <div class="pipeline-form-grid">
-      <div class="control-group">
-        <label for="pipelineJobLimitInput">Job limit</label>
-        <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
-      </div>
+    <div class="pipeline-modal-scroll">
+      <div class="pipeline-form-grid">
+        <div class="control-group">
+          <label for="pipelineJobLimitInput">Job limit</label>
+          <input type="number" id="pipelineJobLimitInput" value="50" min="1" max="500" />
+          <div class="control-help field-help-wide">How many jobs can enter this run.</div>
+        </div>
 
-      <div class="control-group">
-        <label for="pipelineJobPacketLimitInput">Job packet limit</label>
-        <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
-      </div>
+        <div class="control-group">
+          <label for="pipelineJobPacketLimitInput">Job packet limit</label>
+          <input type="number" id="pipelineJobPacketLimitInput" value="0" min="0" max="500" />
+          <div class="control-help field-help-wide">How many detailed planning packets to build. 0 means all selected jobs.</div>
+        </div>
 
-      <div class="control-group wide-control">
-        <label for="pipelineOutputDirInput">Output directory</label>
-        <input type="text" id="pipelineOutputDirInput" value="outputs/application_planning" />
-      </div>
+        <div class="control-group wide-control">
+          <label for="pipelineOutputDirInput">Output directory</label>
+          <input type="text" id="pipelineOutputDirInput" value="outputs/application_planning" />
+          <div class="control-help field-help-wide">Where pipeline outputs and planning artifacts are written.</div>
+        </div>
 
-      <div class="control-group wide-control">
-        <label for="pipelineLogPathInput">Log path</label>
-        <input type="text" id="pipelineLogPathInput" value="outputs/application_planning/live_pipeline_run.log" />
-      </div>
-    </div>
-
-    <div class="pipeline-option-sections">
-      <div class="pipeline-option-section">
-        <div class="pipeline-option-title">LLM Actions</div>
-        <div class="pipeline-checkbox-grid">
-          <label><input type="checkbox" data-pipeline-llm-action value="APPLY" checked /> APPLY</label>
-          <label><input type="checkbox" data-pipeline-llm-action value="APPLY_REVIEW_VARIANTS" checked /> APPLY_REVIEW_VARIANTS</label>
-          <label><input type="checkbox" data-pipeline-llm-action value="MAYBE_TAILOR" /> MAYBE_TAILOR</label>
-          <label><input type="checkbox" data-pipeline-llm-action value="SKIP_FOR_NOW" /> SKIP_FOR_NOW</label>
+        <div class="control-group wide-control">
+          <label for="pipelineLogPathInput">Log path</label>
+          <input type="text" id="pipelineLogPathInput" value="outputs/application_planning/live_pipeline_run.log" />
+          <div class="control-help field-help-wide">Live pipeline log file written during the run.</div>
         </div>
       </div>
 
-      <div class="pipeline-option-section">
-        <div class="pipeline-option-title">Run Options</div>
-        <div class="pipeline-checkbox-grid">
-          <label><input type="checkbox" id="pipelinePlanningOnlyCheckbox" /> Planning only</label>
-          <label><input type="checkbox" id="pipelineGenerateTailoringCheckbox" /> Generate tailoring</label>
-          <label><input type="checkbox" id="pipelineGenerateLlmTailoringCheckbox" /> Generate LLM tailoring</label>
-          <label><input type="checkbox" id="pipelineRefreshLlmTailoringCheckbox" /> Refresh LLM tailoring</label>
-          <label><input type="checkbox" id="pipelineGenerateLlmFallbackCheckbox" /> Generate LLM fallback</label>
+      <div class="pipeline-quick-row">
+        <div class="control-group pipeline-quick-limit-group">
+          <label>Quick limits</label>
+          <div class="pipeline-chip-row">
+            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="25">25</button>
+            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="50">50</button>
+            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="100">100</button>
+            <button type="button" class="ghost-btn pipeline-chip-btn" data-job-limit-preset="200">200</button>
+          </div>
+        </div>
+
+        <div class="control-group pipeline-toggle-group">
+          <label>Delete seen data</label>
+          <div class="segmented-toggle" role="radiogroup" aria-label="Delete seen data">
+            <label class="segmented-option">
+              <input type="radio" name="pipelineDeleteSeenData" value="no" checked />
+              <span>No</span>
+            </label>
+            <label class="segmented-option">
+              <input type="radio" name="pipelineDeleteSeenData" value="yes" />
+              <span>Yes</span>
+            </label>
+          </div>
+          <div class="control-help field-help-wide">No keeps the seen-job cache. Yes reruns jobs that were already seen before.</div>
+        </div>
+      </div>
+
+      <div class="pipeline-option-sections compact-option-sections">
+        <div class="pipeline-option-section">
+          <div class="pipeline-option-section-header">
+            <div class="pipeline-option-title">LLM ACTIONS</div>
+            <div class="pipeline-inline-actions">
+              <button type="button" class="ghost-btn btn-sm" id="pipelineSelectAllActionsBtn">Select all</button>
+              <button type="button" class="ghost-btn btn-sm" id="pipelineClearAllActionsBtn">Clear all</button>
+            </div>
+          </div>
+          <div class="pipeline-checkbox-grid">
+            <label><input type="checkbox" data-pipeline-llm-action value="APPLY" checked /> APPLY</label>
+            <label><input type="checkbox" data-pipeline-llm-action value="APPLY_REVIEW_VARIANTS" checked /> APPLY_REVIEW_VARIANTS</label>
+            <label><input type="checkbox" data-pipeline-llm-action value="MAYBE_TAILOR" /> MAYBE_TAILOR</label>
+            <label><input type="checkbox" data-pipeline-llm-action value="SKIP_FOR_NOW" /> SKIP_FOR_NOW</label>
+          </div>
+        </div>
+
+        <div class="pipeline-option-section">
+          <div class="pipeline-option-title">RUN OPTIONS</div>
+          <div class="pipeline-checkbox-grid">
+            <label><input type="checkbox" id="pipelinePlanningOnlyCheckbox" /> Planning only</label>
+            <label><input type="checkbox" id="pipelineGenerateTailoringCheckbox" /> Generate tailoring</label>
+            <label><input type="checkbox" id="pipelineGenerateLlmTailoringCheckbox" /> Generate LLM tailoring</label>
+            <label><input type="checkbox" id="pipelineRefreshLlmTailoringCheckbox" /> Refresh LLM tailoring</label>
+            <label><input type="checkbox" id="pipelineGenerateLlmFallbackCheckbox" /> Generate LLM fallback</label>
+          </div>
         </div>
       </div>
     </div>
 
-    <div class="modal-actions">
+    <div class="modal-actions pipeline-modal-actions">
       <button type="button" class="ghost-btn" id="cancelPipelineConfigBtn">Cancel</button>
       <button type="button" id="openPipelineConfirmBtn">Continue</button>
     </div>
   </div>
 </section>
 
-<section class="modal-backdrop hidden" id="pipelineConfirmModal">
-  <div class="modal-card">
-    <div class="modal-header">
-      <div>
-        <h3>Confirm pipeline run</h3>
-        <div class="subtext">Review the selected options before starting.</div>
+  <section class="modal-backdrop hidden" id="pipelineConfirmModal">
+    <div class="modal-card pipeline-confirm-card">
+      <div class="modal-header">
+        <div>
+          <h3>Confirm pipeline run</h3>
+          <div class="subtext">Review the selected configuration before launch.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="closePipelineConfirmModalBtn" type="button">Close</button>
       </div>
-      <button class="ghost-btn modal-close-btn" id="closePipelineConfirmModalBtn" type="button">Close</button>
+
+      <div class="confirm-summary-block" id="pipelineConfirmSummary"></div>
+
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="backToPipelineConfigBtn">Back</button>
+        <button type="button" id="confirmPipelineRunBtn">Run</button>
+      </div>
     </div>
+  </section>
 
-    <div class="confirm-summary-block" id="pipelineConfirmSummary"></div>
+  <section class="page-loading-overlay hidden" id="pageLoadingOverlay">
+    <div class="page-loading-card pipeline-loading-card">
+      <div class="loading-spinner"></div>
+      <div class="page-loading-title" id="pageLoadingTitle">Running live pipeline...</div>
+      <div class="page-loading-text" id="pageLoadingText">Preparing pipeline run.</div>
 
-    <div class="modal-actions">
-      <button type="button" class="ghost-btn" id="backToPipelineConfigBtn">Back</button>
-      <button type="button" id="confirmPipelineRunBtn">Run</button>
+      <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
+      <div class="pipeline-loading-counts" id="pipelineLoadingCounts"></div>
+      <div class="pipeline-stage-stepper" id="pipelineStageStepper"></div>
     </div>
-  </div>
-</section>
-
-<section class="page-loading-overlay hidden" id="pageLoadingOverlay">
-  <div class="page-loading-card">
-    <div class="loading-spinner"></div>
-    <div class="page-loading-title" id="pageLoadingTitle">Running live pipeline...</div>
-    <div class="page-loading-text" id="pageLoadingText">Preparing pipeline run.</div>
-  </div>
-</section>
+  </section>
 
   <script src="/static/shell.js"></script>
   <script src="/static/app.js"></script>

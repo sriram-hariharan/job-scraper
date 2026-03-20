@@ -7,12 +7,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-# from src.pipeline.collector import collect_all_jobs_async
-# from src.pipeline.excel_writer import write_jobs_to_sheet
+from src.pipeline.runtime_status import (
+    complete_stage,
+    fail_run,
+    finish_run,
+    initialize_run,
+    start_stage,
+)
 from src.utils.logging import get_logger
-# from src.pipeline.discovery_stage import run_discovery
-# from src.storage.metrics_store import init_metrics_db
-# from src.ai.embedding_model import get_model
 
 logger = get_logger(__name__)
 
@@ -107,7 +109,7 @@ def _run_application_planning(args):
 
     if args.application_planning_generate_tailoring:
         cmd.append("--generate-tailoring")
-    
+
     if args.application_planning_generate_llm_fallback:
         cmd.append("--generate-llm-fallback")
 
@@ -343,14 +345,13 @@ def _merge_application_planning_into_jobs(
 
     return merged_count
 
+
 def _resolve_delete_seen_data(args) -> str:
     if args.delete_seen_data in {"yes", "no"}:
         return args.delete_seen_data
 
     if not sys.stdin or not sys.stdin.isatty():
-        logger.info(
-            "Non-interactive run detected; keeping seen data by default."
-        )
+        logger.info("Non-interactive run detected; keeping seen data by default.")
         return "no"
 
     delete_seen_data = None
@@ -359,99 +360,30 @@ def _resolve_delete_seen_data(args) -> str:
 
     return "yes" if delete_seen_data in {"y", "yes"} else "no"
 
-# async def main_async(args):
-#     delete_seen_data = _resolve_delete_seen_data(args)
-
-#     if delete_seen_data == "yes":
-#         seen_file = os.path.join(os.getcwd(), "data", "seen_job_ids.txt")
-
-#         if os.path.exists(seen_file):
-#             os.remove(seen_file)
-#             logger.info(f"Deleted seen data: {seen_file}")
-#         else:
-#             logger.info(f"Seen file not found: {seen_file}")
-
-#     init_metrics_db()
-
-#     logger.info("Loading embedding model...")
-#     get_model()
-
-#     # logger.info("=============================")
-#     # logger.info("DISCOVERY MODE")
-#     # logger.info("=============================\n")
-#     # run_discovery()
-
-#     jobs = []
-#     application_planning_ran = False
-
-#     if args.application_planning_only:
-#         logger.info("=============================")
-#         logger.info("APPLICATION PLANNING ONLY MODE")
-#         logger.info("=============================\n")
-#     else:
-#         logger.info("=============================")
-#         logger.info("SCRAPING JOBS")
-#         logger.info("=============================\n")
-#         jobs = await collect_all_jobs_async()
-
-#     if args.run_application_planning:
-#         logger.info("")
-#         logger.info("=============================")
-#         logger.info("APPLICATION PLANNING")
-#         logger.info("=============================")
-
-#         corpus_path = "data/rag/job_corpus.jsonl"
-#         if _corpus_has_job_records(corpus_path):
-#             _run_application_planning(args)
-#             application_planning_ran = True
-#         else:
-#             logger.warning(
-#                 "Skipping application planning because the job corpus is missing or empty: %s",
-#                 corpus_path,
-#             )
-
-#     if not jobs and application_planning_ran and args.application_planning_only:
-#         jobs = _load_jobs_from_corpus("data/rag/job_corpus.jsonl")
-#         logger.info(
-#             "Loaded %s jobs from data/rag/job_corpus.jsonl for planning-only sheet refresh",
-#             len(jobs),
-#         )
-
-#     if jobs and application_planning_ran:
-#         best_variant_lookup = _load_best_variant_lookup(
-#             args.application_planning_output_dir
-#         )
-#         execution_queue_lookup = _load_execution_queue_lookup(
-#             args.application_planning_output_dir
-#         )
-#         packet_manifest_lookup = _load_packet_manifest_lookup(
-#             args.application_planning_output_dir
-#         )
-
-#         merged_count = _merge_application_planning_into_jobs(
-#             jobs,
-#             best_variant_lookup=best_variant_lookup,
-#             execution_queue_lookup=execution_queue_lookup,
-#             packet_manifest_lookup=packet_manifest_lookup,
-#         )
-
-#         logger.info(
-#             "Merged application-planning metadata into %s jobs from %s, %s, and %s",
-#             merged_count,
-#             Path(args.application_planning_output_dir) / "best_resume_variant_by_job.csv",
-#             Path(args.application_planning_output_dir) / "application_execution_queue.csv",
-#             Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
-#         )
-
-#     if jobs:
-#         write_jobs_to_sheet(jobs)
-
-#     logger.info("Final jobs: %s", len(jobs))
-
 
 async def main_async(args):
     logger.info("Starting main pipeline entrypoint...")
+
     delete_seen_data = _resolve_delete_seen_data(args)
+
+    initialize_run(
+        output_dir=args.application_planning_output_dir,
+        log_path=str(Path(args.application_planning_output_dir) / "live_pipeline_run.log"),
+        status_path=str(Path(args.application_planning_output_dir) / "live_pipeline_status.json"),
+        planning_only=bool(args.application_planning_only),
+        job_limit=int(args.application_planning_job_limit),
+        job_packet_limit=int(args.application_planning_job_packet_limit),
+        llm_actions=[
+            item.strip()
+            for item in str(args.application_planning_llm_actions or "").split(",")
+            if item.strip()
+        ],
+        generate_tailoring=bool(args.application_planning_generate_tailoring),
+        generate_llm_tailoring=bool(args.application_planning_generate_llm_tailoring),
+        refresh_llm_tailoring=bool(args.application_planning_refresh_llm_tailoring),
+        generate_llm_fallback=bool(args.application_planning_generate_llm_fallback),
+        delete_seen_data=delete_seen_data,
+    )
 
     if delete_seen_data == "yes":
         seen_file = os.path.join(os.getcwd(), "data", "seen_job_ids.txt")
@@ -461,16 +393,16 @@ async def main_async(args):
         else:
             logger.info(f"Seen file not found: {seen_file}")
 
+    start_stage("startup", "Initializing metrics store")
+
     logger.info("Initializing metrics store...")
     from src.storage.metrics_store import init_metrics_db
-    init_metrics_db()
 
-    # logger.info("Loading embedding model...")
-    # from src.ai.embedding_model import get_model
-    # get_model()
+    init_metrics_db()
+    complete_stage("startup", counts={"initialized_metrics": True})
 
     logger.info("Skipping eager embedding preload; model will load lazily when first needed.")
-    
+
     jobs = []
     application_planning_ran = False
 
@@ -482,7 +414,9 @@ async def main_async(args):
         logger.info("=============================")
         logger.info("SCRAPING JOBS")
         logger.info("=============================\n")
+
         from src.pipeline.collector import collect_all_jobs_async
+
         jobs = await collect_all_jobs_async()
 
     if args.run_application_planning:
@@ -493,7 +427,9 @@ async def main_async(args):
 
         corpus_path = "data/rag/job_corpus.jsonl"
         if _corpus_has_job_records(corpus_path):
+            start_stage("planning", "Running application planning")
             _run_application_planning(args)
+            complete_stage("planning", "Application planning completed")
             application_planning_ran = True
         else:
             logger.warning(
@@ -529,12 +465,32 @@ async def main_async(args):
         )
 
     if jobs:
-        from src.pipeline.excel_writer import write_jobs_to_sheet
-        write_jobs_to_sheet(jobs)
+        start_stage("sheet_export", f"Writing {len(jobs)} jobs to sheet")
 
+        from src.pipeline.excel_writer import write_jobs_to_sheet
+
+        write_jobs_to_sheet(jobs)
+        complete_stage("sheet_export", counts={"final_jobs": len(jobs)})
+
+    start_stage("finalization", f"Final jobs: {len(jobs)}")
     logger.info("Final jobs: %s", len(jobs))
-    
+
+    finish_run(
+        return_code=0,
+        summary_message=(
+            "Completed: no new jobs after cache/filtering"
+            if len(jobs) == 0
+            else f"Completed: {len(jobs)} final jobs"
+        ),
+        final_job_count=len(jobs),
+    )
+
+
 if __name__ == "__main__":
     args = _parse_args()
     _validate_application_planning_only_args(args)
-    asyncio.run(main_async(args))
+    try:
+        asyncio.run(main_async(args))
+    except Exception as exc:
+        fail_run("unknown", repr(exc))
+        raise

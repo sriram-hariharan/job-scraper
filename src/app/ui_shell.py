@@ -54,13 +54,21 @@ def render_top_shell(active_href: str) -> str:
       </button>
 
       <div class="profile-dropdown hidden" id="profileDropdown">
-        <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
+  <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
+      <div class="profile-dropdown-actions">
+        <a class="profile-dropdown-nav-btn" href="/profile">
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">My Profile</span>
+            <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
 
-        <div class="profile-dropdown-actions">
-          <a class="profile-dropdown-link ghost-link-btn" href="/profile">My Profile</a>
-          <button type="button" class="profile-dropdown-item ghost-btn" disabled>Log out</button>
-        </div>
+        <button type="button" class="profile-dropdown-danger-btn" disabled>
+          Log out
+        </button>
       </div>
+    </div>
     </div>
   </div>
 </section>

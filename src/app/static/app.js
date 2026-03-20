@@ -826,7 +826,7 @@ function renderQueueRows(rows, metaLabel) {
 
 function buildBrowseUrl() {
   const action = qs("actionFilter").value.trim();
-  const undecidedOnly = qs("undecidedOnly").checked ? "true" : "";
+  const undecidedOnly = getBinaryToggleBool("executiveUndecidedOnly") ? "true" : "";
   const limit = qs("limitInput").value || "25";
 
   const params = new URLSearchParams();
@@ -901,7 +901,7 @@ async function reloadCurrentTable() {
 
 function clearFilters() {
   qs("actionFilter").value = "";
-  qs("undecidedOnly").checked = false;
+  setBinaryToggleValue("executiveUndecidedOnly", false);
   qs("limitInput").value = "25";
 }
 

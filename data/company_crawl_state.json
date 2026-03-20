@@ -539,20 +539,38 @@
   "https://msd.wd5.myworkdayjobs.com/SearchJobs": {
     "last_scraped": 1774033036.110411
   },
+  "https://msd.wd5.myworkdayjobs.com/searchjobs": {
+    "last_scraped": 1774038362.608507
+  },
   "https://mtb.wd5.myworkdayjobs.com/MTB": {
     "last_scraped": 1774033036.1104121
+  },
+  "https://mtb.wd5.myworkdayjobs.com/mtb": {
+    "last_scraped": 1774038362.6085079
   },
   "https://otis.wd5.myworkdayjobs.com/REC_Ext_Gateway": {
     "last_scraped": 1774033036.110413
   },
+  "https://otis.wd5.myworkdayjobs.com/rec_ext_gateway": {
+    "last_scraped": 1774038362.6085088
+  },
   "https://owensminor.wd1.myworkdayjobs.com/OMCareers": {
     "last_scraped": 1774033036.110413
+  },
+  "https://owensminor.wd1.myworkdayjobs.com/omcareers": {
+    "last_scraped": 1774038362.6085088
   },
   "https://pacificlife.wd1.myworkdayjobs.com/PacificLifeCareers": {
     "last_scraped": 1774033036.110414
   },
+  "https://pacificlife.wd1.myworkdayjobs.com/pacificlifecareers": {
+    "last_scraped": 1774038362.60851
+  },
   "https://pbfenergy.wd1.myworkdayjobs.com/PBF": {
     "last_scraped": 1774033036.1104152
+  },
+  "https://pbfenergy.wd1.myworkdayjobs.com/pbf": {
+    "last_scraped": 1774038362.60851
   },
   "https://plains.wd1.myworkdayjobs.com/plains": {
     "last_scraped": 1774033036.1104152

@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
+import json
+import os
 import subprocess
 
 
@@ -11,6 +13,7 @@ DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
 DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv"
 DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
+DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -20,7 +23,10 @@ _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "finished_at": "",
     "return_code": None,
     "command": [],
+    "output_dir": str(DEFAULT_OUTPUT_DIR),
     "log_path": str(DEFAULT_PIPELINE_LOG_PATH),
+    "status_path": str(DEFAULT_PIPELINE_STATUS_PATH),
+    "run_id": "",
     "error": "",
 }
 
@@ -49,12 +55,42 @@ APPLICATION_ACTION_OVERLAY_FIELDS = [
     "is_applied",
 ]
 
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _derive_pipeline_log_path(output_dir: Path) -> Path:
+    return output_dir / "live_pipeline_run.log"
+
+
+def _derive_pipeline_status_path(output_dir: Path) -> Path:
+    return output_dir / "live_pipeline_status.json"
+
+
+def _new_run_id() -> str:
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def _load_runtime_status_file(path: str) -> Dict[str, Any]:
+    status_path = Path(str(path or "")).expanduser()
+    if not status_path.exists():
+        return {}
+
+    try:
+        return json.loads(status_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
 def _job_app():
     import job_app
     return job_app
 
+
 def _make_args(**kwargs):
     return SimpleNamespace(**kwargs)
+
 
 def _normalize_pipeline_llm_actions(value: Any) -> str:
     if isinstance(value, list):
@@ -73,6 +109,16 @@ def _normalize_pipeline_llm_actions(value: Any) -> str:
 
     return ",".join(seen)
 
+
+def _normalize_delete_seen_data(value: Any) -> str:
+    raw = str(value or "").strip().lower()
+    if raw in {"yes", "y", "true", "1"}:
+        return "yes"
+    if raw in {"ask", "prompt"}:
+        return "ask"
+    return "no"
+
+
 def _pipeline_status_snapshot() -> Dict[str, Any]:
     process = _PIPELINE_RUN_STATE.get("process")
     log_handle = _PIPELINE_RUN_STATE.get("log_handle")
@@ -84,8 +130,7 @@ def _pipeline_status_snapshot() -> Dict[str, Any]:
         else:
             _PIPELINE_RUN_STATE["status"] = "succeeded" if return_code == 0 else "failed"
             _PIPELINE_RUN_STATE["finished_at"] = (
-                _PIPELINE_RUN_STATE.get("finished_at")
-                or datetime.now(timezone.utc).isoformat(timespec="seconds")
+                _PIPELINE_RUN_STATE.get("finished_at") or _utc_now()
             )
             _PIPELINE_RUN_STATE["return_code"] = return_code
             _PIPELINE_RUN_STATE["process"] = None
@@ -97,22 +142,61 @@ def _pipeline_status_snapshot() -> Dict[str, Any]:
                     pass
                 _PIPELINE_RUN_STATE["log_handle"] = None
 
+    status = _PIPELINE_RUN_STATE.get("status", "idle")
     return {
-        "status": _PIPELINE_RUN_STATE.get("status", "idle"),
+        "status": status,
         "started_at": _PIPELINE_RUN_STATE.get("started_at", ""),
         "finished_at": _PIPELINE_RUN_STATE.get("finished_at", ""),
         "return_code": _PIPELINE_RUN_STATE.get("return_code"),
         "command": _PIPELINE_RUN_STATE.get("command", []),
+        "output_dir": _PIPELINE_RUN_STATE.get("output_dir", str(DEFAULT_OUTPUT_DIR)),
         "log_path": _PIPELINE_RUN_STATE.get("log_path", str(DEFAULT_PIPELINE_LOG_PATH)),
+        "status_path": _PIPELINE_RUN_STATE.get("status_path", str(DEFAULT_PIPELINE_STATUS_PATH)),
+        "run_id": _PIPELINE_RUN_STATE.get("run_id", ""),
         "error": _PIPELINE_RUN_STATE.get("error", ""),
-        "is_running": _PIPELINE_RUN_STATE.get("status") == "running",
+        "is_running": status == "running",
     }
 
 
 def pipeline_status_payload() -> Dict[str, Any]:
+    snapshot = _pipeline_status_snapshot()
+    runtime_status = _load_runtime_status_file(snapshot.get("status_path", ""))
+
+    merged = dict(snapshot)
+    if runtime_status:
+        if merged.get("status") == "idle":
+            merged["status"] = runtime_status.get("status", merged["status"])
+
+        if not merged.get("started_at"):
+            merged["started_at"] = runtime_status.get("started_at", "")
+        if not merged.get("finished_at"):
+            merged["finished_at"] = runtime_status.get("finished_at", "")
+        if merged.get("return_code") is None:
+            merged["return_code"] = runtime_status.get("return_code")
+        if not merged.get("error"):
+            merged["error"] = runtime_status.get("error", "")
+
+        merged.update({
+            "run_id": runtime_status.get("run_id", merged.get("run_id", "")),
+            "output_dir": runtime_status.get("output_dir", merged.get("output_dir", "")),
+            "log_path": runtime_status.get("log_path", merged.get("log_path", "")),
+            "status_path": runtime_status.get("status_path", merged.get("status_path", "")),
+            "current_stage": runtime_status.get("current_stage", ""),
+            "completed_stages": runtime_status.get("completed_stages", []),
+            "stage_order": runtime_status.get("stage_order", []),
+            "stage_started_at": runtime_status.get("stage_started_at", ""),
+            "stage_message": runtime_status.get("stage_message", ""),
+            "counts": runtime_status.get("counts", {}),
+            "summary_message": runtime_status.get("summary_message", ""),
+            "final_job_count": runtime_status.get("final_job_count"),
+            "config": runtime_status.get("config", {}),
+        })
+
+        merged["is_running"] = merged.get("status") == "running"
+
     return {
         "ok": True,
-        "pipeline": _pipeline_status_snapshot(),
+        "pipeline": merged,
     }
 
 
@@ -127,12 +211,21 @@ def run_live_pipeline_payload(
     refresh_llm_tailoring: bool = False,
     generate_llm_fallback: bool = False,
     planning_only: bool = False,
+    delete_seen_data: str = "no",
 ) -> Dict[str, Any]:
     snapshot = _pipeline_status_snapshot()
     if snapshot.get("is_running"):
         raise ValueError("A live pipeline run is already in progress.")
 
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    canonical_log_path = _derive_pipeline_log_path(output_dir)
+    canonical_status_path = _derive_pipeline_status_path(output_dir)
+    run_id = _new_run_id()
+
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
+    normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
 
     ja = _job_app()
     args = _make_args(
@@ -145,36 +238,106 @@ def run_live_pipeline_payload(
         generate_llm_tailoring=bool(generate_llm_tailoring),
         refresh_llm_tailoring=bool(refresh_llm_tailoring),
         generate_llm_fallback=bool(generate_llm_fallback),
+        delete_seen_data=normalized_delete_seen_data,
     )
     cmd = ja._build_main_cmd(args, planning_only=bool(planning_only))
 
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    log_handle = log_path.open("w", encoding="utf-8")
+    runtime_payload = {
+        "run_id": run_id,
+        "status": "running",
+        "started_at": _utc_now(),
+        "finished_at": "",
+        "current_stage": "startup",
+        "completed_stages": [],
+        "stage_order": [
+            "startup",
+            "scraping",
+            "filtering",
+            "dedupe",
+            "ranking",
+            "cache_filter",
+            "details",
+            "intelligence",
+            "ai_evaluation_filter",
+            "embedding_prefilter",
+            "ai_evaluation",
+            "resume_matching",
+            "application_priority",
+            "rag_export",
+            "planning",
+            "sheet_export",
+            "finalization",
+        ],
+        "stage_started_at": _utc_now(),
+        "stage_message": "Launching pipeline subprocess",
+        "counts": {},
+        "summary_message": "",
+        "final_job_count": None,
+        "return_code": None,
+        "error": "",
+        "output_dir": str(output_dir),
+        "log_path": str(canonical_log_path),
+        "status_path": str(canonical_status_path),
+        "config": {
+            "planning_only": bool(planning_only),
+            "job_limit": int(job_limit),
+            "job_packet_limit": int(job_packet_limit),
+            "llm_actions": normalized_llm_actions.split(","),
+            "generate_tailoring": bool(generate_tailoring),
+            "generate_llm_tailoring": bool(generate_llm_tailoring),
+            "refresh_llm_tailoring": bool(refresh_llm_tailoring),
+            "generate_llm_fallback": bool(generate_llm_fallback),
+            "delete_seen_data": normalized_delete_seen_data,
+        },
+    }
+    canonical_status_path.write_text(
+        json.dumps(runtime_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    log_handle = canonical_log_path.open("w", encoding="utf-8", buffering=1)
+
+    child_env = dict(os.environ)
+    child_env["JOB_APP_PIPELINE_STATUS_PATH"] = str(canonical_status_path)
+    child_env["JOB_APP_PIPELINE_RUN_ID"] = run_id
 
     try:
         process = subprocess.Popen(
             cmd,
             stdout=log_handle,
             stderr=subprocess.STDOUT,
+            env=child_env,
         )
-    except Exception:
+    except Exception as exc:
         log_handle.close()
+        runtime_payload["status"] = "failed"
+        runtime_payload["finished_at"] = _utc_now()
+        runtime_payload["return_code"] = 1
+        runtime_payload["error"] = repr(exc)
+        runtime_payload["summary_message"] = "Failed to launch pipeline subprocess"
+        canonical_status_path.write_text(
+            json.dumps(runtime_payload, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
         raise
 
     _PIPELINE_RUN_STATE["process"] = process
     _PIPELINE_RUN_STATE["log_handle"] = log_handle
     _PIPELINE_RUN_STATE["status"] = "running"
-    _PIPELINE_RUN_STATE["started_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    _PIPELINE_RUN_STATE["started_at"] = _utc_now()
     _PIPELINE_RUN_STATE["finished_at"] = ""
     _PIPELINE_RUN_STATE["return_code"] = None
     _PIPELINE_RUN_STATE["command"] = cmd
-    _PIPELINE_RUN_STATE["log_path"] = str(log_path)
+    _PIPELINE_RUN_STATE["output_dir"] = str(output_dir)
+    _PIPELINE_RUN_STATE["log_path"] = str(canonical_log_path)
+    _PIPELINE_RUN_STATE["status_path"] = str(canonical_status_path)
+    _PIPELINE_RUN_STATE["run_id"] = run_id
     _PIPELINE_RUN_STATE["error"] = ""
 
     return {
         "ok": True,
         "message": "Live pipeline started.",
-        "pipeline": _pipeline_status_snapshot(),
+        "pipeline": pipeline_status_payload()["pipeline"],
     }
 
 def _clean_text(value: Any) -> str:

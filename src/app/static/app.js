@@ -9,6 +9,103 @@ const state = {
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 let pipelinePollTimer = null;
 
+const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
+const DEFAULT_STAGE_ORDER = [
+  "startup",
+  "scraping",
+  "filtering",
+  "dedupe",
+  "ranking",
+  "cache_filter",
+  "details",
+  "intelligence",
+  "ai_evaluation_filter",
+  "embedding_prefilter",
+  "ai_evaluation",
+  "resume_matching",
+  "application_priority",
+  "rag_export",
+  "planning",
+  "sheet_export",
+  "finalization",
+];
+
+const STAGE_LABELS = {
+  startup: "Startup",
+  scraping: "Scraping",
+  filtering: "Filtering",
+  dedupe: "Dedupe",
+  ranking: "Ranking",
+  cache_filter: "Cache Filter",
+  details: "Details",
+  intelligence: "Intelligence",
+  ai_evaluation_filter: "AI Eval Filter",
+  embedding_prefilter: "Embedding Prefilter",
+  ai_evaluation: "AI Evaluation",
+  resume_matching: "Resume Matching",
+  application_priority: "Application Priority",
+  rag_export: "RAG Export",
+  planning: "Planning",
+  sheet_export: "Sheet Export",
+  finalization: "Finalization",
+};
+
+const COUNT_LABELS = {
+  scraped_jobs: "Scraped",
+  filtered_jobs: "Filtered",
+  deduped_jobs: "Deduped",
+  ranked_jobs: "Ranked",
+  new_jobs: "New",
+  detailed_jobs: "Detailed",
+  intelligent_jobs: "Intelligence",
+  evaluable_jobs: "AI Eligible",
+  prefilter_jobs: "Prefilter",
+  ai_jobs: "AI Evaluated",
+  resume_matched_jobs: "Resume Matched",
+  scored_jobs: "Scored",
+  rag_export_count: "RAG Exported",
+  final_jobs: "Final Jobs",
+};
+
+const PIPELINE_PRESETS = {
+  full: {
+    job_limit: 50,
+    job_packet_limit: 0,
+    output_dir: DEFAULT_OUTPUT_DIR,
+    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS"],
+    planning_only: false,
+    generate_tailoring: false,
+    generate_llm_tailoring: false,
+    refresh_llm_tailoring: false,
+    generate_llm_fallback: false,
+    delete_seen_data: false,
+  },
+  planning_only: {
+    job_limit: 50,
+    job_packet_limit: 0,
+    output_dir: DEFAULT_OUTPUT_DIR,
+    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS"],
+    planning_only: true,
+    generate_tailoring: false,
+    generate_llm_tailoring: false,
+    refresh_llm_tailoring: false,
+    generate_llm_fallback: false,
+    delete_seen_data: false,
+  },
+  tailoring_refresh: {
+    job_limit: 50,
+    job_packet_limit: 0,
+    output_dir: DEFAULT_OUTPUT_DIR,
+    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR"],
+    planning_only: true,
+    generate_tailoring: false,
+    generate_llm_tailoring: true,
+    refresh_llm_tailoring: true,
+    generate_llm_fallback: false,
+    delete_seen_data: false,
+  },
+};
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -42,6 +139,81 @@ async function postJson(url, payload) {
   });
 }
 
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
+function titleCaseStage(stage) {
+  return STAGE_LABELS[stage] || String(stage || "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function normalizeOutputDir(value) {
+  const raw = String(value || "").trim() || DEFAULT_OUTPUT_DIR;
+  return raw.replace(/\/+$/, "") || DEFAULT_OUTPUT_DIR;
+}
+
+function derivePipelinePaths(outputDir) {
+  const normalized = normalizeOutputDir(outputDir);
+  return {
+    output_dir: normalized,
+    log_path: `${normalized}/live_pipeline_run.log`,
+    status_path: `${normalized}/live_pipeline_status.json`,
+  };
+}
+
+function syncPipelinePathPreview() {
+  const paths = derivePipelinePaths(qs("pipelineOutputDirInput").value);
+  const logPreview = qs("pipelineLogPathPreview");
+  const statusPreview = qs("pipelineStatusPathPreview");
+
+  logPreview.textContent = paths.log_path;
+  logPreview.title = paths.log_path;
+
+  statusPreview.textContent = paths.status_path;
+  statusPreview.title = paths.status_path;
+}
+
+function setPipelineLlmActions(actions) {
+  const selected = new Set(actions || []);
+  document.querySelectorAll("[data-pipeline-llm-action]").forEach((el) => {
+    el.checked = selected.has(el.value);
+  });
+}
+
+function getSelectedPipelineLlmActions() {
+  return Array.from(document.querySelectorAll("[data-pipeline-llm-action]:checked"))
+    .map((el) => el.value)
+    .filter(Boolean);
+}
+
+function getPipelineDeleteSeenDataValue() {
+  return document.querySelector("input[name='pipelineDeleteSeenData']:checked")?.value || "no";
+}
+
+function applyPipelinePreset(name) {
+  const preset = PIPELINE_PRESETS[name];
+  if (!preset) return;
+
+  qs("pipelineJobLimitInput").value = preset.job_limit;
+  qs("pipelineJobPacketLimitInput").value = preset.job_packet_limit;
+  qs("pipelineOutputDirInput").value = preset.output_dir;
+  qs("pipelinePlanningOnlyCheckbox").checked = preset.planning_only;
+  qs("pipelineGenerateTailoringCheckbox").checked = preset.generate_tailoring;
+  qs("pipelineGenerateLlmTailoringCheckbox").checked = preset.generate_llm_tailoring;
+  qs("pipelineRefreshLlmTailoringCheckbox").checked = preset.refresh_llm_tailoring;
+  qs("pipelineGenerateLlmFallbackCheckbox").checked = preset.generate_llm_fallback;
+  qs("pipelineDeleteSeenDataCheckbox").checked = preset.delete_seen_data;
+  setPipelineLlmActions(preset.llm_actions);
+  syncPipelinePathPreview();
+}
+
 function renderStats(statusData) {
   const summary = statusData.summary || {};
   const undecided = statusData.undecided_review_counts || {};
@@ -52,6 +224,102 @@ function renderStats(statusData) {
   qs("statUndecidedMaybeTailor").textContent = undecided.MAYBE_TAILOR ?? 0;
 }
 
+function buildPipelineMetaText(pipeline) {
+  const status = pipeline.status || "idle";
+  const currentStage = titleCaseStage(pipeline.current_stage);
+  const stageMessage = pipeline.stage_message || "";
+  const summaryMessage = pipeline.summary_message || "";
+  const startedAt = formatDateTime(pipeline.started_at);
+  const finishedAt = formatDateTime(pipeline.finished_at);
+
+  if (status === "running") {
+    if (currentStage && stageMessage) {
+      return `Pipeline running · ${currentStage} · ${stageMessage}`;
+    }
+    if (currentStage) {
+      return `Pipeline running · ${currentStage}`;
+    }
+    return startedAt ? `Pipeline running since ${startedAt}` : "Pipeline running.";
+  }
+
+  if (status === "succeeded") {
+    return summaryMessage
+      ? `${summaryMessage}${finishedAt ? ` · finished ${finishedAt}` : ""}`
+      : `Pipeline finished successfully${finishedAt ? ` at ${finishedAt}` : ""}.`;
+  }
+
+  if (status === "failed") {
+    const errorText = pipeline.error ? ` · ${pipeline.error}` : "";
+    return `Pipeline failed${finishedAt ? ` at ${finishedAt}` : ""}${errorText}`;
+  }
+
+  return "Pipeline idle.";
+}
+
+function renderPipelineCounts(pipeline) {
+  const counts = pipeline.counts || {};
+  const entries = Object.entries(COUNT_LABELS)
+    .map(([key, label]) => {
+      const value = counts[key];
+      if (value === undefined || value === null) return "";
+      return `<div class="pipeline-count-chip"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
+    })
+    .filter(Boolean);
+
+  qs("pipelineLoadingCounts").innerHTML = entries.length
+    ? entries.join("")
+    : `<div class="pipeline-count-empty">No stage counts yet.</div>`;
+}
+
+function renderPipelineStageStepper(pipeline) {
+  const order = Array.isArray(pipeline.stage_order) && pipeline.stage_order.length
+    ? pipeline.stage_order
+    : DEFAULT_STAGE_ORDER;
+
+  const completed = new Set(Array.isArray(pipeline.completed_stages) ? pipeline.completed_stages : []);
+  const current = pipeline.current_stage || "";
+  const status = pipeline.status || "idle";
+
+  const html = order.map((stage) => {
+    let stateClass = "pending";
+    let marker = "○";
+
+    if (completed.has(stage)) {
+      stateClass = "complete";
+      marker = "✓";
+    } else if (status === "running" && current === stage) {
+      stateClass = "current";
+      marker = "•";
+    } else if (status === "failed" && current === stage) {
+      stateClass = "failed";
+      marker = "!";
+    }
+
+    return `
+      <div class="pipeline-step pipeline-step--${stateClass}">
+        <div class="pipeline-step-marker">${escapeHtml(marker)}</div>
+        <div class="pipeline-step-label">${escapeHtml(titleCaseStage(stage))}</div>
+      </div>
+    `;
+  }).join("");
+
+  qs("pipelineStageStepper").innerHTML = html;
+}
+
+function showPageLoadingOverlay(title, text, pipeline = {}) {
+  const overlay = qs("pageLoadingOverlay");
+  qs("pageLoadingTitle").textContent = title || "Running live pipeline...";
+  qs("pageLoadingText").textContent = text || "Preparing pipeline run.";
+  qs("pipelineLoadingMeta").textContent = buildPipelineMetaText(pipeline);
+  renderPipelineCounts(pipeline);
+  renderPipelineStageStepper(pipeline);
+  overlay.classList.remove("hidden");
+}
+
+function hidePageLoadingOverlay() {
+  qs("pageLoadingOverlay").classList.add("hidden");
+}
+
 function renderPipelineStatus(payload) {
   const pipeline = (payload && payload.pipeline) || {};
   const runBtn = qs("runPipelineBtn");
@@ -60,22 +328,15 @@ function renderPipelineStatus(payload) {
   if (!runBtn || !meta) return;
 
   const status = pipeline.status || "idle";
-  const logPath = pipeline.log_path || "";
-  const startedAt = pipeline.started_at || "";
-  const finishedAt = pipeline.finished_at || "";
-  const returnCode = pipeline.return_code;
+  meta.textContent = buildPipelineMetaText(pipeline);
 
   if (status === "running") {
     runBtn.disabled = true;
     runBtn.textContent = "Pipeline Running...";
-    meta.textContent = startedAt
-      ? `Pipeline running since ${startedAt} · log: ${logPath}`
-      : `Pipeline running · log: ${logPath}`;
     showPageLoadingOverlay(
-      "Running live pipeline...",
-      startedAt
-        ? `Started at ${startedAt} · log: ${logPath}`
-        : `Log: ${logPath}`
+      `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
+      pipeline.stage_message || "Pipeline is running.",
+      pipeline
     );
     return;
   }
@@ -83,18 +344,6 @@ function renderPipelineStatus(payload) {
   runBtn.disabled = false;
   runBtn.textContent = "Run Live Pipeline";
   hidePageLoadingOverlay();
-
-  if (status === "succeeded") {
-    meta.textContent = finishedAt
-      ? `Pipeline finished successfully at ${finishedAt} · log: ${logPath}`
-      : `Pipeline finished successfully · log: ${logPath}`;
-  } else if (status === "failed") {
-    meta.textContent = finishedAt
-      ? `Pipeline failed at ${finishedAt} (code ${returnCode}) · log: ${logPath}`
-      : `Pipeline failed (code ${returnCode}) · log: ${logPath}`;
-  } else {
-    meta.textContent = "Pipeline idle.";
-  }
 }
 
 async function loadPipelineStatus() {
@@ -111,22 +360,8 @@ function getPipelineConfirmModal() {
   return qs("pipelineConfirmModal");
 }
 
-function getPageLoadingOverlay() {
-  return qs("pageLoadingOverlay");
-}
-
-function showPageLoadingOverlay(title, text) {
-  const overlay = getPageLoadingOverlay();
-  qs("pageLoadingTitle").textContent = title || "Running live pipeline...";
-  qs("pageLoadingText").textContent = text || "Preparing pipeline run.";
-  overlay.classList.remove("hidden");
-}
-
-function hidePageLoadingOverlay() {
-  getPageLoadingOverlay().classList.add("hidden");
-}
-
 function openPipelineConfigModal() {
+  syncPipelinePathPreview();
   getPipelineConfigModal().classList.remove("hidden");
 }
 
@@ -140,12 +375,6 @@ function openPipelineConfirmModal() {
 
 function closePipelineConfirmModal() {
   getPipelineConfirmModal().classList.add("hidden");
-}
-
-function getSelectedPipelineLlmActions() {
-  return Array.from(document.querySelectorAll("[data-pipeline-llm-action]:checked"))
-    .map((el) => el.value)
-    .filter(Boolean);
 }
 
 function collectPipelineConfig() {
@@ -165,6 +394,7 @@ function collectPipelineConfig() {
     generate_llm_tailoring: qs("pipelineGenerateLlmTailoringCheckbox").checked,
     refresh_llm_tailoring: qs("pipelineRefreshLlmTailoringCheckbox").checked,
     generate_llm_fallback: qs("pipelineGenerateLlmFallbackCheckbox").checked,
+    delete_seen_data: getPipelineDeleteSeenDataValue(),
   };
 }
 
@@ -180,6 +410,7 @@ function renderPipelineConfirmSummary(config) {
     `Generate LLM tailoring: ${config.generate_llm_tailoring ? "Yes" : "No"}`,
     `Refresh LLM tailoring: ${config.refresh_llm_tailoring ? "Yes" : "No"}`,
     `Generate LLM fallback: ${config.generate_llm_fallback ? "Yes" : "No"}`,
+    `Delete seen data: ${config.delete_seen_data === "yes" ? "Yes" : "No"}`,
   ];
 
   qs("pipelineConfirmSummary").innerHTML = lines
@@ -209,19 +440,7 @@ function startPipelinePolling() {
       stopPipelinePolling();
       console.error(err);
     }
-  }, 5000);
-}
-
-function buildApplicationPayloadFromRow(row) {
-  return {
-    job_doc_id: row.job_doc_id || "",
-    job_url: row.job_url || row.job_doc_id || "",
-    job_company: row.job_company || "",
-    job_title: row.job_title || "",
-    source_view: state.currentMode === "workflow" && state.workflowView
-      ? `executive:${state.workflowView}`
-      : "executive:browse",
-  };
+  }, 2000);
 }
 
 function persistPendingApplication(job) {
@@ -464,7 +683,7 @@ function attachApplicationHandlers() {
     closeApplicationModal();
   });
 
-    qs("runPipelineBtn").addEventListener("click", () => {
+  qs("runPipelineBtn").addEventListener("click", () => {
     openPipelineConfigModal();
   });
 
@@ -494,7 +713,14 @@ function attachApplicationHandlers() {
     try {
       const config = state.pendingPipelineConfig || collectPipelineConfig();
       closePipelineConfirmModal();
-      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...");
+      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
+        status: "running",
+        current_stage: "startup",
+        stage_message: "Launching pipeline subprocess",
+        stage_order: DEFAULT_STAGE_ORDER,
+        completed_stages: [],
+        counts: {},
+      });
       await postJson("/pipeline/run", config);
       await loadPipelineStatus();
       startPipelinePolling();
@@ -543,6 +769,30 @@ function attachApplicationHandlers() {
   });
 }
 
+function attachPipelineConfigHandlers() {
+  qs("pipelineOutputDirInput").addEventListener("input", syncPipelinePathPreview);
+
+  qs("pipelineSelectAllActionsBtn").addEventListener("click", () => {
+    setPipelineLlmActions(["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR", "SKIP_FOR_NOW"]);
+  });
+
+  qs("pipelineClearAllActionsBtn").addEventListener("click", () => {
+    setPipelineLlmActions([]);
+  });
+
+  document.querySelectorAll("[data-pipeline-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      applyPipelinePreset(btn.dataset.pipelinePreset);
+    });
+  });
+
+  document.querySelectorAll("[data-job-limit-preset]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      qs("pipelineJobLimitInput").value = btn.dataset.jobLimitPreset || "50";
+    });
+  });
+}
+
 function attachEventHandlers() {
   qs("applyFiltersBtn").addEventListener("click", async () => {
     try {
@@ -564,6 +814,7 @@ function attachEventHandlers() {
   qs("refreshStatusBtn").addEventListener("click", async () => {
     try {
       await loadStatus();
+      await loadPipelineStatus();
       await reloadCurrentTable();
     } catch (err) {
       alert(`Failed to refresh dashboard: ${err.message}`);
@@ -586,11 +837,15 @@ function attachEventHandlers() {
 async function init() {
   attachEventHandlers();
   attachApplicationHandlers();
+  attachPipelineConfigHandlers();
+  applyPipelinePreset("full");
+  syncPipelinePathPreview();
 
   try {
     await loadStatus();
     await loadPipelineStatus();
     await loadBrowse();
+
     const pipelineData = await fetchJson("/pipeline/status");
     if (pipelineData.pipeline && pipelineData.pipeline.is_running) {
       startPipelinePolling();

@@ -122,7 +122,7 @@ def _build_main_cmd(args, planning_only: bool) -> List[str]:
             "--application-planning-job-packet-limit", str(args.job_packet_limit),
             "--application-planning-output-dir", args.output_dir,
             "--application-planning-llm-actions", args.llm_actions,
-            "--delete-seen-data", "no"
+            "--delete-seen-data", getattr(args, "delete_seen_data", "no"),
         ])
 
         if args.generate_tailoring:
@@ -1546,6 +1546,11 @@ def _parse_args():
     run_parser.add_argument("--generate-llm-tailoring", action="store_true")
     run_parser.add_argument("--refresh-llm-tailoring", action="store_true")
     run_parser.add_argument("--generate-llm-fallback", action="store_true")
+    run_parser.add_argument(
+        "--delete-seen-data",
+        choices=["ask", "yes", "no"],
+        default="no",
+    )
 
     planning_parser = subparsers.add_parser(
         "plan",
@@ -1560,6 +1565,11 @@ def _parse_args():
     planning_parser.add_argument("--generate-llm-tailoring", action="store_true")
     planning_parser.add_argument("--refresh-llm-tailoring", action="store_true")
     planning_parser.add_argument("--generate-llm-fallback", action="store_true")
+    planning_parser.add_argument(
+        "--delete-seen-data",
+        choices=["ask", "yes", "no"],
+        default="no",
+    )
 
     status_parser = subparsers.add_parser(
         "status",

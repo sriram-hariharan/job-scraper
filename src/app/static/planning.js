@@ -14,6 +14,66 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function getAppErrorModal() {
+  return qs("appErrorModal");
+}
+
+function closeAppErrorModal() {
+  getAppErrorModal().classList.add("hidden");
+}
+
+function extractErrorMessage(err) {
+  let message = err?.message || String(err || "Unknown error");
+
+  const httpMatch = message.match(/^HTTP \d+:\s*(.*)$/s);
+  if (httpMatch) {
+    message = httpMatch[1];
+  }
+
+  try {
+    const parsed = JSON.parse(message);
+    if (Array.isArray(parsed.detail)) {
+      message = parsed.detail
+        .map((item) => {
+          if (item && item.msg && item.input !== undefined) {
+            return `${item.msg} (input: ${item.input})`;
+          }
+          if (item && item.msg) {
+            return item.msg;
+          }
+          return JSON.stringify(item);
+        })
+        .join("\n");
+    } else if (parsed.detail) {
+      message = typeof parsed.detail === "string"
+        ? parsed.detail
+        : JSON.stringify(parsed.detail, null, 2);
+    }
+  } catch {
+    // leave message as-is
+  }
+
+  return message;
+}
+
+function showAppError(title, err, subtitle = "Review the message below.") {
+  qs("appErrorTitle").textContent = title || "Something went wrong";
+  qs("appErrorSubtitle").textContent = subtitle;
+  qs("appErrorMessage").textContent = extractErrorMessage(err);
+  getAppErrorModal().classList.remove("hidden");
+}
+
+function bindAppErrorModal() {
+  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
+  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
+
+  getAppErrorModal().addEventListener("click", (event) => {
+    if (event.target === getAppErrorModal()) {
+      closeAppErrorModal();
+    }
+  });
+}
+
 function setTextIfPresent(id, value) {
   const el = qs(id);
   if (el) {
@@ -263,7 +323,7 @@ function attachPlanningHandlers() {
     try {
       await loadPlanningTable();
     } catch (err) {
-      alert(`Failed to load planning table: ${err.message}`);
+      showAppError("Failed to load planning table", err);
     }
   });
 
@@ -272,7 +332,7 @@ function attachPlanningHandlers() {
     try {
       await loadPlanningTable();
     } catch (err) {
-      alert(`Failed to reload planning table: ${err.message}`);
+      showAppError("Failed to reload planning table", err);
     }
   });
 
@@ -283,7 +343,7 @@ function attachPlanningHandlers() {
     try {
       await handleApplyClick(button);
     } catch (err) {
-      alert(`Failed to open apply workflow: ${err.message}`);
+      showAppError("Failed to open apply workflow", err);
     }
   });
 
@@ -307,7 +367,7 @@ function attachPlanningHandlers() {
       try {
         await submitApplicationStatus(status);
       } catch (err) {
-        alert(`Failed to update application status: ${err.message}`);
+        showAppError("Failed to update application status", err);
       }
     });
   });
@@ -320,10 +380,11 @@ function attachPlanningHandlers() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
+  bindAppErrorModal();
   attachPlanningHandlers();
   try {
     await loadPlanningTable();
   } catch (err) {
-    alert(`Failed to initialize planning dashboard: ${err.message}`);
+    showAppError("Failed to initialize planning dashboard", err);
   }
 });

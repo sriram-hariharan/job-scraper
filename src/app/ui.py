@@ -56,37 +56,53 @@ def executive_dashboard() -> str:
     </section>
 
     <section class="card controls-card">
-      <div class="controls-row">
-        <div class="control-group">
-          <label for="actionFilter">Action</label>
-          <select id="actionFilter">
-            <option value="">All</option>
-            <option value="APPLY">APPLY</option>
-            <option value="APPLY_REVIEW_VARIANTS">APPLY_REVIEW_VARIANTS</option>
-            <option value="MAYBE_TAILOR">MAYBE_TAILOR</option>
-            <option value="SKIP_FOR_NOW">SKIP_FOR_NOW</option>
-          </select>
+      <div class="dashboard-toolbar dashboard-toolbar--executive">
+        <div class="dashboard-toolbar-left dashboard-toolbar-left--executive">
+          <div class="control-group dashboard-field dashboard-field--action">
+            <label for="actionFilter">Action</label>
+            <select id="actionFilter">
+              <option value="">All</option>
+              <option value="APPLY">APPLY</option>
+              <option value="APPLY_REVIEW_VARIANTS">APPLY_REVIEW_VARIANTS</option>
+              <option value="MAYBE_TAILOR">MAYBE_TAILOR</option>
+              <option value="SKIP_FOR_NOW">SKIP_FOR_NOW</option>
+            </select>
+          </div>
+
+          <div class="control-group dashboard-field dashboard-field--limit">
+            <label for="limitInput">Limit</label>
+            <input type="number" id="limitInput" value="25" min="1" max="200" />
+          </div>
+
+          <div class="control-group dashboard-toggle-group executive-toolbar-toggle">
+            <label>Undecided only</label>
+
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Undecided only">
+              <label class="binary-toggle-option">
+                <input type="radio" name="executiveUndecidedOnly" value="no" checked />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="executiveUndecidedOnly" value="yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+
+            <div class="control-help field-help-wide">
+              Yes shows only browse rows that do not have an operator decision yet.
+            </div>
+          </div>
         </div>
 
-        <div class="control-group checkbox-group">
-          <label for="undecidedOnly">
-            <input type="checkbox" id="undecidedOnly" />
-            Undecided only
-          </label>
-        </div>
-
-        <div class="control-group">
-          <label for="limitInput">Limit</label>
-          <input type="number" id="limitInput" value="25" min="1" max="200" />
-        </div>
-
-        <div class="control-group button-group">
-          <button id="applyFiltersBtn">Apply Filters</button>
-          <button class="ghost-btn" id="clearFiltersBtn">Clear</button>
+        <div class="dashboard-toolbar-right dashboard-toolbar-right--executive">
+          <div class="control-group button-group dashboard-toolbar-actions">
+            <button id="applyFiltersBtn">Apply Filters</button>
+            <button class="ghost-btn" id="clearFiltersBtn">Clear</button>
+          </div>
         </div>
       </div>
 
-      <div class="controls-row quick-view-row">
+      <div class="controls-row quick-view-row quick-view-row--executive">
         <button class="ghost-btn quick-view-btn" data-view="direct_apply_pending">Direct Apply Pending</button>
         <button class="ghost-btn quick-view-btn" data-view="undecided_apply_review">Variant Review Pending</button>
         <button class="ghost-btn quick-view-btn" data-view="undecided_maybe_tailor">Tailor Pending</button>
@@ -493,3 +509,5 @@ def executive_dashboard() -> str:
 </body>
 </html>
     """.strip()
+
+

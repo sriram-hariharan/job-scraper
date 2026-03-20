@@ -14,6 +14,82 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function getAppErrorModal() {
+  return qs("appErrorModal");
+}
+
+function closeAppErrorModal() {
+  getAppErrorModal().classList.add("hidden");
+}
+
+function extractErrorMessage(err) {
+  let message = err?.message || String(err || "Unknown error");
+
+  const httpMatch = message.match(/^HTTP \d+:\s*(.*)$/s);
+  if (httpMatch) {
+    message = httpMatch[1];
+  }
+
+  try {
+    const parsed = JSON.parse(message);
+    if (Array.isArray(parsed.detail)) {
+      message = parsed.detail
+        .map((item) => {
+          if (item && item.msg && item.input !== undefined) {
+            return `${item.msg} (input: ${item.input})`;
+          }
+          if (item && item.msg) {
+            return item.msg;
+          }
+          return JSON.stringify(item);
+        })
+        .join("\n");
+    } else if (parsed.detail) {
+      message = typeof parsed.detail === "string"
+        ? parsed.detail
+        : JSON.stringify(parsed.detail, null, 2);
+    }
+  } catch {
+    // leave message as-is
+  }
+
+  return message;
+}
+
+function showAppError(title, err, subtitle = "Review the message below.") {
+  qs("appErrorTitle").textContent = title || "Something went wrong";
+  qs("appErrorSubtitle").textContent = subtitle;
+  qs("appErrorMessage").textContent = extractErrorMessage(err);
+  getAppErrorModal().classList.remove("hidden");
+}
+
+function bindAppErrorModal() {
+  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
+  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
+
+  getAppErrorModal().addEventListener("click", (event) => {
+    if (event.target === getAppErrorModal()) {
+      closeAppErrorModal();
+    }
+  });
+}
+
+function normalizeBinaryToggleValue(value) {
+  return value === true || value === "yes" ? "yes" : "no";
+}
+
+function getBinaryToggleBool(name) {
+  return document.querySelector(`input[name='${name}']:checked`)?.value === "yes";
+}
+
+function setBinaryToggleValue(name, value) {
+  const normalized = normalizeBinaryToggleValue(value);
+  const radio = document.querySelector(`input[name='${name}'][value='${normalized}']`);
+  if (radio) {
+    radio.checked = true;
+  }
+}
+
 function setTextIfPresent(id, value) {
   const el = qs(id);
   if (el) {
@@ -158,7 +234,7 @@ function buildRagUrl() {
   const mode = qs("ragModeSelect").value;
   const topK = qs("ragTopKInput").value || "5";
   const fetchK = qs("ragFetchKInput").value || "15";
-  const includeDiagnostics = qs("ragDiagnosticsCheckbox").checked ? "true" : "false";
+  const includeDiagnostics = getBinaryToggleBool("ragDiagnosticsToggle") ? "true" : "false";
 
   if (!request) {
     throw new Error("Request is required.");
@@ -506,7 +582,7 @@ function clearRag() {
   qs("ragModeSelect").value = "search";
   qs("ragTopKInput").value = "5";
   qs("ragFetchKInput").value = "15";
-  qs("ragDiagnosticsCheckbox").checked = false;
+  setBinaryToggleValue("ragDiagnosticsToggle", false);
   qs("ragSummary").innerHTML = `<div class="empty-state">Run a search or grounded question.</div>`;
   qs("ragResults").innerHTML = `<div class="empty-state">No results yet.</div>`;
   qs("ragMeta").textContent = "Idle";
@@ -518,7 +594,7 @@ function attachRagHandlers() {
     try {
       await runRag();
     } catch (err) {
-      alert(`Failed to run intelligence query: ${err.message}`);
+      showAppError("Failed to run intelligence query", err);
     }
   });
 
@@ -532,7 +608,7 @@ function attachRagHandlers() {
       try {
         await runRag();
       } catch (err) {
-        alert(`Failed to run intelligence query: ${err.message}`);
+        showAppError("Failed to run intelligence query", err);
       }
     }
   });
@@ -544,7 +620,7 @@ function attachRagHandlers() {
     try {
       await handleApplyClick(button);
     } catch (err) {
-      alert(`Failed to open apply workflow: ${err.message}`);
+      showAppError("Failed to open apply workflow", err);
     }
   });
 
@@ -568,7 +644,7 @@ function attachRagHandlers() {
       try {
         await submitApplicationStatus(status);
       } catch (err) {
-        alert(`Failed to update application status: ${err.message}`);
+        showAppError("Failed to update application status", err);
       }
     });
   });
@@ -581,6 +657,7 @@ function attachRagHandlers() {
 }
 
 window.addEventListener("DOMContentLoaded", () => {
+  bindAppErrorModal();
   attachRagHandlers();
   resetIntelligenceStats();
 });

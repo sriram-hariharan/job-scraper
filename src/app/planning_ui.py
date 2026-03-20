@@ -154,6 +154,36 @@ def planning_dashboard() -> str:
     </div>
   </section>
 
+  <section class="modal-backdrop hidden" id="appErrorModal">
+    <div class="modal-card app-error-modal-card">
+      <div class="modal-header app-error-modal-header">
+        <div>
+          <h3 id="appErrorTitle">Something went wrong</h3>
+          <div class="subtext" id="appErrorSubtitle">Review the message below.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="closeAppErrorModalBtn" type="button">Close</button>
+      </div>
+
+      <div class="app-error-panel">
+        <div class="app-error-icon-wrap" aria-hidden="true">
+          <img
+            class="app-error-icon-img"
+            src="/static/media/error_img.png"
+            alt=""
+          />
+        </div>
+        <div class="app-error-copy">
+          <div class="app-error-badge">Warning</div>
+          <div class="app-error-message" id="appErrorMessage"></div>
+        </div>
+      </div>
+
+      <div class="modal-actions app-error-actions">
+        <button type="button" id="appErrorOkBtn">OK</button>
+      </div>
+    </div>
+  </section>
+
   <script src="/static/shell.js"></script>
   <script src="/static/planning.js"></script>
 </body>

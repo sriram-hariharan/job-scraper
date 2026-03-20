@@ -607,6 +607,55 @@ function closePipelineConfirmModal() {
   getPipelineConfirmModal().classList.add("hidden");
 }
 
+function getAppErrorModal() {
+  return qs("appErrorModal");
+}
+
+function closeAppErrorModal() {
+  getAppErrorModal().classList.add("hidden");
+}
+
+function extractErrorMessage(err) {
+  let message = err?.message || String(err || "Unknown error");
+
+  const httpMatch = message.match(/^HTTP \d+:\s*(.*)$/s);
+  if (httpMatch) {
+    message = httpMatch[1];
+  }
+
+  try {
+    const parsed = JSON.parse(message);
+    if (Array.isArray(parsed.detail)) {
+      message = parsed.detail
+        .map((item) => {
+          if (item && item.msg && item.input !== undefined) {
+            return `${item.msg} (input: ${item.input})`;
+          }
+          if (item && item.msg) {
+            return item.msg;
+          }
+          return JSON.stringify(item);
+        })
+        .join("\n");
+    } else if (parsed.detail) {
+      message = typeof parsed.detail === "string"
+        ? parsed.detail
+        : JSON.stringify(parsed.detail, null, 2);
+    }
+  } catch {
+    // leave message as-is
+  }
+
+  return message;
+}
+
+function showAppError(title, err, subtitle = "Review the message below.") {
+  qs("appErrorTitle").textContent = title || "Something went wrong";
+  qs("appErrorSubtitle").textContent = subtitle;
+  qs("appErrorMessage").textContent = extractErrorMessage(err);
+  getAppErrorModal().classList.remove("hidden");
+}
+
 function collectPipelineConfig() {
   const llmActions = getSelectedPipelineLlmActions();
   if (!llmActions.length) {
@@ -826,8 +875,24 @@ async function loadWorkflow(view) {
   );
 }
 
+  async function loadAppliedJobs() {
+  state.currentMode = "applied_jobs";
+  state.workflowView = null;
+
+  const limit = qs("limitInput").value || "25";
+  const data = await fetchJson(`/applied-jobs?limit=${encodeURIComponent(limit)}`);
+  const count = data.count ?? 0;
+
+  renderQueueRows(
+    data.rows || [],
+    `Applied jobs · ${count} row${count === 1 ? "" : "s"}`
+  );
+}
+
 async function reloadCurrentTable() {
-  if (state.currentMode === "workflow" && state.workflowView) {
+  if (state.currentMode === "applied_jobs") {
+    await loadAppliedJobs();
+  } else if (state.currentMode === "workflow" && state.workflowView) {
     await loadWorkflow(state.workflowView);
   } else {
     await loadBrowse();
@@ -904,7 +969,7 @@ function attachApplicationHandlers() {
     try {
       await handleApplyClick(button);
     } catch (err) {
-      alert(`Failed to open apply workflow: ${err.message}`);
+      showAppError("Failed to open apply workflow", err);
     }
   });
 
@@ -928,7 +993,7 @@ function attachApplicationHandlers() {
       closePipelineConfigModal();
       openPipelineConfirmModal();
     } catch (err) {
-      alert(`Invalid pipeline configuration: ${err.message}`);
+      showAppError("Invalid pipeline configuration", err);
     }
   });
 
@@ -958,13 +1023,22 @@ function attachApplicationHandlers() {
   } catch (err) {
     clearPipelinePendingSuccess();
       hidePageLoadingOverlay();
-      alert(`Failed to start live pipeline: ${err.message}`);
+      showAppError("Failed to start live pipeline", err);
     }
   });
 
   qs("pipelineSuccessOkBtn").addEventListener("click", () => {
     state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
     hidePageLoadingOverlay();
+  }); 
+
+  qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
+  qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);
+
+  getAppErrorModal().addEventListener("click", (event) => {
+    if (event.target === getAppErrorModal()) {
+      closeAppErrorModal();
+    }
   });
 
   getApplicationModal().addEventListener("click", (event) => {
@@ -994,7 +1068,7 @@ function attachApplicationHandlers() {
       try {
         await submitApplicationStatus(status);
       } catch (err) {
-        alert(`Failed to update application status: ${err.message}`);
+        showAppError("Failed to update application status", err);
       }
     });
   });
@@ -1035,7 +1109,7 @@ function attachEventHandlers() {
     try {
       await loadBrowse();
     } catch (err) {
-      alert(`Failed to load browse data: ${err.message}`);
+      showAppError("Failed to load browse data", err);
     }
   });
 
@@ -1044,7 +1118,7 @@ function attachEventHandlers() {
     try {
       await loadBrowse();
     } catch (err) {
-      alert(`Failed to reload browse data: ${err.message}`);
+      showAppError("Failed to reload browse data", err);
     }
   });
 
@@ -1054,18 +1128,24 @@ function attachEventHandlers() {
       await loadPipelineStatus();
       await reloadCurrentTable();
     } catch (err) {
-      alert(`Failed to refresh dashboard: ${err.message}`);
+      showAppError("Failed to refresh dashboard", err);
     }
   });
 
   document.querySelectorAll(".quick-view-btn").forEach((btn) => {
     btn.addEventListener("click", async () => {
-      const view = btn.dataset.view;
-      if (!view) return;
       try {
+        if (btn.dataset.mode === "applied_jobs") {
+          await loadAppliedJobs();
+          return;
+        }
+
+        const view = btn.dataset.view;
+        if (!view) return;
+
         await loadWorkflow(view);
       } catch (err) {
-        alert(`Failed to load workflow view: ${err.message}`);
+        showAppError("Failed to load workflow view", err);
       }
     });
   });
@@ -1089,7 +1169,7 @@ async function init() {
     }
   } catch (err) {
     console.error(err);
-    alert(`Failed to initialize dashboard: ${err.message}`);
+    showAppError("Failed to initialize dashboard", err);
   }
 }
 

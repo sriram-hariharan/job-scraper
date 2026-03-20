@@ -1932,3 +1932,123 @@ thead .sticky-apply-col {
     width: 100%;
   }
 }
+
+/* === pipeline success overlay === */
+
+.pipeline-overlay-loading.hidden,
+.pipeline-overlay-success.hidden {
+  display: none;
+}
+
+.pipeline-overlay-loading {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pipeline-overlay-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.pipeline-success-visual {
+  width: 180px;
+  height: 180px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: radial-gradient(circle at center, rgba(145, 242, 195, 0.14) 0%, rgba(145, 242, 195, 0.04) 58%, transparent 72%);
+  border: 1px solid rgba(145, 242, 195, 0.14);
+  box-shadow: inset 0 0 40px rgba(145, 242, 195, 0.06);
+}
+
+.pipeline-success-gif {
+  width: 150px;
+  height: 150px;
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+.pipeline-success-static-check {
+  width: 150px;
+  height: 150px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 104px;
+  line-height: 1;
+  font-weight: 900;
+  color: #91f2c3;
+  text-shadow: 0 0 24px rgba(145, 242, 195, 0.2);
+}
+
+.pipeline-success-title {
+  color: #d7f8ea;
+  font-size: 28px;
+  text-align: center;
+}
+
+.pipeline-success-text {
+  max-width: 620px;
+  text-align: center;
+}
+
+.pipeline-success-summary {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(42, 53, 99, 0.7);
+  text-align: left;
+}
+
+.pipeline-success-summary-text {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.pipeline-success-summary .pipeline-loading-counts {
+  justify-content: center;
+}
+
+.pipeline-success-actions {
+  justify-content: center;
+}
+
+#pipelineSuccessOkBtn {
+  min-width: 120px;
+}
+
+@media (max-width: 700px) {
+  .pipeline-success-visual {
+    width: 150px;
+    height: 150px;
+  }
+
+  .pipeline-success-gif,
+  .pipeline-success-static-check {
+    width: 120px;
+    height: 120px;
+  }
+
+  .pipeline-success-static-check {
+    font-size: 84px;
+  }
+
+  .pipeline-success-title {
+    font-size: 24px;
+  }
+}
+
+.pipeline-success-gif.hidden,
+.pipeline-success-static-check.hidden {
+  display: none;
+}

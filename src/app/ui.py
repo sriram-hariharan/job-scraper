@@ -421,14 +421,42 @@ def executive_dashboard() -> str:
   </section>
 
   <section class="page-loading-overlay hidden" id="pageLoadingOverlay">
-    <div class="page-loading-card pipeline-loading-card">
-      <div class="loading-spinner"></div>
-      <div class="page-loading-title" id="pageLoadingTitle">Running live pipeline...</div>
-      <div class="page-loading-text" id="pageLoadingText">Preparing pipeline run.</div>
+    <div class="page-loading-card pipeline-loading-card" id="pipelineOverlayCard">
+      <div class="pipeline-overlay-loading" id="pipelineOverlayLoading">
+        <div class="loading-spinner"></div>
+        <div class="page-loading-title" id="pageLoadingTitle">Running live pipeline...</div>
+        <div class="page-loading-text" id="pageLoadingText">Preparing pipeline run.</div>
 
-      <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
-      <div class="pipeline-loading-counts" id="pipelineLoadingCounts"></div>
-      <div class="pipeline-stage-stepper" id="pipelineStageStepper"></div>
+        <div class="pipeline-loading-meta" id="pipelineLoadingMeta"></div>
+        <div class="pipeline-loading-counts" id="pipelineLoadingCounts"></div>
+        <div class="pipeline-stage-stepper" id="pipelineStageStepper"></div>
+      </div>
+
+      <div class="pipeline-overlay-success hidden" id="pipelineOverlaySuccess">
+        <div class="pipeline-success-visual">
+          <img
+              id="pipelineSuccessGif"
+              class="pipeline-success-gif"
+              src="/static/gifs/success_check.gif"
+              data-src="/static/gifs/success_check.gif"
+              alt="Pipeline completed successfully"
+            />
+          <div class="pipeline-success-static-check hidden" id="pipelineSuccessStaticCheck">✓</div>
+        </div>
+
+        <div class="page-loading-title pipeline-success-title" id="pipelineSuccessTitle">
+          Pipeline completed
+        </div>
+        <div class="page-loading-text pipeline-success-text" id="pipelineSuccessText">
+          Run finished successfully.
+        </div>
+
+        <div class="pipeline-success-summary" id="pipelineSuccessSummary"></div>
+
+        <div class="modal-actions pipeline-success-actions">
+          <button type="button" id="pipelineSuccessOkBtn">OK</button>
+        </div>
+      </div>
     </div>
   </section>
 

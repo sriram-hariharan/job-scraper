@@ -3,10 +3,6 @@ import json
 import numpy as np
 from tqdm import tqdm
 
-from src.ai.embedding_model import get_model
-from src.resume.resume_loader import load_resumes
-
-
 CACHE_DIR = "data/resume_embeddings"
 VECTOR_FILE = f"{CACHE_DIR}/vectors.npy"
 NAME_FILE = f"{CACHE_DIR}/names.json"
@@ -37,7 +33,9 @@ def save_cache(vectors, names):
 
 
 def get_embedding_matrix(names=None):
-
+    from src.ai.embedding_model import get_model
+    from src.resume.resume_loader import load_resumes
+    
     if cache_exists():
         print("Loaded resume embedding cache")
         return load_cache()

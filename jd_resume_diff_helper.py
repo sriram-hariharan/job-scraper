@@ -4,7 +4,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
 
-from src.config.consts import TITLE_CANONICAL, _SKILL_ALIASES
+from src.config.consts import TITLE_CANONICAL, _SKILL_ALIASES, CONTEXT_TOKEN_STOPWORDS
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
@@ -71,6 +71,32 @@ def _normalized_skill_list(values: List[str]) -> List[str]:
 def _contains_signal(text: str, signal: str) -> bool:
     return re.search(rf"\b{re.escape(_normalize_text(signal))}\b", text) is not None
 
+def _context_tokens(value: str) -> List[str]:
+    text = _normalize_text(value)
+    if not text:
+        return []
+
+    tokens = []
+    for token in text.split():
+        token = token.strip()
+        if not token:
+            continue
+        if token in CONTEXT_TOKEN_STOPWORDS:
+            continue
+        if len(token) < 3 and token not in {"ml", "ai", "r"}:
+            continue
+        tokens.append(token)
+
+    return _unique_preserve_order(tokens)
+
+
+def _job_context_terms(job) -> List[str]:
+    values: List[str] = []
+    values.extend(_context_tokens(job.title))
+    values.extend(_context_tokens(" ".join(job.required_skills or [])))
+    values.extend(_context_tokens(" ".join(job.preferred_skills or [])))
+    values.extend(_context_tokens(" ".join(job.all_skills or [])))
+    return _unique_preserve_order(values)
 
 def _job_sort_key(record: dict):
     return (
@@ -170,51 +196,84 @@ def _split_job_skill_gaps(resume, job) -> Tuple[List[str], List[str], List[str],
 
 def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
-    rows: List[dict] = []
+
+    direct_rows: List[dict] = []
+    source_entries = {}
+
+    def _source_key(section: str, source_title: str, source_company: str) -> str:
+        return "||".join(
+            [
+                section,
+                _normalize_text(source_title),
+                _normalize_text(source_company),
+            ]
+        )
+
+    def _row_key(row: dict) -> tuple:
+        return (
+            row.get("section", ""),
+            row.get("source_title", ""),
+            row.get("source_company", ""),
+            row.get("bullet_index", -1),
+            row.get("text", ""),
+        )
+
+    def _append_source_rows(
+        *,
+        section: str,
+        source_title: str,
+        source_company: str,
+        bullets: List[str],
+    ) -> None:
+        src_key = _source_key(section, source_title, source_company)
+
+        source_entries[src_key] = {
+            "section": section,
+            "source_title": source_title,
+            "source_company": source_company,
+            "bullets": bullets,
+        }
+
+        for bullet_index, bullet in enumerate(bullets):
+            bullet_norm = _normalize_text(bullet)
+            if not bullet_norm:
+                continue
+
+            overlaps = [term for term in job_targets if _contains_signal(bullet_norm, term)]
+            if not overlaps:
+                continue
+
+            direct_rows.append(
+                {
+                    "section": section,
+                    "source_title": source_title,
+                    "source_company": source_company,
+                    "text": bullet,
+                    "overlap_count": len(overlaps),
+                    "overlaps": overlaps,
+                    "evidence_type": "direct_overlap",
+                    "source_key": src_key,
+                    "bullet_index": bullet_index,
+                }
+            )
 
     for entry in resume.experience_entries:
-        for bullet in entry.bullets:
-            bullet_norm = _normalize_text(bullet)
-            if not bullet_norm:
-                continue
-
-            overlaps = [term for term in job_targets if _contains_signal(bullet_norm, term)]
-            if not overlaps:
-                continue
-
-            rows.append(
-                {
-                    "section": "experience",
-                    "source_title": entry.title,
-                    "source_company": entry.company,
-                    "text": bullet,
-                    "overlap_count": len(overlaps),
-                    "overlaps": overlaps,
-                }
-            )
+        _append_source_rows(
+            section="experience",
+            source_title=entry.title,
+            source_company=entry.company,
+            bullets=entry.bullets,
+        )
 
     for entry in resume.project_entries:
-        for bullet in entry.bullets:
-            bullet_norm = _normalize_text(bullet)
-            if not bullet_norm:
-                continue
+        _append_source_rows(
+            section="project",
+            source_title=entry.name,
+            source_company="",
+            bullets=entry.bullets,
+        )
 
-            overlaps = [term for term in job_targets if _contains_signal(bullet_norm, term)]
-            if not overlaps:
-                continue
-
-            rows.append(
-                {
-                    "section": "project",
-                    "source_title": entry.name,
-                    "source_company": "",
-                    "text": bullet,
-                    "overlap_count": len(overlaps),
-                    "overlaps": overlaps,
-                }
-            )
-
-    rows.sort(
+    direct_rows.sort(
         key=lambda row: (
             -row["overlap_count"],
             row["section"],
@@ -223,7 +282,154 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
         )
     )
 
-    return rows[:top_k]
+    if not direct_rows:
+        return []
+
+    selected: List[dict] = []
+    selected_keys = set()
+    used_sources = set()
+
+    source_best_overlap_count = {}
+    source_anchor_overlaps = {}
+    source_anchor_indices = {}
+
+    def _register_selected(row: dict) -> None:
+        key = _row_key(row)
+        if key in selected_keys:
+            return
+
+        selected.append(row)
+        selected_keys.add(key)
+
+        src_key = row["source_key"]
+        used_sources.add(src_key)
+        source_best_overlap_count[src_key] = max(
+            source_best_overlap_count.get(src_key, 0),
+            int(row.get("overlap_count", 0) or 0),
+        )
+        source_anchor_overlaps.setdefault(src_key, list(row.get("overlaps", [])))
+        source_anchor_indices.setdefault(src_key, []).append(int(row.get("bullet_index", -1)))
+
+    # Pass 1: diversify across sources using strongest direct-overlap bullets.
+    for row in direct_rows:
+        if len(selected) >= top_k:
+            break
+        if row["source_key"] in used_sources:
+            continue
+        _register_selected(row)
+
+    # Pass 2: fill remaining slots with strongest remaining direct-overlap bullets.
+    for row in direct_rows:
+        if len(selected) >= top_k:
+            break
+        _register_selected(row)
+
+    if len(selected) >= top_k:
+        return selected[:top_k]
+
+    # Pass 3: add more bullets from already-proven relevant sources, even if they do not
+    # have explicit JD-term overlap. This gives richer role-level context.
+    same_source_context_rows: List[dict] = []
+
+    for src_key, source_meta in source_entries.items():
+        if src_key not in used_sources:
+            continue
+
+        bullets = source_meta["bullets"]
+        anchor_indices = source_anchor_indices.get(src_key, [])
+        anchor_overlaps = source_anchor_overlaps.get(src_key, [])
+        source_strength = source_best_overlap_count.get(src_key, 0)
+
+        for bullet_index, bullet in enumerate(bullets):
+            bullet_norm = _normalize_text(bullet)
+            if not bullet_norm:
+                continue
+
+            candidate = {
+                "section": source_meta["section"],
+                "source_title": source_meta["source_title"],
+                "source_company": source_meta["source_company"],
+                "text": bullet,
+                "overlap_count": max(source_strength - 1, 1),
+                "overlaps": list(anchor_overlaps),
+                "evidence_type": "same_source_context",
+                "source_key": src_key,
+                "bullet_index": bullet_index,
+                "distance_to_anchor": (
+                    min(abs(bullet_index - idx) for idx in anchor_indices)
+                    if anchor_indices else 999
+                ),
+            }
+
+            key = _row_key(candidate)
+            if key in selected_keys:
+                continue
+
+            same_source_context_rows.append(candidate)
+
+    same_source_context_rows.sort(
+        key=lambda row: (
+            -source_best_overlap_count.get(row["source_key"], 0),
+            row.get("distance_to_anchor", 999),
+            row["section"],
+            row["source_title"].lower(),
+            row["text"].lower(),
+        )
+    )
+
+    for row in same_source_context_rows:
+        if len(selected) >= top_k:
+            break
+        _register_selected(row)
+
+    if len(selected) >= top_k:
+        return selected[:top_k]
+
+    # Pass 4: add immediate neighbors from selected anchors as a final local-context fill.
+    enriched: List[dict] = list(selected[:top_k])
+
+    for anchor in list(selected):
+        if len(enriched) >= top_k:
+            break
+
+        source_meta = source_entries.get(anchor["source_key"])
+        if not source_meta:
+            continue
+
+        bullets = source_meta["bullets"]
+        for offset in (-1, 1):
+            if len(enriched) >= top_k:
+                break
+
+            neighbor_index = anchor["bullet_index"] + offset
+            if neighbor_index < 0 or neighbor_index >= len(bullets):
+                continue
+
+            neighbor_text = bullets[neighbor_index]
+            neighbor_norm = _normalize_text(neighbor_text)
+            if not neighbor_norm:
+                continue
+
+            neighbor_row = {
+                "section": source_meta["section"],
+                "source_title": source_meta["source_title"],
+                "source_company": source_meta["source_company"],
+                "text": neighbor_text,
+                "overlap_count": max(anchor.get("overlap_count", 1) - 1, 1),
+                "overlaps": list(anchor.get("overlaps", [])),
+                "evidence_type": "adjacent_context",
+                "source_key": anchor["source_key"],
+                "bullet_index": neighbor_index,
+            }
+
+            key = _row_key(neighbor_row)
+            if key in selected_keys:
+                continue
+
+            enriched.append(neighbor_row)
+            selected_keys.add(key)
+
+    return enriched[:top_k]
 
 
 def _dimension_snapshot(result, max_dims: int = 6) -> str:
@@ -499,7 +705,10 @@ def main() -> None:
             if row["source_company"]:
                 source = f"{row['source_title']} @ {row['source_company']}"
             print(f"{idx}. [{row['section']}] {source}")
+            print(f"   evidence_type: {row.get('evidence_type', 'direct_overlap')}")
             print(f"   overlaps: {row['overlaps']}")
+            if row.get("context_terms"):
+                print(f"   context_terms: {row['context_terms']}")
             print(f"   bullet: {row['text']}")
             print()
 

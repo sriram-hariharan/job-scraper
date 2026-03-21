@@ -165,6 +165,15 @@ def planning_dashboard() -> str:
         <button class="ghost-btn modal-close-btn" id="closeTailoringModalBtn" type="button">Close</button>
       </div>
 
+      <div class="tailoring-provenance-bar">
+        <div id="tailoringProviderMeta" class="summary-chip-row tailoring-chip-row">
+          <span class="summary-chip chip-muted">Loading provider…</span>
+        </div>
+        <div id="tailoringSourceChips" class="summary-chip-row tailoring-chip-row">
+          <span class="summary-chip chip-muted">Loading provenance…</span>
+        </div>
+      </div>
+
       <div class="pipeline-modal-scroll" id="tailoringModalScroll">
         <section class="card tailoring-overview-card">
           <div class="section-header section-header--compact">
@@ -184,12 +193,12 @@ def planning_dashboard() -> str:
 
             <div class="info-pair tailoring-meta-item">
               <span class="label">Tailoring Status</span>
-              <span id="tailoringModalStatus">-</span>
+              <span id="tailoringModalStatus" class="tailoring-status-value">-</span>
             </div>
 
             <div class="info-pair tailoring-meta-item">
               <span class="label">LLM Error</span>
-              <span id="tailoringModalError">-</span>
+              <span id="tailoringModalError" class="tailoring-error-value">-</span>
             </div>
 
             <div class="info-pair tailoring-meta-item tailoring-meta-item--path">

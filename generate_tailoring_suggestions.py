@@ -94,6 +94,17 @@ def _unique_preserve_order(values: List[str]) -> List[str]:
 def _truncate_list(values: List[str], limit: int) -> List[str]:
     return values[:limit]
 
+def _source_label(row: Dict[str, Any]) -> str:
+    source_title = str(row.get("source_title", "") or "").strip()
+    source_company = str(row.get("source_company", "") or "").strip()
+    return source_title if not source_company else f"{source_title} @ {source_company}"
+
+
+def _short_bullet(text: str, limit: int = 220) -> str:
+    value = str(text or "").strip()
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3].rstrip() + "..."
 
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
@@ -163,30 +174,163 @@ def _build_do_not_claim(packet: Dict[str, Any]) -> List[str]:
     return _unique_preserve_order(items)
 
 
-def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 5) -> List[Dict[str, Any]]:
+def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str, Any]]:
     rows = packet.get("top_relevant_bullets", []) or []
     selected = rows[:limit]
 
     reuse_rows = []
     for row in selected:
-        source_title = row.get("source_title", "")
-        source_company = row.get("source_company", "")
-        source = source_title if not source_company else f"{source_title} @ {source_company}"
+        source = _source_label(row)
+        overlaps = row.get("overlaps", []) or []
+        evidence_type = row.get("evidence_type", "direct_overlap")
+
+        if evidence_type == "direct_overlap":
+            reuse_note = (
+                "Use this as a primary anchor bullet and move the matched JD terms "
+                f"earlier in the sentence: {', '.join(overlaps[:6])}"
+            )
+        elif evidence_type == "same_source_context":
+            reuse_note = (
+                "Use this as supporting context from the same role/project so the main anchor "
+                "bullet feels more credible and less isolated."
+            )
+        else:
+            reuse_note = (
+                "Use this as nearby supporting context if it strengthens the same story truthfully."
+            )
+
         reuse_rows.append(
             {
                 "section": row.get("section", ""),
                 "source": source,
-                "overlaps": row.get("overlaps", []),
+                "overlaps": overlaps,
+                "evidence_type": evidence_type,
                 "bullet": row.get("text", ""),
-                "reuse_note": (
-                    f"Reuse/review this bullet because it already supports: "
-                    f"{', '.join(row.get('overlaps', [])[:6])}"
-                ),
+                "reuse_note": reuse_note,
             }
         )
 
     return reuse_rows
 
+def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Dict[str, Any]]:
+    rows = packet.get("top_relevant_bullets", []) or []
+    candidates: List[Dict[str, Any]] = []
+    used_sources = set()
+
+    for row in rows:
+        overlaps = row.get("overlaps", []) or []
+        if not overlaps:
+            continue
+
+        source = _source_label(row)
+        evidence_type = row.get("evidence_type", "direct_overlap")
+        source_key = (row.get("section", ""), source, evidence_type)
+
+        if source_key in used_sources:
+            continue
+
+        if evidence_type == "direct_overlap":
+            action = (
+                f"Lead with {', '.join(overlaps[:4])} in the opening clause of this bullet, "
+                "then keep the outcome/impact at the end."
+            )
+        elif evidence_type == "same_source_context":
+            action = (
+                "Use this as a second supporting bullet under the same role so the stronger anchor bullet "
+                "looks backed by related work."
+            )
+        else:
+            action = (
+                "Use this as adjacent support only if it keeps the same story truthful and consistent."
+            )
+
+        candidates.append(
+            {
+                "source": source,
+                "section": row.get("section", ""),
+                "evidence_type": evidence_type,
+                "supported_terms": overlaps[:6],
+                "action": action,
+                "bullet_excerpt": _short_bullet(row.get("text", "")),
+            }
+        )
+        used_sources.add(source_key)
+
+        if len(candidates) >= limit:
+            break
+
+    return candidates
+
+
+REWRITE_DIRECTION_PREFIXES = (
+    "Lead with",
+    "Support with",
+    "Keep gap explicit",
+    "Do not add",
+)
+
+
+def _fallback_rewrite_directions_from_payload(
+    payload: Dict[str, Any],
+    limit: int = 6,
+) -> List[str]:
+    rows = payload.get("rewrite_candidates", []) or []
+    directions: List[str] = []
+
+    for row in rows[:limit]:
+        section = row.get("section", "")
+        source = row.get("source", "")
+        action = str(row.get("action", "") or "").strip()
+        evidence = str(row.get("bullet_excerpt", "") or "").strip()
+        if not action:
+            continue
+
+        directions.append(
+            f"{action} Source: [{section}] {source}. Evidence: {evidence}"
+        )
+
+    return directions
+
+
+def _is_actionable_rewrite_direction(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    return text.startswith(REWRITE_DIRECTION_PREFIXES)
+
+
+def _select_operator_rewrite_directions(
+    payload: Dict[str, Any],
+    llm_output: Optional[Dict[str, Any]],
+) -> tuple[List[str], str]:
+    parsed = {}
+    if isinstance(llm_output, dict) and llm_output.get("parse_ok"):
+        parsed = llm_output.get("parsed", {}) or {}
+
+    llm_directions = [
+        str(item).strip()
+        for item in parsed.get("rewrite_directions", []) or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    if len(llm_directions) >= 2:
+        return llm_directions[:6], "live_llm"
+
+    return _fallback_rewrite_directions_from_payload(payload), "deterministic"
+
+
+def _build_operator_markdown_payload(
+    payload: Dict[str, Any],
+    llm_output: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    operator_payload = dict(payload)
+    preferred_rewrite_directions, preferred_rewrite_source = _select_operator_rewrite_directions(
+        payload,
+        llm_output,
+    )
+    operator_payload["preferred_rewrite_directions"] = preferred_rewrite_directions
+    operator_payload["preferred_rewrite_source"] = preferred_rewrite_source
+    return operator_payload
 
 def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
     summary = packet.get("summary", {})
@@ -198,76 +342,129 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
 
     if matched_required:
         actions.append(
-            f"Move the strongest already-supported required skills higher in the resume or summary: "
+            f"Surface already-supported required terms earlier and more explicitly: "
             f"{', '.join(_truncate_list(matched_required, 6))}."
         )
 
-    if bullets:
-        top_overlap_terms = _unique_preserve_order(
-            [term for row in bullets[:5] for term in row.get("overlaps", [])]
+    direct_overlap_rows = [row for row in bullets if row.get("evidence_type") == "direct_overlap"]
+    if direct_overlap_rows:
+        top_terms = _unique_preserve_order(
+            [term for row in direct_overlap_rows[:4] for term in row.get("overlaps", [])]
         )
-        if top_overlap_terms:
+        top_sources = _unique_preserve_order(
+            [_source_label(row) for row in direct_overlap_rows[:3]]
+        )
+        if top_terms:
             actions.append(
-                f"Reuse or strengthen bullets that already prove these JD-aligned terms: "
-                f"{', '.join(_truncate_list(top_overlap_terms, 8))}."
+                f"Prefer anchor bullets that already prove these JD terms: "
+                f"{', '.join(_truncate_list(top_terms, 8))}."
             )
+        if top_sources:
+            actions.append(
+                f"Start from stronger evidence anchors in these source entries: "
+                f"{', '.join(_truncate_list(top_sources, 4))}."
+            )
+
+    same_source_rows = [row for row in bullets if row.get("evidence_type") == "same_source_context"]
+    if same_source_rows:
+        support_sources = _unique_preserve_order(
+            [_source_label(row) for row in same_source_rows[:3]]
+        )
+        actions.append(
+            f"Use supporting bullets from the same role/project to reinforce the anchor story: "
+            f"{', '.join(_truncate_list(support_sources, 4))}."
+        )
 
     if missing_required:
         actions.append(
-            f"Review whether you have truthful evidence for the missing required skills before editing anything: "
+            f"Keep these missing required skills as explicit gaps unless you can support them truthfully: "
             f"{', '.join(_truncate_list(missing_required, 6))}."
-        )
-        actions.append(
-            "If you do have truthful evidence for any missing requirement, add it explicitly in bullets/skills; "
-            "otherwise leave the gap visible instead of inventing coverage."
         )
 
     return _unique_preserve_order(actions)
 
 
-def _build_llm_prompt(packet: Dict[str, Any], bullet_limit: int = 6) -> str:
+def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
     summary = packet.get("summary", {})
-    bullets = packet.get("top_relevant_bullets", [])[:bullet_limit]
-    guardrail = packet.get(
-        "guardrail",
-        "Only add or strengthen resume language when it is already truthful and supported by your actual work.",
-    )
+    bullets = packet.get("top_relevant_bullets", []) or []
+    rewrite_candidates = packet.get("rewrite_candidates", []) or []
 
-    lines = []
-    lines.append("You are helping tailor a resume for one job.")
-    lines.append("You must stay grounded only in the provided evidence.")
-    lines.append("Do not invent skills, tools, projects, outcomes, or responsibilities.")
+    anchor_rows = [row for row in bullets if row.get("evidence_type") == "direct_overlap"][:4]
+    support_rows = [
+        row for row in bullets
+        if row.get("evidence_type") in {"same_source_context", "adjacent_context"}
+    ][:4]
+
+    lines: List[str] = []
+
+    lines.append("Return ONLY JSON that matches the required schema.")
     lines.append("")
-    lines.append(f"Job company: {job.get('company', '')}")
-    lines.append(f"Job title: {job.get('title', '')}")
-    lines.append(f"Selected resume: {selection.get('selected_resume', '')}")
-    lines.append(f"Selected score: {selection.get('selected_score', 0.0):.3f}")
+    lines.append("Goal:")
+    lines.append("Produce evidence-anchored tailoring guidance for ONE selected resume variant.")
     lines.append("")
-    lines.append(f"Matched required skills: {summary.get('matched_required', [])}")
-    lines.append(f"Missing required skills: {summary.get('missing_required', [])}")
-    lines.append(f"Matched preferred skills: {summary.get('matched_preferred', [])}")
-    lines.append(f"Missing preferred skills: {summary.get('missing_preferred', [])}")
-    lines.append(f"Matched terms: {summary.get('matched_terms', [])}")
-    lines.append(f"Top dimensions: {summary.get('top_dimensions', '')}")
+    lines.append("Hard rules:")
+    lines.append("1. Use ONLY the evidence below.")
+    lines.append("2. Do NOT invent tools, methods, responsibilities, metrics, or domains.")
+    lines.append("3. Treat missing unsupported skills as gaps, not rewrite opportunities.")
+    lines.append("4. Prefer concrete rewrite directions tied to a specific source entry.")
+    lines.append("5. Use direct-overlap bullets as primary anchors.")
+    lines.append("6. Use same-role/context bullets only as supporting evidence.")
+    lines.append("7. Avoid generic advice like 'highlight', 'showcase', or 'emphasize' unless you name the exact supported term and source entry.")
+    lines.append("8. In rewrite_directions, each item should start with one of: 'Lead with', 'Support with', 'Keep gap explicit', or 'Do not add'.")
+    lines.append("9. Keep every list concise and recruiter-usable.")
     lines.append("")
-    lines.append("Best existing bullets to reuse/review:")
-    for idx, row in enumerate(bullets, start=1):
+    lines.append("Job:")
+    lines.append(f"- Company: {job.get('company', '')}")
+    lines.append(f"- Title: {job.get('title', '')}")
+    lines.append("")
+    lines.append("Selected resume:")
+    lines.append(f"- Resume: {selection.get('selected_resume', '')}")
+    lines.append(f"- Score: {selection.get('selected_score', '')}")
+    lines.append("")
+    lines.append("Matched / missing skills:")
+    lines.append(f"- Matched required: {summary.get('matched_required', [])}")
+    lines.append(f"- Missing required: {summary.get('missing_required', [])}")
+    lines.append(f"- Matched preferred: {summary.get('matched_preferred', [])}")
+    lines.append(f"- Missing preferred: {summary.get('missing_preferred', [])}")
+    lines.append(f"- Matched terms from prefilter: {summary.get('matched_terms', [])}")
+    lines.append("")
+    lines.append("Primary anchor bullets:")
+    for idx, row in enumerate(anchor_rows, 1):
         lines.append(
-            f"{idx}. [{row.get('section', '')}] "
-            f"{row.get('source_title', '')} @ {row.get('source_company', '')} | "
-            f"overlaps={row.get('overlaps', [])} | bullet={row.get('text', '')}"
+            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+            f"supports={row.get('overlaps', [])}"
         )
+        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
     lines.append("")
-    lines.append(f"Guardrail: {guardrail}")
+    lines.append("Supporting context bullets:")
+    for idx, row in enumerate(support_rows, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+            f"type={row.get('evidence_type', '')} | supports={row.get('overlaps', [])}"
+        )
+        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
     lines.append("")
-    lines.append("Return compact JSON only with:")
-    lines.append("1. recruiter_summary: max 2 sentences")
-    lines.append("2. keep_emphasize: max 4 items")
-    lines.append("3. tailoring_actions: max 4 items")
-    lines.append("4. do_not_claim: max 4 items")
-    lines.append("5. rewrite_directions: max 3 items")
+    lines.append("Evidence-backed rewrite candidates:")
+    for idx, row in enumerate(rewrite_candidates, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {row.get('source', '')} | "
+            f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+        )
+        lines.append(f"   Action: {row.get('action', '')}")
+        lines.append(f"   Evidence: {row.get('bullet_excerpt', '')}")
+    lines.append("")
+    lines.append("Guardrail:")
+    lines.append(str(packet.get("guardrail", "")))
+    lines.append("")
+    lines.append("Output expectations:")
+    lines.append("- recruiter_summary: 1 sentence only.")
+    lines.append("- keep_emphasize: only already-supported terms or phrases.")
+    lines.append("- tailoring_actions: concrete operator actions tied to the evidence above.")
+    lines.append("- do_not_claim: unsupported skills, tools, or responsibilities only.")
+    lines.append("- rewrite_directions: source-tied rewrite instructions, not generic writing advice.")
+
     return "\n".join(lines)
 
 def _escape_control_chars_inside_json_strings(text: str) -> str:
@@ -522,14 +719,18 @@ def _run_live_llm_tailoring(
     prompt = payload["llm_prompt"]
 
     primary_system_prompt = """
-You generate grounded resume tailoring suggestions.
+You generate evidence-anchored resume tailoring JSON.
 
 You MUST obey these rules:
-1. Use ONLY the evidence provided by the user.
-2. Do NOT invent tools, methods, skills, outcomes, metrics, domains, or responsibilities.
-3. If the evidence is weak for a missing skill, say it is unsupported.
-4. Keep outputs concise, practical, and recruiter-usable.
-5. Keep list items short and concrete.
+1. Return content that is fully grounded in the supplied packet evidence.
+2. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
+3. Direct-overlap bullets are the primary anchors for rewrite advice.
+4. Same-role or adjacent bullets are only supporting context.
+5. If a skill is unsupported, keep it in do_not_claim or call it an explicit gap.
+6. rewrite_directions must be concrete and source-tied, not vague writing advice.
+7. Avoid generic phrases like "highlight", "showcase", or "emphasize" unless you name the exact supported term and source entry.
+8. Keep recruiter_summary to one sentence.
+9. Keep lists concise, practical, and recruiter-usable.
 """
 
     retry_system_prompt = """
@@ -541,9 +742,10 @@ You MUST obey these rules:
 3. Keep the entire JSON on a single line.
 4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
 5. Use empty arrays instead of null.
-6. Keep recruiter_summary to 1 sentence.
+6. Keep recruiter_summary to exactly 1 sentence.
 7. Keep each list short and concrete.
-8. Use ONLY the evidence provided. Do NOT invent anything.
+8. Use ONLY the supplied evidence. Do NOT invent anything.
+9. rewrite_directions must be source-tied and action-oriented, not generic writing advice.
 """
 
     fallback_attempted = bool(
@@ -733,6 +935,7 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     keep_emphasize = _build_keep_emphasize(packet)
     do_not_claim = _build_do_not_claim(packet)
     bullet_reuse = _build_bullet_reuse(packet)
+    rewrite_candidates = _build_rewrite_candidates(packet)
     tailoring_actions = _build_tailoring_actions(packet)
     llm_prompt = _build_llm_prompt(packet)
 
@@ -743,6 +946,7 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         "recruiter_summary": recruiter_summary,
         "keep_emphasize": keep_emphasize,
         "tailoring_actions": tailoring_actions,
+        "rewrite_candidates": rewrite_candidates,
         "do_not_claim": do_not_claim,
         "bullet_reuse_candidates": bullet_reuse,
         "llm_prompt": llm_prompt,
@@ -779,6 +983,22 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         lines.append(f"- {item}")
     lines.append("")
 
+    lines.append("## Priority Rewrite Directions")
+    lines.append(f"- Source: {payload.get('preferred_rewrite_source', 'deterministic')}")
+    for item in payload.get("preferred_rewrite_directions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+
+    lines.append("## Evidence-Backed Rewrite Ideas")
+    for row in payload.get("rewrite_candidates", []):
+        lines.append(
+            f"- **[{row.get('section', '')}] {row.get('source', '')}** | "
+            f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+        )
+        lines.append(f"  - Action: {row.get('action', '')}")
+        lines.append(f"  - Evidence: {row.get('bullet_excerpt', '')}")
+    lines.append("")
+
     lines.append("## Do Not Claim")
     for item in payload.get("do_not_claim", []):
         lines.append(f"- {item}")
@@ -788,16 +1008,10 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     for row in payload.get("bullet_reuse_candidates", []):
         lines.append(
             f"- **[{row.get('section', '')}] {row.get('source', '')}** | "
-            f"overlaps={row.get('overlaps', [])}"
+            f"type={row.get('evidence_type', '')} | overlaps={row.get('overlaps', [])}"
         )
-        lines.append(f"  - {row.get('bullet', '')}")
-        lines.append(f"  - {row.get('reuse_note', '')}")
-    lines.append("")
-
-    lines.append("## LLM Prompt")
-    lines.append("```text")
-    lines.append(payload.get("llm_prompt", ""))
-    lines.append("```")
+        lines.append(f"  - Bullet: {row.get('bullet', '')}")
+        lines.append(f"  - Reuse note: {row.get('reuse_note', '')}")
     lines.append("")
 
     return "\n".join(lines)
@@ -841,7 +1055,8 @@ def main() -> None:
 
     packet = _load_packet(Path(args.packet_json))
     payload = _build_payload(packet)
-    markdown = _markdown_from_payload(payload)
+    markdown_payload = _build_operator_markdown_payload(payload, None)
+    markdown = _markdown_from_payload(markdown_payload)
 
     print("=" * 100)
     print("GROUNDED TAILORING SUGGESTIONS")
@@ -871,6 +1086,18 @@ def main() -> None:
     print()
 
     print("-" * 100)
+    print("EVIDENCE-BACKED REWRITE IDEAS")
+    print("-" * 100)
+    for row in payload.get("rewrite_candidates", []):
+        print(
+            f"- [{row.get('section', '')}] {row.get('source', '')} | "
+            f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+        )
+        print(f"  Action: {row.get('action', '')}")
+        print(f"  Evidence: {row.get('bullet_excerpt', '')}")
+    print()
+
+    print("-" * 100)
     print("DO NOT CLAIM")
     print("-" * 100)
     for item in payload["do_not_claim"]:
@@ -882,10 +1109,11 @@ def main() -> None:
         output_json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
         print(f"JSON written: {output_json_path}")
 
+    output_md_path = None
     if args.output_md.strip():
         output_md_path = Path(args.output_md)
         output_md_path.write_text(markdown, encoding="utf-8")
-        print(f"Markdown written: {output_md_path}")
+        print(f"Markdown written: {args.output_md}")
     
     if args.use_llm:
         llm_output = _run_live_llm_tailoring(
@@ -947,7 +1175,14 @@ def main() -> None:
                 encoding="utf-8",
             )
             print(f"LLM JSON written: {output_llm_json_path}")
-
+        
+        if llm_output.get("parse_ok") and output_md_path is not None:
+            markdown_payload = _build_operator_markdown_payload(payload, llm_output)
+            output_md_path.write_text(_markdown_from_payload(markdown_payload), encoding="utf-8")
+            print(
+                f"Markdown updated with {markdown_payload.get('preferred_rewrite_source', 'deterministic')} rewrite directions: "
+                f"{args.output_md}"
+            )
 
 if __name__ == "__main__":
     main()

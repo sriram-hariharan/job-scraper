@@ -1,5 +1,8 @@
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 
+let currentTailoringMarkdownRaw = "";
+let tailoringCopyResetTimer = null;
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -205,6 +208,93 @@ function closeTailoringModal() {
   getTailoringModal().classList.add("hidden");
 }
 
+function clearTailoringCopyResetTimer() {
+  if (tailoringCopyResetTimer) {
+    window.clearTimeout(tailoringCopyResetTimer);
+    tailoringCopyResetTimer = null;
+  }
+}
+
+function setTailoringCopyButtonState({ label = "Copy", disabled = true, copied = false } = {}) {
+  const button = qs("copyTailoringMarkdownBtn");
+  const labelEl = qs("copyTailoringMarkdownLabel");
+  if (!button || !labelEl) return;
+
+  button.disabled = disabled;
+  button.classList.toggle("is-copied", copied);
+  labelEl.textContent = label;
+}
+
+function syncTailoringCopyButtonState() {
+  setTailoringCopyButtonState({
+    label: "Copy",
+    disabled: !String(currentTailoringMarkdownRaw || "").trim(),
+    copied: false,
+  });
+}
+
+function copyTextToClipboard(text) {
+  if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+    return navigator.clipboard.writeText(text);
+  }
+
+  return new Promise((resolve, reject) => {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.top = "-1000px";
+    textarea.style.left = "-1000px";
+    document.body.appendChild(textarea);
+    textarea.select();
+
+    try {
+      const ok = document.execCommand("copy");
+      document.body.removeChild(textarea);
+      if (!ok) {
+        reject(new Error("Clipboard copy command failed."));
+        return;
+      }
+      resolve();
+    } catch (err) {
+      document.body.removeChild(textarea);
+      reject(err);
+    }
+  });
+}
+
+async function handleCopyTailoringMarkdown() {
+  const markdown = String(currentTailoringMarkdownRaw || "").trim();
+  if (!markdown) return;
+
+  clearTailoringCopyResetTimer();
+
+  try {
+    await copyTextToClipboard(markdown);
+    setTailoringCopyButtonState({
+      label: "Copied",
+      disabled: false,
+      copied: true,
+    });
+
+    tailoringCopyResetTimer = window.setTimeout(() => {
+      syncTailoringCopyButtonState();
+    }, 1600);
+  } catch (err) {
+    setTailoringCopyButtonState({
+      label: "Copy failed",
+      disabled: false,
+      copied: false,
+    });
+
+    tailoringCopyResetTimer = window.setTimeout(() => {
+      syncTailoringCopyButtonState();
+    }, 1600);
+
+    showAppError("Failed to copy tailoring markdown", err);
+  }
+}
+
 function titleCase(value) {
   const text = String(value || "").trim().toLowerCase();
   if (!text) return "";
@@ -405,6 +495,10 @@ function resetTailoringModalViewState() {
 }
 
 function resetTailoringModalContent() {
+
+  currentTailoringMarkdownRaw = "";
+  clearTailoringCopyResetTimer();
+
   qs("tailoringModalCompany").textContent = "-";
   qs("tailoringModalTitle").textContent = "-";
   qs("tailoringModalStatus").innerHTML = buildTailoringStatusBadge("Unavailable", "muted");
@@ -419,6 +513,8 @@ function resetTailoringModalContent() {
   qs("tailoringMarkdownContent").innerHTML = "<p>No artifact loaded.</p>";
   qs("tailoringLlmJsonContent").textContent = "No artifact loaded.";
   qs("tailoringPacketJsonContent").textContent = "No artifact loaded.";
+  
+  setTailoringCopyButtonState({ label: "Copy", disabled: true, copied: false });
 
   resetTailoringModalViewState();
 }
@@ -443,6 +539,9 @@ function openTailoringModal(row) {
   qs("tailoringMarkdownContent").innerHTML = "<p>Loading tailoring markdown...</p>";
   qs("tailoringLlmJsonContent").textContent = "Loading LLM tailoring JSON...";
   qs("tailoringPacketJsonContent").textContent = "Loading packet JSON...";
+
+  currentTailoringMarkdownRaw = "";
+  setTailoringCopyButtonState({ label: "Loading...", disabled: true, copied: false });
 
   resetTailoringModalViewState();
 
@@ -587,6 +686,13 @@ async function handleTailoringClick(button) {
   renderArtifactIntoElement("tailoringPacketJsonContent", packetArtifact);
   updateTailoringProvenance(row, llmJsonArtifact);
   updateTailoringOverview(row, llmJsonArtifact);
+
+  currentTailoringMarkdownRaw =
+    markdownArtifact && markdownArtifact.kind === "text"
+      ? String(markdownArtifact.text || "")
+      : "";
+
+  syncTailoringCopyButtonState();
 }
 
 function openApplicationModal(job) {
@@ -754,6 +860,8 @@ function attachPlanningHandlers() {
     clearPendingApplication();
     closeApplicationModal();
   });
+
+  qs("copyTailoringMarkdownBtn").addEventListener("click", handleCopyTailoringMarkdown);
 
   getApplicationModal().addEventListener("click", (event) => {
     if (event.target === getApplicationModal()) {

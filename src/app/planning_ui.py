@@ -221,6 +221,24 @@ def planning_dashboard() -> str:
         <section class="card tailoring-primary-card">
           <div class="section-header">
             <h3>Tailoring Markdown</h3>
+            <div class="section-header-actions">
+              <button
+                type="button"
+                class="ghost-btn tailoring-copy-btn"
+                id="copyTailoringMarkdownBtn"
+                title="Copy tailoring markdown"
+                aria-label="Copy tailoring markdown"
+                disabled
+              >
+                <span class="tailoring-copy-btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                    <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                    <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
+                  </svg>
+                </span>
+                <span id="copyTailoringMarkdownLabel">Copy</span>
+              </button>
+            </div>
           </div>
           <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
         </section>

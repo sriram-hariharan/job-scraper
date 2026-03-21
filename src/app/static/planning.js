@@ -17,6 +17,11 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function planningUndecidedOnlyEnabled() {
+  const selected = document.querySelector("input[name='planningUndecidedOnlyToggle']:checked");
+  return selected ? selected.value === "yes" : false;
+}
+
 function getAppErrorModal() {
   return qs("appErrorModal");
 }
@@ -88,7 +93,7 @@ function countPlanningActiveFilters() {
   let count = 0;
   if (qs("planningActionFilter").value.trim()) count += 1;
   if (qs("planningWinnerBucket").value.trim()) count += 1;
-  if (qs("planningUndecidedOnly").checked) count += 1;
+  if (planningUndecidedOnlyEnabled()) count += 1;
   return count;
 }
 
@@ -133,7 +138,7 @@ function buildPlanningUrl() {
   const params = new URLSearchParams();
   const action = qs("planningActionFilter").value.trim();
   const winnerBucket = qs("planningWinnerBucket").value.trim();
-  const undecidedOnly = qs("planningUndecidedOnly").checked ? "true" : "";
+  const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
   const limit = qs("planningLimitInput").value || "50";
 
   if (action) params.set("action", action);
@@ -812,7 +817,12 @@ async function loadPlanningTable() {
 function clearPlanningFilters() {
   qs("planningActionFilter").value = "";
   qs("planningWinnerBucket").value = "";
-  qs("planningUndecidedOnly").checked = false;
+
+  const defaultUndecided = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
+  if (defaultUndecided) {
+    defaultUndecided.checked = true;
+  }
+  
   qs("planningLimitInput").value = "50";
   updatePlanningStats(0);
 }

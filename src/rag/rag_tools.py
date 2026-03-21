@@ -68,17 +68,39 @@ def _validate_output_mode(output_mode: Any) -> Optional[str]:
 
 
 def _build_diagnostics(
-    top_k: int,
-    fetch_k: int,
-    filters: Optional[Dict[str, Any]],
-    output_mode: str,
+    *,
+    filters: Optional[Dict[str, Any]] = None,
+    answer_payload: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    return {
-        "top_k": top_k,
-        "fetch_k": fetch_k,
-        "filters": filters or {},
-        "output_mode": output_mode,
-    }
+    diagnostics: Dict[str, Any] = {}
+
+    normalized_filters = filters or {}
+    if normalized_filters:
+        diagnostics["requested_filters"] = normalized_filters
+
+    if answer_payload:
+        sources = answer_payload.get("sources", []) or []
+        used_source_ids = answer_payload.get("used_source_ids", []) or []
+        job_evidence = answer_payload.get("job_evidence", []) or []
+
+        structured_evidence_points = 0
+        for row in job_evidence:
+            if not isinstance(row, dict):
+                continue
+            structured_evidence_points += len(row.get("evidence_points", []) or [])
+
+        diagnostics["coverage"] = {
+            "sources_cited": len(used_source_ids),
+            "structured_evidence_jobs": len(job_evidence),
+            "structured_evidence_points": structured_evidence_points,
+        }
+
+        diagnostics["quality_flags"] = {
+            "thin_evidence": len(sources) <= 1 or len(job_evidence) <= 1,
+            "answer_without_structured_evidence": len(sources) > 0 and len(job_evidence) == 0,
+        }
+
+    return diagnostics
 
 
 def _compact_job_result(result: Dict[str, Any]) -> Dict[str, Any]:
@@ -255,7 +277,10 @@ def answer_job_query_tool(
     }
 
     if include_diagnostics:
-        payload["diagnostics"] = _build_diagnostics(top_k, fetch_k, filters, output_mode)
+        payload["diagnostics"] = _build_diagnostics(
+            filters=filters,
+            answer_payload=shaped_result,
+        )
 
     return payload
 

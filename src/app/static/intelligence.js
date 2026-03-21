@@ -351,6 +351,51 @@ async function handleApplyClick(button) {
   }
 }
 
+function renderDiagnostics(diagnostics) {
+  const payload = diagnostics && typeof diagnostics === "object" ? diagnostics : null;
+  if (!payload || !Object.keys(payload).length) {
+    return "";
+  }
+
+  const requestedFilters = payload.requested_filters || {};
+  const coverage = payload.coverage || {};
+  const qualityFlags = payload.quality_flags || {};
+
+  const renderPair = (label, value) => {
+    if (value === null || value === undefined || value === "") {
+      return "";
+    }
+
+    const rendered = Array.isArray(value) || (value && typeof value === "object")
+      ? JSON.stringify(value)
+      : String(value);
+
+    return `
+      <div class="info-pair">
+        <span class="label">${escapeHtml(label)}</span>
+        <span>${escapeHtml(rendered)}</span>
+      </div>
+    `;
+  };
+
+  return `
+    <div class="evidence-section">
+      <div class="evidence-section-label">Diagnostics</div>
+      <div class="evidence-scroll">
+        ${Object.keys(requestedFilters).length ? renderPair("Requested filters", requestedFilters) : ""}
+        ${renderPair("Sources cited", coverage.sources_cited)}
+        ${renderPair("Structured evidence jobs", coverage.structured_evidence_jobs)}
+        ${renderPair("Structured evidence points", coverage.structured_evidence_points)}
+        ${renderPair("Thin evidence", qualityFlags.thin_evidence ? "Yes" : "No")}
+        ${renderPair(
+          "Answer without structured evidence",
+          qualityFlags.answer_without_structured_evidence ? "Yes" : "No"
+        )}
+      </div>
+    </div>
+  `;
+}
+
 function renderJobEvidence(jobEvidence) {
   const rows = Array.isArray(jobEvidence) ? jobEvidence : [];
 
@@ -440,6 +485,9 @@ function renderSummary(payload, mode) {
   const retrievedCount = response.retrieved_count ?? "";
   const sourceCount = response.source_count ?? "";
   const insufficient = response.insufficient_evidence ?? "";
+  const diagnostics = response.diagnostics && typeof response.diagnostics === "object"
+    ? response.diagnostics
+    : null;
   const retrievalLanes = Array.isArray(response.retrieval_lanes_used)
     ? response.retrieval_lanes_used
     : [];
@@ -463,6 +511,8 @@ function renderSummary(payload, mode) {
     <div class="info-pair"><span class="label">Jobs Considered</span><span>${escapeHtml(String(retrievedCount))}</span></div>
     <div class="info-pair"><span class="label">Sources Used in Answer</span><span>${escapeHtml(String(sourceCount))}</span></div>
     <div class="info-pair"><span class="label">Insufficient Evidence</span><span>${escapeHtml(insufficient ? "Yes" : "No")}</span></div>
+    <div class="info-pair"><span class="label">Diagnostics</span><span>${escapeHtml(diagnostics ? "Included" : "Not included")}</span></div>
+    ${renderDiagnostics(diagnostics)}
     ${renderJobEvidence(jobEvidence)}
   `;
 }

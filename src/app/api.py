@@ -194,7 +194,19 @@ def planner(
     except SystemExit as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-
+@app.get("/planning-artifact")
+def planning_artifact(
+    path: str,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
+    try:
+        return services.planning_artifact_payload(
+            path=path,
+            output_dir=Path(output_dir),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.get("/decisions")
 def decisions(
     decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),

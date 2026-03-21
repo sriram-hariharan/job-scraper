@@ -115,6 +115,7 @@ def planning_dashboard() -> str:
               <th>Operator Decision</th>
               <th>Operator Selected Resume</th>
               <th>Priority Reason</th>
+              <th>Tailoring</th>
               <th class="sticky-apply-col">Apply</th>
             </tr>
           </thead>
@@ -150,6 +151,84 @@ def planning_dashboard() -> str:
         <button type="button" class="status-action-btn saved-action-btn" data-status-action="SAVED">Save for later</button>
         <button type="button" class="status-action-btn not-applied-action-btn" data-status-action="NOT_APPLIED">Not applied</button>
         <button type="button" class="ghost-btn" data-status-action="DISMISSED">Dismiss</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop hidden" id="tailoringModal">
+    <div class="modal-card pipeline-modal-card tailoring-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Tailoring Detail</h3>
+          <div class="subtext" id="tailoringModalMeta">Planning artifact details for the selected job.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="closeTailoringModalBtn" type="button">Close</button>
+      </div>
+
+      <div class="pipeline-modal-scroll" id="tailoringModalScroll">
+        <section class="card tailoring-overview-card">
+          <div class="section-header section-header--compact">
+            <h3>Overview</h3>
+          </div>
+
+          <div class="modal-body tailoring-meta-grid">
+            <div class="info-pair tailoring-meta-item">
+              <span class="label">Company</span>
+              <span id="tailoringModalCompany">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item">
+              <span class="label">Title</span>
+              <span id="tailoringModalTitle">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item">
+              <span class="label">Tailoring Status</span>
+              <span id="tailoringModalStatus">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item">
+              <span class="label">LLM Error</span>
+              <span id="tailoringModalError">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+              <span class="label">Tailoring Markdown Path</span>
+              <span id="tailoringModalMarkdownPath" class="tailoring-path-value">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+              <span class="label">Tailoring LLM JSON Path</span>
+              <span id="tailoringModalLlmJsonPath" class="tailoring-path-value">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+              <span class="label">Packet JSON Path</span>
+              <span id="tailoringModalPacketPath" class="tailoring-path-value">-</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="card tailoring-primary-card">
+          <div class="section-header">
+            <h3>Tailoring Markdown</h3>
+          </div>
+          <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
+        </section>
+
+        <details class="card tailoring-accordion">
+          <summary>LLM Tailoring JSON</summary>
+          <pre id="tailoringLlmJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
+        </details>
+
+        <details class="card tailoring-accordion">
+          <summary>Packet JSON</summary>
+          <pre id="tailoringPacketJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
+        </details>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="closeTailoringFooterBtn">Close</button>
       </div>
     </div>
   </section>

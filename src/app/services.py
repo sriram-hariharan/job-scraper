@@ -771,6 +771,51 @@ def planner_payload(
         "count": len(selected),
     }
 
+def _resolve_planning_artifact_path(
+    path: str,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Path:
+    raw = str(path or "").strip()
+    if not raw:
+        raise ValueError("Artifact path is required.")
+
+    resolved = Path(raw).expanduser().resolve()
+    output_root = Path(output_dir).expanduser().resolve()
+
+    try:
+        resolved.relative_to(output_root)
+    except ValueError as exc:
+        raise ValueError("Artifact path must stay inside the planning output directory.") from exc
+
+    if not resolved.exists() or not resolved.is_file():
+        raise ValueError(f"Artifact not found: {raw}")
+
+    if resolved.suffix.lower() not in {".md", ".json"}:
+        raise ValueError(f"Unsupported artifact type: {resolved.suffix}")
+
+    return resolved
+
+
+def planning_artifact_payload(
+    path: str,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
+    suffix = artifact_path.suffix.lower()
+    text = artifact_path.read_text(encoding="utf-8")
+
+    payload: Dict[str, Any] = {
+        "ok": True,
+        "path": str(artifact_path),
+        "kind": "json" if suffix == ".json" else "text",
+    }
+
+    if suffix == ".json":
+        payload["data"] = json.loads(text)
+    else:
+        payload["text"] = text
+
+    return payload
 
 def decisions_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,

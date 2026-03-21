@@ -3479,3 +3479,63 @@ thead .sticky-apply-col {
     grid-template-columns: 1fr;
   }
 }
+
+/* === sortable table headers === */
+
+th.sortable-col {
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.sort-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.sort-header-btn:hover {
+  opacity: 1;
+  color: var(--text);
+}
+
+.sort-header-btn:focus-visible {
+  outline: 2px solid rgba(120, 166, 255, 0.45);
+  outline-offset: 4px;
+  border-radius: 8px;
+}
+
+.sort-header-label {
+  min-width: 0;
+  flex: 1;
+}
+
+.sort-header-indicator {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.sort-header-btn.is-active .sort-header-indicator {
+  color: var(--accent);
+}
+
+.sort-header-btn.is-active .sort-header-label {
+  color: var(--text);
+}

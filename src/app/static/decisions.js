@@ -1,5 +1,14 @@
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 
+const decisionsTableState = {
+  rows: [],
+  metaLabel: "Loading...",
+  sort: {
+    key: "",
+    direction: "asc",
+  },
+};
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -8,6 +17,127 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function normalizeSortValue(value, type = "text") {
+  if (value === null || value === undefined) return null;
+
+  if (type === "number") {
+    const parsed = Number(String(value).replaceAll(",", "").trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (type === "date") {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (type === "boolean") {
+    if (value === true) return 1;
+    if (value === false) return 0;
+
+    const normalized = String(value).trim().toLowerCase();
+    if (["true", "yes", "1"].includes(normalized)) return 1;
+    if (["false", "no", "0"].includes(normalized)) return 0;
+    return null;
+  }
+
+  return String(value).trim().toLowerCase();
+}
+
+function compareSortValues(left, right) {
+  if (left === right) return 0;
+  if (left === null || left === "") return 1;
+  if (right === null || right === "") return -1;
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
+function sortRows(rows, columns, sortState) {
+  const safeRows = Array.isArray(rows) ? rows.slice() : [];
+  if (!sortState.key) return safeRows;
+
+  const column = columns.find((item) => item.key === sortState.key && item.sortable !== false);
+  if (!column) return safeRows;
+
+  const direction = sortState.direction === "desc" ? -1 : 1;
+  const getValue = column.getValue || ((row) => row[column.key]);
+  const type = column.type || "text";
+
+  return safeRows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const cmp = compareSortValues(
+        normalizeSortValue(getValue(a.row), type),
+        normalizeSortValue(getValue(b.row), type)
+      );
+      return cmp === 0 ? a.index - b.index : cmp * direction;
+    })
+    .map((item) => item.row);
+}
+
+function getSortIndicator(sortState, key) {
+  if (sortState.key !== key) return "↕";
+  return sortState.direction === "desc" ? "↓" : "↑";
+}
+
+function renderSortableHeaders(tableId, columns, sortState) {
+  const table = qs(tableId);
+  if (!table) return;
+
+  const cells = table.querySelectorAll("thead th");
+  columns.forEach((column, index) => {
+    const th = cells[index];
+    if (!th) return;
+
+    const label = column.label || th.dataset.originalLabel || th.textContent.trim();
+    th.dataset.originalLabel = label;
+
+    if (column.sortable === false) {
+      th.innerHTML = escapeHtml(label);
+      th.classList.remove("sortable-col");
+      return;
+    }
+
+    th.classList.add("sortable-col");
+    th.innerHTML = `
+      <button
+        type="button"
+        class="sort-header-btn ${sortState.key === column.key ? "is-active" : ""}"
+        data-sort-key="${escapeHtml(column.key)}"
+        aria-label="Sort by ${escapeHtml(label)}"
+      >
+        <span class="sort-header-label">${escapeHtml(label)}</span>
+        <span class="sort-header-indicator">${getSortIndicator(sortState, column.key)}</span>
+      </button>
+    `;
+  });
+}
+
+function bindTableSorting(tableId, columns, sortState, rerender) {
+  const table = qs(tableId);
+  if (!table || table.dataset.sortBound === "true") return;
+
+  table.dataset.sortBound = "true";
+  renderSortableHeaders(tableId, columns, sortState);
+
+  table.querySelector("thead").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-sort-key]");
+    if (!button) return;
+
+    const key = button.dataset.sortKey;
+    if (!key) return;
+
+    if (sortState.key === key) {
+      sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+    } else {
+      sortState.key = key;
+      sortState.direction = "asc";
+    }
+
+    rerender();
+  });
 }
 
 function qs(id) {
@@ -96,6 +226,20 @@ function distinctDecisionJobCount(rows) {
 
   return keys.size;
 }
+
+const DECISIONS_SORT_COLUMNS = [
+  { key: "decision_timestamp", label: "Timestamp", type: "date" },
+  { key: "queue_rank", label: "Queue Rank", type: "number" },
+  { key: "decision", label: "Decision", type: "text" },
+  { key: "job_company", label: "Company", type: "text" },
+  { key: "job_title", label: "Title", type: "text" },
+  { key: "planning_action", label: "Planning Action", type: "text" },
+  { key: "selected_resume", label: "Selected Resume", type: "text" },
+  { key: "winner_resume", label: "Winner Resume", type: "text" },
+  { key: "runner_up_resume", label: "Runner-Up Resume", type: "text" },
+  { key: "note", label: "Note", type: "text" },
+  { key: "apply", label: "Apply", sortable: false },
+];
 
 function renderTableLoading(colspan, label) {
   return `
@@ -242,21 +386,25 @@ async function handleApplyClick(button) {
 }
 
 function renderDecisionRows(rows, metaLabel) {
-  const tbody = qs("decisionsTableBody");
-  const safeRows = Array.isArray(rows) ? rows : [];
+  decisionsTableState.rows = Array.isArray(rows) ? rows.slice() : [];
+  decisionsTableState.metaLabel = metaLabel;
 
-  if (!safeRows.length) {
+  const tbody = qs("decisionsTableBody");
+  const displayRows = sortRows(decisionsTableState.rows, DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
+
+  if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
         <td colspan="11" class="empty-state">No decisions found.</td>
       </tr>
     `;
-    qs("decisionsTableMeta").textContent = metaLabel;
+    qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
     updateDecisionStats([]);
+    renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
     return;
   }
 
-  tbody.innerHTML = safeRows.map((row) => {
+  tbody.innerHTML = displayRows.map((row) => {
     const title = escapeHtml(row.job_title || "");
     const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
     const titleHtml = jobUrl
@@ -280,8 +428,9 @@ function renderDecisionRows(rows, metaLabel) {
     `;
   }).join("");
 
-  qs("decisionsTableMeta").textContent = metaLabel;
-  updateDecisionStats(safeRows);
+  qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
+  updateDecisionStats(displayRows);
+  renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
 }
 
 async function loadDecisionsTable() {
@@ -370,6 +519,11 @@ function attachDecisionHandlers() {
 window.addEventListener("DOMContentLoaded", async () => {
   bindAppErrorModal();
   attachDecisionHandlers();
+
+  bindTableSorting("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort, () => {
+    renderDecisionRows(decisionsTableState.rows, decisionsTableState.metaLabel);
+  });
+
   try {
     await loadDecisionsTable();
   } catch (err) {

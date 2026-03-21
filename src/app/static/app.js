@@ -9,6 +9,15 @@ const state = {
   acknowledgedPipelineSuccessKey: null,
 };
 
+const queueTableState = {
+  rows: [],
+  metaLabel: "Loading...",
+  sort: {
+    key: "",
+    direction: "asc",
+  },
+};
+
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
 const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
@@ -73,6 +82,22 @@ const COUNT_LABELS = {
   final_jobs: "Final Jobs",
 };
 
+const QUEUE_SORT_COLUMNS = [
+  { key: "queue_rank", label: "Queue Rank", type: "number" },
+  { key: "action", label: "Action", type: "text" },
+  { key: "job_company", label: "Company", type: "text" },
+  { key: "job_title", label: "Title", type: "text" },
+  { key: "winner_resume", label: "Winner Resume", type: "text" },
+  { key: "winner_score", label: "Winner Score", type: "number" },
+  { key: "runner_up_resume", label: "Runner-Up Resume", type: "text" },
+  { key: "score_gap", label: "Score Gap", type: "number" },
+  { key: "missing_requirement_count", label: "Missing Req Count", type: "number" },
+  { key: "operator_decision", label: "Operator Decision", type: "text" },
+  { key: "operator_selected_resume", label: "Selected Resume", type: "text" },
+  { key: "queue_priority_reason", label: "Priority Reason", type: "text" },
+  { key: "apply", label: "Apply", sortable: false },
+];
+
 const PIPELINE_PRESETS = {
   full: {
     job_limit: 50,
@@ -120,6 +145,127 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function normalizeSortValue(value, type = "text") {
+  if (value === null || value === undefined) return null;
+
+  if (type === "number") {
+    const parsed = Number(String(value).replaceAll(",", "").trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (type === "date") {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (type === "boolean") {
+    if (value === true) return 1;
+    if (value === false) return 0;
+
+    const normalized = String(value).trim().toLowerCase();
+    if (["true", "yes", "1"].includes(normalized)) return 1;
+    if (["false", "no", "0"].includes(normalized)) return 0;
+    return null;
+  }
+
+  return String(value).trim().toLowerCase();
+}
+
+function compareSortValues(left, right) {
+  if (left === right) return 0;
+  if (left === null || left === "") return 1;
+  if (right === null || right === "") return -1;
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
+function sortRows(rows, columns, sortState) {
+  const safeRows = Array.isArray(rows) ? rows.slice() : [];
+  if (!sortState.key) return safeRows;
+
+  const column = columns.find((item) => item.key === sortState.key && item.sortable !== false);
+  if (!column) return safeRows;
+
+  const direction = sortState.direction === "desc" ? -1 : 1;
+  const getValue = column.getValue || ((row) => row[column.key]);
+  const type = column.type || "text";
+
+  return safeRows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const cmp = compareSortValues(
+        normalizeSortValue(getValue(a.row), type),
+        normalizeSortValue(getValue(b.row), type)
+      );
+      return cmp === 0 ? a.index - b.index : cmp * direction;
+    })
+    .map((item) => item.row);
+}
+
+function getSortIndicator(sortState, key) {
+  if (sortState.key !== key) return "↕";
+  return sortState.direction === "desc" ? "↓" : "↑";
+}
+
+function renderSortableHeaders(tableId, columns, sortState) {
+  const table = qs(tableId);
+  if (!table) return;
+
+  const cells = table.querySelectorAll("thead th");
+  columns.forEach((column, index) => {
+    const th = cells[index];
+    if (!th) return;
+
+    const label = column.label || th.dataset.originalLabel || th.textContent.trim();
+    th.dataset.originalLabel = label;
+
+    if (column.sortable === false) {
+      th.innerHTML = escapeHtml(label);
+      th.classList.remove("sortable-col");
+      return;
+    }
+
+    th.classList.add("sortable-col");
+    th.innerHTML = `
+      <button
+        type="button"
+        class="sort-header-btn ${sortState.key === column.key ? "is-active" : ""}"
+        data-sort-key="${escapeHtml(column.key)}"
+        aria-label="Sort by ${escapeHtml(label)}"
+      >
+        <span class="sort-header-label">${escapeHtml(label)}</span>
+        <span class="sort-header-indicator">${getSortIndicator(sortState, column.key)}</span>
+      </button>
+    `;
+  });
+}
+
+function bindTableSorting(tableId, columns, sortState, rerender) {
+  const table = qs(tableId);
+  if (!table || table.dataset.sortBound === "true") return;
+
+  table.dataset.sortBound = "true";
+  renderSortableHeaders(tableId, columns, sortState);
+
+  table.querySelector("thead").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-sort-key]");
+    if (!button) return;
+
+    const key = button.dataset.sortKey;
+    if (!key) return;
+
+    if (sortState.key === key) {
+      sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+    } else {
+      sortState.key = key;
+      sortState.direction = "asc";
+    }
+
+    rerender();
+  });
 }
 
 function qs(id) {
@@ -808,20 +954,24 @@ function buildQueueRowHtml(row) {
 }
 
 function renderQueueRows(rows, metaLabel) {
-  const tbody = qs("queueTableBody");
-  const safeRows = Array.isArray(rows) ? rows : [];
+  queueTableState.rows = Array.isArray(rows) ? rows.slice() : [];
+  queueTableState.metaLabel = metaLabel;
 
-  if (!safeRows.length) {
+  const tbody = qs("queueTableBody");
+  const displayRows = sortRows(queueTableState.rows, QUEUE_SORT_COLUMNS, queueTableState.sort);
+
+  if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
         <td colspan="13" class="empty-state">No rows found.</td>
       </tr>
     `;
   } else {
-    tbody.innerHTML = safeRows.map(buildQueueRowHtml).join("");
+    tbody.innerHTML = displayRows.map(buildQueueRowHtml).join("");
   }
 
-  qs("tableMeta").textContent = metaLabel;
+  qs("tableMeta").textContent = queueTableState.metaLabel;
+  renderSortableHeaders("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort);
 }
 
 function buildBrowseUrl() {
@@ -1158,6 +1308,10 @@ async function init() {
     attachPipelineConfigHandlers();
     applyPipelinePreset("full");
     syncPipelinePathPreview();
+
+    bindTableSorting("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort, () => {
+      renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
+    });
 
     await loadStatus();
     await loadPipelineStatus();

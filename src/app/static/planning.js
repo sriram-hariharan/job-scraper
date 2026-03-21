@@ -197,6 +197,206 @@ function getApplicationModal() {
   return qs("applicationActionModal");
 }
 
+function getTailoringModal() {
+  return qs("tailoringModal");
+}
+
+function closeTailoringModal() {
+  getTailoringModal().classList.add("hidden");
+}
+
+function resetTailoringModalViewState() {
+  const modalScroll = qs("tailoringModalScroll");
+  if (modalScroll) {
+    modalScroll.scrollTop = 0;
+  }
+
+  ["tailoringMarkdownContent", "tailoringLlmJsonContent", "tailoringPacketJsonContent"].forEach((id) => {
+    const el = qs(id);
+    if (el) {
+      el.scrollTop = 0;
+    }
+  });
+
+  document.querySelectorAll("#tailoringModal .tailoring-accordion").forEach((el) => {
+    el.open = false;
+  });
+}
+
+function resetTailoringModalContent() {
+  qs("tailoringModalCompany").textContent = "-";
+  qs("tailoringModalTitle").textContent = "-";
+  qs("tailoringModalStatus").textContent = "-";
+  qs("tailoringModalError").textContent = "-";
+  qs("tailoringModalMarkdownPath").textContent = "-";
+  qs("tailoringModalLlmJsonPath").textContent = "-";
+  qs("tailoringModalPacketPath").textContent = "-";
+
+  qs("tailoringMarkdownContent").innerHTML = "<p>No artifact loaded.</p>";
+  qs("tailoringLlmJsonContent").textContent = "No artifact loaded.";
+  qs("tailoringPacketJsonContent").textContent = "No artifact loaded.";
+
+  resetTailoringModalViewState();
+}
+
+function openTailoringModal(row) {
+  resetTailoringModalContent();
+
+  qs("tailoringModalCompany").textContent = row.job_company || "-";
+  qs("tailoringModalTitle").textContent = row.job_title || "-";
+  qs("tailoringModalStatus").textContent = row.llm_tailoring_status || "-";
+  qs("tailoringModalError").textContent = row.llm_error_type || "-";
+  qs("tailoringModalMarkdownPath").textContent = row.tailoring_md || "-";
+  qs("tailoringModalLlmJsonPath").textContent = row.tailoring_llm_json || "-";
+  qs("tailoringModalPacketPath").textContent = row.packet_json || "-";
+
+  qs("tailoringMarkdownContent").innerHTML = "<p>Loading tailoring markdown...</p>";
+  qs("tailoringLlmJsonContent").textContent = "Loading LLM tailoring JSON...";
+  qs("tailoringPacketJsonContent").textContent = "Loading packet JSON...";
+
+  resetTailoringModalViewState();
+
+  getTailoringModal().classList.remove("hidden");
+}
+
+function buildArtifactUrl(path) {
+  const params = new URLSearchParams();
+  params.set("path", path);
+  return `/planning-artifact?${params.toString()}`;
+}
+
+async function loadArtifact(path) {
+  if (!path) return null;
+  return fetchJson(buildArtifactUrl(path));
+}
+
+function formatMarkdownInline(text) {
+  return escapeHtml(text).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+}
+
+function renderMarkdownArtifact(text, emptyLabel = "Artifact not available.") {
+  const lines = String(text || "").split(/\r?\n/);
+  const html = [];
+  let listItems = [];
+
+  const flushList = () => {
+    if (!listItems.length) return;
+    html.push(`<ul>${listItems.map((item) => `<li>${formatMarkdownInline(item)}</li>`).join("")}</ul>`);
+    listItems = [];
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    if (!line) {
+      flushList();
+      continue;
+    }
+
+    const heading = line.match(/^(#{1,3})\s+(.*)$/);
+    if (heading) {
+      flushList();
+      const level = heading[1].length;
+      const tag = level === 1 ? "h1" : level === 2 ? "h2" : "h3";
+      html.push(`<${tag}>${formatMarkdownInline(heading[2])}</${tag}>`);
+      continue;
+    }
+
+    const bullet = line.match(/^[-*]\s+(.*)$/);
+    if (bullet) {
+      listItems.push(bullet[1]);
+      continue;
+    }
+
+    flushList();
+    html.push(`<p>${formatMarkdownInline(line)}</p>`);
+  }
+
+  flushList();
+
+  return html.join("") || `<p>${escapeHtml(emptyLabel)}</p>`;
+}
+
+function renderArtifactIntoElement(elementId, artifact, emptyLabel = "Artifact not available.") {
+  const el = qs(elementId);
+  if (!el) return;
+
+  const isMarkdown = elementId === "tailoringMarkdownContent";
+
+  if (!artifact) {
+    if (isMarkdown) {
+      el.innerHTML = `<p>${escapeHtml(emptyLabel)}</p>`;
+    } else {
+      el.textContent = emptyLabel;
+    }
+    el.scrollTop = 0;
+    return;
+  }
+
+  if (isMarkdown) {
+    el.innerHTML = renderMarkdownArtifact(artifact.text || "", emptyLabel);
+    el.scrollTop = 0;
+    return;
+  }
+
+  if (artifact.kind === "json") {
+    el.textContent = JSON.stringify(artifact.data || {}, null, 2);
+    el.scrollTop = 0;
+    return;
+  }
+
+  el.textContent = artifact.text || emptyLabel;
+  el.scrollTop = 0;
+}
+
+function buildTailoringButtonHtml(row) {
+  const hasArtifacts = Boolean(row.tailoring_md || row.tailoring_llm_json || row.packet_json);
+  const label = hasArtifacts ? "View" : "Unavailable";
+  const disabledAttr = hasArtifacts ? "" : "disabled";
+
+  return `
+    <button
+      type="button"
+      class="ghost-btn"
+      ${disabledAttr}
+      data-view-tailoring="true"
+      data-job-company="${escapeHtml(row.job_company || "")}"
+      data-job-title="${escapeHtml(row.job_title || "")}"
+      data-llm-tailoring-status="${escapeHtml(row.llm_tailoring_status || "")}"
+      data-llm-error-type="${escapeHtml(row.llm_error_type || "")}"
+      data-tailoring-md="${escapeHtml(row.tailoring_md || "")}"
+      data-tailoring-llm-json="${escapeHtml(row.tailoring_llm_json || "")}"
+      data-packet-json="${escapeHtml(row.packet_json || "")}"
+    >
+      ${label}
+    </button>
+  `;
+}
+
+async function handleTailoringClick(button) {
+  const row = {
+    job_company: button.dataset.jobCompany || "",
+    job_title: button.dataset.jobTitle || "",
+    llm_tailoring_status: button.dataset.llmTailoringStatus || "",
+    llm_error_type: button.dataset.llmErrorType || "",
+    tailoring_md: button.dataset.tailoringMd || "",
+    tailoring_llm_json: button.dataset.tailoringLlmJson || "",
+    packet_json: button.dataset.packetJson || "",
+  };
+
+  openTailoringModal(row);
+
+  const [markdownArtifact, llmJsonArtifact, packetArtifact] = await Promise.all([
+    loadArtifact(row.tailoring_md),
+    loadArtifact(row.tailoring_llm_json),
+    loadArtifact(row.packet_json),
+  ]);
+
+  renderArtifactIntoElement("tailoringMarkdownContent", markdownArtifact);
+  renderArtifactIntoElement("tailoringLlmJsonContent", llmJsonArtifact);
+  renderArtifactIntoElement("tailoringPacketJsonContent", packetArtifact);
+}
+
 function openApplicationModal(job) {
   if (!job) return;
   qs("applicationModalCompany").textContent = job.job_company || "-";
@@ -251,7 +451,7 @@ function renderPlanningRows(rows, metaLabel) {
   if (!safeRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="19" class="empty-state">No rows found.</td>
+        <td colspan="20" class="empty-state">No rows found.</td>
       </tr>
     `;
     qs("planningTableMeta").textContent = metaLabel;
@@ -286,6 +486,7 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(row.operator_decision || "")}</td>
         <td>${escapeHtml(row.operator_selected_resume || "")}</td>
         <td class="reason-cell">${escapeHtml(row.queue_priority_reason || "")}</td>
+        <td>${buildTailoringButtonHtml(row)}</td>
         <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
       </tr>
     `;
@@ -297,7 +498,7 @@ function renderPlanningRows(rows, metaLabel) {
 
 async function loadPlanningTable() {
   const tbody = qs("planningTableBody");
-  tbody.innerHTML = renderTableLoading(19, "Loading planning rows...");
+  tbody.innerHTML = renderTableLoading(20, "Loading planning rows...");
   qs("planningTableMeta").textContent = "Loading...";
 
   const url = buildPlanningUrl();
@@ -337,11 +538,21 @@ function attachPlanningHandlers() {
   });
 
   qs("planningTableBody").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-apply-job='true']");
-    if (!button || button.disabled) return;
+    const tailoringButton = event.target.closest("[data-view-tailoring='true']");
+    if (tailoringButton && !tailoringButton.disabled) {
+      try {
+        await handleTailoringClick(tailoringButton);
+      } catch (err) {
+        showAppError("Failed to load tailoring artifacts", err);
+      }
+      return;
+    }
+
+    const applyButton = event.target.closest("[data-apply-job='true']");
+    if (!applyButton || applyButton.disabled) return;
 
     try {
-      await handleApplyClick(button);
+      await handleApplyClick(applyButton);
     } catch (err) {
       showAppError("Failed to open apply workflow", err);
     }
@@ -370,6 +581,15 @@ function attachPlanningHandlers() {
         showAppError("Failed to update application status", err);
       }
     });
+  });
+
+  qs("closeTailoringModalBtn").addEventListener("click", closeTailoringModal);
+  qs("closeTailoringFooterBtn").addEventListener("click", closeTailoringModal);
+
+  getTailoringModal().addEventListener("click", (event) => {
+    if (event.target === getTailoringModal()) {
+      closeTailoringModal();
+    }
   });
 
   window.addEventListener("focus", () => {

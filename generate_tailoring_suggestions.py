@@ -5,7 +5,13 @@ from typing import Any, Dict, List, Optional
 import hashlib
 from datetime import datetime, timezone
 
-from src.ai.llm_client import run_chat_completion
+# from src.ai.llm_client import run_chat_completion
+from src.ai.llm_client import (
+    FALLBACK_ENABLED as LLM_FALLBACK_ENABLED,
+    FALLBACK_MODEL as LLM_FALLBACK_MODEL,
+    FALLBACK_PROVIDER as LLM_FALLBACK_PROVIDER,
+    run_chat_completion_with_metadata,
+)
 
 LLM_TAILOR_PROVIDER = "gemini"
 LLM_TAILOR_MODEL = "gemini-2.5-flash"
@@ -372,7 +378,7 @@ def _sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, str]:
+def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, Any]:
     packet_sha256 = _sha256_text(_canonical_json(packet))
 
     job_doc_id = str(
@@ -393,8 +399,11 @@ def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, str]:
             "job_doc_id": job_doc_id,
             "selected_resume": selected_resume,
             "packet_sha256": packet_sha256,
-            "provider": LLM_TAILOR_PROVIDER,
-            "model": LLM_TAILOR_MODEL,
+            "requested_provider": LLM_TAILOR_PROVIDER,
+            "requested_model": LLM_TAILOR_MODEL,
+            "fallback_enabled": LLM_FALLBACK_ENABLED,
+            "fallback_provider": LLM_FALLBACK_PROVIDER if LLM_FALLBACK_ENABLED else "",
+            "fallback_model": LLM_FALLBACK_MODEL if LLM_FALLBACK_ENABLED else "",
             "prompt_version": LLM_TAILOR_PROMPT_VERSION,
         }
     )
@@ -405,12 +414,17 @@ def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, str]:
         "packet_sha256": packet_sha256,
         "cache_key": _sha256_text(cache_key_material),
         "prompt_version": LLM_TAILOR_PROMPT_VERSION,
+        "requested_provider": LLM_TAILOR_PROVIDER,
+        "requested_model": LLM_TAILOR_MODEL,
+        "fallback_enabled": LLM_FALLBACK_ENABLED,
+        "fallback_provider": LLM_FALLBACK_PROVIDER if LLM_FALLBACK_ENABLED else "",
+        "fallback_model": LLM_FALLBACK_MODEL if LLM_FALLBACK_ENABLED else "",
     }
 
 
 def _load_live_llm_cache(
     output_llm_json: str,
-    expected_meta: Dict[str, str],
+    expected_meta: Dict[str, Any],
 ) -> Optional[Dict[str, Any]]:
     if not output_llm_json:
         return None
@@ -436,10 +450,19 @@ def _load_live_llm_cache(
     if cached.get("packet_sha256") != expected_meta["packet_sha256"]:
         return None
 
-    if cached.get("provider") != LLM_TAILOR_PROVIDER:
+    if cached.get("requested_provider") != expected_meta["requested_provider"]:
         return None
 
-    if cached.get("model") != LLM_TAILOR_MODEL:
+    if cached.get("requested_model") != expected_meta["requested_model"]:
+        return None
+
+    if cached.get("fallback_enabled") != expected_meta["fallback_enabled"]:
+        return None
+
+    if cached.get("fallback_provider") != expected_meta["fallback_provider"]:
+        return None
+
+    if cached.get("fallback_model") != expected_meta["fallback_model"]:
         return None
 
     if cached.get("prompt_version") != LLM_TAILOR_PROMPT_VERSION:
@@ -451,7 +474,7 @@ def _load_live_llm_cache(
 
 def _attach_live_llm_cache_meta(
     result: Dict[str, Any],
-    cache_meta: Dict[str, str],
+    cache_meta: Dict[str, Any],
     *,
     cache_hit: bool,
 ) -> Dict[str, Any]:
@@ -507,8 +530,16 @@ You MUST obey these rules:
 8. Use ONLY the evidence provided. Do NOT invent anything.
 """
 
-    def _call_llm(system_prompt: str, user_prompt: str):
-        return run_chat_completion(
+    fallback_attempted = bool(
+        LLM_FALLBACK_ENABLED
+        and LLM_TAILOR_PROVIDER != LLM_FALLBACK_PROVIDER
+    )
+    attempted_providers = [LLM_TAILOR_PROVIDER]
+    if fallback_attempted:
+        attempted_providers.append(LLM_FALLBACK_PROVIDER)
+
+    def _call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
+        return run_chat_completion_with_metadata(
             provider=LLM_TAILOR_PROVIDER,
             model=LLM_TAILOR_MODEL,
             temperature=LLM_TAILOR_TEMPERATURE,
@@ -528,19 +559,44 @@ You MUST obey these rules:
             return json.dumps(value, ensure_ascii=False, default=str)
         return str(value or "").strip()
 
+    def _base_result_meta(result_meta: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        result_meta = result_meta or {}
+        resolved_provider = str(result_meta.get("provider", "") or "").strip()
+        resolved_model = str(result_meta.get("model", "") or "").strip()
+        fallback_used = bool(result_meta.get("fallback_used", False))
+
+        return {
+            "requested_provider": LLM_TAILOR_PROVIDER,
+            "requested_model": LLM_TAILOR_MODEL,
+            "provider": resolved_provider or LLM_TAILOR_PROVIDER,
+            "model": resolved_model or LLM_TAILOR_MODEL,
+            "resolved_provider": resolved_provider,
+            "resolved_model": resolved_model,
+            "fallback_used": fallback_used,
+            "fallback_attempted": fallback_attempted,
+            "fallback_provider": LLM_FALLBACK_PROVIDER if LLM_FALLBACK_ENABLED else "",
+            "fallback_model": LLM_FALLBACK_MODEL if LLM_FALLBACK_ENABLED else "",
+            "attempted_providers": _unique_preserve_order(
+                [LLM_TAILOR_PROVIDER, LLM_FALLBACK_PROVIDER if fallback_used else ""]
+                if resolved_provider
+                else attempted_providers
+            ),
+        }
+
     def _success_result(
-        value: Any,
+        llm_result: Dict[str, Any],
         *,
         retry_used: bool,
         raw_response: str,
         retry_raw_response: str,
     ) -> Dict[str, Any]:
+        value = llm_result.get("content")
+
         if isinstance(value, dict):
             normalized = _normalize_live_llm_parsed(value)
             return _attach_live_llm_cache_meta(
                 {
-                    "provider": LLM_TAILOR_PROVIDER,
-                    "model": LLM_TAILOR_MODEL,
+                    **_base_result_meta(llm_result),
                     "parse_ok": True,
                     "parse_error": "",
                     "retry_used": retry_used,
@@ -557,8 +613,7 @@ You MUST obey these rules:
         normalized = _normalize_live_llm_parsed(parsed)
         return _attach_live_llm_cache_meta(
             {
-                "provider": LLM_TAILOR_PROVIDER,
-                "model": LLM_TAILOR_MODEL,
+                **_base_result_meta(llm_result),
                 "parse_ok": True,
                 "parse_error": "",
                 "retry_used": retry_used,
@@ -571,12 +626,11 @@ You MUST obey these rules:
         )
 
     try:
-        primary_response = _call_llm(primary_system_prompt, prompt)
+        primary_result = _call_llm(primary_system_prompt, prompt)
     except Exception as exc:
         return _attach_live_llm_cache_meta(
             {
-                "provider": LLM_TAILOR_PROVIDER,
-                "model": LLM_TAILOR_MODEL,
+                **_base_result_meta(),
                 "parse_ok": False,
                 "parse_error": f"Primary LLM call failed: {exc}",
                 "retry_used": False,
@@ -588,11 +642,12 @@ You MUST obey these rules:
             cache_hit=False,
         )
 
+    primary_response = primary_result.get("content")
     primary_raw = _raw_text(primary_response)
 
     try:
         return _success_result(
-            primary_response,
+            primary_result,
             retry_used=False,
             raw_response=primary_raw,
             retry_raw_response="",
@@ -607,12 +662,11 @@ You MUST obey these rules:
         )
 
         try:
-            retry_response = _call_llm(retry_system_prompt, retry_prompt)
+            retry_result = _call_llm(retry_system_prompt, retry_prompt)
         except Exception as retry_exc:
             return _attach_live_llm_cache_meta(
                 {
-                    "provider": LLM_TAILOR_PROVIDER,
-                    "model": LLM_TAILOR_MODEL,
+                    **_base_result_meta(),
                     "parse_ok": False,
                     "parse_error": (
                         f"Primary parse failed: {primary_parse_exc}. "
@@ -627,11 +681,12 @@ You MUST obey these rules:
                 cache_hit=False,
             )
 
+        retry_response = retry_result.get("content")
         retry_raw = _raw_text(retry_response)
 
         try:
             return _success_result(
-                retry_response,
+                retry_result,
                 retry_used=True,
                 raw_response=primary_raw,
                 retry_raw_response=retry_raw,
@@ -639,8 +694,7 @@ You MUST obey these rules:
         except Exception as retry_parse_exc:
             return _attach_live_llm_cache_meta(
                 {
-                    "provider": LLM_TAILOR_PROVIDER,
-                    "model": LLM_TAILOR_MODEL,
+                    **_base_result_meta(retry_result),
                     "parse_ok": False,
                     "parse_error": (
                         f"Primary parse failed: {primary_parse_exc}. "
@@ -825,8 +879,11 @@ def main() -> None:
         print("-" * 100)
         print("LIVE LLM TAILORING OUTPUT")
         print("-" * 100)
-        print(f"Provider: {llm_output['provider']}")
-        print(f"Model: {llm_output['model']}")
+        print(f"Requested provider: {llm_output.get('requested_provider', '')}")
+        print(f"Requested model: {llm_output.get('requested_model', '')}")
+        print(f"Resolved provider: {llm_output.get('resolved_provider', '') or '<none>'}")
+        print(f"Resolved model: {llm_output.get('resolved_model', '') or '<none>'}")
+        print(f"Fallback used: {llm_output.get('fallback_used', False)}")
         print(f"Parse OK: {llm_output['parse_ok']}")
         print(f"Cache hit: {llm_output.get('cache_hit', False)}")
         if llm_output["parse_error"]:

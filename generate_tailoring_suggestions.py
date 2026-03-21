@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 import hashlib
@@ -18,6 +19,21 @@ LLM_TAILOR_MODEL = "gemini-2.5-flash"
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
 LLM_TAILOR_PROMPT_VERSION = "v1"
+
+TAILOR_LLM_FALLBACK_ENABLED = (
+    os.getenv(
+        "TAILOR_LLM_FALLBACK_ENABLED",
+        "true" if LLM_FALLBACK_ENABLED else "false",
+    ).strip().lower() == "true"
+)
+TAILOR_LLM_FALLBACK_PROVIDER = os.getenv(
+    "TAILOR_LLM_FALLBACK_PROVIDER",
+    LLM_FALLBACK_PROVIDER,
+).strip().lower()
+TAILOR_LLM_FALLBACK_MODEL = os.getenv(
+    "TAILOR_LLM_FALLBACK_MODEL",
+    LLM_FALLBACK_MODEL,
+).strip()
 
 TAILORING_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -401,9 +417,9 @@ def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, Any]:
             "packet_sha256": packet_sha256,
             "requested_provider": LLM_TAILOR_PROVIDER,
             "requested_model": LLM_TAILOR_MODEL,
-            "fallback_enabled": LLM_FALLBACK_ENABLED,
-            "fallback_provider": LLM_FALLBACK_PROVIDER if LLM_FALLBACK_ENABLED else "",
-            "fallback_model": LLM_FALLBACK_MODEL if LLM_FALLBACK_ENABLED else "",
+            "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
+            "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
             "prompt_version": LLM_TAILOR_PROMPT_VERSION,
         }
     )
@@ -416,9 +432,9 @@ def _compute_live_llm_cache_meta(packet: Dict[str, Any]) -> Dict[str, Any]:
         "prompt_version": LLM_TAILOR_PROMPT_VERSION,
         "requested_provider": LLM_TAILOR_PROVIDER,
         "requested_model": LLM_TAILOR_MODEL,
-        "fallback_enabled": LLM_FALLBACK_ENABLED,
-        "fallback_provider": LLM_FALLBACK_PROVIDER if LLM_FALLBACK_ENABLED else "",
-        "fallback_model": LLM_FALLBACK_MODEL if LLM_FALLBACK_ENABLED else "",
+        "fallback_enabled": TAILOR_LLM_FALLBACK_ENABLED,
+        "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
+        "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
     }
 
 
@@ -531,12 +547,12 @@ You MUST obey these rules:
 """
 
     fallback_attempted = bool(
-        LLM_FALLBACK_ENABLED
-        and LLM_TAILOR_PROVIDER != LLM_FALLBACK_PROVIDER
+        TAILOR_LLM_FALLBACK_ENABLED
+        and LLM_TAILOR_PROVIDER != TAILOR_LLM_FALLBACK_PROVIDER
     )
     attempted_providers = [LLM_TAILOR_PROVIDER]
     if fallback_attempted:
-        attempted_providers.append(LLM_FALLBACK_PROVIDER)
+        attempted_providers.append(TAILOR_LLM_FALLBACK_PROVIDER)
 
     def _call_llm(system_prompt: str, user_prompt: str) -> Dict[str, Any]:
         return run_chat_completion_with_metadata(
@@ -548,6 +564,9 @@ You MUST obey these rules:
             response_schema=TAILORING_RESPONSE_SCHEMA,
             return_parsed=True,
             thinking_budget=0,
+            fallback_enabled=TAILOR_LLM_FALLBACK_ENABLED,
+            fallback_provider=TAILOR_LLM_FALLBACK_PROVIDER,
+            fallback_model=TAILOR_LLM_FALLBACK_MODEL,
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -574,10 +593,10 @@ You MUST obey these rules:
             "resolved_model": resolved_model,
             "fallback_used": fallback_used,
             "fallback_attempted": fallback_attempted,
-            "fallback_provider": LLM_FALLBACK_PROVIDER if LLM_FALLBACK_ENABLED else "",
-            "fallback_model": LLM_FALLBACK_MODEL if LLM_FALLBACK_ENABLED else "",
+            "fallback_provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "fallback_model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
             "attempted_providers": _unique_preserve_order(
-                [LLM_TAILOR_PROVIDER, LLM_FALLBACK_PROVIDER if fallback_used else ""]
+                [LLM_TAILOR_PROVIDER, TAILOR_LLM_FALLBACK_PROVIDER if fallback_used else ""]
                 if resolved_provider
                 else attempted_providers
             ),

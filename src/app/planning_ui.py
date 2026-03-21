@@ -33,45 +33,61 @@ def planning_dashboard() -> str:
     </header>
 
     <section class="card controls-card">
-      <div class="controls-row">
-        <div class="control-group">
-          <label for="planningActionFilter">Action</label>
-          <select id="planningActionFilter">
-            <option value="">All</option>
-            <option value="APPLY">APPLY</option>
-            <option value="APPLY_REVIEW_VARIANTS">APPLY_REVIEW_VARIANTS</option>
-            <option value="MAYBE_TAILOR">MAYBE_TAILOR</option>
-            <option value="SKIP_FOR_NOW">SKIP_FOR_NOW</option>
-          </select>
+      <div class="dashboard-toolbar dashboard-toolbar--planning">
+        <div class="dashboard-toolbar-left dashboard-toolbar-left--planning">
+          <div class="control-group dashboard-field dashboard-field--action">
+            <label for="planningActionFilter">Action</label>
+            <select id="planningActionFilter">
+              <option value="">All</option>
+              <option value="APPLY">APPLY</option>
+              <option value="APPLY_REVIEW_VARIANTS">APPLY_REVIEW_VARIANTS</option>
+              <option value="MAYBE_TAILOR">MAYBE_TAILOR</option>
+              <option value="SKIP_FOR_NOW">SKIP_FOR_NOW</option>
+            </select>
+          </div>
+
+          <div class="control-group dashboard-field planning-field--winner-bucket">
+            <label for="planningWinnerBucket">Winner Bucket</label>
+            <select id="planningWinnerBucket">
+              <option value="">All</option>
+              <option value="strong">strong</option>
+              <option value="solid">solid</option>
+              <option value="moderate">moderate</option>
+              <option value="weak">weak</option>
+              <option value="filtered_out">filtered_out</option>
+            </select>
+          </div>
+
+          <div class="control-group dashboard-toggle-group planning-toolbar-toggle">
+            <label>Undecided only</label>
+
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Planning undecided only">
+              <label class="binary-toggle-option">
+                <input type="radio" name="planningUndecidedOnlyToggle" value="no" checked />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="planningUndecidedOnlyToggle" value="yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+
+            <div class="control-help field-help-wide">
+              Yes shows only planning rows that do not have an operator decision yet.
+            </div>
+          </div>
+
+          <div class="control-group dashboard-field dashboard-field--limit">
+            <label for="planningLimitInput">Limit</label>
+            <input type="number" id="planningLimitInput" value="50" min="1" max="300" />
+          </div>
         </div>
 
-        <div class="control-group">
-          <label for="planningWinnerBucket">Winner Bucket</label>
-          <select id="planningWinnerBucket">
-            <option value="">All</option>
-            <option value="strong">strong</option>
-            <option value="solid">solid</option>
-            <option value="moderate">moderate</option>
-            <option value="weak">weak</option>
-            <option value="filtered_out">filtered_out</option>
-          </select>
-        </div>
-
-        <div class="control-group checkbox-group">
-          <label for="planningUndecidedOnly">
-            <input type="checkbox" id="planningUndecidedOnly" />
-            Undecided only
-          </label>
-        </div>
-
-        <div class="control-group">
-          <label for="planningLimitInput">Limit</label>
-          <input type="number" id="planningLimitInput" value="50" min="1" max="300" />
-        </div>
-
-        <div class="control-group button-group">
-          <button id="planningApplyFiltersBtn">Apply Filters</button>
-          <button class="ghost-btn" id="planningClearFiltersBtn">Clear</button>
+        <div class="dashboard-toolbar-right dashboard-toolbar-right--planning">
+          <div class="control-group button-group dashboard-toolbar-actions">
+            <button id="planningApplyFiltersBtn">Apply Filters</button>
+            <button class="ghost-btn" id="planningClearFiltersBtn">Clear</button>
+          </div>
         </div>
       </div>
     </section>

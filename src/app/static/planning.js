@@ -205,6 +205,187 @@ function closeTailoringModal() {
   getTailoringModal().classList.add("hidden");
 }
 
+function titleCase(value) {
+  const text = String(value || "").trim().toLowerCase();
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+function getProviderLogoUrl(provider) {
+  const normalized = String(provider || "").trim().toLowerCase();
+  if (normalized === "groq") return "/static/provider_logos/groq_ai.png";
+  if (normalized === "gemini") return "/static/provider_logos/gemini.png";
+  return "";
+}
+
+function normalizeBool(value) {
+  if (value === true || value === false) return value;
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "true" || normalized === "yes" || normalized === "1";
+}
+
+function uniqueNonEmpty(values) {
+  const out = [];
+  const seen = new Set();
+
+  values.forEach((value) => {
+    const text = String(value || "").trim();
+    if (!text) return;
+
+    const key = text.toLowerCase();
+    if (seen.has(key)) return;
+
+    seen.add(key);
+    out.push(text);
+  });
+
+  return out;
+}
+
+function buildTailoringStatusBadge(label, tone = "muted") {
+  return `
+    <span class="tailoring-status-badge tailoring-status-badge--${escapeHtml(tone)}">
+      ${escapeHtml(label)}
+    </span>
+  `;
+}
+
+function deriveTailoringOverviewState(row, llmJsonArtifact) {
+  const llmData = llmJsonArtifact && llmJsonArtifact.kind === "json" && llmJsonArtifact.data && typeof llmJsonArtifact.data === "object"
+    ? llmJsonArtifact.data
+    : {};
+
+  const rawStatus = String(row.llm_tailoring_status || "").trim();
+  const statusKey = rawStatus.toLowerCase();
+  const rawErrorType = String(row.llm_error_type || "").trim();
+  const parseOk = llmData.parse_ok;
+
+  const deterministicAvailable = Boolean(row.tailoring_md);
+  const llmGenerated = statusKey === "generated" && parseOk !== false;
+  const llmFailed = Boolean(row.tailoring_llm_json) && (
+    (statusKey && statusKey !== "generated") ||
+    rawErrorType ||
+    parseOk === false
+  );
+
+  let statusLabel = "Unavailable";
+  let statusTone = "muted";
+
+  if (deterministicAvailable || llmGenerated) {
+    statusLabel = "Suggested";
+    statusTone = "success";
+  } else if (llmFailed) {
+    statusLabel = "Failed";
+    statusTone = "danger";
+  }
+
+  const errorParts = uniqueNonEmpty([
+    rawErrorType,
+    statusKey && statusKey !== "generated" ? rawStatus : "",
+    parseOk === false && !rawErrorType && !rawStatus ? "parse_failed" : "",
+  ]);
+
+  return {
+    statusLabel,
+    statusTone,
+    errorDisplay: errorParts.length
+      ? errorParts.map(escapeHtml).join(' <span class="error-separator">●</span> ')
+      : "-",
+  };
+}
+
+function updateTailoringOverview(row, llmJsonArtifact) {
+  const state = deriveTailoringOverviewState(row, llmJsonArtifact);
+
+  qs("tailoringModalStatus").innerHTML = buildTailoringStatusBadge(
+    state.statusLabel,
+    state.statusTone
+  );
+  qs("tailoringModalError").innerHTML = state.errorDisplay;
+}
+
+function buildProviderBadge(provider, model, fallbackUsed) {
+  const normalized = String(provider || "").trim().toLowerCase();
+  if (!normalized) {
+    return `<span class="summary-chip chip-muted">LLM provider unknown</span>`;
+  }
+
+  const logoUrl = getProviderLogoUrl(normalized);
+  const providerLabel = titleCase(normalized);
+  const fallbackHtml = fallbackUsed
+    ? `<span class="summary-chip chip-small chip-muted">Fallback</span>`
+    : "";
+
+  const logoHtml = logoUrl
+    ? `<img class="provider-logo" src="${logoUrl}" alt="${escapeHtml(providerLabel)} logo" title="${escapeHtml(providerLabel)}" />`
+    : `<span class="provider-name">${escapeHtml(providerLabel)}</span>`;
+
+  return `
+    <span class="summary-powered-label">Powered by</span>
+    <span class="summary-chip provider-chip provider-chip-logo-only">
+      ${logoHtml}
+    </span>
+    ${model ? `<span class="summary-model-text">${escapeHtml(model)}</span>` : ""}
+    ${fallbackHtml}
+  `;
+}
+
+function buildTailoringSourceChips({ deterministicAvailable, llmGenerated, llmFailed }) {
+  const chips = [];
+
+  if (deterministicAvailable) {
+    chips.push(`<span class="summary-chip tailoring-source-chip tailoring-source-chip-deterministic">Deterministic</span>`);
+  }
+
+  if (llmGenerated) {
+    chips.push(`<span class="summary-chip tailoring-source-chip tailoring-source-chip-llm">LLM generated</span>`);
+  }
+
+  if (llmFailed) {
+    chips.push(`<span class="summary-chip tailoring-source-chip tailoring-source-chip-failed">LLM failed</span>`);
+  }
+
+  if (!chips.length) {
+    chips.push(`<span class="summary-chip chip-muted">No tailoring provenance</span>`);
+  }
+
+  return chips.join("");
+}
+
+function deriveTailoringProvenance(row, llmJsonArtifact) {
+  const llmData = llmJsonArtifact && llmJsonArtifact.kind === "json" && llmJsonArtifact.data && typeof llmJsonArtifact.data === "object"
+    ? llmJsonArtifact.data
+    : {};
+
+  const status = String(row.llm_tailoring_status || "").trim().toLowerCase();
+  const parseOk = llmData.parse_ok;
+  const provider = String(llmData.provider || "").trim();
+  const model = String(llmData.model || "").trim();
+  const fallbackUsed = normalizeBool(llmData.fallback_used || llmData.llm_fallback_used);
+  const deterministicAvailable = Boolean(row.tailoring_md);
+  const llmGenerated = status === "generated" && parseOk !== false;
+  const llmFailed = Boolean(row.tailoring_llm_json) && status && status !== "generated";
+
+  return {
+    provider,
+    model,
+    fallbackUsed,
+    deterministicAvailable,
+    llmGenerated,
+    llmFailed,
+  };
+}
+
+function updateTailoringProvenance(row, llmJsonArtifact) {
+  const meta = deriveTailoringProvenance(row, llmJsonArtifact);
+
+  qs("tailoringProviderMeta").innerHTML = meta.llmGenerated || meta.provider
+    ? buildProviderBadge(meta.provider, meta.model, meta.fallbackUsed)
+    : `<span class="summary-chip chip-muted">LLM not invoked</span>`;
+
+  qs("tailoringSourceChips").innerHTML = buildTailoringSourceChips(meta);
+}
+
 function resetTailoringModalViewState() {
   const modalScroll = qs("tailoringModalScroll");
   if (modalScroll) {
@@ -226,11 +407,14 @@ function resetTailoringModalViewState() {
 function resetTailoringModalContent() {
   qs("tailoringModalCompany").textContent = "-";
   qs("tailoringModalTitle").textContent = "-";
-  qs("tailoringModalStatus").textContent = "-";
+  qs("tailoringModalStatus").innerHTML = buildTailoringStatusBadge("Unavailable", "muted");
   qs("tailoringModalError").textContent = "-";
   qs("tailoringModalMarkdownPath").textContent = "-";
   qs("tailoringModalLlmJsonPath").textContent = "-";
   qs("tailoringModalPacketPath").textContent = "-";
+
+  qs("tailoringProviderMeta").innerHTML = `<span class="summary-chip chip-muted">Loading provider…</span>`;
+  qs("tailoringSourceChips").innerHTML = `<span class="summary-chip chip-muted">Loading provenance…</span>`;
 
   qs("tailoringMarkdownContent").innerHTML = "<p>No artifact loaded.</p>";
   qs("tailoringLlmJsonContent").textContent = "No artifact loaded.";
@@ -244,11 +428,17 @@ function openTailoringModal(row) {
 
   qs("tailoringModalCompany").textContent = row.job_company || "-";
   qs("tailoringModalTitle").textContent = row.job_title || "-";
-  qs("tailoringModalStatus").textContent = row.llm_tailoring_status || "-";
-  qs("tailoringModalError").textContent = row.llm_error_type || "-";
+  updateTailoringOverview(row, null);
   qs("tailoringModalMarkdownPath").textContent = row.tailoring_md || "-";
   qs("tailoringModalLlmJsonPath").textContent = row.tailoring_llm_json || "-";
   qs("tailoringModalPacketPath").textContent = row.packet_json || "-";
+
+  qs("tailoringProviderMeta").innerHTML = `<span class="summary-chip chip-muted">Loading provider…</span>`;
+  qs("tailoringSourceChips").innerHTML = buildTailoringSourceChips({
+    deterministicAvailable: Boolean(row.tailoring_md),
+    llmGenerated: false,
+    llmFailed: false,
+  });
 
   qs("tailoringMarkdownContent").innerHTML = "<p>Loading tailoring markdown...</p>";
   qs("tailoringLlmJsonContent").textContent = "Loading LLM tailoring JSON...";
@@ -395,6 +585,8 @@ async function handleTailoringClick(button) {
   renderArtifactIntoElement("tailoringMarkdownContent", markdownArtifact);
   renderArtifactIntoElement("tailoringLlmJsonContent", llmJsonArtifact);
   renderArtifactIntoElement("tailoringPacketJsonContent", packetArtifact);
+  updateTailoringProvenance(row, llmJsonArtifact);
+  updateTailoringOverview(row, llmJsonArtifact);
 }
 
 function openApplicationModal(job) {

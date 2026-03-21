@@ -8,6 +8,128 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function normalizeSortValue(value, type = "text") {
+  if (value === null || value === undefined) return null;
+
+  if (type === "number") {
+    const parsed = Number(String(value).replaceAll(",", "").trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (type === "date") {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (type === "boolean") {
+    if (value === true) return 1;
+    if (value === false) return 0;
+
+    const normalized = String(value).trim().toLowerCase();
+    if (["true", "yes", "1"].includes(normalized)) return 1;
+    if (["false", "no", "0"].includes(normalized)) return 0;
+    return null;
+  }
+
+  return String(value).trim().toLowerCase();
+}
+
+function compareSortValues(left, right) {
+  if (left === right) return 0;
+  if (left === null || left === "") return 1;
+  if (right === null || right === "") return -1;
+  if (left < right) return -1;
+  if (left > right) return 1;
+  return 0;
+}
+
+function sortRows(rows, columns, sortState) {
+  const safeRows = Array.isArray(rows) ? rows.slice() : [];
+  if (!sortState.key) return safeRows;
+
+  const column = columns.find((item) => item.key === sortState.key && item.sortable !== false);
+  if (!column) return safeRows;
+
+  const direction = sortState.direction === "desc" ? -1 : 1;
+  const getValue = column.getValue || ((row) => row[column.key]);
+  const type = column.type || "text";
+
+  return safeRows
+    .map((row, index) => ({ row, index }))
+    .sort((a, b) => {
+      const cmp = compareSortValues(
+        normalizeSortValue(getValue(a.row), type),
+        normalizeSortValue(getValue(b.row), type)
+      );
+      return cmp === 0 ? a.index - b.index : cmp * direction;
+    })
+    .map((item) => item.row);
+}
+
+function getSortIndicator(sortState, key) {
+  if (sortState.key !== key) return "↕";
+  return sortState.direction === "desc" ? "↓" : "↑";
+}
+
+function renderSortableHeaders(tableId, columns, sortState) {
+  const table = qs(tableId);
+  if (!table) return;
+
+  const cells = table.querySelectorAll("thead th");
+  columns.forEach((column, index) => {
+    const th = cells[index];
+    if (!th) return;
+
+    const label = column.label || th.dataset.originalLabel || th.textContent.trim();
+    th.dataset.originalLabel = label;
+
+    if (column.sortable === false) {
+      th.innerHTML = escapeHtml(label);
+      th.classList.remove("sortable-col");
+      return;
+    }
+
+    th.classList.add("sortable-col");
+    th.innerHTML = `
+      <button
+        type="button"
+        class="sort-header-btn ${sortState.key === column.key ? "is-active" : ""}"
+        data-sort-key="${escapeHtml(column.key)}"
+        aria-label="Sort by ${escapeHtml(label)}"
+      >
+        <span class="sort-header-label">${escapeHtml(label)}</span>
+        <span class="sort-header-indicator">${getSortIndicator(sortState, column.key)}</span>
+      </button>
+    `;
+  });
+}
+
+function bindTableSorting(tableId, columns, sortState, rerender) {
+  const table = qs(tableId);
+  if (!table || table.dataset.sortBound === "true") return;
+
+  table.dataset.sortBound = "true";
+  renderSortableHeaders(tableId, columns, sortState);
+
+  table.querySelector("thead").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-sort-key]");
+    if (!button) return;
+
+    const key = button.dataset.sortKey;
+    if (!key) return;
+
+    if (sortState.key === key) {
+      sortState.direction = sortState.direction === "asc" ? "desc" : "asc";
+    } else {
+      sortState.key = key;
+      sortState.direction = "asc";
+    }
+
+    rerender();
+  });
+}
+
+
 function qs(id) {
   return document.getElementById(id);
 }
@@ -109,7 +231,26 @@ const APPLICATION_TAB_CONFIG = {
   },
 };
 
+const APPLICATION_SORT_COLUMNS = [
+  { key: "action_timestamp", label: "Timestamp", type: "date" },
+  { key: "job_company", label: "Company", type: "text" },
+  { key: "job_title", label: "Title", type: "text" },
+  { key: "application_status", label: "Status", type: "text" },
+  { key: "source_view", label: "Source View", type: "text" },
+  { key: "note", label: "Note", type: "text" },
+  { key: "open", label: "Open", sortable: false },
+];
+
 let currentApplicationTab = "APPLIED";
+
+const applicationTableState = {
+  rows: [],
+  metaLabel: "Loading...",
+  sort: {
+    key: "",
+    direction: "asc",
+  },
+};
 
 function getCurrentApplicationConfig() {
   return APPLICATION_TAB_CONFIG[currentApplicationTab];
@@ -149,21 +290,29 @@ function setActiveApplicationTab(tabKey) {
 }
 
 function renderApplicationRows(rows, metaLabel, emptyLabel) {
-  const tbody = qs("applicationTableBody");
-  const safeRows = Array.isArray(rows) ? rows : [];
+  applicationTableState.rows = Array.isArray(rows) ? rows.slice() : [];
+  applicationTableState.metaLabel = metaLabel;
 
-  if (!safeRows.length) {
+  const tbody = qs("applicationTableBody");
+  const displayRows = sortRows(applicationTableState.rows, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
+
+  const table = tbody ? tbody.closest("table") : null;
+
+  if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
         <td colspan="7" class="empty-state">${escapeHtml(emptyLabel)}</td>
       </tr>
     `;
-    qs("applicationTableMeta").textContent = metaLabel;
+    qs("applicationTableMeta").textContent = applicationTableState.metaLabel;
     updateApplicationViewStats(0);
+    if (table) {
+      renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
+    }
     return;
   }
 
-  tbody.innerHTML = safeRows.map((row) => {
+  tbody.innerHTML = displayRows.map((row) => {
     const title = escapeHtml(row.job_title || "");
     const jobUrl = escapeHtml(row.job_url || row.job_doc_id || "");
     const titleHtml = jobUrl
@@ -183,8 +332,11 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
     `;
   }).join("");
 
-  qs("applicationTableMeta").textContent = metaLabel;
-  updateApplicationViewStats(safeRows.length);
+  qs("applicationTableMeta").textContent = applicationTableState.metaLabel;
+  updateApplicationViewStats(displayRows.length);
+  if (table) {
+    renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
+  }
 }
 
 async function loadApplicationView() {
@@ -214,6 +366,17 @@ function clearApplicationFilters() {
 
 window.addEventListener("DOMContentLoaded", async () => {
   bindAppErrorModal();
+
+  const applicationTable = qs("applicationTableBody")?.closest("table");
+  if (applicationTable && applicationTable.id) {
+    bindTableSorting(applicationTable.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort, () => {
+      renderApplicationRows(
+        applicationTableState.rows,
+        applicationTableState.metaLabel,
+        getCurrentApplicationConfig().emptyLabel
+      );
+    });
+  }
 
   document.querySelectorAll("[data-app-tab]").forEach((btn) => {
     btn.addEventListener("click", async () => {

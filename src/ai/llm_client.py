@@ -170,9 +170,14 @@ def _run_single_provider(
 ):
     provider_name = provider_name.strip().lower()
 
+    # if provider_name == "groq":
+    #     if return_parsed or response_schema is not None:
+    #         raise ValueError("Structured parsed output is not supported through the Groq wrapper")
+    #     return _run_groq_chat_completion(messages, model, temperature, max_tokens)
+
     if provider_name == "groq":
-        if return_parsed or response_schema is not None:
-            raise ValueError("Structured parsed output is not supported through the Groq wrapper")
+        # Groq does not support the Gemini-style parsed/schema path in this wrapper.
+        # For structured requests, return raw text and let the caller parse/validate it.
         return _run_groq_chat_completion(messages, model, temperature, max_tokens)
 
     if provider_name == "gemini":

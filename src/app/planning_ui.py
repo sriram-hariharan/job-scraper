@@ -23,7 +23,7 @@ def planning_dashboard() -> str:
     <header class="page-header">
       <div>
         <h1>Planning Detail Dashboard</h1>
-        <p class="subtext">Wide planning view with queue, fallback, tie, and operator decision fields.</p>
+          <p class="subtext">Wide planning view with queue, selector state, fallback, and operator decision fields.</p>
       </div>
       <div class="header-actions">
         <a class="ghost-link-btn" href="/">Executive Dashboard</a>
@@ -47,14 +47,14 @@ def planning_dashboard() -> str:
           </div>
 
           <div class="control-group dashboard-field planning-field--winner-bucket">
-            <label for="planningWinnerBucket">Winner Bucket</label>
+            <label for="planningWinnerBucket">Match Strength</label>
             <select id="planningWinnerBucket">
               <option value="">All</option>
-              <option value="strong">strong</option>
-              <option value="solid">solid</option>
-              <option value="moderate">moderate</option>
-              <option value="weak">weak</option>
-              <option value="filtered_out">filtered_out</option>
+              <option value="strong">Excellent match</option>
+              <option value="solid">Strong match</option>
+              <option value="moderate">Moderate match</option>
+              <option value="weak">Weak match</option>
+              <option value="filtered_out">No credible match</option>
             </select>
           </div>
 
@@ -122,9 +122,8 @@ def planning_dashboard() -> str:
               <th>Runner-Up Resume</th>
               <th>Runner-Up Score</th>
               <th>Score Gap</th>
-              <th>Winner Bucket</th>
-              <th>Is Tie</th>
-              <th>Needs Review</th>
+              <th>Match Strength</th>
+              <th>Review State</th>
               <th>Missing Req Count</th>
               <th>Fallback Best Resume</th>
               <th>Fallback Status</th>

@@ -20,7 +20,7 @@ LLM_TAILOR_PROVIDER = "gemini"
 LLM_TAILOR_MODEL = "gemini-2.5-flash"
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
-LLM_TAILOR_PROMPT_VERSION = "v2"
+LLM_TAILOR_PROMPT_VERSION = "v3"
 
 TAILOR_LLM_FALLBACK_ENABLED = (
     os.getenv(
@@ -36,6 +36,17 @@ TAILOR_LLM_FALLBACK_MODEL = os.getenv(
     "TAILOR_LLM_FALLBACK_MODEL",
     LLM_FALLBACK_MODEL,
 ).strip()
+
+LIVE_REWRITE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "rewrite_directions": {
+            "type": "array",
+            "items": {"type": "string"},
+        }
+    },
+    "required": ["rewrite_directions"],
+}
 
 TAILORING_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -326,19 +337,10 @@ def _llm_output_is_strong_enough(parsed: Dict[str, Any]) -> bool:
     support_count = sum(1 for item in rewrite_directions if item.startswith("Support with"))
     gap_count = sum(1 for item in rewrite_directions if item.startswith("Keep gap explicit"))
 
-    # Require at least one anchor-led or support-led rewrite.
     if (lead_count + support_count) < 1:
         return False
 
-    # If almost everything is gap-only, the output is weak.
     if gap_count >= len(rewrite_directions):
-        return False
-
-    bad_prefixes = ("Ensure ", "Verify ", "Confirm ", "Highlight ", "Showcase ", "Emphasize ")
-    tailoring_actions = [str(item).strip() for item in parsed.get("tailoring_actions", []) or []]
-    generic_actions = [item for item in tailoring_actions if item.startswith(bad_prefixes)]
-
-    if tailoring_actions and len(generic_actions) >= max(2, len(tailoring_actions) // 2):
         return False
 
     return True
@@ -520,6 +522,81 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     lines.append("- Every rewrite_directions item must start with one of: Lead with, Support with, Keep gap explicit, Do not add.")
     lines.append("- Every rewrite_directions item must reference a specific source entry from the evidence above when using Lead with or Support with.")
     lines.append("- Avoid generic actions like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.")
+
+    return "\n".join(lines)
+
+def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) -> str:
+    job = packet.get("job", {})
+    selection = packet.get("selection", {})
+    summary = packet.get("summary", {})
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    anchors = evidence_layers.get("anchors", [])[:4]
+    supports = evidence_layers.get("supports", [])[:4]
+    context = evidence_layers.get("context", [])[:4]
+
+    lines: List[str] = []
+
+    lines.append("Return ONLY valid JSON with one top-level key: rewrite_directions.")
+    lines.append("")
+    lines.append("Goal:")
+    lines.append("Produce concrete, source-tied rewrite directions for ONE selected resume variant.")
+    lines.append("")
+    lines.append("Hard rules:")
+    lines.append("1. Use ONLY the evidence below.")
+    lines.append("2. Do NOT invent tools, methods, metrics, domains, or responsibilities.")
+    lines.append("3. Direct-overlap bullets are the only primary anchors.")
+    lines.append("4. Semantic-similarity bullets are support only.")
+    lines.append("5. Same-role context bullets are lowest-priority support only.")
+    lines.append("6. If anchor bullets exist, return at least 3 rewrite_directions.")
+    lines.append("7. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.")
+    lines.append("8. Do not return only gap-explicit directions when anchor bullets exist.")
+    lines.append("9. Every Lead with / Support with item must reference a specific source entry.")
+    lines.append("10. Keep gap explicit only for truly unsupported skills.")
+    lines.append("")
+    lines.append("Job:")
+    lines.append(f"- Company: {job.get('company', '')}")
+    lines.append(f"- Title: {job.get('title', '')}")
+    lines.append("")
+    lines.append("Selected resume:")
+    lines.append(f"- Resume: {selection.get('selected_resume', '')}")
+    lines.append(f"- Score: {selection.get('selected_score', '')}")
+    lines.append("")
+    lines.append("Matched / missing skills:")
+    lines.append(f"- Matched required: {summary.get('matched_required', [])}")
+    lines.append(f"- Missing required: {summary.get('missing_required', [])}")
+    lines.append(f"- Missing preferred: {summary.get('missing_preferred', [])}")
+    lines.append("")
+    lines.append("Primary anchor bullets:")
+    for idx, row in enumerate(anchors, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | supports={row.get('overlaps', [])}"
+        )
+        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    lines.append("")
+    lines.append("Semantic supporting bullets:")
+    for idx, row in enumerate(supports, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | type={row.get('evidence_type', '')}"
+        )
+        if row.get("semantic_score") is not None:
+            lines.append(f"   semantic_score={row.get('semantic_score')}")
+        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    lines.append("")
+    lines.append("Same-role context bullets:")
+    for idx, row in enumerate(context, 1):
+        lines.append(
+            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | type={row.get('evidence_type', '')}"
+        )
+        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    lines.append("")
+    lines.append("Guardrail:")
+    lines.append(str(packet.get("guardrail", "")))
+    lines.append("")
+    lines.append("Output requirements:")
+    lines.append("- Return JSON only.")
+    lines.append("- Output key: rewrite_directions")
+    lines.append("- Allowed prefixes only: Lead with, Support with, Keep gap explicit, Do not add")
+    lines.append("- Prefer anchor-led rewrite directions first, then support if needed.")
 
     return "\n".join(lines)
 
@@ -772,25 +849,60 @@ def _run_live_llm_tailoring(
         if cached_result is not None:
             return cached_result
 
-    prompt = payload["llm_prompt"]
+    prompt = payload["live_rewrite_prompt"]
+
+#     primary_system_prompt = """
+# You generate evidence-anchored resume tailoring JSON.
+
+# You MUST obey these rules:
+# 1. Return content that is fully grounded in the supplied packet evidence.
+# 2. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
+# 3. Direct-overlap bullets are the only primary anchors for rewrite advice.
+# 4. Semantic-similarity bullets are supporting evidence only; use them to reinforce an anchor, not to replace it.
+# 5. Same-role or adjacent-context bullets are lowest-priority support and should only reinforce the same story.
+# 6. Prefer rewrite_directions that follow the pattern: one anchor bullet first, then one support bullet if needed.
+# 7. At least one rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
+# 8. Do not return only gap-explicit rewrite directions when anchor bullets are present.
+# 9. rewrite_directions must be concrete and source-tied, not vague writing advice.
+# 10. Do not use generic action verbs like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.
+# 11. Keep recruiter_summary to one sentence.
+# 12. Keep lists concise, practical, and recruiter-usable.
+# """
 
     primary_system_prompt = """
-You generate evidence-anchored resume tailoring JSON.
+You generate evidence-anchored resume rewrite directions.
 
 You MUST obey these rules:
-1. Return content that is fully grounded in the supplied packet evidence.
-2. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
-3. Direct-overlap bullets are the only primary anchors for rewrite advice.
-4. Semantic-similarity bullets are supporting evidence only; use them to reinforce an anchor, not to replace it.
-5. Same-role or adjacent-context bullets are lowest-priority support and should only reinforce the same story.
-6. Prefer rewrite_directions that follow the pattern: one anchor bullet first, then one support bullet if needed.
-7. At least one rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
-8. Do not return only gap-explicit rewrite directions when anchor bullets are present.
-9. rewrite_directions must be concrete and source-tied, not vague writing advice.
-10. Do not use generic action verbs like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.
-11. Keep recruiter_summary to one sentence.
-12. Keep lists concise, practical, and recruiter-usable.
+1. Return ONLY JSON with one top-level key: rewrite_directions.
+2. Use ONLY the supplied evidence.
+3. Do NOT invent tools, methods, metrics, skills, domains, or responsibilities.
+4. Direct-overlap bullets are the only primary anchors.
+5. Semantic-similarity bullets are support only.
+6. Same-role or adjacent-context bullets are lowest-priority support only.
+7. If anchor bullets exist, return at least 3 rewrite_directions.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.
+9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
+10. Every Lead with / Support with item must reference a specific source entry.
+11. Use only these prefixes: Lead with, Support with, Keep gap explicit, Do not add.
 """
+
+#     retry_system_prompt = """
+# You are returning JSON for a strict Python parser.
+
+# You MUST obey these rules:
+# 1. Return ONLY valid JSON.
+# 2. Do NOT return markdown, code fences, commentary, or explanatory text.
+# 3. Keep the entire JSON on a single line.
+# 4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
+# 5. Use empty arrays instead of null.
+# 6. Keep recruiter_summary to exactly 1 sentence.
+# 7. Keep each list short and concrete.
+# 8. Use ONLY the supplied evidence. Do NOT invent anything.
+# 9. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+# 10. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
+# 11. Do not return only gap-explicit rewrite directions when anchor bullets are present.
+# 12. Do not use generic action verbs like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.
+# """
 
     retry_system_prompt = """
 You are returning JSON for a strict Python parser.
@@ -801,13 +913,11 @@ You MUST obey these rules:
 3. Keep the entire JSON on a single line.
 4. Do NOT include literal newlines, carriage returns, or tabs inside any string value.
 5. Use empty arrays instead of null.
-6. Keep recruiter_summary to exactly 1 sentence.
-7. Keep each list short and concrete.
-8. Use ONLY the supplied evidence. Do NOT invent anything.
-9. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
-10. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
-11. Do not return only gap-explicit rewrite directions when anchor bullets are present.
-12. Do not use generic action verbs like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.
+6. Output ONLY one top-level key: rewrite_directions.
+7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
+8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
+9. Do not return only gap-explicit rewrite directions when anchor bullets are present.
+10. Use ONLY the supplied evidence. Do NOT invent anything.
 """
 
     fallback_attempted = bool(
@@ -825,7 +935,7 @@ You MUST obey these rules:
             temperature=LLM_TAILOR_TEMPERATURE,
             max_tokens=LLM_TAILOR_MAX_TOKENS,
             response_mime_type="application/json",
-            response_schema=TAILORING_RESPONSE_SCHEMA,
+            response_schema=LIVE_REWRITE_RESPONSE_SCHEMA,
             return_parsed=True,
             thinking_budget=0,
             fallback_enabled=TAILOR_LLM_FALLBACK_ENABLED,
@@ -1001,6 +1111,10 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     evidence_layers = _build_evidence_layers(packet)
     tailoring_actions = _build_tailoring_actions(packet)
     llm_prompt = _build_llm_prompt(packet)
+    live_rewrite_prompt = _build_live_rewrite_prompt(packet, {
+        "rewrite_candidates": rewrite_candidates,
+        "evidence_layers": evidence_layers,
+    })
 
     return {
         "job": packet.get("job", {}),
@@ -1014,6 +1128,7 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         "do_not_claim": do_not_claim,
         "bullet_reuse_candidates": bullet_reuse,
         "llm_prompt": llm_prompt,
+        "live_rewrite_prompt": live_rewrite_prompt,
         "guardrail": packet.get(
             "guardrail",
             "Only add or strengthen resume language when it is already truthful and supported by your actual work.",
@@ -1234,9 +1349,8 @@ def main() -> None:
             print()
 
             print("Rewrite directions:")
-            for item in parsed.get("rewrite_directions", []):
+            for item in llm_output["parsed"].get("rewrite_directions", []):
                 print(f"- {item}")
-            print()
         else:
             print("Raw response preview:")
             print(llm_output["raw_response"][:1200])

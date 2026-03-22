@@ -258,7 +258,28 @@ def planning_select_resume(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    
+
+@app.post("/planning/regenerate-selected-resume")
+def planning_regenerate_selected_resume(
+    payload: dict = Body(...),
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+    job_corpus: str = str(services.DEFAULT_CORPUS_PATH),
+    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
+):
+    try:
+        return services.regenerate_selected_resume_tailoring_payload(
+            output_dir=Path(output_dir),
+            job_corpus=Path(job_corpus),
+            decisions_path=Path(decisions_path),
+            job_doc_id=str(payload.get("job_doc_id", "") or ""),
+            queue_rank=str(payload.get("queue_rank", "") or ""),
+            selected_resume=str(payload.get("selected_resume", "") or ""),
+            generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", True)),
+            refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+       
 @app.get("/application-actions")
 def application_actions(
     actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),

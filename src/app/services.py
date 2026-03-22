@@ -2,11 +2,13 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
+import csv
 import json
 import os
-import subprocess
 import re
+import subprocess
+import sys
 
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
@@ -532,6 +534,344 @@ def _resolve_resume_preview_path(resume_name: str) -> Path:
 
 def planning_resume_preview_path(resume_name: str) -> Path:
     return _resolve_resume_preview_path(resume_name)
+
+def _slugify_text(value: Any, max_len: int = 80) -> str:
+    text = _clean_text(value).lower()
+    text = re.sub(r"[^a-z0-9]+", "_", text).strip("_")
+    if not text:
+        text = "item"
+    return text[:max_len]
+
+
+def _load_job_doc_id_to_index(job_corpus_path: Path) -> Dict[str, int]:
+    from src.matching.job_adapter import build_job_evidence
+
+    if not job_corpus_path.exists():
+        raise ValueError(f"Missing job corpus: {job_corpus_path}")
+
+    mapping: Dict[str, int] = {}
+    with job_corpus_path.open("r", encoding="utf-8") as f:
+        for idx, line in enumerate(f):
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            job_evidence = build_job_evidence(record)
+            job_doc_id = _clean_text(getattr(job_evidence, "job_doc_id", ""))
+
+            if job_doc_id:
+                mapping[job_doc_id] = idx
+
+    if not mapping:
+        raise ValueError(f"No usable job_doc_id values found in {job_corpus_path}")
+
+    return mapping
+
+
+def _load_csv_rows_with_fieldnames(path: Path) -> Tuple[List[Dict[str, str]], List[str]]:
+    if not path.exists():
+        raise ValueError(f"Missing CSV: {path}")
+
+    with path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+        rows = list(reader)
+        fieldnames = list(reader.fieldnames or [])
+
+    return rows, fieldnames
+
+
+def _write_csv_rows(path: Path, fieldnames: List[str], rows: List[Dict[str, Any]]) -> None:
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+
+
+def _run_checked_cmd(cmd: List[str]) -> None:
+    subprocess.run(cmd, check=True)
+
+
+def _read_regenerated_llm_status(llm_json_path: Path) -> Dict[str, str]:
+    defaults = {
+        "llm_tailoring_status": "disabled",
+        "llm_cache_hit": "",
+        "llm_parse_ok": "",
+        "llm_provider": "",
+        "llm_model": "",
+        "llm_error_type": "",
+        "llm_retryable": "",
+        "llm_retry_used": "",
+    }
+
+    if not llm_json_path.exists():
+        return defaults
+
+    try:
+        data = json.loads(llm_json_path.read_text(encoding="utf-8"))
+    except Exception:
+        out = dict(defaults)
+        out["llm_tailoring_status"] = "unreadable"
+        out["llm_error_type"] = "unreadable_json"
+        out["llm_retryable"] = "False"
+        return out
+
+    parse_ok = bool(data.get("parse_ok"))
+    cache_hit = bool(data.get("cache_hit"))
+    retry_used = bool(data.get("retry_used"))
+
+    if parse_ok and cache_hit:
+        status = "cached"
+    elif parse_ok:
+        status = "generated"
+    else:
+        status = "failed"
+
+    return {
+        "llm_tailoring_status": status,
+        "llm_cache_hit": str(cache_hit),
+        "llm_parse_ok": str(parse_ok),
+        "llm_provider": str(data.get("provider", "")),
+        "llm_model": str(data.get("model", "")),
+        "llm_error_type": "" if parse_ok else "llm_parse_failed",
+        "llm_retryable": "" if parse_ok else "False",
+        "llm_retry_used": str(retry_used),
+    }
+
+
+def _find_planning_row_for_regeneration(
+    rows: List[Dict[str, Any]],
+    *,
+    job_doc_id: str = "",
+    queue_rank: str = "",
+) -> Dict[str, Any]:
+    clean_job_doc_id = _clean_text(job_doc_id)
+    clean_queue_rank = _clean_text(queue_rank)
+
+    if clean_job_doc_id:
+        for row in rows:
+            if _clean_text(row.get("job_doc_id")) == clean_job_doc_id:
+                return row
+
+    if clean_queue_rank:
+        for row in rows:
+            if _clean_text(row.get("queue_rank")) == clean_queue_rank:
+                return row
+
+    raise ValueError("Could not find planning row for targeted regeneration.")
+
+
+def regenerate_selected_resume_tailoring_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    job_corpus: Path = DEFAULT_CORPUS_PATH,
+    decisions_path: Path = DEFAULT_DECISIONS_PATH,
+    *,
+    job_doc_id: str = "",
+    queue_rank: str = "",
+    selected_resume: str = "",
+    generate_llm_tailoring: bool = True,
+    refresh_llm_tailoring: bool = False,
+) -> Dict[str, Any]:
+    ja = _job_app()
+    merged_rows = ja._build_job_index(output_dir, decisions_path)
+    target_row = _find_planning_row_for_regeneration(
+        merged_rows,
+        job_doc_id=job_doc_id,
+        queue_rank=queue_rank,
+    )
+
+    chosen_resume = _sanitize_resume_filename(
+        selected_resume or target_row.get("operator_selected_resume", "")
+    )
+    if not chosen_resume:
+        raise ValueError("No operator-selected resume is available for regeneration.")
+
+    allowed_resumes = {
+        value
+        for value in [
+            _sanitize_optional_resume_filename(target_row.get("winner_resume")),
+            _sanitize_optional_resume_filename(target_row.get("runner_up_resume")),
+        ]
+        if value
+    }
+    if chosen_resume not in allowed_resumes:
+        allowed = ", ".join(sorted(allowed_resumes))
+        raise ValueError(
+            f"selected_resume must match the current winner or runner-up. Allowed: {allowed}"
+        )
+
+    job_doc_id_value = _clean_text(target_row.get("job_doc_id"))
+    if not job_doc_id_value:
+        raise ValueError("Target planning row is missing job_doc_id.")
+
+    job_doc_id_to_index = _load_job_doc_id_to_index(job_corpus)
+    if job_doc_id_value not in job_doc_id_to_index:
+        raise ValueError(f"Could not map job_doc_id to corpus index: {job_doc_id_value}")
+
+    company = _clean_text(target_row.get("job_company"))
+    title = _clean_text(target_row.get("job_title"))
+    action = _clean_text(target_row.get("action"))
+
+    job_packets_dir = Path(output_dir) / "job_packets"
+    job_packets_dir.mkdir(parents=True, exist_ok=True)
+
+    file_slug = (
+        f"{_slugify_text(company, 30)}__"
+        f"{_slugify_text(title, 60)}__"
+        f"{_slugify_text(chosen_resume, 40)}"
+    )
+
+    packet_json_path = job_packets_dir / f"{file_slug}.json"
+    tailoring_json_path = job_packets_dir / f"{file_slug}__tailoring.json"
+    tailoring_md_path = job_packets_dir / f"{file_slug}__tailoring.md"
+    tailoring_llm_json_path = job_packets_dir / f"{file_slug}__tailoring_llm.json"
+
+    diff_cmd = [
+        sys.executable,
+        "jd_resume_diff_helper.py",
+        "--job-corpus",
+        str(job_corpus),
+        "--job-index",
+        str(job_doc_id_to_index[job_doc_id_value]),
+        "--resume-name-contains",
+        chosen_resume,
+        "--output-json",
+        str(packet_json_path),
+    ]
+    _run_checked_cmd(diff_cmd)
+
+    tailoring_cmd = [
+        sys.executable,
+        "generate_tailoring_suggestions.py",
+        "--packet-json",
+        str(packet_json_path),
+        "--output-json",
+        str(tailoring_json_path),
+        "--output-md",
+        str(tailoring_md_path),
+    ]
+
+    llm_status = {
+        "llm_tailoring_status": "disabled",
+        "llm_cache_hit": "",
+        "llm_parse_ok": "",
+        "llm_provider": "",
+        "llm_model": "",
+        "llm_error_type": "",
+        "llm_retryable": "",
+        "llm_retry_used": "",
+    }
+
+    if generate_llm_tailoring:
+        tailoring_cmd.extend(
+            [
+                "--use-llm",
+                "--output-llm-json",
+                str(tailoring_llm_json_path),
+            ]
+        )
+        if refresh_llm_tailoring:
+            tailoring_cmd.append("--refresh-llm-cache")
+
+    _run_checked_cmd(tailoring_cmd)
+
+    if generate_llm_tailoring:
+        llm_status = _read_regenerated_llm_status(tailoring_llm_json_path)
+    else:
+        tailoring_llm_json_path = Path("")
+
+    manifest_path = Path(output_dir) / "job_packet_manifest.csv"
+    manifest_rows, fieldnames = _load_csv_rows_with_fieldnames(manifest_path)
+
+    if "packet_status" not in fieldnames:
+        insert_at = fieldnames.index("packet_json") if "packet_json" in fieldnames else len(fieldnames)
+        fieldnames.insert(insert_at, "packet_status")
+        for row in manifest_rows:
+            row.setdefault("packet_status", "")
+
+    updated = False
+    for row in manifest_rows:
+        if _clean_text(row.get("job_doc_id")) != job_doc_id_value:
+            continue
+
+        row["queue_rank"] = _clean_text(target_row.get("queue_rank"))
+        row["needs_variant_review"] = _clean_text(target_row.get("needs_variant_review"))
+        row["missing_requirement_count"] = _clean_text(target_row.get("missing_requirement_count"))
+        row["queue_priority_reason"] = _clean_text(target_row.get("queue_priority_reason"))
+        row["job_doc_id"] = job_doc_id_value
+        row["job_company"] = company
+        row["job_title"] = title
+        row["action"] = action
+        row["winner_resume"] = _clean_text(target_row.get("winner_resume"))
+        row["winner_score"] = _clean_text(target_row.get("winner_score"))
+        row["runner_up_resume"] = _clean_text(target_row.get("runner_up_resume"))
+        row["runner_up_score"] = _clean_text(target_row.get("runner_up_score"))
+        row["score_gap"] = _clean_text(target_row.get("score_gap"))
+        row["is_tie"] = _clean_text(target_row.get("is_tie"))
+        row["packet_status"] = "generated"
+        row["packet_json"] = str(packet_json_path)
+        row["tailoring_json"] = str(tailoring_json_path)
+        row["tailoring_md"] = str(tailoring_md_path)
+        row["tailoring_llm_json"] = str(tailoring_llm_json_path) if tailoring_llm_json_path else ""
+        row["llm_tailoring_status"] = llm_status["llm_tailoring_status"]
+        row["llm_cache_hit"] = llm_status["llm_cache_hit"]
+        row["llm_parse_ok"] = llm_status["llm_parse_ok"]
+        row["llm_provider"] = llm_status["llm_provider"]
+        row["llm_model"] = llm_status["llm_model"]
+        row["llm_error_type"] = llm_status["llm_error_type"]
+        row["llm_retryable"] = llm_status["llm_retryable"]
+        row["llm_retry_used"] = llm_status["llm_retry_used"]
+        updated = True
+        break
+
+    if not updated:
+        manifest_row = {field: "" for field in fieldnames}
+        manifest_row["queue_rank"] = _clean_text(target_row.get("queue_rank"))
+        manifest_row["needs_variant_review"] = _clean_text(target_row.get("needs_variant_review"))
+        manifest_row["missing_requirement_count"] = _clean_text(target_row.get("missing_requirement_count"))
+        manifest_row["queue_priority_reason"] = _clean_text(target_row.get("queue_priority_reason"))
+        manifest_row["job_doc_id"] = job_doc_id_value
+        manifest_row["job_company"] = company
+        manifest_row["job_title"] = title
+        manifest_row["action"] = action
+        manifest_row["winner_resume"] = _clean_text(target_row.get("winner_resume"))
+        manifest_row["winner_score"] = _clean_text(target_row.get("winner_score"))
+        manifest_row["runner_up_resume"] = _clean_text(target_row.get("runner_up_resume"))
+        manifest_row["runner_up_score"] = _clean_text(target_row.get("runner_up_score"))
+        manifest_row["score_gap"] = _clean_text(target_row.get("score_gap"))
+        manifest_row["is_tie"] = _clean_text(target_row.get("is_tie"))
+        manifest_row["packet_status"] = "generated"
+        manifest_row["packet_json"] = str(packet_json_path)
+        manifest_row["tailoring_json"] = str(tailoring_json_path)
+        manifest_row["tailoring_md"] = str(tailoring_md_path)
+        manifest_row["tailoring_llm_json"] = str(tailoring_llm_json_path) if tailoring_llm_json_path else ""
+        manifest_row["llm_tailoring_status"] = llm_status["llm_tailoring_status"]
+        manifest_row["llm_cache_hit"] = llm_status["llm_cache_hit"]
+        manifest_row["llm_parse_ok"] = llm_status["llm_parse_ok"]
+        manifest_row["llm_provider"] = llm_status["llm_provider"]
+        manifest_row["llm_model"] = llm_status["llm_model"]
+        manifest_row["llm_error_type"] = llm_status["llm_error_type"]
+        manifest_row["llm_retryable"] = llm_status["llm_retryable"]
+        manifest_row["llm_retry_used"] = llm_status["llm_retry_used"]
+        manifest_rows.append(manifest_row)
+
+    _write_csv_rows(manifest_path, fieldnames, manifest_rows)
+
+    return {
+        "ok": True,
+        "job_doc_id": job_doc_id_value,
+        "job_company": company,
+        "job_title": title,
+        "action": action,
+        "selected_resume": chosen_resume,
+        "packet_json": str(packet_json_path),
+        "tailoring_json": str(tailoring_json_path),
+        "tailoring_md": str(tailoring_md_path),
+        "tailoring_llm_json": str(tailoring_llm_json_path) if tailoring_llm_json_path else "",
+        "llm_tailoring_status": llm_status["llm_tailoring_status"],
+        "manifest_path": str(manifest_path),
+    }
 
 def _normalize_application_status(value: Any) -> str:
     normalized = _clean_text(value).upper().replace(" ", "_")

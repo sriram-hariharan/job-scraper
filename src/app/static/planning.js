@@ -6,6 +6,7 @@ let resumeChoiceState = {
   row: null,
   candidates: [],
   selectedResume: "",
+  isBusy: false,
 };
 
 const planningTableState = {
@@ -416,11 +417,40 @@ function getResumeChoiceCandidates(row) {
   return candidates;
 }
 
+function setResumeChoiceBusyState(isBusy, statusText = "") {
+  resumeChoiceState.isBusy = Boolean(isBusy);
+
+  const modal = getResumeChoiceModal();
+  const overlay = qs("resumeChoiceLoadingOverlay");
+  const selectBtn = qs("resumeChoiceSelectBtn");
+  const cancelBtn = qs("resumeChoiceCancelBtn");
+  const closeBtn = qs("closeResumeChoiceModalBtn");
+  const selectedResume = normalizeResumeName(resumeChoiceState.selectedResume);
+
+  modal.classList.toggle("is-busy", resumeChoiceState.isBusy);
+  overlay.classList.toggle("hidden", !resumeChoiceState.isBusy);
+
+  selectBtn.disabled = resumeChoiceState.isBusy || !selectedResume;
+  cancelBtn.disabled = resumeChoiceState.isBusy;
+  closeBtn.disabled = resumeChoiceState.isBusy;
+
+  qs("resumeChoiceList")
+    .querySelectorAll("[data-resume-choice='true']")
+    .forEach((btn) => {
+      btn.disabled = resumeChoiceState.isBusy;
+    });
+
+  if (statusText) {
+    qs("resumeChoiceSaveStatus").textContent = statusText;
+  }
+}
+
 function resetResumeChoiceModal() {
   resumeChoiceState = {
     row: null,
     candidates: [],
     selectedResume: "",
+    isBusy: false,
   };
 
   qs("resumeChoiceCompany").textContent = "-";
@@ -439,10 +469,15 @@ function resetResumeChoiceModal() {
   previewFrame.classList.add("hidden");
   previewEmpty.classList.remove("hidden");
 
+  qs("resumeChoiceLoadingOverlay").classList.add("hidden");
+  qs("resumeChoiceCancelBtn").disabled = false;
+  qs("closeResumeChoiceModalBtn").disabled = false;
+
   selectBtn.disabled = true;
 }
 
-function closeResumeChoiceModal() {
+function closeResumeChoiceModal(force = false) {
+  if (resumeChoiceState.isBusy && !force) return;
   resetResumeChoiceModal();
   getResumeChoiceModal().classList.add("hidden");
 }
@@ -466,6 +501,7 @@ function renderResumeChoiceCards() {
         class="resume-choice-card ${isSelected ? "is-selected" : ""}"
         data-resume-choice="true"
         data-resume-name="${escapeHtml(resumeName)}"
+        ${resumeChoiceState.isBusy ? "disabled" : ""}
       >
         <div class="resume-choice-card-role">${escapeHtml(candidate.role)}</div>
         <div class="resume-choice-card-name">${escapeHtml(resumeName)}</div>
@@ -499,7 +535,7 @@ function setResumeChoicePreview(resumeName) {
   previewFrame.classList.remove("hidden");
   previewEmpty.classList.add("hidden");
 
-  selectBtn.disabled = false;
+  selectBtn.disabled = resumeChoiceState.isBusy ? true : false;
   qs("resumeChoiceSaveStatus").textContent = `Selected: ${safeName}`;
 
   renderResumeChoiceCards();
@@ -544,8 +580,7 @@ async function submitResumeChoiceSelection() {
     throw new Error("Select a resume before saving.");
   }
 
-  qs("resumeChoiceSelectBtn").disabled = true;
-  qs("resumeChoiceSaveStatus").textContent = `Saving ${selectedResume}...`;
+  setResumeChoiceBusyState(true, `Saving ${selectedResume}...`);
 
   await postJson("/planning/select-resume", {
     queue_rank: row.queue_rank || "",
@@ -562,8 +597,19 @@ async function submitResumeChoiceSelection() {
     note: "Selected from planning resume choices modal.",
   });
 
-  closeResumeChoiceModal();
+  setResumeChoiceBusyState(true, `Generating tailoring suggestions for ${selectedResume}...`);
+
+  await postJson("/planning/regenerate-selected-resume", {
+    queue_rank: row.queue_rank || "",
+    job_doc_id: row.job_doc_id || "",
+    selected_resume: selectedResume,
+    generate_llm_tailoring: true,
+    refresh_llm_tailoring: false,
+  });
+
+  setResumeChoiceBusyState(true, "Refreshing planning row...");
   await loadPlanningTable();
+  closeResumeChoiceModal(true);
 }
 
 function buildResumeChoiceButtonHtml(row) {
@@ -1409,17 +1455,16 @@ function attachPlanningHandlers() {
   });
 
   qs("resumeChoiceSelectBtn").addEventListener("click", async () => {
-  try {
-    await submitResumeChoiceSelection();
-  } catch (err) {
-    qs("resumeChoiceSaveStatus").textContent = "Failed to save resume choice.";
-    qs("resumeChoiceSelectBtn").disabled = false;
-    showAppError("Failed to save selected resume", err);
-  }
-});
+    try {
+      await submitResumeChoiceSelection();
+    } catch (err) {
+      setResumeChoiceBusyState(false, "Failed to save resume choice.");
+      showAppError("Failed to save selected resume", err);
+    }
+  });
 
   getResumeChoiceModal().addEventListener("click", (event) => {
-    if (event.target === getResumeChoiceModal()) {
+    if (event.target === getResumeChoiceModal() && !resumeChoiceState.isBusy) {
       closeResumeChoiceModal();
     }
   });

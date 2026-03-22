@@ -887,6 +887,60 @@ tbody tr:hover {
   background: #1b1f2a;
 }
 
+.resume-choice-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(10, 15, 30, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.resume-choice-loading-overlay.hidden {
+  display: none !important;
+}
+
+.resume-choice-loading-card {
+  width: min(340px, 100%);
+  padding: 22px 20px;
+  border-radius: 18px;
+  background: rgba(18, 25, 51, 0.96);
+  border: 1px solid rgba(120, 166, 255, 0.18);
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.resume-choice-loading-title {
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.resume-choice-loading-text {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.resume-choice-card:disabled,
+.resume-choice-modal-card.is-busy .ghost-btn,
+.resume-choice-modal-card.is-busy button {
+  cursor: wait;
+}
+
+.resume-choice-card:disabled {
+  opacity: 0.7;
+  transform: none;
+}
+
 .resume-choice-empty {
   display: flex;
   align-items: center;

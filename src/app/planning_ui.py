@@ -223,11 +223,22 @@ def planning_dashboard() -> str:
             <div class="resume-choice-empty" id="resumeChoicePreviewEmpty">
               Select a resume on the left to load its PDF preview.
             </div>
+
             <iframe
               id="resumeChoicePreviewFrame"
               class="resume-choice-preview-frame hidden"
               title="Resume quick preview"
             ></iframe>
+
+            <div class="resume-choice-loading-overlay hidden" id="resumeChoiceLoadingOverlay">
+              <div class="resume-choice-loading-card">
+                <div class="loading-spinner"></div>
+                <div class="resume-choice-loading-title">Generating tailoring suggestions</div>
+                <div class="resume-choice-loading-text">
+                  Rebuilding packet and tailoring for the selected resume.
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

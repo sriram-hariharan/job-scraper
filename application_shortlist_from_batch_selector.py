@@ -25,6 +25,15 @@ def _count_missing_requirements(value: str) -> int:
 def _normalize_text(value: str) -> str:
     return " ".join(str(value or "").lower().split()).strip()
 
+def _selection_signal(row: dict) -> str:
+    return str(row.get("selection_signal", "")).strip()
+
+
+def _requires_manual_review(row: dict) -> bool:
+    if _parse_bool(row.get("requires_manual_review", "false")):
+        return True
+    return _selection_signal(row) == "manual_review_close_call"
+
 HIGH_CONFIDENCE_APPLY_SCORE = 0.70
 STRONG_TIE_REVIEW_SCORE = 0.64
 GOOD_MATCH_SCORE = 0.58
@@ -35,6 +44,8 @@ def _classify_action(row: dict) -> tuple[str, str]:
     winner_score = _parse_float(row.get("winner_score", "0"))
     score_gap = _parse_float(row.get("score_gap", "0"))
     is_tie = _parse_bool(row.get("is_tie", "false"))
+    requires_manual_review = _requires_manual_review(row)
+    selection_signal = _selection_signal(row)
     passed_prefilter = int(row.get("passed_prefilter", "0"))
     filtered_out = int(row.get("filtered_out", "0"))
     resume_variants_considered = int(row.get("resume_variants_considered", "0"))
@@ -58,6 +69,7 @@ def _classify_action(row: dict) -> tuple[str, str]:
     if (
         winner_score >= HIGH_CONFIDENCE_APPLY_SCORE
         and not is_tie
+        and not requires_manual_review
         and missing_count <= MAX_DIRECT_APPLY_MISSING_REQUIREMENTS
     ):
         return (
@@ -66,22 +78,42 @@ def _classify_action(row: dict) -> tuple[str, str]:
         )
 
     if (
-        is_tie
-        and winner_score >= STRONG_TIE_REVIEW_SCORE
+        winner_score >= STRONG_TIE_REVIEW_SCORE
         and missing_count <= MAX_STRONG_TIE_MISSING_REQUIREMENTS
+        and (is_tie or requires_manual_review)
     ):
+        if is_tie:
+            return (
+                "APPLY_REVIEW_VARIANTS",
+                f"Strong deterministic match ({winner_score:.3f}) but top variants are effectively tied (gap {score_gap:.3f}); review the tied resume options before applying.",
+            )
         return (
             "APPLY_REVIEW_VARIANTS",
-            f"Strong deterministic match ({winner_score:.3f}) but top variants are effectively tied (gap {score_gap:.3f}); review the tied resume options before applying.",
+            f"Strong deterministic match ({winner_score:.3f}) but winner versus backup is a selector close call (gap {score_gap:.3f}, signal={selection_signal}); review the top resume options before applying.",
         )
 
     if winner_score >= GOOD_MATCH_SCORE:
+        if requires_manual_review:
+            return (
+                "MAYBE_TAILOR",
+                f"Good deterministic match ({winner_score:.3f}) but the winner is a selector close call versus the backup (gap {score_gap:.3f}, signal={selection_signal}); tailor and review the top resume options manually.",
+            )
+        if is_tie:
+            return (
+                "MAYBE_TAILOR",
+                f"Good deterministic match ({winner_score:.3f}) but the top resume options are effectively tied (gap {score_gap:.3f}); tailor and review the tied variants manually.",
+            )
         return (
             "MAYBE_TAILOR",
             f"Good deterministic match ({winner_score:.3f}) but not decisive enough for a straight apply; tailor around the missing requirements ({missing_count}).",
         )
 
     if winner_score >= 0.50 and pass_rate < 0.50:
+        if requires_manual_review:
+            return (
+                "MAYBE_TAILOR",
+                f"Borderline score ({winner_score:.3f}) and selector close call versus backup (gap {score_gap:.3f}, signal={selection_signal}); worth manual review.",
+            )
         return (
             "MAYBE_TAILOR",
             f"Borderline score ({winner_score:.3f}) but the job was selective across resume variants (pass rate {pass_rate:.2%}); worth reviewing manually.",
@@ -182,6 +214,9 @@ def main() -> None:
                 "winner_resume": row["winner_resume"],
                 "winner_score": row["winner_score"],
                 "winner_bucket": row["winner_bucket"],
+                "selection_signal": row.get("selection_signal", ""),
+                "requires_manual_review": row.get("requires_manual_review", ""),
+                "manual_review_gap_epsilon": row.get("manual_review_gap_epsilon", ""),
                 "is_tie": row["is_tie"],
                 "tie_epsilon": row["tie_epsilon"],
                 "runner_up_resume": row["runner_up_resume"],
@@ -215,6 +250,9 @@ def main() -> None:
         "winner_resume",
         "winner_score",
         "winner_bucket",
+        "selection_signal",
+        "requires_manual_review",
+        "manual_review_gap_epsilon",
         "is_tie",
         "tie_epsilon",
         "runner_up_resume",
@@ -245,7 +283,13 @@ def main() -> None:
     for row in shortlist_rows[:args.top_k_console]:
         print("-" * 100)
         print(f"{row['action']} | {row['job_company']} | {row['job_title']}")
-        print(f"Winner: {row['winner_resume']} | score={_parse_float(row['winner_score']):.3f} | bucket={row['winner_bucket']}")
+        print(
+            f"Winner: {row['winner_resume']} | "
+            f"score={_parse_float(row['winner_score']):.3f} | "
+            f"bucket={row['winner_bucket']} | "
+            f"selection={row['selection_signal']} | "
+            f"requires_manual_review={row['requires_manual_review']}"
+        )
         if row["runner_up_resume"]:
             print(
                 f"Backup: {row['runner_up_resume']} | "

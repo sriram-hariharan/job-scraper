@@ -165,6 +165,12 @@ def _title_similarity(left: str, right: str) -> float:
 
     return intersection / union
 
+def _job_title_tokens(job: JobEvidence) -> Set[str]:
+    return _normalized_tokens(job.title)
+
+def _is_data_science_like_job(job: JobEvidence) -> bool:
+    tokens = _job_title_tokens(job)
+    return bool(tokens & {"data", "scientist", "analytics", "analyst", "research", "statistician"})
 
 def _best_resume_title_match(resume: ResumeEvidence, job: JobEvidence) -> Tuple[float, str]:
     candidates = _unique_preserve_order(
@@ -185,12 +191,9 @@ def _best_resume_title_match(resume: ResumeEvidence, job: JobEvidence) -> Tuple[
     return best_score, best_title
 
 
-def _build_resume_skill_set(resume: ResumeEvidence) -> Set[str]:
+def _build_resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
     skill_values: List[str] = []
     skill_values.extend(resume.skills)
-    skill_values.extend(resume.tooling_signals)
-    skill_values.extend(resume.analytics_ml_signals)
-    skill_values.extend(resume.experimentation_signals)
 
     for entry in resume.experience_entries:
         skill_values.extend(entry.normalized_skills)
@@ -217,15 +220,15 @@ def run_prefilter(
     job: JobEvidence,
 ) -> MatchPrefilterResult:
     best_title_score, best_title = _best_resume_title_match(resume, job)
-    resume_skill_set = _build_resume_skill_set(resume)
+    resume_explicit_skill_set = _build_resume_explicit_skill_set(resume)
 
     required_skills = _normalized_skill_list(job.required_skills)
     preferred_skills = _normalized_skill_list(job.preferred_skills)
     all_skills = _normalized_skill_list(job.all_skills)
 
-    matched_required = [skill for skill in required_skills if skill in resume_skill_set]
-    matched_preferred = [skill for skill in preferred_skills if skill in resume_skill_set]
-    matched_any = [skill for skill in all_skills if skill in resume_skill_set]
+    matched_required = [skill for skill in required_skills if skill in resume_explicit_skill_set]
+    matched_preferred = [skill for skill in preferred_skills if skill in resume_explicit_skill_set]
+    matched_any = [skill for skill in all_skills if skill in resume_explicit_skill_set]
 
     matched_terms: List[str] = []
     if best_title and best_title_score >= 0.45:
@@ -236,13 +239,15 @@ def run_prefilter(
         matched_terms.extend(matched_any)
     matched_terms = _unique_preserve_order(matched_terms)
 
-    missing_requirements = [skill for skill in required_skills if skill not in resume_skill_set]
+    missing_requirements = [skill for skill in required_skills if skill not in resume_explicit_skill_set]
 
     reasons: List[str] = []
     failed_reasons: List[str] = []
 
     minimum_overlap_passed = False
     if best_title_score >= 0.80 and len(matched_any) >= 2:
+        minimum_overlap_passed = True
+    elif best_title_score >= 0.80 and _is_data_science_like_job(job) and len(matched_any) >= 1:
         minimum_overlap_passed = True
     elif best_title_score >= 0.45 and len(matched_any) >= 3:
         minimum_overlap_passed = True

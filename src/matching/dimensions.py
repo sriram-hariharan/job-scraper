@@ -16,7 +16,7 @@ MATCH_DIMENSIONS: List[MatchDimensionDefinition] = [
     ),
     MatchDimensionDefinition(
         name="preferred_skills_alignment",
-        weight=0.069767,
+        weight=0.078023,
         description="Coverage of preferred or bonus skills in the resume evidence.",
     ),
     MatchDimensionDefinition(
@@ -36,16 +36,13 @@ MATCH_DIMENSIONS: List[MatchDimensionDefinition] = [
     ),
     MatchDimensionDefinition(
         name="tooling_alignment",
-        weight=0.093023,
+        weight=0.078023,
         description="Overlap between the resume's tools/stack and the job's required tooling.",
     ),
     MatchDimensionDefinition(
         name="baseline_familiarity",
-        weight=0.023256,
-        description=(
-            "Low-weight inferred-only prior for likely-common baseline ML/notebook/version-control "
-            "familiarity. This is scoring-only and not explicit proof."
-        ),
+        weight=0.030000,
+        description="Low-weight scoring-only inferred familiarity for common baseline methods/tools when the resume profile strongly supports them.",
     ),
     MatchDimensionDefinition(
         name="project_relevance",

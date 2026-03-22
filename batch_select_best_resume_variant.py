@@ -15,6 +15,7 @@ from src.resume.evidence_builder import build_resume_evidence
 TIE_EPSILON = 0.010
 TITLE_ONLY_TIE_EPSILON = 0.015
 NON_TITLE_DELTA_EPSILON = 0.002
+CLOSE_CALL_REVIEW_EPSILON = 0.020
 
 LLM_FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "groq").strip().lower()
 LLM_FALLBACK_MODEL = os.getenv(
@@ -168,12 +169,61 @@ def _is_effective_tie(winner, runner_up: Optional[object], epsilon: float = TIE_
         and _is_title_only_edge(winner, runner_up)
     )
 
+def _score_gap(winner, runner_up: Optional[object]) -> float:
+    if runner_up is None:
+        return 0.0
+    return abs(winner.final_score - runner_up.final_score)
 
-def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
+
+def _is_close_call_manual_review(
+    winner,
+    runner_up: Optional[object],
+    gap_epsilon: float = CLOSE_CALL_REVIEW_EPSILON,
+) -> bool:
+    if runner_up is None:
+        return False
+
+    if _is_effective_tie(winner, runner_up):
+        return False
+
+    return _score_gap(winner, runner_up) <= gap_epsilon
+
+
+def _selection_signal(
+    has_credible_match: bool,
+    winner,
+    runner_up: Optional[object],
+    manual_review_gap_epsilon: float = CLOSE_CALL_REVIEW_EPSILON,
+) -> str:
+    if not has_credible_match:
+        return "no_credible_match"
+
+    if _is_effective_tie(winner, runner_up):
+        return "effective_tie"
+
+    if _is_close_call_manual_review(
+        winner,
+        runner_up,
+        gap_epsilon=manual_review_gap_epsilon,
+    ):
+        return "manual_review_close_call"
+
+    return "decisive_winner"
+
+def _recommendation_lines(
+    winner,
+    runner_up: Optional[object],
+    manual_review_gap_epsilon: float = CLOSE_CALL_REVIEW_EPSILON,
+) -> List[str]:
     lines = []
     is_tie = _is_effective_tie(winner, runner_up)
+    is_close_call_manual_review = _is_close_call_manual_review(
+        winner,
+        runner_up,
+        gap_epsilon=manual_review_gap_epsilon,
+    )
 
-    score_gap = abs(winner.final_score - runner_up.final_score) if runner_up is not None else 0.0
+    score_gap = _score_gap(winner, runner_up)
 
     if is_tie:
         if score_gap <= TIE_EPSILON:
@@ -193,6 +243,17 @@ def _recommendation_lines(winner, runner_up: Optional[object]) -> List[str]:
         )
         lines.append(f"Top-ranked variant by deterministic ordering: {winner.pair.resume_name}")
         lines.append(f"Equivalent backup variant: {runner_up.pair.resume_name}")
+
+    elif is_close_call_manual_review:
+        lines.append(
+            f"Manual review: {winner.pair.resume_name} is the current top-ranked variant for "
+            f"{winner.pair.job_company} | {winner.pair.job_title}, but the gap versus "
+            f"{runner_up.pair.resume_name} is only {score_gap:.3f}, which is within the "
+            f"close-call review threshold of {manual_review_gap_epsilon:.3f}."
+        )
+        lines.append(f"Current top-ranked variant by deterministic ordering: {winner.pair.resume_name}")
+        lines.append(f"Close backup variant: {runner_up.pair.resume_name}")
+
     else:
         lines.append(f"Use: {winner.pair.resume_name}")
         lines.append(
@@ -579,6 +640,15 @@ def main() -> None:
         help="Path to write the batch selector CSV.",
     )
     parser.add_argument(
+        "--manual-review-gap-epsilon",
+        type=float,
+        default=CLOSE_CALL_REVIEW_EPSILON,
+        help=(
+            "If winner vs runner-up is above tie handling but at or below this gap, "
+            "flag the result as a deterministic manual-review close call."
+        ),
+    )
+    parser.add_argument(
         "--generate-llm-fallback",
         action="store_true",
         help="For jobs with no credible deterministic winner, run LLM fallback ranking across all resume variants.",
@@ -660,6 +730,21 @@ def main() -> None:
             )
 
         is_tie = _is_effective_tie(winner, runner_up) if has_credible_match else False
+        requires_manual_review = (
+            _is_close_call_manual_review(
+                winner,
+                runner_up,
+                gap_epsilon=args.manual_review_gap_epsilon,
+            )
+            if has_credible_match
+            else False
+        )
+        selection_signal = _selection_signal(
+            has_credible_match=has_credible_match,
+            winner=winner,
+            runner_up=runner_up,
+            manual_review_gap_epsilon=args.manual_review_gap_epsilon,
+        )
 
         output_rows.append(
             {
@@ -757,9 +842,18 @@ def main() -> None:
                     else ""
                 ),
                 "is_tie": is_tie,
+                "selection_signal": selection_signal,
+                "requires_manual_review": requires_manual_review,
+                "manual_review_gap_epsilon": f"{args.manual_review_gap_epsilon:.6f}",
                 "tie_epsilon": f"{TIE_EPSILON:.6f}",
                 "recommendation_summary": (
-                    " ".join(_recommendation_lines(winner, runner_up))
+                    " ".join(
+                        _recommendation_lines(
+                            winner,
+                            runner_up,
+                            manual_review_gap_epsilon=args.manual_review_gap_epsilon,
+                        )
+                    )
                     if has_credible_match
                     else " ".join(_no_credible_match_lines(winner))
                 ),
@@ -827,6 +921,9 @@ def main() -> None:
         "runner_up_dimension_scores_json",
         "score_gap",
         "is_tie",
+        "selection_signal",
+        "requires_manual_review",
+        "manual_review_gap_epsilon",
         "tie_epsilon",
         "recommendation_summary",
         "llm_fallback_best_resume",
@@ -864,7 +961,7 @@ def main() -> None:
         if row["winner_resume"]:
             print(
                 f"Winner: {row['winner_resume']} | score={float(row['winner_score']):.3f} | "
-                f"bucket={row['winner_bucket']}"
+                f"bucket={row['winner_bucket']} | selection={row['selection_signal']}"
             )
         else:
             print(
@@ -892,6 +989,13 @@ def main() -> None:
                     f"score={float(row['runner_up_score']):.3f} | "
                     f"gap={float(row['score_gap']):.3f} | "
                     f"tie_epsilon={float(row['tie_epsilon']):.3f}"
+                )
+            elif str(row["requires_manual_review"]).lower() == "true":
+                print(
+                    f"Manual-review backup: {row['runner_up_resume']} | "
+                    f"score={float(row['runner_up_score']):.3f} | "
+                    f"gap={float(row['score_gap']):.3f} | "
+                    f"review_epsilon={float(row['manual_review_gap_epsilon']):.3f}"
                 )
             else:
                 print(

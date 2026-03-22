@@ -26,6 +26,17 @@ class MatchPrefilterResult:
     matched_terms: List[str] = field(default_factory=list)
     missing_requirements: List[str] = field(default_factory=list)
 
+    best_title_score: float = 0.0
+    best_title: str = ""
+
+    matched_required_terms: List[str] = field(default_factory=list)
+    matched_preferred_terms: List[str] = field(default_factory=list)
+    matched_any_terms: List[str] = field(default_factory=list)
+
+    matched_required_count: int = 0
+    matched_preferred_count: int = 0
+    matched_any_count: int = 0
+
 
 @dataclass(frozen=True)
 class ResumeJobPair:

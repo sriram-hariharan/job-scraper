@@ -114,6 +114,11 @@ def _classify_action(row: dict) -> tuple[str, str]:
                 "MAYBE_TAILOR",
                 f"Borderline score ({winner_score:.3f}) and selector close call versus backup (gap {score_gap:.3f}, signal={selection_signal}); worth manual review.",
             )
+        if is_tie:
+            return (
+                "MAYBE_TAILOR",
+                f"Borderline score ({winner_score:.3f}) and top resume options are effectively tied (gap {score_gap:.3f}, pass rate {pass_rate:.2%}); review the tied variants manually.",
+            )
         return (
             "MAYBE_TAILOR",
             f"Borderline score ({winner_score:.3f}) but the job was selective across resume variants (pass rate {pass_rate:.2%}); worth reviewing manually.",

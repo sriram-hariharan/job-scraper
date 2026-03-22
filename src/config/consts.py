@@ -735,3 +735,24 @@ EMBEDDED_SKILL_PATTERNS = [
     (r"\bsigma\b", "sigma"),
     (r"\btableau\b", "tableau"),
 ]
+
+
+# ============================================================
+# TAILORING
+# ============================================================
+
+
+CONTEXT_TOKEN_STOPWORDS = {
+    "a", "an", "and", "the", "for", "with", "from", "into", "using",
+    "senior", "sr", "junior", "jr", "lead", "staff", "principal",
+    "data", "analyst", "scientist", "engineer", "manager", "director",
+    "product", "platform", "team", "ops", "operation", "operations",
+    "ii", "iii", "iv", "i",
+}
+
+REWRITE_DIRECTION_PREFIXES = (
+    "Lead with",
+    "Support with",
+    "Keep gap explicit",
+    "Do not add",
+)

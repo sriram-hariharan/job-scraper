@@ -191,6 +191,16 @@ def _count_by(rows: List[dict], key: str) -> Dict[str, int]:
         counts[value] = counts.get(value, 0) + 1
     return dict(sorted(counts.items(), key=lambda item: (item[0] != "<empty>", item[0])))
 
+def _parse_bool(value: str) -> bool:
+    return str(value).strip().lower() == "true"
+
+
+def _requires_resolved_resume_selection(row: dict) -> bool:
+    return not (
+        _parse_bool(row.get("requires_manual_review", "false"))
+        or _parse_bool(row.get("is_tie", "false"))
+    )
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Run the application-planning workflow: batch best-variant selection, shortlist generation, and JD diff packets."
@@ -266,8 +276,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--llm-tailoring-actions",
-        default="APPLY,APPLY_REVIEW_VARIANTS",
-        help="Comma-separated shortlist actions eligible for live LLM tailoring.",
+        default="APPLY,MAYBE_TAILOR",
+        help="Comma-separated shortlist actions eligible for live LLM tailoring after resume selection is resolved.",
     )
     parser.add_argument(
         "--generate-llm-fallback",
@@ -385,27 +395,16 @@ def main() -> None:
         winner_resume = row["winner_resume"]
         company = row["job_company"]
         title = row["job_title"]
+        resume_selection_resolved = _requires_resolved_resume_selection(row)
+        packet_status = "generated" if resume_selection_resolved else "pending_variant_selection"
 
         file_slug = (
             f"{_slugify(company, 30)}__"
             f"{_slugify(title, 60)}__"
             f"{_slugify(winner_resume, 40)}"
         )
-        packet_json_path = job_packets_dir / f"{file_slug}.json"
 
-        diff_cmd = [
-            sys.executable,
-            "jd_resume_diff_helper.py",
-            "--job-corpus",
-            str(job_corpus_path),
-            "--job-index",
-            str(job_index),
-            "--output-json",
-            str(packet_json_path),
-        ]
-
-        _run_cmd(diff_cmd)
-
+        packet_json_path = ""
         tailoring_json_path = ""
         tailoring_md_path = ""
         tailoring_llm_json_path = ""
@@ -420,48 +419,68 @@ def main() -> None:
             "llm_retry_used": "",
         }
 
-        if args.generate_tailoring:
-            tailoring_json_path = job_packets_dir / f"{file_slug}__tailoring.json"
-            tailoring_md_path = job_packets_dir / f"{file_slug}__tailoring.md"
+        if not resume_selection_resolved:
+            llm_status["llm_tailoring_status"] = "pending_variant_selection"
+        else:
+            packet_json_path = job_packets_dir / f"{file_slug}.json"
 
-            tailoring_cmd = [
+            diff_cmd = [
                 sys.executable,
-                "generate_tailoring_suggestions.py",
-                "--packet-json",
-                str(packet_json_path),
+                "jd_resume_diff_helper.py",
+                "--job-corpus",
+                str(job_corpus_path),
+                "--job-index",
+                str(job_index),
                 "--output-json",
-                str(tailoring_json_path),
-                "--output-md",
-                str(tailoring_md_path),
+                str(packet_json_path),
             ]
 
-            if args.generate_llm_tailoring:
-                if row["action"] in llm_tailoring_actions:
-                    tailoring_llm_json_path = job_packets_dir / f"{file_slug}__tailoring_llm.json"
-                    tailoring_cmd.extend(
-                        [
-                            "--use-llm",
-                            "--output-llm-json",
-                            str(tailoring_llm_json_path),
-                        ]
-                    )
-                    if args.refresh_llm_tailoring:
-                        tailoring_cmd.append("--refresh-llm-cache")
-                else:
-                    llm_status["llm_tailoring_status"] = "skipped_action_filter"
+            _run_cmd(diff_cmd)
 
-            _run_cmd(tailoring_cmd)
+            if args.generate_tailoring:
+                tailoring_json_path = job_packets_dir / f"{file_slug}__tailoring.json"
+                tailoring_md_path = job_packets_dir / f"{file_slug}__tailoring.md"
 
-            if tailoring_llm_json_path:
-                llm_status = _read_llm_tailoring_status(tailoring_llm_json_path)
+                tailoring_cmd = [
+                    sys.executable,
+                    "generate_tailoring_suggestions.py",
+                    "--packet-json",
+                    str(packet_json_path),
+                    "--output-json",
+                    str(tailoring_json_path),
+                    "--output-md",
+                    str(tailoring_md_path),
+                ]
+
+                if args.generate_llm_tailoring:
+                    if row["action"] in llm_tailoring_actions:
+                        tailoring_llm_json_path = job_packets_dir / f"{file_slug}__tailoring_llm.json"
+                        tailoring_cmd.extend(
+                            [
+                                "--use-llm",
+                                "--output-llm-json",
+                                str(tailoring_llm_json_path),
+                            ]
+                        )
+                        if args.refresh_llm_tailoring:
+                            tailoring_cmd.append("--refresh-llm-cache")
+                    else:
+                        llm_status["llm_tailoring_status"] = "skipped_action_filter"
+
+                _run_cmd(tailoring_cmd)
+
+                if tailoring_llm_json_path:
+                    llm_status = _read_llm_tailoring_status(tailoring_llm_json_path)
 
         print(
             "PACKET STATUS:",
             f"action={row['action']}",
             f"selection={row.get('selection_signal', '-')}",
             f"requires_manual_review={row.get('requires_manual_review', '-')}",
+            f"is_tie={row.get('is_tie', '-')}",
             f"company={company}",
             f"title={title}",
+            f"packet_status={packet_status}",
             f"llm_status={llm_status['llm_tailoring_status']}",
             f"llm_cache_hit={llm_status['llm_cache_hit'] or '-'}",
             f"llm_error_type={llm_status['llm_error_type'] or '-'}",
@@ -487,6 +506,7 @@ def main() -> None:
                 "score_gap": row["score_gap"],
                 "is_tie": row["is_tie"],
                 "tie_epsilon": row.get("tie_epsilon", ""),
+                "packet_status": packet_status,
                 "packet_json": str(packet_json_path),
                 "tailoring_json": str(tailoring_json_path) if tailoring_json_path else "",
                 "tailoring_md": str(tailoring_md_path) if tailoring_md_path else "",
@@ -524,6 +544,7 @@ def main() -> None:
         "score_gap",
         "is_tie",
         "tie_epsilon",
+        "packet_status",
         "packet_json",
         "tailoring_json",
         "tailoring_md",
@@ -543,6 +564,16 @@ def main() -> None:
         for manifest_row in manifest_rows:
             writer.writerow(manifest_row)
     
+    packet_status_counts = _count_by(manifest_rows, "packet_status")
+    packet_created_count = sum(
+        1 for row in manifest_rows
+        if str(row.get("packet_status", "")).strip() == "generated"
+    )
+    pending_variant_selection_count = sum(
+        1
+        for row in manifest_rows
+        if str(row.get("packet_status", "")).strip() == "pending_variant_selection"
+    )
     action_counts = _count_by(manifest_rows, "action")
     llm_status_counts = _count_by(manifest_rows, "llm_tailoring_status")
 
@@ -555,7 +586,8 @@ def main() -> None:
     print(f"Execution queue  : {execution_queue_csv}")
     print(f"Packet manifest  : {manifest_csv}")
     print(f"Job packets dir  : {job_packets_dir}")
-    print(f"Packets created  : {len(manifest_rows)}")
+    print(f"Packets created  : {packet_created_count}")
+    print(f"Pending variant selection rows : {pending_variant_selection_count}")
     print(f"Tailoring step      : {'enabled' if args.generate_tailoring else 'disabled'}")
     print(f"Live LLM tailoring  : {'enabled' if args.generate_llm_tailoring else 'disabled'}")
     if args.generate_llm_tailoring:
@@ -566,6 +598,11 @@ def main() -> None:
     print("Action counts:")
     for action, count in action_counts.items():
         print(f"  {action}: {count}")
+    
+    print()
+    print("Packet status counts:")
+    for status, count in packet_status_counts.items():
+        print(f"  {status}: {count}")
 
     print()
     print("LLM status counts:")

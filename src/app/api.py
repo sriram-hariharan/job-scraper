@@ -1,5 +1,6 @@
 from pathlib import Path
 from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi.responses import FileResponse
 from src.app import services
 from fastapi.staticfiles import StaticFiles
 from src.app.ui import router as ui_router
@@ -32,13 +33,6 @@ def _start_semantic_warmup_thread() -> None:
         daemon=True,
         name="rag-semantic-warmup",
     ).start()
-
-# @asynccontextmanager
-# async def lifespan(app: FastAPI):
-#     import asyncio
-
-#     asyncio.get_running_loop().call_soon(_start_semantic_warmup_thread)
-#     yield
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -206,6 +200,20 @@ def planning_artifact(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.get("/planning/resume-preview")
+def planning_resume_preview(
+    resume_name: str = Query(..., min_length=1),
+):
+    try:
+        preview_path = services.planning_resume_preview_path(resume_name)
+        return FileResponse(
+            path=str(preview_path),
+            media_type="application/pdf",
+            headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.get("/decisions")
 def decisions(
@@ -227,6 +235,30 @@ def decisions(
         limit=limit,
     )
 
+@app.post("/planning/select-resume")
+def planning_select_resume(
+    payload: dict = Body(...),
+    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
+):
+    try:
+        return services.record_operator_resume_selection_payload(
+            decisions_path=Path(decisions_path),
+            queue_rank=str(payload.get("queue_rank", "") or ""),
+            job_doc_id=str(payload.get("job_doc_id", "") or ""),
+            job_company=str(payload.get("job_company", "") or ""),
+            job_title=str(payload.get("job_title", "") or ""),
+            planning_action=str(payload.get("planning_action", "") or ""),
+            decision=str(payload.get("decision", "SELECT_RESUME") or "SELECT_RESUME"),
+            selected_resume=str(payload.get("selected_resume", "") or ""),
+            winner_resume=str(payload.get("winner_resume", "") or ""),
+            winner_score=str(payload.get("winner_score", "") or ""),
+            runner_up_resume=str(payload.get("runner_up_resume", "") or ""),
+            runner_up_score=str(payload.get("runner_up_score", "") or ""),
+            note=str(payload.get("note", "") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.get("/application-actions")
 def application_actions(
     actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),

@@ -169,7 +169,78 @@ def planning_dashboard() -> str:
       </div>
     </div>
   </section>
+    <section class="modal-backdrop hidden" id="resumeChoiceModal">
+    <div class="modal-card resume-choice-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>View Resume Choices</h3>
+          <div class="subtext" id="resumeChoiceModalMeta">
+            Review the winner and runner-up resumes, preview them, and lock one selection.
+          </div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="closeResumeChoiceModalBtn" type="button">Close</button>
+      </div>
 
+      <div class="resume-choice-modal-body">
+        <div class="resume-choice-list-pane">
+          <div class="resume-choice-job-grid">
+            <div class="info-pair">
+              <span class="label">Company</span>
+              <span id="resumeChoiceCompany">-</span>
+            </div>
+            <div class="info-pair">
+              <span class="label">Title</span>
+              <span id="resumeChoiceTitle">-</span>
+            </div>
+            <div class="info-pair">
+              <span class="label">Planning Action</span>
+              <span id="resumeChoiceAction">-</span>
+            </div>
+            <div class="info-pair">
+              <span class="label">Score Gap</span>
+              <span id="resumeChoiceGap">-</span>
+            </div>
+          </div>
+
+          <div class="resume-choice-help">
+            Eligible choices are limited to the current top two variants for this row.
+          </div>
+
+          <div class="resume-choice-list" id="resumeChoiceList">
+            <div class="resume-choice-empty">No resume choices available.</div>
+          </div>
+        </div>
+
+        <div class="resume-choice-preview-pane">
+          <div class="resume-choice-preview-header">
+            <div>
+              <div class="subtext">Quick preview</div>
+              <div class="resume-choice-preview-name" id="resumeChoicePreviewName">Select a resume to preview</div>
+            </div>
+          </div>
+
+          <div class="resume-choice-preview-frame-wrap">
+            <div class="resume-choice-empty" id="resumeChoicePreviewEmpty">
+              Select a resume on the left to load its PDF preview.
+            </div>
+            <iframe
+              id="resumeChoicePreviewFrame"
+              class="resume-choice-preview-frame hidden"
+              title="Resume quick preview"
+            ></iframe>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions resume-choice-modal-actions">
+        <div class="resume-choice-status" id="resumeChoiceSaveStatus">No resume selected yet.</div>
+        <div class="resume-choice-actions-right">
+          <button class="ghost-btn" id="resumeChoiceCancelBtn" type="button">Close</button>
+          <button id="resumeChoiceSelectBtn" type="button" disabled>Select Resume</button>
+        </div>
+      </div>
+    </div>
+  </section>
   <section class="modal-backdrop hidden" id="tailoringModal">
     <div class="modal-card pipeline-modal-card tailoring-modal-card">
       <div class="modal-header">

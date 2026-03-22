@@ -300,4 +300,12 @@ def run_prefilter(
         reasons=combined_reasons,
         matched_terms=matched_terms,
         missing_requirements=missing_requirements,
+        best_title_score=best_title_score,
+        best_title=best_title,
+        matched_required_terms=matched_required,
+        matched_preferred_terms=matched_preferred,
+        matched_any_terms=matched_any,
+        matched_required_count=len(matched_required),
+        matched_preferred_count=len(matched_preferred),
+        matched_any_count=len(matched_any),
     )

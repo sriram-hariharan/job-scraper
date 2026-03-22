@@ -108,6 +108,20 @@ def _dimension_snapshot(result, max_dims: int = 5) -> str:
         for dim in ordered[:max_dims]
     )
 
+def _dimension_scores_json(result) -> str:
+    payload = []
+    for dim in sorted(result.dimension_scores, key=lambda d: d.name):
+        payload.append(
+            {
+                "name": dim.name,
+                "score": round(float(dim.score), 6),
+                "weight": round(float(dim.weight), 6),
+                "weighted_score": round(float(dim.weighted_score), 6),
+                "reason": dim.reason,
+                "evidence": list(dim.evidence),
+            }
+        )
+    return json.dumps(payload, ensure_ascii=False)
 
 def _is_title_only_edge(
     winner,
@@ -661,6 +675,17 @@ def main() -> None:
                 "winner_top_dims": _dimension_snapshot(winner),
                 "winner_missing_requirements": " | ".join(winner.prefilter.missing_requirements),
                 "winner_matched_terms": " | ".join(winner.prefilter.matched_terms),
+                "winner_prefilter_passed": winner.prefilter.passed,
+                "winner_prefilter_best_title_score": f"{winner.prefilter.best_title_score:.6f}",
+                "winner_prefilter_best_title": winner.prefilter.best_title,
+                "winner_prefilter_matched_required_count": winner.prefilter.matched_required_count,
+                "winner_prefilter_matched_preferred_count": winner.prefilter.matched_preferred_count,
+                "winner_prefilter_matched_any_count": winner.prefilter.matched_any_count,
+                "winner_prefilter_matched_required_terms": " | ".join(winner.prefilter.matched_required_terms),
+                "winner_prefilter_matched_preferred_terms": " | ".join(winner.prefilter.matched_preferred_terms),
+                "winner_prefilter_matched_any_terms": " | ".join(winner.prefilter.matched_any_terms),
+                "winner_prefilter_reasons": " || ".join(winner.prefilter.reasons),
+                "winner_dimension_scores_json": _dimension_scores_json(winner),
                 "runner_up_resume": (
                     runner_up.pair.resume_name
                     if has_credible_match and runner_up is not None
@@ -668,6 +693,61 @@ def main() -> None:
                 ),
                 "runner_up_score": (
                     f"{runner_up.final_score:.6f}"
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_passed": (
+                    runner_up.prefilter.passed
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_best_title_score": (
+                    f"{runner_up.prefilter.best_title_score:.6f}"
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_best_title": (
+                    runner_up.prefilter.best_title
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_matched_required_count": (
+                    runner_up.prefilter.matched_required_count
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_matched_preferred_count": (
+                    runner_up.prefilter.matched_preferred_count
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_matched_any_count": (
+                    runner_up.prefilter.matched_any_count
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_matched_required_terms": (
+                    " | ".join(runner_up.prefilter.matched_required_terms)
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_matched_preferred_terms": (
+                    " | ".join(runner_up.prefilter.matched_preferred_terms)
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_matched_any_terms": (
+                    " | ".join(runner_up.prefilter.matched_any_terms)
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_prefilter_reasons": (
+                    " || ".join(runner_up.prefilter.reasons)
+                    if has_credible_match and runner_up is not None
+                    else ""
+                ),
+                "runner_up_dimension_scores_json": (
+                    _dimension_scores_json(runner_up)
                     if has_credible_match and runner_up is not None
                     else ""
                 ),
@@ -721,8 +801,30 @@ def main() -> None:
         "winner_top_dims",
         "winner_missing_requirements",
         "winner_matched_terms",
+        "winner_prefilter_passed",
+        "winner_prefilter_best_title_score",
+        "winner_prefilter_best_title",
+        "winner_prefilter_matched_required_count",
+        "winner_prefilter_matched_preferred_count",
+        "winner_prefilter_matched_any_count",
+        "winner_prefilter_matched_required_terms",
+        "winner_prefilter_matched_preferred_terms",
+        "winner_prefilter_matched_any_terms",
+        "winner_prefilter_reasons",
+        "winner_dimension_scores_json",
         "runner_up_resume",
         "runner_up_score",
+        "runner_up_prefilter_passed",
+        "runner_up_prefilter_best_title_score",
+        "runner_up_prefilter_best_title",
+        "runner_up_prefilter_matched_required_count",
+        "runner_up_prefilter_matched_preferred_count",
+        "runner_up_prefilter_matched_any_count",
+        "runner_up_prefilter_matched_required_terms",
+        "runner_up_prefilter_matched_preferred_terms",
+        "runner_up_prefilter_matched_any_terms",
+        "runner_up_prefilter_reasons",
+        "runner_up_dimension_scores_json",
         "score_gap",
         "is_tie",
         "tie_epsilon",
@@ -799,6 +901,14 @@ def main() -> None:
                 )
 
         print(f"Top dims: {row['winner_top_dims']}")
+        print(
+            "Audit: "
+            f"title={row['winner_prefilter_best_title']} "
+            f"(score={float(row['winner_prefilter_best_title_score']):.3f}), "
+            f"required={row['winner_prefilter_matched_required_count']}, "
+            f"preferred={row['winner_prefilter_matched_preferred_count']}, "
+            f"any={row['winner_prefilter_matched_any_count']}"
+        )
         if row["winner_missing_requirements"]:
             print(f"Missing requirements: {row['winner_missing_requirements']}")
         print(f"Summary: {row['recommendation_summary']}")

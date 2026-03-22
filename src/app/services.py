@@ -59,6 +59,28 @@ APPLICATION_ACTION_OVERLAY_FIELDS = [
     "is_applied",
 ]
 
+OPERATOR_DECISION_HEADERS = [
+    "decision_timestamp",
+    "queue_rank",
+    "job_doc_id",
+    "job_company",
+    "job_title",
+    "planning_action",
+    "winner_resume",
+    "winner_score",
+    "runner_up_resume",
+    "runner_up_score",
+    "selected_resume",
+    "decision",
+    "note",
+]
+
+ALLOWED_OPERATOR_DECISIONS = {
+    "SELECT_RESUME",
+}
+
+_RESUME_PREVIEW_PATH_CACHE: Dict[str, str] = {}
+
 def _get_resume_dir() -> Path:
     resume_dir = DEFAULT_PROFILE_RESUME_DIR
     resume_dir.mkdir(parents=True, exist_ok=True)
@@ -436,6 +458,80 @@ def run_live_pipeline_payload(
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+def _sanitize_optional_resume_filename(value: Any) -> str:
+    raw = _clean_text(value)
+    return _sanitize_resume_filename(raw) if raw else ""
+
+
+def _normalize_operator_decision(value: Any) -> str:
+    normalized = _clean_text(value).upper().replace(" ", "_")
+    if not normalized:
+        raise ValueError("decision is required.")
+    if normalized not in ALLOWED_OPERATOR_DECISIONS:
+        allowed = ", ".join(sorted(ALLOWED_OPERATOR_DECISIONS))
+        raise ValueError(f"Invalid decision={normalized!r}. Allowed values: {allowed}")
+    return normalized
+
+
+def _operator_decision_key(row: Dict[str, Any]) -> str:
+    return _application_action_key(row)
+
+
+def _validate_operator_decision_identity(row: Dict[str, Any]) -> None:
+    if not _operator_decision_key(row):
+        raise ValueError(
+            "Operator decision requires job_doc_id, job_url, or job_company + job_title."
+        )
+
+
+def _resolve_resume_preview_path(resume_name: str) -> Path:
+    safe_name = _sanitize_resume_filename(resume_name)
+
+    cached = _RESUME_PREVIEW_PATH_CACHE.get(safe_name, "")
+    if cached:
+        cached_path = Path(cached)
+        if cached_path.exists() and cached_path.is_file():
+            return cached_path
+
+    profile_path = _get_resume_dir() / safe_name
+    if profile_path.exists() and profile_path.is_file():
+        resolved = profile_path.resolve()
+        _RESUME_PREVIEW_PATH_CACHE[safe_name] = str(resolved)
+        return resolved
+
+    ignore_dirs = {
+        ".git",
+        "__pycache__",
+        "node_modules",
+        ".venv",
+        "venv",
+        "env",
+        "job_scrap312",
+    }
+
+    matches: List[Path] = []
+    search_root = Path.cwd().resolve()
+
+    for path in search_root.rglob(safe_name):
+        if not path.is_file():
+            continue
+        if path.suffix.lower() != ".pdf":
+            continue
+        if any(part in ignore_dirs for part in path.parts):
+            continue
+        matches.append(path.resolve())
+
+    if not matches:
+        raise ValueError(f"Resume preview file not found: {safe_name}")
+
+    matches.sort(key=lambda path: (len(path.parts), len(str(path))))
+    chosen = matches[0]
+    _RESUME_PREVIEW_PATH_CACHE[safe_name] = str(chosen)
+    return chosen
+
+
+def planning_resume_preview_path(resume_name: str) -> Path:
+    return _resolve_resume_preview_path(resume_name)
 
 def _normalize_application_status(value: Any) -> str:
     normalized = _clean_text(value).upper().replace(" ", "_")
@@ -830,6 +926,63 @@ def decisions_payload(
         "filters": filters,
         "rows": selected,
         "count": len(selected),
+        "decisions_path": str(decisions_path),
+    }
+
+def record_operator_resume_selection_payload(
+    decisions_path: Path = DEFAULT_DECISIONS_PATH,
+    *,
+    queue_rank: str = "",
+    job_doc_id: str = "",
+    job_company: str = "",
+    job_title: str = "",
+    planning_action: str = "",
+    decision: str = "SELECT_RESUME",
+    selected_resume: str = "",
+    winner_resume: str = "",
+    winner_score: str = "",
+    runner_up_resume: str = "",
+    runner_up_score: str = "",
+    note: str = "",
+) -> Dict[str, Any]:
+    ja = _job_app()
+
+    safe_selected = _sanitize_resume_filename(selected_resume)
+    safe_winner = _sanitize_optional_resume_filename(winner_resume)
+    safe_runner = _sanitize_optional_resume_filename(runner_up_resume)
+
+    allowed_resumes = {name for name in [safe_winner, safe_runner] if name}
+    if not allowed_resumes:
+        raise ValueError("No eligible resume choices were provided.")
+
+    if safe_selected not in allowed_resumes:
+        allowed = ", ".join(sorted(allowed_resumes))
+        raise ValueError(
+            f"selected_resume must be one of the eligible choices. Allowed: {allowed}"
+        )
+
+    row = {
+        "decision_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "queue_rank": _clean_text(queue_rank),
+        "job_doc_id": _clean_text(job_doc_id),
+        "job_company": _clean_text(job_company),
+        "job_title": _clean_text(job_title),
+        "planning_action": _clean_text(planning_action),
+        "winner_resume": safe_winner,
+        "winner_score": _clean_text(winner_score),
+        "runner_up_resume": safe_runner,
+        "runner_up_score": _clean_text(runner_up_score),
+        "selected_resume": safe_selected,
+        "decision": _normalize_operator_decision(decision),
+        "note": _clean_text(note),
+    }
+
+    _validate_operator_decision_identity(row)
+    ja._append_csv_row(decisions_path, OPERATOR_DECISION_HEADERS, row)
+
+    return {
+        "ok": True,
+        "row": row,
         "decisions_path": str(decisions_path),
     }
 

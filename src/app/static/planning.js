@@ -2,6 +2,11 @@ const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 
 let currentTailoringMarkdownRaw = "";
 let tailoringCopyResetTimer = null;
+let resumeChoiceState = {
+  row: null,
+  candidates: [],
+  selectedResume: "",
+};
 
 const planningTableState = {
   rows: [],
@@ -369,6 +374,248 @@ function getApplicationModal() {
 
 function getTailoringModal() {
   return qs("tailoringModal");
+}
+
+function getResumeChoiceModal() {
+  return qs("resumeChoiceModal");
+}
+
+function normalizeResumeName(value) {
+  return String(value || "").trim();
+}
+
+function buildResumePreviewUrl(resumeName) {
+  const params = new URLSearchParams();
+  params.set("resume_name", resumeName);
+  return `/planning/resume-preview?${params.toString()}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+}
+
+function getResumeChoiceCandidates(row) {
+  const candidates = [];
+  const seen = new Set();
+
+  [
+    {
+      role: "Top recommendation",
+      resume_name: normalizeResumeName(row.winner_resume),
+      score: row.winner_score || "",
+    },
+    {
+      role: "Backup",
+      resume_name: normalizeResumeName(row.runner_up_resume),
+      score: row.runner_up_score || "",
+    },
+  ].forEach((item) => {
+    if (!item.resume_name) return;
+    const key = item.resume_name.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(item);
+  });
+
+  return candidates;
+}
+
+function resetResumeChoiceModal() {
+  resumeChoiceState = {
+    row: null,
+    candidates: [],
+    selectedResume: "",
+  };
+
+  qs("resumeChoiceCompany").textContent = "-";
+  qs("resumeChoiceTitle").textContent = "-";
+  qs("resumeChoiceAction").textContent = "-";
+  qs("resumeChoiceGap").textContent = "-";
+  qs("resumeChoicePreviewName").textContent = "Select a resume to preview";
+  qs("resumeChoiceSaveStatus").textContent = "No resume selected yet.";
+  qs("resumeChoiceList").innerHTML = `<div class="resume-choice-empty">No resume choices available.</div>`;
+
+  const previewFrame = qs("resumeChoicePreviewFrame");
+  const previewEmpty = qs("resumeChoicePreviewEmpty");
+  const selectBtn = qs("resumeChoiceSelectBtn");
+
+  previewFrame.src = "about:blank";
+  previewFrame.classList.add("hidden");
+  previewEmpty.classList.remove("hidden");
+
+  selectBtn.disabled = true;
+}
+
+function closeResumeChoiceModal() {
+  resetResumeChoiceModal();
+  getResumeChoiceModal().classList.add("hidden");
+}
+
+function renderResumeChoiceCards() {
+  const container = qs("resumeChoiceList");
+  const selectedResume = normalizeResumeName(resumeChoiceState.selectedResume);
+
+  if (!resumeChoiceState.candidates.length) {
+    container.innerHTML = `<div class="resume-choice-empty">No resume choices available.</div>`;
+    return;
+  }
+
+  container.innerHTML = resumeChoiceState.candidates.map((candidate) => {
+    const resumeName = normalizeResumeName(candidate.resume_name);
+    const isSelected = selectedResume && selectedResume === resumeName;
+
+    return `
+      <button
+        type="button"
+        class="resume-choice-card ${isSelected ? "is-selected" : ""}"
+        data-resume-choice="true"
+        data-resume-name="${escapeHtml(resumeName)}"
+      >
+        <div class="resume-choice-card-role">${escapeHtml(candidate.role)}</div>
+        <div class="resume-choice-card-name">${escapeHtml(resumeName)}</div>
+        <div class="resume-choice-card-meta">Score: ${escapeHtml(candidate.score || "-")}</div>
+      </button>
+    `;
+  }).join("");
+}
+
+function setResumeChoicePreview(resumeName) {
+  const safeName = normalizeResumeName(resumeName);
+  const previewFrame = qs("resumeChoicePreviewFrame");
+  const previewEmpty = qs("resumeChoicePreviewEmpty");
+  const previewName = qs("resumeChoicePreviewName");
+  const selectBtn = qs("resumeChoiceSelectBtn");
+
+  if (!safeName) {
+    previewFrame.src = "about:blank";
+    previewFrame.classList.add("hidden");
+    previewEmpty.classList.remove("hidden");
+    previewName.textContent = "Select a resume to preview";
+    selectBtn.disabled = true;
+    return;
+  }
+
+  const previewUrl = buildResumePreviewUrl(safeName);
+
+  resumeChoiceState.selectedResume = safeName;
+  previewName.textContent = safeName;
+  previewFrame.src = previewUrl;
+  previewFrame.classList.remove("hidden");
+  previewEmpty.classList.add("hidden");
+
+  selectBtn.disabled = false;
+  qs("resumeChoiceSaveStatus").textContent = `Selected: ${safeName}`;
+
+  renderResumeChoiceCards();
+}
+
+function openResumeChoiceModal(row) {
+  resetResumeChoiceModal();
+
+  const normalizedRow = {
+    ...row,
+    winner_resume: normalizeResumeName(row.winner_resume),
+    runner_up_resume: normalizeResumeName(row.runner_up_resume),
+    operator_selected_resume: normalizeResumeName(row.operator_selected_resume),
+  };
+
+  resumeChoiceState.row = normalizedRow;
+  resumeChoiceState.candidates = getResumeChoiceCandidates(normalizedRow);
+
+  qs("resumeChoiceCompany").textContent = normalizedRow.job_company || "-";
+  qs("resumeChoiceTitle").textContent = normalizedRow.job_title || "-";
+  qs("resumeChoiceAction").textContent = normalizedRow.action || "-";
+  qs("resumeChoiceGap").textContent = normalizedRow.score_gap || "-";
+
+  renderResumeChoiceCards();
+  getResumeChoiceModal().classList.remove("hidden");
+
+  const defaultResume =
+    normalizedRow.operator_selected_resume ||
+    normalizedRow.winner_resume ||
+    normalizedRow.runner_up_resume;
+
+  if (defaultResume) {
+    setResumeChoicePreview(defaultResume);
+  }
+}
+
+async function submitResumeChoiceSelection() {
+  const row = resumeChoiceState.row;
+  const selectedResume = normalizeResumeName(resumeChoiceState.selectedResume);
+
+  if (!row || !selectedResume) {
+    throw new Error("Select a resume before saving.");
+  }
+
+  qs("resumeChoiceSelectBtn").disabled = true;
+  qs("resumeChoiceSaveStatus").textContent = `Saving ${selectedResume}...`;
+
+  await postJson("/planning/select-resume", {
+    queue_rank: row.queue_rank || "",
+    job_doc_id: row.job_doc_id || "",
+    job_company: row.job_company || "",
+    job_title: row.job_title || "",
+    planning_action: row.action || "",
+    decision: "SELECT_RESUME",
+    selected_resume: selectedResume,
+    winner_resume: row.winner_resume || "",
+    winner_score: row.winner_score || "",
+    runner_up_resume: row.runner_up_resume || "",
+    runner_up_score: row.runner_up_score || "",
+    note: "Selected from planning resume choices modal.",
+  });
+
+  closeResumeChoiceModal();
+  await loadPlanningTable();
+}
+
+function buildResumeChoiceButtonHtml(row) {
+  const hasWinner = normalizeResumeName(row.winner_resume);
+  const hasRunner = normalizeResumeName(row.runner_up_resume);
+  const needsReview = normalizeBool(row.needs_variant_review);
+
+  if (!needsReview || !hasWinner || !hasRunner) {
+    return "";
+  }
+
+  const buttonLabel = normalizeResumeName(row.operator_selected_resume)
+    ? "Review Choices"
+    : "View Resume Choices";
+
+  return `
+    <button
+      type="button"
+      class="ghost-btn btn-sm"
+      data-view-resume-choices="true"
+      data-queue-rank="${escapeHtml(row.queue_rank || "")}"
+      data-job-doc-id="${escapeHtml(row.job_doc_id || "")}"
+      data-job-url="${escapeHtml(row.job_url || row.job_doc_id || "")}"
+      data-job-company="${escapeHtml(row.job_company || "")}"
+      data-job-title="${escapeHtml(row.job_title || "")}"
+      data-action="${escapeHtml(row.action || "")}"
+      data-score-gap="${escapeHtml(row.score_gap || "")}"
+      data-winner-resume="${escapeHtml(row.winner_resume || "")}"
+      data-winner-score="${escapeHtml(row.winner_score || "")}"
+      data-runner-up-resume="${escapeHtml(row.runner_up_resume || "")}"
+      data-runner-up-score="${escapeHtml(row.runner_up_score || "")}"
+      data-operator-selected-resume="${escapeHtml(row.operator_selected_resume || "")}"
+    >
+      ${buttonLabel}
+    </button>
+  `;
+}
+
+function buildOperatorDecisionCellHtml(row) {
+  const decision = String(row.operator_decision || "").trim();
+  const buttonHtml = buildResumeChoiceButtonHtml(row);
+
+  if (!decision && !buttonHtml) {
+    return "-";
+  }
+
+  return `
+    <div class="planning-decision-cell">
+      <div class="planning-decision-label">${escapeHtml(decision || "Pending")}</div>
+      ${buttonHtml}
+    </div>
+  `;
 }
 
 function closeTailoringModal() {
@@ -1047,7 +1294,7 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(row.missing_requirement_count || "")}</td>
         <td>${buildFallbackResumeHtml(row)}</td>
         <td>${escapeHtml(humanizeFallbackStatus(row.llm_fallback_status || ""))}</td>
-        <td>${escapeHtml(row.operator_decision || "")}</td>
+        <td>${buildOperatorDecisionCellHtml(row)}</td>
         <td>${buildCompactTextHtml(row.operator_selected_resume, { maxLength: 28, emptyLabel: "-" })}</td>
         <td class="reason-cell">${buildReasonHtml(row.queue_priority_reason)}</td>
         <td>${buildTailoringButtonHtml(row)}</td>
@@ -1108,6 +1355,25 @@ function attachPlanningHandlers() {
   });
 
   qs("planningTableBody").addEventListener("click", async (event) => {
+    const resumeChoiceButton = event.target.closest("[data-view-resume-choices='true']");
+    if (resumeChoiceButton && !resumeChoiceButton.disabled) {
+      openResumeChoiceModal({
+        queue_rank: resumeChoiceButton.dataset.queueRank || "",
+        job_doc_id: resumeChoiceButton.dataset.jobDocId || "",
+        job_url: resumeChoiceButton.dataset.jobUrl || "",
+        job_company: resumeChoiceButton.dataset.jobCompany || "",
+        job_title: resumeChoiceButton.dataset.jobTitle || "",
+        action: resumeChoiceButton.dataset.action || "",
+        score_gap: resumeChoiceButton.dataset.scoreGap || "",
+        winner_resume: resumeChoiceButton.dataset.winnerResume || "",
+        winner_score: resumeChoiceButton.dataset.winnerScore || "",
+        runner_up_resume: resumeChoiceButton.dataset.runnerUpResume || "",
+        runner_up_score: resumeChoiceButton.dataset.runnerUpScore || "",
+        operator_selected_resume: resumeChoiceButton.dataset.operatorSelectedResume || "",
+      });
+      return;
+    }
+
     const tailoringButton = event.target.closest("[data-view-tailoring='true']");
     if (tailoringButton && !tailoringButton.disabled) {
       try {
@@ -1133,6 +1399,31 @@ function attachPlanningHandlers() {
     closeApplicationModal();
   });
 
+  qs("closeResumeChoiceModalBtn").addEventListener("click", closeResumeChoiceModal);
+  qs("resumeChoiceCancelBtn").addEventListener("click", closeResumeChoiceModal);
+
+  qs("resumeChoiceList").addEventListener("click", (event) => {
+    const choiceButton = event.target.closest("[data-resume-choice='true']");
+    if (!choiceButton) return;
+    setResumeChoicePreview(choiceButton.dataset.resumeName || "");
+  });
+
+  qs("resumeChoiceSelectBtn").addEventListener("click", async () => {
+  try {
+    await submitResumeChoiceSelection();
+  } catch (err) {
+    qs("resumeChoiceSaveStatus").textContent = "Failed to save resume choice.";
+    qs("resumeChoiceSelectBtn").disabled = false;
+    showAppError("Failed to save selected resume", err);
+  }
+});
+
+  getResumeChoiceModal().addEventListener("click", (event) => {
+    if (event.target === getResumeChoiceModal()) {
+      closeResumeChoiceModal();
+    }
+  });
+  
   qs("copyTailoringMarkdownBtn").addEventListener("click", handleCopyTailoringMarkdown);
 
   getApplicationModal().addEventListener("click", (event) => {

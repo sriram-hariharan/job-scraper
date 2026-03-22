@@ -9,6 +9,7 @@ from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
+from src.ai.embedding_model import get_model
 
 TIE_EPSILON = 0.010
 TITLE_ONLY_TIE_EPSILON = 0.015
@@ -97,6 +98,222 @@ def _job_context_terms(job) -> List[str]:
     values.extend(_context_tokens(" ".join(job.preferred_skills or [])))
     values.extend(_context_tokens(" ".join(job.all_skills or [])))
     return _unique_preserve_order(values)
+
+def _job_semantic_query_text(job) -> str:
+    parts = [
+        job.title,
+        " ".join(job.required_skills or []),
+        " ".join(job.preferred_skills or []),
+        " ".join(job.all_skills or []),
+    ]
+    return " | ".join(part for part in parts if str(part or "").strip())
+
+def _is_structurally_good_bullet(text: str) -> bool:
+    value = str(text or "").strip()
+    if not value:
+        return False
+
+    words = value.split()
+    if len(words) < 8:
+        return False
+
+    first = value[0]
+    if first.isalpha() and first != first.upper():
+        return False
+
+    return True
+
+
+def _entry_context_text(section: str, source_title: str, source_company: str, normalized_skills: List[str]) -> str:
+    parts = [section, source_title, source_company, " ".join(normalized_skills or [])]
+    return " | ".join(part for part in parts if str(part or "").strip())
+
+
+def _entry_is_semantically_eligible(
+    *,
+    job_targets: List[str],
+    job_context_terms: List[str],
+    section: str,
+    source_title: str,
+    source_company: str,
+    normalized_skills: List[str],
+) -> bool:
+    normalized_skill_set = {
+        _normalize_text(skill)
+        for skill in (normalized_skills or [])
+        if _normalize_text(skill)
+    }
+
+    if any(term in normalized_skill_set for term in job_targets):
+        return True
+
+    context_text = _normalize_text(_entry_context_text(section, source_title, source_company, normalized_skills))
+    if not context_text:
+        return False
+
+    context_hits = [term for term in job_context_terms if _contains_signal(context_text, term)]
+    return len(context_hits) >= 1
+
+
+def _evidence_type_priority(evidence_type: str) -> int:
+    if evidence_type == "direct_overlap":
+        return 0
+    if evidence_type == "semantic_similarity":
+        return 1
+    if evidence_type == "same_source_context":
+        return 2
+    if evidence_type == "adjacent_context":
+        return 3
+    return 9
+
+def _rerank_evidence_rows(rows: List[dict]) -> List[dict]:
+    source_counts = {}
+    for row in rows:
+        src_key = row.get("source_key", "")
+        source_counts[src_key] = source_counts.get(src_key, 0) + 1
+
+    def _sort_key(row: dict):
+        evidence_type = row.get("evidence_type", "")
+        source_key = row.get("source_key", "")
+        section = row.get("section", "")
+
+        # Strong preference order:
+        # 1. evidence type priority
+        # 2. more explicit lexical overlap when present
+        # 3. higher semantic score when present
+        # 4. experience before project
+        # 5. sources that are not already flooding the result
+        return (
+            _evidence_type_priority(evidence_type),
+            -int(row.get("overlap_count", 0) or 0),
+            -float(row.get("semantic_score", 0.0) or 0.0),
+            0 if section == "experience" else 1,
+            source_counts.get(source_key, 0),
+            row.get("source_title", "").lower(),
+            row.get("text", "").lower(),
+        )
+
+    return sorted(rows, key=_sort_key)
+
+def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
+    query_text = _job_semantic_query_text(job).strip()
+    if not query_text:
+        return []
+
+    job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
+    job_context_terms = _job_context_terms(job)
+
+    bullet_rows: List[dict] = []
+
+    def _append_bullets(
+        section: str,
+        source_title: str,
+        source_company: str,
+        bullets: List[str],
+        normalized_skills: List[str],
+    ) -> None:
+        if not _entry_is_semantically_eligible(
+            job_targets=job_targets,
+            job_context_terms=job_context_terms,
+            section=section,
+            source_title=source_title,
+            source_company=source_company,
+            normalized_skills=normalized_skills,
+        ):
+            return
+
+        for bullet_index, bullet in enumerate(bullets):
+            text = str(bullet or "").strip()
+            if not _is_structurally_good_bullet(text):
+                continue
+
+            text_norm = _normalize_text(text)
+            if not text_norm:
+                continue
+
+            exact_overlaps = [term for term in job_targets if _contains_signal(text_norm, term)]
+            if exact_overlaps:
+                continue
+
+            bullet_rows.append(
+                {
+                    "section": section,
+                    "source_title": source_title,
+                    "source_company": source_company,
+                    "text": text,
+                    "text_norm": text_norm,
+                    "bullet_index": bullet_index,
+                }
+            )
+
+    for entry in resume.experience_entries:
+        _append_bullets(
+            "experience",
+            entry.title,
+            entry.company,
+            entry.bullets,
+            entry.normalized_skills,
+        )
+
+    for entry in resume.project_entries:
+        _append_bullets(
+            "project",
+            entry.name,
+            "",
+            entry.bullets,
+            entry.normalized_skills,
+        )
+
+    if not bullet_rows:
+        return []
+
+    model = get_model()
+    query_vec = model.encode(query_text, normalize_embeddings=True)
+    bullet_texts = [row["text"] for row in bullet_rows]
+    bullet_vecs = model.encode(bullet_texts, normalize_embeddings=True)
+
+    scores = bullet_vecs @ query_vec
+
+    ranked = sorted(
+        zip(bullet_rows, scores),
+        key=lambda item: float(item[1]),
+        reverse=True,
+    )
+
+    semantic_rows: List[dict] = []
+    used_sources = set()
+
+    for row, score in ranked:
+        src_key = "||".join(
+            [
+                row["section"],
+                _normalize_text(row["source_title"]),
+                _normalize_text(row["source_company"]),
+            ]
+        )
+
+        if src_key in used_sources:
+            continue
+
+        semantic_rows.append(
+            {
+                "section": row["section"],
+                "source_title": row["source_title"],
+                "source_company": row["source_company"],
+                "text": row["text"],
+                "overlap_count": 0,
+                "overlaps": [],
+                "evidence_type": "semantic_similarity",
+                "semantic_score": round(float(score), 6),
+                "bullet_index": row["bullet_index"],
+            }
+        )
+        used_sources.add(src_key)
+
+        if len(semantic_rows) >= top_k:
+            break
+
+    return semantic_rows
 
 def _job_sort_key(record: dict):
     return (
@@ -282,9 +499,6 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
         )
     )
 
-    if not direct_rows:
-        return []
-
     selected: List[dict] = []
     selected_keys = set()
     used_sources = set()
@@ -301,7 +515,13 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
         selected.append(row)
         selected_keys.add(key)
 
-        src_key = row["source_key"]
+        src_key = row.get("source_key") or _source_key(
+            row.get("section", ""),
+            row.get("source_title", ""),
+            row.get("source_company", ""),
+        )
+        row["source_key"] = src_key
+
         used_sources.add(src_key)
         source_best_overlap_count[src_key] = max(
             source_best_overlap_count.get(src_key, 0),
@@ -324,11 +544,41 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
             break
         _register_selected(row)
 
-    if len(selected) >= top_k:
-        return selected[:top_k]
+    # Pass 3: semantic bullets from the selected resume to improve meaning-based recall.
+    # First prefer new sources, then fill from already-used sources if still needed.
+    semantic_rows = _semantic_bullet_candidates(resume, job, top_k=max(4, top_k // 2))
 
-    # Pass 3: add more bullets from already-proven relevant sources, even if they do not
-    # have explicit JD-term overlap. This gives richer role-level context.
+    semantic_new_source = []
+    semantic_existing_source = []
+
+    for row in semantic_rows:
+        src_key = _source_key(
+            row.get("section", ""),
+            row.get("source_title", ""),
+            row.get("source_company", ""),
+        )
+        row["source_key"] = src_key
+
+        if src_key in used_sources:
+            semantic_existing_source.append(row)
+        else:
+            semantic_new_source.append(row)
+
+    for row in semantic_new_source:
+        if len(selected) >= top_k:
+            break
+        _register_selected(row)
+
+    for row in semantic_existing_source:
+        if len(selected) >= top_k:
+            break
+        _register_selected(row)
+
+    if len(selected) >= top_k:
+        reranked = _rerank_evidence_rows(selected)
+        return reranked[:top_k]
+
+    # Pass 4: add more bullets from already-proven relevant sources for richer role-level context.
     same_source_context_rows: List[dict] = []
 
     for src_key, source_meta in source_entries.items():
@@ -382,55 +632,8 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
             break
         _register_selected(row)
 
-    if len(selected) >= top_k:
-        return selected[:top_k]
-
-    # Pass 4: add immediate neighbors from selected anchors as a final local-context fill.
-    enriched: List[dict] = list(selected[:top_k])
-
-    for anchor in list(selected):
-        if len(enriched) >= top_k:
-            break
-
-        source_meta = source_entries.get(anchor["source_key"])
-        if not source_meta:
-            continue
-
-        bullets = source_meta["bullets"]
-        for offset in (-1, 1):
-            if len(enriched) >= top_k:
-                break
-
-            neighbor_index = anchor["bullet_index"] + offset
-            if neighbor_index < 0 or neighbor_index >= len(bullets):
-                continue
-
-            neighbor_text = bullets[neighbor_index]
-            neighbor_norm = _normalize_text(neighbor_text)
-            if not neighbor_norm:
-                continue
-
-            neighbor_row = {
-                "section": source_meta["section"],
-                "source_title": source_meta["source_title"],
-                "source_company": source_meta["source_company"],
-                "text": neighbor_text,
-                "overlap_count": max(anchor.get("overlap_count", 1) - 1, 1),
-                "overlaps": list(anchor.get("overlaps", [])),
-                "evidence_type": "adjacent_context",
-                "source_key": anchor["source_key"],
-                "bullet_index": neighbor_index,
-            }
-
-            key = _row_key(neighbor_row)
-            if key in selected_keys:
-                continue
-
-            enriched.append(neighbor_row)
-            selected_keys.add(key)
-
-    return enriched[:top_k]
-
+    reranked = _rerank_evidence_rows(selected)
+    return reranked[:top_k]
 
 def _dimension_snapshot(result, max_dims: int = 6) -> str:
     ordered = sorted(
@@ -706,7 +909,10 @@ def main() -> None:
                 source = f"{row['source_title']} @ {row['source_company']}"
             print(f"{idx}. [{row['section']}] {source}")
             print(f"   evidence_type: {row.get('evidence_type', 'direct_overlap')}")
+            print(f"   rerank_priority: {_evidence_type_priority(row.get('evidence_type', ''))}")
             print(f"   overlaps: {row['overlaps']}")
+            if "semantic_score" in row:
+                print(f"   semantic_score: {row['semantic_score']}")
             if row.get("context_terms"):
                 print(f"   context_terms: {row['context_terms']}")
             print(f"   bullet: {row['text']}")

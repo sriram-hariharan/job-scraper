@@ -153,25 +153,34 @@ function planningUndecidedOnlyEnabled() {
 }
 
 const PLANNING_SORT_COLUMNS = [
-  { key: "queue_rank", label: "Queue Rank", type: "number" },
+  { key: "queue_rank", label: "Rank", type: "number" },
   { key: "action", label: "Action", type: "text" },
   { key: "job_company", label: "Company", type: "text" },
   { key: "job_title", label: "Title", type: "text" },
-  { key: "winner_resume", label: "Winner Resume", type: "text" },
-  { key: "winner_score", label: "Winner Score", type: "number" },
-  { key: "runner_up_resume", label: "Runner-Up Resume", type: "text" },
-  { key: "runner_up_score", label: "Runner-Up Score", type: "number" },
-  { key: "score_gap", label: "Score Gap", type: "number" },
-  { key: "winner_bucket", label: "Winner Bucket", type: "text" },
-  { key: "is_tie", label: "Is Tie", type: "boolean" },
-  { key: "needs_variant_review", label: "Needs Review", type: "boolean" },
-  { key: "missing_requirement_count", label: "Missing Req Count", type: "number" },
-  { key: "llm_fallback_best_resume", label: "Fallback Best Resume", type: "text" },
-  { key: "llm_fallback_status", label: "Fallback Status", type: "text" },
-  { key: "operator_decision", label: "Operator Decision", type: "text" },
-  { key: "operator_selected_resume", label: "Operator Selected Resume", type: "text" },
-  { key: "queue_priority_reason", label: "Priority Reason", type: "text" },
-  { key: "tailoring", label: "Tailoring", sortable: false },
+  { key: "winner_resume", label: "Winner", type: "text" },
+  { key: "winner_score", label: "Score", type: "number" },
+  { key: "runner_up_resume", label: "Backup", type: "text" },
+  { key: "runner_up_score", label: "Backup Score", type: "number" },
+  { key: "score_gap", label: "Gap", type: "number" },
+  { key: "winner_bucket", label: "Strength", type: "text" },
+  {
+    key: "review_state",
+    label: "Review",
+    type: "text",
+    getValue: (row) => deriveReviewStateLabel(row),
+  },
+  { key: "missing_requirement_count", label: "Missing", type: "number" },
+  { key: "llm_fallback_best_resume", label: "Fallback Resume", type: "text" },
+  {
+    key: "llm_fallback_status",
+    label: "Fallback",
+    type: "text",
+    getValue: (row) => humanizeFallbackStatus(row.llm_fallback_status),
+  },
+  { key: "operator_decision", label: "Decision", type: "text" },
+  { key: "operator_selected_resume", label: "Selected", type: "text" },
+  { key: "queue_priority_reason", label: "Why", type: "text" },
+  { key: "tailoring", label: "Tailor", sortable: false },
   { key: "apply", label: "Apply", sortable: false },
 ];
 
@@ -470,6 +479,102 @@ function normalizeBool(value) {
   if (value === true || value === false) return value;
   const normalized = String(value || "").trim().toLowerCase();
   return normalized === "true" || normalized === "yes" || normalized === "1";
+}
+
+function buildPlanningPill(label) {
+  return `<span class="pill">${escapeHtml(label || "-")}</span>`;
+}
+
+function truncateText(value, maxLength = 36) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
+function stripPdfExtension(value) {
+  return String(value || "").trim().replace(/\.pdf$/i, "");
+}
+
+function buildCompactTextHtml(value, { maxLength = 36, emptyLabel = "-" } = {}) {
+  const fullRaw = String(value || "").trim();
+  if (!fullRaw) return escapeHtml(emptyLabel);
+
+  const full = stripPdfExtension(fullRaw);
+  const visible = truncateText(full, maxLength);
+
+  return `<span title="${escapeHtml(fullRaw)}">${escapeHtml(visible)}</span>`;
+}
+
+function humanizeWinnerBucket(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (normalized === "strong") return "Strong";
+  if (normalized === "solid") return "Solid";
+  if (normalized === "moderate") return "Moderate";
+  if (normalized === "weak") return "Weak";
+  if (normalized === "filtered_out") return "No match";
+  if (!normalized) return "-";
+
+  return normalized.replaceAll("_", " ");
+}
+
+function humanizeFallbackStatus(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+
+  if (!normalized || normalized === "disabled") return "Off";
+  if (normalized === "cache_hit") return "Cache";
+  if (normalized === "used") return "Used";
+
+  return normalized.replaceAll("_", " ");
+}
+
+function deriveReviewStateLabel(row) {
+  const selectionSignal = String(row.selection_signal || "").trim().toLowerCase();
+  const winnerBucket = String(row.winner_bucket || "").trim().toLowerCase();
+  const hasWinner = String(row.winner_resume || "").trim().length > 0;
+  const needsVariantReview = normalizeBool(row.needs_variant_review);
+
+  if (!hasWinner || winnerBucket === "filtered_out" || selectionSignal === "no_credible_match") {
+    return "No match";
+  }
+
+  if (selectionSignal === "manual_review_close_call") {
+    return needsVariantReview ? "Close review" : "Close call";
+  }
+
+  if (selectionSignal === "effective_tie") {
+    return needsVariantReview ? "Tie review" : "Tie";
+  }
+
+  if (needsVariantReview) {
+    return "Review";
+  }
+
+  return "Ready";
+}
+
+function buildMatchStrengthHtml(row) {
+  return buildPlanningPill(humanizeWinnerBucket(row.winner_bucket));
+}
+
+function buildReviewStateHtml(row) {
+  return buildPlanningPill(deriveReviewStateLabel(row));
+}
+
+function buildFallbackResumeHtml(row) {
+  const status = String(row.llm_fallback_status || "").trim().toLowerCase();
+  if (!row.llm_fallback_best_resume || !status || status === "disabled") {
+    return "-";
+  }
+  return buildCompactTextHtml(row.llm_fallback_best_resume, { maxLength: 28 });
+}
+
+function buildReasonHtml(value) {
+  const full = String(value || "").trim();
+  if (!full) return "-";
+  const visible = truncateText(full, 72);
+  return `<span title="${escapeHtml(full)}">${escapeHtml(visible)}</span>`;
 }
 
 function uniqueNonEmpty(values) {
@@ -910,7 +1015,7 @@ function renderPlanningRows(rows, metaLabel) {
   if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="20" class="empty-state">No rows found.</td>
+        <td colspan="19" class="empty-state">No rows found.</td>
       </tr>
     `;
     qs("planningTableMeta").textContent = planningTableState.metaLabel;
@@ -932,20 +1037,19 @@ function renderPlanningRows(rows, metaLabel) {
         <td><span class="pill">${escapeHtml(row.action || "")}</span></td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">${titleHtml}</td>
-        <td>${escapeHtml(row.winner_resume || "")}</td>
+        <td>${buildCompactTextHtml(row.winner_resume, { maxLength: 34 })}</td>
         <td>${escapeHtml(row.winner_score || "")}</td>
-        <td>${escapeHtml(row.runner_up_resume || "")}</td>
+        <td>${buildCompactTextHtml(row.runner_up_resume, { maxLength: 34 })}</td>
         <td>${escapeHtml(row.runner_up_score || "")}</td>
         <td>${escapeHtml(row.score_gap || "")}</td>
-        <td>${escapeHtml(row.winner_bucket || "")}</td>
-        <td>${escapeHtml(row.is_tie || "")}</td>
-        <td>${escapeHtml(row.needs_variant_review || "")}</td>
+        <td>${buildMatchStrengthHtml(row)}</td>
+        <td>${buildReviewStateHtml(row)}</td>
         <td>${escapeHtml(row.missing_requirement_count || "")}</td>
-        <td>${escapeHtml(row.llm_fallback_best_resume || "")}</td>
-        <td>${escapeHtml(row.llm_fallback_status || "")}</td>
+        <td>${buildFallbackResumeHtml(row)}</td>
+        <td>${escapeHtml(humanizeFallbackStatus(row.llm_fallback_status || ""))}</td>
         <td>${escapeHtml(row.operator_decision || "")}</td>
-        <td>${escapeHtml(row.operator_selected_resume || "")}</td>
-        <td class="reason-cell">${escapeHtml(row.queue_priority_reason || "")}</td>
+        <td>${buildCompactTextHtml(row.operator_selected_resume, { maxLength: 28, emptyLabel: "-" })}</td>
+        <td class="reason-cell">${buildReasonHtml(row.queue_priority_reason)}</td>
         <td>${buildTailoringButtonHtml(row)}</td>
         <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
       </tr>
@@ -959,7 +1063,7 @@ function renderPlanningRows(rows, metaLabel) {
 
 async function loadPlanningTable() {
   const tbody = qs("planningTableBody");
-  tbody.innerHTML = renderTableLoading(20, "Loading planning rows...");
+  tbody.innerHTML = renderTableLoading(19, "Loading planning rows...");
   qs("planningTableMeta").textContent = "Loading...";
 
   const url = buildPlanningUrl();

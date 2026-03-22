@@ -3,6 +3,7 @@ from typing import Callable, Dict, List, Set, Tuple
 
 from src.config.consts import (
     ANALYTICS_ML_SIGNAL_PATTERNS,
+    BASELINE_FAMILIARITY_FAMILIES,
     DOMAIN_SIGNAL_PATTERNS,
     EXPERIMENTATION_SIGNAL_PATTERNS,
     ROLE_WORD_HINTS,
@@ -39,25 +40,6 @@ _VARIANT_TITLE_ABBREVIATIONS = {
     "da": "data analyst",
     "ae": "analytics engineer",
 }
-_BASELINE_FAMILIARITY_METHOD_TARGETS = [
-    "random forest",
-    "svm",
-    "support vector machine",
-]
-
-_BASELINE_FAMILIARITY_NOTEBOOK_TARGETS = [
-    "jupyter",
-    "jupyter notebook",
-]
-
-_BASELINE_FAMILIARITY_VERSION_CONTROL_TARGETS = [
-    "git",
-    "github",
-    "version control",
-]
-
-_BASELINE_FAMILIARITY_MAX_SCORE = 0.60
-
 
 def _looks_roleish(text: str) -> bool:
     normalized = _normalize_text(text)
@@ -65,7 +47,6 @@ def _looks_roleish(text: str) -> bool:
         re.search(rf"\b{re.escape(word)}\b", normalized)
         for word in ROLE_WORD_HINTS
     )
-
 
 def _resume_name_title_candidates(resume_name: str) -> List[str]:
     stem = re.sub(r"\.[^.]+$", "", str(resume_name or ""))
@@ -231,24 +212,6 @@ def _canonicalize_signals(values: List[str], canonical_map: Dict[str, str]) -> L
         [_canonicalize_signal(value, canonical_map) for value in values if _canonicalize_signal(value, canonical_map)]
     )
 
-
-def _resume_skill_set(resume: ResumeEvidence) -> Set[str]:
-    values: List[str] = []
-    values.extend(resume.skills)
-    values.extend(resume.tooling_signals)
-    values.extend(resume.analytics_ml_signals)
-    values.extend(resume.experimentation_signals)
-    values.extend(resume.domain_signals)
-
-    for entry in resume.experience_entries:
-        values.extend(entry.normalized_skills)
-
-    for entry in resume.project_entries:
-        values.extend(entry.normalized_skills)
-
-    return {_normalize_text(value) for value in values if _normalize_text(value)}
-
-
 def _resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
     values: List[str] = []
     values.extend(resume.skills)
@@ -260,72 +223,6 @@ def _resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
         values.extend(entry.normalized_skills)
 
     return {_normalize_text(value) for value in values if _normalize_text(value)}
-
-def _normalized_constant_skill_set(values: List[str]) -> Set[str]:
-    return {_normalize_text(value) for value in values if _normalize_text(value)}
-
-
-def _resume_inferred_baseline_familiarity(
-    resume: ResumeEvidence,
-    resume_explicit_skill_set: Set[str],
-) -> Tuple[Set[str], List[str]]:
-    inferred_targets: Set[str] = set()
-    profile_basis: List[str] = []
-
-    title_token_sets = [
-        _title_tokens(title)
-        for title in _unique_preserve_order(_resume_titles(resume) + _resume_variant_titles(resume))
-        if _normalize_text(title)
-    ]
-
-    canonical_analytics = set(
-        _canonicalize_signals(
-            resume.analytics_ml_signals,
-            _ANALYTICS_ML_SIGNAL_CANONICAL,
-        )
-    )
-
-    normalized_tooling = {
-        _normalize_text(value)
-        for value in resume.tooling_signals
-        if _normalize_text(value)
-    }
-
-    pythonic_profile_targets = _normalized_constant_skill_set(
-        ["python", "pyspark", "scikit-learn", "tensorflow", "pytorch"]
-    )
-    pythonic_profile = bool(resume_explicit_skill_set & pythonic_profile_targets)
-
-    strong_ml_profile = (
-        any(tokens & (_DATA_TITLE_TOKENS | _ML_TITLE_TOKENS) for tokens in title_token_sets)
-        or len(canonical_analytics) >= 3
-    )
-
-    technical_build_profile = (
-        bool(normalized_tooling)
-        or any("engineer" in tokens for tokens in title_token_sets)
-        or (bool(resume.project_entries) and pythonic_profile)
-    )
-
-    if strong_ml_profile:
-        inferred_targets.update(
-            _normalized_constant_skill_set(_BASELINE_FAMILIARITY_METHOD_TARGETS)
-        )
-        profile_basis.append("strong analytics/ml profile")
-
-    if strong_ml_profile and pythonic_profile:
-        inferred_targets.update(
-            _normalized_constant_skill_set(_BASELINE_FAMILIARITY_NOTEBOOK_TARGETS)
-        )
-        profile_basis.append("python + analytics/ml profile")
-
-    if technical_build_profile:
-        inferred_targets.update(
-            _normalized_constant_skill_set(_BASELINE_FAMILIARITY_VERSION_CONTROL_TARGETS)
-        )
-        profile_basis.append("technical build/project profile")
-
-    return inferred_targets, _unique_preserve_order(profile_basis)
 
 def _title_tokens(value: str) -> Set[str]:
     return {
@@ -409,6 +306,153 @@ def _prune_generic_analytics_signals(signals: List[str]) -> List[str]:
     specific = [signal for signal in ordered if signal not in _ANALYTICS_ML_GENERIC_SIGNALS]
     return specific if specific else ordered
 
+def _job_baseline_family_targets(job: JobEvidence) -> Dict[str, List[str]]:
+    job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
+    family_targets: Dict[str, List[str]] = {}
+
+    for family_name, family_config in BASELINE_FAMILIARITY_FAMILIES.items():
+        job_terms = _normalized_skill_list(family_config.get("job_terms", []))
+        matched_terms = [term for term in job_terms if term in job_targets]
+        if matched_terms:
+            family_targets[family_name] = matched_terms
+
+    return family_targets
+
+
+def _resume_baseline_family_support(
+    resume: ResumeEvidence,
+    resume_explicit_skill_set: Set[str],
+    family_name: str,
+) -> Tuple[int, List[str]]:
+    family = BASELINE_FAMILIARITY_FAMILIES.get(family_name, {})
+    support_hits = 0
+    support_reasons: List[str] = []
+
+    title_tokens_any = {_normalize_text(value) for value in family.get("title_tokens_any", []) if _normalize_text(value)}
+    if title_tokens_any:
+        resume_title_tokens: Set[str] = set()
+        for title in _resume_titles(resume) + _resume_variant_titles(resume):
+            resume_title_tokens |= _title_tokens(title)
+        if resume_title_tokens & title_tokens_any:
+            support_hits += 1
+            support_reasons.append("title-profile support")
+
+    supporting_explicit = {
+        _normalize_text(value)
+        for value in family.get("supporting_explicit_skills_any", [])
+        if _normalize_text(value)
+    }
+    if supporting_explicit and (resume_explicit_skill_set & supporting_explicit):
+        support_hits += 1
+        support_reasons.append("explicit-skill support")
+
+    supporting_analytics = {
+        _normalize_text(value)
+        for value in family.get("supporting_analytics_signals_any", [])
+        if _normalize_text(value)
+    }
+    resume_analytics = {
+        _normalize_text(value)
+        for value in resume.analytics_ml_signals
+        if _normalize_text(value)
+    }
+    if supporting_analytics and (resume_analytics & supporting_analytics):
+        support_hits += 1
+        support_reasons.append("analytics-signal support")
+
+    supporting_tooling = {
+        _normalize_text(value)
+        for value in family.get("supporting_tooling_signals_any", [])
+        if _normalize_text(value)
+    }
+    resume_tooling = {
+        _normalize_text(value)
+        for value in resume.tooling_signals
+        if _normalize_text(value)
+    }
+    if supporting_tooling and (resume_tooling & supporting_tooling):
+        support_hits += 1
+        support_reasons.append("tooling-signal support")
+
+    return support_hits, support_reasons
+
+
+def _score_baseline_familiarity(
+    definition: MatchDimensionDefinition,
+    resume: ResumeEvidence,
+    resume_explicit_skill_set: Set[str],
+    job: JobEvidence,
+) -> MatchDimensionScore:
+    family_targets = _job_baseline_family_targets(job)
+    if not family_targets:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job has no eligible baseline-familiarity targets, so baseline_familiarity is neutral in v1.",
+            [],
+        )
+
+    total_targets = 0
+    explicit_matches = 0
+    inferred_only_matches = 0
+    evidence: List[str] = []
+    family_summaries: List[str] = []
+
+    for family_name, targets in family_targets.items():
+        family = BASELINE_FAMILIARITY_FAMILIES.get(family_name, {})
+        min_support_hits = int(family.get("min_support_hits", 1))
+        support_hits, support_reasons = _resume_baseline_family_support(
+            resume,
+            resume_explicit_skill_set,
+            family_name,
+        )
+
+        total_targets += len(targets)
+
+        family_explicit = [target for target in targets if target in resume_explicit_skill_set]
+        family_inferred = []
+
+        if support_hits >= min_support_hits:
+            family_inferred = [
+                target for target in targets
+                if target not in resume_explicit_skill_set
+            ]
+
+        explicit_matches += len(family_explicit)
+        inferred_only_matches += len(family_inferred)
+
+        if family_inferred:
+            evidence.extend(family_inferred)
+
+        family_summaries.append(
+            f"{family_name}: explicit={len(family_explicit)}, inferred_only={len(family_inferred)}, "
+            f"support_hits={support_hits}/{min_support_hits}"
+        )
+        if support_reasons:
+            family_summaries[-1] += f" ({', '.join(support_reasons)})"
+
+    if total_targets == 0:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job has no eligible baseline-familiarity targets, so baseline_familiarity is neutral in v1.",
+            [],
+        )
+
+    inferred_coverage = inferred_only_matches / total_targets
+    score = min(0.60, 0.60 * inferred_coverage)
+
+    return _weighted_dimension(
+        definition,
+        score,
+        (
+            f"Granted scoring-only inferred familiarity for {inferred_only_matches}/{total_targets} eligible "
+            f"baseline targets. Explicit matches already belong to explicit dimensions and are not counted here. "
+            f"Family details: {'; '.join(family_summaries)}. "
+            f"This dimension is a low-weight scoring prior only and must not be treated as explicit tailoring proof."
+        ),
+        evidence,
+    )
 
 def _weighted_dimension(
     definition: MatchDimensionDefinition,
@@ -578,70 +622,6 @@ def _score_tooling_alignment(
         coverage,
         f"Matched {len(matches)}/{len(tooling_targets)} explicit job tooling targets.",
         matches,
-    )
-
-def _score_baseline_familiarity(
-    definition: MatchDimensionDefinition,
-    resume: ResumeEvidence,
-    resume_explicit_skill_set: Set[str],
-    job: JobEvidence,
-) -> MatchDimensionScore:
-    baseline_targets = _normalized_constant_skill_set(
-        _BASELINE_FAMILIARITY_METHOD_TARGETS
-        + _BASELINE_FAMILIARITY_NOTEBOOK_TARGETS
-        + _BASELINE_FAMILIARITY_VERSION_CONTROL_TARGETS
-    )
-
-    job_targets = [
-        skill
-        for skill in _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
-        if skill in baseline_targets
-    ]
-
-    if not job_targets:
-        return _weighted_dimension(
-            definition,
-            0.5,
-            "Job has no eligible baseline-familiarity targets, so baseline_familiarity is neutral in v1.",
-            [],
-        )
-
-    inferred_targets, profile_basis = _resume_inferred_baseline_familiarity(
-        resume,
-        resume_explicit_skill_set,
-    )
-
-    explicit_matches = [skill for skill in job_targets if skill in resume_explicit_skill_set]
-    inferred_only_matches = [
-        skill
-        for skill in job_targets
-        if skill not in resume_explicit_skill_set and skill in inferred_targets
-    ]
-
-    if not inferred_only_matches:
-        reason = (
-            f"No inferred-only baseline familiarity credit granted. "
-            f"{len(explicit_matches)}/{len(job_targets)} eligible baseline targets are explicitly evidenced elsewhere."
-            if explicit_matches
-            else f"No inferred-only baseline familiarity credit granted for {len(job_targets)} eligible baseline targets."
-        )
-        return _weighted_dimension(definition, 0.0, reason, profile_basis)
-
-    coverage = len(inferred_only_matches) / len(job_targets)
-    score = min(_BASELINE_FAMILIARITY_MAX_SCORE, _BASELINE_FAMILIARITY_MAX_SCORE * coverage)
-
-    reason = (
-        f"Granted low-weight inferred-only credit for {len(inferred_only_matches)}/{len(job_targets)} "
-        f"eligible baseline targets ({', '.join(inferred_only_matches)}). "
-        f"These targets are not explicitly evidenced on the resume and must not be treated as tailoring proof. "
-        f"Profile basis: {', '.join(profile_basis)}."
-    )
-
-    return _weighted_dimension(
-        definition,
-        score,
-        reason,
-        profile_basis,
     )
 
 def _score_signal_alignment(
@@ -909,55 +889,55 @@ def score_resume_job_match(
     )
 
     scorers: Dict[str, Callable[[MatchDimensionDefinition], MatchDimensionScore]] = {
-    "title_alignment": lambda definition: _score_title_alignment(definition, resume, job),
-    "required_skills_alignment": lambda definition: _score_skill_alignment(
-        definition,
-        job.required_skills,
-        resume_explicit_skill_set,
-        "Job has no explicit required-skill list, so required-skills alignment is neutral in v1.",
-    ),
-    "preferred_skills_alignment": lambda definition: _score_skill_alignment(
-        definition,
-        job.preferred_skills,
-        resume_explicit_skill_set,
-        "Job has no explicit preferred-skill list, so preferred-skills alignment is neutral in v1.",
-    ),
-    "analytics_ml_depth": lambda definition: _score_analytics_ml_depth(
-        definition,
-        resume,
-        resume_explicit_skill_set,
-        job_analytics_ml_signals,
-    ),
-    "tooling_alignment": lambda definition: _score_tooling_alignment(
-        definition,
-        resume_explicit_skill_set,
-        job,
-    ),
-    "experimentation_depth": lambda definition: _score_signal_alignment(
-        definition,
-        resume.experimentation_signals,
-        job_experimentation_signals,
-        "Job has no explicit experimentation signals, so experimentation depth is neutral in v1.",
-    ),
-    "domain_relevance": lambda definition: _score_signal_alignment(
-        definition,
-        resume.domain_signals,
-        job_domain_signals,
-        "Job has no explicit domain signals, so domain relevance is neutral in v1.",
-    ),
-    "project_relevance": lambda definition: _score_project_relevance(
-        definition,
-        resume,
-        job,
-        job_analytics_ml_signals,
-        job_experimentation_signals,
-    ),
-    "baseline_familiarity": lambda definition: _score_baseline_familiarity(
-        definition,
-        resume,
-        resume_explicit_skill_set,
-        job,
-    ),
+        "title_alignment": lambda definition: _score_title_alignment(definition, resume, job),
+        "required_skills_alignment": lambda definition: _score_skill_alignment(
+            definition,
+            job.required_skills,
+            resume_explicit_skill_set,
+            "Job has no explicit required-skill list, so required-skills alignment is neutral in v1.",
+        ),
+        "preferred_skills_alignment": lambda definition: _score_skill_alignment(
+            definition,
+            job.preferred_skills,
+            resume_explicit_skill_set,
+            "Job has no explicit preferred-skill list, so preferred-skills alignment is neutral in v1.",
+        ),
+        "analytics_ml_depth": lambda definition: _score_analytics_ml_depth(
+            definition,
+            resume,
+            resume_explicit_skill_set,
+            job_analytics_ml_signals,
+        ),
+        "tooling_alignment": lambda definition: _score_tooling_alignment(
+            definition,
+            resume_explicit_skill_set,
+            job,
+        ),
+        "baseline_familiarity": lambda definition: _score_baseline_familiarity(
+            definition,
+            resume,
+            resume_explicit_skill_set,
+            job,
+        ),
+        "experimentation_depth": lambda definition: _score_signal_alignment(
+            definition,
+            resume.experimentation_signals,
+            job_experimentation_signals,
+            "Job has no explicit experimentation signals, so experimentation depth is neutral in v1.",
+        ),
+        "domain_relevance": lambda definition: _score_signal_alignment(
+            definition,
+            resume.domain_signals,
+            job_domain_signals,
+            "Job has no explicit domain signals, so domain relevance is neutral in v1.",
+        ),
+        "project_relevance": lambda definition: _score_project_relevance(
+            definition,
+            resume,
+            job,
+            job_analytics_ml_signals,
+            job_experimentation_signals,
+        ),
     }
 
     dimension_scores: List[MatchDimensionScore] = []

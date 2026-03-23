@@ -1,0 +1,19 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "jquery/javascript programming including scripting / coding",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "jquery",
+    "javascript",
+    "scripting",
+    "coding"
+  ],
+  "dropped_fragments": [
+    "programming",
+    "including"
+  ],
+  "reasoning": "Extracted specific programming skills and technologies, dropped generic terms and filler words.",
+  "cache_hit": false
+}

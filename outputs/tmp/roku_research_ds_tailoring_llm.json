@@ -1,0 +1,43 @@
+{
+  "requested_provider": "gemini",
+  "requested_model": "gemini-2.5-flash",
+  "provider": "gemini",
+  "model": "gemini-2.5-flash",
+  "resolved_provider": "gemini",
+  "resolved_model": "gemini-2.5-flash",
+  "fallback_used": false,
+  "fallback_attempted": true,
+  "fallback_provider": "groq",
+  "fallback_model": "llama-3.1-8b-instant",
+  "attempted_providers": [
+    "gemini"
+  ],
+  "parse_ok": true,
+  "parse_error": "",
+  "retry_used": false,
+  "raw_response": "{\"rewrite_directions\": [\"Lead with \\\"Conducted portfolio exposure analysis using Python for scenario modeling, SQL for data aggregation, & Tableau for risk visualization, informing pricing, design changes that improved profitability by 10% and reduced lapse risk by 12%\\\" to highlight Python and SQL skills.\", \"Support with \\\"Drove lapse and retention risk assessments using Python (gradient boosting) and customer segmentation with SQL, uncovering key drivers of early terminations that informed policy changes and reduced early-lapse rates by 15% Improved quarterly risk assessment accuracy by 12% by implementing a gradient boosting model t...\\\" to further emphasize Python and SQL expertise.\", \"Support with \\\"Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns\\\" to showcase machine learning experience.\", \"Keep gap explicit for data engineering.\", \"Keep gap explicit for experimentation.\", \"Keep gap explicit for statistical methods.\", \"Keep gap explicit for a/b testing.\"]}",
+  "retry_raw_response": "",
+  "parsed": {
+    "recruiter_summary": "",
+    "keep_emphasize": [],
+    "tailoring_actions": [],
+    "do_not_claim": [],
+    "rewrite_directions": [
+      "Lead with \"Conducted portfolio exposure analysis using Python for scenario modeling, SQL for data aggregation, & Tableau for risk visualization, informing pricing, design changes that improved profitability by 10% and reduced lapse risk by 12%\" to highlight Python and SQL skills.",
+      "Support with \"Drove lapse and retention risk assessments using Python (gradient boosting) and customer segmentation with SQL, uncovering key drivers of early terminations that informed policy changes and reduced early-lapse rates by 15% Improved quarterly risk assessment accuracy by 12% by implementing a gradient boosting model t...\" to further emphasize Python and SQL expertise.",
+      "Support with \"Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns\" to showcase machine learning experience.",
+      "Keep gap explicit for data engineering.",
+      "Keep gap explicit for experimentation.",
+      "Keep gap explicit for statistical methods.",
+      "Keep gap explicit for a/b testing."
+    ]
+  },
+  "job_doc_id": "",
+  "selected_resume": "",
+  "packet_sha256": "3755520a67895e397ab737461a8a2e84410b0218018c4c5dc5566104a82113b8",
+  "cache_key": "2c9c97438735bf69951157900d1d25812721da3f7df3ea29bd4b9d45250d85b4",
+  "prompt_version": "v3",
+  "fallback_enabled": true,
+  "cache_hit": false,
+  "generated_at": "2026-03-23T06:19:48.559489+00:00"
+}

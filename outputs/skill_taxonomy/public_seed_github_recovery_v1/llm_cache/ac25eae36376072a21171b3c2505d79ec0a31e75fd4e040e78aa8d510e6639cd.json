@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "software engineer - data engineer - sql",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "sql"
+  ],
+  "dropped_fragments": [
+    "software engineer",
+    "data engineer"
+  ],
+  "reasoning": "Dropped role names and generic terms, recovered specific skill 'sql'",
+  "cache_hit": false
+}

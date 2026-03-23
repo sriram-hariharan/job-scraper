@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "experience using statistical computer languages r",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "r"
+  ],
+  "dropped_fragments": [
+    "experience using statistical computer languages"
+  ],
+  "reasoning": "Extracted 'R' as a programming language, dropped the rest as generic phrases.",
+  "cache_hit": false
+}

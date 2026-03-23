@@ -1,0 +1,157 @@
+{
+  "job": {
+    "job_doc_id": "https://www.weareroku.com/jobs/7251360?gh_jid=7251360",
+    "company": "roku",
+    "title": "Research Data Scientist"
+  },
+  "selection": {
+    "selected_resume": "Neelakantan_SriramHariharan_Resume_MLE_v3.pdf",
+    "selected_score": 0.594108,
+    "selected_bucket": "moderate",
+    "runner_up_resume": "Sriram_Neelakantan_AI2.pdf",
+    "runner_up_score": 0.583409,
+    "score_gap": 0.010699,
+    "is_tie": false,
+    "tie_epsilon": 0.01
+  },
+  "summary": {
+    "matched_required": [
+      "python",
+      "sql"
+    ],
+    "missing_required": [
+      "data engineering",
+      "experimentation",
+      "statistical methods"
+    ],
+    "matched_preferred": [
+      "a/b testing",
+      "machine learning"
+    ],
+    "missing_preferred": [
+      "causal inference"
+    ],
+    "matched_terms": [
+      "Data Scientist II",
+      "python",
+      "sql",
+      "a/b testing",
+      "machine learning"
+    ],
+    "top_dimensions": "title_alignment=0.66/0.137, analytics_ml_depth=1.00/0.116, required_skills_alignment=0.40/0.102, tooling_alignment=1.00/0.078, preferred_skills_alignment=0.67/0.052, domain_relevance=0.50/0.047"
+  },
+  "top_dimension_deltas_vs_backup": [
+    "analytics_ml_depth: +0.047 (selected=0.116, backup=0.070)",
+    "experimentation_depth: -0.023 (selected=0.023, backup=0.047)",
+    "title_alignment: -0.013 (selected=0.137, backup=0.150)",
+    "baseline_familiarity: +0.000 (selected=0.015, backup=0.015)",
+    "domain_relevance: +0.000 (selected=0.047, backup=0.047)"
+  ],
+  "top_relevant_bullets": [
+    {
+      "section": "experience",
+      "source_title": "Data Analyst II",
+      "source_company": "Accenture",
+      "text": "Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns Improved quarterly risk assessment accuracy by 12% by implementing a gradient boosting model that predicts policyholder default probabilities, using demographic and historical claim data to refine risk mitigation strategies Identified key features causing customer early lapse through lapse analysis, reporting findings using Python, SQL, and Tableau to the cross-functional Finance team, by refining pricing strategies",
+      "overlap_count": 3,
+      "overlaps": [
+        "python",
+        "sql",
+        "machine learning"
+      ],
+      "evidence_type": "direct_overlap",
+      "source_key": "experience||data analyst ii||accenture",
+      "bullet_index": 0
+    },
+    {
+      "section": "experience",
+      "source_title": "Data Analyst I",
+      "source_company": "Accenture",
+      "text": "Deduced key biomarkers linked to cardiovascular health in healthcare product performance assessments by using Python for statistical analysis and Tableau for data visualizations, with AWS S3 and Databricks for data storage",
+      "overlap_count": 1,
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "source_key": "experience||data analyst i||accenture",
+      "bullet_index": 2
+    },
+    {
+      "section": "experience",
+      "source_title": "Data Analyst I",
+      "source_company": "Accenture",
+      "text": "Refined ARIMA-based sales seasonal forecasting for internal products using 250k records to identify trends, by conducting A/B testing on 12 insights, increasing market base & gross margin by 8%",
+      "overlap_count": 1,
+      "overlaps": [
+        "a/b testing"
+      ],
+      "evidence_type": "direct_overlap",
+      "source_key": "experience||data analyst i||accenture",
+      "bullet_index": 0
+    },
+    {
+      "section": "experience",
+      "source_title": "Data Scientist II",
+      "source_company": "L.B. Foster Salient Systems",
+      "text": "Built a scalable data pipeline using Python & PySpark on Databricks with Azure Blob Storage to process 3M+ high- speed sensor data, enabling automated wheel filtering, anomaly detection, poly curve analysis, & weight calculation.",
+      "overlap_count": 1,
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "source_key": "experience||data scientist ii||l b foster salient systems",
+      "bullet_index": 0
+    },
+    {
+      "section": "experience",
+      "source_title": "Machine Learning",
+      "source_company": "Norfolk Southern Corp",
+      "text": "Streamlined Exploratory Data Analysis with Pandas, NumPy, and Matplotlib to pinpoint over 50 anomalies among 30,000+ data points, achieving a 40% boost in clustering accuracy and optimizing project deliverables Implemented Faster R-CNN using PyTorch for railway defect (in coaches, tracks, plates, etc) detection, categorizing over 1000 defects from 7k undercarriage camera images, helping enhance maintenance precision & safety",
+      "overlap_count": 0,
+      "overlaps": [],
+      "evidence_type": "semantic_similarity",
+      "semantic_score": 0.720161,
+      "bullet_index": 1,
+      "source_key": "experience||machine learning||norfolk southern corp"
+    },
+    {
+      "section": "experience",
+      "source_title": "Data Analyst I",
+      "source_company": "Accenture",
+      "text": "Achieved a 15% increase in effective treatment outcomes by combining Link Analysis & XGBoost into the healthcare product efficacy model, reducing false positives by 20%, using Databricks for data processing & tracking",
+      "overlap_count": 0,
+      "overlaps": [],
+      "evidence_type": "semantic_similarity",
+      "semantic_score": 0.669683,
+      "bullet_index": 1,
+      "source_key": "experience||data analyst i||accenture"
+    },
+    {
+      "section": "experience",
+      "source_title": "Data Scientist II",
+      "source_company": "L.B. Foster Salient Systems",
+      "text": "Developed a wheel health metric using double differential filtering and polynomial curve fitting with K-means to filter out 35% of jittery wheels and detect 18% more true electronic anomalies, boosting predictive accuracy.",
+      "overlap_count": 0,
+      "overlaps": [],
+      "evidence_type": "semantic_similarity",
+      "semantic_score": 0.639251,
+      "bullet_index": 1,
+      "source_key": "experience||data scientist ii||l b foster salient systems"
+    },
+    {
+      "section": "experience",
+      "source_title": "Data Scientist II",
+      "source_company": "L.B. Foster Salient Systems",
+      "text": "Automated ADC-based sensor data validation across 16 circuits per rail enhances electronic signal integrity and strengthens anomaly isolation and wheel health diagnostics by reducing misclassification by 40%.",
+      "overlap_count": 1,
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "same_source_context",
+      "source_key": "experience||data scientist ii||l b foster salient systems",
+      "bullet_index": 2,
+      "distance_to_anchor": 1
+    }
+  ],
+  "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+}

@@ -1,0 +1,116 @@
+target_family,technology,occupation_count
+analytics,microsoft excel,3
+analytics,python,3
+analytics,r,3
+analytics,sas,3
+analytics,structured query language sql,3
+analytics,tableau,3
+analytics,amazon web services aws software,2
+analytics,adobe acrobat,1
+analytics,ajax,1
+analytics,alteryx software,1
+analytics,amazon dynamodb,1
+analytics,apache hive,1
+analytics,arcsight enterprise threat and risk management,1
+analytics,bookkeeping software,1
+analytics,business intelligence software,1
+analytics,c#,1
+analytics,c++,1
+analytics,electronic health record ehr software,1
+analytics,ibm spss statistics,1
+analytics,javascript,1
+analytics,linux,1
+analytics,microsoft access,1
+analytics,microsoft azure software,1
+analytics,microsoft power bi,1
+analytics,microsoft sharepoint,1
+analytics,microsoft sql server,1
+analytics,microsoft visio,1
+analytics,microsoft visual basic for applications vba,1
+analytics,oracle cloud software,1
+analytics,sap software,1
+analytics,splunk enterprise,1
+analytics,the mathworks matlab,1
+data_science,c++,4
+data_science,microsoft excel,4
+data_science,python,4
+data_science,structured query language sql,4
+data_science,apache hadoop,3
+data_science,extensible markup language xml,3
+data_science,r,3
+data_science,sas,3
+data_science,amazon redshift,2
+data_science,amazon web services aws software,2
+data_science,apache spark,2
+data_science,bash,2
+data_science,git,2
+data_science,ibm spss statistics,2
+data_science,microsoft access,2
+data_science,microsoft power bi,2
+data_science,tableau,2
+data_science,apache hive,1
+data_science,apple macos,1
+data_science,c,1
+data_science,c#,1
+data_science,esri arcgis software,1
+data_science,ibm db2,1
+data_science,javascript,1
+data_science,linux,1
+data_science,microsoft azure software,1
+data_science,oracle java,1
+data_science,pytorch,1
+data_science,salesforce software,1
+data_science,sap software,1
+data_science,snowflake,1
+engineering_data_platform,amazon web services aws software,3
+engineering_data_platform,apache spark,3
+engineering_data_platform,microsoft excel,3
+engineering_data_platform,microsoft power bi,3
+engineering_data_platform,amazon dynamodb,2
+engineering_data_platform,amazon elastic compute cloud ec2,2
+engineering_data_platform,amazon redshift,2
+engineering_data_platform,apache hadoop,2
+engineering_data_platform,apache kafka,2
+engineering_data_platform,microsoft access,2
+engineering_data_platform,microsoft azure software,2
+engineering_data_platform,python,2
+engineering_data_platform,structured query language sql,2
+engineering_data_platform,tableau,2
+engineering_data_platform,adobe acrobat,1
+engineering_data_platform,ajax,1
+engineering_data_platform,apache airflow,1
+engineering_data_platform,apache cassandra,1
+engineering_data_platform,apache hive,1
+engineering_data_platform,git,1
+engineering_data_platform,informatica software,1
+engineering_data_platform,linux,1
+engineering_data_platform,microsoft sql server,1
+engineering_data_platform,microsoft sql server integration services ssis,1
+engineering_data_platform,oracle java,1
+engineering_data_platform,r,1
+engineering_data_platform,snowflake,1
+machine_learning,amazon web services aws software,2
+machine_learning,apache hadoop,2
+machine_learning,apache spark,2
+machine_learning,c++,2
+machine_learning,git,2
+machine_learning,ansible software,1
+machine_learning,bash,1
+machine_learning,c,1
+machine_learning,docker,1
+machine_learning,github,1
+machine_learning,go,1
+machine_learning,ibm terraform,1
+machine_learning,javascript,1
+machine_learning,jenkins ci,1
+machine_learning,kubernetes,1
+machine_learning,microsoft azure software,1
+machine_learning,microsoft excel,1
+machine_learning,microsoft power bi,1
+machine_learning,oracle java,1
+machine_learning,python,1
+machine_learning,pytorch,1
+machine_learning,r,1
+machine_learning,sas,1
+machine_learning,snowflake,1
+machine_learning,structured query language sql,1

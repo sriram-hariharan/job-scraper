@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "hdfs/ hive/ impala",
+  "cleaned_skills": [
+    "hdfs",
+    "hive",
+    "impala"
+  ],
+  "dropped_fragments": [
+    "/"
+  ],
+  "reasoning": "split multi-skill phrase into atomic skill terms, removing slashes",
+  "cache_hit": false
+}

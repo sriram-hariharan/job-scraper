@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "airline contracting - direct analytics",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "analytics"
+  ],
+  "dropped_fragments": [
+    "airline contracting",
+    "direct"
+  ],
+  "reasoning": "Extracted 'analytics' as a meaningful skill term, dropped other fragments as noise or non-atomic terms.",
+  "cache_hit": false
+}

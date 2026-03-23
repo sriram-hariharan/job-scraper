@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "building predictive models - r",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "predictive models",
+    "r"
+  ],
+  "dropped_fragments": [
+    "building"
+  ],
+  "reasoning": "Extracted 'predictive models' and 'r' as atomic skills, dropped 'building' as a generic business word.",
+  "cache_hit": false
+}

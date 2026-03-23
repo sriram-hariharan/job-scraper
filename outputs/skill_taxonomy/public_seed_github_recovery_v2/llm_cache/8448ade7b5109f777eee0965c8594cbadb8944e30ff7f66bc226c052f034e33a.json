@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "ibm db2 and sql server",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "db2",
+    "sql server"
+  ],
+  "dropped_fragments": [
+    "ibm",
+    "and"
+  ],
+  "reasoning": "Extracted specific database management system skills (DB2, SQL Server) while dropping the company name (ibm) and a conjunction (and) as noise.",
+  "cache_hit": false
+}

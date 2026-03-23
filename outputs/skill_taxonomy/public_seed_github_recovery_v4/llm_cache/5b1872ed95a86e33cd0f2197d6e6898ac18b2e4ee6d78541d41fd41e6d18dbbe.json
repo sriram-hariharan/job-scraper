@@ -1,0 +1,18 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data science and implementations in python",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "data science",
+    "python"
+  ],
+  "dropped_fragments": [
+    "and",
+    "implementations",
+    "in"
+  ],
+  "reasoning": "Extracted 'data science' and 'python' as atomic skills, dropped generic words and prepositions.",
+  "cache_hit": false
+}

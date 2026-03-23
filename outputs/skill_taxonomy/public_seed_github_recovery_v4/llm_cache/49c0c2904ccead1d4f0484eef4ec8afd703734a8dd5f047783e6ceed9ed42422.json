@@ -1,0 +1,22 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "business analyst data scientist r python jira github tableau powerbi statistics",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "r",
+    "python",
+    "jira",
+    "github",
+    "tableau",
+    "powerbi",
+    "statistics"
+  ],
+  "dropped_fragments": [
+    "business analyst",
+    "data scientist"
+  ],
+  "reasoning": "Dropped role names and generic terms, recovered specific tools, programming languages, and technical skills.",
+  "cache_hit": false
+}

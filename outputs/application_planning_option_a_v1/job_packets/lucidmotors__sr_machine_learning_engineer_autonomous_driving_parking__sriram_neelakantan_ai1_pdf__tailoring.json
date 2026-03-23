@@ -1,0 +1,234 @@
+{
+  "job": {
+    "job_doc_id": "https://job-boards.greenhouse.io/lucidmotors/jobs/4963850007",
+    "company": "lucidmotors",
+    "title": "Sr. Machine Learning Engineer, Autonomous Driving & Parking"
+  },
+  "selection": {
+    "selected_resume": "Sriram_Neelakantan_AI1.pdf",
+    "selected_score": 0.524291,
+    "selected_bucket": "moderate",
+    "runner_up_resume": "Sriram_Neelakantan_AI2.pdf",
+    "runner_up_score": 0.524291,
+    "score_gap": 0.0,
+    "is_tie": true,
+    "tie_epsilon": 0.01
+  },
+  "summary": {
+    "matched_required": [
+      "deep learning",
+      "machine learning",
+      "python",
+      "pytorch",
+      "tensorflow"
+    ],
+    "missing_required": [
+      "c++",
+      "dl architectures",
+      "large-scale architecture",
+      "performance metrics",
+      "reliable production systems",
+      "state-of-the-art machine learning techniques",
+      "transformers"
+    ],
+    "matched_preferred": [],
+    "missing_preferred": [
+      "foundational models",
+      "large language models",
+      "llms",
+      "machine learning development"
+    ],
+    "matched_terms": [
+      "deep learning",
+      "machine learning",
+      "python",
+      "pytorch",
+      "tensorflow"
+    ],
+    "top_dimensions": "analytics_ml_depth=1.00/0.116, title_alignment=0.53/0.112, required_skills_alignment=0.42/0.107, tooling_alignment=0.75/0.059, domain_relevance=0.50/0.047, experimentation_depth=0.50/0.047"
+  },
+  "recruiter_summary": "Sriram_Neelakantan_AI1.pdf is the selected variant for lucidmotors | Sr. Machine Learning Engineer, Autonomous Driving & Parking with a deterministic score of 0.524. It already aligns on deep learning, machine learning, python, pytorch, tensorflow. The main explicit gaps still showing are c++, dl architectures, large-scale architecture, performance metrics.",
+  "keep_emphasize": [
+    "Keep explicit required-skill evidence visible: deep learning, machine learning, python, pytorch, tensorflow.",
+    "Preserve the strongest JD-aligned language already present: deep learning, machine learning, python, pytorch, tensorflow."
+  ],
+  "tailoring_actions": [
+    "Lead the tailored version with already-supported required terms: deep learning, machine learning, python, pytorch, tensorflow.",
+    "Use these direct-match bullets as primary anchors: Data Scientist II (AI Engineer) @ L.B. Foster Salient Systems, Data Analyst I @ Accenture.",
+    "Use semantically aligned bullets only as supporting proof after the anchors: Machine Learning Intern @ Norfolk Southern Corp.",
+    "Keep these required gaps explicit unless you can support them truthfully: c++, dl architectures, large-scale architecture, performance metrics, reliable production systems, state-of-the-art machine learning techniques."
+  ],
+  "rewrite_candidates": [
+    {
+      "source": "Data Scientist II (AI Engineer) @ L.B. Foster Salient Systems",
+      "section": "experience",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "pytorch"
+      ],
+      "action": "Lead with pytorch in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Fine-tuned a LLaMA-2 model using Hugging Face AutoModelForCausalLM and LoRA adapters in PyTorch Lightning, tracked via MLflow, and deployed through Amazon Bedrock, improving response clarity and alignment by ~20%"
+    },
+    {
+      "source": "Data Analyst I @ Accenture",
+      "section": "experience",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "python"
+      ],
+      "action": "Lead with python in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%"
+    },
+    {
+      "source": "Data Analyst II @ Accenture",
+      "section": "experience",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "machine learning"
+      ],
+      "action": "Lead with machine learning in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns"
+    }
+  ],
+  "evidence_layers": {
+    "anchors": [
+      {
+        "section": "experience",
+        "source_title": "Data Scientist II (AI Engineer)",
+        "source_company": "L.B. Foster Salient Systems",
+        "text": "Fine-tuned a LLaMA-2 model using Hugging Face AutoModelForCausalLM and LoRA adapters in PyTorch Lightning, tracked via MLflow, and deployed through Amazon Bedrock, improving response clarity and alignment by ~20%",
+        "overlap_count": 1,
+        "overlaps": [
+          "pytorch"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data scientist ii artificial intelligence engineer||l b foster salient systems",
+        "bullet_index": 1
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Analyst I",
+        "source_company": "Accenture",
+        "text": "Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%",
+        "overlap_count": 1,
+        "overlaps": [
+          "python"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data analyst i||accenture",
+        "bullet_index": 3
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Analyst I",
+        "source_company": "Accenture",
+        "text": "Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records",
+        "overlap_count": 1,
+        "overlaps": [
+          "python"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data analyst i||accenture",
+        "bullet_index": 2
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Analyst I",
+        "source_company": "Accenture",
+        "text": "Manipulated and analyzed large-scale clinical and real-world datasets (trial records, biomarker studies) using Python, SQL, and Databricks, ensuring compliance with regulatory standards, improving early risk detection 10%",
+        "overlap_count": 1,
+        "overlaps": [
+          "python"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data analyst i||accenture",
+        "bullet_index": 4
+      }
+    ],
+    "supports": [
+      {
+        "section": "experience",
+        "source_title": "Machine Learning Intern",
+        "source_company": "Norfolk Southern Corp",
+        "text": "Utilized K-Nearest Neighbors, PCA, and K-Means within an agile framework to cluster and enhance the spatial analysis of 90k + rail-road intersections, significantly advancing infrastructure planning efforts",
+        "overlap_count": 0,
+        "overlaps": [],
+        "evidence_type": "semantic_similarity",
+        "semantic_score": 0.686671,
+        "bullet_index": 0,
+        "source_key": "experience||machine learning intern||norfolk southern corp"
+      }
+    ],
+    "context": []
+  },
+  "do_not_claim": [
+    "Do not claim missing required skills unless you can support them truthfully: c++, dl architectures, large-scale architecture, performance metrics, reliable production systems, state-of-the-art machine learning techniques, transformers.",
+    "Do not add unsupported preferred-skill claims: foundational models, large language models, llms, machine learning development.",
+    "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+  ],
+  "bullet_reuse_candidates": [
+    {
+      "section": "experience",
+      "source": "Data Scientist II (AI Engineer) @ L.B. Foster Salient Systems",
+      "overlaps": [
+        "pytorch"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Fine-tuned a LLaMA-2 model using Hugging Face AutoModelForCausalLM and LoRA adapters in PyTorch Lightning, tracked via MLflow, and deployed through Amazon Bedrock, improving response clarity and alignment by ~20%",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: pytorch"
+    },
+    {
+      "section": "experience",
+      "source": "Data Analyst I @ Accenture",
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: python"
+    },
+    {
+      "section": "experience",
+      "source": "Data Analyst I @ Accenture",
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: python"
+    },
+    {
+      "section": "experience",
+      "source": "Data Analyst I @ Accenture",
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Manipulated and analyzed large-scale clinical and real-world datasets (trial records, biomarker studies) using Python, SQL, and Databricks, ensuring compliance with regulatory standards, improving early risk detection 10%",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: python"
+    },
+    {
+      "section": "experience",
+      "source": "Data Analyst II @ Accenture",
+      "overlaps": [
+        "machine learning"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Architected a data pipeline using supervised ML models and Apache Spark for insurance campaign response studies, enhancing conversion rates by 5.5% through customized campaigns",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: machine learning"
+    },
+    {
+      "section": "experience",
+      "source": "Data Analyst II @ Accenture",
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Conducted portfolio exposure analysis using Python for scenario modeling, SQL for data aggregation, & Tableau for risk visualization, informing pricing and design changes that improved profitability by 10% and reduced lapse risk by 12%",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: python"
+    }
+  ],
+  "llm_prompt": "Return ONLY JSON that matches the required schema.\n\nGoal:\nProduce evidence-anchored tailoring guidance for ONE selected resume variant.\n\nHard rules:\n1. Use ONLY the evidence below.\n2. Do NOT invent tools, methods, responsibilities, metrics, or domains.\n3. Treat missing unsupported skills as gaps, not rewrite opportunities.\n4. Prefer concrete rewrite directions tied to a specific source entry.\n5. Use direct-overlap bullets as primary anchors.\n6. Use semantic-similarity bullets only as supporting evidence.\n7. Use same-role/context bullets only as lowest-priority supporting context.\n8. Avoid generic advice like 'highlight', 'showcase', or 'emphasize' unless you name the exact supported term and source entry.\n9. In rewrite_directions, each item should start with one of: 'Lead with', 'Support with', 'Keep gap explicit', or 'Do not add'.\n10. Keep every list concise and recruiter-usable.\n\nJob:\n- Company: lucidmotors\n- Title: Sr. Machine Learning Engineer, Autonomous Driving & Parking\n\nSelected resume:\n- Resume: Sriram_Neelakantan_AI1.pdf\n- Score: 0.524291\n\nMatched / missing skills:\n- Matched required: ['deep learning', 'machine learning', 'python', 'pytorch', 'tensorflow']\n- Missing required: ['c++', 'dl architectures', 'large-scale architecture', 'performance metrics', 'reliable production systems', 'state-of-the-art machine learning techniques', 'transformers']\n- Matched preferred: []\n- Missing preferred: ['foundational models', 'large language models', 'llms', 'machine learning development']\n- Matched terms from prefilter: ['deep learning', 'machine learning', 'python', 'pytorch', 'tensorflow']\n\nPrimary anchor bullets:\n\nSemantic supporting bullets:\n\nSame-role context bullets:\n\nEvidence-backed rewrite candidates:\n\nGuardrail:\nOnly add or strengthen resume language when it is already truthful and supported by your actual work.\n\nOutput expectations:\n- recruiter_summary: 1 sentence only.\n- keep_emphasize: only already-supported terms or phrases.\n- tailoring_actions: concrete operator actions tied to the evidence above.\n- do_not_claim: unsupported skills, tools, or responsibilities only.\n- rewrite_directions: REQUIRED. Return at least 3 items if 3 or more anchor bullets exist.\n- At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.\n- Do not return only 'Keep gap explicit' items when anchor bullets are present.\n- Every rewrite_directions item must start with one of: Lead with, Support with, Keep gap explicit, Do not add.\n- Every rewrite_directions item must reference a specific source entry from the evidence above when using Lead with or Support with.\n- Avoid generic actions like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.",
+  "live_rewrite_prompt": "Return ONLY valid JSON with one top-level key: rewrite_directions.\n\nGoal:\nProduce concrete, source-tied rewrite directions for ONE selected resume variant.\n\nHard rules:\n1. Use ONLY the evidence below.\n2. Do NOT invent tools, methods, metrics, domains, or responsibilities.\n3. Direct-overlap bullets are the only primary anchors.\n4. Semantic-similarity bullets are support only.\n5. Same-role context bullets are lowest-priority support only.\n6. If anchor bullets exist, return at least 3 rewrite_directions.\n7. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.\n8. Do not return only gap-explicit directions when anchor bullets exist.\n9. Every Lead with / Support with item must reference a specific source entry.\n10. Keep gap explicit only for truly unsupported skills.\n\nJob:\n- Company: lucidmotors\n- Title: Sr. Machine Learning Engineer, Autonomous Driving & Parking\n\nSelected resume:\n- Resume: Sriram_Neelakantan_AI1.pdf\n- Score: 0.524291\n\nMatched / missing skills:\n- Matched required: ['deep learning', 'machine learning', 'python', 'pytorch', 'tensorflow']\n- Missing required: ['c++', 'dl architectures', 'large-scale architecture', 'performance metrics', 'reliable production systems', 'state-of-the-art machine learning techniques', 'transformers']\n- Missing preferred: ['foundational models', 'large language models', 'llms', 'machine learning development']\n\nPrimary anchor bullets:\n1. [experience] Data Scientist II (AI Engineer) @ L.B. Foster Salient Systems | supports=['pytorch']\n   Bullet: Fine-tuned a LLaMA-2 model using Hugging Face AutoModelForCausalLM and LoRA adapters in PyTorch Lightning, tracked via MLflow, and deployed through Amazon Bedrock, improving response clarity and alignment by ~20%\n2. [experience] Data Analyst I @ Accenture | supports=['python']\n   Bullet: Built Python-based validation frameworks to cross-check trial records against regulatory and protocol standards, reducing compliance review time by 35% and improving quality assurance scores by 20%\n3. [experience] Data Analyst I @ Accenture | supports=['python']\n   Bullet: Deduced key cardiovascular biomarkers in product performance assessments using Python and Tableau, leveraging AWS S3 and Databricks for data, improving early-risk detection accuracy by 14% across 12k+ patient records\n4. [experience] Data Analyst I @ Accenture | supports=['python']\n   Bullet: Manipulated and analyzed large-scale clinical and real-world datasets (trial records, biomarker studies) using Python, SQL, and Databricks, ensuring compliance with regulatory standards, improving early risk detection 10%\n\nSemantic supporting bullets:\n1. [experience] Machine Learning Intern @ Norfolk Southern Corp | type=semantic_similarity\n   semantic_score=0.686671\n   Bullet: Utilized K-Nearest Neighbors, PCA, and K-Means within an agile framework to cluster and enhance the spatial analysis of 90k + rail-road intersections, significantly advancing infrastructure planning efforts\n\nSame-role context bullets:\n\nGuardrail:\nOnly add or strengthen resume language when it is already truthful and supported by your actual work.\n\nOutput requirements:\n- Return JSON only.\n- Output key: rewrite_directions\n- Allowed prefixes only: Lead with, Support with, Keep gap explicit, Do not add\n- Prefer anchor-led rewrite directions first, then support if needed.",
+  "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+}

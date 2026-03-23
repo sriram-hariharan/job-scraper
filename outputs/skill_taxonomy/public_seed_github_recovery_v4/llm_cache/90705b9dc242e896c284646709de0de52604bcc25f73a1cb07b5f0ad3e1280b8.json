@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data modeling and hypothesis generation",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "data modeling",
+    "hypothesis generation"
+  ],
+  "dropped_fragments": [
+    "and"
+  ],
+  "reasoning": "Extracted specific skills from the phrase, dropping generic conjunctions.",
+  "cache_hit": false
+}

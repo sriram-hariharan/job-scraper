@@ -1,0 +1,18 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "large data set organization and analytics",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "data organization",
+    "analytics"
+  ],
+  "dropped_fragments": [
+    "large",
+    "set",
+    "and"
+  ],
+  "reasoning": "Extracted meaningful skill terms related to data handling and analysis, while dropping generic descriptors and filler words.",
+  "cache_hit": false
+}

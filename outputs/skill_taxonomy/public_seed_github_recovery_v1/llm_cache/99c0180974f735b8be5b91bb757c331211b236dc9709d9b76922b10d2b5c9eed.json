@@ -1,0 +1,18 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "soap - ruby on rails",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "soap",
+    "ruby",
+    "rails"
+  ],
+  "dropped_fragments": [
+    "-",
+    "on"
+  ],
+  "reasoning": "Extracted programming-related terms SOAP, Ruby, and Rails, while dropping non-technical fragments.",
+  "cache_hit": false
+}

@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data modeling for analytics",
+  "cleaned_skills": [
+    "data modeling",
+    "analytics"
+  ],
+  "dropped_fragments": [
+    "for"
+  ],
+  "reasoning": "split phrase into atomic skills, dropped preposition 'for' as noise",
+  "cache_hit": false
+}

@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "o advanced applied statistics skills",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "applied statistics"
+  ],
+  "dropped_fragments": [
+    "o",
+    "advanced",
+    "skills"
+  ],
+  "reasoning": "Extracted 'applied statistics' as a meaningful skill term, dropped other fragments as noise or generic words.",
+  "cache_hit": false
+}

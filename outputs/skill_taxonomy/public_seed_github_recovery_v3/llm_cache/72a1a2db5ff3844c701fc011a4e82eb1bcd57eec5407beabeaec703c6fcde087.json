@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "cloud/analytics",
+  "cleaned_skills": [
+    "cloud",
+    "analytics"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split the input phrase into two distinct skills",
+  "cache_hit": false
+}

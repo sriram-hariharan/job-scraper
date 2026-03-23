@@ -410,6 +410,157 @@ def _split_job_skill_gaps(resume, job) -> Tuple[List[str], List[str], List[str],
 
     return matched_required, missing_required, matched_preferred, missing_preferred
 
+def _term_support_evidence_row(
+    *,
+    section: str,
+    source_title: str,
+    source_company: str,
+    text: str = "",
+) -> dict:
+    return {
+        "section": section,
+        "source_title": source_title,
+        "source_company": source_company,
+        "text": text,
+    }
+
+
+def _build_single_term_support(resume, term: str) -> dict:
+    normalized_term = _normalize_text(term)
+    if not normalized_term:
+        return {
+            "term": "",
+            "support_level": "unsupported",
+            "support_scope": "none",
+            "evidence": [],
+        }
+
+    experience_matches: List[dict] = []
+    for entry in resume.experience_entries:
+        for bullet in entry.bullets:
+            bullet_norm = _normalize_text(bullet)
+            if not bullet_norm:
+                continue
+            if _contains_signal(bullet_norm, normalized_term):
+                experience_matches.append(
+                    _term_support_evidence_row(
+                        section="experience",
+                        source_title=entry.title,
+                        source_company=entry.company,
+                        text=bullet,
+                    )
+                )
+                if len(experience_matches) >= 2:
+                    break
+        if len(experience_matches) >= 2:
+            break
+
+    if experience_matches:
+        return {
+            "term": normalized_term,
+            "support_level": "direct_bullet",
+            "support_scope": "experience",
+            "evidence": experience_matches,
+        }
+
+    project_matches: List[dict] = []
+    for entry in resume.project_entries:
+        for bullet in entry.bullets:
+            bullet_norm = _normalize_text(bullet)
+            if not bullet_norm:
+                continue
+            if _contains_signal(bullet_norm, normalized_term):
+                project_matches.append(
+                    _term_support_evidence_row(
+                        section="project",
+                        source_title=entry.name,
+                        source_company="",
+                        text=bullet,
+                    )
+                )
+                if len(project_matches) >= 2:
+                    break
+        if len(project_matches) >= 2:
+            break
+
+    if project_matches:
+        return {
+            "term": normalized_term,
+            "support_level": "direct_bullet",
+            "support_scope": "project",
+            "evidence": project_matches,
+        }
+
+    for entry in resume.experience_entries:
+        normalized_skills = {
+            _normalize_text(value) for value in entry.normalized_skills if _normalize_text(value)
+        }
+        if normalized_term in normalized_skills:
+            return {
+                "term": normalized_term,
+                "support_level": "entry_context",
+                "support_scope": "experience",
+                "evidence": [
+                    _term_support_evidence_row(
+                        section="experience",
+                        source_title=entry.title,
+                        source_company=entry.company,
+                        text="",
+                    )
+                ],
+            }
+
+    for entry in resume.project_entries:
+        normalized_skills = {
+            _normalize_text(value) for value in entry.normalized_skills if _normalize_text(value)
+        }
+        if normalized_term in normalized_skills:
+            return {
+                "term": normalized_term,
+                "support_level": "entry_context",
+                "support_scope": "project",
+                "evidence": [
+                    _term_support_evidence_row(
+                        section="project",
+                        source_title=entry.name,
+                        source_company="",
+                        text="",
+                    )
+                ],
+            }
+
+    resume_skill_set = {_normalize_text(value) for value in resume.skills if _normalize_text(value)}
+    if normalized_term in resume_skill_set:
+        return {
+            "term": normalized_term,
+            "support_level": "skills_section",
+            "support_scope": "resume_skills",
+            "evidence": [
+                _term_support_evidence_row(
+                    section="resume_skills",
+                    source_title="Resume Skills",
+                    source_company="",
+                    text="",
+                )
+            ],
+        }
+
+    return {
+        "term": normalized_term,
+        "support_level": "unsupported",
+        "support_scope": "none",
+        "evidence": [],
+    }
+
+
+def _build_term_support_summary(resume, job) -> dict:
+    required_terms = _normalized_skill_list(job.required_skills)
+    preferred_terms = _normalized_skill_list(job.preferred_skills)
+
+    return {
+        "required": [_build_single_term_support(resume, term) for term in required_terms],
+        "preferred": [_build_single_term_support(resume, term) for term in preferred_terms],
+    }
 
 def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
@@ -719,7 +870,7 @@ def _payload_for_json(
             "selected_resume": selected_result.pair.resume_name,
             "selected_score": selected_result.final_score,
             "selected_bucket": selected_result.match_bucket,
-            "runner_up_resume": runner_up_result.pair.resume_name if runner_up_result is not None else None,
+            "runner_up_resume": selected_result.pair.resume_name if runner_up_result is not None else None,
             "runner_up_score": runner_up_result.final_score if runner_up_result is not None else None,
             "score_gap": (
                 round(selected_result.final_score - runner_up_result.final_score, 6)
@@ -736,6 +887,7 @@ def _payload_for_json(
             "missing_preferred": missing_preferred,
             "matched_terms": list(selected_result.prefilter.matched_terms),
             "top_dimensions": _dimension_snapshot(selected_result),
+            "term_support": _build_term_support_summary(selected_resume, job_evidence),
         },
         "top_dimension_deltas_vs_backup": (
             _top_dimension_deltas(selected_result, runner_up_result)

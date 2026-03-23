@@ -1,0 +1,18 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "lead data scientist - high growth startup - nyc - 160k+",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "data scientist"
+  ],
+  "dropped_fragments": [
+    "lead",
+    "high growth startup",
+    "nyc",
+    "160k+"
+  ],
+  "reasoning": "Extracted 'data scientist' as the only meaningful skill term, dropped other fragments as they are either role names, locations, or numeric values.",
+  "cache_hit": false
+}

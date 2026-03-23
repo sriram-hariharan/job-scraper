@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "ibm spss and sas tools",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "ibm spss",
+    "sas"
+  ],
+  "dropped_fragments": [
+    "and",
+    "tools"
+  ],
+  "reasoning": "Extracted specific tool names, dropped generic words and conjunctions.",
+  "cache_hit": false
+}

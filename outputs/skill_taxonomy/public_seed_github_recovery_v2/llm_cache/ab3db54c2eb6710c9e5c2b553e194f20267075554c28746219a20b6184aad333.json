@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "c/c++",
+  "cleaned_skills": [
+    "c",
+    "c++"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split multi-skill phrase into atomic programming language terms",
+  "cache_hit": false
+}

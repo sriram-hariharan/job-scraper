@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "sql and data visualization software",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "sql",
+    "data visualization"
+  ],
+  "dropped_fragments": [
+    "and",
+    "software"
+  ],
+  "reasoning": "Extracted SQL and Data Visualization as atomic skills, dropped 'and' as a filler and 'software' as a generic term.",
+  "cache_hit": false
+}

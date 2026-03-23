@@ -1,0 +1,19 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "nosql databases - mongodb-couchbase - cassandra",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "mongodb",
+    "couchbase",
+    "cassandra",
+    "nosql"
+  ],
+  "dropped_fragments": [
+    "databases",
+    "-"
+  ],
+  "reasoning": "Extracted specific NoSQL database technologies and the term 'nosql' itself, while dropping generic terms and punctuation.",
+  "cache_hit": false
+}

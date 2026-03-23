@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data mining expertise sql required",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "data mining",
+    "sql"
+  ],
+  "dropped_fragments": [
+    "expertise",
+    "required"
+  ],
+  "reasoning": "Extracted specific technical skills from the phrase, dropping generic terms and phrases.",
+  "cache_hit": false
+}

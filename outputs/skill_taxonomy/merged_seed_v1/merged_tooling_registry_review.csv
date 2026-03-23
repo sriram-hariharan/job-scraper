@@ -1,0 +1,57 @@
+term,onet_total_occupation_support,onet_families,public_tooling_candidate,public_recovered_count,public_recovered_examples,sources
+ajax,2,"analytics,engineering_data_platform",False,0,,onet
+alteryx software,1,analytics,False,0,,onet
+ansible software,1,machine_learning,False,0,,onet
+apache cassandra,1,engineering_data_platform,False,0,,onet
+apple macos,1,data_science,False,0,,onet
+aws,9,"analytics,data_science,engineering_data_platform,machine_learning",False,1,etc amazon web services aws,"onet,public_recovered"
+azure,5,"analytics,data_science,engineering_data_platform,machine_learning",False,1,data analyst and capacity and visualization and sql and azure,"onet,public_recovered"
+azure machine learning,0,,True,0,,public_tooling
+bash,3,"data_science,machine_learning",True,0,,"onet,public_tooling"
+bookkeeping software,1,analytics,False,0,,onet
+c#,2,"analytics,data_science",False,0,,onet
+c++,7,"analytics,data_science,machine_learning",False,0,,onet
+cassandra,0,,True,2,nosql databases - mongodb-couchbase - cassandra,"public_recovered,public_tooling"
+couchbase,0,,True,2,nosql databases - mongodb-couchbase - cassandra,"public_recovered,public_tooling"
+docker,1,machine_learning,False,0,,onet
+dynamodb,3,"analytics,engineering_data_platform",False,0,,onet
+ec2,2,engineering_data_platform,False,0,,onet
+esri arcgis software,1,data_science,False,0,,onet
+extensible markup language xml,3,data_science,False,0,,onet
+go,1,machine_learning,False,0,,onet
+hadoop,7,"data_science,engineering_data_platform,machine_learning",True,3,hadoop - hive - pig | apache spark or kubernetes or hortonworks or hadoop,"onet,public_recovered,public_tooling"
+hive,3,"analytics,data_science,engineering_data_platform",True,2,hadoop - hive - pig,"onet,public_recovered,public_tooling"
+ibm db2,1,data_science,False,0,,onet
+impala,0,,True,0,,public_tooling
+informatica software,1,engineering_data_platform,False,0,,onet
+java,3,"data_science,engineering_data_platform,machine_learning",True,2,one modern programming language java | data scientist machine learning statistics r python c java scala,"onet,public_recovered,public_tooling"
+jenkins,0,,True,0,,public_tooling
+jenkins ci,1,machine_learning,False,0,,onet
+jira,0,,False,1,business analyst data scientist r python jira github tableau powerbi statistics,public_recovered
+kafka,2,engineering_data_platform,False,0,,onet
+kubernetes,1,machine_learning,False,1,apache spark or kubernetes or hortonworks or hadoop,"onet,public_recovered"
+linux,3,"analytics,data_science,engineering_data_platform",True,0,,"onet,public_tooling"
+machine learning - python,0,,True,0,,public_tooling
+machine learning aml python,0,,True,0,,public_tooling
+matlab,1,analytics,True,0,,"onet,public_tooling"
+microsoft access,5,"analytics,data_science,engineering_data_platform",False,0,,onet
+microsoft excel,11,"analytics,data_science,engineering_data_platform,machine_learning",False,0,,onet
+microsoft sharepoint,1,analytics,False,0,,onet
+microsoft visio,1,analytics,False,0,,onet
+modeling - python,0,,True,0,,public_tooling
+mongodb,0,,True,2,nosql databases - mongodb-couchbase - cassandra,"public_recovered,public_tooling"
+mysql,0,,True,0,,public_tooling
+nosql,0,,False,2,nosql databases - mongodb-couchbase - cassandra,public_recovered
+oracle cloud,1,analytics,False,0,,onet
+python - machine learning,0,,True,0,,public_tooling
+redshift,4,"data_science,engineering_data_platform",True,0,,"onet,public_tooling"
+salesforce software,1,data_science,False,0,,onet
+sap software,2,"analytics,data_science",False,0,,onet
+scala,0,,True,1,data scientist machine learning statistics r python c java scala,"public_recovered,public_tooling"
+spark - machine learning,0,,True,0,,public_tooling
+splunk enterprise,1,analytics,False,0,,onet
+spss,3,"analytics,data_science",False,1,wps or spss or python prefer sql server,"onet,public_recovered"
+sql and relational databases,0,,True,0,,public_tooling
+sql server,2,"analytics,engineering_data_platform",True,3,data analysis - sql server | ibm db2 and sql server | wps or spss or python prefer sql server,"onet,public_recovered,public_tooling"
+sql tableau marketing analysis,0,,True,0,,public_tooling
+terraform,1,machine_learning,False,0,,onet

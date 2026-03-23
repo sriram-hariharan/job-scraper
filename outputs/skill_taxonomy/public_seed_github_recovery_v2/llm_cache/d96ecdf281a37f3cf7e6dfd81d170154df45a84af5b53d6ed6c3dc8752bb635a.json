@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "c/c++ - data scientist",
+  "cleaned_skills": [
+    "c",
+    "c++"
+  ],
+  "dropped_fragments": [
+    "data scientist"
+  ],
+  "reasoning": "dropped 'data scientist' as it's a role name, kept 'c' and 'c++' as they are programming languages",
+  "cache_hit": false
+}

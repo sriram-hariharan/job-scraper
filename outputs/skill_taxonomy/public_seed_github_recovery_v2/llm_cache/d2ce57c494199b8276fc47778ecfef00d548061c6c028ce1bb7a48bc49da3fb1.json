@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data manipulation/wrangling",
+  "cleaned_skills": [
+    "data manipulation",
+    "data wrangling"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split the phrase into two related but distinct skills",
+  "cache_hit": false
+}

@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "sas/stat",
+  "cleaned_skills": [
+    "sas",
+    "stat"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split the phrase into two compact, lowercase-friendly terms: sas and stat, which are likely referring to the sas software and statistics",
+  "cache_hit": false
+}

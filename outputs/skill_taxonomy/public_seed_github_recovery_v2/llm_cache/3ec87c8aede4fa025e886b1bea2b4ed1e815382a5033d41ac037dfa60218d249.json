@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "bash/shell",
+  "cleaned_skills": [
+    "bash",
+    "shell"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split multi-skill phrase into atomic skill terms",
+  "cache_hit": false
+}

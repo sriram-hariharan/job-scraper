@@ -1,0 +1,14 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "experience with machine learning",
+  "cleaned_skills": [
+    "machine learning"
+  ],
+  "dropped_fragments": [
+    "experience with"
+  ],
+  "reasoning": "removed generic phrase 'experience with' as it's hiring noise",
+  "cache_hit": false
+}

@@ -1,0 +1,21 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data scientist machine learning statistics r python c java scala",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "machine learning",
+    "statistics",
+    "r",
+    "python",
+    "c",
+    "java",
+    "scala"
+  ],
+  "dropped_fragments": [
+    "data scientist"
+  ],
+  "reasoning": "Extracted specific programming languages and technical terms, dropped generic role name 'data scientist'",
+  "cache_hit": false
+}

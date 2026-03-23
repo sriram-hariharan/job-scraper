@@ -1,0 +1,50 @@
+{
+  "requested_provider": "gemini",
+  "requested_model": "gemini-2.5-flash",
+  "provider": "gemini",
+  "model": "gemini-2.5-flash",
+  "resolved_provider": "gemini",
+  "resolved_model": "gemini-2.5-flash",
+  "fallback_used": false,
+  "fallback_attempted": true,
+  "fallback_provider": "groq",
+  "fallback_model": "llama-3.1-8b-instant",
+  "attempted_providers": [
+    "gemini"
+  ],
+  "parse_ok": true,
+  "parse_error": "",
+  "retry_used": false,
+  "raw_response": "{\"rewrite_directions\": [\"Lead with the fine-tuning of LLaMA-2 using PyTorch Lightning and deployment via Amazon Bedrock, improving response clarity and alignment by ~20% (Data Scientist II @ L.B. Foster Salient Systems).\", \"Support with the development of Python-based validation frameworks, reducing compliance review time by 35% and improving quality assurance scores by 20% (Data Analyst I @ Accenture).\", \"Support with the analysis of large-scale clinical and real-world datasets using Python, SQL, and Databricks, improving early risk detection by 10% (Data Analyst I @ Accenture).\", \"Keep gap explicit for 'c++'.\", \"Keep gap explicit for 'dl architectures'.\", \"Keep gap explicit for 'large-scale architecture'.\", \"Keep gap explicit for 'performance metrics'.\", \"Keep gap explicit for 'reliable production systems'.\", \"Keep gap explicit for 'state-of-the-art machine learning techniques'.\", \"Keep gap explicit for 'transformers'.\", \"Keep gap explicit for 'foundational models'.\", \"Keep gap explicit for 'large language models'.\", \"Keep gap explicit for 'llms'.\", \"Keep gap explicit for 'machine learning development'.\"]}",
+  "retry_raw_response": "",
+  "parsed": {
+    "recruiter_summary": "",
+    "keep_emphasize": [],
+    "tailoring_actions": [],
+    "do_not_claim": [],
+    "rewrite_directions": [
+      "Lead with the fine-tuning of LLaMA-2 using PyTorch Lightning and deployment via Amazon Bedrock, improving response clarity and alignment by ~20% (Data Scientist II @ L.B. Foster Salient Systems).",
+      "Support with the development of Python-based validation frameworks, reducing compliance review time by 35% and improving quality assurance scores by 20% (Data Analyst I @ Accenture).",
+      "Support with the analysis of large-scale clinical and real-world datasets using Python, SQL, and Databricks, improving early risk detection by 10% (Data Analyst I @ Accenture).",
+      "Keep gap explicit for 'c++'.",
+      "Keep gap explicit for 'dl architectures'.",
+      "Keep gap explicit for 'large-scale architecture'.",
+      "Keep gap explicit for 'performance metrics'.",
+      "Keep gap explicit for 'reliable production systems'.",
+      "Keep gap explicit for 'state-of-the-art machine learning techniques'.",
+      "Keep gap explicit for 'transformers'.",
+      "Keep gap explicit for 'foundational models'.",
+      "Keep gap explicit for 'large language models'.",
+      "Keep gap explicit for 'llms'.",
+      "Keep gap explicit for 'machine learning development'."
+    ]
+  },
+  "job_doc_id": "",
+  "selected_resume": "",
+  "packet_sha256": "d7c5f0ec63a4ca560bdb9da2ba9c9f51715d8f3a5f9f2235f21d580ed9991a0b",
+  "cache_key": "5acb5fe5577dc29fef5543d2e6a181ccd0d797d7761acc78cb0bbd6f2c364a77",
+  "prompt_version": "v3",
+  "fallback_enabled": true,
+  "cache_hit": false,
+  "generated_at": "2026-03-22T11:00:21.666547+00:00"
+}

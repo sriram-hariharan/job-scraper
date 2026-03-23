@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "etl and big data platforms",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "etl",
+    "big data"
+  ],
+  "dropped_fragments": [
+    "and",
+    "platforms"
+  ],
+  "reasoning": "Extracted ETL and Big Data as atomic skills, dropped 'and' as a filler word and 'platforms' as a generic term.",
+  "cache_hit": false
+}

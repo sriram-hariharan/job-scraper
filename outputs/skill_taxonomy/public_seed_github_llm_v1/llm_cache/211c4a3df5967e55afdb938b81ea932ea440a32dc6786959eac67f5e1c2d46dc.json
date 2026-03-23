@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "bi engineer/data scientist",
+  "cleaned_skills": [
+    "bi",
+    "engineer",
+    "data scientist"
+  ],
+  "dropped_fragments": [
+    "/"
+  ],
+  "reasoning": "split the phrase into individual skills, removing the slash as a noise fragment",
+  "cache_hit": false
+}

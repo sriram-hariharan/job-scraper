@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "database concepts and sql",
+  "cleaned_skills": [
+    "database concepts",
+    "sql"
+  ],
+  "dropped_fragments": [
+    "and"
+  ],
+  "reasoning": "split phrase into atomic skill terms, dropped 'and' as it's a generic filler",
+  "cache_hit": false
+}

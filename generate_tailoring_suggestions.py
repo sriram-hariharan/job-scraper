@@ -119,42 +119,155 @@ def _short_bullet(text: str, limit: int = 220) -> str:
         return value
     return value[: limit - 3].rstrip() + "..."
 
+def _term_support_rows(packet: Dict[str, Any], bucket: str) -> List[Dict[str, Any]]:
+    summary = packet.get("summary", {}) or {}
+    term_support = summary.get("term_support", {}) or {}
+    rows = term_support.get(bucket, []) or []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _terms_by_support_level(rows: List[Dict[str, Any]], *levels: str) -> List[str]:
+    level_set = {str(level or "").strip() for level in levels if str(level or "").strip()}
+    terms: List[str] = []
+    for row in rows:
+        if str(row.get("support_level", "")).strip() in level_set:
+            term = str(row.get("term", "") or "").strip()
+            if term:
+                terms.append(term)
+    return _unique_preserve_order(terms)
+
+
+def _direct_terms(packet: Dict[str, Any], bucket: str) -> List[str]:
+    return _terms_by_support_level(_term_support_rows(packet, bucket), "direct_bullet")
+
+
+def _contextual_terms(packet: Dict[str, Any], bucket: str) -> List[str]:
+    return _terms_by_support_level(_term_support_rows(packet, bucket), "entry_context")
+
+
+def _skills_only_terms(packet: Dict[str, Any], bucket: str) -> List[str]:
+    return _terms_by_support_level(_term_support_rows(packet, bucket), "skills_section")
+
+
+def _unsupported_terms(packet: Dict[str, Any], bucket: str) -> List[str]:
+    return _terms_by_support_level(_term_support_rows(packet, bucket), "unsupported")
+
+
+def _support_tier_prompt_lines(packet: Dict[str, Any]) -> List[str]:
+    direct_required = _direct_terms(packet, "required")
+    contextual_required = _contextual_terms(packet, "required")
+    skills_required = _skills_only_terms(packet, "required")
+    unsupported_required = _unsupported_terms(packet, "required")
+
+    direct_preferred = _direct_terms(packet, "preferred")
+    contextual_preferred = _contextual_terms(packet, "preferred")
+    skills_preferred = _skills_only_terms(packet, "preferred")
+    unsupported_preferred = _unsupported_terms(packet, "preferred")
+
+    return [
+        "Support tiers by JD term:",
+        f"- Direct bullet support (required): {direct_required}",
+        f"- Entry-context support (required): {contextual_required}",
+        f"- Skills-section-only support (required): {skills_required}",
+        f"- Unsupported (required): {unsupported_required}",
+        f"- Direct bullet support (preferred): {direct_preferred}",
+        f"- Entry-context support (preferred): {contextual_preferred}",
+        f"- Skills-section-only support (preferred): {skills_preferred}",
+        f"- Unsupported (preferred): {unsupported_preferred}",
+        "",
+    ]
+
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
-    summary = packet.get("summary", {})
-
     resume_name = selection.get("selected_resume", "selected resume")
     score = selection.get("selected_score", 0.0)
     company = job.get("company", "")
     title = job.get("title", "")
-    matched_required = summary.get("matched_required", [])
-    missing_required = summary.get("missing_required", [])
 
-    matched_text = ", ".join(_truncate_list(matched_required, 6)) if matched_required else "core requirements"
-    missing_text = ", ".join(_truncate_list(missing_required, 4)) if missing_required else "no major explicit gaps"
-
-    return (
-        f"{resume_name} is the selected variant for {company} | {title} with a deterministic score of {score:.3f}. "
-        f"It already aligns on {matched_text}. "
-        f"The main explicit gaps still showing are {missing_text}."
+    direct_terms = _unique_preserve_order(
+        _direct_terms(packet, "required") + _direct_terms(packet, "preferred")
     )
+    contextual_terms = _unique_preserve_order(
+        _contextual_terms(packet, "required") + _contextual_terms(packet, "preferred")
+    )
+    skills_only_terms = _unique_preserve_order(
+        _skills_only_terms(packet, "required") + _skills_only_terms(packet, "preferred")
+    )
+    unsupported_terms = _unique_preserve_order(
+        _unsupported_terms(packet, "required") + _unsupported_terms(packet, "preferred")
+    )
+
+    sentences: List[str] = [
+        f"{resume_name} is the selected variant for {company} | {title} with a deterministic score of {score:.3f}."
+    ]
+
+    if direct_terms:
+        sentences.append(
+            f"It has direct bullet support for {', '.join(_truncate_list(direct_terms, 8))}."
+        )
+    else:
+        sentences.append(
+            "It does not yet show strong direct bullet support for the main JD terms."
+        )
+
+    contextual_parts: List[str] = []
+    if contextual_terms:
+        contextual_parts.append(
+            f"adjacent entry-context support for {', '.join(_truncate_list(contextual_terms, 6))}"
+        )
+    if skills_only_terms:
+        contextual_parts.append(
+            f"skills-section-only support for {', '.join(_truncate_list(skills_only_terms, 6))}"
+        )
+
+    if contextual_parts:
+        sentences.append(
+            "It also has "
+            + " and ".join(contextual_parts)
+            + ", which should be framed carefully rather than presented as direct hands-on experience."
+        )
+
+    if unsupported_terms:
+        sentences.append(
+            f"The clearest unsupported gaps still showing are {', '.join(_truncate_list(unsupported_terms, 6))}."
+        )
+    else:
+        sentences.append(
+            "It does not show major unsupported JD terms after the support-tier pass."
+        )
+
+    return " ".join(sentences)
 
 
 def _build_keep_emphasize(packet: Dict[str, Any]) -> List[str]:
-    summary = packet.get("summary", {})
-    matched_required = summary.get("matched_required", [])
-    matched_preferred = summary.get("matched_preferred", [])
-    matched_terms = summary.get("matched_terms", [])
+    direct_required = _direct_terms(packet, "required")
+    direct_preferred = _direct_terms(packet, "preferred")
+    contextual_terms = _unique_preserve_order(
+        _contextual_terms(packet, "required") + _contextual_terms(packet, "preferred")
+    )
+    skills_only_terms = _unique_preserve_order(
+        _skills_only_terms(packet, "required") + _skills_only_terms(packet, "preferred")
+    )
+    matched_terms = (packet.get("summary", {}) or {}).get("matched_terms", [])
 
-    items = []
-    if matched_required:
+    items: List[str] = []
+
+    if direct_required:
         items.append(
-            f"Keep explicit required-skill evidence visible: {', '.join(_truncate_list(matched_required, 8))}."
+            f"Keep direct bullet evidence visible for required terms: {', '.join(_truncate_list(direct_required, 8))}."
         )
-    if matched_preferred:
+    if direct_preferred:
         items.append(
-            f"Keep preferred-skill evidence visible: {', '.join(_truncate_list(matched_preferred, 6))}."
+            f"Keep direct bullet evidence visible for preferred terms: {', '.join(_truncate_list(direct_preferred, 6))}."
+        )
+    if contextual_terms:
+        items.append(
+            f"Use adjacent entry-context support only as secondary framing: {', '.join(_truncate_list(contextual_terms, 6))}."
+        )
+    if skills_only_terms:
+        items.append(
+            f"Use skills-section-only support carefully and only as light supporting context: {', '.join(_truncate_list(skills_only_terms, 6))}."
         )
     if matched_terms:
         items.append(
@@ -165,25 +278,35 @@ def _build_keep_emphasize(packet: Dict[str, Any]) -> List[str]:
 
 
 def _build_do_not_claim(packet: Dict[str, Any]) -> List[str]:
-    summary = packet.get("summary", {})
-    missing_required = summary.get("missing_required", [])
-    missing_preferred = summary.get("missing_preferred", [])
+    unsupported_required = _unsupported_terms(packet, "required")
+    unsupported_preferred = _unsupported_terms(packet, "preferred")
+    contextual_or_skills_only = _unique_preserve_order(
+        _contextual_terms(packet, "required")
+        + _contextual_terms(packet, "preferred")
+        + _skills_only_terms(packet, "required")
+        + _skills_only_terms(packet, "preferred")
+    )
     guardrail = packet.get(
         "guardrail",
         "Only add or strengthen resume language when it is already truthful and supported by your actual work.",
     )
 
-    items = []
-    if missing_required:
-        items.append(
-            f"Do not claim missing required skills unless you can support them truthfully: {', '.join(_truncate_list(missing_required, 8))}."
-        )
-    if missing_preferred:
-        items.append(
-            f"Do not add unsupported preferred-skill claims: {', '.join(_truncate_list(missing_preferred, 8))}."
-        )
-    items.append(guardrail)
+    items: List[str] = []
 
+    if unsupported_required:
+        items.append(
+            f"Do not claim unsupported required skills unless you can support them truthfully: {', '.join(_truncate_list(unsupported_required, 8))}."
+        )
+    if unsupported_preferred:
+        items.append(
+            f"Do not add unsupported preferred-skill claims: {', '.join(_truncate_list(unsupported_preferred, 8))}."
+        )
+    if contextual_or_skills_only:
+        items.append(
+            f"Do not rewrite these as direct hands-on experience unless a bullet proves them: {', '.join(_truncate_list(contextual_or_skills_only, 8))}."
+        )
+
+    items.append(guardrail)
     return _unique_preserve_order(items)
 
 
@@ -378,49 +501,61 @@ def _build_operator_markdown_payload(
     return operator_payload
 
 def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
-    summary = packet.get("summary", {})
     evidence_layers = _build_evidence_layers(packet)
 
     anchors = evidence_layers.get("anchors", [])
     supports = evidence_layers.get("supports", [])
     context = evidence_layers.get("context", [])
 
-    matched_required = summary.get("matched_required", [])
-    missing_required = summary.get("missing_required", [])
+    direct_required = _direct_terms(packet, "required")
+    direct_preferred = _direct_terms(packet, "preferred")
+    secondary_terms = _unique_preserve_order(
+        _contextual_terms(packet, "required")
+        + _contextual_terms(packet, "preferred")
+        + _skills_only_terms(packet, "required")
+        + _skills_only_terms(packet, "preferred")
+    )
+    unsupported_required = _unsupported_terms(packet, "required")
+    unsupported_preferred = _unsupported_terms(packet, "preferred")
 
     actions: List[str] = []
 
-    if matched_required:
+    if direct_required:
         actions.append(
-            f"Lead the tailored version with already-supported required terms: "
-            f"{', '.join(_truncate_list(matched_required, 6))}."
+            f"Lead the tailored version with direct-bullet required terms: {', '.join(_truncate_list(direct_required, 6))}."
+        )
+    elif direct_preferred:
+        actions.append(
+            f"Lead with the strongest directly supported preferred terms already proven in bullets: {', '.join(_truncate_list(direct_preferred, 6))}."
         )
 
     if anchors:
         anchor_sources = _unique_preserve_order([_source_label(row) for row in anchors[:3]])
         actions.append(
-            f"Use these direct-match bullets as primary anchors: "
-            f"{', '.join(_truncate_list(anchor_sources, 4))}."
+            f"Use these direct-match bullets as primary anchors: {', '.join(_truncate_list(anchor_sources, 4))}."
+        )
+
+    if secondary_terms:
+        actions.append(
+            f"Use these adjacent or skills-only terms only as secondary framing, not as direct hands-on claims: {', '.join(_truncate_list(secondary_terms, 6))}."
         )
 
     if supports:
         support_sources = _unique_preserve_order([_source_label(row) for row in supports[:3]])
         actions.append(
-            f"Use semantically aligned bullets only as supporting proof after the anchors: "
-            f"{', '.join(_truncate_list(support_sources, 4))}."
+            f"Use semantically aligned bullets only as supporting proof after the anchors: {', '.join(_truncate_list(support_sources, 4))}."
         )
 
     if context:
         context_sources = _unique_preserve_order([_source_label(row) for row in context[:3]])
         actions.append(
-            f"Use same-role context bullets only to reinforce the anchor story: "
-            f"{', '.join(_truncate_list(context_sources, 4))}."
+            f"Use same-role context bullets only to reinforce the anchor story: {', '.join(_truncate_list(context_sources, 4))}."
         )
 
-    if missing_required:
+    true_gaps = _unique_preserve_order(unsupported_required + unsupported_preferred)
+    if true_gaps:
         actions.append(
-            f"Keep these required gaps explicit unless you can support them truthfully: "
-            f"{', '.join(_truncate_list(missing_required, 6))}."
+            f"Keep these truly unsupported gaps explicit unless you can support them truthfully: {', '.join(_truncate_list(true_gaps, 6))}."
         )
 
     return _unique_preserve_order(actions)
@@ -472,6 +607,7 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     lines.append(f"- Missing preferred: {summary.get('missing_preferred', [])}")
     lines.append(f"- Matched terms from prefilter: {summary.get('matched_terms', [])}")
     lines.append("")
+    lines.extend(_support_tier_prompt_lines(packet))
     lines.append("Primary anchor bullets:")
     for idx, row in enumerate(anchor_rows, 1):
         lines.append(
@@ -566,6 +702,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append(f"- Missing required: {summary.get('missing_required', [])}")
     lines.append(f"- Missing preferred: {summary.get('missing_preferred', [])}")
     lines.append("")
+    lines.extend(_support_tier_prompt_lines(packet))
     lines.append("Primary anchor bullets:")
     for idx, row in enumerate(anchors, 1):
         lines.append(

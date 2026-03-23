@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "ci/cd/ci-cd/continuous integration/continuous deployment/jenkins",
+  "cleaned_skills": [
+    "ci",
+    "cd",
+    "continuous integration",
+    "continuous deployment",
+    "jenkins"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split the phrase into individual, compact skill terms, keeping only the meaningful skills and tools",
+  "cache_hit": false
+}

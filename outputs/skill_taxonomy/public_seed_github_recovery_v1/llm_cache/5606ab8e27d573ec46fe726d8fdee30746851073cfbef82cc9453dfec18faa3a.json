@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "life science - data science",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "life science",
+    "data science"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "Extracted life science and data science as atomic skill terms, dropped the hyphen as a noise fragment.",
+  "cache_hit": false
+}

@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "python or java",
+  "cleaned_skills": [
+    "python",
+    "java"
+  ],
+  "dropped_fragments": [
+    "or"
+  ],
+  "reasoning": "split multi-skill phrase into atomic skill terms and removed generic filler",
+  "cache_hit": false
+}

@@ -177,65 +177,235 @@ def _support_tier_prompt_lines(packet: Dict[str, Any]) -> List[str]:
         "",
     ]
 
+def _facet_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
+    summary = packet.get("summary", {}) or {}
+    rows = summary.get("facet_support", []) or []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _facet_row(packet: Dict[str, Any], facet_name: str) -> Dict[str, Any]:
+    for row in _facet_rows(packet):
+        if str(row.get("facet", "")).strip() == facet_name:
+            return row
+    return {}
+
+
+def _facet_display_name(name: str) -> str:
+    return str(name or "").replace("_", " ").strip()
+
+
+def _facet_support_score(row: Dict[str, Any]) -> tuple:
+    direct_terms = row.get("direct_terms", []) or []
+    context_terms = row.get("context_terms", []) or []
+    skills_only_terms = row.get("skills_only_terms", []) or []
+    unsupported_terms = row.get("unsupported_terms", []) or []
+    anchor_evidence = row.get("anchor_evidence", []) or []
+    facet_direct_evidence = row.get("facet_direct_evidence", []) or []
+    facet_context_terms = row.get("facet_context_terms", []) or []
+    facet_context_evidence = row.get("facet_context_evidence", []) or []
+
+    direct_score = (
+        len(direct_terms) * 12
+        + min(len(anchor_evidence), 4) * 4
+        + min(len(facet_direct_evidence), 4) * 3
+    )
+    context_score = (
+        len(context_terms) * 6
+        + min(len(facet_context_terms), 4) * 2
+        + min(len(facet_context_evidence), 4) * 2
+    )
+    skills_only_score = len(skills_only_terms)
+    unsupported_penalty = len(unsupported_terms) * 2
+
+    return (
+        direct_score,
+        context_score,
+        skills_only_score,
+        -unsupported_penalty,
+    )
+
+def _facet_has_direct_support(row: Dict[str, Any]) -> bool:
+    return bool(row.get("direct_terms"))
+
+
+def _facet_has_adjacent_support(row: Dict[str, Any]) -> bool:
+    if _facet_has_direct_support(row):
+        return False
+
+    return bool(
+        row.get("facet_direct_evidence")
+        or row.get("facet_context_terms")
+        or row.get("facet_context_evidence")
+        or row.get("context_terms")
+        or row.get("skills_only_terms")
+    )
+
+
+def _facet_is_true_gap(row: Dict[str, Any]) -> bool:
+    return (
+        not _facet_has_direct_support(row)
+        and not _facet_has_adjacent_support(row)
+        and bool(row.get("unsupported_terms"))
+    )
+
+
+def _adjacent_unsupported_terms(packet: Dict[str, Any]) -> List[str]:
+    terms: List[str] = []
+    for row in _facet_rows(packet):
+        if _facet_has_adjacent_support(row):
+            terms.extend(row.get("unsupported_terms", []) or [])
+    return _unique_preserve_order(terms)
+
+
+def _true_gap_terms(packet: Dict[str, Any]) -> List[str]:
+    terms: List[str] = []
+    for row in _facet_rows(packet):
+        if _facet_is_true_gap(row):
+            terms.extend(row.get("unsupported_terms", []) or [])
+    return _unique_preserve_order(terms)
+
+
+def _top_direct_facets(packet: Dict[str, Any], limit: int = 3) -> List[Dict[str, Any]]:
+    rows = [row for row in _facet_rows(packet) if _facet_has_direct_support(row)]
+    rows.sort(
+        key=lambda row: (
+            -_facet_support_score(row)[0],
+            -_facet_support_score(row)[1],
+            -_facet_support_score(row)[2],
+            _facet_support_score(row)[3],
+            _facet_display_name(row.get("facet", "")),
+        )
+    )
+    return rows[:limit]
+
+
+def _top_adjacent_facets(packet: Dict[str, Any], limit: int = 3) -> List[Dict[str, Any]]:
+    rows = [row for row in _facet_rows(packet) if _facet_has_adjacent_support(row)]
+    rows.sort(
+        key=lambda row: (
+            -_facet_support_score(row)[0],
+            -_facet_support_score(row)[1],
+            -_facet_support_score(row)[2],
+            _facet_support_score(row)[3],
+            _facet_display_name(row.get("facet", "")),
+        )
+    )
+    return rows[:limit]
+
+def _top_supported_facets(packet: Dict[str, Any], limit: int = 3) -> List[Dict[str, Any]]:
+    return _top_direct_facets(packet, limit=limit)
+
+
+def _top_gap_facets(packet: Dict[str, Any], limit: int = 3) -> List[Dict[str, Any]]:
+    rows = [row for row in _facet_rows(packet) if _facet_is_true_gap(row)]
+    rows.sort(
+        key=lambda row: (
+            -len(row.get("unsupported_terms", []) or []),
+            _facet_display_name(row.get("facet", "")),
+        )
+    )
+    return rows[:limit]
+
+
+def _facet_prompt_lines(packet: Dict[str, Any]) -> List[str]:
+    lines: List[str] = ["JD facet support:"]
+
+    for row in _facet_rows(packet):
+        facet_name = _facet_display_name(row.get("facet", ""))
+        lines.append(
+            f"- {facet_name}: "
+            f"direct={row.get('direct_terms', [])}; "
+            f"context={row.get('context_terms', [])}; "
+            f"skills_only={row.get('skills_only_terms', [])}; "
+            f"unsupported={row.get('unsupported_terms', [])}"
+        )
+
+        facet_direct_sources = _unique_preserve_order(
+            [_source_label(ev) for ev in (row.get("facet_direct_evidence", []) or [])[:2]]
+        )
+        facet_context_sources = _unique_preserve_order(
+            [_source_label(ev) for ev in (row.get("facet_context_evidence", []) or [])[:2]]
+        )
+
+        if facet_direct_sources:
+            lines.append(f"  direct_facet_evidence_sources={facet_direct_sources}")
+        if row.get("facet_context_terms"):
+            lines.append(f"  context_facet_terms={row.get('facet_context_terms', [])}")
+        if facet_context_sources:
+            lines.append(f"  context_facet_evidence_sources={facet_context_sources}")
+
+    lines.append("")
+    return lines
+
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
+
     resume_name = selection.get("selected_resume", "selected resume")
     score = selection.get("selected_score", 0.0)
     company = job.get("company", "")
     title = job.get("title", "")
 
+    direct_facets = _top_direct_facets(packet, limit=3)
+    adjacent_facets = _top_adjacent_facets(packet, limit=3)
+    gap_facets = _top_gap_facets(packet, limit=3)
+
     direct_terms = _unique_preserve_order(
         _direct_terms(packet, "required") + _direct_terms(packet, "preferred")
     )
     contextual_terms = _unique_preserve_order(
-        _contextual_terms(packet, "required") + _contextual_terms(packet, "preferred")
+        _contextual_terms(packet, "required")
+        + _contextual_terms(packet, "preferred")
+        + _skills_only_terms(packet, "required")
+        + _skills_only_terms(packet, "preferred")
     )
-    skills_only_terms = _unique_preserve_order(
-        _skills_only_terms(packet, "required") + _skills_only_terms(packet, "preferred")
-    )
-    unsupported_terms = _unique_preserve_order(
-        _unsupported_terms(packet, "required") + _unsupported_terms(packet, "preferred")
-    )
+    adjacent_unsupported = _adjacent_unsupported_terms(packet)
+    true_gap_terms = _true_gap_terms(packet)
 
     sentences: List[str] = [
         f"{resume_name} is the selected variant for {company} | {title} with a deterministic score of {score:.3f}."
     ]
 
+    if direct_facets:
+        facet_text = ", ".join(
+            _facet_display_name(row.get("facet", "")) for row in direct_facets
+        )
+        sentences.append(f"The strongest directly supported JD facets are {facet_text}.")
+
+    if adjacent_facets:
+        facet_text = ", ".join(
+            _facet_display_name(row.get("facet", "")) for row in adjacent_facets
+        )
+        sentences.append(
+            f"It also has adjacent facet-level support for {facet_text}, but the exact JD terms in those areas should still be framed carefully."
+        )
+
     if direct_terms:
         sentences.append(
-            f"It has direct bullet support for {', '.join(_truncate_list(direct_terms, 8))}."
-        )
-    else:
-        sentences.append(
-            "It does not yet show strong direct bullet support for the main JD terms."
+            f"Direct bullet support includes {', '.join(_truncate_list(direct_terms, 8))}."
         )
 
-    contextual_parts: List[str] = []
     if contextual_terms:
-        contextual_parts.append(
-            f"adjacent entry-context support for {', '.join(_truncate_list(contextual_terms, 6))}"
-        )
-    if skills_only_terms:
-        contextual_parts.append(
-            f"skills-section-only support for {', '.join(_truncate_list(skills_only_terms, 6))}"
+        sentences.append(
+            f"Additional adjacent or skills-only support exists for {', '.join(_truncate_list(contextual_terms, 8))}, which should not be presented as direct hands-on ownership."
         )
 
-    if contextual_parts:
+    if adjacent_unsupported:
         sentences.append(
-            "It also has "
-            + " and ".join(contextual_parts)
-            + ", which should be framed carefully rather than presented as direct hands-on experience."
+            f"Within the adjacent-support areas, the exact JD terms still not directly proven are {', '.join(_truncate_list(adjacent_unsupported, 6))}."
         )
 
-    if unsupported_terms:
+    if gap_facets:
+        gap_text = ", ".join(
+            _facet_display_name(row.get("facet", "")) for row in gap_facets
+        )
+        sentences.append(f"The main true JD facet gaps still showing are {gap_text}.")
+    elif true_gap_terms:
         sentences.append(
-            f"The clearest unsupported gaps still showing are {', '.join(_truncate_list(unsupported_terms, 6))}."
+            f"The clearest true unsupported JD terms still showing are {', '.join(_truncate_list(true_gap_terms, 6))}."
         )
     else:
-        sentences.append(
-            "It does not show major unsupported JD terms after the support-tier pass."
-        )
+        sentences.append("It does not show major true JD facet gaps after the facet pass.")
 
     return " ".join(sentences)
 
@@ -515,10 +685,31 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
         + _skills_only_terms(packet, "required")
         + _skills_only_terms(packet, "preferred")
     )
-    unsupported_required = _unsupported_terms(packet, "required")
-    unsupported_preferred = _unsupported_terms(packet, "preferred")
+
+    direct_facets = _top_direct_facets(packet, limit=3)
+    adjacent_facets = _top_adjacent_facets(packet, limit=3)
+    gap_facets = _top_gap_facets(packet, limit=3)
+
+    adjacent_unsupported = _adjacent_unsupported_terms(packet)
+    true_gap_terms = _true_gap_terms(packet)
 
     actions: List[str] = []
+
+    if direct_facets:
+        facet_text = ", ".join(
+            _facet_display_name(row.get("facet", "")) for row in direct_facets
+        )
+        actions.append(
+            f"Build the main narrative around these directly supported JD facets: {facet_text}."
+        )
+
+    if adjacent_facets:
+        facet_text = ", ".join(
+            _facet_display_name(row.get("facet", "")) for row in adjacent_facets
+        )
+        actions.append(
+            f"Use these adjacent facet-support areas only as secondary framing, not as direct ownership claims: {facet_text}."
+        )
 
     if direct_required:
         actions.append(
@@ -537,7 +728,7 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
 
     if secondary_terms:
         actions.append(
-            f"Use these adjacent or skills-only terms only as secondary framing, not as direct hands-on claims: {', '.join(_truncate_list(secondary_terms, 6))}."
+            f"Use these adjacent or skills-only terms only as supporting context, not as direct hands-on claims: {', '.join(_truncate_list(secondary_terms, 6))}."
         )
 
     if supports:
@@ -552,10 +743,22 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
             f"Use same-role context bullets only to reinforce the anchor story: {', '.join(_truncate_list(context_sources, 4))}."
         )
 
-    true_gaps = _unique_preserve_order(unsupported_required + unsupported_preferred)
-    if true_gaps:
+    if adjacent_unsupported:
         actions.append(
-            f"Keep these truly unsupported gaps explicit unless you can support them truthfully: {', '.join(_truncate_list(true_gaps, 6))}."
+            f"Even where related facet evidence exists, keep these exact JD terms explicit unless a bullet proves them directly: {', '.join(_truncate_list(adjacent_unsupported, 6))}."
+        )
+
+    if gap_facets:
+        gap_text = ", ".join(
+            _facet_display_name(row.get("facet", "")) for row in gap_facets
+        )
+        actions.append(
+            f"Keep these true JD facet gaps explicit unless you can support them truthfully: {gap_text}."
+        )
+
+    if true_gap_terms:
+        actions.append(
+            f"Keep these truly unsupported exact JD terms explicit unless you can support them truthfully: {', '.join(_truncate_list(true_gap_terms, 6))}."
         )
 
     return _unique_preserve_order(actions)
@@ -565,10 +768,10 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
     summary = packet.get("summary", {})
-    bullets = packet.get("top_relevant_bullets", []) or []
-    rewrite_candidates = packet.get("rewrite_candidates", []) or []
 
-    evidence_layers = packet.get("evidence_layers", {}) or {}
+    evidence_layers = _build_evidence_layers(packet)
+    rewrite_candidates = _build_rewrite_candidates(packet)
+
     anchor_rows = evidence_layers.get("anchors", [])[:4]
     semantic_support_rows = evidence_layers.get("supports", [])[:4]
     context_rows = evidence_layers.get("context", [])[:4]
@@ -608,42 +811,59 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     lines.append(f"- Matched terms from prefilter: {summary.get('matched_terms', [])}")
     lines.append("")
     lines.extend(_support_tier_prompt_lines(packet))
+    lines.extend(_facet_prompt_lines(packet))
+
     lines.append("Primary anchor bullets:")
-    for idx, row in enumerate(anchor_rows, 1):
-        lines.append(
-            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
-            f"supports={row.get('overlaps', [])}"
-        )
-        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    if anchor_rows:
+        for idx, row in enumerate(anchor_rows, 1):
+            lines.append(
+                f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+                f"supports={row.get('overlaps', [])}"
+            )
+            lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    else:
+        lines.append("- none")
     lines.append("")
+
     lines.append("Semantic supporting bullets:")
-    for idx, row in enumerate(semantic_support_rows, 1):
-        lines.append(
-            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
-            f"type={row.get('evidence_type', '')}"
-        )
-        if row.get("semantic_score") is not None:
-            lines.append(f"   semantic_score={row.get('semantic_score')}")
-        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    if semantic_support_rows:
+        for idx, row in enumerate(semantic_support_rows, 1):
+            lines.append(
+                f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+                f"type={row.get('evidence_type', '')}"
+            )
+            if row.get("semantic_score") is not None:
+                lines.append(f"   semantic_score={row.get('semantic_score')}")
+            lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    else:
+        lines.append("- none")
     lines.append("")
 
     lines.append("Same-role context bullets:")
-    for idx, row in enumerate(context_rows, 1):
-        lines.append(
-            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
-            f"type={row.get('evidence_type', '')} | supports={row.get('overlaps', [])}"
-        )
-        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    if context_rows:
+        for idx, row in enumerate(context_rows, 1):
+            lines.append(
+                f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+                f"type={row.get('evidence_type', '')} | supports={row.get('overlaps', [])}"
+            )
+            lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+    else:
+        lines.append("- none")
     lines.append("")
+
     lines.append("Evidence-backed rewrite candidates:")
-    for idx, row in enumerate(rewrite_candidates, 1):
-        lines.append(
-            f"{idx}. [{row.get('section', '')}] {row.get('source', '')} | "
-            f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
-        )
-        lines.append(f"   Action: {row.get('action', '')}")
-        lines.append(f"   Evidence: {row.get('bullet_excerpt', '')}")
+    if rewrite_candidates:
+        for idx, row in enumerate(rewrite_candidates, 1):
+            lines.append(
+                f"{idx}. [{row.get('section', '')}] {row.get('source', '')} | "
+                f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+            )
+            lines.append(f"   Action: {row.get('action', '')}")
+            lines.append(f"   Evidence: {row.get('bullet_excerpt', '')}")
+    else:
+        lines.append("- none")
     lines.append("")
+
     lines.append("Guardrail:")
     lines.append(str(packet.get("guardrail", "")))
     lines.append("")
@@ -703,6 +923,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append(f"- Missing preferred: {summary.get('missing_preferred', [])}")
     lines.append("")
     lines.extend(_support_tier_prompt_lines(packet))
+    lines.extend(_facet_prompt_lines(packet))
     lines.append("Primary anchor bullets:")
     for idx, row in enumerate(anchors, 1):
         lines.append(

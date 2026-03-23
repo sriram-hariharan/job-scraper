@@ -4,7 +4,12 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
 
-from src.config.consts import TITLE_CANONICAL, _SKILL_ALIASES, CONTEXT_TOKEN_STOPWORDS
+from src.config.consts import (
+    TITLE_CANONICAL,
+    TAILORING_FACET_PATTERNS,
+    _SKILL_ALIASES,
+    CONTEXT_TOKEN_STOPWORDS,
+)
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
@@ -562,6 +567,278 @@ def _build_term_support_summary(resume, job) -> dict:
         "preferred": [_build_single_term_support(resume, term) for term in preferred_terms],
     }
 
+def _term_matches_facet_pattern(term: str, pattern: str) -> bool:
+    term_norm = _normalize_text(term)
+    pattern_norm = _normalize_text(pattern)
+
+    if not term_norm or not pattern_norm:
+        return False
+
+    return _contains_signal(term_norm, pattern_norm) or _contains_signal(pattern_norm, term_norm)
+
+
+def _build_job_facet_targets(job) -> dict:
+    job_terms = _normalized_skill_list(
+        list(job.required_skills or [])
+        + list(job.preferred_skills or [])
+        + list(job.all_skills or [])
+        + [job.title]
+    )
+
+    facet_targets = {}
+    for facet_name, patterns in TAILORING_FACET_PATTERNS.items():
+        matched_terms: List[str] = []
+        for term in job_terms:
+            if any(_term_matches_facet_pattern(term, pattern) for pattern in patterns):
+                matched_terms.append(term)
+
+        matched_terms = _unique_preserve_order(matched_terms)
+        if matched_terms:
+            facet_targets[facet_name] = matched_terms
+
+    return facet_targets
+
+def _text_matches_any_facet_pattern(text: str, patterns: List[str]) -> bool:
+    normalized_text = _normalize_text(text)
+    if not normalized_text:
+        return False
+
+    for pattern in patterns:
+        normalized_pattern = _normalize_text(pattern)
+        if not normalized_pattern:
+            continue
+        if _contains_signal(normalized_text, normalized_pattern):
+            return True
+
+    return False
+
+
+def _normalized_values_matching_facet_patterns(values: List[str], patterns: List[str]) -> List[str]:
+    matches: List[str] = []
+
+    for value in values or []:
+        normalized_value = _normalize_text(value)
+        if not normalized_value:
+            continue
+
+        for pattern in patterns:
+            normalized_pattern = _normalize_text(pattern)
+            if not normalized_pattern:
+                continue
+
+            if _contains_signal(normalized_value, normalized_pattern) or _contains_signal(normalized_pattern, normalized_value):
+                matches.append(normalized_value)
+                break
+
+    return _unique_preserve_order(matches)
+
+
+def _collect_facet_direct_evidence(resume, patterns: List[str], limit: int = 4) -> List[dict]:
+    rows: List[dict] = []
+    seen = set()
+
+    for entry in resume.experience_entries:
+        for bullet in entry.bullets:
+            if not _text_matches_any_facet_pattern(bullet, patterns):
+                continue
+
+            key = ("experience", entry.title, entry.company, bullet)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            rows.append(
+                _term_support_evidence_row(
+                    section="experience",
+                    source_title=entry.title,
+                    source_company=entry.company,
+                    text=bullet,
+                )
+            )
+            if len(rows) >= limit:
+                return rows
+
+    for entry in resume.project_entries:
+        for bullet in entry.bullets:
+            if not _text_matches_any_facet_pattern(bullet, patterns):
+                continue
+
+            key = ("project", entry.name, "", bullet)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            rows.append(
+                _term_support_evidence_row(
+                    section="project",
+                    source_title=entry.name,
+                    source_company="",
+                    text=bullet,
+                )
+            )
+            if len(rows) >= limit:
+                return rows
+
+    return rows
+
+
+def _collect_facet_context_support(resume, patterns: List[str], limit: int = 4) -> Tuple[List[str], List[dict]]:
+    matched_terms: List[str] = []
+    evidence_rows: List[dict] = []
+    seen = set()
+
+    for entry in resume.experience_entries:
+        context_terms = _normalized_values_matching_facet_patterns(entry.normalized_skills, patterns)
+        if not context_terms:
+            continue
+
+        matched_terms.extend(context_terms)
+        key = ("experience", entry.title, entry.company)
+        if key not in seen:
+            seen.add(key)
+            evidence_rows.append(
+                _term_support_evidence_row(
+                    section="experience",
+                    source_title=entry.title,
+                    source_company=entry.company,
+                    text="",
+                )
+            )
+            if len(evidence_rows) >= limit:
+                break
+
+    if len(evidence_rows) < limit:
+        for entry in resume.project_entries:
+            context_terms = _normalized_values_matching_facet_patterns(entry.normalized_skills, patterns)
+            if not context_terms:
+                continue
+
+            matched_terms.extend(context_terms)
+            key = ("project", entry.name, "")
+            if key not in seen:
+                seen.add(key)
+                evidence_rows.append(
+                    _term_support_evidence_row(
+                        section="project",
+                        source_title=entry.name,
+                        source_company="",
+                        text="",
+                    )
+                )
+                if len(evidence_rows) >= limit:
+                    break
+
+    resume_skill_matches = _normalized_values_matching_facet_patterns(resume.skills, patterns)
+    matched_terms.extend(resume_skill_matches)
+
+    return _unique_preserve_order(matched_terms), evidence_rows
+
+def _facet_support_row(
+    resume,
+    facet_name: str,
+    job_terms: List[str],
+    patterns: List[str],
+    support_rows: List[dict],
+) -> dict:
+    support_map = {
+        _normalize_text(row.get("term", "")): row
+        for row in support_rows
+        if _normalize_text(row.get("term", ""))
+    }
+
+    direct_terms: List[str] = []
+    context_terms: List[str] = []
+    skills_only_terms: List[str] = []
+    unsupported_terms: List[str] = []
+    anchor_evidence: List[dict] = []
+    seen_anchor_keys = set()
+
+    for term in job_terms:
+        normalized_term = _normalize_text(term)
+        row = support_map.get(
+            normalized_term,
+            {
+                "term": normalized_term,
+                "support_level": "unsupported",
+                "support_scope": "none",
+                "evidence": [],
+            },
+        )
+
+        support_level = row.get("support_level", "unsupported")
+
+        if support_level == "direct_bullet":
+            direct_terms.append(normalized_term)
+            for evidence in row.get("evidence", []) or []:
+                key = (
+                    evidence.get("section", ""),
+                    evidence.get("source_title", ""),
+                    evidence.get("source_company", ""),
+                    evidence.get("text", ""),
+                )
+                if key in seen_anchor_keys:
+                    continue
+                seen_anchor_keys.add(key)
+                anchor_evidence.append(evidence)
+
+        elif support_level == "entry_context":
+            context_terms.append(normalized_term)
+
+        elif support_level == "skills_section":
+            skills_only_terms.append(normalized_term)
+
+        else:
+            unsupported_terms.append(normalized_term)
+
+    facet_direct_evidence = _collect_facet_direct_evidence(resume, patterns, limit=4)
+    facet_context_terms, facet_context_evidence = _collect_facet_context_support(resume, patterns, limit=4)
+
+    for evidence in facet_direct_evidence:
+        key = (
+            evidence.get("section", ""),
+            evidence.get("source_title", ""),
+            evidence.get("source_company", ""),
+            evidence.get("text", ""),
+        )
+        if key in seen_anchor_keys:
+            continue
+        seen_anchor_keys.add(key)
+        anchor_evidence.append(evidence)
+
+    return {
+        "facet": facet_name,
+        "job_terms": _unique_preserve_order(job_terms),
+        "direct_terms": _unique_preserve_order(direct_terms),
+        "context_terms": _unique_preserve_order(context_terms),
+        "skills_only_terms": _unique_preserve_order(skills_only_terms),
+        "unsupported_terms": _unique_preserve_order(unsupported_terms),
+        "anchor_evidence": anchor_evidence[:4],
+        "facet_direct_evidence": facet_direct_evidence[:4],
+        "facet_context_terms": _unique_preserve_order(facet_context_terms),
+        "facet_context_evidence": facet_context_evidence[:4],
+    }
+
+
+def _build_resume_facet_support(resume, job) -> List[dict]:
+    term_support = _build_term_support_summary(resume, job)
+    support_rows = (term_support.get("required", []) or []) + (term_support.get("preferred", []) or [])
+    facet_targets = _build_job_facet_targets(job)
+
+    facet_rows: List[dict] = []
+    for facet_name, job_terms in facet_targets.items():
+        patterns = TAILORING_FACET_PATTERNS.get(facet_name, []) or []
+        facet_rows.append(
+            _facet_support_row(
+                resume,
+                facet_name,
+                job_terms,
+                patterns,
+                support_rows,
+            )
+        )
+
+    return facet_rows
+
 def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
 
@@ -888,6 +1165,7 @@ def _payload_for_json(
             "matched_terms": list(selected_result.prefilter.matched_terms),
             "top_dimensions": _dimension_snapshot(selected_result),
             "term_support": _build_term_support_summary(selected_resume, job_evidence),
+            "facet_support": _build_resume_facet_support(selected_resume, job_evidence),
         },
         "top_dimension_deltas_vs_backup": (
             _top_dimension_deltas(selected_result, runner_up_result)

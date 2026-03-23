@@ -1063,6 +1063,116 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
     reranked = _rerank_evidence_rows(selected)
     return reranked[:top_k]
 
+def _split_bullet_into_clauses(text: str) -> List[str]:
+    raw = re.sub(r"\s+", " ", str(text or "").strip())
+    if not raw:
+        return []
+
+    primary_parts = re.split(
+        r";\s*|(?<=\d%)\s+(?=[A-Z])|(?<=[a-z0-9])\.\s+(?=[A-Z])",
+        raw,
+    )
+
+    clauses: List[str] = []
+    for part in primary_parts:
+        cleaned = part.strip(" -•\t")
+        if not cleaned:
+            continue
+        clauses.append(cleaned)
+
+    return _unique_preserve_order(clauses)
+
+
+def _collect_top_relevant_evidence_units(resume, job, top_k: int = 16) -> List[dict]:
+    parent_rows = _collect_top_relevant_bullets(resume, job, top_k=max(top_k, 10))
+    job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
+
+    unit_rows: List[dict] = []
+    seen_keys = set()
+
+    def _unit_priority(evidence_type: str) -> int:
+        if evidence_type == "direct_overlap":
+            return 0
+        if evidence_type == "semantic_similarity":
+            return 1
+        if evidence_type in {"same_source_context", "adjacent_context"}:
+            return 2
+        return 3
+
+    for row in parent_rows:
+        parent_text = str(row.get("text", "") or "").strip()
+        if not parent_text:
+            continue
+
+        clauses = _split_bullet_into_clauses(parent_text)
+        if not clauses:
+            clauses = [parent_text]
+
+        parent_terms = _unique_preserve_order(
+            list(row.get("overlaps", []) or []) + list(row.get("context_terms", []) or [])
+        )
+        evidence_type = row.get("evidence_type", "")
+
+        for clause_index, clause_text in enumerate(clauses):
+            clause_norm = _normalize_text(clause_text)
+            if not clause_norm:
+                continue
+
+            clause_overlaps = [
+                term for term in job_targets
+                if _contains_signal(clause_norm, term)
+            ]
+
+            if evidence_type == "direct_overlap" and not clause_overlaps:
+                continue
+
+            supported_terms = clause_overlaps if clause_overlaps else parent_terms
+            if not supported_terms:
+                continue
+
+            unit_row = {
+                "section": row.get("section", ""),
+                "source_title": row.get("source_title", ""),
+                "source_company": row.get("source_company", ""),
+                "text": clause_text,
+                "clause_text": clause_text,
+                "parent_bullet": parent_text,
+                "clause_index": clause_index,
+                "overlap_count": len(clause_overlaps) if clause_overlaps else len(supported_terms),
+                "overlaps": _unique_preserve_order(supported_terms)[:8],
+                "context_terms": row.get("context_terms", []) or [],
+                "evidence_type": evidence_type,
+                "unit_kind": "clause_unit",
+                "semantic_score": row.get("semantic_score"),
+                "source_key": row.get("source_key", ""),
+                "bullet_index": row.get("bullet_index", -1),
+            }
+
+            unit_key = (
+                unit_row["section"],
+                unit_row["source_title"],
+                unit_row["source_company"],
+                unit_row["evidence_type"],
+                unit_row["clause_text"],
+            )
+            if unit_key in seen_keys:
+                continue
+
+            seen_keys.add(unit_key)
+            unit_rows.append(unit_row)
+
+    unit_rows.sort(
+        key=lambda row: (
+            _unit_priority(str(row.get("evidence_type", ""))),
+            -int(row.get("overlap_count", 0) or 0),
+            str(row.get("section", "")),
+            str(row.get("source_title", "")).lower(),
+            str(row.get("clause_text", "")).lower(),
+        )
+    )
+
+    return unit_rows[:top_k]
+
 def _dimension_snapshot(result, max_dims: int = 6) -> str:
     ordered = sorted(
         result.dimension_scores,
@@ -1136,6 +1246,7 @@ def _payload_for_json(
     matched_preferred: List[str],
     missing_preferred: List[str],
     top_bullets: List[dict],
+    top_evidence_units: List[dict],
 ) -> dict:
     return {
         "job": {
@@ -1147,7 +1258,7 @@ def _payload_for_json(
             "selected_resume": selected_result.pair.resume_name,
             "selected_score": selected_result.final_score,
             "selected_bucket": selected_result.match_bucket,
-            "runner_up_resume": selected_result.pair.resume_name if runner_up_result is not None else None,
+            "runner_up_resume": runner_up_result.pair.resume_name if runner_up_result is not None else None,
             "runner_up_score": runner_up_result.final_score if runner_up_result is not None else None,
             "score_gap": (
                 round(selected_result.final_score - runner_up_result.final_score, 6)
@@ -1173,6 +1284,7 @@ def _payload_for_json(
             else []
         ),
         "top_relevant_bullets": top_bullets,
+        "top_relevant_evidence_units": top_evidence_units,
         "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work.",
     }
 
@@ -1268,6 +1380,11 @@ def main() -> None:
         job_evidence,
         top_k=args.top_bullets,
     )
+    top_evidence_units = _collect_top_relevant_evidence_units(
+        selected_resume,
+        job_evidence,
+        top_k=max(args.top_bullets * 2, 12),
+    )
 
     print("=" * 100)
     print("JD-SPECIFIC RESUME DIFF HELPER")
@@ -1360,6 +1477,7 @@ def main() -> None:
             matched_preferred=matched_preferred,
             missing_preferred=missing_preferred,
             top_bullets=top_bullets,
+            top_evidence_units=top_evidence_units,
         )
         output_path = Path(args.output_json)
         output_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")

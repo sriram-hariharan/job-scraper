@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data science analytics networks machine learning tensorflow",
+  "cleaned_skills": [
+    "data science",
+    "analytics",
+    "networks",
+    "machine learning",
+    "tensorflow"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "the input phrase is already quite compact and contains specific skills and tools, so no significant cleaning was required",
+  "cache_hit": false
+}

@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "algorithms - machine learning",
+  "cleaned_skills": [
+    "algorithms",
+    "machine learning"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "split phrase into distinct skills and removed hyphen as noise",
+  "cache_hit": false
+}

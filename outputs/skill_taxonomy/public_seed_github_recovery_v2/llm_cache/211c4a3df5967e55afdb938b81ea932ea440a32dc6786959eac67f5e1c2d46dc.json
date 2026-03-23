@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "bi engineer/data scientist",
+  "cleaned_skills": [
+    "bi",
+    "data scientist"
+  ],
+  "dropped_fragments": [
+    "engineer"
+  ],
+  "reasoning": "removed 'engineer' as a role name, kept 'bi' and 'data scientist' as meaningful skill terms",
+  "cache_hit": false
+}

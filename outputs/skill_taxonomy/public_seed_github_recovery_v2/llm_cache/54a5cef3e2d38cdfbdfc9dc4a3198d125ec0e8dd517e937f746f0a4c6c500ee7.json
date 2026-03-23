@@ -1,0 +1,18 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "apache spark or kubernetes or hortonworks or hadoop",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "apache spark",
+    "kubernetes",
+    "hortonworks",
+    "hadoop"
+  ],
+  "dropped_fragments": [
+    "or"
+  ],
+  "reasoning": "Extracted specific technologies and frameworks, dropped conjunctions",
+  "cache_hit": false
+}

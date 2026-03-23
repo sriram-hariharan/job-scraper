@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "crm - python",
+  "cleaned_skills": [
+    "crm",
+    "python"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "split the phrase into atomic skill terms, removing the hyphen as a noise fragment",
+  "cache_hit": false
+}

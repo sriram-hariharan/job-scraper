@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "conceptual and logical data modeling",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "data modeling"
+  ],
+  "dropped_fragments": [
+    "conceptual",
+    "and",
+    "logical"
+  ],
+  "reasoning": "Extracted 'Data Modeling' as a meaningful skill, dropped 'conceptual', 'and', and 'logical' as they are either modifiers or filler words.",
+  "cache_hit": false
+}

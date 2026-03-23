@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "hadoop - data",
+  "cleaned_skills": [
+    "hadoop",
+    "data"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "split phrase into atomic skill terms, removed hyphen as noise",
+  "cache_hit": false
+}

@@ -1,0 +1,14 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data architect - r",
+  "cleaned_skills": [
+    "data architect"
+  ],
+  "dropped_fragments": [
+    "- r"
+  ],
+  "reasoning": "removed role name and unknown fragment",
+  "cache_hit": false
+}

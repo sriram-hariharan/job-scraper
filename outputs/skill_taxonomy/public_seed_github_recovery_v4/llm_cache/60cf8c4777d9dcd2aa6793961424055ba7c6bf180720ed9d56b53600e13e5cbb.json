@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "business intelligence engineer iii",
+  "cleaned_skills": [
+    "business intelligence"
+  ],
+  "dropped_fragments": [
+    "engineer",
+    "iii"
+  ],
+  "reasoning": "removed role name and seniority level, kept relevant skill term",
+  "cache_hit": false
+}

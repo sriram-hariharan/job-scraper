@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "ai and cognitive technology",
+  "cleaned_skills": [
+    "ai",
+    "cognitive technology"
+  ],
+  "dropped_fragments": [
+    "and"
+  ],
+  "reasoning": "split the phrase into atomic skill terms and removed the conjunction 'and' as it's a generic filler",
+  "cache_hit": false
+}

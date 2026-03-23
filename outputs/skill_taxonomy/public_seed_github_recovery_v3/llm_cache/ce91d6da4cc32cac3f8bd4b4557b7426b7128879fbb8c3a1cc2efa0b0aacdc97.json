@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "and behavioral modeling and simulation for bfs/retail",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "behavioral modeling",
+    "simulation"
+  ],
+  "dropped_fragments": [
+    "and",
+    "for bfs/retail"
+  ],
+  "reasoning": "Extracted specific technical skills while dropping generic conjunctions and industry/domain references.",
+  "cache_hit": false
+}

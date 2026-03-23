@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "image analytics - python",
+  "cleaned_skills": [
+    "image analytics",
+    "python"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "split phrase into distinct skills, removed hyphen as noise",
+  "cache_hit": false
+}

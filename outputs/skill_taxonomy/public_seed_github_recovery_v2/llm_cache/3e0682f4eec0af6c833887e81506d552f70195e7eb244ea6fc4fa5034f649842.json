@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data scientist level 1 experience with data sets",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "data sets"
+  ],
+  "dropped_fragments": [
+    "data scientist",
+    "level 1 experience",
+    "with"
+  ],
+  "reasoning": "Dropped role name and generic phrases, recovered 'data sets' as a relevant skill term.",
+  "cache_hit": false
+}

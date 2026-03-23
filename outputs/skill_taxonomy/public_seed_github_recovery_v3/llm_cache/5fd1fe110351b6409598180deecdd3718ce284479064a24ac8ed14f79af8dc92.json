@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "agile work environment - data mining",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "agile",
+    "data mining"
+  ],
+  "dropped_fragments": [
+    "work environment"
+  ],
+  "reasoning": "Extracted 'agile' and 'data mining' as meaningful skill terms, dropped 'work environment' as a generic business phrase.",
+  "cache_hit": false
+}

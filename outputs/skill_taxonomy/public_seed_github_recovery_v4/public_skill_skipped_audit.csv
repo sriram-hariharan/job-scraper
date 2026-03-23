@@ -1,0 +1,1008 @@
+normalized_term,skip_reason,count,raw_examples,recoverable
+r,too_short,93,' r' | ['r' | ' r'] | 'r ' | 'r',False
+data scientist,drop_exact,58,['data scientist'] | ['data scientist' | ' data scientist' | ' data scientist'] | ['data scientist ',False
+,empty_after_normalization,42,[''] | ''],False
+business requirements,invalid_skill_pattern,12,' business requirements',False
+c,too_short,9,' c#' | ' c',False
+data analyst,drop_exact,3,['data analyst' | ' data analyst',False
+s3,version_or_code_like,3,s3' | ['s3' | ' s3',False
+requirements gathering,invalid_skill_pattern,2,' requirements gathering',False
+hadoop - hive - pig,long_freeform_phrase,2,' hadoop - hive - pig',True
+large data set organization and analytics,long_freeform_phrase,2,' large data set organization & analytics',True
+nosql databases - mongodb-couchbase - cassandra,long_freeform_phrase,2,' nosql databases - mongodb-couchbase - cassandra',True
+2 years industry exp,mixed_numeric_phrase,2,' 2 years industry exp',True
+experience with nlp technologies/data science in a clinical background,too_many_tokens,2,['experience with nlp technologies/data science in a clinical background' | 'experience with nlp technologies/data science in a clinical background',True
+jr data scientist,drop_exact,1,['jr data scientist'],False
+senior data scientist,drop_exact,1,['senior data scientist ',False
+sr data scientist,drop_exact,1,['sr data scientist'],False
+7 years of progressively increasing responsibilities marketing,invalid_skill_pattern,1,' 7 years of progressively increasing responsibilities (marketing',False
+full relocation package,invalid_skill_pattern,1,['full relocation package'],False
+masters degree with 5 years of experience in creating machine learning pipelines,invalid_skill_pattern,1,['masters degree with 5 years of experience in creating machine learning pipelines',False
+9+ years of demonstrated experience leading teams,long_freeform_phrase,1,['9+ years of demonstrated experience leading teams',True
+agile work environment - data mining,long_freeform_phrase,1,' agile work environment - data mining',True
+airline contracting - direct analytics,long_freeform_phrase,1,' airline contracting - direct analytics',True
+and behavioral modeling and simulation for bfs/retail,long_freeform_phrase,1,' and behavioral modeling and simulation for bfs/retail'],True
+building predictive models - r,long_freeform_phrase,1,' building predictive models - r',True
+business analyst and data and sql,long_freeform_phrase,1,['business analyst and data and sql'],True
+computational physics - data science,long_freeform_phrase,1,' computational physics - data science',True
+conceptual and logical data modeling,long_freeform_phrase,1,' conceptual and logical data modeling'],True
+data analysis - sql server,long_freeform_phrase,1,' data analysis - sql server',True
+data mining and statistical analysis,long_freeform_phrase,1,' data mining and statistical analysis',True
+data mining expertise sql required,long_freeform_phrase,1,data mining expertise: sql required,True
+data modeling and hypothesis generation,long_freeform_phrase,1,' data modeling and hypothesis generation',True
+data science and implementations in python,long_freeform_phrase,1,['data science and implementations in python',True
+datarobot for quick implementation of ai/ml,long_freeform_phrase,1,['datarobot for quick implementation of ai/ml'],True
+distributed computing - big data,long_freeform_phrase,1,' distributed computing - big data',True
+etc amazon web services aws,long_freeform_phrase,1,' etc.) amazon web services (aws)',True
+etc and analysis tools tableau,long_freeform_phrase,1,' etc) and analysis tools ( tableau',True
+etc gcp or other cloud platforms,long_freeform_phrase,1,' etc.) gcp or other cloud platforms'],True
+etl and big data platforms,long_freeform_phrase,1,'etl and big data platforms'],True
+etl tools knowledge is required,long_freeform_phrase,1,' etl tools knowledge is required.'],True
+experience using statistical computer languages r,long_freeform_phrase,1,['experience using statistical computer languages (r',True
+expert level understanding of the umls,long_freeform_phrase,1,'expert level understanding of the umls'],True
+full funnel analytics - marketing analytics,long_freeform_phrase,1,' full funnel analytics - marketing analytics',True
+ibm db2 and sql server,long_freeform_phrase,1,'  ibm db2 and sql server',True
+ibm spss and sas tools,long_freeform_phrase,1,' ibm spss and sas tools',True
+jquery/javascript programming including scripting / coding,long_freeform_phrase,1,' jquery/javascript programming (including scripting / coding)',True
+life science - data science,long_freeform_phrase,1,' life science - data science',True
+ms in statistics or analytics,long_freeform_phrase,1,['ms in statistics or analytics',True
+must have skills data science python sas,long_freeform_phrase,1,['must have skills:  data science  python  sas'],True
+o advanced applied statistics skills,long_freeform_phrase,1,['o advanced applied statistics skills',True
+one modern programming language java,long_freeform_phrase,1,['one modern programming language: java',True
+open source ml and dl frameworks,long_freeform_phrase,1,' open source ml & dl frameworks'],True
+oracle marketing suite - marketing technologies,long_freeform_phrase,1,' oracle marketing suite - marketing technologies',True
+prior teaching experience not essential,long_freeform_phrase,1,' prior teaching experience (not essential)'],True
+senior data scientist with phd,long_freeform_phrase,1,['senior  data scientist  with phd',True
+simulation development and/or predictive analytics,long_freeform_phrase,1,' simulation development and/or predictive analytics'],True
+soap - ruby on rails,long_freeform_phrase,1,' soap - ruby on rails',True
+software engineer - data engineer - sql,long_freeform_phrase,1,['software engineer - data engineer - sql',True
+sql and data visualization software,long_freeform_phrase,1,['sql and data visualization software'],True
+statistical analysis and data driven insights,long_freeform_phrase,1,' statistical analysis and data driven insights',True
+tableau/ raw /chart js/data visualization,long_freeform_phrase,1,' tableau/ raw /chart.js/data visualization'],True
+teaching technical concepts - data science,long_freeform_phrase,1,' teaching technical concepts - data science',True
+team setting including git and unit testing,long_freeform_phrase,1,' team setting (including git & unit testing)'],True
+1 python 2 nlp 3 deep learning,mixed_numeric_phrase,1,['1. python 2. nlp 3. deep learning'],True
+10,numeric_only,1,10,False
+100,numeric_only,1,100,False
+101,numeric_only,1,101,False
+102,numeric_only,1,102,False
+103,numeric_only,1,103,False
+104,numeric_only,1,104,False
+105,numeric_only,1,105,False
+106,numeric_only,1,106,False
+107,numeric_only,1,107,False
+108,numeric_only,1,108,False
+109,numeric_only,1,109,False
+11,numeric_only,1,11,False
+110,numeric_only,1,110,False
+111,numeric_only,1,111,False
+112,numeric_only,1,112,False
+113,numeric_only,1,113,False
+114,numeric_only,1,114,False
+115,numeric_only,1,115,False
+116,numeric_only,1,116,False
+117,numeric_only,1,117,False
+118,numeric_only,1,118,False
+119,numeric_only,1,119,False
+12,numeric_only,1,12,False
+120,numeric_only,1,120,False
+121,numeric_only,1,121,False
+122,numeric_only,1,122,False
+123,numeric_only,1,123,False
+124,numeric_only,1,124,False
+125,numeric_only,1,125,False
+126,numeric_only,1,126,False
+127,numeric_only,1,127,False
+128,numeric_only,1,128,False
+129,numeric_only,1,129,False
+13,numeric_only,1,13,False
+130,numeric_only,1,130,False
+131,numeric_only,1,131,False
+132,numeric_only,1,132,False
+133,numeric_only,1,133,False
+134,numeric_only,1,134,False
+135,numeric_only,1,135,False
+136,numeric_only,1,136,False
+137,numeric_only,1,137,False
+138,numeric_only,1,138,False
+139,numeric_only,1,139,False
+14,numeric_only,1,14,False
+140,numeric_only,1,140,False
+141,numeric_only,1,141,False
+142,numeric_only,1,142,False
+143,numeric_only,1,143,False
+144,numeric_only,1,144,False
+145,numeric_only,1,145,False
+146,numeric_only,1,146,False
+147,numeric_only,1,147,False
+148,numeric_only,1,148,False
+149,numeric_only,1,149,False
+15,numeric_only,1,15,False
+150,numeric_only,1,150,False
+151,numeric_only,1,151,False
+152,numeric_only,1,152,False
+153,numeric_only,1,153,False
+154,numeric_only,1,154,False
+155,numeric_only,1,155,False
+156,numeric_only,1,156,False
+157,numeric_only,1,157,False
+158,numeric_only,1,158,False
+159,numeric_only,1,159,False
+16,numeric_only,1,16,False
+160,numeric_only,1,160,False
+161,numeric_only,1,161,False
+162,numeric_only,1,162,False
+163,numeric_only,1,163,False
+164,numeric_only,1,164,False
+165,numeric_only,1,165,False
+166,numeric_only,1,166,False
+167,numeric_only,1,167,False
+168,numeric_only,1,168,False
+169,numeric_only,1,169,False
+17,numeric_only,1,17,False
+170,numeric_only,1,170,False
+171,numeric_only,1,171,False
+172,numeric_only,1,172,False
+173,numeric_only,1,173,False
+174,numeric_only,1,174,False
+175,numeric_only,1,175,False
+176,numeric_only,1,176,False
+177,numeric_only,1,177,False
+178,numeric_only,1,178,False
+179,numeric_only,1,179,False
+18,numeric_only,1,18,False
+180,numeric_only,1,180,False
+181,numeric_only,1,181,False
+182,numeric_only,1,182,False
+183,numeric_only,1,183,False
+184,numeric_only,1,184,False
+185,numeric_only,1,185,False
+186,numeric_only,1,186,False
+187,numeric_only,1,187,False
+188,numeric_only,1,188,False
+189,numeric_only,1,189,False
+19,numeric_only,1,19,False
+190,numeric_only,1,190,False
+191,numeric_only,1,191,False
+192,numeric_only,1,192,False
+193,numeric_only,1,193,False
+194,numeric_only,1,194,False
+195,numeric_only,1,195,False
+196,numeric_only,1,196,False
+197,numeric_only,1,197,False
+198,numeric_only,1,198,False
+199,numeric_only,1,199,False
+20,numeric_only,1,20,False
+200,numeric_only,1,200,False
+201,numeric_only,1,201,False
+202,numeric_only,1,202,False
+203,numeric_only,1,203,False
+204,numeric_only,1,204,False
+205,numeric_only,1,205,False
+206,numeric_only,1,206,False
+207,numeric_only,1,207,False
+208,numeric_only,1,208,False
+209,numeric_only,1,209,False
+21,numeric_only,1,21,False
+210,numeric_only,1,210,False
+211,numeric_only,1,211,False
+212,numeric_only,1,212,False
+213,numeric_only,1,213,False
+214,numeric_only,1,214,False
+215,numeric_only,1,215,False
+216,numeric_only,1,216,False
+217,numeric_only,1,217,False
+218,numeric_only,1,218,False
+219,numeric_only,1,219,False
+22,numeric_only,1,22,False
+220,numeric_only,1,220,False
+221,numeric_only,1,221,False
+222,numeric_only,1,222,False
+223,numeric_only,1,223,False
+224,numeric_only,1,224,False
+225,numeric_only,1,225,False
+226,numeric_only,1,226,False
+227,numeric_only,1,227,False
+228,numeric_only,1,228,False
+229,numeric_only,1,229,False
+23,numeric_only,1,23,False
+230,numeric_only,1,230,False
+231,numeric_only,1,231,False
+232,numeric_only,1,232,False
+233,numeric_only,1,233,False
+234,numeric_only,1,234,False
+235,numeric_only,1,235,False
+236,numeric_only,1,236,False
+237,numeric_only,1,237,False
+238,numeric_only,1,238,False
+239,numeric_only,1,239,False
+24,numeric_only,1,24,False
+240,numeric_only,1,240,False
+241,numeric_only,1,241,False
+242,numeric_only,1,242,False
+243,numeric_only,1,243,False
+244,numeric_only,1,244,False
+245,numeric_only,1,245,False
+246,numeric_only,1,246,False
+247,numeric_only,1,247,False
+248,numeric_only,1,248,False
+249,numeric_only,1,249,False
+25,numeric_only,1,25,False
+250,numeric_only,1,250,False
+251,numeric_only,1,251,False
+252,numeric_only,1,252,False
+253,numeric_only,1,253,False
+254,numeric_only,1,254,False
+255,numeric_only,1,255,False
+256,numeric_only,1,256,False
+257,numeric_only,1,257,False
+258,numeric_only,1,258,False
+259,numeric_only,1,259,False
+26,numeric_only,1,26,False
+260,numeric_only,1,260,False
+261,numeric_only,1,261,False
+262,numeric_only,1,262,False
+263,numeric_only,1,263,False
+264,numeric_only,1,264,False
+265,numeric_only,1,265,False
+266,numeric_only,1,266,False
+267,numeric_only,1,267,False
+268,numeric_only,1,268,False
+269,numeric_only,1,269,False
+27,numeric_only,1,27,False
+270,numeric_only,1,270,False
+271,numeric_only,1,271,False
+272,numeric_only,1,272,False
+273,numeric_only,1,273,False
+274,numeric_only,1,274,False
+275,numeric_only,1,275,False
+276,numeric_only,1,276,False
+277,numeric_only,1,277,False
+278,numeric_only,1,278,False
+279,numeric_only,1,279,False
+28,numeric_only,1,28,False
+280,numeric_only,1,280,False
+281,numeric_only,1,281,False
+282,numeric_only,1,282,False
+283,numeric_only,1,283,False
+284,numeric_only,1,284,False
+285,numeric_only,1,285,False
+286,numeric_only,1,286,False
+287,numeric_only,1,287,False
+288,numeric_only,1,288,False
+289,numeric_only,1,289,False
+29,numeric_only,1,29,False
+290,numeric_only,1,290,False
+291,numeric_only,1,291,False
+292,numeric_only,1,292,False
+293,numeric_only,1,293,False
+294,numeric_only,1,294,False
+295,numeric_only,1,295,False
+296,numeric_only,1,296,False
+297,numeric_only,1,297,False
+298,numeric_only,1,298,False
+299,numeric_only,1,299,False
+30,numeric_only,1,30,False
+300,numeric_only,1,300,False
+301,numeric_only,1,301,False
+302,numeric_only,1,302,False
+303,numeric_only,1,303,False
+304,numeric_only,1,304,False
+305,numeric_only,1,305,False
+306,numeric_only,1,306,False
+307,numeric_only,1,307,False
+308,numeric_only,1,308,False
+309,numeric_only,1,309,False
+31,numeric_only,1,31,False
+310,numeric_only,1,310,False
+311,numeric_only,1,311,False
+312,numeric_only,1,312,False
+313,numeric_only,1,313,False
+314,numeric_only,1,314,False
+315,numeric_only,1,315,False
+316,numeric_only,1,316,False
+317,numeric_only,1,317,False
+318,numeric_only,1,318,False
+319,numeric_only,1,319,False
+32,numeric_only,1,32,False
+320,numeric_only,1,320,False
+321,numeric_only,1,321,False
+322,numeric_only,1,322,False
+323,numeric_only,1,323,False
+324,numeric_only,1,324,False
+325,numeric_only,1,325,False
+326,numeric_only,1,326,False
+327,numeric_only,1,327,False
+328,numeric_only,1,328,False
+329,numeric_only,1,329,False
+33,numeric_only,1,33,False
+330,numeric_only,1,330,False
+331,numeric_only,1,331,False
+332,numeric_only,1,332,False
+333,numeric_only,1,333,False
+334,numeric_only,1,334,False
+335,numeric_only,1,335,False
+336,numeric_only,1,336,False
+337,numeric_only,1,337,False
+338,numeric_only,1,338,False
+339,numeric_only,1,339,False
+34,numeric_only,1,34,False
+340,numeric_only,1,340,False
+341,numeric_only,1,341,False
+342,numeric_only,1,342,False
+343,numeric_only,1,343,False
+344,numeric_only,1,344,False
+345,numeric_only,1,345,False
+346,numeric_only,1,346,False
+347,numeric_only,1,347,False
+348,numeric_only,1,348,False
+349,numeric_only,1,349,False
+35,numeric_only,1,35,False
+350,numeric_only,1,350,False
+351,numeric_only,1,351,False
+352,numeric_only,1,352,False
+353,numeric_only,1,353,False
+354,numeric_only,1,354,False
+355,numeric_only,1,355,False
+356,numeric_only,1,356,False
+357,numeric_only,1,357,False
+358,numeric_only,1,358,False
+359,numeric_only,1,359,False
+36,numeric_only,1,36,False
+360,numeric_only,1,360,False
+361,numeric_only,1,361,False
+362,numeric_only,1,362,False
+363,numeric_only,1,363,False
+364,numeric_only,1,364,False
+365,numeric_only,1,365,False
+366,numeric_only,1,366,False
+367,numeric_only,1,367,False
+368,numeric_only,1,368,False
+369,numeric_only,1,369,False
+37,numeric_only,1,37,False
+370,numeric_only,1,370,False
+371,numeric_only,1,371,False
+372,numeric_only,1,372,False
+373,numeric_only,1,373,False
+374,numeric_only,1,374,False
+375,numeric_only,1,375,False
+376,numeric_only,1,376,False
+377,numeric_only,1,377,False
+378,numeric_only,1,378,False
+379,numeric_only,1,379,False
+38,numeric_only,1,38,False
+380,numeric_only,1,380,False
+381,numeric_only,1,381,False
+382,numeric_only,1,382,False
+383,numeric_only,1,383,False
+384,numeric_only,1,384,False
+385,numeric_only,1,385,False
+386,numeric_only,1,386,False
+387,numeric_only,1,387,False
+388,numeric_only,1,388,False
+389,numeric_only,1,389,False
+39,numeric_only,1,39,False
+390,numeric_only,1,390,False
+391,numeric_only,1,391,False
+392,numeric_only,1,392,False
+393,numeric_only,1,393,False
+394,numeric_only,1,394,False
+395,numeric_only,1,395,False
+396,numeric_only,1,396,False
+397,numeric_only,1,397,False
+398,numeric_only,1,398,False
+399,numeric_only,1,399,False
+40,numeric_only,1,40,False
+400,numeric_only,1,400,False
+401,numeric_only,1,401,False
+402,numeric_only,1,402,False
+403,numeric_only,1,403,False
+404,numeric_only,1,404,False
+405,numeric_only,1,405,False
+406,numeric_only,1,406,False
+407,numeric_only,1,407,False
+408,numeric_only,1,408,False
+409,numeric_only,1,409,False
+41,numeric_only,1,41,False
+410,numeric_only,1,410,False
+411,numeric_only,1,411,False
+412,numeric_only,1,412,False
+413,numeric_only,1,413,False
+414,numeric_only,1,414,False
+415,numeric_only,1,415,False
+416,numeric_only,1,416,False
+417,numeric_only,1,417,False
+418,numeric_only,1,418,False
+419,numeric_only,1,419,False
+42,numeric_only,1,42,False
+420,numeric_only,1,420,False
+421,numeric_only,1,421,False
+422,numeric_only,1,422,False
+423,numeric_only,1,423,False
+424,numeric_only,1,424,False
+425,numeric_only,1,425,False
+426,numeric_only,1,426,False
+427,numeric_only,1,427,False
+428,numeric_only,1,428,False
+429,numeric_only,1,429,False
+43,numeric_only,1,43,False
+430,numeric_only,1,430,False
+431,numeric_only,1,431,False
+432,numeric_only,1,432,False
+433,numeric_only,1,433,False
+434,numeric_only,1,434,False
+435,numeric_only,1,435,False
+436,numeric_only,1,436,False
+437,numeric_only,1,437,False
+438,numeric_only,1,438,False
+439,numeric_only,1,439,False
+44,numeric_only,1,44,False
+440,numeric_only,1,440,False
+441,numeric_only,1,441,False
+442,numeric_only,1,442,False
+443,numeric_only,1,443,False
+444,numeric_only,1,444,False
+445,numeric_only,1,445,False
+446,numeric_only,1,446,False
+447,numeric_only,1,447,False
+448,numeric_only,1,448,False
+449,numeric_only,1,449,False
+45,numeric_only,1,45,False
+450,numeric_only,1,450,False
+451,numeric_only,1,451,False
+452,numeric_only,1,452,False
+453,numeric_only,1,453,False
+46,numeric_only,1,46,False
+47,numeric_only,1,47,False
+48,numeric_only,1,48,False
+49,numeric_only,1,49,False
+50,numeric_only,1,50,False
+51,numeric_only,1,51,False
+52,numeric_only,1,52,False
+53,numeric_only,1,53,False
+54,numeric_only,1,54,False
+55,numeric_only,1,55,False
+56,numeric_only,1,56,False
+57,numeric_only,1,57,False
+58,numeric_only,1,58,False
+59,numeric_only,1,59,False
+60,numeric_only,1,60,False
+61,numeric_only,1,61,False
+62,numeric_only,1,62,False
+63,numeric_only,1,63,False
+64,numeric_only,1,64,False
+65,numeric_only,1,65,False
+66,numeric_only,1,66,False
+67,numeric_only,1,67,False
+68,numeric_only,1,68,False
+69,numeric_only,1,69,False
+70,numeric_only,1,70,False
+71,numeric_only,1,71,False
+72,numeric_only,1,72,False
+73,numeric_only,1,73,False
+74,numeric_only,1,74,False
+75,numeric_only,1,75,False
+76,numeric_only,1,76,False
+77,numeric_only,1,77,False
+78,numeric_only,1,78,False
+79,numeric_only,1,79,False
+80,numeric_only,1,80,False
+81,numeric_only,1,81,False
+82,numeric_only,1,82,False
+83,numeric_only,1,83,False
+84,numeric_only,1,84,False
+85,numeric_only,1,85,False
+86,numeric_only,1,86,False
+87,numeric_only,1,87,False
+88,numeric_only,1,88,False
+89,numeric_only,1,89,False
+90,numeric_only,1,90,False
+91,numeric_only,1,91,False
+92,numeric_only,1,92,False
+93,numeric_only,1,93,False
+94,numeric_only,1,94,False
+95,numeric_only,1,95,False
+96,numeric_only,1,96,False
+97,numeric_only,1,97,False
+98,numeric_only,1,98,False
+99,numeric_only,1,99,False
+python or r or sas,stack_blob,1,python or r or sas,True
+5+ years of experience in a similar role and experience in web attribution analytics,too_long,1,['5+ years of experience in a similar role and experience in web attribution analytics.'],False
+cloud infrastructure and threat intelligenceexperience with data visualization and programming languages,too_long,1,' cloud infrastructure and threat intelligenceexperience with data visualization and programming languages',False
+computer vision or developing software libraries that abstract/encapsulate custom hardware devices,too_long,1,' computer vision or developing software libraries that abstract/encapsulate custom hardware devices.'],False
+data scientist and data analysis or running data pipelines and machine learning or matlab and python,too_long,1,['(data scientist ) and (data analysis or running data pipelines ) and(machine learning or matlab ) and(python )'],False
+data scientist data pipeline modeling data engineer r sas python spark machine learning,too_long,1,['data scientist data pipeline modeling data engineer r sas python spark machine learning'],False
+data scientist machine learning statistical modeling database data python r cloud,too_long,1,['data scientist machine learning statistical modeling database data python r cloud'],False
+data scientists and data analysts with u s citizenship required and able to obtain a top secret or secret clearance,too_long,1,['data scientists and data analysts with u.s. citizenship required and able to obtain a top secret or secret clearance'],False
+deep learning and machine learning and research and statistical models and python,too_long,1,['deep learning and machine learning and research and statistical models and (python',False
+digital tag over 0 2 year s or tag management over 0 2 year s or tagging over 0 2 year s or tealium over 0 2 year s or piwik pro over 0 2 year s or pixel over 0 2 year s or qubit over 0 2 year s or opentag over 0 2 year s or open tag over 0 2 year s or ensighten over 0 2 year s or google tag over 0 2 year s or dynamic tag management over 0 2 year s or tag commander over 0 2 year s or mezzobit over 0 2 year s or supertag over 0 2 year s or super tag over 0 2 year s or tag defender over 0 2 year s or ubertags over 0 2 year s or ddx over 0 2 year s and analytics over 0 2 year s or data scientist over 0 2 year s or informatics over 0 2 year s and javascript over 0 2 year s or java script over 0 2 year s or html over 0 2 year s,too_long,1,['(digital tag over 0.2 year(s) or tag management over 0.2 year(s) or tagging over 0.2 year(s) or tealium over 0.2 year(s) or piwik pro over 0.2 year(s) or pixel over 0.2 year(s) or qubit over 0.2 year(s) or opentag over 0.2 year(s) or open tag over 0.2 year(s) or ensighten over 0.2 year(s) or google tag over 0.2 year(s) or dynamic tag management over 0.2 year(s) or tag commander over 0.2 year(s) or mezzobit over 0.2 year(s) or supertag over 0.2 year(s) or super tag over 0.2 year(s) or tag defender over 0.2 year(s) or ubertags over 0.2 year(s) or ddx over 0.2 year(s) ) and(analytics over 0.2 year(s) or data scientist over 0.2 year(s) or informatics over 0.2 year(s) ) and(javascript over 0.2 year(s) or java script over 0.2 year(s) or html over 0.2 year(s) )'],False
+etc o excellent understanding of fundamental machine learning techniques and algorithms,too_long,1,' etc. o excellent understanding of fundamental machine learning techniques and algorithms',False
+expertise/experience working on cloud platforms - pivotal cloud foundry and public cloud aws/azure/google cloud,too_long,1,['expertise/experience working on cloud platforms - pivotal cloud foundry and public cloud aws/azure/google cloud.'],False
+expertise/experience working on cloud platforms - pivotal cloud foundry and public cloud aws/azure/google cloud should have hands on experience configuring and onboarding users including developer,too_long,1,['expertise/experience working on cloud platforms - pivotal cloud foundry and public cloud aws/azure/google cloud.   should have hands on experience configuring and onboarding users including developer'],False
+https //www dice com/jobs/detail/application-architect-v-mitchell-martin-charlotte-nc-28201/mitchmar1/mitca000j19533 icid sr445-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Application-Architect-V-Mitchell-Martin-Charlotte-NC-28201/mitchmar1/MITCA000J19533?icid=sr445-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/associate-director 2c-lead-data-scientist-s 26p-global-new-york-ny-10001/rtx14fecf/236706 icid sr314-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Associate-Director%2C-Lead-Data-Scientist-S%26P-Global-New-York-NY-10001/RTX14fecf/236706?icid=sr314-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/associate-director 2c-lead-data-scientist-s 26p-global-ratings-boston-ma-02110/rtx14fecf/240789 icid sr312-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Associate-Director%2C-Lead-Data-Scientist-S%26P-Global-Ratings-Boston-MA-02110/RTX14fecf/240789?icid=sr312-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/associate-director 2c-lead-data-scientist-s 26p-global-ratings-new-york-ny-10001/rtx14fecf/240788 icid sr311-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Associate-Director%2C-Lead-Data-Scientist-S%26P-Global-Ratings-New-York-NY-10001/RTX14fecf/240788?icid=sr311-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/associate-director 2c-senior-data-scientist-s 26p-global-market-intelligence-new-york-ny-10001/rtx14fecf/237927 1 icid sr313-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Associate-Director%2C-Senior-Data-Scientist-S%26P-GLOBAL-MARKET-INTELLIGENCE-New-York-NY-10001/RTX14fecf/237927_1?icid=sr313-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/azure-cloud-engineer-apex-systems 2c-inc-chicago-il-60631/apexsan/618805 icid sr386-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Azure-Cloud-Engineer-Apex-Systems%2C-Inc-Chicago-IL-60631/apexsan/618805?icid=sr386-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/bi-data-scientist-eliassen-group-stamford-ct-06901/cxelisen/311718 icid sr253-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/BI-Data-Scientist-Eliassen-Group-Stamford-CT-06901/cxelisen/311718?icid=sr253-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/bi-developer 26 2347data-scientist-esha-corp-it-new-york-city-ny-10001/91001914/644019 icid sr300-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/BI-Developer%26%2347Data-Scientist-ESHA-CORP-IT-New-York-City-NY-10001/91001914/644019?icid=sr300-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/bi-engineer 26 2347data-scientist-experis-seattle-wa-98141/cxmnpwr1/fox 11356802 26 234575 icid sr293-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/BI-Engineer%26%2347Data-Scientist-Experis-Seattle-WA-98141/cxmnpwr1/FOX_11356802%26%234575?icid=sr293-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/bi-engineer-spire-systems-inc-seattle-wa-98109/10111972/660073 icid sr391-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/BI-Engineer-Spire-Systems-Inc-Seattle-WA-98109/10111972/660073?icid=sr391-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/big-data- 28data-scientist 29-5 26 23458-yrs-experience-computer-enterprises 2c-inc -centennial-co-80122/ceiam/655741 icid sr367-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Big-Data-%28Data-Scientist%29-5%26%23458-yrs-experience-Computer-Enterprises%2C-Inc.-Centennial-CO-80122/ceiam/655741?icid=sr367-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/big-data-engineers-kpk-technologies 2c-inc-chicago-il-60603/10271690/big21 icid sr442-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Big-Data-Engineers-KPK-Technologies%2C-Inc-Chicago-IL-60603/10271690/BIG21?icid=sr442-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/big-data-scientist- 26 2347-clinical-analyst- 26 2345-boston-unitedhealth-group-boston-ma-02108/uhgbot/772836 icid sr309-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Big-Data-Scientist-%26%2347-Clinical-Analyst-%26%2345-Boston-UnitedHealth-Group-Boston-MA-02108/uhgbot/772836?icid=sr309-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/big-data-scientist-omm-it-solutions-baltimore-md-21244/90934554/bdshls2 icid sr260-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Big-Data-Scientist-Omm-IT-Solutions-Baltimore-MD-21244/90934554/BDSHLS2?icid=sr260-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/business-analyst 26 2347-data-scientist 10482-sedaa-san-ramon-ca-94583/90752961/384608 icid sr296-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Business-Analyst%26%2347-Data-scientist_10482-Sedaa-San-Ramon-CA-94583/90752961/384608?icid=sr296-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/business-analyst-kutir-inc-helena-mt-59601/10121915/a0919ba icid sr388-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Business-Analyst-Kutir-Inc-Helena-MT-59601/10121915/A0919BA?icid=sr388-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/business-analyst-onx-enterprise-solutions-houston-tx-77042/10117905e/641165 icid sr441-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Business-Analyst-OnX-Enterprise-Solutions-Houston-TX-77042/10117905e/641165?icid=sr441-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/business-analyst-onx-enterprise-solutions-houston-tx-77079/10117905d/644028 icid sr382-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Business-Analyst-OnX-Enterprise-Solutions-Houston-TX-77079/10117905d/644028?icid=sr382-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/business-intelligence-engineer-iii-experis-seattle-wa-98141/cxmnpwr1/fox 11356601 26 2345743 icid sr428-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Business-Intelligence-Engineer-III-Experis-Seattle-WA-98141/cxmnpwr1/FOX_11356601%26%2345743?icid=sr428-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/chief-data-scientist-cybercoders-nashville-tn-37201/cybercod/lp6 26 234514825101 icid sr202-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Chief-Data-Scientist-CyberCoders-Nashville-TN-37201/cybercod/LP6%26%234514825101?icid=sr202-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/chief-data-scientist-intelletec-llc-new-york-city-ny-10004/90907234/619759 icid sr183-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Chief-Data-Scientist-Intelletec-LLC-New-York-City-NY-10004/90907234/619759?icid=sr183-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/chief-data-scientist-solution-architect-job-saic-flexwork-tx-/10111346/t440787 icid sr342-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Chief-Data-Scientist-Solution-Architect-Job-SAIC-Flexwork-TX-/10111346/T440787?icid=sr342-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/client-services-representative-consultnet 2c-llc-new-york-ny-10001/cxcnetut/18 26 234502434 icid sr425-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Client-Services-Representative-ConsultNet%2C-LLC-New-York-NY-10001/cxcnetut/18%26%234502434?icid=sr425-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/clinical-data-scientist-sage-it-inc-canton-mi-48188/10120222/609253 icid sr256-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Clinical-Data-Scientist-Sage-IT-Inc-Canton-MI-48188/10120222/609253?icid=sr256-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/cloud-computing-architect 26 2347-senior-engineer-itech-solutions-hartford-ct-06183/10111560/18 26 234501844 icid sr435-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Cloud-Computing-Architect%26%2347-Senior-Engineer-iTech-Solutions-Hartford-CT-06183/10111560/18%26%234501844?icid=sr435-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/cyber-security-data-scientist-bank-of-america-chicago-il-60290/10118499/18058874 26 23451 icid sr173-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Cyber-Security-Data-Scientist-Bank-Of-America-Chicago-IL-60290/10118499/18058874%26%23451?icid=sr173-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data 26 2347quantitative-behavioral-scientist-leidos-mclean--/scncapi2/tr 26 2345662298 icid sr397-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data%26%2347Quantitative-Behavioral-Scientist-Leidos-Mclean--/SCNCAPI2/TR%26%2345662298?icid=sr397-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-analyst-atrilogy-solutions-group 2c-inc -anaheim-ca-92805/atrilogy/660627 icid sr369-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Analyst-Atrilogy-Solutions-Group%2C-Inc.-Anaheim-CA-92805/atrilogy/660627?icid=sr369-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-analytics- 26 2347-data-scientist-professional-jsr-tech-consulting-livingston-nj-07039/90942473/654262 icid sr283-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Analytics-%26%2347-Data-Scientist-Professional-JSR-Tech-Consulting-Livingston-NJ-07039/90942473/654262?icid=sr283-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-analytics-consultant- 26 2347-data-scientist- 28-hospital-improvement-network 29-accede-solutions-inc-chicago-il-60601/rtx187e79/83000000288329 icid sr364-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Analytics-Consultant-%26%2347-Data-Scientist-%28-Hospital-Improvement-Network%29-Accede-Solutions-Inc-Chicago-IL-60601/RTX187e79/83000000288329?icid=sr364-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-analytics-specialist 2c-mid-booz-allen-hamilton-falls-church-va-20598/booz/j3n67f6tpdhlwgsghlk icid sr431-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Analytics-Specialist%2C-Mid-Booz-Allen-Hamilton-Falls-Church-VA-20598/booz/J3N67F6TPDHLWGSGHLK?icid=sr431-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-architect- 26 2345-r 2c-python 2c-stats 2c-ai-soft-inc -philadelphia-pa-19019/soft/d2661 icid sr379-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Architect-%26%2345-R%2C-Python%2C-Stats%2C-AI-SOFT-Inc.-Philadelphia-PA-19019/soft/D2661?icid=sr379-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-architect-loma-linda-university-san-bernardino-ca-92408/10221731/073614 icid sr394-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Architect-Loma-Linda-University-San-Bernardino-CA-92408/10221731/073614?icid=sr394-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer 2c-data-intelligence-engineering-harvey-nash 2c-inc-yonkers-ny-10703/esi/418 26 23451 icid sr416-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer%2C-Data-Intelligence-Engineering-Harvey-Nash%2C-Inc-Yonkers-NY-10703/esi/418%26%23451?icid=sr416-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer 2c-data-intelligence-engineering-harvey-nash 2c-inc-yonkers-ny-10703/esi/419 26 23451 icid sr417-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer%2C-Data-Intelligence-Engineering-Harvey-Nash%2C-Inc-Yonkers-NY-10703/esi/419%26%23451?icid=sr417-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer 2c-data-intelligence-engineering-harvey-nash 2c-inc-yonkers-ny-10703/esi/590 26 23451 icid sr419-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer%2C-Data-Intelligence-Engineering-Harvey-Nash%2C-Inc-Yonkers-NY-10703/esi/590%26%23451?icid=sr419-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer 2c-data-intelligence-engineering-harvey-nash 2c-inc-yonkers-ny-10703/esi/734 26 23451 icid sr415-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer%2C-Data-Intelligence-Engineering-Harvey-Nash%2C-Inc-Yonkers-NY-10703/esi/734%26%23451?icid=sr415-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer- 28spark 2c-java 2c-kafka 29-contract-or-fte-200k-projas-technologies 2c-llc-sunnyvale-ca-94089/10126850/data 26 2345engineer icid sr375-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-%28Spark%2C-Java%2C-Kafka%29-Contract-or-FTE-200K-Projas-Technologies%2C-LLC-Sunnyvale-CA-94089/10126850/DATA%26%2345ENGINEER?icid=sr375-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer- 40-ny-aci-infotech-new-york-ny-10003/10342460/636029 icid sr423-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-%40-NY-ACI-Infotech-New-York-NY-10003/10342460/636029?icid=sr423-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-asurion-llc-nashville-tn-37201/10106849/pro00927 icid sr448-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Asurion-LLC-Nashville-TN-37201/10106849/pro00927?icid=sr448-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-capital-markets-placement-richmond-va-22109/10120548/3625 16247443 icid sr437-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Capital-Markets-Placement-Richmond-VA-22109/10120548/3625_16247443?icid=sr437-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-cybercoders-jersey-city-nj-07097/cybercod/pm6 26 234514498341 icid sr399-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-CyberCoders-Jersey-City-NJ-07097/cybercod/PM6%26%234514498341?icid=sr399-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-dicks-sporting-goods-pittsburgh-pa-15220/rtx15511c/451689 icid sr396-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Dicks-Sporting-Goods-Pittsburgh-PA-15220/RTX15511c/451689?icid=sr396-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-harvey-nash 2c-inc-yonkers-ny-10703/esi/487 26 23451 icid sr420-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Harvey-Nash%2C-Inc-Yonkers-NY-10703/esi/487%26%23451?icid=sr420-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-harvey-nash 2c-inc-yonkers-ny-10703/esi/589 26 23451 icid sr418-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Harvey-Nash%2C-Inc-Yonkers-NY-10703/esi/589%26%23451?icid=sr418-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-iii-swoon-group-waukegan-il-60079/10360791/29484 icid sr402-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-III-Swoon-Group-Waukegan-IL-60079/10360791/29484?icid=sr402-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-kforce-inc -juno-beach-fl-33408/kforcecx/iteqg1761567 icid sr426-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Kforce-Inc.-Juno-Beach-FL-33408/kforcecx/ITEQG1761567?icid=sr426-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-talented-it-new-york-ny-10001/10204403/486494 icid sr404-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Talented-IT-New-York-NY-10001/10204403/486494?icid=sr404-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-technosoft-corporation-boston-clg-ma-02467/tecnosb/2018 26 23452238 icid sr424-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-Technosoft-Corporation-Boston-Clg-MA-02467/tecnosb/2018%26%23452238?icid=sr424-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-engineer-w 26 2347-python- 26-aws-technitia-redmond-wa-98052/91021876/651444 icid sr378-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Engineer-w%26%2347-Python-%26-AWS-Technitia-Redmond-WA-98052/91021876/651444?icid=sr378-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-product-manager-modis-chicago-il-60606/cxmodoak/us en 6 914752 1023348 icid sr384-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Product-Manager-Modis-Chicago-IL-60606/cxmodoak/US_EN_6_914752_1023348?icid=sr384-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-product-manager-modis-chicago-il-60606/cxmodoak1/us en 6 914752 1023348 icid sr385-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Product-Manager-Modis-Chicago-IL-60606/cxmodoak1/US_EN_6_914752_1023348?icid=sr385-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-release-manager-miracle-software-systems 2c-inc -appleton-wi-54912/mirmi001/633209 icid sr451-16p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Release-Manager-Miracle-Software-Systems%2C-Inc.-Appleton-WI-54912/mirmi001/633209?icid=sr451-16p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-sceintist-tephra-inc -new-york-ny-10001/10462853/rj24206 icid sr359-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Sceintist-Tephra-Inc.-New-York-NY-10001/10462853/RJ24206?icid=sr359-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-science- 26 2347data-scientist-techstar-consulting-inc -spring-valley-ny-10977/10201253/dscience icid sr251-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Science-%26%2347Data-Scientist-Techstar-Consulting-Inc.-Spring-Valley-NY-10977/10201253/DScience?icid=sr251-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-science-consultant-mak-technologies 2c-llc-denver-co-80201/10519203a/38409 icid sr374-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Science-Consultant-MAK-Technologies%2C-LLC-Denver-CO-80201/10519203a/38409?icid=sr374-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2345 26 2345 26 2345 26 2345 26 2345 26 2345chicago 2c-il-source-infotech-chicago-il-60601/10240767/644641 icid sr304-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-scientist%26%2345%26%2345%26%2345%26%2345%26%2345%26%2345Chicago%2C-IL-Source-Infotech-Chicago-IL-60601/10240767/644641?icid=sr304-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2345-journeyman-chenega-corporation-springfield-va-20598/10125215/1800002576 icid sr273-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2345-Journeyman-Chenega-Corporation-Springfield-VA-20598/10125215/1800002576?icid=sr273-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2345journeyman-leidos-chantilly--/scncapi2/tr 26 2345662760 icid sr161-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2345Journeyman-Leidos-Chantilly--/SCNCAPI2/TR%26%2345662760?icid=sr161-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2345supply-chain-pegasus-knowledge-solutions-chicago-il-60631/10110049/req 26 23452518 icid sr266-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2345Supply-Chain-Pegasus-Knowledge-Solutions-Chicago-IL-60631/10110049/REQ%26%23452518?icid=sr266-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347-digital-analytics 26 2345-r- 26-python-it-corpz-peoria-il-61601/90957079/656380 icid sr332-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347-Digital-Analytics%26%2345-R-%26-Python-IT-Corpz-Peoria-IL-61601/90957079/656380?icid=sr332-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347-machine-learning-consultant- 26 2345-remote-cybercoders-newark-nj-07101/cybercod/bl4 26 234514820001 icid sr353-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347-Machine-Learning-Consultant-%26%2345-Remote-CyberCoders-Newark-NJ-07101/cybercod/BL4%26%234514820001?icid=sr353-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347-software-engineer-forbes-technical-consulting-chicago-il-60601/10113925/634548 icid sr299-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347-Software-Engineer-Forbes-Technical-Consulting-Chicago-IL-60601/10113925/634548?icid=sr299-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347analyst- 26 2345-system-analysis-and-program- 26 2345-iii-calance-us-7701-e-telecom-pkwy 26 2345temple-terrace-fl-33617/cxbcsi/jobnum32022 icid sr334-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347Analyst-%26%2345-System-Analysis-and-Program-%26%2345-III-Calance-US-7701-E-Telecom-Pkwy%26%2345temple-Terrace-FL-33617/cxbcsi/JobNum32022?icid=sr334-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347architect-with-polygraph-leidos-mclean--/scncapi2/tr 26 2345658383 icid sr281-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347Architect-with-Polygraph-Leidos-Mclean--/SCNCAPI2/TR%26%2345658383?icid=sr281-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347data-analyst-leidos-aurora-il-60502/scncapi2/tr 26 2345662034 icid sr282-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347Data-Analyst-Leidos-Aurora-IL-60502/SCNCAPI2/TR%26%2345662034?icid=sr282-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347machine-learning-consultant-techstar-consulting-inc -spring-valley-ny-10977/10201253/sampath dsml icid sr330-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347Machine-Learning-Consultant-Techstar-Consulting-Inc.-Spring-Valley-NY-10977/10201253/sampath_dsml?icid=sr330-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 26 2347machine-learning-engineer-dedicated-tech-services 2c-inc - 28dts 29-columbus-oh-43215/90968525/6103 icid sr328-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%26%2347Machine-Learning-Engineer-Dedicated-Tech-Services%2C-Inc.-%28DTS%29-Columbus-OH-43215/90968525/6103?icid=sr328-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 2c-decision-analytics- 26 2345-minnetonka 2c-mn-unitedhealth-group-minnetonka-mn-55305/uhgbot/787246 icid sr338-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%2C-Decision-Analytics-%26%2345-Minnetonka%2C-MN-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/787246?icid=sr338-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 2c-machine-learning 2c-r 2c-python 2c-sparks 2c-predictive-model-primus-software-corp-warren-nj-07059/primusga/datascientistnj icid sr357-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%2C-Machine-Learning%2C-R%2C-Python%2C-Sparks%2C-Predictive-Model-Primus-Software-Corp-Warren-NJ-07059/primusga/datascientistnj?icid=sr357-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 2c-mid-booz-allen-hamilton-alexandria-va-20598/booz/j3r0yx77vk9mzrxnmqm icid sr167-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%2C-Mid-Booz-Allen-Hamilton-Alexandria-VA-20598/booz/J3R0YX77VK9MZRXNMQM?icid=sr167-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 2c-mn- 26 2345-direct-client-need-javen-technologies 2c-inc-richfield-mn-55423/10334594/632072 icid sr354-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%2C-MN-%26%2345-Direct-Client-Need-Javen-Technologies%2C-Inc-Richfield-MN-55423/10334594/632072?icid=sr354-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 2c-nlp-hff-houston-tx-77046/rtx164555/637970 icid sr160-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST%2C-NLP-HFF-Houston-TX-77046/RTX164555/637970?icid=sr160-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist 2c-search-engage2excel-toronto-on-m4b 1b4/rtl60836/633412 icid sr227-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist%2C-Search-Engage2Excel-Toronto-ON-M4B 1B4/RTL60836/633412?icid=sr227-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345 26 2345-phd- 26 2345 26 2345-relocation-to-santa-monica-provided-cybercoders-san-francisco-ca-94101/cybercod/me1 26 234514636811 icid sr324-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345%26%2345-PhD-%26%2345%26%2345-Relocation-to-Santa-Monica-Provided-CyberCoders-San-Francisco-CA-94101/cybercod/ME1%26%234514636811?icid=sr324-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-17726-hii 26 2345mission-driven-innovative-solutions 2c-inc -fairfax-va-20151/10116608/17726 icid sr163-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-17726-HII%26%2345Mission-Driven-Innovative-Solutions%2C-Inc.-Fairfax-VA-20151/10116608/17726?icid=sr163-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-analytics 2c-strategy-and-innovation-v 26 2345soft-consulting-group 2c-inc-chicago-il-60606/vsky001/lg52557 icid sr285-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Analytics%2C-Strategy-and-Innovation-V%26%2345Soft-Consulting-Group%2C-Inc-Chicago-IL-60606/vsky001/LG52557?icid=sr285-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-data-science-core-blackrock-new-york-ny-10055/10114248/r181668 icid sr278-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Data-Science-Core-BlackRock-New-York-NY-10055/10114248/R181668?icid=sr278-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-entry-to-experienced-level- 26 2345-30001024-national-security-agency-fort-meade-md-20755/10470536/30001024 icid sr315-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Entry-to-Experienced-Level-%26%2345-30001024-National-Security-Agency-Fort-Meade-MD-20755/10470536/30001024?icid=sr315-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-expert-leidos-bethesda--/scncapi2/tr 26 2345662835 icid sr168-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Expert-Leidos-Bethesda--/SCNCAPI2/TR%26%2345662835?icid=sr168-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-human-capital-analytics-leidos-bethesda--/scncapi2/tr 26 2345658203 icid sr284-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Human-Capital-Analytics-Leidos-Bethesda--/SCNCAPI2/TR%26%2345658203?icid=sr284-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-innovation-lab-citi-new-york-ny-10001/citi4/18065488 icid sr156-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Innovation-Lab-Citi-New-York-NY-10001/citi4/18065488?icid=sr156-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-intermediate-the-judge-group-creve-coeur-mo-63141/cxjudgpa/581650 icid sr303-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-%26%2345-INTERMEDIATE-The-Judge-Group-Creve-Coeur-MO-63141/cxjudgpa/581650?icid=sr303-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-intermediate-the-judge-group-ladue-mo-63124/cxjudgpa/584175 icid sr305-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-%26%2345-INTERMEDIATE-The-Judge-Group-Ladue-MO-63124/cxjudgpa/584175?icid=sr305-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-machine-learning-excell-cambridge-ma-02142/excell/18 26 234503327 icid sr248-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Machine-Learning-eXcell-Cambridge-MA-02142/excell/18%26%234503327?icid=sr248-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-nlp- 26-ai- 40tech-consulting-group-san-jose-ca-95113/techa001/ 26 2345g 26 2345taru 26 2345ds icid sr291-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-NLP-%26-Ai-%40tech-Consulting-Group-San-Jose-CA-95113/techa001/%26%2345G%26%2345TARU%26%2345DS?icid=sr291-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-only-local-to-mn-javen-technologies 2c-inc-richfield-mn-55423/10334594/data scientist icid sr322-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Only-Local-to-MN-Javen-Technologies%2C-Inc-Richfield-MN-55423/10334594/DATA_SCIENTIST?icid=sr322-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-only-locals-to-california-srs-consulting-inc-san-jose-ca-95101/10124308/650025 icid sr323-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Only-locals-to-California-SRS-Consulting-Inc-San-Jose-CA-95101/10124308/650025?icid=sr323-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-research-informatics-city-of-hope-irwindale-ca-91010/rtx16118e/13926 icid sr188-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Research-Informatics-City-of-Hope-Irwindale-CA-91010/RTX16118e/13926?icid=sr188-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-san-juan 2c-pr-unitedhealth-group-san-juan-pr-00901/uhgbot/790045 icid sr275-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-San-Juan%2C-PR-UnitedHealth-Group-San-Juan-PR-00901/uhgbot/790045?icid=sr275-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-senior-leidos-bethesda--/scncapi2/tr 26 2345658262 icid sr190-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-Senior-Leidos-Bethesda--/SCNCAPI2/TR%26%2345658262?icid=sr190-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-senior-the-judge-group-creve-coeur-mo-63141/cxjudgpa/583649 icid sr257-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-%26%2345-SENIOR-The-Judge-Group-Creve-Coeur-MO-63141/cxjudgpa/583649?icid=sr257-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-senior-the-judge-group-ladue-mo-63124/cxjudgpa/584954 icid sr254-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-%26%2345-SENIOR-The-Judge-Group-Ladue-MO-63124/cxjudgpa/584954?icid=sr254-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-senior-the-judge-group-saint-louis-mo-63101/cxjudgpa/585650 icid sr252-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-%26%2345-SENIOR-The-Judge-Group-Saint-Louis-MO-63101/cxjudgpa/585650?icid=sr252-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-sql 2c-python 26 2347r-cybercoders-san-jose-ca-95101/cybercod/cl2 26 2345datascientistsanjose1 icid sr289-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-SQL%2C-Python%26%2347R-CyberCoders-San-Jose-CA-95101/cybercod/CL2%26%2345datascientistsanjose1?icid=sr289-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2345-u s -travel-agency-and 26 2347or-airline-experience-cybercoders-tampa-fl-33601/cybercod/cw1 26 234514823391 icid sr349-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2345-U.S.-Travel-Agency-and%26%2347or-Airline-Experience-CyberCoders-Tampa-FL-33601/cybercod/CW1%26%234514823391?icid=sr349-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-analyst-ableforce-san-diego-ca-92131/10238334/633029 icid sr250-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Analyst-AbleForce-San-Diego-CA-92131/10238334/633029?icid=sr250-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-analyst-bis-consulting-inc -research-triangle-park-nc-27711/rtl432449/dsrtp icid sr264-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Analyst-BIS-Consulting-Inc.-Research-Triangle-Park-NC-27711/RTL432449/DSrtp?icid=sr264-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-analyst-source-one-technical-solutions-llc-duluth-ga-30097/sourcepi/646989 icid sr245-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Analyst-Source-One-Technical-Solutions-LLC-Duluth-GA-30097/sourcepi/646989?icid=sr245-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-machine-learning- 26 2345-fte-200k 2b 2c-15 26 2337-bonus 2c-equity-projas-technologies 2c-llc-palo-alto-ca-94301/10126850/th 26 2345datasc 26 2345ml icid sr368-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Machine-learning-%26%2345-FTE-200K%2B%2C-15%26%2337-bonus%2C-Equity-Projas-Technologies%2C-LLC-Palo-Alto-CA-94301/10126850/TH%26%2345DATASC%26%2345ML?icid=sr368-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-machine-learning- 26 2347-ai- -90 26 2345115- 26 2347hr- -direct-client-projas-technologies 2c-llc-south-san-francisco-ca-94080/10126850/s 26 2345data 26 2345ml icid sr366-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Machine-Learning-%26%2347-AI-***-90%26%2345115-%26%2347hr-***-Direct-Client-Projas-Technologies%2C-LLC-South-San-Francisco-CA-94080/10126850/S%26%2345DATA%26%2345ML?icid=sr366-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-machine-learning-engineer-datawave-technologies-tampa-fl-33606/90696805/2018 26 2345190 icid sr318-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-scientist-%26%2347-Machine-Learning-Engineer-Datawave-Technologies-Tampa-FL-33606/90696805/2018%26%2345190?icid=sr318-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-machine-learning-government-systems-technologies-inc - 28gsti 29-wilmington-de-19801/10315211/mph2004h icid sr269-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Machine-Learning-Government-Systems-Technologies-Inc.-%28GSTi%29-Wilmington-DE-19801/10315211/MPH2004H?icid=sr269-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-operations-research-analyst- 26 2345-bhjob2052 15065-visionaire-partners-atlanta-ga-30309/10294321/bhjob2052 15065 icid sr333-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Operations-Research-Analyst-%26%2345-BHJOB2052_15065-Visionaire-Partners-Atlanta-GA-30309/10294321/BHJOB2052_15065?icid=sr333-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347-quantitative-analyst-ved-software-services 2c-inc -boston-ma-02110/vedmi001/638077 icid sr270-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347-Quantitative-Analyst-VED-Software-Services%2C-Inc.-Boston-MA-02110/vedmi001/638077?icid=sr270-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 26 2347natural-language-processing-in-morrisville 2c-nc-super-technology-solutions 2c-inc -morrisville-nc-27560/10317361/rk960 icid sr351-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%26%2347Natural-Language-Processing-in-Morrisville%2C-NC-Super-Technology-Solutions%2C-Inc.-Morrisville-NC-27560/10317361/RK960?icid=sr351-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28 relocation-assistance-available 29-cybercoders-san-francisco-ca-94101/cybercod/sz2 26 234514621841 icid sr286-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28*Relocation-Assistance-Available%29-CyberCoders-San-Francisco-CA-94101/cybercod/SZ2%26%234514621841?icid=sr286-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28data-engineer 29-acclaim-systems-alpharetta-ga-30005/acclaim/acck 26 2345ga 26 2345data icid sr301-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28data-engineer%29-Acclaim-Systems-Alpharetta-GA-30005/acclaim/acck%26%2345GA%26%2345Data?icid=sr301-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28direct-hire 29-teamsoft-chicago-il-60612/10110872/10503 sci chi icid sr292-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28Direct-Hire%29-TeamSoft-Chicago-IL-60612/10110872/10503_SCI_CHI?icid=sr292-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28journeyman 29-leidos-reston--/scncapi2/tr 26 2345661243 icid sr178-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28Journeyman%29-Leidos-Reston--/SCNCAPI2/TR%26%2345661243?icid=sr178-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28precision-medicine-and-genomics 29-essex-management-rockville-md-20852/rtl106108/657508 icid sr297-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28Precision-Medicine-and-Genomics%29-Essex-Management-Rockville-MD-20852/RTL106108/657508?icid=sr297-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28python 26 2347r 29- 26 2345-people-analytics-deloitte-orlando-fl-32801/10106525/e19orlcacds003 26 2345hc icid sr310-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28Python%26%2347R%29-%26%2345-People-Analytics-Deloitte-Orlando-FL-32801/10106525/E19ORLCACDS003%26%2345HC?icid=sr310-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28sas-programmer 29- 26 2345-part-time-seacoast-banking-stuart-fl-34994/91088976/654010 icid sr362-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28SAS-Programmer%29-%26%2345-Part-Time-Seacoast-Banking-Stuart-FL-34994/91088976/654010?icid=sr362-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28sas-programmer 29- 26 2345-part-time-seacoast-banking-winter-park-fl-32789/91088976/654026 icid sr361-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28SAS-Programmer%29-%26%2345-Part-Time-Seacoast-Banking-Winter-Park-FL-32789/91088976/654026?icid=sr361-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28senior 29-leidos-reston--/scncapi2/tr 26 2345661244 icid sr177-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28Senior%29-Leidos-Reston--/SCNCAPI2/TR%26%2345661244?icid=sr177-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist- 28sme 29-leidos-reston--/scncapi2/tr 26 2345661246 icid sr179-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-%28SME%29-Leidos-Reston--/SCNCAPI2/TR%26%2345661246?icid=sr179-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-2 26 23473-northrop-grumman-san-diego-ca-92101/mssector/18017616 icid sr271-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-2%26%23473-Northrop-Grumman-San-Diego-CA-92101/MSSector/18017616?icid=sr271-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-3d-staffing-llc -tampa-fl-33601/91013780/660658 icid sr123-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/data-scientist-3D-Staffing-LLC.-Tampa-FL-33601/91013780/660658?icid=sr123-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-3q-digital-new-york-city-ny-10010/91088492/638866 icid sr11-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-3Q-Digital-New-York-City-NY-10010/91088492/638866?icid=sr11-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-4-northrop-grumman-san-diego-ca-92101/mssector/18017619 icid sr272-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-4-Northrop-Grumman-San-Diego-CA-92101/MSSector/18017619?icid=sr272-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-advanced-software-talent-south-san-francisco-ca-94080/atstaff/8617581 icid sr113-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Advanced-Software-Talent-South-San-Francisco-CA-94080/atstaff/8617581?icid=sr113-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-agoda-services-tel-aviv--/90674169/1227658 icid sr10-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Agoda-Services-Tel-Aviv--/90674169/1227658?icid=sr10-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-alpha-recruitment-washington-dc-20001/10369051/609843 icid sr87-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Alpha-Recruitment-Washington-DC-20001/10369051/609843?icid=sr87-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ams-staffing-inc -waltham-ma-02452/10192616/622712 icid sr31-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-AMS-Staffing-Inc.-Waltham-MA-02452/10192616/622712?icid=sr31-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-and-engineering-intern-leidos-columbia-sc-29201/scncapi2/tr 26 2345661717 icid sr162-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-and-Engineering-Intern-Leidos-Columbia-SC-29201/SCNCAPI2/TR%26%2345661717?icid=sr162-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-andersen-corporation-oak-park-heights-mn-55082/rtl161330/24043 icid sr14-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Andersen-Corporation-Oak-Park-Heights-MN-55082/RTL161330/24043?icid=sr14-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-anveta-inc-greensboro-nc-27401/10312854/646269 icid sr130-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Anveta-Inc-Greensboro-NC-27401/10312854/646269?icid=sr130-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-architect-nthrive-gville-sc-29601/501589903/23021 icid sr295-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Architect-nThrive-Gville-SC-29601/501589903/23021?icid=sr295-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-asurion-llc-nashville-tn-37201/10106849/pro01020 icid sr23-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Asurion-LLC-Nashville-TN-37201/10106849/pro01020?icid=sr23-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-austin-fraser-usa-austin-tx-78701/10347650/bbbh12192 26 2345587 icid sr81-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Austin-Fraser-USA-Austin-TX-78701/10347650/BBBH12192%26%2345587?icid=sr81-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-bay-area-techworkers-san-ramon-ca-94583/bati/pl3561 icid sr118-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Bay-Area-Techworkers-San-Ramon-CA-94583/bati/pl3561?icid=sr118-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-beespoke-denver-co-80237/91078689/479941 icid sr55-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Beespoke-Denver-CO-80237/91078689/479941?icid=sr55-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-bhjob11946 342576-addison-group-houston-tx-77042/10114130/634114 icid sr194-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-BHJOB11946_342576-Addison-Group-Houston-TX-77042/10114130/634114?icid=sr194-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-boxy-charm-pembroke-pines-fl-33027/rtx1ca6be/658648 icid sr1-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Boxy-Charm-Pembroke-Pines-FL-33027/RTX1ca6be/658648?icid=sr1-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-brooksource-denver-co-80045/10110651/jo180989016 26 2345462 icid sr54-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Brooksource-Denver-CO-80045/10110651/JO180989016%26%2345462?icid=sr54-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-business-and-technology-solutions 2c-llc-boston-ma-02111/91074121/580074 icid sr48-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Business-and-Technology-Solutions%2C-LLC-Boston-MA-02111/91074121/580074?icid=sr48-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-c h -robinson-worldwide-eden-prairie-mn-55343/10115901/10099 icid sr19-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-C.H.-Robinson-Worldwide-Eden-Prairie-MN-55343/10115901/10099?icid=sr19-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-capacity-infrastructure-engineer-jp-morgan-chase-columbus-oh-43240/10125746/180061173 icid sr308-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Capacity-Infrastructure-Engineer-JP-Morgan-Chase-Columbus-OH-43240/10125746/180061173?icid=sr308-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-career-advancements 2c-inc -san-jose-ca-95101/cadv/607624 icid sr79-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Career-Advancements%2C-Inc.-San-Jose-CA-95101/cadv/607624?icid=sr79-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-charter-solutions-inc-saint-paul-mn-55101/10112718/a0e0w00001ohnjauan icid sr86-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Charter-Solutions-Inc-Saint-Paul-MN-55101/10112718/a0E0W00001OhNJaUAN?icid=sr86-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ciber-inc -bellevue-wa-98004/10122753/201815 icid sr28-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Ciber-Inc.-Bellevue-WA-98004/10122753/201815?icid=sr28-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ciber-inc -seattle-wa-98104/10122753/201523 icid sr21-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Ciber-Inc.-Seattle-WA-98104/10122753/201523?icid=sr21-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-citiustech-denver-co-80202/10482231/datascientistda icid sr97-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CitiusTech-Denver-CO-80202/10482231/DataScientistDA?icid=sr97-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-colaberry-inc -charlotte-nc-28201/90940927/632162 icid sr24-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Colaberry-Inc.-Charlotte-NC-28201/90940927/632162?icid=sr24-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-comcentric-inc -broomfield-co-80021/10116074/648758 icid sr111-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Comcentric-Inc.-Broomfield-CO-80021/10116074/648758?icid=sr111-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-compugain-corporation-rockville-md-20850/rtl61687/18 26 234501950 icid sr134-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CompuGain-Corporation-Rockville-MD-20850/RTL61687/18%26%234501950?icid=sr134-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-comscore-madison-wi-53562/10117623/3667 icid sr22-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-comScore-Madison-WI-53562/10117623/3667?icid=sr22-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-comscore-new-york-ny-10001/10117623/3708 icid sr6-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-comScore-New-York-NY-10001/10117623/3708?icid=sr6-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-consultant-vedainfo-inc -atlanta-ga-30301/10285916/660961 icid sr302-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Consultant-Vedainfo-Inc.-Atlanta-GA-30301/10285916/660961?icid=sr302-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-consultusa-pittsburgh-pa-15222/10119092/11589d icid sr98-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-ConsultUSA-Pittsburgh-PA-15222/10119092/11589D?icid=sr98-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-crossfire-consulting-corp-saint-louis-mo-63134/10117531/18 26 234505047 ld icid sr100-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Crossfire-Consulting-Corp-Saint-Louis-MO-63134/10117531/18%26%234505047_LD?icid=sr100-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-csi- 28consultant-specialists-inc 29-south-san-francisco-ca-94080/10106409/realworlddata icid sr119-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CSI-%28Consultant-Specialists-Inc.%29-South-San-Francisco-CA-94080/10106409/RealWorldData?icid=sr119-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-csi- 28consultant-specialists-inc 29-south-san-francisco-ca-94080/10106409/realworlddata icid sr122-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CSI-%28Consultant-Specialists-Inc.%29-South-San-Francisco-CA-94080/10106409/RealWorldData?icid=sr122-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-alberta-ab-/cybercod/mm18 26 234514757141 icid sr42-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Alberta-AB-/cybercod/MM18%26%234514757141?icid=sr42-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-berkeley-ca-94701/cybercod/sm1 26 234514616911 icid sr41-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Berkeley-CA-94701/cybercod/SM1%26%234514616911?icid=sr41-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-bethesda-md-20810/cybercod/jg8 26 234514855741 icid sr72-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Bethesda-MD-20810/cybercod/JG8%26%234514855741?icid=sr72-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-bethesda-md-20810/cybercod/sw3 26 234514800621 icid sr61-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Bethesda-MD-20810/cybercod/SW3%26%234514800621?icid=sr61-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-clayton-mo-63105/cybercod/rc4 26 234514825181 icid sr64-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Clayton-MO-63105/cybercod/RC4%26%234514825181?icid=sr64-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-columbus-oh-43085/cybercod/sz2 26 234514837701 icid sr75-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Columbus-OH-43085/cybercod/SZ2%26%234514837701?icid=sr75-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-greensboro-nc-27395/cybercod/jw1 26 234514856931 icid sr63-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Greensboro-NC-27395/cybercod/JW1%26%234514856931?icid=sr63-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-irvine-ca-92602/cybercod/am11 26 234514852571 icid sr84-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Irvine-CA-92602/cybercod/AM11%26%234514852571?icid=sr84-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-lake-forest-ca-92630/cybercod/pm7 26 234514628161 icid sr116-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Lake-Forest-CA-92630/cybercod/PM7%26%234514628161?icid=sr116-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-little-rock-ar-72201/cybercod/le1 26 234514852771 icid sr76-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Little-Rock-AR-72201/cybercod/LE1%26%234514852771?icid=sr76-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-los-angeles-ca-90001/cybercod/dl2 26 234514705967 icid sr62-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Los-Angeles-CA-90001/cybercod/DL2%26%234514705967?icid=sr62-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-new-york-ny-10001/cybercod/sz2 26 234514869481 icid sr67-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-New-York-NY-10001/cybercod/SZ2%26%234514869481?icid=sr67-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-newport-beach-ca-92658/cybercod/ng 26 234514609851 icid sr47-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Newport-Beach-CA-92658/cybercod/NG%26%234514609851?icid=sr47-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-palo-alto-ca-94301/cybercod/es1 26 234514875641 icid sr69-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Palo-Alto-CA-94301/cybercod/ES1%26%234514875641?icid=sr69-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-san-francisco-ca-94101/cybercod/am11 26 234514839631 icid sr83-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-San-Francisco-CA-94101/cybercod/AM11%26%234514839631?icid=sr83-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-san-francisco-ca-94101/cybercod/sz2 26 234514604801 icid sr60-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-San-Francisco-CA-94101/cybercod/SZ2%26%234514604801?icid=sr60-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-santa-monica-ca-90401/cybercod/me1 26 234514633821 icid sr68-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Santa-Monica-CA-90401/cybercod/ME1%26%234514633821?icid=sr68-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-west-menlo-park-ca-94025/cybercod/cb10 26 234514821261 icid sr59-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-West-Menlo-Park-CA-94025/cybercod/CB10%26%234514821261?icid=sr59-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-cybercoders-woodland-hills-ca-91364/cybercod/mr 26 234514870391 icid sr82-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-CyberCoders-Woodland-Hills-CA-91364/cybercod/MR%26%234514870391?icid=sr82-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-dataspace-inc -livonia-mi-48150/datami/009 icid sr77-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Dataspace-Inc.-Livonia-MI-48150/datami/009?icid=sr77-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-dst-systems 2c-inc-kansas-city-mo-64101/rtx191607/r237243 icid sr26-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-DST-Systems%2C-Inc-Kansas-City-MO-64101/RTX191607/R237243?icid=sr26-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-e 26 2345zest-solutions 2c-inc -irving-tx-75014/90556710/638835 icid sr29-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-e%26%2345Zest-Solutions%2C-Inc.-Irving-TX-75014/90556710/638835?icid=sr29-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-eliassen-group-atlanta-ga-30328/10444409/635729 icid sr57-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Eliassen-Group-Atlanta-GA-30328/10444409/635729?icid=sr57-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-eliassen-group-rockville-md-20847/cxelisen/311284 icid sr109-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Eliassen-Group-Rockville-MD-20847/cxelisen/311284?icid=sr109-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-emvia-inc-plano-tx-75024/90979540/ 23150484 icid sr53-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-scientist-Emvia-Inc-Plano-TX-75024/90979540/%23150484?icid=sr53-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-encore-consulting-services-springfield 2c-il-62701/10123687/609427 icid sr104-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Encore-Consulting-Services-Springfield%2C-IL-62701/10123687/609427?icid=sr104-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-engility-springfield-va-20598/10365615/185996 icid sr7-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Engility-Springfield-VA-20598/10365615/185996?icid=sr7-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-experis-san-antonio-tx-78205/comsysd/fox 11358355 26 2345930 icid sr49-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Experis-San-Antonio-TX-78205/COMSYSD/FOX_11358355%26%2345930?icid=sr49-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-fahrenheit-it-denver-co-80002/10111360/152305 icid sr88-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Fahrenheit-IT-Denver-CO-80002/10111360/152305?icid=sr88-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-flexion-inc -chicago-il-60603/compcc/3054 26 2345749 icid sr32-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Flexion-Inc.-Chicago-IL-60603/compcc/3054%26%2345749?icid=sr32-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-flexon-technologies-inc -newtown-square-pa-19073/90891773/632637 icid sr128-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Flexon-Technologies-Inc.-Newtown-Square-PA-19073/90891773/632637?icid=sr128-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-for-a-connected-and-automated-vehicle-r 26d-osi-engineering 2c-inc -southfield-mi-48034/10365912/datascientistmi icid sr307-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-for-a-Connected-and-Automated-Vehicle-R%26D-OSI-Engineering%2C-Inc.-Southfield-MI-48034/10365912/datascientistmi?icid=sr307-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-geneva-consulting-group-new-york-city-ny-10018/geneva/ad8746 icid sr138-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-GENEVA-CONSULTING-GROUP-New-York-City-NY-10018/geneva/AD8746?icid=sr138-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-grid-dynamics-international 2c-inc -atlanta-ga-30301/rtx145791/gd1976 icid sr25-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Grid-Dynamics-International%2C-Inc.-Atlanta-GA-30301/RTX145791/GD1976?icid=sr25-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-grid-dynamics-international 2c-inc -milpitas-ca-95035/rtx145791/gd1920 icid sr5-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Grid-Dynamics-International%2C-Inc.-Milpitas-CA-95035/RTX145791/GD1920?icid=sr5-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-gspann-technologies-san-francisco-ca-94102/10200091/030918 icid sr143-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-GSPANN-Technologies-San-Francisco-CA-94102/10200091/030918?icid=sr143-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-gsrinc-san-francisco-ca-94105/gsr/pm062617 icid sr106-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-GSRINC-San-Francisco-CA-94105/gsr/PM062617?icid=sr106-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-htc-global-services 2c-inc -charlotte-nc-28262/10122753b/601456 icid sr102-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-HTC-Global-Services%2C-Inc.-Charlotte-NC-28262/10122753b/601456?icid=sr102-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-htc-global-services 2c-inc -matthews-nc-28105/10122753b/nncpython icid sr45-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-HTC-Global-Services%2C-Inc.-Matthews-NC-28105/10122753b/NNCPython?icid=sr45-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-i-csi- 28consultant-specialists-inc 29-south-san-francisco-ca-94080/10106409/datascientist icid sr255-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-I-CSI-%28Consultant-Specialists-Inc.%29-South-San-Francisco-CA-94080/10106409/DataScientist?icid=sr255-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-i-csx-technology-jacksonville-fl-32099/csxmd001/044996 26tz 3dgmt 26 234505 26 23373a00 icid sr171-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-I-CSX-Technology-Jacksonville-FL-32099/csxmd001/044996%26tz%3DGMT%26%234505%26%23373A00?icid=sr171-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ibg 2c-llc-budapest--/10340106/1830 icid sr27-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-IBG%2C-LLC-Budapest--/10340106/1830?icid=sr27-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-iii-the-judge-group-rancho-cordova-ca-95655/cxjudgpa/585653 icid sr225-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-III-The-Judge-Group-Rancho-Cordova-CA-95655/cxjudgpa/585653?icid=sr225-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-infovision 2c-inc -colorado-springs-co-80901/infotx/654889 icid sr136-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-InfoVision%2C-Inc.-Colorado-Springs-CO-80901/infotx/654889?icid=sr136-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-innova-solutions-inc-dublin-ca-94568/10114225/635738 icid sr33-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Innova-Solutions-Inc-Dublin-CA-94568/10114225/635738?icid=sr33-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-innovizant-llc-madison-wi-53706/91001806/2018 26 2345139 icid sr90-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Innovizant-LLC-Madison-WI-53706/91001806/2018%26%2345139?icid=sr90-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-insigma-san-francisco-ca-94101/90763284/386012 icid sr141-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Insigma-San-Francisco-CA-94101/90763284/386012?icid=sr141-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-intern-asurion-llc-nashville-tn-37201/10106849/pro00986 icid sr174-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Intern-Asurion-LLC-Nashville-TN-37201/10106849/pro00986?icid=sr174-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-invictus-infotech-walnut-creek-ca-94595/10426580/645598 icid sr2-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-scientist-Invictus-Infotech-Walnut-Creek-CA-94595/10426580/645598?icid=sr2-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-iris-software 2c-inc -roseland-nj-07068/irissoft/addsrnj icid sr103-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-IRIS-Software%2C-Inc.-Roseland-NJ-07068/irissoft/ADDSRNJ?icid=sr103-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ispace 2c-inc-denver-co-80201/10106153/8629489 icid sr101-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-iSpace%2C-Inc-Denver-CO-80201/10106153/8629489?icid=sr101-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-it 26 2345scient-atlanta-ga-30339/10214351/659672 icid sr146-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-IT%26%2345SCIENT-Atlanta-GA-30339/10214351/659672?icid=sr146-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-it-associates 2c-inc -chicago-il-60601/itassoc/dstt 26 2345f7 icid sr114-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-IT-Associates%2C-Inc.-Chicago-IL-60601/itassoc/DSTT%26%2345F7?icid=sr114-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-iv-sears-hoffman-estates-il-60103/10112347/954082br 26 2345933 icid sr170-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-IV-Sears-Hoffman-Estates-IL-60103/10112347/954082BR%26%2345933?icid=sr170-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-jack-richman- 26-associates- 26 2347-jra-consulting-miami-fl-33131/10111611/655659 icid sr93-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-Jack-Richman-%26-Associates-%26%2347-JRA-Consulting-Miami-FL-33131/10111611/655659?icid=sr93-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-jones-grove-it-recruiting-charlotte-nc-28209/10513610/jg666 icid sr124-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Jones-Grove-IT-Recruiting-Charlotte-NC-28209/10513610/JG666?icid=sr124-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-journeyman-leidos-springfield-mo-65801/scncapi2/tr 26 2345658047 icid sr187-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Journeyman-Leidos-Springfield-MO-65801/SCNCAPI2/TR%26%2345658047?icid=sr187-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-kaztronix-basking-ridge-nj-07920/10195552/46843 icid sr152-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Kaztronix-Basking-Ridge-NJ-07920/10195552/46843?icid=sr152-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-kmm-technologies 2c-inc-greensboro-nc-27401/10244996/647778 icid sr140-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-KMM-Technologies%2C-Inc-Greensboro-NC-27401/10244996/647778?icid=sr140-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-lawrence-harvey-new-york-city-ny-10004/10333482/bigl icid sr44-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Lawrence-Harvey-New-York-City-NY-10004/10333482/BIGL?icid=sr44-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-leidos-aurora-il-60502/scncapi2/tr 26 2345660233 icid sr38-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Leidos-Aurora-IL-60502/SCNCAPI2/TR%26%2345660233?icid=sr38-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-leidos-mclean--/scncapi2/tr 26 2345654458 icid sr3-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Leidos-Mclean--/SCNCAPI2/TR%26%2345654458?icid=sr3-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-leidos-mclean--/scncapi2/tr 26 2345662847 icid sr4-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Leidos-Mclean--/SCNCAPI2/TR%26%2345662847?icid=sr4-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-matlen-silver-charlotte-nc-28202/10113579/640601 icid sr39-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Matlen-Silver-Charlotte-NC-28202/10113579/640601?icid=sr39-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-modelling-systems-technology-group-inc - 28stg 29-dearborn-mi-48126/10124418/datascimod icid sr262-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Modelling-Systems-Technology-Group-Inc.-%28STG%29-Dearborn-MI-48126/10124418/dataSciMod?icid=sr262-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-modis-louisville-ky-40222/10425966/us en 6 916320 1026939 icid sr96-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Modis-Louisville-KY-40222/10425966/US_EN_6_916320_1026939?icid=sr96-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-modis-poway-ca-92064/cxmodsad1/us en 6 914740 1026166 icid sr71-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Modis-Poway-CA-92064/CXMODSAD1/US_EN_6_914740_1026166?icid=sr71-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-modis-southfield-mi-48075/10477088/503012 icid sr129-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Modis-Southfield-MI-48075/10477088/503012?icid=sr129-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-need-local-to-ga-for-f2f-tekshapers-atlanta-ga-30301/10335759/654024 icid sr348-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Need-local-to-GA-for-F2F-TekShapers-Atlanta-GA-30301/10335759/654024?icid=sr348-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-nic-inc-austin-tx-73301/10119425/39e6bf15 26 23451e84 26 23454dec 26 2345956e 26 2345ffc638a6aae3 icid sr18-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DATA-SCIENTIST-NIC-Inc-Austin-TX-73301/10119425/39e6bf15%26%23451e84%26%23454dec%26%2345956e%26%2345ffc638a6aae3?icid=sr18-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-open-systems-technologies-new-york-ny-10018/opensyst/118720 icid sr37-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Open-Systems-Technologies-New-York-NY-10018/opensyst/118720?icid=sr37-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-outworx-corporation-mountain-view-ca-94039/10285856/637626 icid sr34-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Outworx-Corporation-Mountain-View-CA-94039/10285856/637626?icid=sr34-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-people-force-consulting-inc-denver-co-80014/90938791/650963 icid sr149-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-People-Force-Consulting-Inc-Denver-CO-80014/90938791/650963?icid=sr149-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-people-force-consulting-inc-denver-co-80014/90938791/650963 icid sr151-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-People-Force-Consulting-Inc-Denver-CO-80014/90938791/650963?icid=sr151-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-princeton-information-ltd-new-york-ny-10036/cxprince/18 26 234515251 icid sr147-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Princeton-Information-Ltd-New-York-NY-10036/cxprince/18%26%234515251?icid=sr147-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-principal-fedex-services-collierville-tn-38017/90615169/625909 icid sr172-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Principal-FedEx-Services-Collierville-TN-38017/90615169/625909?icid=sr172-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-prudent-technologies-and-consulting-fort-worth-tx-76131/prutx001/ck34 icid sr117-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Prudent-Technologies-and-Consulting-Fort-Worth-TX-76131/prutx001/CK34?icid=sr117-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-pyramid-consulting 2c-inc -colorado-springs-co-80903/pyrmid/18 26 234544644 icid sr139-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Pyramid-Consulting%2C-Inc.-Colorado-Springs-CO-80903/pyrmid/18%26%234544644?icid=sr139-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-quicken-loans-inc -detroit-mi-48201/10109060/25094 icid sr16-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Quicken-Loans-Inc.-Detroit-MI-48201/10109060/25094?icid=sr16-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-red-gate-group-ltd-reston-va-20191/10349707/591314 icid sr30-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Red-Gate-Group-LTD-Reston-VA-20191/10349707/591314?icid=sr30-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-chicago-il-60290/rhalfint/01300 26 23450010648346 icid sr94-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Chicago-IL-60290/rhalfint/01300%26%23450010648346?icid=sr94-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-chicago-il-60290/rhalfint/01300 26 23450010651031 icid sr80-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Chicago-IL-60290/rhalfint/01300%26%23450010651031?icid=sr80-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-chicago-il-60601/rhalfint/01340 26 23459501514003 icid sr56-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Chicago-IL-60601/rhalfint/01340%26%23459501514003?icid=sr56-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-houston-tx-77072/rhalfint/04130 26 23450010517055 icid sr74-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Houston-TX-77072/rhalfint/04130%26%23450010517055?icid=sr74-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-oklahoma-city-ok-73112/rhalfint/03500 26 23459501466939 icid sr58-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Oklahoma-City-OK-73112/rhalfint/03500%26%23459501466939?icid=sr58-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-quincy-ma-02169/rhalfint/02100 26 23459501522389 icid sr85-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Quincy-MA-02169/rhalfint/02100%26%23459501522389?icid=sr85-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-santa-clara-ca-95050/rhalfint/04812 26 23459501536211 icid sr66-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Santa-Clara-CA-95050/rhalfint/04812%26%23459501536211?icid=sr66-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-robert-half-technology-spartanburg-sc-29303/rhalfint/03230 26 23450010663609 icid sr73-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Robert-Half-Technology-Spartanburg-SC-29303/rhalfint/03230%26%23450010663609?icid=sr73-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-s 26p-global-ratings-boston-ma-02110/rtx14fecf/240787 icid sr13-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-S%26P-Global-Ratings-Boston-MA-02110/RTX14fecf/240787?icid=sr13-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-s 26p-global-ratings-new-york-ny-10001/rtx14fecf/239549 icid sr12-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-S%26P-Global-Ratings-New-York-NY-10001/RTX14fecf/239549?icid=sr12-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-s 26p-global-ratings-new-york-ny-10001/rtx14fecf/242123 icid sr15-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-S%26P-Global-Ratings-New-York-NY-10001/RTX14fecf/242123?icid=sr15-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-s 26p-global-ratings-new-york-ny-10001/rtx14fecf/242428 icid sr8-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-S%26P-Global-Ratings-New-York-NY-10001/RTX14fecf/242428?icid=sr8-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-savantis-solutions-llc-scottsdale-az-85254/10116737/645545 icid sr137-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-scientist-Savantis-Solutions-LLC-Scottsdale-AZ-85254/10116737/645545?icid=sr137-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-seneca-resources 2c-llc-richmond-va-23219/10119426/5593 icid sr120-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Seneca-Resources%2C-LLC-Richmond-VA-23219/10119426/5593?icid=sr120-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-signature-consultants-charlotte-nc-28202/sigmass/265752 26 2345869 icid sr50-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Signature-Consultants-Charlotte-NC-28202/sigmass/265752%26%2345869?icid=sr50-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-signature-consultants-seattle-wa-98141/sigmass/267537 26 2345563 icid sr51-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Signature-Consultants-Seattle-WA-98141/sigmass/267537%26%2345563?icid=sr51-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-silverlink-technologies-llc-san-jose-ca-95134/10412304/660566 icid sr112-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Silverlink-Technologies-LLC-San-Jose-CA-95134/10412304/660566?icid=sr112-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-spi-irving-tx-75063/10115553/326065 icid sr127-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-SPI-Irving-TX-75063/10115553/326065?icid=sr127-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-sr -lead-capital-markets-placement-los-angeles-ca-90001/10120548/3625 15514213 icid sr239-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Sr.-Lead-Capital-Markets-Placement-Los-Angeles-CA-90001/10120548/3625_15514213?icid=sr239-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ssi-boston-ma-02108/10128873/ns8302 icid sr135-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-SSI-Boston-MA-02108/10128873/NS8302?icid=sr135-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-steven-douglas-associates-waltham-ma-02451/itechsol/588409 icid sr89-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Steven-Douglas-Associates-Waltham-MA-02451/itechsol/588409?icid=sr89-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-strivector-san-jose-ca-95113/10482237/18 26 234503968 icid sr46-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Strivector-San-Jose-CA-95113/10482237/18%26%234503968?icid=sr46-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-sullivan-and-cogliano-waltham-ma-02451/10107697/ds icid sr35-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Sullivan-and-Cogliano-Waltham-MA-02451/10107697/DS?icid=sr35-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-synechron-inc -new-york-ny-10001/10111699/627401 icid sr43-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Synechron-Inc.-New-York-NY-10001/10111699/627401?icid=sr43-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-sysmind 2c-llc-albany-ny-12202/10114932/628687 icid sr91-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Sysmind%2C-LLC-Albany-NY-12202/10114932/628687?icid=sr91-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-systems-technology-group-inc - 28stg 29-dearborn-mi-48126/10124418/scientistdata icid sr121-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Systems-Technology-Group-Inc.-%28STG%29-Dearborn-MI-48126/10124418/ScientistData?icid=sr121-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-talent-cloud-staffing-tampa-fl-33607/90918719/660200 icid sr78-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Talent-Cloud-Staffing-Tampa-FL-33607/90918719/660200?icid=sr78-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-techno 26 2345comp 2c-inc -ashburn-va-20147/technonj/dl datascience icid sr142-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Techno%26%2345Comp%2C-Inc.-Ashburn-VA-20147/technonj/dl_datascience?icid=sr142-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-tekhiring-sunnyvale-ca-94085/90993822/627169 icid sr126-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-TEKHiring-Sunnyvale-CA-94085/90993822/627169?icid=sr126-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-tekvalley 2c-corp -sunnyvale-ca-94085/10216442/652150 icid sr131-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Tekvalley%2C-Corp.-Sunnyvale-CA-94085/10216442/652150?icid=sr131-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-tephra-inc -new-york-ny-10027/10462853/neel ds icid sr92-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Tephra-Inc.-New-York-NY-10027/10462853/Neel_DS?icid=sr92-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-the-csi-companies-alpharetta-ga-30004/10113246/40141 icid sr110-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-The-CSI-Companies-Alpharetta-GA-30004/10113246/40141?icid=sr110-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-the-judge-group-irving-tx-75014/cxjudgpa/582980 icid sr144-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-The-Judge-Group-Irving-TX-75014/cxjudgpa/582980?icid=sr144-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-the-judge-group-malvern-pa-19355/cxjudgpa/587798 icid sr107-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-The-Judge-Group-Malvern-PA-19355/cxjudgpa/587798?icid=sr107-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-the-judge-group-philadelphia-pa-19019/cxjudgpa/581402 icid sr108-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-The-Judge-Group-Philadelphia-PA-19019/cxjudgpa/581402?icid=sr108-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-thinkfind-corporation-fort-worth-tx-76131/10439854/1513 26 234528 26 2345mh2352 icid sr115-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Thinkfind-Corporation-Fort-Worth-TX-76131/10439854/1513%26%234528%26%2345MH2352?icid=sr115-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-thomas-new-york-ny-10001/rtl031540/608262 icid sr9-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Thomas-New-York-NY-10001/RTL031540/608262?icid=sr9-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-thoughtwave-software-and-solutions-san-francisco-ca-94101/10334366/2018 26 23456321 icid sr52-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Thoughtwave-Software-and-Solutions-San-Francisco-CA-94101/10334366/2018%26%23456321?icid=sr52-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-tranzeal 2c-inc -seattle-wa-98102/10439527/657324 icid sr99-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Tranzeal%2C-Inc.-Seattle-WA-98102/10439527/657324?icid=sr99-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-u s -tech-solutions-inc -palo-alto-ca-94304/usts/18 26 234533924 icid sr132-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-U.S.-Tech-Solutions-Inc.-Palo-Alto-CA-94304/usts/18%26%234533924?icid=sr132-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-u s -tech-solutions-inc -seattle-wa-98101/usts/583573 icid sr105-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-U.S.-Tech-Solutions-Inc.-Seattle-WA-98101/usts/583573?icid=sr105-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-u s -tech-solutions-inc -seattle-wa-98104/usts/582961 icid sr133-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-U.S.-Tech-Solutions-Inc.-Seattle-WA-98104/usts/582961?icid=sr133-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-unisys-federal-reston-va-20190/rtl92996/4461 icid sr20-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Unisys-Federal-Reston-VA-20190/RTL92996/4461?icid=sr20-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-ups-wayne-nj-07470/10120942a/170671 icid sr17-1p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-UPS-Wayne-NJ-07470/10120942A/170671?icid=sr17-1p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-v2soft-detroit-mi-48226/10115258/18 26 234500737 icid sr150-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-V2Soft-Detroit-MI-48226/10115258/18%26%234500737?icid=sr150-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-vy-systems-malvern-pa-19355/10114746/960458 icid sr40-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-scientist-Vy-Systems-Malvern-PA-19355/10114746/960458?icid=sr40-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-w-sap-is 26 2345u-systems-technology-group-inc - 28stg 29-detroit-mi-48268/10124418/sci sapisu icid sr298-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-w-SAP-IS%26%2345U-Systems-Technology-Group-Inc.-%28STG%29-Detroit-MI-48268/10124418/Sci_SAPISU?icid=sr298-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-walkwater-technologies-kirkland-wa-98033/10463523/592493 icid sr145-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Walkwater-Technologies-Kirkland-WA-98033/10463523/592493?icid=sr145-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-winmax-systems-corporation-dallas-tx-75227/10120741/535192 icid sr148-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-WinMax-Systems-Corporation-Dallas-TX-75227/10120741/535192?icid=sr148-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-wipro-ltd -bellevue-wa-98004/10110759/618873 icid sr36-2p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Wipro-Ltd.-Bellevue-WA-98004/10110759/618873?icid=sr36-2p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-wipro-ltd -englewood-co-80110/10110759/302082 icid sr95-4p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Wipro-Ltd.-Englewood-CO-80110/10110759/302082?icid=sr95-4p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-wipro-ltd -redmond-wa-98033/10110759/295217 icid sr70-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Wipro-Ltd.-Redmond-WA-98033/10110759/295217?icid=sr70-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-with-python-kavi-software-atlanta-ga-30354/10119154/pd0003 icid sr265-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-With-Python-Kavi-Software-Atlanta-GA-30354/10119154/PD0003?icid=sr265-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-xoriant-corporation-kirkland-wa-98033/xorca001/196535 icid sr125-5p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Xoriant-Corporation-Kirkland-WA-98033/xorca001/196535?icid=sr125-5p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientist-yablon- 26-associates-new-york-ny-10016/10519719/543658 icid sr65-3p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientist-Yablon-%26-Associates-New-York-NY-10016/10519719/543658?icid=sr65-3p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/data-scientists-and-data-analysts-epic-systems 2c-inc 2c-arlington-va-22201/90901966/563564 icid sr377-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Data-Scientists-and-Data-Analysts-Epic-Systems%2C-Inc%2C-Arlington-VA-22201/90901966/563564?icid=sr377-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/database-architect-lead-variq-corporation-washington-dc-20001/10286792/3204 icid sr395-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Database-Architect-Lead-VariQ-Corporation-Washington-DC-20001/10286792/3204?icid=sr395-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/database-programmer-gdh-consulting-houston 2c-tx-tx-77002/10112156/gdh 56051 26 2345260 icid sr373-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Database-Programmer-GDH-Consulting-Houston%2C-Tx-TX-77002/10112156/GDH_56051%26%2345260?icid=sr373-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/decision- 26 2347-data-scientist-computer-staff 2c-inc -fort-worth-tx-76102/10117243/262 icid sr231-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Decision-%26%2347-Data-Scientist-Computer-Staff%2C-Inc.-Fort-Worth-TX-76102/10117243/262?icid=sr231-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/devops 26 2347java- 2b-data-scientist-innoflexion-technologies-san-francisco-ca-94108/rtl195322/619240 icid sr329-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/DevOps%26%2347Java-%2B-Data-Scientist-Innoflexion-Technologies-San-Francisco-CA-94108/RTL195322/619240?icid=sr329-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/digital-insights-data-scientist-capital-markets-placement-new-york-ny-10001/10120548/3625 16178424 icid sr240-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Digital-Insights-Data-Scientist-Capital-Markets-Placement-New-York-NY-10001/10120548/3625_16178424?icid=sr240-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/direct-fulltime-role- 26 2345-data-scientist-forecasting-cardinal-technology-solutions-union-nj-07083/10121181/cts0606 icid sr350-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Direct-fulltime-role-%26%2345-Data-Scientist-Forecasting-Cardinal-Technology-Solutions-Union-NJ-07083/10121181/CTS0606?icid=sr350-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/director 2c-data-analytics-and-business-intelligence-robert-half-technology-basking-ridge-nj-07974/rhalfint/02720 26 23450010627427 icid sr450-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Director%2C-Data-Analytics-and-Business-Intelligence-Robert-Half-Technology-Basking-Ridge-NJ-07974/rhalfint/02720%26%23450010627427?icid=sr450-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/director-data-scientist-and-advanced-analytics-comrise-nyc-ny-10036/comrise/591788 icid sr321-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/director-Data-Scientist-and-Advanced-analytics-Comrise-Nyc-NY-10036/comrise/591788?icid=sr321-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/director-of-data-science- 26 2347-analytics-kforce-inc -phoenix-az-85034/kforcecx/itwqg1762759 icid sr414-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Director-of-Data-Science-%26%2347-Analytics-Kforce-Inc.-Phoenix-AZ-85034/kforcecx/ITWQG1762759?icid=sr414-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/director-of-data-science- 26 2347-analytics-kforce-inc -phoenix-az-85034/kforcecx/itwqg1762759 icid sr421-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Director-of-Data-Science-%26%2347-Analytics-Kforce-Inc.-Phoenix-AZ-85034/kforcecx/ITWQG1762759?icid=sr421-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/enterprise-architect-encore-consulting-services-hartford-ct-06101/10123687/646657 icid sr443-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Enterprise-Architect-Encore-Consulting-Services-Hartford-CT-06101/10123687/646657?icid=sr443-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/enterprise-architect-level-iv-corporate-systems-associates-hartford-ct-06183/corct001/t3719 icid sr389-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Enterprise-Architect-Level-IV-Corporate-Systems-Associates-Hartford-CT-06183/corct001/T3719?icid=sr389-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/enterprise-infrastructure-and-cloud-architect- 26 2345-cloud-adpi 2c-llc -hartford-ct-06183/silent/trvjp3719 icid sr405-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Enterprise-Infrastructure-and-Cloud-Architect-%26%2345-Cloud-ADPI%2C-LLC..-Hartford-CT-06183/silent/TRVJP3719?icid=sr405-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/etl 26 2347-data-engineer-kavaliro-wilmington-de-19805/10411514/644553 icid sr387-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/ETL%26%2347-Data-Engineer-Kavaliro-Wilmington-DE-19805/10411514/644553?icid=sr387-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/expert-data-scientist-modis-seattle-wa-98101/10208456/us en 6 914784 1028400 icid sr226-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Expert-Data-Scientist-Modis-Seattle-WA-98101/10208456/US_EN_6_914784_1028400?icid=sr226-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/fte 26 2347perm 3a-direct-hire-in-nc 26 2347ar 3a-immediate-opening 3a-data-analytics- 26 2345-data-scientist- 28audit-exp -a-plus 29-u s -tech-solutions-inc -charlotte-nc-28201/usts/604257 icid sr363-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/FTE%26%2347PERM%3A-Direct-Hire-in-NC%26%2347AR%3A-Immediate-Opening%3A-Data-Analytics-%26%2345-Data-Scientist-%28Audit-Exp.-a-plus%29-U.S.-Tech-Solutions-Inc.-Charlotte-NC-28201/usts/604257?icid=sr363-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/full-stack-developer- 28ruby-on-rails 29-cybercoders-san-luis-obispo-ca-93401/cybercod/dm7 26 2345144961328 icid sr400-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Full-Stack-Developer-%28Ruby-on-Rails%29-CyberCoders-San-Luis-Obispo-CA-93401/cybercod/DM7%26%2345144961328?icid=sr400-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/head-of-data-science-cybercoders-cambridge-ma-02138/cybercod/rr7 26 234514632141 icid sr411-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Head-of-Data-Science-CyberCoders-Cambridge-MA-02138/cybercod/RR7%26%234514632141?icid=sr411-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/ibm-watson-data-scientist-encode 2c-inc -durham-nc-27713/encode/657602 icid sr267-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/IBM-Watson-Data-Scientist-Encode%2C-Inc.-Durham-NC-27713/encode/657602?icid=sr267-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/integrated-intelligence-principle-data-scientist-engility-chantilly-va-20151/10365615/1812325 icid sr279-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Integrated-Intelligence-Principle-Data-Scientist-Engility-Chantilly-VA-20151/10365615/1812325?icid=sr279-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/it-digital-analytics-lead-edi-staffing---02864/10107595/18 26 234500527 icid sr376-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/IT-Digital-Analytics-Lead-EDI-Staffing---02864/10107595/18%26%234500527?icid=sr376-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/it-enterprise-architect-tca-consulting-group 2c-inc -hartford-ct-06183/tca/samt3719ct icid sr406-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/IT-Enterprise-Architect-TCA-Consulting-Group%2C-Inc.-Hartford-CT-06183/tca/SAMT3719CT?icid=sr406-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/jr -data-scientist-critical-skills-inc-dba-cspring-indianapolis-in-46204/10119301/877592 icid sr218-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Jr.-Data-Scientist-Critical-Skills-Inc-dba-CSpring-Indianapolis-IN-46204/10119301/877592?icid=sr218-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/jr-data-scientist- 26 2345-with-in-person-python-test- 26 2345-pleasanton 2c-ca-spruce-technology-inc -pleasanton-ca-94566/10215935/anpdatascientis icid sr365-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Jr-Data-Scientist-%26%2345-With-In-person-Python-Test-%26%2345-Pleasanton%2C-CA-Spruce-Technology-Inc.-Pleasanton-CA-94566/10215935/ANPDATASCIENTIS?icid=sr365-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/jr-data-scientist-strategic-staffing-solutions-charlotte-nc-28202/sssmi/bbbh141307 26 2345709 icid sr195-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Jr-Data-Scientist-Strategic-Staffing-Solutions-Charlotte-NC-28202/sssmi/BBBH141307%26%2345709?icid=sr195-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/junior-ai 26 2347ml-data-analyst-world-fuel-services-corporation---/10187433/r5317 icid sr422-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Junior-AI%26%2347ML-Data-Analyst-World-Fuel-Services-Corporation---/10187433/R5317?icid=sr422-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/junior-data-scientist- 26 2345-machine-learning-world-fuel-services-corporation---/10187433/r3811 icid sr277-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Junior-Data-Scientist-%26%2345-Machine-Learning-World-Fuel-Services-Corporation---/10187433/R3811?icid=sr277-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/junior-data-scientist-ibg 2c-llc-budapest--/10340106/1831 icid sr175-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Junior-Data-Scientist-IBG%2C-LLC-Budapest--/10340106/1831?icid=sr175-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/junior-data-scientist-pixalate 2c-inc -playa-vista-ca-90066/90823961/job 20180929014709 cntsgkasu55zfdwk icid sr159-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Junior-Data-Scientist-Pixalate%2C-Inc.-Playa-Vista-CA-90066/90823961/job_20180929014709_CNTSGKASU55ZFDWK?icid=sr159-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/junior-software-engineer-leidos-arlington-tx-76001/scncapi2/tr 26 2345660095 icid sr381-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Junior-Software-Engineer-Leidos-Arlington-TX-76001/SCNCAPI2/TR%26%2345660095?icid=sr381-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist- 26 2345-high-growth-startup- 26 2345-nyc- 26 2345-160k 2b-twenty-recruitment-brooklyn-ny-11225/10514056/bbbh19332 26 2345801 icid sr343-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-%26%2345-High-Growth-Startup-%26%2345-NYC-%26%2345-160k%2B-Twenty-Recruitment-Brooklyn-NY-11225/10514056/BBBH19332%26%2345801?icid=sr343-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist- 26 2345-onsite-interview-at-ca-must-bayone-solutions-san-mateo-ca-94403/10494547/588681 icid sr356-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-%26%2345-Onsite-Interview-at-CA-must-BayOne-Solutions-San-Mateo-CA-94403/10494547/588681?icid=sr356-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist- 26 2347-engineer-the-execu 7csearch-group-waltham-ma-02451/execusch/1058846 icid sr294-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-%26%2347-Engineer-The-Execu%7CSearch-Group-Waltham-MA-02451/EXECUSCH/1058846?icid=sr294-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-brighthouse-financial 2c-inc-charlotte-nc-28201/91015267/1688 26 2345en us icid sr238-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-Brighthouse-Financial%2C-Inc-Charlotte-NC-28201/91015267/1688%26%2345en_US?icid=sr238-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-cybercoders-new-york-ny-10001/cybercod/cb15 26 234514834191 icid sr203-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-CyberCoders-New-York-NY-10001/cybercod/CB15%26%234514834191?icid=sr203-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-cybercoders-new-york-ny-10001/cybercod/gk2 26 234514832271 icid sr221-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-CyberCoders-New-York-NY-10001/cybercod/GK2%26%234514832271?icid=sr221-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-cybercoders-pasadena-ca-91101/cybercod/pm6 26 234514673841 icid sr212-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-CyberCoders-Pasadena-CA-91101/cybercod/PM6%26%234514673841?icid=sr212-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-cybercoders-philadelphia-pa-19019/cybercod/an2 26 234514866391 icid sr206-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-CyberCoders-Philadelphia-PA-19019/cybercod/AN2%26%234514866391?icid=sr206-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-cybercoders-pleasanton-ca-94566/cybercod/rh1 26 234514820521 icid sr186-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-CyberCoders-Pleasanton-CA-94566/cybercod/RH1%26%234514820521?icid=sr186-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-for-predictive-modeling-for-scottsdale 2c-az-cygnet-infotech-llc-scottsdale-az-85250/91003106/598713 icid sr346-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-for-Predictive-Modeling-for-Scottsdale%2C-AZ-Cygnet-Infotech-LLC-Scottsdale-AZ-85250/91003106/598713?icid=sr346-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-inficare-technologies-chicago-il-60601/10113809/2018 26 234517613 icid sr261-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-InfiCare-Technologies-Chicago-IL-60601/10113809/2018%26%234517613?icid=sr261-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-intelletec-llc-new-york-ny-10001/90907234/651237 icid sr182-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-Intelletec-LLC-New-York-NY-10001/90907234/651237?icid=sr182-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-intelliswift-software-inc-san-mateo-ca-94403/10108150/aa 18 26 234506364 icid sr242-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-Intelliswift-Software-Inc-San-Mateo-CA-94403/10108150/AA_18%26%234506364?icid=sr242-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-spinnaker-search-group-llc-philadelphia-pa-19104/10494670/645432 icid sr228-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-Spinnaker-Search-Group-LLC-Philadelphia-PA-19104/10494670/645432?icid=sr228-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-data-scientist-swoon-group-oak-brook-il-60521/10360791/29930 icid sr235-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-Data-Scientist-Swoon-Group-Oak-Brook-IL-60521/10360791/29930?icid=sr235-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/lead-ml-engineer-red-spark-philadelphia-pa-19104/90933486/630971 icid sr393-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Lead-ML-Engineer-Red-Spark-Philadelphia-PA-19104/90933486/630971?icid=sr393-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/looking-for-data-scientist-in-glendale 2c-ca-for-full-time-trinus-corporation-glendale-ca-91203/trinus/sau ds icid sr347-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Looking-for-Data-Scientist-in-Glendale%2C-CA-for-Full-Time-Trinus-Corporation-Glendale-CA-91203/trinus/SAU_DS?icid=sr347-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/machine-learning-data-engineer-capital-markets-placement-tysons-corner-va-22102/10120548/3625 15501924 icid sr436-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Machine-Learning-Data-Engineer-Capital-Markets-Placement-Tysons-Corner-VA-22102/10120548/3625_15501924?icid=sr436-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/machine-learning-engineer- 26 2347-data-scientist-united-business-solutions-inc-orlando-fl-32804/10493171/654333 icid sr319-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Machine-Learning-Engineer-%26%2347-Data-Scientist-United-Business-Solutions-Inc-Orlando-FL-32804/10493171/654333?icid=sr319-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/machine-learning-expert- 26 2347-data-scientist-conduent-morrisville-nc-27560/90981088/652949 icid sr288-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Machine-Learning-Expert-%26%2347-Data-Scientist-Conduent-Morrisville-NC-27560/90981088/652949?icid=sr288-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/machine-learning-software-engineer-capital-markets-placement-tysons-corner-va-22102/10120548/3625 15501739 icid sr438-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Machine-Learning-Software-Engineer-Capital-Markets-Placement-Tysons-Corner-VA-22102/10120548/3625_15501739?icid=sr438-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/manager-data-science-cybercoders-woodland-hills-ca-91364/cybercod/mr 26 234514878261 icid sr449-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Manager-Data-Science-CyberCoders-Woodland-Hills-CA-91364/cybercod/MR%26%234514878261?icid=sr449-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/marketing-data-scientist 26 2347analyst-teksystems 2c-inc -san-jose-ca-95172/10105424/6532847 26 2345349 icid sr196-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Marketing-Data-Scientist%26%2347Analyst-TEKsystems%2C-Inc.-San-Jose-CA-95172/10105424/6532847%26%2345349?icid=sr196-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/marketing-data-scientist-cybercoders-cambridge-ma-02138/cybercod/bw4 26 234514575331 icid sr192-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Marketing-Data-Scientist-CyberCoders-Cambridge-MA-02138/cybercod/BW4%26%234514575331?icid=sr192-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/marketing-data-scientist-cybercoders-san-diego-ca-92101/cybercod/pm6 26 234514591491 icid sr214-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Marketing-Data-Scientist-CyberCoders-San-Diego-CA-92101/cybercod/PM6%26%234514591491?icid=sr214-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/master-data-engineer-capital-markets-placement-vienna-va-22027/10120548/3625 15709992 icid sr439-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Master-Data-Engineer-Capital-Markets-Placement-Vienna-VA-22027/10120548/3625_15709992?icid=sr439-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/microsoft-stack-software-engineer-consultnet 2c-llc-new-york-ny-10001/cxcnetut/18 26 234502356 icid sr427-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Microsoft-Stack-Software-Engineer-ConsultNet%2C-LLC-New-York-NY-10001/cxcnetut/18%26%234502356?icid=sr427-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/multiple-business-analyst-to-work-with-key-stakeholders-for-healthcare-softw-qat-global-austin-tx-78702/10119253/649376 icid sr432-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Multiple-Business-Analyst-to-work-with-key-stakeholders-for-healthcare-softw-QAT-Global-Austin-TX-78702/10119253/649376?icid=sr432-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/multiple-business-analyst-to-work-with-key-stakeholders-for-healthcare-softw-qat-global-lenexa-ks-66210/10119253/00936 icid sr433-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Multiple-Business-Analyst-to-work-with-key-stakeholders-for-healthcare-softw-QAT-Global-Lenexa-KS-66210/10119253/00936?icid=sr433-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/natural-language-processing- 28nlp 29-senior-architect- 26 2347-sr -data-scienti-omm-it-solutions-baltimore-md-21201/90934554/616380 icid sr444-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Natural-Language-Processing-%28NLP%29-Senior-Architect-%26%2347-Sr.-Data-Scienti-Omm-IT-Solutions-Baltimore-MD-21201/90934554/616380?icid=sr444-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/natural-language-processing-data-scientist-cybercoders-san-jose-ca-95101/cybercod/sm9 26 234514845121 icid sr287-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Natural-Language-Processing-Data-Scientist-CyberCoders-San-Jose-CA-95101/cybercod/SM9%26%234514845121?icid=sr287-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/nlp-data-scientist-xscion-solutions-rockville-md-20847/10124587/502945 icid sr258-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/NLP-Data-Scientist-xScion-Solutions-Rockville-MD-20847/10124587/502945?icid=sr258-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/oop-data-scientist-matlen-silver-charlotte-nc-28202/90979153/642051 icid sr268-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/OOP-Data-Scientist-Matlen-Silver-Charlotte-NC-28202/90979153/642051?icid=sr268-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/pre 26 2345sales-engineer- 26 2345-east-coast 26 2347nyc-cybercoders-new-york-ny-10001/cybercod/kh4 26 234514641261 icid sr410-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Pre%26%2345Sales-Engineer-%26%2345-East-Coast%26%2347NYC-CyberCoders-New-York-NY-10001/cybercod/KH4%26%234514641261?icid=sr410-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/principal-data-scientist- 26 2345-eden-prairie 2c-mn-unitedhealth-group-eden-prairie-mn-55343/uhgbot/786116 icid sr337-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Principal-Data-Scientist-%26%2345-Eden-Prairie%2C-MN-UnitedHealth-Group-Eden-Prairie-MN-55343/uhgbot/786116?icid=sr337-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/principal-data-scientist- 26 2345-telecommute-central-or-eastern-time-zones-unitedhealth-group-minnetonka-mn-55305/uhgbot/786225 icid sr344-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Principal-Data-Scientist-%26%2345-Telecommute-Central-or-Eastern-Time-Zones-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/786225?icid=sr344-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/principal-data-scientist-footlocker 2c-inc-bradenton-fl-34205/10433899s/590744 icid sr153-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/PRINCIPAL-DATA-SCIENTIST-Footlocker%2C-Inc-Bradenton-FL-34205/10433899S/590744?icid=sr153-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/principal-data-scientist-prestige-staffing-austin-tx-78759/10123949/547744 icid sr193-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Principal-Data-Scientist-Prestige-Staffing-Austin-TX-78759/10123949/547744?icid=sr193-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/principal-data-scientist-talener-boston-ma-02109/10226910/ba1711671010 icid sr209-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Principal-Data-Scientist-Talener-Boston-MA-02109/10226910/BA1711671010?icid=sr209-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/principal-data-scientist-the-csi-companies-boca-raton--/10113246/39531 icid sr220-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Principal-Data-Scientist-The-CSI-Companies-Boca-Raton--/10113246/39531?icid=sr220-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/python-developer-prime-team-partners 2c-inc-seattle-wa-98101/10118781/a0ef4000002nu58aaa icid sr413-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Python-Developer-Prime-Team-Partners%2C-Inc-Seattle-WA-98101/10118781/a0ef4000002nu58AAA?icid=sr413-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/quant-analyst- 26 2345data-scientist- 2cinvestment-banking-client 2cboston-atyeti-boston-ma-02110/10378739/640637 icid sr352-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Quant-Analyst-%26%2345Data-Scientist-%2CInvestment-banking-client%2CBoston-Atyeti-Boston-MA-02110/10378739/640637?icid=sr352-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/quant-data-scientist-atyeti-boston-ma-02127/10378739/637896 icid sr263-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Quant-Data-Scientist-Atyeti-Boston-MA-02127/10378739/637896?icid=sr263-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/quantitative-data-scientist-suntechpros 2c-inc -boston-ma-02116/rtl208955/asvt 26 23457103 icid sr259-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Quantitative-Data-Scientist-SunTechPros%2C-Inc.-Boston-MA-02116/RTL208955/ASVT%26%23457103?icid=sr259-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/quantitative-researcher 26 2345equities-selby-jennings-boston-ma-02117/90819980/184654013 26 2345460 icid sr403-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Quantitative-Researcher%26%2345Equities-Selby-Jennings-Boston-MA-02117/90819980/184654013%26%2345460?icid=sr403-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/req 3a-data-scientist-onwardpath-technology-solutions-llc-chicago-il-60610/10455053/ds1010 icid sr306-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Req%3A-Data-Scientist-OnwardPath-Technology-Solutions-LLC-Chicago-IL-60610/10455053/DS1010?icid=sr306-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/saas-marketing-manager-data-scientist-titan-technologies 2c-inc -pittsburgh-pa-15201/10447565/saas icid sr320-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/SaaS-Marketing-Manager-Data-Scientist-Titan-Technologies%2C-Inc.-Pittsburgh-PA-15201/10447565/SAAS?icid=sr320-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-big-data-engineer-greensky-credit-atlanta-ga-30301/90790689/624048 icid sr447-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Big-Data-Engineer-GreenSky-Credit-Atlanta-GA-30301/90790689/624048?icid=sr447-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-computer-vision- 26 2347-image-processing-engineer-cybercoders-boston-ma-02108/cybercod/bs3 26 234514852051 icid sr380-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Computer-Vision-%26%2347-Image-Processing-Engineer-CyberCoders-Boston-MA-02108/cybercod/BS3%26%234514852051?icid=sr380-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-engineer-comlinkdata-boston-ma-02110/rtx1cd0fd/5660288 icid sr430-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Engineer-Comlinkdata-Boston-MA-02110/RTX1cd0fd/5660288?icid=sr430-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-engineering-analyst- 26 2345-noida 2c-up- 28multiple-locations 29-unitedhealth-group-noida--/uhgbot/784562 icid sr429-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Engineering-Analyst-%26%2345-Noida%2C-UP-%28Multiple-Locations%29-UnitedHealth-Group-Noida--/uhgbot/784562?icid=sr429-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-science-manager-the-robinson-group-cincinnati-oh-45240/10101529/501 icid sr371-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Science-Manager-The-Robinson-Group-Cincinnati-OH-45240/10101529/501?icid=sr371-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist 2c-finance-regis-corporation-minneapolis-mn-55401/10122923/2018 26 234539094 icid sr169-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist%2C-Finance-Regis-Corporation-Minneapolis-MN-55401/10122923/2018%26%234539094?icid=sr169-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist 2c-machine-learning-covera-health-new-york-ny-10017/91088673/637168 icid sr276-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist%2C-Machine-Learning-Covera-Health-New-York-NY-10017/91088673/637168?icid=sr276-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist- 26 2345-clean-energy-genuent 2c-llc-rosemead-ca-91770/10228513/18 26 234505444 icid sr290-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-%26%2345-Clean-Energy-Genuent%2C-LLC-Rosemead-CA-91770/10228513/18%26%234505444?icid=sr290-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist- 26 2345-dublin 2c-ireland-unitedhealth-group-dublin--/uhgbot/776640 icid sr274-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-%26%2345-Dublin%2C-Ireland-UnitedHealth-Group-Dublin--/uhgbot/776640?icid=sr274-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist- 26 2345-e 26 2345commerce- 26 2347-adtech-cybercoders-new-york-ny-10001/cybercod/jo4 26 234514580331 icid sr325-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-%26%2345-E%26%2345Commerce-%26%2347-Adtech-CyberCoders-New-York-NY-10001/cybercod/JO4%26%234514580331?icid=sr325-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist- 26 2345-machine-learning- 26 2345-minnetonka-mn-unitedhealth-group-minnetonka-mn-55305/uhgbot/766403 icid sr339-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-%26%2345-Machine-Learning-%26%2345-Minnetonka-MN-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/766403?icid=sr339-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist- 26 2345-statistics- 26 2345-minnetonka 2c-mn-unitedhealth-group-minnetonka-mn-55305/uhgbot/765459 icid sr340-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-%26%2345-Statistics-%26%2345-Minnetonka%2C-MN-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/765459?icid=sr340-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-100 26 2345160k- 28hadoop 26 2347scala 29-ibmg-solutions-inc -cincinnati-oh-45202/10232735/652883 icid sr335-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-100%26%2345160K-%28Hadoop%26%2347Scala%29-IBMG-Solutions-Inc.-Cincinnati-OH-45202/10232735/652883?icid=sr335-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-centura-health-centennial-co-80112/10301635/104539368 icid sr180-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Centura-Health-Centennial-CO-80112/10301635/104539368?icid=sr180-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-dallas-tx-75201/cybercod/gk2 26 234514865291 icid sr216-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Dallas-TX-75201/cybercod/GK2%26%234514865291?icid=sr216-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-hazlet-nj-07730/cybercod/rs2 26 234514455941 icid sr197-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Hazlet-NJ-07730/cybercod/RS2%26%234514455941?icid=sr197-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-indianapolis-in-46201/cybercod/gk2 26 234514865221 icid sr217-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Indianapolis-IN-46201/cybercod/GK2%26%234514865221?icid=sr217-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-los-altos-ca-94022/cybercod/sj2 26 2345ds 26 2345losalt1 icid sr230-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Los-Altos-CA-94022/cybercod/SJ2%26%2345DS%26%2345LosAlt1?icid=sr230-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-new-york-ny-10001/cybercod/rs2 26 234514623461 icid sr199-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-New-York-NY-10001/cybercod/RS2%26%234514623461?icid=sr199-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-new-york-ny-10001/cybercod/sj2 26 2345corpds 26 2345master 26 2345090820181 icid sr204-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-New-York-NY-10001/cybercod/SJ2%26%2345CorpDS%26%2345Master%26%2345090820181?icid=sr204-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-redwood-city-ca-94061/cybercod/mm21 26 234514627261 icid sr207-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Redwood-City-CA-94061/cybercod/MM21%26%234514627261?icid=sr207-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-san-francisco-ca-94101/cybercod/cg3 26 234514839711 icid sr213-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-San-Francisco-CA-94101/cybercod/CG3%26%234514839711?icid=sr213-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-san-francisco-ca-94101/cybercod/jg8 26 234514843611 icid sr224-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-San-Francisco-CA-94101/cybercod/JG8%26%234514843611?icid=sr224-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-san-francisco-ca-94101/cybercod/jg8 26 234514869831 icid sr222-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-San-Francisco-CA-94101/cybercod/JG8%26%234514869831?icid=sr222-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-san-francisco-ca-94101/cybercod/jg8 26 234514882841 icid sr223-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-San-Francisco-CA-94101/cybercod/JG8%26%234514882841?icid=sr223-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-seattle-wa-98101/cybercod/cb10 26 234514574014 icid sr201-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Seattle-WA-98101/cybercod/CB10%26%234514574014?icid=sr201-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-seattle-wa-98101/cybercod/sj2 26 2345sds 26 2345seattle 26 23451213171 icid sr233-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Seattle-WA-98101/cybercod/SJ2%26%2345SDS%26%2345Seattle%26%23451213171?icid=sr233-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-washington-dc-20001/cybercod/lp5 26 234514777611 icid sr200-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Washington-DC-20001/cybercod/LP5%26%234514777611?icid=sr200-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-cybercoders-washington-dc-20001/cybercod/lp5 26 234514798141 icid sr198-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-CyberCoders-Washington-DC-20001/cybercod/LP5%26%234514798141?icid=sr198-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-deloitte-arlington-va-22201/10106525/e19roscsrcsss027 26 2345hc icid sr157-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Deloitte-Arlington-VA-22201/10106525/E19ROSCSRCSSS027%26%2345HC?icid=sr157-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-engage2excel-san-francisco-ca-94104/rtl60836/633419 icid sr181-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Engage2Excel-San-Francisco-CA-94104/RTL60836/633419?icid=sr181-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-euclid-innovations-charlotte-nc-28201/10375704/627697 icid sr246-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Euclid-Innovations-Charlotte-NC-28201/10375704/627697?icid=sr246-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-lawrence-harvey-palo-alto-ca-94304/10333482/vac0013 26 2345msa icid sr191-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Lawrence-Harvey-Palo-Alto-CA-94304/10333482/VAC0013%26%2345MSA?icid=sr191-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-nthrive-htfd-ct-06101/501589903/24373 icid sr234-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-nThrive-Htfd-CT-06101/501589903/24373?icid=sr234-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-onstak-inc -san-jose-ca-95196/90887911/6870 icid sr249-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Onstak-Inc.-San-Jose-CA-95196/90887911/6870?icid=sr249-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-s 26p-global-new-york-ny-10001/rtx14fecf/238681 icid sr166-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-S%26P-Global-New-York-NY-10001/RTX14fecf/238681?icid=sr166-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-tessella-inc -collegeville-pa-19426/rtx1580e0/636292 icid sr158-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-Tessella-Inc.-Collegeville-PA-19426/RTX1580e0/636292?icid=sr158-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-with-phd-techpro-consulting-newark-nj-07194/90836405/658240 icid sr244-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-scientist-with-PHD-Techpro-Consulting-Newark-NJ-07194/90836405/658240?icid=sr244-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-data-scientist-world-fuel-services-corporation---/10187433/r3807 icid sr165-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Data-Scientist-World-Fuel-Services-Corporation---/10187433/R3807?icid=sr165-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-financial-data-scientist-cybercoders-washington-dc-20001/cybercod/sw3 26 234514876581 icid sr208-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Financial-Data-Scientist-CyberCoders-Washington-DC-20001/cybercod/SW3%26%234514876581?icid=sr208-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-machine-learning-engineer-ianuly-talent-accelerators-seattle-wa-98104/91073932/605614 icid sr409-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Machine-Learning-Engineer-Ianuly-Talent-Accelerators-Seattle-WA-98104/91073932/605614?icid=sr409-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-machine-learning-product-scientist-agoda-services-bangkok--10330/80154230/633579 icid sr370-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Machine-Learning-Product-Scientist-Agoda-Services-Bangkok--10330/80154230/633579?icid=sr370-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-principal-data-scientist- 26 2345-telecommute- 26 2345-central-or-eastern-time-zones-unitedhealth-group-minnetonka-mn-55305/uhgbot/784660 icid sr345-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Principal-Data-Scientist-%26%2345-Telecommute-%26%2345-Central-or-Eastern-Time-Zones-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/784660?icid=sr345-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-ruby-developer- 28javascript 2c-sql 2c-aws 29-cybercoders-san-luis-obispo-ca-93401/cybercod/dm7 26 234514481761 icid sr401-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Ruby-Developer-%28JavaScript%2C-SQL%2C-AWS%29-CyberCoders-San-Luis-Obispo-CA-93401/cybercod/DM7%26%234514481761?icid=sr401-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-security-data-scientist-delta-risk-llc-dulles-va-20166/10458571/27059929 icid sr184-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Security-Data-Scientist-Delta-Risk-LLC-Dulles-VA-20166/10458571/27059929?icid=sr184-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/senior-software-engineer- 26 2345-data-scientist- 26 2345-gurgaon 2c-hr-unitedhealth-group-gurgaon--/uhgbot/783214 icid sr336-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Senior-Software-Engineer-%26%2345-Data-Scientist-%26%2345-Gurgaon%2C-HR-UnitedHealth-Group-Gurgaon--/uhgbot/783214?icid=sr336-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/software-engineer- 26 2345-data-engineer-is 26t-consulting-group 2c-llc-houston-tx-77077/91085791/4060 icid sr408-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Software-Engineer-%26%2345-Data-Engineer-IS%26T-Consulting-Group%2C-LLC-Houston-TX-77077/91085791/4060?icid=sr408-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/software-engineer-java-scala-fahrenheit-it-new-york-ny-10001/10111360/152457 icid sr383-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Software-Engineer-Java-Scala-Fahrenheit-IT-New-York-NY-10001/10111360/152457?icid=sr383-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -associate 2c-data-scientist-kpmg-new-york-ny-10001/kpmgtx/36751 26 2332 26 2345 26 233264 icid sr241-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Associate%2C-Data-Scientist-KPMG-New-York-NY-10001/KPMGTX/36751%26%2332%26%2345%26%233264?icid=sr241-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-engineer-suntechpros 2c-inc -boston-ma-02109/rtl208955/asvt 26 23457101 icid sr390-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Engineer-SunTechPros%2C-Inc.-Boston-MA-02109/RTL208955/ASVT%26%23457101?icid=sr390-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-governance-analyst-atrilogy-solutions-group 2c-inc -scottsdale-az-85254/atrilogy/10943371 icid sr372-13p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Governance-Analyst-Atrilogy-Solutions-Group%2C-Inc.-Scottsdale-AZ-85254/atrilogy/10943371?icid=sr372-13p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist 26 2345baltimore-will 26 2345n 26 2345able-baltimore-md-21201/10117527/srdatasci md icid sr211-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist%26%2345Baltimore-Will%26%2345N%26%2345Able-Baltimore-MD-21201/10117527/SrDataSci_MD?icid=sr211-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist 26 2345ts 26 2347sci-w 26 2347fsp-cybercoders-mclean-va-20598/cybercod/sw3 26 234514878411 icid sr326-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist%26%2345TS%26%2347SCI-w%26%2347FSP-CyberCoders-Mclean-VA-20598/cybercod/SW3%26%234514878411?icid=sr326-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist- 26 2345-telecommute-unitedhealth-group-eden-prairie-mn-55343/uhgbot/780996 icid sr155-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-%26%2345-Telecommute-UnitedHealth-Group-Eden-Prairie-MN-55343/uhgbot/780996?icid=sr155-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist- 28python 2c-ml 2c-nlp- 2c-tensorflow 2c-r 29-tvs-infotech-inc -santa-clara-ca-95051/10105951/631659 icid sr360-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-%28Python%2C-ML%2C-NLP-%2C-Tensorflow%2C-R%29-TVS-Infotech-Inc.-Santa-Clara-CA-95051/10105951/631659?icid=sr360-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-9to9-software-solutions-llc-redmond-wa-98052/90573793/631170 icid sr189-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-9to9-Software-Solutions-LLC-Redmond-WA-98052/90573793/631170?icid=sr189-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-analytica-washington-dc-20036/10370554/636193 icid sr236-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-ANALYTICA-Washington-DC-20036/10370554/636193?icid=sr236-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-atrilogy-solutions-group 2c-inc -phoenix-az-85085/atrilogy/11448008 icid sr232-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Atrilogy-Solutions-Group%2C-Inc.-Phoenix-AZ-85085/atrilogy/11448008?icid=sr232-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-crescent-solutions-inc-reno-nv-89521/10210023d/355798 icid sr215-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Crescent-Solutions-Inc-Reno-NV-89521/10210023D/355798?icid=sr215-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-cybercoders-pleasanton-ca-94566/cybercod/iw1 26 234514631041 icid sr205-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-CyberCoders-Pleasanton-CA-94566/cybercod/IW1%26%234514631041?icid=sr205-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-cybercoders-pleasanton-ca-94566/cybercod/rh1 26 234514767111 icid sr185-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-CyberCoders-Pleasanton-CA-94566/cybercod/RH1%26%234514767111?icid=sr185-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-harvard-partners 2c-llp-waltham-ma-02451/10518948/18 26 234500222 icid sr237-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Harvard-Partners%2C-LLP-Waltham-MA-02451/10518948/18%26%234500222?icid=sr237-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-in-alexandria 2c-va-satsyil-corporation-alexandria-va-22314/10491343/208533 icid sr331-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-in-Alexandria%2C-VA-Satsyil-Corporation-Alexandria-VA-22314/10491343/208533?icid=sr331-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-infomatics-creve-coeur-mo-63141/10109948/605925 icid sr243-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-INFOMATICS-Creve-Coeur-MO-63141/10109948/605925?icid=sr243-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-machine-learning 2c-natural-language-processing- 28c-elan-partners-plano-tx-75024/10239619/3473 icid sr358-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Machine-Learning%2C-Natural-Language-Processing-%28c-Elan-Partners-Plano-TX-75024/10239619/3473?icid=sr358-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-memorial-sloan-kettering-cancer-center-new-york-ny-10017/10118869/461058 icid sr176-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Memorial-Sloan-Kettering-Cancer-Center-New-York-NY-10017/10118869/461058?icid=sr176-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-pegasus-knowledge-solutions-chicago-il-60631/10110049/req2518 icid sr247-9p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Pegasus-Knowledge-Solutions-Chicago-IL-60631/10110049/REQ2518?icid=sr247-9p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-will 26 2345n 26 2345able-new-york-city-ny-10003/10117527/srdatasci ny icid sr210-7p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-Will%26%2345N%26%2345Able-New-York-City-NY-10003/10117527/SrDataSci_NY?icid=sr210-7p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -data-scientist-with-c 23-or-node- 28local-to-nj- 29-apetan-consulting-princeton-nj-08540/10513292/660451 icid sr355-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Data-Scientist-with-C%23-or-Node-%28Local-To-NJ-%29-Apetan-Consulting-Princeton-NJ-08540/10513292/660451?icid=sr355-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -developer- 28hdfs 26 2347-hive 26 2347-impala 2cjava 2c-bi- 29- 28local-to-il-only 29-advantech-solutions 2c-inc -waukegan-il-60085/adtechil/ab 26 23453095 icid sr407-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Developer-%28HDFS%26%2347-Hive%26%2347-Impala%2CJava%2C-BI-%29-%28Local-to-IL-Only%29-Advantech-Solutions%2C-Inc.-Waukegan-IL-60085/adtechil/ab%26%23453095?icid=sr407-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -java-full-stack-engineer-corus-group 2c-llc-chicago-ridge-il-60415/10351101/188213 26 2345947 icid sr392-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Java-Full-Stack-Engineer-Corus-Group%2C-LLC-Chicago-Ridge-IL-60415/10351101/188213%26%2345947?icid=sr392-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -machine-learning-scientist-cybercoders-san-mateo-ca-94401/cybercod/eu1 26 234514879751 icid sr412-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Machine-Learning-Scientist-CyberCoders-San-Mateo-CA-94401/cybercod/EU1%26%234514879751?icid=sr412-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -manager 2c-data-scientist- 26-advanced-analytics-comrise-nyc-ny-10001/comrise/532389 icid sr327-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Manager%2C-Data-Scientist-%26-Advanced-Analytics-Comrise-Nyc-NY-10001/comrise/532389?icid=sr327-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr -scala- 26 2347-sql-data-engineer-aeg- 26 2345-application-engineering-group-saint-louis-mo-63105/10106235/7766 icid sr398-14p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr.-Scala-%26%2347-SQL-Data-Engineer-AEG-%26%2345-Application-Engineering-Group-Saint-Louis-MO-63105/10106235/7766?icid=sr398-14p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr-data-scientist- 28machine-learning 29-cisco-systems-inc -san-jose-ca-95002/ciscobot/1243071 icid sr280-10p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/SR-Data-Scientist-%28Machine-Learning%29-Cisco-Systems-Inc.-San-Jose-CA-95002/ciscobot/1243071?icid=sr280-10p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr-data-scientist-britech-group 2c-inc -carlsbad-ca-92011/10118384/req 26 23451433 icid sr219-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr-Data-Scientist-Britech-Group%2C-Inc.-Carlsbad-CA-92011/10118384/Req%26%23451433?icid=sr219-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr-data-scientist-gm-financial-arlington-tx-76011/10120555/201833547 26 2345780 icid sr154-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr-Data-Scientist-GM-Financial-Arlington-TX-76011/10120555/201833547%26%2345780?icid=sr154-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr-data-scientist-sullivan-and-cogliano-waltham-ma-02452/10107697/37343 icid sr229-8p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr-Data-Scientist-Sullivan-and-Cogliano-Waltham-MA-02452/10107697/37343?icid=sr229-8p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/sr-principal-data-scientist- 26 2345-minnetonka 2c-mn-unitedhealth-group-minnetonka-mn-55305/uhgbot/778877 icid sr341-12p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Sr-Principal-Data-Scientist-%26%2345-Minnetonka%2C-MN-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/778877?icid=sr341-12p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/statistician 26 2347data-scientist-4- 26 2345-performance-analyst-engility-springfield-va-20598/10365615/1811835 icid sr317-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Statistician%26%2347Data-Scientist-4-%26%2345-Performance-Analyst-Engility-Springfield-VA-20598/10365615/1811835?icid=sr317-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/statistician- 26 2347data-scientist-4- 26 2345-data-modeler-engility-springfield-va-20598/10365615/1811832 icid sr316-11p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Statistician-%26%2347Data-Scientist-4-%26%2345-Data-Modeler-Engility-Springfield-VA-20598/10365615/1811832?icid=sr316-11p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/supply-chain-support-viva-usa-inc-houston-tx-77024/vivausa/lstxsc362 icid sr452-16p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Supply-Chain-Support-VIVA-USA-INC-Houston-TX-77024/vivausa/LSTXSC362?icid=sr452-16p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/system-data-scientist-engility-chantilly-va-20151/10365615/1811984 icid sr164-6p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/System-Data-Scientist-Engility-Chantilly-VA-20151/10365615/1811984?icid=sr164-6p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/test-req-do-not-apply-capital-markets-placement-minnetonka-mn-55305/10120548/3625 15730802 icid sr453-16p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Test-Req-Do-Not-Apply-Capital-Markets-Placement-Minnetonka-MN-55305/10120548/3625_15730802?icid=sr453-16p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/test-req-do-not-apply-unitedhealth-group-minnetonka-mn-55305/uhgbot/228615 icid sr446-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/Test-Req-Do-Not-Apply-UnitedHealth-Group-Minnetonka-MN-55305/uhgbot/228615?icid=sr446-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/uas-traffic-management-data-science- 26 2347-software-engineer-ii-bay-systems-consulting 2c-inc -mountain-view-ca-94039/10120303/527415 icid sr440-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/UAS-Traffic-Management-Data-Science-%26%2347-Software-Engineer-II-Bay-Systems-Consulting%2C-Inc.-Mountain-View-CA-94039/10120303/527415?icid=sr440-15p&q=%22Data+Scientist%22&l=,False
+https //www dice com/jobs/detail/uas-traffic-management-data-science- 26 2347-software-engineer-leidos-mountain-view--/scncapi2/tr 26 2345658398 icid sr434-15p and q 22data+scientist 22 and l,too_long,1,https://www.dice.com/jobs/detail/UAS-Traffic-Management-Data-Science-%26%2347-Software-Engineer-Leidos-Mountain-View--/SCNCAPI2/TR%26%2345658398?icid=sr434-15p&q=%22Data+Scientist%22&l=,False
+knowledge of a variety of machine learning and statistical modeling techniques in a business setting,too_long,1,['knowledge of a variety of machine learning and statistical modeling techniques in a business setting'],False
+machine learning and supervised machine learning to cybersecurity or fraud detectionworking knowledge of security detection tools,too_long,1,' machine learning and supervised machine learning to cybersecurity or fraud detectionworking knowledge of security detection tools',False
+or python and experience with languages/ frameworks used in ml and analytics spark,too_long,1,' or python and experience with languages/ frameworks used in ml & analytics: spark',False
+principal data scientist skills analytics - statistics - machine learning - ml - data models - big data - pricing revenue - retail - cloud - price optimization - r - python,too_long,1,['principal data scientist skills: analytics - statistics - machine learning - ml - data models - big data - pricing revenue - retail - cloud - price optimization - r - python'],False
+scala or javaexperience driving research and early stage projects to production implementationcreative approach to problem solving and using leading edge tools to build innovative solutionsteam player with strong desire to learn,too_long,1,' scala or javaexperience driving research and early stage projects to production implementationcreative approach to problem solving and using leading edge tools to build innovative solutionsteam player with strong desire to learn',False
+statistics or data mining disciplines5+ years experience as a data scientist or equivalent role applying statistical models,too_long,1,' statistics or data mining disciplines5+ years experience as a data scientist (or equivalent role) applying statistical models',False
+3+ years experience doing data science with r and python in a professional,too_many_tokens,1,['3+ years experience doing data science with r and python in a professional',True
+apache spark or kubernetes or hortonworks or hadoop,too_many_tokens,1,' apache spark or kubernetes or hortonworks or hadoop'],True
+at least 2 to 4 years professional experience in nlp,too_many_tokens,1,['at least 2 to 4 years professional experience in nlp',True
+big data management tools i e informatica bdm/idl/eic/idq,too_many_tokens,1,['big data management tools i.e. informatica bdm/idl/eic/idq',True
+business analyst data scientist r python jira github tableau powerbi statistics,too_many_tokens,1,['business analyst data scientist r python jira github tableau powerbi statistics'],True
+data analyst and capacity and visualization and sql and azure,too_many_tokens,1,['data analyst and capacity and visualization and sql and azure'],True
+data scientist level 1 experience with data sets,too_many_tokens,1,['data scientist level 1 experience with data sets',True
+data scientist machine learning statistics r python c java scala,too_many_tokens,1,['data scientist machine learning statistics r python c# java scala'],True
+etc to manipulate data and draw insights from large data sets,too_many_tokens,1,' etc.) to manipulate data and draw insights from large data sets.'],True
+lead data scientist - high growth startup - nyc - 160k+,too_many_tokens,1,['lead data scientist - high growth startup - nyc - 160k+'],True
+open source ml and dl frameworks - computer vision,too_many_tokens,1,' open source ml & dl frameworks - computer vision',True
+prior teaching experience not essential - data science,too_many_tokens,1,' prior teaching experience (not essential) - data science',True
+ruby on rails / ror / ruby / rails,too_many_tokens,1,['ruby on rails / ror / ruby / rails',True
+sales or product development function within a data driven organization,too_many_tokens,1,' sales or product development function) within a data driven organization'],True
+share knowledge and build a world class security platform,too_many_tokens,1,' share knowledge and build a world class security platform'],True
+soap - ruby on rails / ror / ruby / rails,too_many_tokens,1,' soap - ruby on rails / ror / ruby / rails',True
+with thorough knowledge of business intelligence and analytics,too_many_tokens,1,' with thorough knowledge of business intelligence and analytics',True
+wps or spss or python prefer sql server,too_many_tokens,1,' wps or spss or python prefer: sql server',True
+1,too_short,1,1,False
+2,too_short,1,2,False
+3,too_short,1,3,False
+4,too_short,1,4,False
+5,too_short,1,5,False
+6,too_short,1,6,False
+7,too_short,1,7,False
+8,too_short,1,8,False
+9,too_short,1,9,False
+x12,version_or_code_like,1,x12,False

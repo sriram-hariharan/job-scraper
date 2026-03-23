@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "tableau/ raw /chart js/data visualization",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "tableau",
+    "chart js",
+    "data visualization"
+  ],
+  "dropped_fragments": [
+    "raw"
+  ],
+  "reasoning": "Extracted specific data visualization tools and skills, dropped generic term 'raw' as it's not a specific skill or tool.",
+  "cache_hit": false
+}

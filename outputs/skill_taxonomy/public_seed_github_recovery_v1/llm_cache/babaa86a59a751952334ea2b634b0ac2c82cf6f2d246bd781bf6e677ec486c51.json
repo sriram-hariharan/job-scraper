@@ -1,0 +1,18 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "one modern programming language java",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "java"
+  ],
+  "dropped_fragments": [
+    "one",
+    "modern",
+    "programming",
+    "language"
+  ],
+  "reasoning": "Extracted 'java' as a specific programming language, dropped other words as generic or filler.",
+  "cache_hit": false
+}

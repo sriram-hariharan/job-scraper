@@ -1,0 +1,14 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "azure sql data warehouse",
+  "cleaned_skills": [
+    "azure",
+    "sql",
+    "data warehouse"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split phrase into individual, meaningful technology and tool terms",
+  "cache_hit": false
+}

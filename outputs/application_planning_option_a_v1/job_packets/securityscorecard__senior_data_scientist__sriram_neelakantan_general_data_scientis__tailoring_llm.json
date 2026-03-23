@@ -1,0 +1,42 @@
+{
+  "requested_provider": "gemini",
+  "requested_model": "gemini-2.5-flash",
+  "provider": "gemini",
+  "model": "gemini-2.5-flash",
+  "resolved_provider": "gemini",
+  "resolved_model": "gemini-2.5-flash",
+  "fallback_used": false,
+  "fallback_attempted": true,
+  "fallback_provider": "groq",
+  "fallback_model": "llama-3.1-8b-instant",
+  "attempted_providers": [
+    "gemini"
+  ],
+  "parse_ok": true,
+  "parse_error": "",
+  "retry_used": false,
+  "raw_response": "{\"rewrite_directions\": [\"Lead with \\\"Integrated link analysis and XGBoost into healthcare product efficacy models, improving treatment outcome accuracy and reducing false positives by 20%\\\" from Data Analyst I @ Accenture to highlight XGBoost experience.\", \"Support with \\\"Built scalable data pipelines using Python & PySpark on Databricks with Azure Storage to process 3M+ high-speed sensor records, enabling automated wheel filtering, anomaly detection, poly-curve analysis, and weight calculation\\\" from Data Scientist II @ L.B. Foster Salient Systems to emphasize Databricks and Python skills.\", \"Support with \\\"Performed advanced EDA in Python and PySpark on Databricks to identify trends and anomalies, enabling proactive wheel replacement and optimized maintenance schedules\\\" from Data Scientist II @ L.B. Foster Salient Systems to further demonstrate Databricks and Python proficiency.\", \"Keep gap explicit for 'gcp'.\", \"Keep gap explicit for 'mlflow'.\", \"Keep gap explicit for 'llms'.\"]}",
+  "retry_raw_response": "",
+  "parsed": {
+    "recruiter_summary": "",
+    "keep_emphasize": [],
+    "tailoring_actions": [],
+    "do_not_claim": [],
+    "rewrite_directions": [
+      "Lead with \"Integrated link analysis and XGBoost into healthcare product efficacy models, improving treatment outcome accuracy and reducing false positives by 20%\" from Data Analyst I @ Accenture to highlight XGBoost experience.",
+      "Support with \"Built scalable data pipelines using Python & PySpark on Databricks with Azure Storage to process 3M+ high-speed sensor records, enabling automated wheel filtering, anomaly detection, poly-curve analysis, and weight calculation\" from Data Scientist II @ L.B. Foster Salient Systems to emphasize Databricks and Python skills.",
+      "Support with \"Performed advanced EDA in Python and PySpark on Databricks to identify trends and anomalies, enabling proactive wheel replacement and optimized maintenance schedules\" from Data Scientist II @ L.B. Foster Salient Systems to further demonstrate Databricks and Python proficiency.",
+      "Keep gap explicit for 'gcp'.",
+      "Keep gap explicit for 'mlflow'.",
+      "Keep gap explicit for 'llms'."
+    ]
+  },
+  "job_doc_id": "",
+  "selected_resume": "",
+  "packet_sha256": "7254193bfc6af1704c4727eb838112e95159c645d9f6cb8075403646c947a17c",
+  "cache_key": "0bf83e0232570aedbab7ae87c4fe9bca117c5d275850bd539afca4422689e9c2",
+  "prompt_version": "v3",
+  "fallback_enabled": true,
+  "cache_hit": false,
+  "generated_at": "2026-03-22T10:59:54.774828+00:00"
+}

@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "etc amazon web services aws",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "amazon web services",
+    "aws"
+  ],
+  "dropped_fragments": [
+    "etc"
+  ],
+  "reasoning": "Extracted specific cloud computing platform and its abbreviation from the phrase.",
+  "cache_hit": false
+}

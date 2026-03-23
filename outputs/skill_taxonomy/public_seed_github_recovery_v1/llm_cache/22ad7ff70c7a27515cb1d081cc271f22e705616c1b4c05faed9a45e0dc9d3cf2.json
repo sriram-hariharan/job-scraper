@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "data visualizations and reporting",
+  "cleaned_skills": [
+    "data visualization",
+    "reporting"
+  ],
+  "dropped_fragments": [
+    "and"
+  ],
+  "reasoning": "split phrase into atomic skills, dropped conjunction",
+  "cache_hit": false
+}

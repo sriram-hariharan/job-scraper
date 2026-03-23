@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "oracle marketing suite - marketing technologies",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "oracle"
+  ],
+  "dropped_fragments": [
+    "marketing suite",
+    "marketing technologies"
+  ],
+  "reasoning": "Extracted 'Oracle' as a specific, meaningful skill term, while dropping generic marketing phrases.",
+  "cache_hit": false
+}

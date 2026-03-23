@@ -1,0 +1,15 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "azure - data science",
+  "cleaned_skills": [
+    "azure",
+    "data science"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "split the phrase into azure and data science, dropped the hyphen as it's not a skill",
+  "cache_hit": false
+}

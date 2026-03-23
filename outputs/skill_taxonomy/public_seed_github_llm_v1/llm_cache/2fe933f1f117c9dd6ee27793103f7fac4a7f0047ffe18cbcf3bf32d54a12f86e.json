@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "sas/stat",
+  "cleaned_skills": [
+    "sas",
+    "stat"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split the phrase into two compact skills: sas and stat",
+  "cache_hit": false
+}

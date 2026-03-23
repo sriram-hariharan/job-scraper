@@ -1,0 +1,42 @@
+{
+  "job": {
+    "job_doc_id": "https://www.weareroku.com/jobs/7526070?gh_jid=7526070",
+    "company": "roku",
+    "title": "Data Scientist"
+  },
+  "selection": {
+    "selected_resume": "Sriram_Neelakantan_AI2.pdf",
+    "selected_score": 0.543456,
+    "selected_bucket": "moderate",
+    "runner_up_resume": "Sriram_Neelakantan_AI1.pdf",
+    "runner_up_score": 0.520749,
+    "score_gap": 0.022707,
+    "is_tie": false,
+    "tie_epsilon": 0.01
+  },
+  "summary": {
+    "matched_required": [],
+    "missing_required": [],
+    "matched_preferred": [
+      "causal inference"
+    ],
+    "missing_preferred": [
+      "deep specialization",
+      "experimentation"
+    ],
+    "matched_terms": [
+      "Sr. Data Scientist",
+      "causal inference"
+    ],
+    "top_dimensions": "title_alignment=0.86/0.181, required_skills_alignment=0.50/0.128, analytics_ml_depth=0.50/0.058, domain_relevance=0.50/0.047, tooling_alignment=0.50/0.039, experimentation_depth=0.29/0.027"
+  },
+  "top_dimension_deltas_vs_backup": [
+    "experimentation_depth: +0.013 (selected=0.027, backup=0.013)",
+    "title_alignment: +0.009 (selected=0.181, backup=0.172)",
+    "analytics_ml_depth: +0.000 (selected=0.058, backup=0.058)",
+    "baseline_familiarity: +0.000 (selected=0.015, backup=0.015)",
+    "domain_relevance: +0.000 (selected=0.047, backup=0.047)"
+  ],
+  "top_relevant_bullets": [],
+  "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+}

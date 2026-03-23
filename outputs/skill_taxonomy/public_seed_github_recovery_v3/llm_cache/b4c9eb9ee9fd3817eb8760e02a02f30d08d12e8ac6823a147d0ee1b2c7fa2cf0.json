@@ -1,0 +1,13 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "nlp - data science",
+  "cleaned_skills": [
+    "natural language processing",
+    "data science"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "split phrase into two distinct skills",
+  "cache_hit": false
+}

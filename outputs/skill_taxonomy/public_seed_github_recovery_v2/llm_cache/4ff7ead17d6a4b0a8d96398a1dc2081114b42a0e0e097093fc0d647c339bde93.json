@@ -1,0 +1,14 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "2 years industry exp",
+  "skip_reason": "mixed_numeric_phrase",
+  "recovered_skills": [],
+  "dropped_fragments": [
+    "2 years",
+    "exp"
+  ],
+  "reasoning": "The phrase contains a numeric value and an abbreviation, but no specific skill terms can be recovered.",
+  "cache_hit": false
+}

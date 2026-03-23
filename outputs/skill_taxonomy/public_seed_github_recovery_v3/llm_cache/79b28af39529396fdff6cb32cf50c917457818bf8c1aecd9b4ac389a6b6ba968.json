@@ -1,0 +1,14 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "ai - r",
+  "cleaned_skills": [
+    "ai"
+  ],
+  "dropped_fragments": [
+    "- r"
+  ],
+  "reasoning": "removed non-skill fragment and kept the atomic skill term 'ai'",
+  "cache_hit": false
+}

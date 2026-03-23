@@ -1,0 +1,53 @@
+{
+  "job": {
+    "job_doc_id": "https://www.weareroku.com/jobs/7526070?gh_jid=7526070",
+    "company": "roku",
+    "title": "Data Scientist"
+  },
+  "selection": {
+    "selected_resume": "Sriram_Neelakantan_AI2.pdf",
+    "selected_score": 0.543456,
+    "selected_bucket": "moderate",
+    "runner_up_resume": "Sriram_Neelakantan_AI1.pdf",
+    "runner_up_score": 0.520749,
+    "score_gap": 0.022707,
+    "is_tie": false,
+    "tie_epsilon": 0.01
+  },
+  "summary": {
+    "matched_required": [],
+    "missing_required": [],
+    "matched_preferred": [
+      "causal inference"
+    ],
+    "missing_preferred": [
+      "deep specialization",
+      "experimentation"
+    ],
+    "matched_terms": [
+      "Sr. Data Scientist",
+      "causal inference"
+    ],
+    "top_dimensions": "title_alignment=0.86/0.181, required_skills_alignment=0.50/0.128, analytics_ml_depth=0.50/0.058, domain_relevance=0.50/0.047, tooling_alignment=0.50/0.039, experimentation_depth=0.29/0.027"
+  },
+  "recruiter_summary": "Sriram_Neelakantan_AI2.pdf is the selected variant for roku | Data Scientist with a deterministic score of 0.543. It already aligns on core requirements. The main explicit gaps still showing are no major explicit gaps.",
+  "keep_emphasize": [
+    "Keep preferred-skill evidence visible: causal inference.",
+    "Preserve the strongest JD-aligned language already present: Sr. Data Scientist, causal inference."
+  ],
+  "tailoring_actions": [],
+  "rewrite_candidates": [],
+  "evidence_layers": {
+    "anchors": [],
+    "supports": [],
+    "context": []
+  },
+  "do_not_claim": [
+    "Do not add unsupported preferred-skill claims: deep specialization, experimentation.",
+    "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+  ],
+  "bullet_reuse_candidates": [],
+  "llm_prompt": "Return ONLY JSON that matches the required schema.\n\nGoal:\nProduce evidence-anchored tailoring guidance for ONE selected resume variant.\n\nHard rules:\n1. Use ONLY the evidence below.\n2. Do NOT invent tools, methods, responsibilities, metrics, or domains.\n3. Treat missing unsupported skills as gaps, not rewrite opportunities.\n4. Prefer concrete rewrite directions tied to a specific source entry.\n5. Use direct-overlap bullets as primary anchors.\n6. Use semantic-similarity bullets only as supporting evidence.\n7. Use same-role/context bullets only as lowest-priority supporting context.\n8. Avoid generic advice like 'highlight', 'showcase', or 'emphasize' unless you name the exact supported term and source entry.\n9. In rewrite_directions, each item should start with one of: 'Lead with', 'Support with', 'Keep gap explicit', or 'Do not add'.\n10. Keep every list concise and recruiter-usable.\n\nJob:\n- Company: roku\n- Title: Data Scientist\n\nSelected resume:\n- Resume: Sriram_Neelakantan_AI2.pdf\n- Score: 0.543456\n\nMatched / missing skills:\n- Matched required: []\n- Missing required: []\n- Matched preferred: ['causal inference']\n- Missing preferred: ['deep specialization', 'experimentation']\n- Matched terms from prefilter: ['Sr. Data Scientist', 'causal inference']\n\nPrimary anchor bullets:\n\nSemantic supporting bullets:\n\nSame-role context bullets:\n\nEvidence-backed rewrite candidates:\n\nGuardrail:\nOnly add or strengthen resume language when it is already truthful and supported by your actual work.\n\nOutput expectations:\n- recruiter_summary: 1 sentence only.\n- keep_emphasize: only already-supported terms or phrases.\n- tailoring_actions: concrete operator actions tied to the evidence above.\n- do_not_claim: unsupported skills, tools, or responsibilities only.\n- rewrite_directions: REQUIRED. Return at least 3 items if 3 or more anchor bullets exist.\n- At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.\n- Do not return only 'Keep gap explicit' items when anchor bullets are present.\n- Every rewrite_directions item must start with one of: Lead with, Support with, Keep gap explicit, Do not add.\n- Every rewrite_directions item must reference a specific source entry from the evidence above when using Lead with or Support with.\n- Avoid generic actions like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.",
+  "live_rewrite_prompt": "Return ONLY valid JSON with one top-level key: rewrite_directions.\n\nGoal:\nProduce concrete, source-tied rewrite directions for ONE selected resume variant.\n\nHard rules:\n1. Use ONLY the evidence below.\n2. Do NOT invent tools, methods, metrics, domains, or responsibilities.\n3. Direct-overlap bullets are the only primary anchors.\n4. Semantic-similarity bullets are support only.\n5. Same-role context bullets are lowest-priority support only.\n6. If anchor bullets exist, return at least 3 rewrite_directions.\n7. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.\n8. Do not return only gap-explicit directions when anchor bullets exist.\n9. Every Lead with / Support with item must reference a specific source entry.\n10. Keep gap explicit only for truly unsupported skills.\n\nJob:\n- Company: roku\n- Title: Data Scientist\n\nSelected resume:\n- Resume: Sriram_Neelakantan_AI2.pdf\n- Score: 0.543456\n\nMatched / missing skills:\n- Matched required: []\n- Missing required: []\n- Missing preferred: ['deep specialization', 'experimentation']\n\nPrimary anchor bullets:\n\nSemantic supporting bullets:\n\nSame-role context bullets:\n\nGuardrail:\nOnly add or strengthen resume language when it is already truthful and supported by your actual work.\n\nOutput requirements:\n- Return JSON only.\n- Output key: rewrite_directions\n- Allowed prefixes only: Lead with, Support with, Keep gap explicit, Do not add\n- Prefer anchor-led rewrite directions first, then support if needed.",
+  "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+}

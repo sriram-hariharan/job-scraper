@@ -1,0 +1,256 @@
+{
+  "job": {
+    "job_doc_id": "https://job-boards.greenhouse.io/securityscorecard/jobs/7565684",
+    "company": "securityscorecard",
+    "title": "Senior Data Scientist"
+  },
+  "selection": {
+    "selected_resume": "Sriram_Neelakantan_General_Data_Scientist.pdf",
+    "selected_score": 0.600944,
+    "selected_bucket": "solid",
+    "runner_up_resume": "Sriram_Neelakantan_Healthcare_Data_Scientist.pdf",
+    "runner_up_score": 0.600944,
+    "score_gap": 0.0,
+    "is_tie": true,
+    "tie_epsilon": 0.01
+  },
+  "summary": {
+    "matched_required": [
+      "aws",
+      "databricks",
+      "python",
+      "scikit-learn"
+    ],
+    "missing_required": [
+      "gcp",
+      "mlflow",
+      "xgboost"
+    ],
+    "matched_preferred": [],
+    "missing_preferred": [
+      "llms"
+    ],
+    "matched_terms": [
+      "Sr. Data Scientist",
+      "aws",
+      "databricks",
+      "python",
+      "scikit-learn"
+    ],
+    "top_dimensions": "title_alignment=0.90/0.187, required_skills_alignment=0.57/0.146, tooling_alignment=1.00/0.078, analytics_ml_depth=0.50/0.058, domain_relevance=0.50/0.047, experimentation_depth=0.50/0.047"
+  },
+  "recruiter_summary": "Sriram_Neelakantan_General_Data_Scientist.pdf is the selected variant for securityscorecard | Senior Data Scientist with a deterministic score of 0.601. It already aligns on aws, databricks, python, scikit-learn. The main explicit gaps still showing are gcp, mlflow, xgboost.",
+  "keep_emphasize": [
+    "Keep explicit required-skill evidence visible: aws, databricks, python, scikit-learn.",
+    "Preserve the strongest JD-aligned language already present: Sr. Data Scientist, aws, databricks, python, scikit-learn."
+  ],
+  "tailoring_actions": [
+    "Lead the tailored version with already-supported required terms: aws, databricks, python, scikit-learn.",
+    "Use these direct-match bullets as primary anchors: Data Analyst I @ Accenture, Data Scientist II @ L.B. Foster Salient Systems.",
+    "Use semantically aligned bullets only as supporting proof after the anchors: Data Analyst II @ Accenture, Data Scientist II @ L.B. Foster Salient Systems.",
+    "Keep these required gaps explicit unless you can support them truthfully: gcp, mlflow, xgboost."
+  ],
+  "rewrite_candidates": [
+    {
+      "source": "Data Analyst I @ Accenture",
+      "section": "experience",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "python",
+        "xgboost"
+      ],
+      "action": "Lead with python, xgboost in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Developed self-service Tableau dashboards standardizing engagement KPIs, reducing manual reporting by 25% Integrated link analysis and XGBoost into healthcare product efficacy models, improving treatment outcome accur..."
+    },
+    {
+      "source": "Data Scientist II @ L.B. Foster Salient Systems",
+      "section": "experience",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "databricks",
+        "python"
+      ],
+      "action": "Lead with databricks, python in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Built scalable data pipelines using Python & PySpark on Databricks with Azure Storage to process 3M+ high-speed sensor records, enabling automated wheel filtering, anomaly detection, poly-curve analysis, and weight ca..."
+    },
+    {
+      "source": "Data Analyst II @ Accenture",
+      "section": "experience",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "python"
+      ],
+      "action": "Lead with python in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality"
+    },
+    {
+      "source": "Projects",
+      "section": "project",
+      "evidence_type": "direct_overlap",
+      "supported_terms": [
+        "xgboost"
+      ],
+      "action": "Lead with xgboost in the opening clause of this bullet, then keep the outcome/impact at the end.",
+      "bullet_excerpt": "Applied SVM, Logistic Regression, and XGBoost on Expedia hotel data with ARIMA-based trend analysis to"
+    }
+  ],
+  "evidence_layers": {
+    "anchors": [
+      {
+        "section": "experience",
+        "source_title": "Data Analyst I",
+        "source_company": "Accenture",
+        "text": "Developed self-service Tableau dashboards standardizing engagement KPIs, reducing manual reporting by 25% Integrated link analysis and XGBoost into healthcare product efficacy models, improving treatment outcome accuracy and reducing false positives by 20% Identified cardiovascular biomarkers using Python statistical analysis and Tableau visualizations, supporting improved healthcare product assessments",
+        "overlap_count": 2,
+        "overlaps": [
+          "python",
+          "xgboost"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data analyst i||accenture",
+        "bullet_index": 1
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Scientist II",
+        "source_company": "L.B. Foster Salient Systems",
+        "text": "Built scalable data pipelines using Python & PySpark on Databricks with Azure Storage to process 3M+ high-speed sensor records, enabling automated wheel filtering, anomaly detection, poly-curve analysis, and weight calculation",
+        "overlap_count": 2,
+        "overlaps": [
+          "databricks",
+          "python"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data scientist ii||l b foster salient systems",
+        "bullet_index": 0
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Scientist II",
+        "source_company": "L.B. Foster Salient Systems",
+        "text": "Performed advanced EDA in Python and PySpark on Databricks to identify trends and anomalies, enabling proactive wheel replacement and optimized maintenance schedules",
+        "overlap_count": 2,
+        "overlaps": [
+          "databricks",
+          "python"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data scientist ii||l b foster salient systems",
+        "bullet_index": 4
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Analyst II",
+        "source_company": "Accenture",
+        "text": "Automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality",
+        "overlap_count": 1,
+        "overlaps": [
+          "python"
+        ],
+        "evidence_type": "direct_overlap",
+        "source_key": "experience||data analyst ii||accenture",
+        "bullet_index": 2
+      }
+    ],
+    "supports": [
+      {
+        "section": "experience",
+        "source_title": "Data Analyst II",
+        "source_company": "Accenture",
+        "text": "Architected ML-driven data pipelines using Apache Spark for insurance campaign response analysis, improving conversion rates by 5.5%",
+        "overlap_count": 0,
+        "overlaps": [],
+        "evidence_type": "semantic_similarity",
+        "semantic_score": 0.642531,
+        "bullet_index": 0,
+        "source_key": "experience||data analyst ii||accenture"
+      },
+      {
+        "section": "experience",
+        "source_title": "Data Scientist II",
+        "source_company": "L.B. Foster Salient Systems",
+        "text": "Automated ADC-based sensor data validation across 16 circuits per rail, reducing misclassification by 40% and strengthening anomaly isolation and wheel health diagnostics",
+        "overlap_count": 0,
+        "overlaps": [],
+        "evidence_type": "semantic_similarity",
+        "semantic_score": 0.583218,
+        "bullet_index": 3,
+        "source_key": "experience||data scientist ii||l b foster salient systems"
+      }
+    ],
+    "context": []
+  },
+  "do_not_claim": [
+    "Do not claim missing required skills unless you can support them truthfully: gcp, mlflow, xgboost.",
+    "Do not add unsupported preferred-skill claims: llms.",
+    "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+  ],
+  "bullet_reuse_candidates": [
+    {
+      "section": "experience",
+      "source": "Data Analyst I @ Accenture",
+      "overlaps": [
+        "python",
+        "xgboost"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Developed self-service Tableau dashboards standardizing engagement KPIs, reducing manual reporting by 25% Integrated link analysis and XGBoost into healthcare product efficacy models, improving treatment outcome accuracy and reducing false positives by 20% Identified cardiovascular biomarkers using Python statistical analysis and Tableau visualizations, supporting improved healthcare product assessments",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: python, xgboost"
+    },
+    {
+      "section": "experience",
+      "source": "Data Scientist II @ L.B. Foster Salient Systems",
+      "overlaps": [
+        "databricks",
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Built scalable data pipelines using Python & PySpark on Databricks with Azure Storage to process 3M+ high-speed sensor records, enabling automated wheel filtering, anomaly detection, poly-curve analysis, and weight calculation",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: databricks, python"
+    },
+    {
+      "section": "experience",
+      "source": "Data Scientist II @ L.B. Foster Salient Systems",
+      "overlaps": [
+        "databricks",
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Performed advanced EDA in Python and PySpark on Databricks to identify trends and anomalies, enabling proactive wheel replacement and optimized maintenance schedules",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: databricks, python"
+    },
+    {
+      "section": "experience",
+      "source": "Data Analyst II @ Accenture",
+      "overlaps": [
+        "python"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: python"
+    },
+    {
+      "section": "experience",
+      "source": "Data Scientist II @ L.B. Foster Salient Systems",
+      "overlaps": [
+        "databricks"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Partnered with railway clients, operations teams, and engineering leads to deliver Power BI dashboards backed by SQL queries from Databricks, improving maintenance KPI visibility and planning accuracy",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: databricks"
+    },
+    {
+      "section": "project",
+      "source": "Projects",
+      "overlaps": [
+        "xgboost"
+      ],
+      "evidence_type": "direct_overlap",
+      "bullet": "Applied SVM, Logistic Regression, and XGBoost on Expedia hotel data with ARIMA-based trend analysis to",
+      "reuse_note": "Use this as a primary anchor bullet and move the matched JD terms earlier in the sentence: xgboost"
+    }
+  ],
+  "llm_prompt": "Return ONLY JSON that matches the required schema.\n\nGoal:\nProduce evidence-anchored tailoring guidance for ONE selected resume variant.\n\nHard rules:\n1. Use ONLY the evidence below.\n2. Do NOT invent tools, methods, responsibilities, metrics, or domains.\n3. Treat missing unsupported skills as gaps, not rewrite opportunities.\n4. Prefer concrete rewrite directions tied to a specific source entry.\n5. Use direct-overlap bullets as primary anchors.\n6. Use semantic-similarity bullets only as supporting evidence.\n7. Use same-role/context bullets only as lowest-priority supporting context.\n8. Avoid generic advice like 'highlight', 'showcase', or 'emphasize' unless you name the exact supported term and source entry.\n9. In rewrite_directions, each item should start with one of: 'Lead with', 'Support with', 'Keep gap explicit', or 'Do not add'.\n10. Keep every list concise and recruiter-usable.\n\nJob:\n- Company: securityscorecard\n- Title: Senior Data Scientist\n\nSelected resume:\n- Resume: Sriram_Neelakantan_General_Data_Scientist.pdf\n- Score: 0.600944\n\nMatched / missing skills:\n- Matched required: ['aws', 'databricks', 'python', 'scikit-learn']\n- Missing required: ['gcp', 'mlflow', 'xgboost']\n- Matched preferred: []\n- Missing preferred: ['llms']\n- Matched terms from prefilter: ['Sr. Data Scientist', 'aws', 'databricks', 'python', 'scikit-learn']\n\nPrimary anchor bullets:\n\nSemantic supporting bullets:\n\nSame-role context bullets:\n\nEvidence-backed rewrite candidates:\n\nGuardrail:\nOnly add or strengthen resume language when it is already truthful and supported by your actual work.\n\nOutput expectations:\n- recruiter_summary: 1 sentence only.\n- keep_emphasize: only already-supported terms or phrases.\n- tailoring_actions: concrete operator actions tied to the evidence above.\n- do_not_claim: unsupported skills, tools, or responsibilities only.\n- rewrite_directions: REQUIRED. Return at least 3 items if 3 or more anchor bullets exist.\n- At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.\n- Do not return only 'Keep gap explicit' items when anchor bullets are present.\n- Every rewrite_directions item must start with one of: Lead with, Support with, Keep gap explicit, Do not add.\n- Every rewrite_directions item must reference a specific source entry from the evidence above when using Lead with or Support with.\n- Avoid generic actions like Ensure, Verify, Confirm, Highlight, Showcase, or Emphasize.",
+  "live_rewrite_prompt": "Return ONLY valid JSON with one top-level key: rewrite_directions.\n\nGoal:\nProduce concrete, source-tied rewrite directions for ONE selected resume variant.\n\nHard rules:\n1. Use ONLY the evidence below.\n2. Do NOT invent tools, methods, metrics, domains, or responsibilities.\n3. Direct-overlap bullets are the only primary anchors.\n4. Semantic-similarity bullets are support only.\n5. Same-role context bullets are lowest-priority support only.\n6. If anchor bullets exist, return at least 3 rewrite_directions.\n7. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets exist.\n8. Do not return only gap-explicit directions when anchor bullets exist.\n9. Every Lead with / Support with item must reference a specific source entry.\n10. Keep gap explicit only for truly unsupported skills.\n\nJob:\n- Company: securityscorecard\n- Title: Senior Data Scientist\n\nSelected resume:\n- Resume: Sriram_Neelakantan_General_Data_Scientist.pdf\n- Score: 0.600944\n\nMatched / missing skills:\n- Matched required: ['aws', 'databricks', 'python', 'scikit-learn']\n- Missing required: ['gcp', 'mlflow', 'xgboost']\n- Missing preferred: ['llms']\n\nPrimary anchor bullets:\n1. [experience] Data Analyst I @ Accenture | supports=['python', 'xgboost']\n   Bullet: Developed self-service Tableau dashboards standardizing engagement KPIs, reducing manual reporting by 25% Integrated link analysis and XGBoost into healthcare product efficacy models, improving treatment outcome accuracy and reducing false positives by 20% Identified cardiovascular biomarkers using Python statistica...\n2. [experience] Data Scientist II @ L.B. Foster Salient Systems | supports=['databricks', 'python']\n   Bullet: Built scalable data pipelines using Python & PySpark on Databricks with Azure Storage to process 3M+ high-speed sensor records, enabling automated wheel filtering, anomaly detection, poly-curve analysis, and weight calculation\n3. [experience] Data Scientist II @ L.B. Foster Salient Systems | supports=['databricks', 'python']\n   Bullet: Performed advanced EDA in Python and PySpark on Databricks to identify trends and anomalies, enabling proactive wheel replacement and optimized maintenance schedules\n4. [experience] Data Analyst II @ Accenture | supports=['python']\n   Bullet: Automated ingestion and transformation of 250k+ customer records weekly using SQL and Python, achieving 98% data quality\n\nSemantic supporting bullets:\n1. [experience] Data Analyst II @ Accenture | type=semantic_similarity\n   semantic_score=0.642531\n   Bullet: Architected ML-driven data pipelines using Apache Spark for insurance campaign response analysis, improving conversion rates by 5.5%\n2. [experience] Data Scientist II @ L.B. Foster Salient Systems | type=semantic_similarity\n   semantic_score=0.583218\n   Bullet: Automated ADC-based sensor data validation across 16 circuits per rail, reducing misclassification by 40% and strengthening anomaly isolation and wheel health diagnostics\n\nSame-role context bullets:\n\nGuardrail:\nOnly add or strengthen resume language when it is already truthful and supported by your actual work.\n\nOutput requirements:\n- Return JSON only.\n- Output key: rewrite_directions\n- Allowed prefixes only: Lead with, Support with, Keep gap explicit, Do not add\n- Prefer anchor-led rewrite directions first, then support if needed.",
+  "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work."
+}

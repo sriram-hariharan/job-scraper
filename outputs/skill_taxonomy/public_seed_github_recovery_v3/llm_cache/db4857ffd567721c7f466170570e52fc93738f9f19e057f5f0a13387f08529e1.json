@@ -1,0 +1,14 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "full funnel analytics - marketing analytics",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "full funnel analytics",
+    "marketing analytics"
+  ],
+  "dropped_fragments": [],
+  "reasoning": "Extracted specific analytics terms from the phrase.",
+  "cache_hit": false
+}

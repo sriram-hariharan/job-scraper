@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "c/c++ - data scientist",
+  "cleaned_skills": [
+    "c",
+    "c++",
+    "data scientist"
+  ],
+  "dropped_fragments": [
+    "-"
+  ],
+  "reasoning": "split the phrase into programming languages and job title, but 'data scientist' is not split further as it's a specific job title, however, it's not ideal as per rule 2. Revising to follow the rules: 'data scientist' should be dropped as it's a role name.",
+  "cache_hit": false
+}

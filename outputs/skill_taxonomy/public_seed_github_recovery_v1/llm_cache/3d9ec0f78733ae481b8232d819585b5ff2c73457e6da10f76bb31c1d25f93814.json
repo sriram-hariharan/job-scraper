@@ -1,0 +1,17 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "business analyst and data and sql",
+  "skip_reason": "long_freeform_phrase",
+  "recovered_skills": [
+    "sql"
+  ],
+  "dropped_fragments": [
+    "business analyst",
+    "and",
+    "data"
+  ],
+  "reasoning": "Extracted SQL as a specific, meaningful skill term, while dropping generic business words and filler.",
+  "cache_hit": false
+}

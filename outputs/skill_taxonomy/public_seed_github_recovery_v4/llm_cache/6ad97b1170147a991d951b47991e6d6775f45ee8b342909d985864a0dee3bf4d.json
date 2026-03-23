@@ -1,0 +1,16 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "prior teaching experience not essential - data science",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "data science"
+  ],
+  "dropped_fragments": [
+    "prior teaching experience",
+    "not essential"
+  ],
+  "reasoning": "Extracted 'data science' as a valid skill term, dropped other fragments as noise.",
+  "cache_hit": false
+}

@@ -1,0 +1,20 @@
+{
+  "status": "generated",
+  "provider": "groq",
+  "model": "llama-3.3-70b-versatile",
+  "raw_term": "big data management tools i e informatica bdm/idl/eic/idq",
+  "skip_reason": "too_many_tokens",
+  "recovered_skills": [
+    "informatica",
+    "bdm",
+    "idl",
+    "eic",
+    "idq"
+  ],
+  "dropped_fragments": [
+    "big data management tools",
+    "i e"
+  ],
+  "reasoning": "Extracted specific tool names and abbreviations, dropped generic phrases and filler words.",
+  "cache_hit": false
+}

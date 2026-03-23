@@ -639,6 +639,344 @@ def _build_evidence_layers(packet: Dict[str, Any], limit_per_group: int = 4) -> 
         "context": context,
     }
 
+def _plan_unit_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "section": row.get("section", ""),
+        "source": _source_label(row),
+        "evidence_type": row.get("evidence_type", ""),
+        "supported_terms": _row_supported_terms(row)[:6],
+        "evidence_unit": row.get("clause_text") or row.get("text", ""),
+        "parent_bullet": row.get("parent_bullet", ""),
+    }
+
+def _plan_row_key(row: Dict[str, Any]) -> tuple:
+    return (
+        str(row.get("section", "") or "").strip(),
+        _source_label(row),
+        str(row.get("evidence_type", "") or "").strip(),
+        str(row.get("clause_text") or row.get("text") or "").strip(),
+    )
+
+
+def _facet_evidence_texts(facet_row: Dict[str, Any]) -> List[str]:
+    texts: List[str] = []
+
+    for key in ("anchor_evidence", "facet_direct_evidence", "facet_context_evidence"):
+        for evidence in facet_row.get(key, []) or []:
+            if not isinstance(evidence, dict):
+                continue
+
+            text = str(evidence.get("text", "") or "").strip()
+            if text:
+                texts.append(text)
+
+    return _unique_preserve_order(texts)
+
+
+def _row_matches_facet(row: Dict[str, Any], facet_row: Dict[str, Any]) -> bool:
+    row_terms = _row_supported_terms(row)
+    row_text = str(row.get("clause_text") or row.get("text") or "").strip()
+    parent_text = str(row.get("parent_bullet", "") or "").strip()
+
+    facet_terms = _unique_preserve_order(
+        list(facet_row.get("direct_terms", []) or [])
+        + list(facet_row.get("context_terms", []) or [])
+        + list(facet_row.get("skills_only_terms", []) or [])
+        + list(facet_row.get("facet_context_terms", []) or [])
+        + list(facet_row.get("job_terms", []) or [])
+    )
+    facet_evidence_texts = _facet_evidence_texts(facet_row)
+
+    # 1) explicit term overlap on the selected row itself
+    if any(term in row_terms for term in facet_terms):
+        return True
+
+    # 2) facet language actually appears in the selected clause or its parent bullet
+    for candidate_text in (row_text, parent_text):
+        if candidate_text and _direction_mentions_any(candidate_text, facet_terms):
+            return True
+
+    # 3) the selected clause/parent bullet actually corresponds to one of the facet evidence texts
+    for candidate_text in (row_text, parent_text):
+        if not candidate_text:
+            continue
+
+        for evidence_text in facet_evidence_texts:
+            if (
+                candidate_text == evidence_text
+                or candidate_text in evidence_text
+                or evidence_text in candidate_text
+            ):
+                return True
+
+    return False
+
+def _select_plan_rows_for_facet(
+    rows: List[Dict[str, Any]],
+    facet_row: Dict[str, Any],
+    used_keys: set,
+    *,
+    limit: int = 1,
+    allowed_types: Optional[List[str]] = None,
+) -> List[Dict[str, Any]]:
+    allowed = set(allowed_types or [])
+    selected: List[Dict[str, Any]] = []
+
+    for row in rows:
+        evidence_type = str(row.get("evidence_type", "") or "").strip()
+        if allowed and evidence_type not in allowed:
+            continue
+
+        if not _row_matches_facet(row, facet_row):
+            continue
+
+        key = _plan_row_key(row)
+        if key in used_keys:
+            continue
+
+        used_keys.add(key)
+        selected.append(_plan_unit_row(row))
+
+        if len(selected) >= limit:
+            break
+
+    return selected
+
+def _build_narrative_angle(packet: Dict[str, Any]) -> str:
+    direct_facets = _top_direct_facets(packet, limit=2)
+    adjacent_facets = _top_adjacent_facets(packet, limit=2)
+    gap_facets = _top_gap_facets(packet, limit=1)
+
+    direct_facet_names = [
+        _facet_display_name(row.get("facet", "")) for row in direct_facets
+    ]
+    adjacent_facet_names = [
+        _facet_display_name(row.get("facet", "")) for row in adjacent_facets
+    ]
+    gap_facet_names = [
+        _facet_display_name(row.get("facet", "")) for row in gap_facets
+    ]
+
+    if direct_facet_names:
+        sentence = f"Lead with {', '.join(_truncate_list(direct_facet_names, 2))} as the core story"
+        if adjacent_facet_names:
+            sentence += (
+                f"; use {', '.join(_truncate_list(adjacent_facet_names, 2))} only as adjacent support"
+            )
+        if gap_facet_names:
+            sentence += (
+                f"; keep {', '.join(_truncate_list(gap_facet_names, 1))} explicit instead of overstating ownership"
+            )
+        return sentence + "."
+
+    direct_terms = _unique_preserve_order(
+        _direct_terms(packet, "required") + _direct_terms(packet, "preferred")
+    )
+    if direct_terms:
+        sentence = f"Lead with direct bullet evidence for {', '.join(_truncate_list(direct_terms, 4))}"
+        if gap_facet_names:
+            sentence += (
+                f"; keep {', '.join(_truncate_list(gap_facet_names, 1))} explicit instead of overstating ownership"
+            )
+        return sentence + "."
+
+    return "Use the strongest direct bullet evidence first and keep unsupported areas explicit."
+
+
+def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
+    rows = _rewrite_source_rows(packet)
+
+    direct_anchor_rows = [
+        row for row in rows
+        if str(row.get("evidence_type", "") or "").strip() == "direct_overlap"
+    ]
+    support_rows = [
+        row for row in rows
+        if str(row.get("evidence_type", "") or "").strip()
+        in {"direct_overlap", "semantic_similarity", "same_source_context", "adjacent_context"}
+    ]
+    secondary_only_rows = [
+        row for row in rows
+        if str(row.get("evidence_type", "") or "").strip()
+        in {"semantic_similarity", "same_source_context", "adjacent_context"}
+    ]
+
+    direct_facets = _top_direct_facets(packet, limit=3)
+    adjacent_facets = _top_adjacent_facets(packet, limit=3)
+
+    used_keys = set()
+    primary_anchor_units: List[Dict[str, Any]] = []
+    secondary_support_units: List[Dict[str, Any]] = []
+    primary_facet_coverage: List[str] = []
+    secondary_facet_coverage: List[str] = []
+
+    # Step 1: guarantee one primary anchor per top direct facet where possible
+    for facet_row in direct_facets[:2]:
+        selected = _select_plan_rows_for_facet(
+            direct_anchor_rows,
+            facet_row,
+            used_keys,
+            limit=1,
+            allowed_types=["direct_overlap"],
+        )
+        if selected:
+            primary_anchor_units.extend(selected)
+            primary_facet_coverage.append(_facet_display_name(facet_row.get("facet", "")))
+
+    # Step 2: backfill remaining primary anchors from strongest direct-overlap rows
+    for row in direct_anchor_rows:
+        if len(primary_anchor_units) >= 3:
+            break
+
+        key = _plan_row_key(row)
+        if key in used_keys:
+            continue
+
+        used_keys.add(key)
+        primary_anchor_units.append(_plan_unit_row(row))
+
+    # Step 3: if any direct facet still lacks primary coverage, force secondary coverage for it
+    covered_direct_facets = set(primary_facet_coverage)
+    for facet_row in direct_facets[:2]:
+        facet_name = _facet_display_name(facet_row.get("facet", ""))
+        if facet_name in covered_direct_facets:
+            continue
+
+        selected = _select_plan_rows_for_facet(
+            support_rows,
+            facet_row,
+            used_keys,
+            limit=1,
+            allowed_types=["direct_overlap", "semantic_similarity", "same_source_context", "adjacent_context"],
+        )
+        if selected:
+            secondary_support_units.extend(selected)
+            secondary_facet_coverage.append(facet_name)
+
+    # Step 4: add one adjacent-support unit for the strongest adjacent facets
+    for facet_row in adjacent_facets[:2]:
+        selected = _select_plan_rows_for_facet(
+            support_rows,
+            facet_row,
+            used_keys,
+            limit=1,
+            allowed_types=["semantic_similarity", "same_source_context", "adjacent_context", "direct_overlap"],
+        )
+        if selected:
+            secondary_support_units.extend(selected)
+            secondary_facet_coverage.append(_facet_display_name(facet_row.get("facet", "")))
+
+    # Step 5: backfill remaining secondary support slots
+    for row in secondary_only_rows:
+        if len(secondary_support_units) >= 3:
+            break
+
+        key = _plan_row_key(row)
+        if key in used_keys:
+            continue
+
+        used_keys.add(key)
+        secondary_support_units.append(_plan_unit_row(row))
+
+    return {
+        "primary_anchor_units": primary_anchor_units,
+        "secondary_support_units": secondary_support_units,
+        "primary_facet_coverage": _unique_preserve_order(primary_facet_coverage),
+        "secondary_facet_coverage": _unique_preserve_order(secondary_facet_coverage),
+    }
+
+
+def _build_gap_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
+    contextual_terms_to_frame_carefully = _unique_preserve_order(
+        _contextual_terms(packet, "required")
+        + _contextual_terms(packet, "preferred")
+        + _skills_only_terms(packet, "required")
+        + _skills_only_terms(packet, "preferred")
+    )
+
+    adjacent_terms_to_keep_explicit = _adjacent_unsupported_terms(packet)
+    true_unsupported_terms = _true_gap_terms(packet)
+
+    direct_facets = [
+        _facet_display_name(row.get("facet", ""))
+        for row in _top_direct_facets(packet, limit=3)
+    ]
+    adjacent_facets = [
+        _facet_display_name(row.get("facet", ""))
+        for row in _top_adjacent_facets(packet, limit=3)
+    ]
+    true_gap_facets = [
+        _facet_display_name(row.get("facet", ""))
+        for row in _top_gap_facets(packet, limit=3)
+    ]
+
+    return {
+        "direct_facets": _unique_preserve_order(direct_facets),
+        "adjacent_facets": _unique_preserve_order(adjacent_facets),
+        "true_gap_facets": _unique_preserve_order(true_gap_facets),
+        "contextual_terms_to_frame_carefully": contextual_terms_to_frame_carefully,
+        "adjacent_terms_to_keep_explicit": adjacent_terms_to_keep_explicit,
+        "true_unsupported_terms": true_unsupported_terms,
+    }
+
+
+def _build_tailoring_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
+    anchor_plan = _build_anchor_plan(packet)
+    gap_plan = _build_gap_plan(packet)
+
+    return {
+        "narrative_angle": _build_narrative_angle(packet),
+        **anchor_plan,
+        **gap_plan,
+    }
+
+
+def _tailoring_plan_prompt_lines(plan: Dict[str, Any]) -> List[str]:
+    lines: List[str] = ["Deterministic tailoring plan:"]
+    lines.append(f"- Narrative angle: {plan.get('narrative_angle', '')}")
+    lines.append(f"- Direct facets to lead with: {plan.get('direct_facets', [])}")
+    lines.append(f"- Adjacent facets to frame carefully: {plan.get('adjacent_facets', [])}")
+    lines.append(f"- True facet gaps to keep explicit: {plan.get('true_gap_facets', [])}")
+    lines.append(
+        f"- Contextual/skills-only terms to frame carefully: {plan.get('contextual_terms_to_frame_carefully', [])}"
+    )
+    lines.append(
+        f"- Adjacent terms still not directly proven: {plan.get('adjacent_terms_to_keep_explicit', [])}"
+    )
+    lines.append(
+        f"- True unsupported exact JD terms: {plan.get('true_unsupported_terms', [])}"
+    )
+
+    lines.append("- Primary anchor units:")
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    if primary_anchor_units:
+        for idx, row in enumerate(primary_anchor_units, 1):
+            lines.append(
+                f"  {idx}. [{row.get('section', '')}] {row.get('source', '')} | "
+                f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+            )
+            lines.append(f"     Evidence unit: {_short_bullet(row.get('evidence_unit', ''), 220)}")
+            if row.get("parent_bullet"):
+                lines.append(f"     Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 220)}")
+    else:
+        lines.append("  - none")
+
+    lines.append("- Secondary support units:")
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+    if secondary_support_units:
+        for idx, row in enumerate(secondary_support_units, 1):
+            lines.append(
+                f"  {idx}. [{row.get('section', '')}] {row.get('source', '')} | "
+                f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+            )
+            lines.append(f"     Evidence unit: {_short_bullet(row.get('evidence_unit', ''), 220)}")
+            if row.get("parent_bullet"):
+                lines.append(f"     Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 220)}")
+    else:
+        lines.append("  - none")
+
+    lines.append("")
+    return lines
 
 def _fallback_rewrite_directions_from_payload(
     payload: Dict[str, Any],
@@ -661,6 +999,170 @@ def _fallback_rewrite_directions_from_payload(
 
     return directions
 
+def _planner_seed_rewrite_directions(
+    payload: Dict[str, Any],
+    limit: int = 6,
+) -> List[str]:
+    plan = payload.get("tailoring_plan", {}) or {}
+    directions: List[str] = []
+
+    for row in (plan.get("primary_anchor_units", []) or [])[:2]:
+        source = str(row.get("source", "") or "").strip()
+        evidence_unit = _short_bullet(str(row.get("evidence_unit", "") or "").strip(), 180)
+        supported_terms = row.get("supported_terms", []) or []
+
+        if source and evidence_unit and supported_terms:
+            directions.append(
+                f"Lead with {evidence_unit} from {source} to anchor {', '.join(_truncate_list(supported_terms, 4))}."
+            )
+        elif source and evidence_unit:
+            directions.append(
+                f"Lead with {evidence_unit} from {source} as a primary anchor."
+            )
+
+    for row in (plan.get("secondary_support_units", []) or [])[:2]:
+        source = str(row.get("source", "") or "").strip()
+        evidence_unit = _short_bullet(str(row.get("evidence_unit", "") or "").strip(), 180)
+        supported_terms = row.get("supported_terms", []) or []
+
+        if source and evidence_unit and supported_terms:
+            directions.append(
+                f"Support with {evidence_unit} from {source} to reinforce {', '.join(_truncate_list(supported_terms, 4))} without overstating ownership."
+            )
+        elif source and evidence_unit:
+            directions.append(
+                f"Support with {evidence_unit} from {source} to reinforce the main story without overstating ownership."
+            )
+
+    adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
+    adjacent_facets = plan.get("adjacent_facets", []) or []
+    if adjacent_terms:
+        directions.append(
+            f"Do not add direct ownership claims for {', '.join(_truncate_list(adjacent_terms, 4))}; use related evidence only as adjacent support."
+        )
+    elif adjacent_facets:
+        directions.append(
+            f"Do not add direct ownership claims for {', '.join(_truncate_list(adjacent_facets, 2))}; use related evidence only as adjacent support."
+        )
+
+    true_gap_terms = plan.get("true_unsupported_terms", []) or []
+    true_gap_facets = plan.get("true_gap_facets", []) or []
+    if true_gap_terms:
+        directions.append(
+            f"Keep gap explicit for {', '.join(_truncate_list(true_gap_terms, 4))}."
+        )
+    elif true_gap_facets:
+        directions.append(
+            f"Keep gap explicit for {', '.join(_truncate_list(true_gap_facets, 2))}."
+        )
+
+    return _unique_preserve_order(directions)[:limit]
+
+
+def _direction_mentions_any(direction: str, values: List[str]) -> bool:
+    text = str(direction or "").strip().lower()
+    if not text:
+        return False
+
+    for value in values or []:
+        candidate = str(value or "").strip().lower()
+        if candidate and candidate in text:
+            return True
+
+    return False
+
+
+def _direction_matches_plan_unit(direction: str, row: Dict[str, Any]) -> bool:
+    values: List[str] = []
+
+    source = str(row.get("source", "") or "").strip()
+    if source:
+        values.append(source)
+
+    values.extend(row.get("supported_terms", []) or [])
+
+    evidence_unit = str(row.get("evidence_unit", "") or "").strip()
+    if evidence_unit:
+        values.append(evidence_unit[:80])
+
+    return _direction_mentions_any(direction, values)
+
+
+def _rewrite_directions_cover_plan(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> bool:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+    if not actionable:
+        return False
+
+    plan = payload.get("tailoring_plan", {}) or {}
+
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    if primary_anchor_units:
+        first_primary = primary_anchor_units[0]
+        if not any(
+            item.startswith("Lead with") and _direction_matches_plan_unit(item, first_primary)
+            for item in actionable
+        ):
+            return False
+
+        if len(primary_anchor_units) > 1:
+            second_primary = primary_anchor_units[1]
+            if not any(
+                (item.startswith("Lead with") or item.startswith("Support with"))
+                and _direction_matches_plan_unit(item, second_primary)
+                for item in actionable
+            ):
+                return False
+
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+    if secondary_support_units:
+        first_secondary = secondary_support_units[0]
+        if not any(
+            item.startswith("Support with") and _direction_matches_plan_unit(item, first_secondary)
+            for item in actionable
+        ):
+            return False
+
+    adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
+    adjacent_facets = plan.get("adjacent_facets", []) or []
+    if adjacent_terms or adjacent_facets:
+        targets = adjacent_terms if adjacent_terms else adjacent_facets
+        if not any(
+            item.startswith("Do not add") and _direction_mentions_any(item, targets)
+            for item in actionable
+        ):
+            return False
+
+    true_gap_terms = plan.get("true_unsupported_terms", []) or []
+    true_gap_facets = plan.get("true_gap_facets", []) or []
+    if true_gap_terms or true_gap_facets:
+        targets = true_gap_terms if true_gap_terms else true_gap_facets
+        if not any(
+            item.startswith("Keep gap explicit") and _direction_mentions_any(item, targets)
+            for item in actionable
+        ):
+            return False
+
+    return True
+
+
+def _blend_live_and_planner_directions(
+    payload: Dict[str, Any],
+    llm_directions: List[str],
+    limit: int = 6,
+) -> List[str]:
+    planner_directions = _planner_seed_rewrite_directions(payload, limit=limit)
+    blended = _unique_preserve_order(
+        [str(item).strip() for item in llm_directions if _is_actionable_rewrite_direction(item)]
+        + planner_directions
+    )
+    return blended[:limit]
 
 def _is_actionable_rewrite_direction(value: str) -> bool:
     text = str(value or "").strip()
@@ -697,13 +1199,24 @@ def _select_operator_rewrite_directions(
     if isinstance(llm_output, dict) and llm_output.get("parse_ok"):
         parsed = llm_output.get("parsed", {}) or {}
 
+    planner_directions = _planner_seed_rewrite_directions(payload)
+
     if parsed and _llm_output_is_strong_enough(parsed):
         llm_directions = [
             str(item).strip()
             for item in parsed.get("rewrite_directions", []) or []
             if _is_actionable_rewrite_direction(item)
         ]
-        return llm_directions[:6], "live_llm"
+
+        if _rewrite_directions_cover_plan(payload, llm_directions):
+            return llm_directions[:6], "live_llm"
+
+        blended = _blend_live_and_planner_directions(payload, llm_directions, limit=6)
+        if _rewrite_directions_cover_plan(payload, blended):
+            return blended[:6], "live_llm_blended"
+
+    if planner_directions:
+        return planner_directions[:6], "deterministic_planner"
 
     return _fallback_rewrite_directions_from_payload(payload), "deterministic"
 
@@ -722,44 +1235,24 @@ def _build_operator_markdown_payload(
     return operator_payload
 
 def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
-    evidence_layers = _build_evidence_layers(packet)
-
-    anchors = evidence_layers.get("anchors", [])
-    supports = evidence_layers.get("supports", [])
-    context = evidence_layers.get("context", [])
+    tailoring_plan = _build_tailoring_plan(packet)
 
     direct_required = _direct_terms(packet, "required")
     direct_preferred = _direct_terms(packet, "preferred")
-    secondary_terms = _unique_preserve_order(
-        _contextual_terms(packet, "required")
-        + _contextual_terms(packet, "preferred")
-        + _skills_only_terms(packet, "required")
-        + _skills_only_terms(packet, "preferred")
-    )
-
-    direct_facets = _top_direct_facets(packet, limit=3)
-    adjacent_facets = _top_adjacent_facets(packet, limit=3)
-    gap_facets = _top_gap_facets(packet, limit=3)
-
-    adjacent_unsupported = _adjacent_unsupported_terms(packet)
-    true_gap_terms = _true_gap_terms(packet)
 
     actions: List[str] = []
 
-    if direct_facets:
-        facet_text = ", ".join(
-            _facet_display_name(row.get("facet", "")) for row in direct_facets
-        )
+    if tailoring_plan.get("narrative_angle"):
+        actions.append(f"Follow this narrative angle: {tailoring_plan.get('narrative_angle')}")
+
+    if tailoring_plan.get("direct_facets"):
         actions.append(
-            f"Build the main narrative around these directly supported JD facets: {facet_text}."
+            f"Build the main story around these directly supported JD facets: {', '.join(_truncate_list(tailoring_plan.get('direct_facets', []), 3))}."
         )
 
-    if adjacent_facets:
-        facet_text = ", ".join(
-            _facet_display_name(row.get("facet", "")) for row in adjacent_facets
-        )
+    if tailoring_plan.get("adjacent_facets"):
         actions.append(
-            f"Use these adjacent facet-support areas only as secondary framing, not as direct ownership claims: {facet_text}."
+            f"Use these adjacent facet-support areas only as secondary framing, not as direct ownership claims: {', '.join(_truncate_list(tailoring_plan.get('adjacent_facets', []), 3))}."
         )
 
     if direct_required:
@@ -771,42 +1264,43 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
             f"Lead with the strongest directly supported preferred terms already proven in bullets: {', '.join(_truncate_list(direct_preferred, 6))}."
         )
 
-    if anchors:
-        anchor_sources = _unique_preserve_order([_source_label(row) for row in anchors[:3]])
-        actions.append(
-            f"Use these direct-match bullets as primary anchors: {', '.join(_truncate_list(anchor_sources, 4))}."
-        )
-
-    if secondary_terms:
-        actions.append(
-            f"Use these adjacent or skills-only terms only as supporting context, not as direct hands-on claims: {', '.join(_truncate_list(secondary_terms, 6))}."
-        )
-
-    if supports:
-        support_sources = _unique_preserve_order([_source_label(row) for row in supports[:3]])
-        actions.append(
-            f"Use semantically aligned bullets only as supporting proof after the anchors: {', '.join(_truncate_list(support_sources, 4))}."
-        )
-
-    if context:
-        context_sources = _unique_preserve_order([_source_label(row) for row in context[:3]])
-        actions.append(
-            f"Use same-role context bullets only to reinforce the anchor story: {', '.join(_truncate_list(context_sources, 4))}."
-        )
-
-    if adjacent_unsupported:
-        actions.append(
-            f"Even where related facet evidence exists, keep these exact JD terms explicit unless a bullet proves them directly: {', '.join(_truncate_list(adjacent_unsupported, 6))}."
-        )
-
-    if gap_facets:
-        gap_text = ", ".join(
-            _facet_display_name(row.get("facet", "")) for row in gap_facets
+    primary_anchor_units = tailoring_plan.get("primary_anchor_units", []) or []
+    if primary_anchor_units:
+        anchor_sources = _unique_preserve_order(
+            [row.get("source", "") for row in primary_anchor_units if row.get("source")]
         )
         actions.append(
-            f"Keep these true JD facet gaps explicit unless you can support them truthfully: {gap_text}."
+            f"Use these evidence units as the primary anchors: {', '.join(_truncate_list(anchor_sources, 4))}."
         )
 
+    secondary_support_units = tailoring_plan.get("secondary_support_units", []) or []
+    if secondary_support_units:
+        support_sources = _unique_preserve_order(
+            [row.get("source", "") for row in secondary_support_units if row.get("source")]
+        )
+        actions.append(
+            f"Use these secondary support units only to reinforce the main anchor story: {', '.join(_truncate_list(support_sources, 4))}."
+        )
+
+    contextual_terms = tailoring_plan.get("contextual_terms_to_frame_carefully", []) or []
+    if contextual_terms:
+        actions.append(
+            f"Use these contextual or skills-only terms carefully and never present them as direct hands-on ownership: {', '.join(_truncate_list(contextual_terms, 6))}."
+        )
+
+    adjacent_terms = tailoring_plan.get("adjacent_terms_to_keep_explicit", []) or []
+    if adjacent_terms:
+        actions.append(
+            f"Even where related facet evidence exists, keep these exact JD terms explicit unless a bullet proves them directly: {', '.join(_truncate_list(adjacent_terms, 6))}."
+        )
+
+    true_gap_facets = tailoring_plan.get("true_gap_facets", []) or []
+    if true_gap_facets:
+        actions.append(
+            f"Keep these true JD facet gaps explicit unless you can support them truthfully: {', '.join(_truncate_list(true_gap_facets, 3))}."
+        )
+
+    true_gap_terms = tailoring_plan.get("true_unsupported_terms", []) or []
     if true_gap_terms:
         actions.append(
             f"Keep these truly unsupported exact JD terms explicit unless you can support them truthfully: {', '.join(_truncate_list(true_gap_terms, 6))}."
@@ -815,10 +1309,14 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
     return _unique_preserve_order(actions)
 
 
-def _build_llm_prompt(packet: Dict[str, Any]) -> str:
+def _build_llm_prompt(
+    packet: Dict[str, Any],
+    tailoring_plan: Optional[Dict[str, Any]] = None,
+) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
     summary = packet.get("summary", {})
+    tailoring_plan = tailoring_plan or _build_tailoring_plan(packet)
 
     evidence_layers = _build_evidence_layers(packet)
     rewrite_candidates = _build_rewrite_candidates(packet)
@@ -863,6 +1361,7 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     lines.append("")
     lines.extend(_support_tier_prompt_lines(packet))
     lines.extend(_facet_prompt_lines(packet))
+    lines.extend(_tailoring_plan_prompt_lines(tailoring_plan))
 
     lines.append("Primary anchor evidence units:")
     if anchor_rows:
@@ -948,6 +1447,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     anchors = evidence_layers.get("anchors", [])[:4]
     supports = evidence_layers.get("supports", [])[:4]
     context = evidence_layers.get("context", [])[:4]
+    tailoring_plan = payload.get("tailoring_plan", {}) or _build_tailoring_plan(packet)
 
     lines: List[str] = []
 
@@ -983,6 +1483,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("")
     lines.extend(_support_tier_prompt_lines(packet))
     lines.extend(_facet_prompt_lines(packet))
+    lines.extend(_tailoring_plan_prompt_lines(tailoring_plan))
     lines.append("Primary anchor evidence units:")
     for idx, row in enumerate(anchors, 1):
         lines.append(
@@ -1535,12 +2036,17 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     bullet_reuse = _build_bullet_reuse(packet)
     rewrite_candidates = _build_rewrite_candidates(packet)
     evidence_layers = _build_evidence_layers(packet)
+    tailoring_plan = _build_tailoring_plan(packet)
     tailoring_actions = _build_tailoring_actions(packet)
-    llm_prompt = _build_llm_prompt(packet)
-    live_rewrite_prompt = _build_live_rewrite_prompt(packet, {
-        "rewrite_candidates": rewrite_candidates,
-        "evidence_layers": evidence_layers,
-    })
+    llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
+    live_rewrite_prompt = _build_live_rewrite_prompt(
+        packet,
+        {
+            "rewrite_candidates": rewrite_candidates,
+            "evidence_layers": evidence_layers,
+            "tailoring_plan": tailoring_plan,
+        },
+    )
 
     return {
         "job": packet.get("job", {}),
@@ -1549,8 +2055,15 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         "recruiter_summary": recruiter_summary,
         "keep_emphasize": keep_emphasize,
         "tailoring_actions": tailoring_actions,
+        "tailoring_plan": tailoring_plan,
         "rewrite_candidates": rewrite_candidates,
         "evidence_layers": evidence_layers,
+        "planner_seed_rewrite_directions": _planner_seed_rewrite_directions(
+            {
+                "tailoring_plan": tailoring_plan,
+                "rewrite_candidates": rewrite_candidates,
+            }
+        ),
         "do_not_claim": do_not_claim,
         "bullet_reuse_candidates": bullet_reuse,
         "llm_prompt": llm_prompt,
@@ -1588,9 +2101,33 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         lines.append(f"- {item}")
     lines.append("")
 
+    lines.append("## Tailoring Plan")
+    tailoring_plan = payload.get("tailoring_plan", {}) or {}
+    lines.append(f"- Narrative angle: {tailoring_plan.get('narrative_angle', '')}")
+    lines.append(f"- Direct facets: {tailoring_plan.get('direct_facets', [])}")
+    lines.append(f"- Adjacent facets: {tailoring_plan.get('adjacent_facets', [])}")
+    lines.append(f"- True gap facets: {tailoring_plan.get('true_gap_facets', [])}")
+    lines.append(f"- Primary facet coverage: {tailoring_plan.get('primary_facet_coverage', [])}")
+    lines.append(f"- Secondary facet coverage: {tailoring_plan.get('secondary_facet_coverage', [])}")
+    lines.append(
+        f"- Contextual terms to frame carefully: {tailoring_plan.get('contextual_terms_to_frame_carefully', [])}"
+    )
+    lines.append(
+        f"- Adjacent terms to keep explicit: {tailoring_plan.get('adjacent_terms_to_keep_explicit', [])}"
+    )
+    lines.append(
+        f"- True unsupported terms: {tailoring_plan.get('true_unsupported_terms', [])}"
+    )
+    lines.append("")
+
     lines.append("## Priority Rewrite Directions")
     lines.append(f"- Source: {payload.get('preferred_rewrite_source', 'deterministic')}")
     for item in payload.get("preferred_rewrite_directions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+
+    lines.append("## Planner Seed Rewrite Directions")
+    for item in payload.get("planner_seed_rewrite_directions", []):
         lines.append(f"- {item}")
     lines.append("")
 

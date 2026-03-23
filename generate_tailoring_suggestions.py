@@ -1564,6 +1564,101 @@ def _llm_output_is_strong_enough(parsed: Dict[str, Any]) -> bool:
 
     return True
 
+def _replace_direction_prefix(direction: str, new_prefix: str) -> str:
+    text = str(direction or "").strip()
+    old_prefix = _direction_prefix(text)
+    if not old_prefix:
+        return text
+    return f"{new_prefix}{text[len(old_prefix):]}"
+
+
+def _strip_wrapped_clause_quotes(direction: str) -> str:
+    text = str(direction or "").strip()
+
+    for prefix in ("Lead with ", "Support with "):
+        if not text.startswith(prefix):
+            continue
+
+        remainder = text[len(prefix):]
+        if not remainder:
+            return text
+
+        quote_char = ""
+        if remainder.startswith('"'):
+            quote_char = '"'
+        elif remainder.startswith("'"):
+            quote_char = "'"
+
+        if not quote_char:
+            return text
+
+        marker = f"{quote_char} from "
+        marker_index = remainder.find(marker)
+        if marker_index <= 0:
+            return text
+
+        clause_text = remainder[1:marker_index].strip()
+        suffix = remainder[marker_index + 1 :]
+        return f"{prefix}{clause_text}{suffix}"
+
+    return text
+
+
+def _normalize_live_rewrite_directions(
+    payload: Dict[str, Any],
+    directions: List[str],
+    limit: int = 6,
+) -> List[str]:
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+
+    normalized: List[str] = []
+    covered_primary_keys = set()
+
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    for item in actionable:
+        item = _strip_wrapped_clause_quotes(item)
+        prefix = _direction_prefix(item)
+
+        if prefix == "Support with":
+            primary_match = _best_matching_plan_unit(item, primary_anchor_units)
+            secondary_match = _best_matching_plan_unit(item, secondary_support_units)
+
+            primary_score = (
+                _direction_plan_unit_match_score(item, primary_match)
+                if primary_match is not None
+                else 0
+            )
+            secondary_score = (
+                _direction_plan_unit_match_score(item, secondary_match)
+                if secondary_match is not None
+                else 0
+            )
+
+            if (
+                primary_match is not None
+                and _plan_unit_key(primary_match) not in covered_primary_keys
+                and primary_score >= 4
+                and primary_score > secondary_score
+            ):
+                item = _replace_direction_prefix(item, "Lead with")
+                prefix = "Lead with"
+
+        if prefix == "Lead with":
+            matched_primary = _best_matching_plan_unit(item, primary_anchor_units)
+            if matched_primary is not None:
+                covered_primary_keys.add(_plan_unit_key(matched_primary))
+
+        normalized.append(item)
+
+    return _unique_preserve_order(normalized)[:limit]
+
 def _rewrite_path_audit(
     payload: Dict[str, Any],
     directions: List[str],
@@ -1608,12 +1703,15 @@ def _select_operator_rewrite_directions(
     }
 
     if parsed:
-        llm_directions = [
+        raw_llm_directions = [
             str(item).strip()
             for item in parsed.get("rewrite_directions", []) or []
             if _is_actionable_rewrite_direction(item)
         ]
+        llm_directions = _normalize_live_rewrite_directions(payload, raw_llm_directions, limit=6)
         audit["llm_strong_enough"] = _llm_output_is_strong_enough(parsed)
+        audit["live_llm_raw_directions"] = raw_llm_directions[:6]
+        audit["live_llm_normalized_directions"] = llm_directions[:6]
 
         if audit["llm_strong_enough"]:
             live_audit = _rewrite_path_audit(payload, llm_directions)
@@ -1624,6 +1722,9 @@ def _select_operator_rewrite_directions(
                 return llm_directions[:6], "live_llm", audit
 
             blended = _blend_live_and_planner_directions(payload, llm_directions, limit=6)
+            blended = _normalize_live_rewrite_directions(payload, blended, limit=6)
+            audit["live_llm_blended_normalized_directions"] = blended[:6]
+
             blended_audit = _rewrite_path_audit(payload, blended)
             audit["live_llm_blended"] = blended_audit
 

@@ -1564,40 +1564,101 @@ def _llm_output_is_strong_enough(parsed: Dict[str, Any]) -> bool:
 
     return True
 
+def _rewrite_path_audit(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> Dict[str, Any]:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+    verifier = _rewrite_direction_verifier_report(payload, actionable)
+    covers_plan = _rewrite_directions_cover_plan(payload, actionable)
+
+    return {
+        "count": len(actionable),
+        "covers_plan": covers_plan,
+        "verifier_ok": bool(verifier.get("ok")),
+        "verifier_issues": list(verifier.get("issues", []) or []),
+        "directions": actionable[:6],
+    }
+
 def _select_operator_rewrite_directions(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
-) -> tuple[List[str], str]:
+) -> tuple[List[str], str, Dict[str, Any]]:
     parsed = {}
-    if isinstance(llm_output, dict) and llm_output.get("parse_ok"):
+    parse_ok = bool(isinstance(llm_output, dict) and llm_output.get("parse_ok"))
+    if parse_ok:
         parsed = llm_output.get("parsed", {}) or {}
 
     planner_directions = _planner_seed_rewrite_directions(payload)
+    planner_audit = _rewrite_path_audit(payload, planner_directions)
 
-    if parsed and _llm_output_is_strong_enough(parsed):
+    audit: Dict[str, Any] = {
+        "llm_requested": bool(llm_output is not None),
+        "llm_parse_ok": parse_ok,
+        "llm_strong_enough": False,
+        "live_llm": None,
+        "live_llm_blended": None,
+        "deterministic_planner": planner_audit,
+        "selected_source": "",
+        "fallback_reason_codes": [],
+    }
+
+    if parsed:
         llm_directions = [
             str(item).strip()
             for item in parsed.get("rewrite_directions", []) or []
             if _is_actionable_rewrite_direction(item)
         ]
+        audit["llm_strong_enough"] = _llm_output_is_strong_enough(parsed)
 
-        if (
-            _rewrite_directions_cover_plan(payload, llm_directions)
-            and _rewrite_directions_pass_verifier(payload, llm_directions)
-        ):
-            return llm_directions[:6], "live_llm"
+        if audit["llm_strong_enough"]:
+            live_audit = _rewrite_path_audit(payload, llm_directions)
+            audit["live_llm"] = live_audit
 
-        blended = _blend_live_and_planner_directions(payload, llm_directions, limit=6)
-        if (
-            _rewrite_directions_cover_plan(payload, blended)
-            and _rewrite_directions_pass_verifier(payload, blended)
-        ):
-            return blended[:6], "live_llm_blended"
+            if live_audit["covers_plan"] and live_audit["verifier_ok"]:
+                audit["selected_source"] = "live_llm"
+                return llm_directions[:6], "live_llm", audit
+
+            blended = _blend_live_and_planner_directions(payload, llm_directions, limit=6)
+            blended_audit = _rewrite_path_audit(payload, blended)
+            audit["live_llm_blended"] = blended_audit
+
+            if blended_audit["covers_plan"] and blended_audit["verifier_ok"]:
+                audit["selected_source"] = "live_llm_blended"
+                return blended[:6], "live_llm_blended", audit
+        else:
+            audit["fallback_reason_codes"].append("live_llm_not_strong_enough")
+    else:
+        if llm_output is not None:
+            audit["fallback_reason_codes"].append("live_llm_parse_failed_or_missing")
+
+    if audit["live_llm"] is not None:
+        if not audit["live_llm"]["covers_plan"]:
+            audit["fallback_reason_codes"].append("live_llm_failed_plan_coverage")
+        if not audit["live_llm"]["verifier_ok"]:
+            audit["fallback_reason_codes"].append("live_llm_failed_verifier")
+
+    if audit["live_llm_blended"] is not None:
+        if not audit["live_llm_blended"]["covers_plan"]:
+            audit["fallback_reason_codes"].append("live_llm_blended_failed_plan_coverage")
+        if not audit["live_llm_blended"]["verifier_ok"]:
+            audit["fallback_reason_codes"].append("live_llm_blended_failed_verifier")
 
     if planner_directions:
-        return planner_directions[:6], "deterministic_planner"
+        audit["selected_source"] = "deterministic_planner"
+        audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        return planner_directions[:6], "deterministic_planner", audit
 
-    return _fallback_rewrite_directions_from_payload(payload), "deterministic"
+    fallback = _fallback_rewrite_directions_from_payload(payload)
+    audit["selected_source"] = "deterministic"
+    audit["fallback_reason_codes"] = _unique_preserve_order(
+        audit["fallback_reason_codes"] + ["deterministic_planner_empty"]
+    )
+    return fallback, "deterministic", audit
 
 
 def _build_operator_markdown_payload(
@@ -1605,7 +1666,7 @@ def _build_operator_markdown_payload(
     llm_output: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     operator_payload = dict(payload)
-    preferred_rewrite_directions, preferred_rewrite_source = _select_operator_rewrite_directions(
+    preferred_rewrite_directions, preferred_rewrite_source, preferred_rewrite_selection_audit = _select_operator_rewrite_directions(
         payload,
         llm_output,
     )
@@ -1615,6 +1676,7 @@ def _build_operator_markdown_payload(
         payload,
         preferred_rewrite_directions,
     )
+    operator_payload["preferred_rewrite_selection_audit"] = preferred_rewrite_selection_audit
     return operator_payload
 
 def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:

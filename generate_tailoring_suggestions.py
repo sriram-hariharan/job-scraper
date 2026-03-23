@@ -1968,13 +1968,35 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> tuple:
         -int(quality.get("generic_skill_tail_count", 0)),
     )
 
+def _candidate_directions_key(directions: List[str]) -> tuple:
+    return tuple(str(item).strip() for item in directions or [])
+
+
+def _candidate_pool_lineage_rows(lineage: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for item in lineage:
+        rows.append(
+            {
+                "candidate_id": item.get("candidate_id", ""),
+                "source_family": item.get("source_family", ""),
+                "is_polished": bool(item.get("is_polished")),
+                "status": item.get("status", ""),
+                "resolved_to_candidate_id": item.get("resolved_to_candidate_id", ""),
+                "resolved_to_source_family": item.get("resolved_to_source_family", ""),
+                "dedupe_reason": item.get("dedupe_reason", ""),
+                "directions": list(item.get("directions", []) or []),
+            }
+        )
+
+    return rows
 
 def _build_rewrite_candidate_pool(
     payload: Dict[str, Any],
     planner_directions: List[str],
     live_directions: Optional[List[str]],
     blended_directions: Optional[List[str]],
-) -> List[Dict[str, Any]]:
+) -> Dict[str, Any]:
     raw_candidates: List[Dict[str, Any]] = []
 
     def _add_candidate(candidate_id: str, source_family: str, directions: Optional[List[str]]) -> None:
@@ -2019,24 +2041,54 @@ def _build_rewrite_candidate_pool(
             _polish_selected_rewrite_directions(payload, blended_directions),
         )
 
-    deduped: List[Dict[str, Any]] = []
-    seen = set()
+    unique_candidates: List[Dict[str, Any]] = []
+    lineage: List[Dict[str, Any]] = []
+    key_to_winner: Dict[tuple, Dict[str, Any]] = {}
 
     for candidate in raw_candidates:
-        key = tuple(candidate.get("directions", []) or [])
-        if key in seen:
+        key = _candidate_directions_key(candidate.get("directions", []) or [])
+
+        if key in key_to_winner:
+            winner = key_to_winner[key]
+            lineage.append(
+                {
+                    "candidate_id": candidate.get("candidate_id", ""),
+                    "source_family": candidate.get("source_family", ""),
+                    "is_polished": bool(candidate.get("is_polished")),
+                    "status": "deduped_same_directions",
+                    "resolved_to_candidate_id": winner.get("candidate_id", ""),
+                    "resolved_to_source_family": winner.get("source_family", ""),
+                    "dedupe_reason": "same_directions_as_existing_candidate",
+                    "directions": list(candidate.get("directions", []) or []),
+                }
+            )
             continue
-        seen.add(key)
 
         audit = _rewrite_path_audit(payload, candidate["directions"])
-        deduped.append(
+        winner = {
+            **candidate,
+            "audit": audit,
+        }
+        key_to_winner[key] = winner
+        unique_candidates.append(winner)
+
+        lineage.append(
             {
-                **candidate,
-                "audit": audit,
+                "candidate_id": candidate.get("candidate_id", ""),
+                "source_family": candidate.get("source_family", ""),
+                "is_polished": bool(candidate.get("is_polished")),
+                "status": "kept_unique",
+                "resolved_to_candidate_id": candidate.get("candidate_id", ""),
+                "resolved_to_source_family": candidate.get("source_family", ""),
+                "dedupe_reason": "",
+                "directions": list(candidate.get("directions", []) or []),
             }
         )
 
-    return deduped
+    return {
+        "unique_candidates": unique_candidates,
+        "lineage": lineage,
+    }
 
 
 def _best_rewrite_candidate_for_source_family(
@@ -2065,6 +2117,35 @@ def _best_rewrite_candidate_for_source_family(
     filtered.sort(key=_rewrite_candidate_sort_key, reverse=True)
     return filtered[0]
 
+def _resolved_candidate_for_source_family(
+    source_family: str,
+    candidate_pool: List[Dict[str, Any]],
+    lineage: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    direct = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        source_family,
+        require_valid=False,
+    )
+    if direct is not None:
+        return direct
+
+    resolved_ids = [
+        item.get("resolved_to_candidate_id", "")
+        for item in lineage
+        if item.get("source_family") == source_family
+        and item.get("status") == "deduped_same_directions"
+        and item.get("resolved_to_candidate_id")
+    ]
+
+    if not resolved_ids:
+        return None
+
+    for candidate in candidate_pool:
+        if candidate.get("candidate_id", "") in resolved_ids:
+            return candidate
+
+    return None
 
 def _candidate_pool_audit_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
@@ -2202,13 +2283,17 @@ def _select_operator_rewrite_directions(
         if llm_output is not None:
             audit["fallback_reason_codes"].append("live_llm_parse_failed_or_missing")
 
-    candidate_pool = _build_rewrite_candidate_pool(
+    candidate_pool_bundle = _build_rewrite_candidate_pool(
         payload,
         planner_directions,
         llm_directions if audit["llm_strong_enough"] else None,
         blended_directions if audit["llm_strong_enough"] else None,
     )
+    candidate_pool = candidate_pool_bundle["unique_candidates"]
+    candidate_lineage = candidate_pool_bundle["lineage"]
+
     audit["candidate_pool"] = _candidate_pool_audit_rows(candidate_pool)
+    audit["candidate_pool_lineage"] = _candidate_pool_lineage_rows(candidate_lineage)
 
     best_deterministic = _best_rewrite_candidate_for_source_family(
         candidate_pool,
@@ -2226,13 +2311,31 @@ def _select_operator_rewrite_directions(
         require_valid=True,
     )
 
+    resolved_deterministic = _resolved_candidate_for_source_family(
+        "deterministic_planner",
+        candidate_pool,
+        candidate_lineage,
+    )
+    resolved_live = _resolved_candidate_for_source_family(
+        "live_llm",
+        candidate_pool,
+        candidate_lineage,
+    )
+    resolved_blended = _resolved_candidate_for_source_family(
+        "live_llm_blended",
+        candidate_pool,
+        candidate_lineage,
+    )
+
     if best_deterministic is not None:
         audit["deterministic_planner"] = best_deterministic["audit"]
+    elif resolved_deterministic is not None:
+        audit["deterministic_planner"] = resolved_deterministic["audit"]
     else:
         audit["deterministic_planner"] = _rewrite_path_audit(payload, planner_directions)
 
-    audit["live_llm"] = best_live["audit"] if best_live is not None else None
-    audit["live_llm_blended"] = best_blended["audit"] if best_blended is not None else None
+    audit["live_llm"] = resolved_live["audit"] if resolved_live is not None else None
+    audit["live_llm_blended"] = resolved_blended["audit"] if resolved_blended is not None else None
 
     if audit["live_llm"] is not None:
         if not audit["live_llm"]["covers_plan"]:

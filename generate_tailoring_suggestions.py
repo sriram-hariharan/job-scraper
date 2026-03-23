@@ -1217,6 +1217,37 @@ def _fallback_rewrite_directions_from_payload(
 
     return directions
 
+def _plan_unit_to_direction(
+    row: Dict[str, Any],
+    *,
+    primary: bool,
+) -> str:
+    source = str(row.get("source", "") or "").strip()
+    evidence_unit = _short_bullet(str(row.get("evidence_unit", "") or "").strip(), 180)
+    supported_terms = row.get("supported_terms", []) or []
+
+    if primary:
+        if source and evidence_unit and supported_terms:
+            return (
+                f"Lead with {evidence_unit} from {source} to anchor "
+                f"{', '.join(_truncate_list(supported_terms, 4))}."
+            )
+        if source and evidence_unit:
+            return f"Lead with {evidence_unit} from {source} as a primary anchor."
+    else:
+        if source and evidence_unit and supported_terms:
+            return (
+                f"Support with {evidence_unit} from {source} to reinforce "
+                f"{', '.join(_truncate_list(supported_terms, 4))} without overstating ownership."
+            )
+        if source and evidence_unit:
+            return (
+                f"Support with {evidence_unit} from {source} to reinforce the main story "
+                f"without overstating ownership."
+            )
+
+    return ""
+
 def _planner_seed_rewrite_directions(
     payload: Dict[str, Any],
     limit: int = 6,
@@ -1224,33 +1255,22 @@ def _planner_seed_rewrite_directions(
     plan = payload.get("tailoring_plan", {}) or {}
     directions: List[str] = []
 
-    for row in (plan.get("primary_anchor_units", []) or [])[:2]:
-        source = str(row.get("source", "") or "").strip()
-        evidence_unit = _short_bullet(str(row.get("evidence_unit", "") or "").strip(), 180)
-        supported_terms = row.get("supported_terms", []) or []
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
 
-        if source and evidence_unit and supported_terms:
-            directions.append(
-                f"Lead with {evidence_unit} from {source} to anchor {', '.join(_truncate_list(supported_terms, 4))}."
-            )
-        elif source and evidence_unit:
-            directions.append(
-                f"Lead with {evidence_unit} from {source} as a primary anchor."
-            )
+    # Always cover every selected primary anchor first.
+    for row in primary_anchor_units:
+        direction = _plan_unit_to_direction(row, primary=True)
+        if direction:
+            directions.append(direction)
 
-    for row in (plan.get("secondary_support_units", []) or [])[:2]:
-        source = str(row.get("source", "") or "").strip()
-        evidence_unit = _short_bullet(str(row.get("evidence_unit", "") or "").strip(), 180)
-        supported_terms = row.get("supported_terms", []) or []
-
-        if source and evidence_unit and supported_terms:
-            directions.append(
-                f"Support with {evidence_unit} from {source} to reinforce {', '.join(_truncate_list(supported_terms, 4))} without overstating ownership."
-            )
-        elif source and evidence_unit:
-            directions.append(
-                f"Support with {evidence_unit} from {source} to reinforce the main story without overstating ownership."
-            )
+    # Only then add secondary support lines if there is still room.
+    remaining_slots = max(0, limit - len(directions))
+    if remaining_slots > 0:
+        for row in secondary_support_units[:remaining_slots]:
+            direction = _plan_unit_to_direction(row, primary=False)
+            if direction:
+                directions.append(direction)
 
     adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
     adjacent_facets = plan.get("adjacent_facets", []) or []
@@ -1275,7 +1295,6 @@ def _planner_seed_rewrite_directions(
         )
 
     return _unique_preserve_order(directions)[:limit]
-
 
 def _direction_mentions_any(direction: str, values: List[str]) -> bool:
     text = str(direction or "").strip().lower()
@@ -1321,29 +1340,19 @@ def _rewrite_directions_cover_plan(
     plan = payload.get("tailoring_plan", {}) or {}
 
     primary_anchor_units = plan.get("primary_anchor_units", []) or []
-    if primary_anchor_units:
-        first_primary = primary_anchor_units[0]
-        if not any(
-            item.startswith("Lead with") and _direction_matches_plan_unit(item, first_primary)
-            for item in actionable
-        ):
-            return False
+    lead_directions = [item for item in actionable if item.startswith("Lead with")]
+    support_directions = [item for item in actionable if item.startswith("Support with")]
 
-        if len(primary_anchor_units) > 1:
-            second_primary = primary_anchor_units[1]
-            if not any(
-                (item.startswith("Lead with") or item.startswith("Support with"))
-                and _direction_matches_plan_unit(item, second_primary)
-                for item in actionable
-            ):
-                return False
+    for row in primary_anchor_units:
+        if not any(_direction_matches_plan_unit(item, row) for item in lead_directions):
+            return False
 
     secondary_support_units = plan.get("secondary_support_units", []) or []
     if secondary_support_units:
         first_secondary = secondary_support_units[0]
         if not any(
-            item.startswith("Support with") and _direction_matches_plan_unit(item, first_secondary)
-            for item in actionable
+            _direction_matches_plan_unit(item, first_secondary)
+            for item in support_directions
         ):
             return False
 

@@ -6,7 +6,7 @@ import sys
 import textwrap
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Any
 from datetime import datetime
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
@@ -369,29 +369,53 @@ def _matches_bool_filter(row_value, expected) -> bool:
     actual = _parse_bool_flag(str(row_value or ""))
     return actual is expected
 
+def _normalize_multi_filter_values(value: Any) -> List[str]:
+    if value is None:
+        return []
+
+    raw_parts: List[str] = []
+
+    if isinstance(value, (list, tuple, set)):
+        for item in value:
+            raw_parts.extend(str(item or "").split(","))
+    else:
+        raw_parts.extend(str(value or "").split(","))
+
+    normalized: List[str] = []
+    for part in raw_parts:
+        item = _normalize_text(part)
+        if item and item not in normalized:
+            normalized.append(item)
+
+    return normalized
+
+
+def _matches_text_filter(row_value: str, filter_value: Any) -> bool:
+    allowed = _normalize_multi_filter_values(filter_value)
+    if not allowed:
+        return True
+    return _normalize_text(row_value) in allowed
+
 
 def _select_browse_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
     selected = rows
 
-    if args.action:
-        action_target = _normalize_text(args.action)
+    if _normalize_multi_filter_values(getattr(args, "action", "")):
         selected = [
             row for row in selected
-            if _normalize_text(row.get("action", "")) == action_target
+            if _matches_text_filter(row.get("action", ""), args.action)
         ]
 
-    if args.fallback_status:
-        fallback_target = _normalize_text(args.fallback_status)
+    if _normalize_multi_filter_values(getattr(args, "fallback_status", "")):
         selected = [
             row for row in selected
-            if _normalize_text(row.get("llm_fallback_status", "")) == fallback_target
+            if _matches_text_filter(row.get("llm_fallback_status", ""), args.fallback_status)
         ]
 
-    if args.winner_bucket:
-        bucket_target = _normalize_text(args.winner_bucket)
+    if _normalize_multi_filter_values(getattr(args, "winner_bucket", "")):
         selected = [
             row for row in selected
-            if _normalize_text(row.get("winner_bucket", "")) == bucket_target
+            if _matches_text_filter(row.get("winner_bucket", ""), args.winner_bucket)
         ]
 
     needs_review = _parse_bool_flag(args.needs_review)
@@ -989,11 +1013,10 @@ def _select_decision_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, st
             if str(row.get("queue_rank", "") or "").strip() == str(args.queue_rank)
         ]
 
-    if args.decision:
-        target = _normalize_text(args.decision)
+    if _normalize_multi_filter_values(getattr(args, "decision", "")):
         selected = [
             row for row in selected
-            if _normalize_text(row.get("decision", "")) == target
+            if _matches_text_filter(row.get("decision", ""), args.decision)
         ]
 
     if args.selected_resume:

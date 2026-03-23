@@ -479,22 +479,58 @@ def _build_do_not_claim(packet: Dict[str, Any]) -> List[str]:
     items.append(guardrail)
     return _unique_preserve_order(items)
 
+def _evidence_unit_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows = packet.get("top_relevant_evidence_units", []) or []
+    return [row for row in rows if isinstance(row, dict)]
+
+
+def _rewrite_source_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
+    unit_rows = _evidence_unit_rows(packet)
+    if unit_rows:
+        return unit_rows
+    return packet.get("top_relevant_bullets", []) or []
+
+
+def _row_supported_terms(row: Dict[str, Any]) -> List[str]:
+    return _unique_preserve_order(
+        list(row.get("overlaps", []) or []) + list(row.get("context_terms", []) or [])
+    )
+
+
+def _row_evidence_excerpt(row: Dict[str, Any], max_len: int = 220) -> str:
+    text = row.get("clause_text") or row.get("text", "")
+    return _short_bullet(text, max_len)
+
+
+def _row_parent_bullet_excerpt(row: Dict[str, Any], max_len: int = 260) -> str:
+    return _short_bullet(row.get("parent_bullet", ""), max_len)
+
+
+def _is_clause_unit(row: Dict[str, Any]) -> bool:
+    return str(row.get("unit_kind", "")).strip() == "clause_unit"
 
 def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str, Any]]:
-    rows = packet.get("top_relevant_bullets", []) or []
+    rows = _rewrite_source_rows(packet)
     selected = rows[:limit]
 
     reuse_rows = []
     for row in selected:
         source = _source_label(row)
-        overlaps = row.get("overlaps", []) or []
+        overlaps = _row_supported_terms(row)
         evidence_type = row.get("evidence_type", "direct_overlap")
+        is_clause = _is_clause_unit(row)
 
         if evidence_type == "direct_overlap":
-            reuse_note = (
-                "Use this as a primary anchor bullet and move the matched JD terms "
-                f"earlier in the sentence: {', '.join(overlaps[:6])}"
-            )
+            if is_clause:
+                reuse_note = (
+                    "Use this clause as a primary anchor and only keep the rest of the parent bullet "
+                    f"if it strengthens the same supported story truthfully: {', '.join(overlaps[:6])}"
+                )
+            else:
+                reuse_note = (
+                    "Use this as a primary anchor bullet and move the matched JD terms "
+                    f"earlier in the sentence: {', '.join(overlaps[:6])}"
+                )
         elif evidence_type == "semantic_similarity":
             reuse_note = (
                 "Use this as supporting evidence only. It is meaning-aligned with the JD, "
@@ -503,7 +539,7 @@ def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str
         elif evidence_type == "same_source_context":
             reuse_note = (
                 "Use this as supporting context from the same role/project so the main anchor "
-                "bullet feels more credible and less isolated."
+                "evidence feels more credible and less isolated."
             )
         else:
             reuse_note = (
@@ -516,7 +552,8 @@ def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str
                 "source": source,
                 "overlaps": overlaps,
                 "evidence_type": evidence_type,
-                "bullet": row.get("text", ""),
+                "bullet": row.get("clause_text") or row.get("text", ""),
+                "parent_bullet": row.get("parent_bullet", ""),
                 "reuse_note": reuse_note,
             }
         )
@@ -524,30 +561,43 @@ def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str
     return reuse_rows
 
 def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Dict[str, Any]]:
-    rows = packet.get("top_relevant_bullets", []) or []
+    rows = _rewrite_source_rows(packet)
     candidates: List[Dict[str, Any]] = []
     used_sources = set()
 
     for row in rows:
-        overlaps = row.get("overlaps", []) or []
-        if not overlaps:
+        supported_terms = _row_supported_terms(row)
+        if not supported_terms:
             continue
 
         source = _source_label(row)
         evidence_type = row.get("evidence_type", "direct_overlap")
-        source_key = (row.get("section", ""), source, evidence_type)
+        source_key = (
+            row.get("section", ""),
+            source,
+            evidence_type,
+            row.get("clause_text") or row.get("text", ""),
+        )
 
         if source_key in used_sources:
             continue
 
+        is_clause = _is_clause_unit(row)
+
         if evidence_type == "direct_overlap":
-            action = (
-                f"Lead with {', '.join(overlaps[:4])} in the opening clause of this bullet, "
-                "then keep the outcome/impact at the end."
-            )
+            if is_clause:
+                action = (
+                    f"Lead with {', '.join(supported_terms[:4])} in this opening clause, "
+                    "then keep the remaining parent-bullet context only if it preserves a clean story."
+                )
+            else:
+                action = (
+                    f"Lead with {', '.join(supported_terms[:4])} in the opening clause of this bullet, "
+                    "then keep the outcome/impact at the end."
+                )
         elif evidence_type == "same_source_context":
             action = (
-                "Use this as a second supporting bullet under the same role so the stronger anchor bullet "
+                "Use this as a second supporting line under the same role so the stronger anchor evidence "
                 "looks backed by related work."
             )
         else:
@@ -560,9 +610,10 @@ def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Di
                 "source": source,
                 "section": row.get("section", ""),
                 "evidence_type": evidence_type,
-                "supported_terms": overlaps[:6],
+                "supported_terms": supported_terms[:6],
                 "action": action,
-                "bullet_excerpt": _short_bullet(row.get("text", "")),
+                "bullet_excerpt": _row_evidence_excerpt(row),
+                "parent_bullet": row.get("parent_bullet", ""),
             }
         )
         used_sources.add(source_key)
@@ -573,7 +624,7 @@ def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Di
     return candidates
 
 def _build_evidence_layers(packet: Dict[str, Any], limit_per_group: int = 4) -> Dict[str, List[Dict[str, Any]]]:
-    rows = packet.get("top_relevant_bullets", []) or []
+    rows = _rewrite_source_rows(packet)
 
     anchors = [row for row in rows if row.get("evidence_type") == "direct_overlap"][:limit_per_group]
     supports = [row for row in rows if row.get("evidence_type") == "semantic_similarity"][:limit_per_group]
@@ -813,19 +864,21 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
     lines.extend(_support_tier_prompt_lines(packet))
     lines.extend(_facet_prompt_lines(packet))
 
-    lines.append("Primary anchor bullets:")
+    lines.append("Primary anchor evidence units:")
     if anchor_rows:
         for idx, row in enumerate(anchor_rows, 1):
             lines.append(
                 f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
                 f"supports={row.get('overlaps', [])}"
             )
-            lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+            lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 320)}")
+            if row.get("parent_bullet"):
+                lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 320)}")
     else:
         lines.append("- none")
     lines.append("")
 
-    lines.append("Semantic supporting bullets:")
+    lines.append("Semantic supporting evidence units:")
     if semantic_support_rows:
         for idx, row in enumerate(semantic_support_rows, 1):
             lines.append(
@@ -834,19 +887,25 @@ def _build_llm_prompt(packet: Dict[str, Any]) -> str:
             )
             if row.get("semantic_score") is not None:
                 lines.append(f"   semantic_score={row.get('semantic_score')}")
-            lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+            lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 320)}")
+
+            if row.get("parent_bullet"):
+                lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 320)}")
     else:
         lines.append("- none")
     lines.append("")
 
-    lines.append("Same-role context bullets:")
+    lines.append("Same-role context evidence units:")
     if context_rows:
         for idx, row in enumerate(context_rows, 1):
             lines.append(
                 f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
                 f"type={row.get('evidence_type', '')} | supports={row.get('overlaps', [])}"
             )
-            lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+
+            lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 320)}")
+            if row.get("parent_bullet"):
+                lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 320)}")
     else:
         lines.append("- none")
     lines.append("")
@@ -924,28 +983,37 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("")
     lines.extend(_support_tier_prompt_lines(packet))
     lines.extend(_facet_prompt_lines(packet))
-    lines.append("Primary anchor bullets:")
+    lines.append("Primary anchor evidence units:")
     for idx, row in enumerate(anchors, 1):
         lines.append(
             f"{idx}. [{row.get('section', '')}] {_source_label(row)} | supports={row.get('overlaps', [])}"
         )
-        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+        lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
+        if row.get("parent_bullet"):
+            lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
     lines.append("")
-    lines.append("Semantic supporting bullets:")
+    lines.append("Semantic supporting evidence units:")
     for idx, row in enumerate(supports, 1):
         lines.append(
             f"{idx}. [{row.get('section', '')}] {_source_label(row)} | type={row.get('evidence_type', '')}"
         )
         if row.get("semantic_score") is not None:
             lines.append(f"   semantic_score={row.get('semantic_score')}")
-        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+
+        lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
+        if row.get("parent_bullet"):
+            lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
+
     lines.append("")
-    lines.append("Same-role context bullets:")
+    lines.append("Same-role context evidence units:")
     for idx, row in enumerate(context, 1):
         lines.append(
             f"{idx}. [{row.get('section', '')}] {_source_label(row)} | type={row.get('evidence_type', '')}"
         )
-        lines.append(f"   Bullet: {_short_bullet(row.get('text', ''), 320)}")
+        lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
+        if row.get("parent_bullet"):
+            lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
+
     lines.append("")
     lines.append("Guardrail:")
     lines.append(str(packet.get("guardrail", "")))
@@ -1533,7 +1601,9 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
         )
         lines.append(f"  - Action: {row.get('action', '')}")
-        lines.append(f"  - Evidence: {row.get('bullet_excerpt', '')}")
+        lines.append(f"  - Evidence unit: {row.get('bullet_excerpt', '')}")
+        if row.get("parent_bullet"):
+            lines.append(f"  - Parent bullet: {row.get('parent_bullet', '')}")
     lines.append("")
 
     lines.append("## Do Not Claim")
@@ -1547,7 +1617,9 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             f"- **[{row.get('section', '')}] {row.get('source', '')}** | "
             f"type={row.get('evidence_type', '')} | overlaps={row.get('overlaps', [])}"
         )
-        lines.append(f"  - Bullet: {row.get('bullet', '')}")
+        lines.append(f"  - Evidence unit: {row.get('bullet', '')}")
+        if row.get("parent_bullet"):
+            lines.append(f"  - Parent bullet: {row.get('parent_bullet', '')}")
         lines.append(f"  - Reuse note: {row.get('reuse_note', '')}")
     lines.append("")
 

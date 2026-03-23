@@ -1990,16 +1990,110 @@ def _select_operator_rewrite_directions(
         audit["selected_reason"] = "deterministic_planner_empty"
     return fallback, "deterministic", audit
 
+def _canonical_selected_direction_for_plan_unit(
+    row: Dict[str, Any],
+    *,
+    primary: bool,
+) -> str:
+    source = str(row.get("source", "") or "").strip()
+    evidence_unit = str(row.get("evidence_unit", "") or "").strip()
+
+    if not evidence_unit:
+        return ""
+
+    if primary:
+        if source:
+            return f"Lead with {evidence_unit} from {source}."
+        return f"Lead with {evidence_unit}."
+    else:
+        if source:
+            return f"Support with {evidence_unit} from {source} as secondary supporting evidence."
+        return f"Support with {evidence_unit} as secondary supporting evidence."
+
+
+def _polish_selected_rewrite_directions(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> List[str]:
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+
+    polished: List[str] = []
+
+    for item in directions or []:
+        text = str(item or "").strip()
+        prefix = _direction_prefix(text)
+
+        if prefix == "Lead with":
+            matched_primary = _best_matching_plan_unit(text, primary_anchor_units)
+            if matched_primary is not None:
+                polished_text = _canonical_selected_direction_for_plan_unit(
+                    matched_primary,
+                    primary=True,
+                )
+                polished.append(polished_text or text)
+                continue
+
+        if prefix == "Support with":
+            matched_support = _best_matching_plan_unit(text, secondary_support_units)
+            if matched_support is not None:
+                polished_text = _canonical_selected_direction_for_plan_unit(
+                    matched_support,
+                    primary=False,
+                )
+                polished.append(polished_text or text)
+                continue
+
+        polished.append(text)
+
+    return _unique_preserve_order(polished)
+
+def _refresh_selected_rewrite_audit_after_polish(
+    payload: Dict[str, Any],
+    preferred_rewrite_source: str,
+    preferred_rewrite_directions: List[str],
+    selection_audit: Dict[str, Any],
+) -> Dict[str, Any]:
+    refreshed = dict(selection_audit or {})
+    final_path_audit = _rewrite_path_audit(payload, preferred_rewrite_directions)
+
+    refreshed["selected_source"] = preferred_rewrite_source
+
+    if preferred_rewrite_source == "live_llm":
+        refreshed["live_llm"] = final_path_audit
+        refreshed["live_llm_normalized_directions"] = preferred_rewrite_directions[:6]
+    elif preferred_rewrite_source == "live_llm_blended":
+        refreshed["live_llm_blended"] = final_path_audit
+        refreshed["live_llm_blended_normalized_directions"] = preferred_rewrite_directions[:6]
+    elif preferred_rewrite_source == "deterministic_planner":
+        refreshed["deterministic_planner"] = final_path_audit
+
+    return refreshed
 
 def _build_operator_markdown_payload(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
 ) -> Dict[str, Any]:
     operator_payload = dict(payload)
+
     preferred_rewrite_directions, preferred_rewrite_source, preferred_rewrite_selection_audit = _select_operator_rewrite_directions(
         payload,
         llm_output,
     )
+
+    preferred_rewrite_directions = _polish_selected_rewrite_directions(
+        payload,
+        preferred_rewrite_directions,
+    )
+
+    preferred_rewrite_selection_audit = _refresh_selected_rewrite_audit_after_polish(
+        payload,
+        preferred_rewrite_source,
+        preferred_rewrite_directions,
+        preferred_rewrite_selection_audit,
+    )
+
     operator_payload["preferred_rewrite_directions"] = preferred_rewrite_directions
     operator_payload["preferred_rewrite_source"] = preferred_rewrite_source
     operator_payload["preferred_rewrite_verifier"] = _rewrite_direction_verifier_report(

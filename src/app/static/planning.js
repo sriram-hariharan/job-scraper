@@ -153,6 +153,58 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return DATE_TIME_FORMATTER.format(date);
+}
+
+const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function buildDateTimeCellHtml(value) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return escapeHtml(String(value));
+  }
+
+  return `
+    <div class="datetime-cell">
+      <div class="datetime-cell-date">${escapeHtml(DATE_ONLY_FORMATTER.format(date))}</div>
+      <div class="datetime-cell-time">${escapeHtml(TIME_ONLY_FORMATTER.format(date))}</div>
+    </div>
+  `;
+}
+
+function formatScore100(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "-";
+  const parsed = Number(String(value).replaceAll(",", "").trim());
+  if (!Number.isFinite(parsed)) return String(value);
+  const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+  return normalized.toFixed(2);
+}
+
 function planningUndecidedOnlyEnabled() {
   const selected = document.querySelector("input[name='planningUndecidedOnlyToggle']:checked");
   return selected ? selected.value === "yes" : false;
@@ -163,6 +215,7 @@ const PLANNING_SORT_COLUMNS = [
   { key: "action", label: "Action", type: "text" },
   { key: "job_company", label: "Company", type: "text" },
   { key: "job_title", label: "Title", type: "text" },
+  { key: "posted_at", label: "Posted At", type: "date" },
   { key: "winner_resume", label: "Winner", type: "text" },
   { key: "winner_score", label: "Score", type: "number" },
   { key: "runner_up_resume", label: "Backup", type: "text" },
@@ -907,17 +960,19 @@ function deriveTailoringOverviewState(row, llmJsonArtifact) {
   const parseOk = llmData.parse_ok;
 
   const deterministicAvailable = Boolean(row.tailoring_md);
-  const llmGenerated = statusKey === "generated" && parseOk !== false;
+  const llmSucceeded = (statusKey === "generated" || statusKey === "cached") && parseOk !== false;
   const llmFailed = Boolean(row.tailoring_llm_json) && (
-    (statusKey && statusKey !== "generated") ||
-    rawErrorType ||
-    parseOk === false
+    !llmSucceeded && (
+      rawErrorType ||
+      parseOk === false ||
+      (statusKey && statusKey !== "disabled" && statusKey !== "pending_variant_selection" && statusKey !== "skipped_action_filter")
+    )
   );
 
   let statusLabel = "Unavailable";
   let statusTone = "muted";
 
-  if (deterministicAvailable || llmGenerated) {
+  if (deterministicAvailable || llmSucceeded) {
     statusLabel = "Suggested";
     statusTone = "success";
   } else if (llmFailed) {
@@ -927,7 +982,7 @@ function deriveTailoringOverviewState(row, llmJsonArtifact) {
 
   const errorParts = uniqueNonEmpty([
     rawErrorType,
-    statusKey && statusKey !== "generated" ? rawStatus : "",
+    llmFailed && statusKey ? rawStatus : "",
     parseOk === false && !rawErrorType && !rawStatus ? "parse_failed" : "",
   ]);
 
@@ -976,7 +1031,7 @@ function buildProviderBadge(provider, model, fallbackUsed) {
   `;
 }
 
-function buildTailoringSourceChips({ deterministicAvailable, llmGenerated, llmFailed }) {
+function buildTailoringSourceChips({ deterministicAvailable, llmGenerated, llmCached, llmFailed }) {
   const chips = [];
 
   if (deterministicAvailable) {
@@ -985,6 +1040,10 @@ function buildTailoringSourceChips({ deterministicAvailable, llmGenerated, llmFa
 
   if (llmGenerated) {
     chips.push(`<span class="summary-chip tailoring-source-chip tailoring-source-chip-llm">LLM generated</span>`);
+  }
+
+  if (llmCached) {
+    chips.push(`<span class="summary-chip tailoring-source-chip tailoring-source-chip-llm">LLM cached</span>`);
   }
 
   if (llmFailed) {
@@ -1009,8 +1068,18 @@ function deriveTailoringProvenance(row, llmJsonArtifact) {
   const model = String(llmData.model || "").trim();
   const fallbackUsed = normalizeBool(llmData.fallback_used || llmData.llm_fallback_used);
   const deterministicAvailable = Boolean(row.tailoring_md);
+
   const llmGenerated = status === "generated" && parseOk !== false;
-  const llmFailed = Boolean(row.tailoring_llm_json) && status && status !== "generated";
+  const llmCached = status === "cached" && parseOk !== false;
+  const llmSucceeded = llmGenerated || llmCached;
+
+  const llmFailed = Boolean(row.tailoring_llm_json) && (
+    !llmSucceeded &&
+    status &&
+    status !== "disabled" &&
+    status !== "pending_variant_selection" &&
+    status !== "skipped_action_filter"
+  );
 
   return {
     provider,
@@ -1018,6 +1087,7 @@ function deriveTailoringProvenance(row, llmJsonArtifact) {
     fallbackUsed,
     deterministicAvailable,
     llmGenerated,
+    llmCached,
     llmFailed,
   };
 }
@@ -1329,12 +1399,15 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(row.queue_rank || "")}</td>
         <td><span class="pill">${escapeHtml(row.action || "")}</span></td>
         <td>${escapeHtml(row.job_company || "")}</td>
-        <td class="title-cell">${titleHtml}</td>
+              <td class="title-cell">
+          <div>${titleHtml}</div>
+        </td>
+        <td>${buildDateTimeCellHtml(row.posted_at)}</td>
         <td>${buildCompactTextHtml(row.winner_resume, { maxLength: 34 })}</td>
-        <td>${escapeHtml(row.winner_score || "")}</td>
+        <td>${escapeHtml(formatScore100(row.winner_score))}</td>
         <td>${buildCompactTextHtml(row.runner_up_resume, { maxLength: 34 })}</td>
-        <td>${escapeHtml(row.runner_up_score || "")}</td>
-        <td>${escapeHtml(row.score_gap || "")}</td>
+        <td>${escapeHtml(formatScore100(row.runner_up_score))}</td>
+        <td>${escapeHtml(formatScore100(row.score_gap))}</td>
         <td>${buildMatchStrengthHtml(row)}</td>
         <td>${buildReviewStateHtml(row)}</td>
         <td>${escapeHtml(row.missing_requirement_count || "")}</td>

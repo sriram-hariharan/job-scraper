@@ -144,6 +144,58 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return DATE_TIME_FORMATTER.format(date);
+}
+
+const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function buildDateTimeCellHtml(value) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return escapeHtml(String(value));
+  }
+
+  return `
+    <div class="datetime-cell">
+      <div class="datetime-cell-date">${escapeHtml(DATE_ONLY_FORMATTER.format(date))}</div>
+      <div class="datetime-cell-time">${escapeHtml(TIME_ONLY_FORMATTER.format(date))}</div>
+    </div>
+  `;
+}
+
+function formatScore100(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "-";
+  const parsed = Number(String(value).replaceAll(",", "").trim());
+  if (!Number.isFinite(parsed)) return String(value);
+  const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+  return normalized.toFixed(2);
+}
+
 function getAppErrorModal() {
   return qs("appErrorModal");
 }
@@ -228,11 +280,12 @@ function distinctDecisionJobCount(rows) {
 }
 
 const DECISIONS_SORT_COLUMNS = [
-  { key: "decision_timestamp", label: "Timestamp", type: "date" },
+  { key: "decision_timestamp", label: "Date / Time", type: "date" },
   { key: "queue_rank", label: "Queue Rank", type: "number" },
   { key: "decision", label: "Decision", type: "text" },
   { key: "job_company", label: "Company", type: "text" },
   { key: "job_title", label: "Title", type: "text" },
+  { key: "posted_at", label: "Posted At", type: "date" },
   { key: "planning_action", label: "Planning Action", type: "text" },
   { key: "selected_resume", label: "Selected Resume", type: "text" },
   { key: "winner_resume", label: "Winner Resume", type: "text" },
@@ -395,7 +448,7 @@ function renderDecisionRows(rows, metaLabel) {
   if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="11" class="empty-state">No decisions found.</td>
+        <td colspan="12" class="empty-state">No decisions found.</td>
       </tr>
     `;
     qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
@@ -413,11 +466,12 @@ function renderDecisionRows(rows, metaLabel) {
 
     return `
       <tr>
-        <td>${escapeHtml(row.decision_timestamp || "")}</td>
+        <td>${buildDateTimeCellHtml(row.decision_timestamp)}</td>
         <td>${escapeHtml(row.queue_rank || "")}</td>
         <td><span class="pill">${escapeHtml(row.decision || "")}</span></td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">${titleHtml}</td>
+        <td>${buildDateTimeCellHtml(row.posted_at)}</td>
         <td>${escapeHtml(row.planning_action || "")}</td>
         <td>${escapeHtml(row.selected_resume || "")}</td>
         <td>${escapeHtml(row.winner_resume || "")}</td>
@@ -435,7 +489,7 @@ function renderDecisionRows(rows, metaLabel) {
 
 async function loadDecisionsTable() {
   const tbody = qs("decisionsTableBody");
-  tbody.innerHTML = renderTableLoading(11, "Loading decisions...");
+  tbody.innerHTML = renderTableLoading(12, "Loading decisions...");
   qs("decisionsTableMeta").textContent = "Loading...";
 
   const url = buildDecisionsUrl();

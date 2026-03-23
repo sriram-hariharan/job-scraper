@@ -1,6 +1,7 @@
 const state = {
   currentMode: "browse",
   workflowView: null,
+  executiveViewMode: "detailed",
   pendingApplicationJob: null,
   applicationModalOpen: false,
   pendingPipelineConfig: null,
@@ -21,6 +22,7 @@ const queueTableState = {
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
 const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
+const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 let pipelinePollTimer = null;
 let pipelineSuccessGifTimer = null;
 
@@ -87,6 +89,7 @@ const QUEUE_SORT_COLUMNS = [
   { key: "action", label: "Action", type: "text" },
   { key: "job_company", label: "Company", type: "text" },
   { key: "job_title", label: "Title", type: "text" },
+  { key: "posted_at", label: "Posted At", type: "date" },
   { key: "winner_resume", label: "Winner Resume", type: "text" },
   { key: "winner_score", label: "Winner Score", type: "number" },
   { key: "runner_up_resume", label: "Runner-Up Resume", type: "text" },
@@ -272,6 +275,62 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function normalizeExecutiveViewMode(value) {
+  return String(value || "").trim().toLowerCase() === "simple" ? "simple" : "detailed";
+}
+
+function loadExecutiveViewMode() {
+  return normalizeExecutiveViewMode(localStorage.getItem(EXECUTIVE_VIEW_MODE_STORAGE_KEY));
+}
+
+function syncExecutiveViewModeControls() {
+  const mode = normalizeExecutiveViewMode(state.executiveViewMode);
+  const radio = document.querySelector(`input[name='executiveViewMode'][value='${mode}']`);
+  if (radio) radio.checked = true;
+}
+
+function setExecutiveViewMode(mode) {
+  state.executiveViewMode = normalizeExecutiveViewMode(mode);
+  localStorage.setItem(EXECUTIVE_VIEW_MODE_STORAGE_KEY, state.executiveViewMode);
+  syncExecutiveViewModeControls();
+  renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
+}
+
+function renderQueueHeaders() {
+  const headerRow = qs("queueTableHeaderRow");
+  if (!headerRow) return;
+
+  if (state.executiveViewMode === "simple") {
+    headerRow.innerHTML = `
+      <th>Queue Rank</th>
+      <th>Job</th>
+      <th>Resume Options</th>
+      <th class="sticky-apply-col">Apply</th>
+    `;
+    return;
+  }
+
+  headerRow.innerHTML = QUEUE_SORT_COLUMNS
+    .map((column) => `<th>${escapeHtml(column.label)}</th>`)
+    .join("");
+
+  renderSortableHeaders("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort);
+}
+
+function buildResumeOptionHtml(label, resumeName, score) {
+  const safeLabel = escapeHtml(label || "");
+  const safeResume = escapeHtml(resumeName || "-");
+  const safeScore = escapeHtml(formatScore100(score));
+
+  return `
+    <div class="resume-option-block">
+      <div><strong>${safeLabel}</strong></div>
+      <div>${safeResume}</div>
+      <div class="subtext-inline">Score: ${safeScore}</div>
+    </div>
+  `;
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -291,11 +350,28 @@ async function postJson(url, payload) {
   });
 }
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
 function formatDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
+  if (Number.isNaN(date.getTime())) return String(value);
+  return DATE_TIME_FORMATTER.format(date);
+}
+
+function formatScore100(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "-";
+  const parsed = Number(String(value).replaceAll(",", "").trim());
+  if (!Number.isFinite(parsed)) return String(value);
+  const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+  return normalized.toFixed(2);
 }
 
 function titleCaseStage(stage) {
@@ -915,7 +991,7 @@ function buildApplicationButtonHtml(row) {
   `;
 }
 
-function buildQueueRowHtml(row) {
+function buildQueueRowDetailedHtml(row) {
   const queueRank = escapeHtml(row.queue_rank || "");
   const action = escapeHtml(row.action || "");
   const company = escapeHtml(row.job_company || "");
@@ -940,14 +1016,46 @@ function buildQueueRowHtml(row) {
       <td><span class="pill">${action || "-"}</span></td>
       <td>${company}</td>
       <td class="title-cell">${titleHtml}</td>
-      <td>${winnerResume}</td>
-      <td>${winnerScore}</td>
-      <td>${runnerUpResume}</td>
-      <td>${scoreGap}</td>
+      <td>${escapeHtml(formatDateTime(row.posted_at) || "-")}</td>
+      <td>${escapeHtml(row.winner_resume || "")}</td>
+      <td>${escapeHtml(formatScore100(row.winner_score))}</td>
+      <td>${escapeHtml(row.runner_up_resume || "")}</td>
+      <td>${escapeHtml(formatScore100(row.score_gap))}</td>
       <td>${missingRequirementCount}</td>
       <td>${operatorDecision || "-"}</td>
       <td>${operatorSelectedResume || "-"}</td>
       <td class="reason-cell">${reason}</td>
+      <td class="apply-cell sticky-apply-col">${applyButtonHtml}</td>
+    </tr>
+  `;
+}
+
+function buildQueueRowSimpleHtml(row) {
+  const queueRank = escapeHtml(row.queue_rank || "");
+  const action = escapeHtml(row.action || "");
+  const company = escapeHtml(row.job_company || "");
+  const title = escapeHtml(row.job_title || "");
+  const postedAt = escapeHtml(formatDateTime(row.posted_at) || "-");
+  const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
+  const titleHtml = jobUrl
+    ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+    : title;
+
+  const applyButtonHtml = buildApplicationButtonHtml(row);
+
+  return `
+    <tr>
+      <td>${queueRank}</td>
+      <td class="title-cell">
+        <div><strong>${company || "-"}</strong></div>
+        <div>${titleHtml}</div>
+        <div class="subtext-inline">Posted: ${postedAt}</div>
+        <div class="subtext-inline">${action || "-"}</div>
+      </td>
+      <td>
+        ${buildResumeOptionHtml("Best", row.winner_resume || "", row.winner_score || "")}
+        ${buildResumeOptionHtml("Backup", row.runner_up_resume || "", row.runner_up_score || "")}
+      </td>
       <td class="apply-cell sticky-apply-col">${applyButtonHtml}</td>
     </tr>
   `;
@@ -959,19 +1067,24 @@ function renderQueueRows(rows, metaLabel) {
 
   const tbody = qs("queueTableBody");
   const displayRows = sortRows(queueTableState.rows, QUEUE_SORT_COLUMNS, queueTableState.sort);
+  const modeLabel = state.executiveViewMode === "simple" ? "Simple mode" : "Detailed mode";
+
+  renderQueueHeaders();
 
   if (!displayRows.length) {
+    const colspan = state.executiveViewMode === "simple" ? 4 : 14;
     tbody.innerHTML = `
       <tr>
-        <td colspan="13" class="empty-state">No rows found.</td>
+        <td colspan="${colspan}" class="empty-state">No rows found.</td>
       </tr>
     `;
+  } else if (state.executiveViewMode === "simple") {
+    tbody.innerHTML = displayRows.map(buildQueueRowSimpleHtml).join("");
   } else {
-    tbody.innerHTML = displayRows.map(buildQueueRowHtml).join("");
+    tbody.innerHTML = displayRows.map(buildQueueRowDetailedHtml).join("");
   }
 
-  qs("tableMeta").textContent = queueTableState.metaLabel;
-  renderSortableHeaders("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort);
+  qs("tableMeta").textContent = `${queueTableState.metaLabel} · ${modeLabel}`;
 }
 
 function buildBrowseUrl() {
@@ -1272,6 +1385,12 @@ function attachEventHandlers() {
     }
   });
 
+  document.querySelectorAll("input[name='executiveViewMode']").forEach((input) => {
+    input.addEventListener("change", () => {
+      setExecutiveViewMode(input.value);
+    });
+  });
+
   qs("refreshStatusBtn").addEventListener("click", async () => {
     try {
       await loadStatus();
@@ -1308,6 +1427,9 @@ async function init() {
     attachPipelineConfigHandlers();
     applyPipelinePreset("full");
     syncPipelinePathPreview();
+
+    state.executiveViewMode = loadExecutiveViewMode();
+    syncExecutiveViewModeControls();
 
     bindTableSorting("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort, () => {
       renderQueueRows(queueTableState.rows, queueTableState.metaLabel);

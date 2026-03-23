@@ -117,6 +117,7 @@ def planning_dashboard() -> str:
               <th>Action</th>
               <th>Company</th>
               <th>Title</th>
+              <th>Posted At</th>
               <th>Winner Resume</th>
               <th>Winner Score</th>
               <th>Runner-Up Resume</th>

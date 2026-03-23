@@ -14,6 +14,30 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return DATE_TIME_FORMATTER.format(date);
+}
+
+function formatScore100(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "-";
+  const parsed = Number(String(value).replaceAll(",", "").trim());
+  if (!Number.isFinite(parsed)) return String(value);
+  const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+  return normalized.toFixed(2);
+}
+
 function getAppErrorModal() {
   return qs("appErrorModal");
 }
@@ -545,14 +569,14 @@ function renderSearchResults(results) {
           </div>
           <div class="result-meta">
             <span>${escapeHtml(row.company || "")}</span>
-            <span>score=${escapeHtml(String(row.score ?? ""))}</span>
+            <span>Score: ${escapeHtml(formatScore100(row.score))}</span>
             <span>${escapeHtml(row.location || "")}</span>
           </div>
           <div class="result-meta">
-            <span>source=${escapeHtml(row.source || "")}</span>
-            <span>posted_at=${escapeHtml(row.posted_at || "")}</span>
-            <span>visa=${escapeHtml(row.visa_sponsorship || "")}</span>
-            <span>ai_fit=${escapeHtml(String(row.ai_fit_score ?? ""))}</span>
+            <span>Source: ${escapeHtml(row.source || "")}</span>
+            <span>Posted: ${escapeHtml(formatDateTime(row.posted_at) || "-")}</span>
+            <span>Visa: ${escapeHtml(row.visa_sponsorship || "")}</span>
+            <span>AI fit: ${escapeHtml(formatScore100(row.ai_fit_score))}</span>
           </div>
         </div>
       `;
@@ -589,6 +613,7 @@ function renderAnswerSources(sources) {
           <div class="result-meta">
             <span>${escapeHtml(row.source_id || "")}</span>
             <span>${escapeHtml(row.company || "")}</span>
+            <span>Posted: ${escapeHtml(formatDateTime(row.posted_at) || "-")}</span>
           </div>
         </div>
       `;

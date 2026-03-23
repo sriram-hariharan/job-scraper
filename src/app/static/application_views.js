@@ -134,6 +134,50 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function buildDateTimeCellHtml(value) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return escapeHtml(String(value));
+  }
+
+  return `
+    <div class="datetime-cell">
+      <div class="datetime-cell-date">${escapeHtml(DATE_ONLY_FORMATTER.format(date))}</div>
+      <div class="datetime-cell-time">${escapeHtml(TIME_ONLY_FORMATTER.format(date))}</div>
+    </div>
+  `;
+}
+
+const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
+function formatDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return DATE_TIME_FORMATTER.format(date);
+}
+
 function getAppErrorModal() {
   return qs("appErrorModal");
 }
@@ -232,7 +276,7 @@ const APPLICATION_TAB_CONFIG = {
 };
 
 const APPLICATION_SORT_COLUMNS = [
-  { key: "action_timestamp", label: "Timestamp", type: "date" },
+  { key: "action_timestamp", label: "Date / Time", type: "date" },
   { key: "job_company", label: "Company", type: "text" },
   { key: "job_title", label: "Title", type: "text" },
   { key: "application_status", label: "Status", type: "text" },
@@ -321,7 +365,7 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
 
     return `
       <tr>
-        <td>${escapeHtml(row.action_timestamp || "")}</td>
+        <td>${buildDateTimeCellHtml(row.action_timestamp)}</td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">${titleHtml}</td>
         <td><span class="pill">${escapeHtml(row.application_status || "")}</span></td>

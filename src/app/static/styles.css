@@ -57,6 +57,103 @@ h2 {
   gap: 10px;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.page-header-main {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.executive-view-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.executive-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 18px;
+  flex-wrap: wrap;
+}
+
+.executive-title-row h1 {
+  margin: 0;
+}
+
+.executive-view-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.executive-view-mode-label {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+}
+
+.resume-option-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cell-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.subtext-inline {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.datetime-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+.datetime-cell-date {
+  line-height: 1.2;
+}
+
+.datetime-cell-time {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+@media (max-width: 1200px) {
+  .header-actions {
+    justify-content: flex-start;
+  }
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2178,17 +2275,10 @@ thead .sticky-apply-col {
   transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
-.binary-toggle-option input[value="yes"]:checked + span {
-  background: rgba(145, 242, 195, 0.18);
-  color: #d7f8ea;
-  box-shadow: inset 0 0 0 1px rgba(145, 242, 195, 0.28);
-  transform: translateY(-1px);
-}
-
-.binary-toggle-option input[value="no"]:checked + span {
-  background: rgba(255, 143, 143, 0.14);
-  color: #ffd7d7;
-  box-shadow: inset 0 0 0 1px rgba(255, 143, 143, 0.24);
+.binary-toggle-option input:checked + span {
+  background: rgba(120, 166, 255, 0.18);
+  color: #e7f0ff;
+  box-shadow: inset 0 0 0 1px rgba(120, 166, 255, 0.24);
   transform: translateY(-1px);
 }
 

@@ -818,28 +818,60 @@ def _candidate_pool_lineage_rows(lineage: List[Dict[str, Any]]) -> List[Dict[str
 
     return rows
 
+def _terminal_resolved_candidate_id(
+    candidate_id: str,
+    lineage: List[Dict[str, Any]],
+) -> str:
+    candidate_id = str(candidate_id or "").strip()
+    if not candidate_id:
+        return ""
+
+    lineage_by_candidate = {
+        str(item.get("candidate_id", "") or "").strip(): item
+        for item in lineage or []
+        if str(item.get("candidate_id", "") or "").strip()
+    }
+
+    seen = set()
+    current = candidate_id
+
+    while current and current not in seen:
+        seen.add(current)
+        row = lineage_by_candidate.get(current)
+        if not row:
+            return current
+
+        status = str(row.get("status", "") or "").strip()
+        resolved_to = str(row.get("resolved_to_candidate_id", "") or "").strip()
+
+        if not resolved_to or resolved_to == current or status == "kept_unique":
+            return current
+
+        current = resolved_to
+
+    return current
+
 def _equivalent_candidate_ids_for_selected_candidate(
     selected_candidate_id: str,
     lineage: List[Dict[str, Any]],
 ) -> List[str]:
+    selected_candidate_id = str(selected_candidate_id or "").strip()
     if not selected_candidate_id:
         return []
 
+    selected_terminal = _terminal_resolved_candidate_id(
+        selected_candidate_id,
+        lineage,
+    )
     equivalent: List[str] = []
 
     for item in lineage or []:
         candidate_id = str(item.get("candidate_id", "") or "").strip()
-        resolved_to = str(item.get("resolved_to_candidate_id", "") or "").strip()
-        status = str(item.get("status", "") or "").strip()
-
         if not candidate_id:
             continue
 
-        if candidate_id == selected_candidate_id:
-            equivalent.append(candidate_id)
-            continue
-
-        if status == "deduped_same_directions" and resolved_to == selected_candidate_id:
+        candidate_terminal = _terminal_resolved_candidate_id(candidate_id, lineage)
+        if candidate_terminal == selected_terminal:
             equivalent.append(candidate_id)
 
     return _unique_preserve_order(equivalent)
@@ -983,22 +1015,41 @@ def _resolved_candidate_for_source_family(
     if direct is not None:
         return direct
 
-    resolved_ids = [
-        item.get("resolved_to_candidate_id", "")
-        for item in lineage
+    candidate_by_id = {
+        str(candidate.get("candidate_id", "") or "").strip(): candidate
+        for candidate in candidate_pool or []
+        if str(candidate.get("candidate_id", "") or "").strip()
+    }
+
+    family_rows = [
+        item for item in lineage or []
         if item.get("source_family") == source_family
-        and item.get("status") == "deduped_same_directions"
-        and item.get("resolved_to_candidate_id")
     ]
 
-    if not resolved_ids:
+    resolved_candidates: List[Dict[str, Any]] = []
+    seen_ids = set()
+
+    for item in family_rows:
+        candidate_id = str(item.get("candidate_id", "") or "").strip()
+        if not candidate_id:
+            continue
+
+        terminal_id = _terminal_resolved_candidate_id(candidate_id, lineage)
+        if not terminal_id or terminal_id in seen_ids:
+            continue
+
+        candidate = candidate_by_id.get(terminal_id)
+        if candidate is None:
+            continue
+
+        seen_ids.add(terminal_id)
+        resolved_candidates.append(candidate)
+
+    if not resolved_candidates:
         return None
 
-    for candidate in candidate_pool:
-        if candidate.get("candidate_id", "") in resolved_ids:
-            return candidate
-
-    return None
+    resolved_candidates.sort(key=_rewrite_candidate_sort_key, reverse=True)
+    return resolved_candidates[0]
 
 def _effective_best_candidate_for_source_family(
     source_family: str,
@@ -1008,6 +1059,7 @@ def _effective_best_candidate_for_source_family(
     candidate_by_id = {
         str(candidate.get("candidate_id", "") or "").strip(): candidate
         for candidate in candidate_pool or []
+        if str(candidate.get("candidate_id", "") or "").strip()
     }
 
     family_rows = [
@@ -1021,13 +1073,19 @@ def _effective_best_candidate_for_source_family(
     seen_ids = set()
 
     for row in family_rows:
-        resolved_id = str(row.get("resolved_to_candidate_id", "") or "").strip()
-        if not resolved_id or resolved_id in seen_ids:
+        candidate_id = str(row.get("candidate_id", "") or "").strip()
+        if not candidate_id:
             continue
-        candidate = candidate_by_id.get(resolved_id)
+
+        terminal_id = _terminal_resolved_candidate_id(candidate_id, lineage)
+        if not terminal_id or terminal_id in seen_ids:
+            continue
+
+        candidate = candidate_by_id.get(terminal_id)
         if candidate is None:
             continue
-        seen_ids.add(resolved_id)
+
+        seen_ids.add(terminal_id)
         resolved_candidates.append(candidate)
 
     if not resolved_candidates:
@@ -1154,16 +1212,17 @@ def _select_operator_rewrite_directions(
             for item in parsed.get("rewrite_directions", []) or []
             if _is_actionable_rewrite_direction(item)
         ]
-        llm_directions = _normalize_live_rewrite_directions(
-            payload,
-            raw_llm_directions,
-            limit=6,
-        )
         audit["llm_strong_enough"] = _llm_output_is_strong_enough(parsed)
         audit["live_llm_raw_directions"] = raw_llm_directions[:6]
-        audit["live_llm_normalized_directions"] = llm_directions[:6]
 
-        if audit["llm_strong_enough"]:
+        if audit["llm_strong_enough"] and raw_llm_directions:
+            llm_directions = _normalize_live_rewrite_directions(
+                payload,
+                raw_llm_directions,
+                limit=6,
+            )
+            audit["live_llm_normalized_directions"] = llm_directions[:6]
+
             blended = _blend_live_and_planner_directions(
                 payload,
                 llm_directions,
@@ -1176,6 +1235,10 @@ def _select_operator_rewrite_directions(
             )
             audit["live_llm_blended_normalized_directions"] = blended_directions[:6]
         else:
+            llm_directions = []
+            blended_directions = []
+            audit["live_llm_normalized_directions"] = []
+            audit["live_llm_blended_normalized_directions"] = []
             audit["fallback_reason_codes"].append("live_llm_not_strong_enough")
     else:
         if llm_output is not None:

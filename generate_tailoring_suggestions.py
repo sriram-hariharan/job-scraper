@@ -1308,21 +1308,54 @@ def _direction_mentions_any(direction: str, values: List[str]) -> bool:
 
     return False
 
+def _direction_plan_unit_match_score(direction: str, row: Dict[str, Any]) -> int:
+    text = str(direction or "").strip()
+    if not text:
+        return 0
 
-def _direction_matches_plan_unit(direction: str, row: Dict[str, Any]) -> bool:
-    values: List[str] = []
+    score = 0
 
     source = str(row.get("source", "") or "").strip()
-    if source:
-        values.append(source)
+    if source and _direction_mentions_any(text, [source]):
+        score += 3
 
-    values.extend(row.get("supported_terms", []) or [])
+    supported_terms = [str(term).strip() for term in (row.get("supported_terms", []) or []) if str(term).strip()]
+    matched_terms = [term for term in supported_terms if _direction_mentions_any(text, [term])]
+    score += len(matched_terms)
 
     evidence_unit = str(row.get("evidence_unit", "") or "").strip()
+    evidence_markers: List[str] = []
     if evidence_unit:
-        values.append(evidence_unit[:80])
+        evidence_markers.append(evidence_unit[:80])
+        evidence_markers.append(_short_bullet(evidence_unit, 140))
 
-    return _direction_mentions_any(direction, values)
+    if evidence_markers and _direction_mentions_any(text, evidence_markers):
+        score += 4
+
+    return score
+
+
+def _best_matching_plan_unit(
+    direction: str,
+    plan_units: List[Dict[str, Any]],
+    min_score: int = 4,
+) -> Optional[Dict[str, Any]]:
+    best_row: Optional[Dict[str, Any]] = None
+    best_score = 0
+
+    for row in plan_units:
+        score = _direction_plan_unit_match_score(direction, row)
+        if score > best_score:
+            best_score = score
+            best_row = row
+
+    if best_score < min_score:
+        return None
+
+    return best_row
+
+def _direction_matches_plan_unit(direction: str, row: Dict[str, Any]) -> bool:
+    return _direction_plan_unit_match_score(direction, row) >= 4
 
 
 def _rewrite_directions_cover_plan(
@@ -1378,6 +1411,119 @@ def _rewrite_directions_cover_plan(
 
     return True
 
+def _normalize_direction_text(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _direction_prefix(value: str) -> str:
+    text = str(value or "").strip()
+    for prefix in REWRITE_DIRECTION_PREFIXES:
+        if text.startswith(prefix):
+            return prefix
+    return ""
+
+
+def _direction_matches_any_plan_unit(
+    direction: str,
+    plan_units: List[Dict[str, Any]],
+) -> bool:
+    return any(_direction_matches_plan_unit(direction, row) for row in plan_units)
+
+
+def _rewrite_direction_verifier_report(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> Dict[str, Any]:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+
+    blocked_direct_claim_terms = _unique_preserve_order(
+        list(plan.get("contextual_terms_to_frame_carefully", []) or [])
+        + list(plan.get("adjacent_terms_to_keep_explicit", []) or [])
+        + list(plan.get("true_unsupported_terms", []) or [])
+    )
+
+    seen_text = set()
+    duplicate_directions: List[str] = []
+    unmapped_lead_support: List[str] = []
+    blocked_term_directions: List[str] = []
+    duplicate_primary_anchor_directions: List[str] = []
+    duplicate_secondary_support_directions: List[str] = []
+
+    covered_primary_keys = set()
+    covered_secondary_keys = set()
+
+    for item in actionable:
+        normalized = _normalize_direction_text(item)
+        if normalized in seen_text:
+            duplicate_directions.append(item)
+            continue
+        seen_text.add(normalized)
+
+        prefix = _direction_prefix(item)
+
+        if prefix == "Lead with":
+            matched_primary_unit = _best_matching_plan_unit(item, primary_anchor_units)
+            if not matched_primary_unit:
+                unmapped_lead_support.append(item)
+                continue
+
+            if blocked_direct_claim_terms and _direction_mentions_any(item, blocked_direct_claim_terms):
+                blocked_term_directions.append(item)
+
+            matched_key = _plan_unit_key(matched_primary_unit)
+            if matched_key in covered_primary_keys:
+                duplicate_primary_anchor_directions.append(item)
+            else:
+                covered_primary_keys.add(matched_key)
+
+        elif prefix == "Support with":
+            support_pool = secondary_support_units or (primary_anchor_units + secondary_support_units)
+            matched_support_unit = _best_matching_plan_unit(item, support_pool)
+            if not matched_support_unit:
+                unmapped_lead_support.append(item)
+                continue
+
+            if blocked_direct_claim_terms and _direction_mentions_any(item, blocked_direct_claim_terms):
+                blocked_term_directions.append(item)
+
+            matched_key = _plan_unit_key(matched_support_unit)
+            if matched_key in covered_secondary_keys:
+                duplicate_secondary_support_directions.append(item)
+            else:
+                covered_secondary_keys.add(matched_key)
+
+    issues = _unique_preserve_order(
+        (["duplicate_directions"] if duplicate_directions else [])
+        + (["unmapped_lead_support"] if unmapped_lead_support else [])
+        + (["blocked_term_directions"] if blocked_term_directions else [])
+        + (["duplicate_primary_anchor_directions"] if duplicate_primary_anchor_directions else [])
+        + (["duplicate_secondary_support_directions"] if duplicate_secondary_support_directions else [])
+    )
+
+    return {
+        "ok": not issues,
+        "issues": issues,
+        "duplicate_directions": duplicate_directions,
+        "unmapped_lead_support": unmapped_lead_support,
+        "blocked_term_directions": blocked_term_directions,
+        "duplicate_primary_anchor_directions": duplicate_primary_anchor_directions,
+        "duplicate_secondary_support_directions": duplicate_secondary_support_directions,
+    }
+
+
+def _rewrite_directions_pass_verifier(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> bool:
+    return bool(_rewrite_direction_verifier_report(payload, directions).get("ok"))
 
 def _blend_live_and_planner_directions(
     payload: Dict[str, Any],
@@ -1435,11 +1581,17 @@ def _select_operator_rewrite_directions(
             if _is_actionable_rewrite_direction(item)
         ]
 
-        if _rewrite_directions_cover_plan(payload, llm_directions):
+        if (
+            _rewrite_directions_cover_plan(payload, llm_directions)
+            and _rewrite_directions_pass_verifier(payload, llm_directions)
+        ):
             return llm_directions[:6], "live_llm"
 
         blended = _blend_live_and_planner_directions(payload, llm_directions, limit=6)
-        if _rewrite_directions_cover_plan(payload, blended):
+        if (
+            _rewrite_directions_cover_plan(payload, blended)
+            and _rewrite_directions_pass_verifier(payload, blended)
+        ):
             return blended[:6], "live_llm_blended"
 
     if planner_directions:
@@ -1459,6 +1611,10 @@ def _build_operator_markdown_payload(
     )
     operator_payload["preferred_rewrite_directions"] = preferred_rewrite_directions
     operator_payload["preferred_rewrite_source"] = preferred_rewrite_source
+    operator_payload["preferred_rewrite_verifier"] = _rewrite_direction_verifier_report(
+        payload,
+        preferred_rewrite_directions,
+    )
     return operator_payload
 
 def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
@@ -2431,8 +2587,8 @@ def main() -> None:
 
     packet = _load_packet(Path(args.packet_json))
     payload = _build_payload(packet)
-    markdown_payload = _build_operator_markdown_payload(payload, None)
-    markdown = _markdown_from_payload(markdown_payload)
+    final_payload = _build_operator_markdown_payload(payload, None)
+    markdown = _markdown_from_payload(final_payload)
 
     print("=" * 100)
     print("GROUNDED TAILORING SUGGESTIONS")
@@ -2490,16 +2646,13 @@ def main() -> None:
         print(f"- {item}")
     print()
 
+    output_json_path = None
     if args.output_json.strip():
         output_json_path = Path(args.output_json)
-        output_json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
-        print(f"JSON written: {output_json_path}")
 
     output_md_path = None
     if args.output_md.strip():
         output_md_path = Path(args.output_md)
-        output_md_path.write_text(markdown, encoding="utf-8")
-        print(f"Markdown written: {args.output_md}")
     
     if args.use_llm:
         llm_output = _run_live_llm_tailoring(
@@ -2561,13 +2714,28 @@ def main() -> None:
             )
             print(f"LLM JSON written: {output_llm_json_path}")
         
-        if llm_output.get("parse_ok") and output_md_path is not None:
-            markdown_payload = _build_operator_markdown_payload(payload, llm_output)
-            output_md_path.write_text(_markdown_from_payload(markdown_payload), encoding="utf-8")
+        final_payload = _build_operator_markdown_payload(payload, llm_output)
+        markdown = _markdown_from_payload(final_payload)
+
+        if output_json_path is not None:
+            output_json_path.write_text(json.dumps(final_payload, indent=2), encoding="utf-8")
+            print(f"JSON written: {output_json_path}")
+
+        if output_md_path is not None:
+            output_md_path.write_text(markdown, encoding="utf-8")
             print(
-                f"Markdown updated with {markdown_payload.get('preferred_rewrite_source', 'deterministic')} rewrite directions: "
+                f"Markdown written with {final_payload.get('preferred_rewrite_source', 'deterministic')} rewrite directions: "
                 f"{args.output_md}"
             )
+
+    if not args.use_llm:
+        if output_json_path is not None:
+            output_json_path.write_text(json.dumps(final_payload, indent=2), encoding="utf-8")
+            print(f"JSON written: {output_json_path}")
+
+        if output_md_path is not None:
+            output_md_path.write_text(markdown, encoding="utf-8")
+            print(f"Markdown written: {args.output_md}")
 
 if __name__ == "__main__":
     main()

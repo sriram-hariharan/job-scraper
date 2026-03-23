@@ -1955,12 +1955,153 @@ def _rewrite_path_audit(
         "directions": actionable[:6],
     }
 
+def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> tuple:
+    audit = candidate.get("audit", {}) or {}
+    quality = audit.get("quality", {}) or {}
+
+    return (
+        int(audit.get("quality_score", 0)),
+        1 if candidate.get("is_polished") else 0,
+        int(quality.get("full_anchor_line_count", 0)),
+        -int(quality.get("truncated_line_count", 0)),
+        -int(quality.get("plannerese_line_count", 0)),
+        -int(quality.get("generic_skill_tail_count", 0)),
+    )
+
+
+def _build_rewrite_candidate_pool(
+    payload: Dict[str, Any],
+    planner_directions: List[str],
+    live_directions: Optional[List[str]],
+    blended_directions: Optional[List[str]],
+) -> List[Dict[str, Any]]:
+    raw_candidates: List[Dict[str, Any]] = []
+
+    def _add_candidate(candidate_id: str, source_family: str, directions: Optional[List[str]]) -> None:
+        actionable = [
+            str(item).strip()
+            for item in directions or []
+            if _is_actionable_rewrite_direction(item)
+        ]
+        if not actionable:
+            return
+
+        raw_candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "source_family": source_family,
+                "is_polished": candidate_id.endswith("_polished"),
+                "directions": actionable[:6],
+            }
+        )
+
+    if planner_directions:
+        _add_candidate("deterministic_planner", "deterministic_planner", planner_directions)
+        _add_candidate(
+            "deterministic_planner_polished",
+            "deterministic_planner",
+            _polish_selected_rewrite_directions(payload, planner_directions),
+        )
+
+    if live_directions:
+        _add_candidate("live_llm", "live_llm", live_directions)
+        _add_candidate(
+            "live_llm_polished",
+            "live_llm",
+            _polish_selected_rewrite_directions(payload, live_directions),
+        )
+
+    if blended_directions:
+        _add_candidate("live_llm_blended", "live_llm_blended", blended_directions)
+        _add_candidate(
+            "live_llm_blended_polished",
+            "live_llm_blended",
+            _polish_selected_rewrite_directions(payload, blended_directions),
+        )
+
+    deduped: List[Dict[str, Any]] = []
+    seen = set()
+
+    for candidate in raw_candidates:
+        key = tuple(candidate.get("directions", []) or [])
+        if key in seen:
+            continue
+        seen.add(key)
+
+        audit = _rewrite_path_audit(payload, candidate["directions"])
+        deduped.append(
+            {
+                **candidate,
+                "audit": audit,
+            }
+        )
+
+    return deduped
+
+
+def _best_rewrite_candidate_for_source_family(
+    candidates: List[Dict[str, Any]],
+    source_family: str,
+    *,
+    require_valid: bool = True,
+) -> Optional[Dict[str, Any]]:
+    filtered = [
+        candidate
+        for candidate in candidates
+        if candidate.get("source_family") == source_family
+    ]
+
+    if require_valid:
+        filtered = [
+            candidate
+            for candidate in filtered
+            if candidate.get("audit", {}).get("covers_plan")
+            and candidate.get("audit", {}).get("verifier_ok")
+        ]
+
+    if not filtered:
+        return None
+
+    filtered.sort(key=_rewrite_candidate_sort_key, reverse=True)
+    return filtered[0]
+
+
+def _candidate_pool_audit_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for candidate in candidates:
+        audit = candidate.get("audit", {}) or {}
+        quality = audit.get("quality", {}) or {}
+
+        rows.append(
+            {
+                "candidate_id": candidate.get("candidate_id", ""),
+                "source_family": candidate.get("source_family", ""),
+                "is_polished": bool(candidate.get("is_polished")),
+                "covers_plan": bool(audit.get("covers_plan")),
+                "verifier_ok": bool(audit.get("verifier_ok")),
+                "quality_score": int(audit.get("quality_score", 0)),
+                "full_anchor_line_count": int(quality.get("full_anchor_line_count", 0)),
+                "truncated_line_count": int(quality.get("truncated_line_count", 0)),
+                "plannerese_line_count": int(quality.get("plannerese_line_count", 0)),
+                "generic_skill_tail_count": int(quality.get("generic_skill_tail_count", 0)),
+                "verifier_issues": list(audit.get("verifier_issues", []) or []),
+                "directions": list(audit.get("directions", []) or []),
+            }
+        )
+
+    return rows
+
 def _choose_best_valid_rewrite_path(
-    planner_audit: Dict[str, Any],
+    deterministic_audit: Optional[Dict[str, Any]],
     live_audit: Optional[Dict[str, Any]],
     blended_audit: Optional[Dict[str, Any]],
 ) -> tuple[str, str]:
-    planner_score = int(planner_audit.get("quality_score", 0))
+    deterministic_valid = bool(
+        deterministic_audit
+        and deterministic_audit.get("covers_plan")
+        and deterministic_audit.get("verifier_ok")
+    )
 
     candidates: List[tuple[str, Dict[str, Any]]] = []
     for source, audit in [
@@ -1971,7 +2112,9 @@ def _choose_best_valid_rewrite_path(
             candidates.append((source, audit))
 
     if not candidates:
-        return "deterministic_planner", "no_live_candidate_passed_all_gates"
+        if deterministic_valid:
+            return "deterministic_planner", "no_live_candidate_passed_all_gates"
+        return "deterministic", "no_valid_candidate_passed_all_gates"
 
     candidates.sort(
         key=lambda item: (
@@ -1983,10 +2126,20 @@ def _choose_best_valid_rewrite_path(
     best_source, best_audit = candidates[0]
     best_score = int(best_audit.get("quality_score", 0))
 
-    if best_score >= planner_score + 2:
+    if not deterministic_valid:
+        return best_source, f"{best_source}_only_valid_candidate"
+
+    deterministic_score = int(deterministic_audit.get("quality_score", 0))
+
+    if best_score >= deterministic_score + 2:
         return best_source, f"{best_source}_quality_beats_deterministic"
-    if best_score > planner_score and best_audit.get("quality", {}).get("truncated_line_count", 0) < planner_audit.get("quality", {}).get("truncated_line_count", 0):
+    if (
+        best_score > deterministic_score
+        and best_audit.get("quality", {}).get("truncated_line_count", 0)
+        < deterministic_audit.get("quality", {}).get("truncated_line_count", 0)
+    ):
         return best_source, f"{best_source}_wins_on_truncation_quality"
+
     return "deterministic_planner", "deterministic_kept_as_quality_baseline"
 
 def _select_operator_rewrite_directions(
@@ -1999,7 +2152,6 @@ def _select_operator_rewrite_directions(
         parsed = llm_output.get("parsed", {}) or {}
 
     planner_directions = _planner_seed_rewrite_directions(payload)
-    planner_audit = _rewrite_path_audit(payload, planner_directions)
 
     audit: Dict[str, Any] = {
         "llm_requested": bool(llm_output is not None),
@@ -2007,11 +2159,15 @@ def _select_operator_rewrite_directions(
         "llm_strong_enough": False,
         "live_llm": None,
         "live_llm_blended": None,
-        "deterministic_planner": planner_audit,
+        "deterministic_planner": None,
         "selected_source": "",
         "selected_reason": "",
         "fallback_reason_codes": [],
+        "candidate_pool": [],
     }
+
+    llm_directions: List[str] = []
+    blended_directions: List[str] = []
 
     if parsed:
         raw_llm_directions = [
@@ -2029,28 +2185,54 @@ def _select_operator_rewrite_directions(
         audit["live_llm_normalized_directions"] = llm_directions[:6]
 
         if audit["llm_strong_enough"]:
-            live_audit = _rewrite_path_audit(payload, llm_directions)
-            audit["live_llm"] = live_audit
-
             blended = _blend_live_and_planner_directions(
                 payload,
                 llm_directions,
                 limit=6,
             )
-            blended = _normalize_live_rewrite_directions(
+            blended_directions = _normalize_live_rewrite_directions(
                 payload,
                 blended,
                 limit=6,
             )
-            audit["live_llm_blended_normalized_directions"] = blended[:6]
-
-            blended_audit = _rewrite_path_audit(payload, blended)
-            audit["live_llm_blended"] = blended_audit
+            audit["live_llm_blended_normalized_directions"] = blended_directions[:6]
         else:
             audit["fallback_reason_codes"].append("live_llm_not_strong_enough")
     else:
         if llm_output is not None:
             audit["fallback_reason_codes"].append("live_llm_parse_failed_or_missing")
+
+    candidate_pool = _build_rewrite_candidate_pool(
+        payload,
+        planner_directions,
+        llm_directions if audit["llm_strong_enough"] else None,
+        blended_directions if audit["llm_strong_enough"] else None,
+    )
+    audit["candidate_pool"] = _candidate_pool_audit_rows(candidate_pool)
+
+    best_deterministic = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        "deterministic_planner",
+        require_valid=True,
+    )
+    best_live = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        "live_llm",
+        require_valid=True,
+    )
+    best_blended = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        "live_llm_blended",
+        require_valid=True,
+    )
+
+    if best_deterministic is not None:
+        audit["deterministic_planner"] = best_deterministic["audit"]
+    else:
+        audit["deterministic_planner"] = _rewrite_path_audit(payload, planner_directions)
+
+    audit["live_llm"] = best_live["audit"] if best_live is not None else None
+    audit["live_llm_blended"] = best_blended["audit"] if best_blended is not None else None
 
     if audit["live_llm"] is not None:
         if not audit["live_llm"]["covers_plan"]:
@@ -2065,28 +2247,26 @@ def _select_operator_rewrite_directions(
             audit["fallback_reason_codes"].append("live_llm_blended_failed_verifier")
 
     chosen_source, chosen_reason = _choose_best_valid_rewrite_path(
-        planner_audit,
+        audit["deterministic_planner"],
         audit["live_llm"],
         audit["live_llm_blended"],
     )
     audit["selected_reason"] = chosen_reason
 
-    if chosen_source == "live_llm" and audit["live_llm"] is not None:
+    if chosen_source == "live_llm" and best_live is not None:
         audit["selected_source"] = "live_llm"
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
-        return audit["live_llm"]["directions"][:6], "live_llm", audit
+        return best_live["audit"]["directions"][:6], "live_llm", audit
 
-    if chosen_source == "live_llm_blended" and audit["live_llm_blended"] is not None:
+    if chosen_source == "live_llm_blended" and best_blended is not None:
         audit["selected_source"] = "live_llm_blended"
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
-        return audit["live_llm_blended"]["directions"][:6], "live_llm_blended", audit
+        return best_blended["audit"]["directions"][:6], "live_llm_blended", audit
 
-    if planner_directions:
+    if chosen_source == "deterministic_planner" and best_deterministic is not None:
         audit["selected_source"] = "deterministic_planner"
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
-        if not audit.get("selected_reason"):
-            audit["selected_reason"] = "deterministic_kept_as_quality_baseline"
-        return planner_directions[:6], "deterministic_planner", audit
+        return best_deterministic["audit"]["directions"][:6], "deterministic_planner", audit
 
     fallback = _fallback_rewrite_directions_from_payload(payload)
     audit["selected_source"] = "deterministic"

@@ -217,6 +217,113 @@ h2 {
   color: var(--text);
 }
 
+.multi-select {
+  position: relative;
+  min-width: 180px;
+}
+
+.multi-select-trigger {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  font-weight: 500;
+}
+
+.multi-select-trigger:hover {
+  opacity: 1;
+  border-color: rgba(120, 166, 255, 0.45);
+}
+
+.multi-select.is-open .multi-select-trigger {
+  border-color: rgba(120, 166, 255, 0.6);
+  box-shadow: 0 0 0 3px rgba(120, 166, 255, 0.12);
+}
+
+.multi-select-trigger-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.multi-select-trigger-icon {
+  flex-shrink: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.multi-select-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 260px;
+  overflow-y: auto;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(18, 25, 51, 0.98);
+  box-shadow: var(--shadow);
+}
+
+.multi-select-menu[hidden] {
+  display: none !important;
+}
+
+.multi-select-option {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.multi-select-option:hover {
+  background: rgba(120, 166, 255, 0.12);
+  opacity: 1;
+}
+
+.multi-select-option.is-selected {
+  background: rgba(120, 166, 255, 0.16);
+}
+
+.multi-select-option-check {
+  opacity: 0;
+  color: #9ec1ff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.multi-select-option.is-selected .multi-select-option-check {
+  opacity: 1;
+}
+
+.multi-select-option-label {
+  min-width: 0;
+  word-break: break-word;
+}
+
 .checkbox-group {
   padding-bottom: 8px;
 }

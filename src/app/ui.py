@@ -74,14 +74,32 @@ def executive_dashboard() -> str:
       <div class="dashboard-toolbar dashboard-toolbar--executive">
         <div class="dashboard-toolbar-left dashboard-toolbar-left--executive">
           <div class="control-group dashboard-field dashboard-field--action">
-            <label for="actionFilter">Action</label>
-            <select id="actionFilter">
-              <option value="">All</option>
-              <option value="APPLY">APPLY</option>
-              <option value="APPLY_REVIEW_VARIANTS">APPLY_REVIEW_VARIANTS</option>
-              <option value="MAYBE_TAILOR">MAYBE_TAILOR</option>
-              <option value="SKIP_FOR_NOW">SKIP_FOR_NOW</option>
-            </select>
+            <label>Action</label>
+            <div class="multi-select" id="actionFilter" data-placeholder="All">
+              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+                <span class="multi-select-trigger-label">All</span>
+                <span class="multi-select-trigger-icon">▾</span>
+              </button>
+
+              <div class="multi-select-menu" role="menu" hidden>
+                <button type="button" class="multi-select-option" data-value="APPLY" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">APPLY</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="APPLY_REVIEW_VARIANTS" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">APPLY_REVIEW_VARIANTS</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="MAYBE_TAILOR" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">MAYBE_TAILOR</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="SKIP_FOR_NOW" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">SKIP_FOR_NOW</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="control-group dashboard-field dashboard-field--limit">
@@ -115,13 +133,6 @@ def executive_dashboard() -> str:
             <button class="ghost-btn" id="clearFiltersBtn">Clear</button>
           </div>
         </div>
-      </div>
-
-      <div class="controls-row quick-view-row quick-view-row--executive">
-        <button class="ghost-btn quick-view-btn" data-view="direct_apply_pending">Direct Apply Pending</button>
-        <button class="ghost-btn quick-view-btn" data-view="undecided_apply_review">Variant Review Pending</button>
-        <button class="ghost-btn quick-view-btn" data-view="undecided_maybe_tailor">Tailor Pending</button>
-        <button class="ghost-btn quick-view-btn" data-mode="applied_jobs">Applied Jobs</button>
       </div>
     </section>
 

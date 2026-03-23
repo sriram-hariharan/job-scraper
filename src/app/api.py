@@ -218,6 +218,7 @@ def planning_resume_preview(
 @app.get("/decisions")
 def decisions(
     decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     queue_rank: int | None = None,
     decision: str = "",
     selected_resume: str = "",
@@ -227,6 +228,7 @@ def decisions(
 ):
     return services.decisions_payload(
         decisions_path=Path(decisions_path),
+        output_dir=Path(output_dir),
         queue_rank=queue_rank,
         decision=decision,
         selected_resume=selected_resume,

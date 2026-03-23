@@ -83,11 +83,12 @@ def decisions_dashboard() -> str:
         <table id="decisionsTable">
           <thead>
             <tr>
-              <th>Timestamp</th>
+              <th>Date / Time</th>
               <th>Queue Rank</th>
               <th>Decision</th>
               <th>Company</th>
               <th>Title</th>
+              <th>Posted At</th>
               <th>Planning Action</th>
               <th>Selected Resume</th>
               <th>Winner Resume</th>

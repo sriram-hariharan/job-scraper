@@ -1018,6 +1018,105 @@ def _overlay_application_actions(
 
     return overlaid_rows
 
+def _load_job_metadata_overlay_from_corpus(
+    job_corpus: Path = DEFAULT_CORPUS_PATH,
+) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    if not job_corpus.exists():
+        return latest_by_key
+
+    with job_corpus.open("r", encoding="utf-8") as f:
+        for line in f:
+            raw = line.strip()
+            if not raw:
+                continue
+
+            try:
+                record = json.loads(raw)
+            except Exception:
+                continue
+
+            metadata = record.get("metadata", {}) if isinstance(record.get("metadata"), dict) else {}
+
+            job_doc_id = _clean_text(
+                record.get("job_doc_id")
+                or record.get("doc_id")
+                or metadata.get("doc_id")
+                or record.get("job_url")
+                or metadata.get("job_url")
+            )
+            job_url = _clean_text(
+                record.get("job_url")
+                or metadata.get("job_url")
+                or job_doc_id
+            )
+            job_company = _clean_text(
+                record.get("job_company")
+                or record.get("company")
+                or metadata.get("company")
+            )
+            job_title = _clean_text(
+                record.get("job_title")
+                or record.get("title")
+                or metadata.get("title")
+            )
+            posted_at = _clean_text(
+                record.get("posted_at")
+                or metadata.get("posted_at")
+            )
+
+            if not posted_at and not job_url:
+                continue
+
+            key_row = {
+                "job_doc_id": job_doc_id,
+                "job_url": job_url,
+                "job_company": job_company,
+                "job_title": job_title,
+            }
+            overlay = {
+                "posted_at": posted_at,
+                "job_url": job_url,
+            }
+
+            for key in _application_row_key_candidates(key_row):
+                if key:
+                    latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _overlay_job_metadata(
+    rows: List[Dict[str, Any]],
+    job_corpus: Path = DEFAULT_CORPUS_PATH,
+) -> List[Dict[str, Any]]:
+    latest_by_key = _load_job_metadata_overlay_from_corpus(job_corpus)
+    if not latest_by_key:
+        return rows
+
+    overlaid_rows: List[Dict[str, Any]] = []
+
+    for row in rows:
+        merged = dict(row)
+        merged.setdefault("posted_at", "")
+        merged.setdefault("job_url", _clean_text(merged.get("job_doc_id")))
+
+        for key in _application_row_key_candidates(merged):
+            overlay = latest_by_key.get(key)
+            if not overlay:
+                continue
+
+            if overlay.get("posted_at"):
+                merged["posted_at"] = overlay["posted_at"]
+            if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
+                merged["job_url"] = overlay["job_url"]
+            break
+
+        overlaid_rows.append(merged)
+
+    return overlaid_rows
+
 def health_payload() -> Dict[str, Any]:
     from src.rag.retriever import get_semantic_status
 
@@ -1072,6 +1171,7 @@ def status_payload(
     application_overlay_by_key = _load_latest_application_action_overlay(
         DEFAULT_APPLICATION_ACTIONS_PATH
     )
+    job_metadata_by_key = _load_job_metadata_overlay_from_corpus(job_corpus)
 
     top_rows = sorted(
         queue_rows,
@@ -1100,6 +1200,17 @@ def status_payload(
             if key and key in latest_by_key:
                 overlay_row.update(latest_by_key[key])
                 break
+        
+        for key in _application_row_key_candidates(overlay_row):
+            metadata = job_metadata_by_key.get(key)
+            if not metadata:
+                continue
+
+            if metadata.get("posted_at"):
+                overlay_row["posted_at"] = metadata["posted_at"]
+            if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
+                overlay_row["job_url"] = metadata["job_url"]
+            break
         
         for field in APPLICATION_ACTION_OVERLAY_FIELDS:
             if field == "application_label":
@@ -1147,6 +1258,7 @@ def browse_payload(
     rows = ja._build_job_index(output_dir, decisions_path)
     args = _make_args(**filters)
     selected = ja._select_browse_rows(rows, args)
+    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
     return {
         "filters": filters,
@@ -1164,6 +1276,7 @@ def review_payload(
     rows = ja._build_job_index(output_dir, decisions_path)
     args = _make_args(**filters)
     selected = ja._select_review_rows(rows, args)
+    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
     return {
         "filters": filters,
@@ -1181,6 +1294,7 @@ def workflow_payload(
     ja = _job_app()
     rows = ja._build_job_index(output_dir, decisions_path)
     selected = ja._workflow_view_rows(rows, view)[:limit]
+    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
     return {
         "view": view,
@@ -1199,6 +1313,7 @@ def planner_payload(
     view = ja._infer_planner_view(request)
     rows = ja._build_job_index(output_dir, decisions_path)
     selected = ja._workflow_view_rows(rows, view)[:limit]
+    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
     return {
         "request": request,
@@ -1255,12 +1370,14 @@ def planning_artifact_payload(
 
 def decisions_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = ja._load_csv_rows(decisions_path)
     args = _make_args(**filters)
     selected = ja._select_decision_rows(rows, args)
+    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
     return {
         "filters": filters,

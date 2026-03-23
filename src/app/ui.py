@@ -20,19 +20,34 @@ def executive_dashboard() -> str:
 <body>
   {render_top_shell("/")}
   <div class="page">
-    <header class="page-header">
-      <div>
-        <h1>Executive Queue</h1>
-        <p class="subtext">High-signal operator dashboard for direct apply and review decisions.</p>
-      </div>
-      <div class="header-actions">
-        <a class="ghost-link-btn" href="/planning">Planning Detail</a>
-        <a class="ghost-link-btn" href="/decisions-ui">Decisions</a>
-        <a class="ghost-link-btn" href="/intelligence">Intelligence</a>
-        <button class="ghost-btn" id="refreshStatusBtn">Refresh Status</button>
-        <button id="runPipelineBtn">Run Live Pipeline</button>
-      </div>
-    </header>
+        <header class="page-header">
+          <div class="page-header-main">
+            <div class="executive-title-row">
+              <h1>Executive Queue</h1>
+
+              <div class="executive-view-mode-row">
+                <span class="executive-view-mode-label">View Mode</span>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Executive view mode">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="executiveViewMode" value="detailed" checked />
+                    <span>Detailed</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="executiveViewMode" value="simple" />
+                    <span>Simple</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <p class="subtext">High-signal operator dashboard for direct apply and review decisions.</p>
+          </div>
+
+          <div class="header-actions">
+            <button class="ghost-btn" id="refreshStatusBtn" type="button">Refresh Status</button>
+            <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
+          </div>
+        </header>
 
     <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
 
@@ -119,11 +134,12 @@ def executive_dashboard() -> str:
       <div class="table-wrap">
         <table id="queueTable">
           <thead>
-            <tr>
+            <tr id="queueTableHeaderRow">
               <th>Queue Rank</th>
               <th>Action</th>
               <th>Company</th>
               <th>Title</th>
+              <th>Posted At</th>
               <th>Winner Resume</th>
               <th>Winner Score</th>
               <th>Runner-Up Resume</th>
@@ -216,6 +232,18 @@ def executive_dashboard() -> str:
             <label for="pipelineLogPathInput">Log path</label>
             <input type="text" id="pipelineLogPathInput" value="outputs/application_planning/live_pipeline_run.log" />
             <div class="control-help field-help-wide">Live pipeline log file written during the run.</div>
+          </div>
+        </div>
+
+        <div class="pipeline-path-preview-grid compact-preview-grid">
+          <div class="pipeline-preview-card">
+            <div class="pipeline-preview-label">Derived log path</div>
+            <div class="pipeline-preview-path" id="pipelineLogPathPreview">outputs/application_planning/live_pipeline_run.log</div>
+          </div>
+
+          <div class="pipeline-preview-card">
+            <div class="pipeline-preview-label">Derived status path</div>
+            <div class="pipeline-preview-path" id="pipelineStatusPathPreview">outputs/application_planning/live_pipeline_status.json</div>
           </div>
         </div>
 

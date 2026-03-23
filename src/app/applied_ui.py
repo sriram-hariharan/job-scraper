@@ -68,7 +68,7 @@ def applied_jobs_dashboard() -> str:
 
     <section class="card table-card">
       <div class="section-header">
-        <h2>Applied Jobs</h2>
+        <h2 id="applicationTableTitle">Applied Jobs</h2>
         <div class="subtext" id="applicationTableMeta">Loading...</div>
       </div>
 
@@ -76,7 +76,7 @@ def applied_jobs_dashboard() -> str:
         <table id="applicationTable">
           <thead>
             <tr>
-              <th>Timestamp</th>
+              <th>Date / Time</th>
               <th>Company</th>
               <th>Title</th>
               <th>Status</th>

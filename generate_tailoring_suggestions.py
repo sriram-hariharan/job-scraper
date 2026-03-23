@@ -560,10 +560,37 @@ def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str
 
     return reuse_rows
 
-def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Dict[str, Any]]:
-    rows = _rewrite_source_rows(packet)
+def _build_rewrite_candidates(
+    packet: Dict[str, Any],
+    tailoring_plan: Optional[Dict[str, Any]] = None,
+    limit: int = 4,
+) -> List[Dict[str, Any]]:
+    tailoring_plan = tailoring_plan or {}
     candidates: List[Dict[str, Any]] = []
-    used_sources = set()
+    used_keys = set()
+
+    primary_units = tailoring_plan.get("primary_anchor_units", []) or []
+    secondary_units = tailoring_plan.get("secondary_support_units", []) or []
+
+    for unit in primary_units:
+        key = _plan_unit_key(unit)
+        if key in used_keys:
+            continue
+        used_keys.add(key)
+        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=True))
+        if len(candidates) >= limit:
+            return candidates
+
+    for unit in secondary_units:
+        key = _plan_unit_key(unit)
+        if key in used_keys:
+            continue
+        used_keys.add(key)
+        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=False))
+        if len(candidates) >= limit:
+            return candidates
+
+    rows = _rewrite_source_rows(packet)
 
     for row in rows:
         supported_terms = _row_supported_terms(row)
@@ -579,7 +606,7 @@ def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Di
             row.get("clause_text") or row.get("text", ""),
         )
 
-        if source_key in used_sources:
+        if source_key in used_keys:
             continue
 
         is_clause = _is_clause_unit(row)
@@ -616,15 +643,50 @@ def _build_rewrite_candidates(packet: Dict[str, Any], limit: int = 4) -> List[Di
                 "parent_bullet": row.get("parent_bullet", ""),
             }
         )
-        used_sources.add(source_key)
+        used_keys.add(source_key)
 
         if len(candidates) >= limit:
             break
 
     return candidates
 
-def _build_evidence_layers(packet: Dict[str, Any], limit_per_group: int = 4) -> Dict[str, List[Dict[str, Any]]]:
+def _build_evidence_layers(
+    packet: Dict[str, Any],
+    tailoring_plan: Optional[Dict[str, Any]] = None,
+    limit_per_group: int = 4,
+) -> Dict[str, List[Dict[str, Any]]]:
+    tailoring_plan = tailoring_plan or {}
     rows = _rewrite_source_rows(packet)
+
+    primary_units = tailoring_plan.get("primary_anchor_units", []) or []
+    secondary_units = tailoring_plan.get("secondary_support_units", []) or []
+
+    if primary_units or secondary_units:
+        anchors = [
+            _find_rewrite_row_for_plan_unit(rows, unit)
+            for unit in primary_units[:limit_per_group]
+        ]
+        supports = [
+            _find_rewrite_row_for_plan_unit(rows, unit)
+            for unit in secondary_units[:limit_per_group]
+        ]
+
+        used_keys = {
+            _plan_row_key(row)
+            for row in anchors + supports
+        }
+
+        context = [
+            row for row in rows
+            if row.get("evidence_type") in {"same_source_context", "adjacent_context"}
+            and _plan_row_key(row) not in used_keys
+        ][:limit_per_group]
+
+        return {
+            "anchors": anchors,
+            "supports": supports,
+            "context": context,
+        }
 
     anchors = [row for row in rows if row.get("evidence_type") == "direct_overlap"][:limit_per_group]
     supports = [row for row in rows if row.get("evidence_type") == "semantic_similarity"][:limit_per_group]
@@ -637,6 +699,86 @@ def _build_evidence_layers(packet: Dict[str, Any], limit_per_group: int = 4) -> 
         "anchors": anchors,
         "supports": supports,
         "context": context,
+    }
+
+def _display_row_source(row: Dict[str, Any]) -> str:
+    source = str(row.get("source", "") or "").strip()
+    if source:
+        return source
+    return _source_label(row)
+
+
+def _plan_unit_key(unit: Dict[str, Any]) -> tuple:
+    return (
+        str(unit.get("section", "") or "").strip(),
+        str(unit.get("source", "") or "").strip(),
+        str(unit.get("evidence_type", "") or "").strip(),
+        str(unit.get("evidence_unit", "") or "").strip(),
+    )
+
+
+def _find_rewrite_row_for_plan_unit(
+    rows: List[Dict[str, Any]],
+    unit: Dict[str, Any],
+) -> Dict[str, Any]:
+    target_key = _plan_unit_key(unit)
+
+    for row in rows:
+        if _plan_row_key(row) == target_key:
+            return row
+
+    return {
+        "section": unit.get("section", ""),
+        "source": unit.get("source", ""),
+        "evidence_type": unit.get("evidence_type", ""),
+        "overlaps": list(unit.get("supported_terms", []) or []),
+        "context_terms": [],
+        "clause_text": unit.get("evidence_unit", ""),
+        "parent_bullet": unit.get("parent_bullet", ""),
+        "unit_kind": "clause_unit",
+    }
+
+
+def _rewrite_candidate_from_plan_unit(
+    unit: Dict[str, Any],
+    *,
+    primary: bool,
+) -> Dict[str, Any]:
+    supported_terms = list(unit.get("supported_terms", []) or [])
+    source = str(unit.get("source", "") or "").strip()
+    evidence_unit = str(unit.get("evidence_unit", "") or "").strip()
+    parent_bullet = str(unit.get("parent_bullet", "") or "").strip()
+
+    if primary:
+        if supported_terms:
+            action = (
+                f"Lead with {', '.join(supported_terms[:4])} in this opening clause, "
+                "then keep the remaining parent-bullet context only if it preserves the same story truthfully."
+            )
+        else:
+            action = (
+                "Lead with this opening clause, then keep the remaining parent-bullet context only if it preserves the same story truthfully."
+            )
+    else:
+        if supported_terms:
+            action = (
+                f"Support with {', '.join(supported_terms[:4])} only after the primary anchors, "
+                "and keep it as reinforcing evidence rather than the main ownership claim."
+            )
+        else:
+            action = (
+                "Use this only as secondary supporting evidence after the primary anchors, "
+                "not as the main ownership claim."
+            )
+
+    return {
+        "source": source,
+        "section": unit.get("section", ""),
+        "evidence_type": unit.get("evidence_type", ""),
+        "supported_terms": supported_terms[:6],
+        "action": action,
+        "bullet_excerpt": _short_bullet(evidence_unit, 220),
+        "parent_bullet": parent_bullet,
     }
 
 def _plan_unit_row(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -742,6 +884,69 @@ def _select_plan_rows_for_facet(
 
     return selected
 
+def _plan_unit_match_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "overlaps": list(row.get("supported_terms", []) or []),
+        "context_terms": [],
+        "clause_text": row.get("evidence_unit", ""),
+        "parent_bullet": row.get("parent_bullet", ""),
+    }
+
+def _plan_unit_brief_label(unit: Dict[str, Any], max_evidence_len: int = 120) -> str:
+    source = str(unit.get("source", "") or "").strip()
+    supported_terms = list(unit.get("supported_terms", []) or [])
+    evidence_unit = _short_bullet(str(unit.get("evidence_unit", "") or "").strip(), max_evidence_len)
+
+    parts: List[str] = []
+    if source:
+        parts.append(source)
+    if supported_terms:
+        parts.append(f"supports={', '.join(_truncate_list(supported_terms, 4))}")
+    if evidence_unit:
+        parts.append(f"evidence={evidence_unit}")
+
+    return " | ".join(parts)
+
+
+def _plan_unit_brief_labels(
+    units: List[Dict[str, Any]],
+    *,
+    limit: int,
+    max_evidence_len: int = 120,
+) -> List[str]:
+    labels: List[str] = []
+    seen = set()
+
+    for unit in units:
+        label = _plan_unit_brief_label(unit, max_evidence_len=max_evidence_len)
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        labels.append(label)
+        if len(labels) >= limit:
+            break
+
+    return labels
+
+def _covered_facet_names_for_plan_units(
+    plan_units: List[Dict[str, Any]],
+    facet_rows: List[Dict[str, Any]],
+) -> List[str]:
+    covered: List[str] = []
+
+    for facet_row in facet_rows:
+        facet_name = _facet_display_name(facet_row.get("facet", ""))
+        if not facet_name:
+            continue
+
+        if any(
+            _row_matches_facet(_plan_unit_match_row(unit), facet_row)
+            for unit in plan_units
+        ):
+            covered.append(facet_name)
+
+    return _unique_preserve_order(covered)
+
 def _build_narrative_angle(packet: Dict[str, Any]) -> str:
     direct_facets = _top_direct_facets(packet, limit=2)
     adjacent_facets = _top_adjacent_facets(packet, limit=2)
@@ -807,8 +1012,6 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
     used_keys = set()
     primary_anchor_units: List[Dict[str, Any]] = []
     secondary_support_units: List[Dict[str, Any]] = []
-    primary_facet_coverage: List[str] = []
-    secondary_facet_coverage: List[str] = []
 
     # Step 1: guarantee one primary anchor per top direct facet where possible
     for facet_row in direct_facets[:2]:
@@ -821,7 +1024,6 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         )
         if selected:
             primary_anchor_units.extend(selected)
-            primary_facet_coverage.append(_facet_display_name(facet_row.get("facet", "")))
 
     # Step 2: backfill remaining primary anchors from strongest direct-overlap rows
     for row in direct_anchor_rows:
@@ -834,6 +1036,11 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
 
         used_keys.add(key)
         primary_anchor_units.append(_plan_unit_row(row))
+
+    primary_facet_coverage = _covered_facet_names_for_plan_units(
+        primary_anchor_units,
+        direct_facets,
+    )
 
     # Step 3: if any direct facet still lacks primary coverage, force secondary coverage for it
     covered_direct_facets = set(primary_facet_coverage)
@@ -851,7 +1058,6 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         )
         if selected:
             secondary_support_units.extend(selected)
-            secondary_facet_coverage.append(facet_name)
 
     # Step 4: add one adjacent-support unit for the strongest adjacent facets
     for facet_row in adjacent_facets[:2]:
@@ -864,7 +1070,6 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         )
         if selected:
             secondary_support_units.extend(selected)
-            secondary_facet_coverage.append(_facet_display_name(facet_row.get("facet", "")))
 
     # Step 5: backfill remaining secondary support slots
     for row in secondary_only_rows:
@@ -878,11 +1083,24 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         used_keys.add(key)
         secondary_support_units.append(_plan_unit_row(row))
 
+    primary_facet_coverage = _covered_facet_names_for_plan_units(
+        primary_anchor_units,
+        direct_facets,
+    )
+    secondary_facet_coverage = [
+        name
+        for name in _covered_facet_names_for_plan_units(
+            secondary_support_units,
+            direct_facets + adjacent_facets,
+        )
+        if name not in set(primary_facet_coverage)
+    ]
+
     return {
         "primary_anchor_units": primary_anchor_units,
         "secondary_support_units": secondary_support_units,
-        "primary_facet_coverage": _unique_preserve_order(primary_facet_coverage),
-        "secondary_facet_coverage": _unique_preserve_order(secondary_facet_coverage),
+        "primary_facet_coverage": primary_facet_coverage,
+        "secondary_facet_coverage": secondary_facet_coverage,
     }
 
 
@@ -1266,20 +1484,24 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
 
     primary_anchor_units = tailoring_plan.get("primary_anchor_units", []) or []
     if primary_anchor_units:
-        anchor_sources = _unique_preserve_order(
-            [row.get("source", "") for row in primary_anchor_units if row.get("source")]
+        anchor_labels = _plan_unit_brief_labels(
+            primary_anchor_units,
+            limit=3,
+            max_evidence_len=110,
         )
         actions.append(
-            f"Use these evidence units as the primary anchors: {', '.join(_truncate_list(anchor_sources, 4))}."
+            f"Use these evidence units as the primary anchors: {'; '.join(anchor_labels)}."
         )
 
     secondary_support_units = tailoring_plan.get("secondary_support_units", []) or []
     if secondary_support_units:
-        support_sources = _unique_preserve_order(
-            [row.get("source", "") for row in secondary_support_units if row.get("source")]
+        support_labels = _plan_unit_brief_labels(
+            secondary_support_units,
+            limit=3,
+            max_evidence_len=110,
         )
         actions.append(
-            f"Use these secondary support units only to reinforce the main anchor story: {', '.join(_truncate_list(support_sources, 4))}."
+            f"Use these secondary support units only to reinforce the main anchor story: {'; '.join(support_labels)}."
         )
 
     contextual_terms = tailoring_plan.get("contextual_terms_to_frame_carefully", []) or []
@@ -1318,8 +1540,8 @@ def _build_llm_prompt(
     summary = packet.get("summary", {})
     tailoring_plan = tailoring_plan or _build_tailoring_plan(packet)
 
-    evidence_layers = _build_evidence_layers(packet)
-    rewrite_candidates = _build_rewrite_candidates(packet)
+    evidence_layers = _build_evidence_layers(packet, tailoring_plan=tailoring_plan)
+    rewrite_candidates = _build_rewrite_candidates(packet, tailoring_plan=tailoring_plan)
 
     anchor_rows = evidence_layers.get("anchors", [])[:4]
     semantic_support_rows = evidence_layers.get("supports", [])[:4]
@@ -1367,7 +1589,7 @@ def _build_llm_prompt(
     if anchor_rows:
         for idx, row in enumerate(anchor_rows, 1):
             lines.append(
-                f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+                f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | "
                 f"supports={row.get('overlaps', [])}"
             )
             lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 320)}")
@@ -1377,11 +1599,11 @@ def _build_llm_prompt(
         lines.append("- none")
     lines.append("")
 
-    lines.append("Semantic supporting evidence units:")
+    lines.append("Secondary supporting evidence units:")
     if semantic_support_rows:
         for idx, row in enumerate(semantic_support_rows, 1):
             lines.append(
-                f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+                f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | "
                 f"type={row.get('evidence_type', '')}"
             )
             if row.get("semantic_score") is not None:
@@ -1398,7 +1620,7 @@ def _build_llm_prompt(
     if context_rows:
         for idx, row in enumerate(context_rows, 1):
             lines.append(
-                f"{idx}. [{row.get('section', '')}] {_source_label(row)} | "
+                f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | "
                 f"type={row.get('evidence_type', '')} | supports={row.get('overlaps', [])}"
             )
 
@@ -1487,16 +1709,16 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("Primary anchor evidence units:")
     for idx, row in enumerate(anchors, 1):
         lines.append(
-            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | supports={row.get('overlaps', [])}"
+            f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | supports={row.get('overlaps', [])}"
         )
         lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
         if row.get("parent_bullet"):
             lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
     lines.append("")
-    lines.append("Semantic supporting evidence units:")
+    lines.append("Secondary supporting evidence units:")
     for idx, row in enumerate(supports, 1):
         lines.append(
-            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | type={row.get('evidence_type', '')}"
+            f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | type={row.get('evidence_type', '')}"
         )
         if row.get("semantic_score") is not None:
             lines.append(f"   semantic_score={row.get('semantic_score')}")
@@ -1509,8 +1731,7 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("Same-role context evidence units:")
     for idx, row in enumerate(context, 1):
         lines.append(
-            f"{idx}. [{row.get('section', '')}] {_source_label(row)} | type={row.get('evidence_type', '')}"
-        )
+            f"{idx}. [{row.get('section', '')}] {_display_row_source(row)} | type={row.get('evidence_type', '')}"           )
         lines.append(f"   Evidence unit: {_short_bullet(row.get('text', ''), 300)}")
         if row.get("parent_bullet"):
             lines.append(f"   Parent bullet: {_short_bullet(row.get('parent_bullet', ''), 300)}")
@@ -2034,9 +2255,9 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     keep_emphasize = _build_keep_emphasize(packet)
     do_not_claim = _build_do_not_claim(packet)
     bullet_reuse = _build_bullet_reuse(packet)
-    rewrite_candidates = _build_rewrite_candidates(packet)
-    evidence_layers = _build_evidence_layers(packet)
     tailoring_plan = _build_tailoring_plan(packet)
+    rewrite_candidates = _build_rewrite_candidates(packet, tailoring_plan=tailoring_plan)
+    evidence_layers = _build_evidence_layers(packet, tailoring_plan=tailoring_plan)
     tailoring_actions = _build_tailoring_actions(packet)
     llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
     live_rewrite_prompt = _build_live_rewrite_prompt(

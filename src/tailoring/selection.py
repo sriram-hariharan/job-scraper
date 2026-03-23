@@ -1,0 +1,1395 @@
+from typing import List, Dict, Any, Optional
+
+from src.config.consts import REWRITE_DIRECTION_PREFIXES
+
+from src.tailoring.packet_support import (
+    _rewrite_source_rows,
+    _source_label,
+    _row_supported_terms,
+    _is_clause_unit,
+    _row_evidence_excerpt,
+    _short_bullet,
+    _truncate_list,
+    _unique_preserve_order,
+    _direction_mentions_any,
+)
+
+from src.tailoring.planner import (
+    _plan_unit_key,
+    _find_rewrite_row_for_plan_unit,
+    _plan_row_key,
+    _plan_unit_to_direction,
+    _planner_seed_rewrite_directions,
+    _fallback_rewrite_directions_from_payload,
+)
+
+def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str, Any]]:
+    rows = _rewrite_source_rows(packet)
+    selected = rows[:limit]
+
+    reuse_rows = []
+    for row in selected:
+        source = _source_label(row)
+        overlaps = _row_supported_terms(row)
+        evidence_type = row.get("evidence_type", "direct_overlap")
+        is_clause = _is_clause_unit(row)
+
+        if evidence_type == "direct_overlap":
+            if is_clause:
+                reuse_note = (
+                    "Use this clause as a primary anchor and only keep the rest of the parent bullet "
+                    f"if it strengthens the same supported story truthfully: {', '.join(overlaps[:6])}"
+                )
+            else:
+                reuse_note = (
+                    "Use this as a primary anchor bullet and move the matched JD terms "
+                    f"earlier in the sentence: {', '.join(overlaps[:6])}"
+                )
+        elif evidence_type == "semantic_similarity":
+            reuse_note = (
+                "Use this as supporting evidence only. It is meaning-aligned with the JD, "
+                "but it is not the strongest exact-term anchor."
+            )
+        elif evidence_type == "same_source_context":
+            reuse_note = (
+                "Use this as supporting context from the same role/project so the main anchor "
+                "evidence feels more credible and less isolated."
+            )
+        else:
+            reuse_note = (
+                "Use this as nearby supporting context if it strengthens the same story truthfully."
+            )
+
+        reuse_rows.append(
+            {
+                "section": row.get("section", ""),
+                "source": source,
+                "overlaps": overlaps,
+                "evidence_type": evidence_type,
+                "bullet": row.get("clause_text") or row.get("text", ""),
+                "parent_bullet": row.get("parent_bullet", ""),
+                "reuse_note": reuse_note,
+            }
+        )
+
+    return reuse_rows
+
+def _build_rewrite_candidates(
+    packet: Dict[str, Any],
+    tailoring_plan: Optional[Dict[str, Any]] = None,
+    limit: int = 4,
+) -> List[Dict[str, Any]]:
+    tailoring_plan = tailoring_plan or {}
+    candidates: List[Dict[str, Any]] = []
+    used_keys = set()
+
+    primary_units = tailoring_plan.get("primary_anchor_units", []) or []
+    secondary_units = tailoring_plan.get("secondary_support_units", []) or []
+
+    for unit in primary_units:
+        key = _plan_unit_key(unit)
+        if key in used_keys:
+            continue
+        used_keys.add(key)
+        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=True))
+        if len(candidates) >= limit:
+            return candidates
+
+    for unit in secondary_units:
+        key = _plan_unit_key(unit)
+        if key in used_keys:
+            continue
+        used_keys.add(key)
+        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=False))
+        if len(candidates) >= limit:
+            return candidates
+
+    rows = _rewrite_source_rows(packet)
+
+    for row in rows:
+        supported_terms = _row_supported_terms(row)
+        if not supported_terms:
+            continue
+
+        source = _source_label(row)
+        evidence_type = row.get("evidence_type", "direct_overlap")
+        source_key = (
+            row.get("section", ""),
+            source,
+            evidence_type,
+            row.get("clause_text") or row.get("text", ""),
+        )
+
+        if source_key in used_keys:
+            continue
+
+        is_clause = _is_clause_unit(row)
+
+        if evidence_type == "direct_overlap":
+            if is_clause:
+                action = (
+                    f"Lead with {', '.join(supported_terms[:4])} in this opening clause, "
+                    "then keep the remaining parent-bullet context only if it preserves a clean story."
+                )
+            else:
+                action = (
+                    f"Lead with {', '.join(supported_terms[:4])} in the opening clause of this bullet, "
+                    "then keep the outcome/impact at the end."
+                )
+        elif evidence_type == "same_source_context":
+            action = (
+                "Use this as a second supporting line under the same role so the stronger anchor evidence "
+                "looks backed by related work."
+            )
+        else:
+            action = (
+                "Use this as adjacent support only if it keeps the same story truthful and consistent."
+            )
+
+        candidates.append(
+            {
+                "source": source,
+                "section": row.get("section", ""),
+                "evidence_type": evidence_type,
+                "supported_terms": supported_terms[:6],
+                "action": action,
+                "bullet_excerpt": _row_evidence_excerpt(row),
+                "parent_bullet": row.get("parent_bullet", ""),
+            }
+        )
+        used_keys.add(source_key)
+
+        if len(candidates) >= limit:
+            break
+
+    return candidates
+
+def _build_evidence_layers(
+    packet: Dict[str, Any],
+    tailoring_plan: Optional[Dict[str, Any]] = None,
+    limit_per_group: int = 4,
+) -> Dict[str, List[Dict[str, Any]]]:
+    tailoring_plan = tailoring_plan or {}
+    rows = _rewrite_source_rows(packet)
+
+    primary_units = tailoring_plan.get("primary_anchor_units", []) or []
+    secondary_units = tailoring_plan.get("secondary_support_units", []) or []
+
+    if primary_units or secondary_units:
+        anchors = [
+            _find_rewrite_row_for_plan_unit(rows, unit)
+            for unit in primary_units[:limit_per_group]
+        ]
+        supports = [
+            _find_rewrite_row_for_plan_unit(rows, unit)
+            for unit in secondary_units[:limit_per_group]
+        ]
+
+        used_keys = {
+            _plan_row_key(row)
+            for row in anchors + supports
+        }
+
+        context = [
+            row for row in rows
+            if row.get("evidence_type") in {"same_source_context", "adjacent_context"}
+            and _plan_row_key(row) not in used_keys
+        ][:limit_per_group]
+
+        return {
+            "anchors": anchors,
+            "supports": supports,
+            "context": context,
+        }
+
+    anchors = [row for row in rows if row.get("evidence_type") == "direct_overlap"][:limit_per_group]
+    supports = [row for row in rows if row.get("evidence_type") == "semantic_similarity"][:limit_per_group]
+    context = [
+        row for row in rows
+        if row.get("evidence_type") in {"same_source_context", "adjacent_context"}
+    ][:limit_per_group]
+
+    return {
+        "anchors": anchors,
+        "supports": supports,
+        "context": context,
+    }
+
+def _rewrite_candidate_from_plan_unit(
+    unit: Dict[str, Any],
+    *,
+    primary: bool,
+) -> Dict[str, Any]:
+    supported_terms = list(unit.get("supported_terms", []) or [])
+    source = str(unit.get("source", "") or "").strip()
+    evidence_unit = str(unit.get("evidence_unit", "") or "").strip()
+    parent_bullet = str(unit.get("parent_bullet", "") or "").strip()
+
+    if primary:
+        if supported_terms:
+            action = (
+                f"Lead with {', '.join(supported_terms[:4])} in this opening clause, "
+                "then keep the remaining parent-bullet context only if it preserves the same story truthfully."
+            )
+        else:
+            action = (
+                "Lead with this opening clause, then keep the remaining parent-bullet context only if it preserves the same story truthfully."
+            )
+    else:
+        if supported_terms:
+            action = (
+                f"Support with {', '.join(supported_terms[:4])} only after the primary anchors, "
+                "and keep it as reinforcing evidence rather than the main ownership claim."
+            )
+        else:
+            action = (
+                "Use this only as secondary supporting evidence after the primary anchors, "
+                "not as the main ownership claim."
+            )
+
+    return {
+        "source": source,
+        "section": unit.get("section", ""),
+        "evidence_type": unit.get("evidence_type", ""),
+        "supported_terms": supported_terms[:6],
+        "action": action,
+        "bullet_excerpt": _short_bullet(evidence_unit, 220),
+        "parent_bullet": parent_bullet,
+    }
+
+def _direction_plan_unit_match_score(direction: str, row: Dict[str, Any]) -> int:
+    text = str(direction or "").strip()
+    if not text:
+        return 0
+
+    score = 0
+
+    source = str(row.get("source", "") or "").strip()
+    if source and _direction_mentions_any(text, [source]):
+        score += 3
+
+    supported_terms = [str(term).strip() for term in (row.get("supported_terms", []) or []) if str(term).strip()]
+    matched_terms = [term for term in supported_terms if _direction_mentions_any(text, [term])]
+    score += len(matched_terms)
+
+    evidence_unit = str(row.get("evidence_unit", "") or "").strip()
+    evidence_markers: List[str] = []
+    if evidence_unit:
+        evidence_markers.append(evidence_unit[:80])
+        evidence_markers.append(_short_bullet(evidence_unit, 140))
+
+    if evidence_markers and _direction_mentions_any(text, evidence_markers):
+        score += 4
+
+    return score
+
+
+def _best_matching_plan_unit(
+    direction: str,
+    plan_units: List[Dict[str, Any]],
+    min_score: int = 4,
+) -> Optional[Dict[str, Any]]:
+    best_row: Optional[Dict[str, Any]] = None
+    best_score = 0
+
+    for row in plan_units:
+        score = _direction_plan_unit_match_score(direction, row)
+        if score > best_score:
+            best_score = score
+            best_row = row
+
+    if best_score < min_score:
+        return None
+
+    return best_row
+
+def _direction_matches_plan_unit(direction: str, row: Dict[str, Any]) -> bool:
+    return _direction_plan_unit_match_score(direction, row) >= 4
+
+
+def _rewrite_directions_cover_plan(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> bool:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+    if not actionable:
+        return False
+
+    plan = payload.get("tailoring_plan", {}) or {}
+
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    lead_directions = [item for item in actionable if item.startswith("Lead with")]
+    support_directions = [item for item in actionable if item.startswith("Support with")]
+
+    for row in primary_anchor_units:
+        if not any(_direction_matches_plan_unit(item, row) for item in lead_directions):
+            return False
+
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+    if secondary_support_units:
+        first_secondary = secondary_support_units[0]
+        if not any(
+            _direction_matches_plan_unit(item, first_secondary)
+            for item in support_directions
+        ):
+            return False
+
+    adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
+    adjacent_facets = plan.get("adjacent_facets", []) or []
+    if adjacent_terms or adjacent_facets:
+        targets = adjacent_terms if adjacent_terms else adjacent_facets
+        if not any(
+            item.startswith("Do not add") and _direction_mentions_any(item, targets)
+            for item in actionable
+        ):
+            return False
+
+    true_gap_terms = plan.get("true_unsupported_terms", []) or []
+    true_gap_facets = plan.get("true_gap_facets", []) or []
+    if true_gap_terms or true_gap_facets:
+        targets = true_gap_terms if true_gap_terms else true_gap_facets
+        if not any(
+            item.startswith("Keep gap explicit") and _direction_mentions_any(item, targets)
+            for item in actionable
+        ):
+            return False
+
+    return True
+
+def _normalize_direction_text(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _direction_prefix(value: str) -> str:
+    text = str(value or "").strip()
+    for prefix in REWRITE_DIRECTION_PREFIXES:
+        if text.startswith(prefix):
+            return prefix
+    return ""
+
+def _rewrite_direction_verifier_report(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> Dict[str, Any]:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+
+    blocked_direct_claim_terms = _unique_preserve_order(
+        list(plan.get("contextual_terms_to_frame_carefully", []) or [])
+        + list(plan.get("adjacent_terms_to_keep_explicit", []) or [])
+        + list(plan.get("true_unsupported_terms", []) or [])
+    )
+
+    seen_text = set()
+    duplicate_directions: List[str] = []
+    unmapped_lead_support: List[str] = []
+    blocked_term_directions: List[str] = []
+    duplicate_primary_anchor_directions: List[str] = []
+    duplicate_secondary_support_directions: List[str] = []
+
+    covered_primary_keys = set()
+    covered_secondary_keys = set()
+
+    for item in actionable:
+        normalized = _normalize_direction_text(item)
+        if normalized in seen_text:
+            duplicate_directions.append(item)
+            continue
+        seen_text.add(normalized)
+
+        prefix = _direction_prefix(item)
+
+        if prefix == "Lead with":
+            matched_primary_unit = _best_matching_plan_unit(item, primary_anchor_units)
+            if not matched_primary_unit:
+                unmapped_lead_support.append(item)
+                continue
+
+            if blocked_direct_claim_terms and _direction_mentions_any(item, blocked_direct_claim_terms):
+                blocked_term_directions.append(item)
+
+            matched_key = _plan_unit_key(matched_primary_unit)
+            if matched_key in covered_primary_keys:
+                duplicate_primary_anchor_directions.append(item)
+            else:
+                covered_primary_keys.add(matched_key)
+
+        elif prefix == "Support with":
+            support_pool = secondary_support_units or (primary_anchor_units + secondary_support_units)
+            matched_support_unit = _best_matching_plan_unit(item, support_pool)
+            if not matched_support_unit:
+                unmapped_lead_support.append(item)
+                continue
+
+            if blocked_direct_claim_terms and _direction_mentions_any(item, blocked_direct_claim_terms):
+                blocked_term_directions.append(item)
+
+            matched_key = _plan_unit_key(matched_support_unit)
+            if matched_key in covered_secondary_keys:
+                duplicate_secondary_support_directions.append(item)
+            else:
+                covered_secondary_keys.add(matched_key)
+
+    issues = _unique_preserve_order(
+        (["duplicate_directions"] if duplicate_directions else [])
+        + (["unmapped_lead_support"] if unmapped_lead_support else [])
+        + (["blocked_term_directions"] if blocked_term_directions else [])
+        + (["duplicate_primary_anchor_directions"] if duplicate_primary_anchor_directions else [])
+        + (["duplicate_secondary_support_directions"] if duplicate_secondary_support_directions else [])
+    )
+
+    return {
+        "ok": not issues,
+        "issues": issues,
+        "duplicate_directions": duplicate_directions,
+        "unmapped_lead_support": unmapped_lead_support,
+        "blocked_term_directions": blocked_term_directions,
+        "duplicate_primary_anchor_directions": duplicate_primary_anchor_directions,
+        "duplicate_secondary_support_directions": duplicate_secondary_support_directions,
+    }
+
+def _blend_live_and_planner_directions(
+    payload: Dict[str, Any],
+    llm_directions: List[str],
+    limit: int = 6,
+) -> List[str]:
+    planner_directions = _planner_seed_rewrite_directions(payload, limit=limit)
+    blended = _unique_preserve_order(
+        [str(item).strip() for item in llm_directions if _is_actionable_rewrite_direction(item)]
+        + planner_directions
+    )
+    return blended[:limit]
+
+def _is_actionable_rewrite_direction(value: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    return text.startswith(REWRITE_DIRECTION_PREFIXES)
+
+def _llm_output_is_strong_enough(parsed: Dict[str, Any]) -> bool:
+    rewrite_directions = [
+        str(item).strip()
+        for item in parsed.get("rewrite_directions", []) or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+    if len(rewrite_directions) < 2:
+        return False
+
+    lead_count = sum(1 for item in rewrite_directions if item.startswith("Lead with"))
+    support_count = sum(1 for item in rewrite_directions if item.startswith("Support with"))
+    gap_count = sum(1 for item in rewrite_directions if item.startswith("Keep gap explicit"))
+
+    if (lead_count + support_count) < 1:
+        return False
+
+    if gap_count >= len(rewrite_directions):
+        return False
+
+    return True
+
+def _replace_direction_prefix(direction: str, new_prefix: str) -> str:
+    text = str(direction or "").strip()
+    old_prefix = _direction_prefix(text)
+    if not old_prefix:
+        return text
+    return f"{new_prefix}{text[len(old_prefix):]}"
+
+
+def _strip_wrapped_clause_quotes(direction: str) -> str:
+    text = str(direction or "").strip()
+
+    for prefix in ("Lead with ", "Support with "):
+        if not text.startswith(prefix):
+            continue
+
+        remainder = text[len(prefix):]
+        if not remainder:
+            return text
+
+        quote_char = ""
+        if remainder.startswith('"'):
+            quote_char = '"'
+        elif remainder.startswith("'"):
+            quote_char = "'"
+
+        if not quote_char:
+            return text
+
+        marker = f"{quote_char} from "
+        marker_index = remainder.find(marker)
+        if marker_index <= 0:
+            return text
+
+        clause_text = remainder[1:marker_index].strip()
+        suffix = remainder[marker_index + 1 :]
+        return f"{prefix}{clause_text}{suffix}"
+
+    return text
+
+def _direction_list_mentions_term(directions: List[str], term: str) -> bool:
+    term = str(term or "").strip()
+    if not term:
+        return False
+    return any(_direction_mentions_any(item, [term]) for item in directions or [])
+
+
+def _canonical_adjacent_guardrail_direction(adjacent_terms: List[str]) -> str:
+    terms = [str(term).strip() for term in adjacent_terms or [] if str(term).strip()]
+    if not terms:
+        return ""
+    return (
+        f"Do not add direct ownership claims for {', '.join(_truncate_list(terms, 4))}; "
+        "use related evidence only as adjacent support."
+    )
+
+
+def _canonical_true_gap_direction(true_gap_terms: List[str]) -> str:
+    terms = [str(term).strip() for term in true_gap_terms or [] if str(term).strip()]
+    if not terms:
+        return ""
+    return f"Keep gap explicit for {', '.join(_truncate_list(terms, 4))}."
+
+
+def _drop_term_only_gap_lines(
+    directions: List[str],
+    blocked_terms: List[str],
+) -> List[str]:
+    blocked = {str(term).strip().lower() for term in blocked_terms or [] if str(term).strip()}
+    cleaned: List[str] = []
+
+    for item in directions or []:
+        text = str(item or "").strip()
+        if not text.startswith("Keep gap explicit for"):
+            cleaned.append(text)
+            continue
+
+        lowered = text.lower()
+        matched = [term for term in blocked if term in lowered]
+        if matched:
+            continue
+
+        cleaned.append(text)
+
+    return cleaned
+
+def _normalize_live_rewrite_directions(
+    payload: Dict[str, Any],
+    directions: List[str],
+    limit: int = 6,
+) -> List[str]:
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+    adjacent_terms = list(plan.get("adjacent_terms_to_keep_explicit", []) or [])
+    true_gap_terms = list(plan.get("true_unsupported_terms", []) or [])
+
+    normalized: List[str] = []
+    covered_primary_keys = set()
+
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    for item in actionable:
+        item = _strip_wrapped_clause_quotes(item)
+        prefix = _direction_prefix(item)
+
+        if prefix == "Support with":
+            primary_match = _best_matching_plan_unit(item, primary_anchor_units)
+            secondary_match = _best_matching_plan_unit(item, secondary_support_units)
+
+            primary_score = (
+                _direction_plan_unit_match_score(item, primary_match)
+                if primary_match is not None
+                else 0
+            )
+            secondary_score = (
+                _direction_plan_unit_match_score(item, secondary_match)
+                if secondary_match is not None
+                else 0
+            )
+
+            if (
+                primary_match is not None
+                and _plan_unit_key(primary_match) not in covered_primary_keys
+                and primary_score >= 4
+                and primary_score > secondary_score
+            ):
+                item = _replace_direction_prefix(item, "Lead with")
+                prefix = "Lead with"
+
+        if prefix == "Lead with":
+            matched_primary = _best_matching_plan_unit(item, primary_anchor_units)
+            if matched_primary is not None:
+                covered_primary_keys.add(_plan_unit_key(matched_primary))
+
+        normalized.append(item)
+
+    normalized = _unique_preserve_order(normalized)
+
+    # Canonicalize adjacent-support guardrail coverage.
+    if adjacent_terms:
+        adjacent_terms_covered_individually = all(
+            _direction_list_mentions_term(normalized, term)
+            for term in adjacent_terms
+        )
+        has_canonical_adjacent = any(
+            text.startswith("Do not add")
+            and _direction_mentions_any(text, adjacent_terms)
+            for text in normalized
+        )
+
+        if adjacent_terms_covered_individually and not has_canonical_adjacent:
+            normalized = _drop_term_only_gap_lines(normalized, adjacent_terms)
+            canonical_adjacent = _canonical_adjacent_guardrail_direction(adjacent_terms)
+            if canonical_adjacent:
+                normalized.append(canonical_adjacent)
+
+    # Canonicalize true-gap coverage to the full deterministic gap line.
+    if true_gap_terms:
+        has_any_true_gap_line = any(
+            text.startswith("Keep gap explicit")
+            and _direction_mentions_any(text, true_gap_terms)
+            for text in normalized
+        )
+
+        if has_any_true_gap_line:
+            normalized = _drop_term_only_gap_lines(normalized, true_gap_terms)
+            canonical_true_gap = _canonical_true_gap_direction(true_gap_terms)
+            if canonical_true_gap:
+                normalized.append(canonical_true_gap)
+
+    # Ensure at least one selected secondary support unit is preserved when the plan has one.
+    if secondary_support_units:
+        has_secondary_support = any(
+            _direction_prefix(text) == "Support with"
+            and _best_matching_plan_unit(text, secondary_support_units) is not None
+            for text in normalized
+        )
+        if not has_secondary_support:
+            fallback_support = _plan_unit_to_direction(secondary_support_units[0], primary=False)
+            if fallback_support:
+                normalized.append(fallback_support)
+
+    # Reorder to deterministic plan shape before truncation.
+    lead_lines = [text for text in normalized if _direction_prefix(text) == "Lead with"]
+    support_lines = [text for text in normalized if _direction_prefix(text) == "Support with"]
+    do_not_add_lines = [text for text in normalized if _direction_prefix(text) == "Do not add"]
+    gap_lines = [text for text in normalized if _direction_prefix(text) == "Keep gap explicit"]
+
+    ordered = lead_lines + support_lines + do_not_add_lines + gap_lines
+    return _unique_preserve_order(ordered)[:limit]
+
+def _direction_has_truncation(direction: str) -> bool:
+    return "..." in str(direction or "")
+
+
+def _direction_has_plannerese(direction: str) -> bool:
+    text = str(direction or "").lower()
+    return (" to anchor " in text) or ("without overstating ownership" in text)
+
+
+def _direction_has_generic_skill_tail(direction: str) -> bool:
+    text = str(direction or "").lower()
+    generic_markers = [
+        "to highlight",
+        "to emphasize",
+        "to further demonstrate",
+        "to demonstrate",
+        "skills.",
+        "skills,",
+        "experience.",
+        "experience,",
+        "proficiency.",
+        "proficiency,",
+    ]
+    return any(marker in text for marker in generic_markers)
+
+
+def _rewrite_direction_quality_report(
+    directions: List[str],
+) -> Dict[str, Any]:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    lead_support_lines = [
+        item for item in actionable
+        if _direction_prefix(item) in {"Lead with", "Support with"}
+    ]
+
+    truncated_lines = [item for item in actionable if _direction_has_truncation(item)]
+    plannerese_lines = [item for item in actionable if _direction_has_plannerese(item)]
+    generic_skill_tail_lines = [item for item in actionable if _direction_has_generic_skill_tail(item)]
+    full_anchor_lines = [
+        item for item in lead_support_lines
+        if not _direction_has_truncation(item)
+    ]
+
+    score = (
+        2 * len(full_anchor_lines)
+        - 2 * len(truncated_lines)
+        - 2 * len(plannerese_lines)
+        - 1 * len(generic_skill_tail_lines)
+    )
+
+    return {
+        "score": score,
+        "full_anchor_line_count": len(full_anchor_lines),
+        "truncated_line_count": len(truncated_lines),
+        "plannerese_line_count": len(plannerese_lines),
+        "generic_skill_tail_count": len(generic_skill_tail_lines),
+        "truncated_lines": truncated_lines,
+        "plannerese_lines": plannerese_lines,
+        "generic_skill_tail_lines": generic_skill_tail_lines,
+    }
+
+def _rewrite_path_audit(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> Dict[str, Any]:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+    verifier = _rewrite_direction_verifier_report(payload, actionable)
+    covers_plan = _rewrite_directions_cover_plan(payload, actionable)
+    quality = _rewrite_direction_quality_report(actionable)
+
+    return {
+        "count": len(actionable),
+        "covers_plan": covers_plan,
+        "verifier_ok": bool(verifier.get("ok")),
+        "verifier_issues": list(verifier.get("issues", []) or []),
+        "quality_score": quality.get("score", 0),
+        "quality": quality,
+        "directions": actionable[:6],
+    }
+
+def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> tuple:
+    audit = candidate.get("audit", {}) or {}
+    quality = audit.get("quality", {}) or {}
+
+    return (
+        int(audit.get("quality_score", 0)),
+        1 if candidate.get("is_polished") else 0,
+        int(quality.get("full_anchor_line_count", 0)),
+        -int(quality.get("truncated_line_count", 0)),
+        -int(quality.get("plannerese_line_count", 0)),
+        -int(quality.get("generic_skill_tail_count", 0)),
+    )
+
+def _candidate_directions_key(directions: List[str]) -> tuple:
+    return tuple(str(item).strip() for item in directions or [])
+
+
+def _candidate_pool_lineage_rows(lineage: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for item in lineage:
+        rows.append(
+            {
+                "candidate_id": item.get("candidate_id", ""),
+                "source_family": item.get("source_family", ""),
+                "is_polished": bool(item.get("is_polished")),
+                "status": item.get("status", ""),
+                "resolved_to_candidate_id": item.get("resolved_to_candidate_id", ""),
+                "resolved_to_source_family": item.get("resolved_to_source_family", ""),
+                "dedupe_reason": item.get("dedupe_reason", ""),
+                "directions": list(item.get("directions", []) or []),
+            }
+        )
+
+    return rows
+
+def _equivalent_candidate_ids_for_selected_candidate(
+    selected_candidate_id: str,
+    lineage: List[Dict[str, Any]],
+) -> List[str]:
+    if not selected_candidate_id:
+        return []
+
+    equivalent: List[str] = []
+
+    for item in lineage or []:
+        candidate_id = str(item.get("candidate_id", "") or "").strip()
+        resolved_to = str(item.get("resolved_to_candidate_id", "") or "").strip()
+        status = str(item.get("status", "") or "").strip()
+
+        if not candidate_id:
+            continue
+
+        if candidate_id == selected_candidate_id:
+            equivalent.append(candidate_id)
+            continue
+
+        if status == "deduped_same_directions" and resolved_to == selected_candidate_id:
+            equivalent.append(candidate_id)
+
+    return _unique_preserve_order(equivalent)
+
+def _build_rewrite_candidate_pool(
+    payload: Dict[str, Any],
+    planner_directions: List[str],
+    live_directions: Optional[List[str]],
+    blended_directions: Optional[List[str]],
+) -> Dict[str, Any]:
+    raw_candidates: List[Dict[str, Any]] = []
+
+    def _add_candidate(candidate_id: str, source_family: str, directions: Optional[List[str]]) -> None:
+        actionable = [
+            str(item).strip()
+            for item in directions or []
+            if _is_actionable_rewrite_direction(item)
+        ]
+        if not actionable:
+            return
+
+        raw_candidates.append(
+            {
+                "candidate_id": candidate_id,
+                "source_family": source_family,
+                "is_polished": candidate_id.endswith("_polished"),
+                "directions": actionable[:6],
+            }
+        )
+
+    if planner_directions:
+        _add_candidate("deterministic_planner", "deterministic_planner", planner_directions)
+        _add_candidate(
+            "deterministic_planner_polished",
+            "deterministic_planner",
+            _polish_selected_rewrite_directions(payload, planner_directions),
+        )
+
+    if live_directions:
+        _add_candidate("live_llm", "live_llm", live_directions)
+        _add_candidate(
+            "live_llm_polished",
+            "live_llm",
+            _polish_selected_rewrite_directions(payload, live_directions),
+        )
+
+    if blended_directions:
+        _add_candidate("live_llm_blended", "live_llm_blended", blended_directions)
+        _add_candidate(
+            "live_llm_blended_polished",
+            "live_llm_blended",
+            _polish_selected_rewrite_directions(payload, blended_directions),
+        )
+
+    unique_candidates: List[Dict[str, Any]] = []
+    lineage: List[Dict[str, Any]] = []
+    key_to_winner: Dict[tuple, Dict[str, Any]] = {}
+
+    for candidate in raw_candidates:
+        key = _candidate_directions_key(candidate.get("directions", []) or [])
+
+        if key in key_to_winner:
+            winner = key_to_winner[key]
+            lineage.append(
+                {
+                    "candidate_id": candidate.get("candidate_id", ""),
+                    "source_family": candidate.get("source_family", ""),
+                    "is_polished": bool(candidate.get("is_polished")),
+                    "status": "deduped_same_directions",
+                    "resolved_to_candidate_id": winner.get("candidate_id", ""),
+                    "resolved_to_source_family": winner.get("source_family", ""),
+                    "dedupe_reason": "same_directions_as_existing_candidate",
+                    "directions": list(candidate.get("directions", []) or []),
+                }
+            )
+            continue
+
+        audit = _rewrite_path_audit(payload, candidate["directions"])
+        winner = {
+            **candidate,
+            "audit": audit,
+        }
+        key_to_winner[key] = winner
+        unique_candidates.append(winner)
+
+        lineage.append(
+            {
+                "candidate_id": candidate.get("candidate_id", ""),
+                "source_family": candidate.get("source_family", ""),
+                "is_polished": bool(candidate.get("is_polished")),
+                "status": "kept_unique",
+                "resolved_to_candidate_id": candidate.get("candidate_id", ""),
+                "resolved_to_source_family": candidate.get("source_family", ""),
+                "dedupe_reason": "",
+                "directions": list(candidate.get("directions", []) or []),
+            }
+        )
+
+    return {
+        "unique_candidates": unique_candidates,
+        "lineage": lineage,
+    }
+
+
+def _best_rewrite_candidate_for_source_family(
+    candidates: List[Dict[str, Any]],
+    source_family: str,
+    *,
+    require_valid: bool = True,
+) -> Optional[Dict[str, Any]]:
+    filtered = [
+        candidate
+        for candidate in candidates
+        if candidate.get("source_family") == source_family
+    ]
+
+    if require_valid:
+        filtered = [
+            candidate
+            for candidate in filtered
+            if candidate.get("audit", {}).get("covers_plan")
+            and candidate.get("audit", {}).get("verifier_ok")
+        ]
+
+    if not filtered:
+        return None
+
+    filtered.sort(key=_rewrite_candidate_sort_key, reverse=True)
+    return filtered[0]
+
+def _resolved_candidate_for_source_family(
+    source_family: str,
+    candidate_pool: List[Dict[str, Any]],
+    lineage: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    direct = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        source_family,
+        require_valid=False,
+    )
+    if direct is not None:
+        return direct
+
+    resolved_ids = [
+        item.get("resolved_to_candidate_id", "")
+        for item in lineage
+        if item.get("source_family") == source_family
+        and item.get("status") == "deduped_same_directions"
+        and item.get("resolved_to_candidate_id")
+    ]
+
+    if not resolved_ids:
+        return None
+
+    for candidate in candidate_pool:
+        if candidate.get("candidate_id", "") in resolved_ids:
+            return candidate
+
+    return None
+
+def _effective_best_candidate_for_source_family(
+    source_family: str,
+    candidate_pool: List[Dict[str, Any]],
+    lineage: List[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    candidate_by_id = {
+        str(candidate.get("candidate_id", "") or "").strip(): candidate
+        for candidate in candidate_pool or []
+    }
+
+    family_rows = [
+        row for row in lineage or []
+        if row.get("source_family") == source_family
+    ]
+    if not family_rows:
+        return None
+
+    resolved_candidates: List[Dict[str, Any]] = []
+    seen_ids = set()
+
+    for row in family_rows:
+        resolved_id = str(row.get("resolved_to_candidate_id", "") or "").strip()
+        if not resolved_id or resolved_id in seen_ids:
+            continue
+        candidate = candidate_by_id.get(resolved_id)
+        if candidate is None:
+            continue
+        seen_ids.add(resolved_id)
+        resolved_candidates.append(candidate)
+
+    if not resolved_candidates:
+        return None
+
+    resolved_candidates.sort(key=_rewrite_candidate_sort_key, reverse=True)
+    return resolved_candidates[0]
+
+def _candidate_pool_audit_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for candidate in candidates:
+        audit = candidate.get("audit", {}) or {}
+        quality = audit.get("quality", {}) or {}
+
+        rows.append(
+            {
+                "candidate_id": candidate.get("candidate_id", ""),
+                "source_family": candidate.get("source_family", ""),
+                "is_polished": bool(candidate.get("is_polished")),
+                "covers_plan": bool(audit.get("covers_plan")),
+                "verifier_ok": bool(audit.get("verifier_ok")),
+                "quality_score": int(audit.get("quality_score", 0)),
+                "full_anchor_line_count": int(quality.get("full_anchor_line_count", 0)),
+                "truncated_line_count": int(quality.get("truncated_line_count", 0)),
+                "plannerese_line_count": int(quality.get("plannerese_line_count", 0)),
+                "generic_skill_tail_count": int(quality.get("generic_skill_tail_count", 0)),
+                "verifier_issues": list(audit.get("verifier_issues", []) or []),
+                "directions": list(audit.get("directions", []) or []),
+            }
+        )
+
+    return rows
+
+def _choose_best_valid_rewrite_path(
+    deterministic_candidate: Optional[Dict[str, Any]],
+    live_candidate: Optional[Dict[str, Any]],
+    blended_candidate: Optional[Dict[str, Any]],
+) -> tuple[str, str]:
+    deterministic_audit = (deterministic_candidate or {}).get("audit", {}) or {}
+    live_audit = (live_candidate or {}).get("audit", {}) or {}
+    blended_audit = (blended_candidate or {}).get("audit", {}) or {}
+
+    deterministic_valid = bool(
+        deterministic_candidate
+        and deterministic_audit.get("covers_plan")
+        and deterministic_audit.get("verifier_ok")
+    )
+
+    candidates: List[tuple[str, Dict[str, Any], Dict[str, Any]]] = []
+    for source, candidate, audit in [
+        ("live_llm", live_candidate, live_audit),
+        ("live_llm_blended", blended_candidate, blended_audit),
+    ]:
+        if candidate and audit.get("covers_plan") and audit.get("verifier_ok"):
+            candidates.append((source, candidate, audit))
+
+    if not candidates:
+        if deterministic_valid:
+            return "deterministic_planner", "no_live_candidate_passed_all_gates"
+        return "deterministic", "no_valid_candidate_passed_all_gates"
+
+    candidates.sort(
+        key=lambda item: _rewrite_candidate_sort_key(item[1]),
+        reverse=True,
+    )
+    best_source, best_candidate, best_audit = candidates[0]
+    best_score = int(best_audit.get("quality_score", 0))
+
+    if not deterministic_valid:
+        return best_source, f"{best_source}_only_valid_candidate"
+
+    deterministic_score = int(deterministic_audit.get("quality_score", 0))
+    deterministic_key = _candidate_directions_key(
+        (deterministic_candidate or {}).get("audit", {}).get("directions", []) or []
+    )
+    best_key = _candidate_directions_key(best_audit.get("directions", []) or [])
+
+    if best_key and deterministic_key and best_key == deterministic_key:
+        return "deterministic_planner", "deterministic_kept_as_identical_best_candidate"
+
+    if best_score >= deterministic_score + 2:
+        return best_source, f"{best_source}_quality_beats_deterministic"
+
+    if (
+        best_score > deterministic_score
+        and best_audit.get("quality", {}).get("truncated_line_count", 0)
+        < deterministic_audit.get("quality", {}).get("truncated_line_count", 0)
+    ):
+        return best_source, f"{best_source}_wins_on_truncation_quality"
+
+    return "deterministic_planner", "deterministic_kept_as_quality_baseline"
+
+def _select_operator_rewrite_directions(
+    payload: Dict[str, Any],
+    llm_output: Optional[Dict[str, Any]],
+) -> tuple[List[str], str, Dict[str, Any]]:
+    parsed = {}
+    parse_ok = bool(isinstance(llm_output, dict) and llm_output.get("parse_ok"))
+    if parse_ok:
+        parsed = llm_output.get("parsed", {}) or {}
+
+    planner_directions = _planner_seed_rewrite_directions(payload)
+
+    audit: Dict[str, Any] = {
+        "llm_requested": bool(llm_output is not None),
+        "llm_parse_ok": parse_ok,
+        "llm_strong_enough": False,
+        "live_llm": None,
+        "live_llm_blended": None,
+        "deterministic_planner": None,
+        "selected_source": "",
+        "selected_reason": "",
+        "fallback_reason_codes": [],
+        "candidate_pool": [],
+    }
+
+    llm_directions: List[str] = []
+    blended_directions: List[str] = []
+
+    if parsed:
+        raw_llm_directions = [
+            str(item).strip()
+            for item in parsed.get("rewrite_directions", []) or []
+            if _is_actionable_rewrite_direction(item)
+        ]
+        llm_directions = _normalize_live_rewrite_directions(
+            payload,
+            raw_llm_directions,
+            limit=6,
+        )
+        audit["llm_strong_enough"] = _llm_output_is_strong_enough(parsed)
+        audit["live_llm_raw_directions"] = raw_llm_directions[:6]
+        audit["live_llm_normalized_directions"] = llm_directions[:6]
+
+        if audit["llm_strong_enough"]:
+            blended = _blend_live_and_planner_directions(
+                payload,
+                llm_directions,
+                limit=6,
+            )
+            blended_directions = _normalize_live_rewrite_directions(
+                payload,
+                blended,
+                limit=6,
+            )
+            audit["live_llm_blended_normalized_directions"] = blended_directions[:6]
+        else:
+            audit["fallback_reason_codes"].append("live_llm_not_strong_enough")
+    else:
+        if llm_output is not None:
+            audit["fallback_reason_codes"].append("live_llm_parse_failed_or_missing")
+
+    candidate_pool_bundle = _build_rewrite_candidate_pool(
+        payload,
+        planner_directions,
+        llm_directions if audit["llm_strong_enough"] else None,
+        blended_directions if audit["llm_strong_enough"] else None,
+    )
+    candidate_pool = candidate_pool_bundle["unique_candidates"]
+    candidate_lineage = candidate_pool_bundle["lineage"]
+
+    audit["candidate_pool"] = _candidate_pool_audit_rows(candidate_pool)
+    audit["candidate_pool_lineage"] = _candidate_pool_lineage_rows(candidate_lineage)
+
+    best_deterministic = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        "deterministic_planner",
+        require_valid=True,
+    )
+    best_live = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        "live_llm",
+        require_valid=True,
+    )
+    best_blended = _best_rewrite_candidate_for_source_family(
+        candidate_pool,
+        "live_llm_blended",
+        require_valid=True,
+    )
+
+    resolved_deterministic = _resolved_candidate_for_source_family(
+        "deterministic_planner",
+        candidate_pool,
+        candidate_lineage,
+    )
+    resolved_live = _resolved_candidate_for_source_family(
+        "live_llm",
+        candidate_pool,
+        candidate_lineage,
+    )
+    resolved_blended = _resolved_candidate_for_source_family(
+        "live_llm_blended",
+        candidate_pool,
+        candidate_lineage,
+    )
+
+    if best_deterministic is not None:
+        audit["deterministic_planner"] = best_deterministic["audit"]
+    elif resolved_deterministic is not None:
+        audit["deterministic_planner"] = resolved_deterministic["audit"]
+    else:
+        audit["deterministic_planner"] = _rewrite_path_audit(payload, planner_directions)
+
+    audit["live_llm"] = resolved_live["audit"] if resolved_live is not None else None
+    audit["live_llm_blended"] = resolved_blended["audit"] if resolved_blended is not None else None
+
+    if audit["live_llm"] is not None:
+        if not audit["live_llm"]["covers_plan"]:
+            audit["fallback_reason_codes"].append("live_llm_failed_plan_coverage")
+        if not audit["live_llm"]["verifier_ok"]:
+            audit["fallback_reason_codes"].append("live_llm_failed_verifier")
+
+    if audit["live_llm_blended"] is not None:
+        if not audit["live_llm_blended"]["covers_plan"]:
+            audit["fallback_reason_codes"].append("live_llm_blended_failed_plan_coverage")
+        if not audit["live_llm_blended"]["verifier_ok"]:
+            audit["fallback_reason_codes"].append("live_llm_blended_failed_verifier")
+
+    effective_deterministic = _effective_best_candidate_for_source_family(
+        "deterministic_planner",
+        candidate_pool,
+        candidate_lineage,
+    )
+    effective_live = _effective_best_candidate_for_source_family(
+        "live_llm",
+        candidate_pool,
+        candidate_lineage,
+    )
+    effective_blended = _effective_best_candidate_for_source_family(
+        "live_llm_blended",
+        candidate_pool,
+        candidate_lineage,
+    )
+
+    chosen_source, chosen_reason = _choose_best_valid_rewrite_path(
+        effective_deterministic,
+        effective_live,
+        effective_blended,
+    )
+    audit["selected_reason"] = chosen_reason
+
+    if chosen_source == "live_llm" and best_live is not None:
+        audit["selected_source"] = "live_llm"
+        audit["selected_candidate_id"] = best_live.get("candidate_id", "")
+        audit["selected_equivalent_candidate_ids"] = _equivalent_candidate_ids_for_selected_candidate(
+            best_live.get("candidate_id", ""),
+            candidate_lineage,
+        )
+        audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        return best_live["audit"]["directions"][:6], "live_llm", audit
+
+    if chosen_source == "live_llm_blended" and best_blended is not None:
+        audit["selected_source"] = "live_llm_blended"
+        audit["selected_candidate_id"] = best_blended.get("candidate_id", "")
+        audit["selected_equivalent_candidate_ids"] = _equivalent_candidate_ids_for_selected_candidate(
+            best_blended.get("candidate_id", ""),
+            candidate_lineage,
+        )
+        audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        return best_blended["audit"]["directions"][:6], "live_llm_blended", audit
+
+    if chosen_source == "deterministic_planner" and best_deterministic is not None:
+        audit["selected_source"] = "deterministic_planner"
+        audit["selected_candidate_id"] = best_deterministic.get("candidate_id", "")
+        audit["selected_equivalent_candidate_ids"] = _equivalent_candidate_ids_for_selected_candidate(
+            best_deterministic.get("candidate_id", ""),
+            candidate_lineage,
+        )
+        audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        return best_deterministic["audit"]["directions"][:6], "deterministic_planner", audit
+
+    fallback = _fallback_rewrite_directions_from_payload(payload)
+    audit["selected_source"] = "deterministic"
+    audit["selected_candidate_id"] = ""
+    audit["selected_equivalent_candidate_ids"] = []
+    audit["fallback_reason_codes"] = _unique_preserve_order(
+        audit["fallback_reason_codes"] + ["deterministic_planner_empty"]
+    )
+    if not audit.get("selected_reason"):
+        audit["selected_reason"] = "deterministic_planner_empty"
+    return fallback, "deterministic", audit
+
+def _canonical_selected_direction_for_plan_unit(
+    row: Dict[str, Any],
+    *,
+    primary: bool,
+) -> str:
+    source = str(row.get("source", "") or "").strip()
+    evidence_unit = str(row.get("evidence_unit", "") or "").strip()
+
+    if not evidence_unit:
+        return ""
+
+    if primary:
+        if source:
+            return f"Lead with {evidence_unit} from {source}."
+        return f"Lead with {evidence_unit}."
+    else:
+        if source:
+            return f"Support with {evidence_unit} from {source} as secondary supporting evidence."
+        return f"Support with {evidence_unit} as secondary supporting evidence."
+
+
+def _polish_selected_rewrite_directions(
+    payload: Dict[str, Any],
+    directions: List[str],
+) -> List[str]:
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+
+    polished: List[str] = []
+
+    for item in directions or []:
+        text = str(item or "").strip()
+        prefix = _direction_prefix(text)
+
+        if prefix == "Lead with":
+            matched_primary = _best_matching_plan_unit(text, primary_anchor_units)
+            if matched_primary is not None:
+                polished_text = _canonical_selected_direction_for_plan_unit(
+                    matched_primary,
+                    primary=True,
+                )
+                polished.append(polished_text or text)
+                continue
+
+        if prefix == "Support with":
+            matched_support = _best_matching_plan_unit(text, secondary_support_units)
+            if matched_support is not None:
+                polished_text = _canonical_selected_direction_for_plan_unit(
+                    matched_support,
+                    primary=False,
+                )
+                polished.append(polished_text or text)
+                continue
+
+        polished.append(text)
+
+    return _unique_preserve_order(polished)
+
+def _refresh_selected_rewrite_audit_after_polish(
+    payload: Dict[str, Any],
+    preferred_rewrite_source: str,
+    preferred_rewrite_directions: List[str],
+    selection_audit: Dict[str, Any],
+) -> Dict[str, Any]:
+    refreshed = dict(selection_audit or {})
+    final_path_audit = _rewrite_path_audit(payload, preferred_rewrite_directions)
+
+    refreshed["selected_source"] = preferred_rewrite_source
+
+    if preferred_rewrite_source == "live_llm":
+        refreshed["live_llm"] = final_path_audit
+        refreshed["live_llm_normalized_directions"] = preferred_rewrite_directions[:6]
+    elif preferred_rewrite_source == "live_llm_blended":
+        refreshed["live_llm_blended"] = final_path_audit
+        refreshed["live_llm_blended_normalized_directions"] = preferred_rewrite_directions[:6]
+    elif preferred_rewrite_source == "deterministic_planner":
+        refreshed["deterministic_planner"] = final_path_audit
+
+    return refreshed
+
+

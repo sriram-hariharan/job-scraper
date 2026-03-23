@@ -1137,21 +1137,128 @@ def _build_gap_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         "true_unsupported_terms": true_unsupported_terms,
     }
 
+def _build_compatibility_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
+    rows = _rewrite_source_rows(packet)
+
+    direct_facets = _top_direct_facets(packet, limit=3)
+    adjacent_facets = _top_adjacent_facets(packet, limit=3)
+
+    primary_anchor_units: List[Dict[str, Any]] = []
+    secondary_support_units: List[Dict[str, Any]] = []
+    used_keys = set()
+
+    supported_rows = [row for row in rows if _row_supported_terms(row)]
+    if not supported_rows:
+        return {
+            "primary_anchor_units": [],
+            "secondary_support_units": [],
+            "primary_facet_coverage": [],
+            "secondary_facet_coverage": [],
+            "compatibility_mode": False,
+            "compatibility_reason": "",
+        }
+
+    # Treat legacy rows with supported terms as usable anchors even if newer facet-plan fields are missing.
+    anchor_candidates: List[Dict[str, Any]] = []
+    support_candidates: List[Dict[str, Any]] = []
+
+    for row in supported_rows:
+        evidence_type = str(row.get("evidence_type", "") or "").strip()
+        if evidence_type in {"same_source_context", "adjacent_context"}:
+            support_candidates.append(row)
+        else:
+            anchor_candidates.append(row)
+
+    if not anchor_candidates:
+        anchor_candidates = supported_rows[:]
+
+    for row in anchor_candidates:
+        key = _plan_row_key(row)
+        if key in used_keys:
+            continue
+        used_keys.add(key)
+        primary_anchor_units.append(_plan_unit_row(row))
+        if len(primary_anchor_units) >= 3:
+            break
+
+    for row in support_candidates:
+        key = _plan_row_key(row)
+        if key in used_keys:
+            continue
+        used_keys.add(key)
+        secondary_support_units.append(_plan_unit_row(row))
+        if len(secondary_support_units) >= 1:
+            break
+
+    # If no explicit support row exists, preserve one additional supported row as secondary evidence.
+    if not secondary_support_units:
+        for row in supported_rows:
+            key = _plan_row_key(row)
+            if key in used_keys:
+                continue
+            used_keys.add(key)
+            secondary_support_units.append(_plan_unit_row(row))
+            break
+
+    primary_facet_coverage = (
+        _covered_facet_names_for_plan_units(primary_anchor_units, direct_facets)
+        if direct_facets
+        else []
+    )
+
+    secondary_facet_coverage = (
+        [
+            name
+            for name in _covered_facet_names_for_plan_units(
+                secondary_support_units,
+                direct_facets + adjacent_facets,
+            )
+            if name not in set(primary_facet_coverage)
+        ]
+        if (direct_facets or adjacent_facets)
+        else []
+    )
+
+    return {
+        "primary_anchor_units": primary_anchor_units,
+        "secondary_support_units": secondary_support_units,
+        "primary_facet_coverage": primary_facet_coverage,
+        "secondary_facet_coverage": secondary_facet_coverage,
+        "compatibility_mode": True,
+        "compatibility_reason": "legacy_packet_missing_planner_seed_structure",
+    }
 
 def _build_tailoring_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
     anchor_plan = _build_anchor_plan(packet)
     gap_plan = _build_gap_plan(packet)
 
+    compatibility_mode = False
+    compatibility_reason = ""
+
+    if not anchor_plan.get("primary_anchor_units") and not anchor_plan.get("secondary_support_units"):
+        compatibility_anchor_plan = _build_compatibility_anchor_plan(packet)
+        if (
+            compatibility_anchor_plan.get("primary_anchor_units")
+            or compatibility_anchor_plan.get("secondary_support_units")
+        ):
+            anchor_plan = compatibility_anchor_plan
+            compatibility_mode = bool(compatibility_anchor_plan.get("compatibility_mode"))
+            compatibility_reason = str(compatibility_anchor_plan.get("compatibility_reason", "") or "").strip()
+
     return {
         "narrative_angle": _build_narrative_angle(packet),
         **anchor_plan,
         **gap_plan,
+        "compatibility_mode": compatibility_mode,
+        "compatibility_reason": compatibility_reason,
     }
 
 
 def _tailoring_plan_prompt_lines(plan: Dict[str, Any]) -> List[str]:
     lines: List[str] = ["Deterministic tailoring plan:"]
     lines.append(f"- Narrative angle: {plan.get('narrative_angle', '')}")
+    lines.append(f"- Compatibility mode: {plan.get('compatibility_mode', False)}")
+    lines.append(f"- Compatibility reason: {plan.get('compatibility_reason', '')}")
     lines.append(f"- Direct facets to lead with: {plan.get('direct_facets', [])}")
     lines.append(f"- Adjacent facets to frame carefully: {plan.get('adjacent_facets', [])}")
     lines.append(f"- True facet gaps to keep explicit: {plan.get('true_gap_facets', [])}")
@@ -2950,6 +3057,7 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
 def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     job = payload.get("job", {})
     selection = payload.get("selection", {})
+    tailoring_plan = payload.get("tailoring_plan", {}) or {}
     lines: List[str] = []
 
     lines.append(f"# Tailoring Suggestions")
@@ -2974,8 +3082,9 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     lines.append("")
 
     lines.append("## Tailoring Plan")
-    tailoring_plan = payload.get("tailoring_plan", {}) or {}
     lines.append(f"- Narrative angle: {tailoring_plan.get('narrative_angle', '')}")
+    lines.append(f"- Compatibility mode: {tailoring_plan.get('compatibility_mode', False)}")
+    lines.append(f"- Compatibility reason: {tailoring_plan.get('compatibility_reason', '')}")
     lines.append(f"- Direct facets: {tailoring_plan.get('direct_facets', [])}")
     lines.append(f"- Adjacent facets: {tailoring_plan.get('adjacent_facets', [])}")
     lines.append(f"- True gap facets: {tailoring_plan.get('true_gap_facets', [])}")

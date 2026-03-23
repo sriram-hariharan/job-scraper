@@ -36,26 +36,65 @@ def planning_dashboard() -> str:
       <div class="dashboard-toolbar dashboard-toolbar--planning">
         <div class="dashboard-toolbar-left dashboard-toolbar-left--planning">
           <div class="control-group dashboard-field dashboard-field--action">
-            <label for="planningActionFilter">Action</label>
-            <select id="planningActionFilter">
-              <option value="">All</option>
-              <option value="APPLY">APPLY</option>
-              <option value="APPLY_REVIEW_VARIANTS">APPLY_REVIEW_VARIANTS</option>
-              <option value="MAYBE_TAILOR">MAYBE_TAILOR</option>
-              <option value="SKIP_FOR_NOW">SKIP_FOR_NOW</option>
-            </select>
+            <label>Action</label>
+            <div class="multi-select" id="planningActionFilter" data-placeholder="All">
+              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+                <span class="multi-select-trigger-label">All</span>
+                <span class="multi-select-trigger-icon">▾</span>
+              </button>
+
+              <div class="multi-select-menu" role="menu" hidden>
+                <button type="button" class="multi-select-option" data-value="APPLY" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">APPLY</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="APPLY_REVIEW_VARIANTS" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">APPLY_REVIEW_VARIANTS</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="MAYBE_TAILOR" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">MAYBE_TAILOR</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="SKIP_FOR_NOW" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">SKIP_FOR_NOW</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="control-group dashboard-field planning-field--winner-bucket">
-            <label for="planningWinnerBucket">Match Strength</label>
-            <select id="planningWinnerBucket">
-              <option value="">All</option>
-              <option value="strong">Excellent match</option>
-              <option value="solid">Strong match</option>
-              <option value="moderate">Moderate match</option>
-              <option value="weak">Weak match</option>
-              <option value="filtered_out">No credible match</option>
-            </select>
+            <label>Match Strength</label>
+            <div class="multi-select" id="planningWinnerBucket" data-placeholder="All">
+              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+                <span class="multi-select-trigger-label">All</span>
+                <span class="multi-select-trigger-icon">▾</span>
+              </button>
+
+              <div class="multi-select-menu" role="menu" hidden>
+                <button type="button" class="multi-select-option" data-value="strong" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Excellent match</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="solid" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Strong match</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="moderate" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Moderate match</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="weak" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Weak match</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="filtered_out" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">No credible match</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <div class="control-group dashboard-toggle-group planning-toolbar-toggle">

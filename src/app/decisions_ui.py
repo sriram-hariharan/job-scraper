@@ -35,14 +35,32 @@ def decisions_dashboard() -> str:
     <section class="card controls-card">
       <div class="controls-row">
         <div class="control-group">
-          <label for="decisionFilter">Decision</label>
-          <select id="decisionFilter">
-            <option value="">All</option>
-            <option value="APPLY">APPLY</option>
-            <option value="TAILOR">TAILOR</option>
-            <option value="SKIP">SKIP</option>
-            <option value="HOLD">HOLD</option>
-          </select>
+          <label>Decision</label>
+          <div class="multi-select" id="decisionFilter" data-placeholder="All">
+            <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+              <span class="multi-select-trigger-label">All</span>
+              <span class="multi-select-trigger-icon">▾</span>
+            </button>
+
+            <div class="multi-select-menu" role="menu" hidden>
+              <button type="button" class="multi-select-option" data-value="APPLY" aria-checked="false">
+                <span class="multi-select-option-check">✓</span>
+                <span class="multi-select-option-label">APPLY</span>
+              </button>
+              <button type="button" class="multi-select-option" data-value="TAILOR" aria-checked="false">
+                <span class="multi-select-option-check">✓</span>
+                <span class="multi-select-option-label">TAILOR</span>
+              </button>
+              <button type="button" class="multi-select-option" data-value="SKIP" aria-checked="false">
+                <span class="multi-select-option-check">✓</span>
+                <span class="multi-select-option-label">SKIP</span>
+              </button>
+              <button type="button" class="multi-select-option" data-value="HOLD" aria-checked="false">
+                <span class="multi-select-option-check">✓</span>
+                <span class="multi-select-option-label">HOLD</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <div class="control-group">

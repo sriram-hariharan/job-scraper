@@ -144,6 +144,102 @@ function qs(id) {
   return document.getElementById(id);
 }
 
+function getMultiSelectRoot(id) {
+  return qs(id);
+}
+
+function getMultiSelectValues(id) {
+  const root = getMultiSelectRoot(id);
+  if (!root) return [];
+
+  return Array.from(root.querySelectorAll(".multi-select-option.is-selected"))
+    .map((option) => String(option.dataset.value || "").trim())
+    .filter(Boolean);
+}
+
+function appendMultiValueParams(params, key, values) {
+  values.forEach((value) => params.append(key, value));
+}
+
+function updateMultiSelectLabel(root) {
+  if (!root) return;
+
+  const label = root.querySelector(".multi-select-trigger-label");
+  if (!label) return;
+
+  const selected = Array.from(root.querySelectorAll(".multi-select-option.is-selected"));
+  const placeholder = root.dataset.placeholder || "All";
+
+  if (!selected.length) {
+    label.textContent = placeholder;
+  } else if (selected.length === 1) {
+    const text = selected[0].querySelector(".multi-select-option-label")?.textContent?.trim();
+    label.textContent = text || selected[0].dataset.value || placeholder;
+  } else {
+    label.textContent = `${selected.length} selected`;
+  }
+}
+
+function setMultiSelectOpen(root, isOpen) {
+  if (!root) return;
+
+  const trigger = root.querySelector(".multi-select-trigger");
+  const menu = root.querySelector(".multi-select-menu");
+  if (!trigger || !menu) return;
+
+  root.classList.toggle("is-open", isOpen);
+  trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+  menu.hidden = !isOpen;
+}
+
+function clearMultiSelect(id) {
+  const root = getMultiSelectRoot(id);
+  if (!root) return;
+
+  root.querySelectorAll(".multi-select-option").forEach((option) => {
+    option.classList.remove("is-selected");
+    option.setAttribute("aria-checked", "false");
+  });
+
+  updateMultiSelectLabel(root);
+}
+
+function initMultiSelect(id) {
+  const root = getMultiSelectRoot(id);
+  if (!root || root.dataset.bound === "true") return;
+
+  const trigger = root.querySelector(".multi-select-trigger");
+  const menu = root.querySelector(".multi-select-menu");
+  if (!trigger || !menu) return;
+
+  root.dataset.bound = "true";
+  updateMultiSelectLabel(root);
+
+  trigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const willOpen = menu.hidden;
+    document.querySelectorAll(".multi-select").forEach((node) => {
+      if (node !== root) {
+        setMultiSelectOpen(node, false);
+      }
+    });
+    setMultiSelectOpen(root, willOpen);
+  });
+
+  root.querySelectorAll(".multi-select-option").forEach((option) => {
+    option.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const isSelected = option.classList.toggle("is-selected");
+      option.setAttribute("aria-checked", isSelected ? "true" : "false");
+      updateMultiSelectLabel(root);
+    });
+  });
+}
+
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: "short",
   day: "numeric",
@@ -334,11 +430,11 @@ async function postJson(url, payload) {
 
 function buildDecisionsUrl() {
   const params = new URLSearchParams();
-  const decision = qs("decisionFilter").value.trim();
+  const decisions = getMultiSelectValues("decisionFilter");
   const companyContains = qs("decisionCompanyFilter").value.trim();
   const limit = qs("decisionLimitInput").value || "50";
 
-  if (decision) params.set("decision", decision);
+  appendMultiValueParams(params, "decision", decisions);
   if (companyContains) params.set("company_contains", companyContains);
   params.set("limit", limit);
 
@@ -503,13 +599,14 @@ async function loadDecisionsTable() {
 }
 
 function clearDecisionFilters() {
-  qs("decisionFilter").value = "";
+  clearMultiSelect("decisionFilter");
   qs("decisionCompanyFilter").value = "";
   qs("decisionLimitInput").value = "50";
   updateDecisionStats([]);
 }
 
 function attachDecisionHandlers() {
+  initMultiSelect("decisionFilter");
   qs("decisionApplyFiltersBtn").addEventListener("click", async () => {
     try {
       await loadDecisionsTable();
@@ -559,6 +656,14 @@ function attachDecisionHandlers() {
         await submitApplicationStatus(status);
       } catch (err) {
         showAppError("Failed to update application status", err);
+      }
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    document.querySelectorAll(".multi-select").forEach((root) => {
+      if (!root.contains(event.target)) {
+        setMultiSelectOpen(root, false);
       }
     });
   });

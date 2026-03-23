@@ -1603,6 +1603,51 @@ def _strip_wrapped_clause_quotes(direction: str) -> str:
 
     return text
 
+def _direction_list_mentions_term(directions: List[str], term: str) -> bool:
+    term = str(term or "").strip()
+    if not term:
+        return False
+    return any(_direction_mentions_any(item, [term]) for item in directions or [])
+
+
+def _canonical_adjacent_guardrail_direction(adjacent_terms: List[str]) -> str:
+    terms = [str(term).strip() for term in adjacent_terms or [] if str(term).strip()]
+    if not terms:
+        return ""
+    return (
+        f"Do not add direct ownership claims for {', '.join(_truncate_list(terms, 4))}; "
+        "use related evidence only as adjacent support."
+    )
+
+
+def _canonical_true_gap_direction(true_gap_terms: List[str]) -> str:
+    terms = [str(term).strip() for term in true_gap_terms or [] if str(term).strip()]
+    if not terms:
+        return ""
+    return f"Keep gap explicit for {', '.join(_truncate_list(terms, 4))}."
+
+
+def _drop_term_only_gap_lines(
+    directions: List[str],
+    blocked_terms: List[str],
+) -> List[str]:
+    blocked = {str(term).strip().lower() for term in blocked_terms or [] if str(term).strip()}
+    cleaned: List[str] = []
+
+    for item in directions or []:
+        text = str(item or "").strip()
+        if not text.startswith("Keep gap explicit for"):
+            cleaned.append(text)
+            continue
+
+        lowered = text.lower()
+        matched = [term for term in blocked if term in lowered]
+        if matched:
+            continue
+
+        cleaned.append(text)
+
+    return cleaned
 
 def _normalize_live_rewrite_directions(
     payload: Dict[str, Any],
@@ -1612,6 +1657,8 @@ def _normalize_live_rewrite_directions(
     plan = payload.get("tailoring_plan", {}) or {}
     primary_anchor_units = plan.get("primary_anchor_units", []) or []
     secondary_support_units = plan.get("secondary_support_units", []) or []
+    adjacent_terms = list(plan.get("adjacent_terms_to_keep_explicit", []) or [])
+    true_gap_terms = list(plan.get("true_unsupported_terms", []) or [])
 
     normalized: List[str] = []
     covered_primary_keys = set()
@@ -1657,7 +1704,126 @@ def _normalize_live_rewrite_directions(
 
         normalized.append(item)
 
-    return _unique_preserve_order(normalized)[:limit]
+    normalized = _unique_preserve_order(normalized)
+
+    # Canonicalize adjacent-support guardrail coverage.
+    if adjacent_terms:
+        adjacent_terms_covered_individually = all(
+            _direction_list_mentions_term(normalized, term)
+            for term in adjacent_terms
+        )
+        has_canonical_adjacent = any(
+            text.startswith("Do not add")
+            and _direction_mentions_any(text, adjacent_terms)
+            for text in normalized
+        )
+
+        if adjacent_terms_covered_individually and not has_canonical_adjacent:
+            normalized = _drop_term_only_gap_lines(normalized, adjacent_terms)
+            canonical_adjacent = _canonical_adjacent_guardrail_direction(adjacent_terms)
+            if canonical_adjacent:
+                normalized.append(canonical_adjacent)
+
+    # Canonicalize true-gap coverage to the full deterministic gap line.
+    if true_gap_terms:
+        has_any_true_gap_line = any(
+            text.startswith("Keep gap explicit")
+            and _direction_mentions_any(text, true_gap_terms)
+            for text in normalized
+        )
+
+        if has_any_true_gap_line:
+            normalized = _drop_term_only_gap_lines(normalized, true_gap_terms)
+            canonical_true_gap = _canonical_true_gap_direction(true_gap_terms)
+            if canonical_true_gap:
+                normalized.append(canonical_true_gap)
+
+    # Ensure at least one selected secondary support unit is preserved when the plan has one.
+    if secondary_support_units:
+        has_secondary_support = any(
+            _direction_prefix(text) == "Support with"
+            and _best_matching_plan_unit(text, secondary_support_units) is not None
+            for text in normalized
+        )
+        if not has_secondary_support:
+            fallback_support = _plan_unit_to_direction(secondary_support_units[0], primary=False)
+            if fallback_support:
+                normalized.append(fallback_support)
+
+    # Reorder to deterministic plan shape before truncation.
+    lead_lines = [text for text in normalized if _direction_prefix(text) == "Lead with"]
+    support_lines = [text for text in normalized if _direction_prefix(text) == "Support with"]
+    do_not_add_lines = [text for text in normalized if _direction_prefix(text) == "Do not add"]
+    gap_lines = [text for text in normalized if _direction_prefix(text) == "Keep gap explicit"]
+
+    ordered = lead_lines + support_lines + do_not_add_lines + gap_lines
+    return _unique_preserve_order(ordered)[:limit]
+
+def _direction_has_truncation(direction: str) -> bool:
+    return "..." in str(direction or "")
+
+
+def _direction_has_plannerese(direction: str) -> bool:
+    text = str(direction or "").lower()
+    return (" to anchor " in text) or ("without overstating ownership" in text)
+
+
+def _direction_has_generic_skill_tail(direction: str) -> bool:
+    text = str(direction or "").lower()
+    generic_markers = [
+        "to highlight",
+        "to emphasize",
+        "to further demonstrate",
+        "to demonstrate",
+        "skills.",
+        "skills,",
+        "experience.",
+        "experience,",
+        "proficiency.",
+        "proficiency,",
+    ]
+    return any(marker in text for marker in generic_markers)
+
+
+def _rewrite_direction_quality_report(
+    directions: List[str],
+) -> Dict[str, Any]:
+    actionable = [
+        str(item).strip()
+        for item in directions or []
+        if _is_actionable_rewrite_direction(item)
+    ]
+
+    lead_support_lines = [
+        item for item in actionable
+        if _direction_prefix(item) in {"Lead with", "Support with"}
+    ]
+
+    truncated_lines = [item for item in actionable if _direction_has_truncation(item)]
+    plannerese_lines = [item for item in actionable if _direction_has_plannerese(item)]
+    generic_skill_tail_lines = [item for item in actionable if _direction_has_generic_skill_tail(item)]
+    full_anchor_lines = [
+        item for item in lead_support_lines
+        if not _direction_has_truncation(item)
+    ]
+
+    score = (
+        2 * len(full_anchor_lines)
+        - 2 * len(truncated_lines)
+        - 2 * len(plannerese_lines)
+        - 1 * len(generic_skill_tail_lines)
+    )
+
+    return {
+        "score": score,
+        "full_anchor_line_count": len(full_anchor_lines),
+        "truncated_line_count": len(truncated_lines),
+        "plannerese_line_count": len(plannerese_lines),
+        "generic_skill_tail_count": len(generic_skill_tail_lines),
+        "truncated_lines": truncated_lines,
+        "plannerese_lines": plannerese_lines,
+        "generic_skill_tail_lines": generic_skill_tail_lines,
+    }
 
 def _rewrite_path_audit(
     payload: Dict[str, Any],
@@ -1670,14 +1836,51 @@ def _rewrite_path_audit(
     ]
     verifier = _rewrite_direction_verifier_report(payload, actionable)
     covers_plan = _rewrite_directions_cover_plan(payload, actionable)
+    quality = _rewrite_direction_quality_report(actionable)
 
     return {
         "count": len(actionable),
         "covers_plan": covers_plan,
         "verifier_ok": bool(verifier.get("ok")),
         "verifier_issues": list(verifier.get("issues", []) or []),
+        "quality_score": quality.get("score", 0),
+        "quality": quality,
         "directions": actionable[:6],
     }
+
+def _choose_best_valid_rewrite_path(
+    planner_audit: Dict[str, Any],
+    live_audit: Optional[Dict[str, Any]],
+    blended_audit: Optional[Dict[str, Any]],
+) -> tuple[str, str]:
+    planner_score = int(planner_audit.get("quality_score", 0))
+
+    candidates: List[tuple[str, Dict[str, Any]]] = []
+    for source, audit in [
+        ("live_llm", live_audit),
+        ("live_llm_blended", blended_audit),
+    ]:
+        if audit and audit.get("covers_plan") and audit.get("verifier_ok"):
+            candidates.append((source, audit))
+
+    if not candidates:
+        return "deterministic_planner", "no_live_candidate_passed_all_gates"
+
+    candidates.sort(
+        key=lambda item: (
+            int(item[1].get("quality_score", 0)),
+            1 if item[0] == "live_llm" else 0,
+        ),
+        reverse=True,
+    )
+    best_source, best_audit = candidates[0]
+    best_score = int(best_audit.get("quality_score", 0))
+
+    if best_score >= planner_score + 2:
+        return best_source, f"{best_source}_quality_beats_deterministic"
+    if best_score > planner_score and best_audit.get("quality", {}).get("truncated_line_count", 0) < planner_audit.get("quality", {}).get("truncated_line_count", 0):
+        return best_source, f"{best_source}_wins_on_truncation_quality"
+    return "deterministic_planner", "deterministic_kept_as_quality_baseline"
 
 def _select_operator_rewrite_directions(
     payload: Dict[str, Any],
@@ -1699,6 +1902,7 @@ def _select_operator_rewrite_directions(
         "live_llm_blended": None,
         "deterministic_planner": planner_audit,
         "selected_source": "",
+        "selected_reason": "",
         "fallback_reason_codes": [],
     }
 
@@ -1708,7 +1912,11 @@ def _select_operator_rewrite_directions(
             for item in parsed.get("rewrite_directions", []) or []
             if _is_actionable_rewrite_direction(item)
         ]
-        llm_directions = _normalize_live_rewrite_directions(payload, raw_llm_directions, limit=6)
+        llm_directions = _normalize_live_rewrite_directions(
+            payload,
+            raw_llm_directions,
+            limit=6,
+        )
         audit["llm_strong_enough"] = _llm_output_is_strong_enough(parsed)
         audit["live_llm_raw_directions"] = raw_llm_directions[:6]
         audit["live_llm_normalized_directions"] = llm_directions[:6]
@@ -1717,20 +1925,20 @@ def _select_operator_rewrite_directions(
             live_audit = _rewrite_path_audit(payload, llm_directions)
             audit["live_llm"] = live_audit
 
-            if live_audit["covers_plan"] and live_audit["verifier_ok"]:
-                audit["selected_source"] = "live_llm"
-                return llm_directions[:6], "live_llm", audit
-
-            blended = _blend_live_and_planner_directions(payload, llm_directions, limit=6)
-            blended = _normalize_live_rewrite_directions(payload, blended, limit=6)
+            blended = _blend_live_and_planner_directions(
+                payload,
+                llm_directions,
+                limit=6,
+            )
+            blended = _normalize_live_rewrite_directions(
+                payload,
+                blended,
+                limit=6,
+            )
             audit["live_llm_blended_normalized_directions"] = blended[:6]
 
             blended_audit = _rewrite_path_audit(payload, blended)
             audit["live_llm_blended"] = blended_audit
-
-            if blended_audit["covers_plan"] and blended_audit["verifier_ok"]:
-                audit["selected_source"] = "live_llm_blended"
-                return blended[:6], "live_llm_blended", audit
         else:
             audit["fallback_reason_codes"].append("live_llm_not_strong_enough")
     else:
@@ -1749,9 +1957,28 @@ def _select_operator_rewrite_directions(
         if not audit["live_llm_blended"]["verifier_ok"]:
             audit["fallback_reason_codes"].append("live_llm_blended_failed_verifier")
 
+    chosen_source, chosen_reason = _choose_best_valid_rewrite_path(
+        planner_audit,
+        audit["live_llm"],
+        audit["live_llm_blended"],
+    )
+    audit["selected_reason"] = chosen_reason
+
+    if chosen_source == "live_llm" and audit["live_llm"] is not None:
+        audit["selected_source"] = "live_llm"
+        audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        return audit["live_llm"]["directions"][:6], "live_llm", audit
+
+    if chosen_source == "live_llm_blended" and audit["live_llm_blended"] is not None:
+        audit["selected_source"] = "live_llm_blended"
+        audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        return audit["live_llm_blended"]["directions"][:6], "live_llm_blended", audit
+
     if planner_directions:
         audit["selected_source"] = "deterministic_planner"
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
+        if not audit.get("selected_reason"):
+            audit["selected_reason"] = "deterministic_kept_as_quality_baseline"
         return planner_directions[:6], "deterministic_planner", audit
 
     fallback = _fallback_rewrite_directions_from_payload(payload)
@@ -1759,6 +1986,8 @@ def _select_operator_rewrite_directions(
     audit["fallback_reason_codes"] = _unique_preserve_order(
         audit["fallback_reason_codes"] + ["deterministic_planner_empty"]
     )
+    if not audit.get("selected_reason"):
+        audit["selected_reason"] = "deterministic_planner_empty"
     return fallback, "deterministic", audit
 
 

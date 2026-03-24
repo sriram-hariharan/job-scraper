@@ -797,6 +797,135 @@ def _write_reviewer_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
                 }
             )
 
+def _headline_metric_text(metric: Dict[str, Any]) -> str:
+    numerator = int(metric.get("numerator", 0) or 0)
+    denominator = int(metric.get("denominator", 0) or 0)
+    pct = float(metric.get("pct", 0.0) or 0.0)
+    return f"{numerator}/{denominator} ({pct:.2f}%)"
+
+
+def _reviewer_recommendations(summary: Dict[str, Any]) -> List[str]:
+    headline_metrics = summary.get("headline_metrics", {}) or {}
+
+    deterministic_metric = headline_metrics.get("deterministic_correct_rate", {}) or {}
+    live_metric = headline_metrics.get("live_better_than_deterministic_rate", {}) or {}
+    live_blended_metric = headline_metrics.get("live_blended_better_than_deterministic_rate", {}) or {}
+    equivalence_metric = headline_metrics.get("equivalence_judgment_correct_rate", {}) or {}
+
+    recommendations: List[str] = []
+
+    deterministic_num = int(deterministic_metric.get("numerator", 0) or 0)
+    deterministic_den = int(deterministic_metric.get("denominator", 0) or 0)
+    live_num = int(live_metric.get("numerator", 0) or 0)
+    live_blended_num = int(live_blended_metric.get("numerator", 0) or 0)
+    equivalence_num = int(equivalence_metric.get("numerator", 0) or 0)
+    equivalence_den = int(equivalence_metric.get("denominator", 0) or 0)
+
+    if deterministic_den > 0 and deterministic_num == deterministic_den and live_num == 0 and live_blended_num == 0:
+        recommendations.append(
+            "Keep runtime winner selection deterministic-first. This reviewed batch shows no evidence that live or live_blended should replace deterministic selection."
+        )
+    elif deterministic_den > 0 and deterministic_num < deterministic_den:
+        recommendations.append(
+            "Do not change runtime policy yet. Deterministic selection was not universally supported by this reviewed batch, so gather more labeled evidence before any selector change."
+        )
+
+    if equivalence_den > 0 and equivalence_num < equivalence_den:
+        recommendations.append(
+            "Do not change runtime winner selection. Tighten offline equivalence interpretation/reporting instead, because at least one runtime equivalence judgment was too generous."
+        )
+
+    if not recommendations:
+        recommendations.append(
+            "No automatic policy recommendation triggered. Review the headline metrics and disagreement rows before changing runtime behavior."
+        )
+
+    return recommendations
+
+
+def _write_reviewer_report_markdown(path: Path, summary: Dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    headline_metrics = summary.get("headline_metrics", {}) or {}
+    disagreements = summary.get("disagreement_rows", []) or []
+
+    deterministic_metric = headline_metrics.get("deterministic_correct_rate", {}) or {}
+    live_metric = headline_metrics.get("live_better_than_deterministic_rate", {}) or {}
+    live_blended_metric = headline_metrics.get("live_blended_better_than_deterministic_rate", {}) or {}
+    equivalence_metric = headline_metrics.get("equivalence_judgment_correct_rate", {}) or {}
+
+    total_rows = int(summary.get("total_rows", 0) or 0)
+    completed_reviews = int(summary.get("completed_reviews", 0) or 0)
+    completion_rate_pct = float(summary.get("completion_rate_pct", 0.0) or 0.0)
+
+    lines: List[str] = []
+    lines.append("# Tailoring Reviewer Human-Agreement Report")
+    lines.append("")
+    lines.append("## Scope")
+    lines.append(f"- total rows: {total_rows}")
+    lines.append(f"- completed reviews: {completed_reviews}")
+    lines.append(f"- reviewer completion rate: {completion_rate_pct:.2f}%")
+    lines.append("")
+
+    lines.append("## Headline Metrics")
+    lines.append(f"- deterministic correct rate: {_headline_metric_text(deterministic_metric)}")
+    lines.append(f"- live better than deterministic rate: {_headline_metric_text(live_metric)}")
+    lines.append(f"- live blended better than deterministic rate: {_headline_metric_text(live_blended_metric)}")
+    lines.append(f"- equivalence judgment correct rate: {_headline_metric_text(equivalence_metric)}")
+    lines.append("")
+
+    lines.append("## Recommendation")
+    for recommendation in _reviewer_recommendations(summary):
+        lines.append(f"- {recommendation}")
+    lines.append("")
+
+    lines.append("## Interpretation")
+    if (
+        int(deterministic_metric.get("denominator", 0) or 0) > 0
+        and int(deterministic_metric.get("numerator", 0) or 0) == int(deterministic_metric.get("denominator", 0) or 0)
+        and int(live_metric.get("numerator", 0) or 0) == 0
+        and int(live_blended_metric.get("numerator", 0) or 0) == 0
+    ):
+        lines.append("- Deterministic winner selection was supported by every completed review in this batch.")
+    else:
+        lines.append("- Deterministic winner selection was not universally supported in this batch.")
+
+    if int(equivalence_metric.get("numerator", 0) or 0) < int(equivalence_metric.get("denominator", 0) or 0):
+        lines.append("- The main weakness exposed by this batch is equivalence labeling quality, not winner selection quality.")
+    else:
+        lines.append("- No equivalence-label disagreement was found in this batch.")
+    lines.append("")
+
+    lines.append("## Reviewer Disagreements")
+    if disagreements:
+        for item in disagreements:
+            packet_key = str(item.get("packet_key", "") or "").strip()
+            resume_key = str(item.get("resume_key", "") or "").strip()
+            company = str(item.get("company", "") or "").strip()
+            title = str(item.get("title", "") or "").strip()
+            reasons = item.get("disagreement_reasons", []) or []
+            selection_bucket = str(item.get("selection_outcome_bucket", "") or "").strip()
+            live_bucket = str(item.get("live_outcome_bucket", "") or "").strip()
+            equivalence_bucket = str(item.get("equivalence_outcome_bucket", "") or "").strip()
+            fingerprint_bucket = str(item.get("fingerprint_relationship_bucket", "") or "").strip()
+            notes = str(item.get("reviewer_notes", "") or "").strip()
+
+            lines.append(f"### {packet_key}")
+            lines.append(f"- resume: {resume_key}")
+            lines.append(f"- title: {company} | {title}")
+            lines.append(f"- disagreement reasons: {', '.join(reasons) if reasons else 'unspecified'}")
+            lines.append(f"- selection bucket: {selection_bucket}")
+            lines.append(f"- live bucket: {live_bucket}")
+            lines.append(f"- equivalence bucket: {equivalence_bucket}")
+            lines.append(f"- fingerprint relationship bucket: {fingerprint_bucket}")
+            lines.append(f"- reviewer notes: {notes or 'n/a'}")
+            lines.append("")
+    else:
+        lines.append("- none")
+        lines.append("")
+
+    path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Analyze tailoring training-log JSONL outputs or reviewer CSV exports."
@@ -841,6 +970,11 @@ def main() -> None:
         "--output-reviewer-csv",
         default="",
         help="Optional path to write a reviewer CSV for latest keyed packet comparisons.",
+    )
+    parser.add_argument(
+        "--output-reviewer-report-md",
+        default="",
+        help="Optional path to write a reviewer-facing markdown report for reviewer CSV analysis mode.",
     )
     args = parser.parse_args()
 
@@ -897,6 +1031,15 @@ def main() -> None:
                 encoding="utf-8",
             )
             print(f"\nWrote summary JSON: {output_path}")
+        
+        if args.output_reviewer_report_md.strip():
+            if summary.get("mode") != "reviewer_csv":
+                raise ValueError(
+                    "--output-reviewer-report-md requires reviewer CSV analysis mode."
+                )
+            reviewer_report_path = Path(args.output_reviewer_report_md)
+            _write_reviewer_report_markdown(reviewer_report_path, summary)
+            print(f"Wrote reviewer report markdown: {reviewer_report_path}")
 
         return
 

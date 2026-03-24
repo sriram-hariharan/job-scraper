@@ -416,9 +416,6 @@ def _rewrite_direction_verifier_report(
                 unmapped_lead_support.append(item)
                 continue
 
-            if blocked_direct_claim_terms and _direction_mentions_any(item, blocked_direct_claim_terms):
-                blocked_term_directions.append(item)
-
             matched_key = _plan_unit_key(matched_primary_unit)
             if matched_key in covered_primary_keys:
                 duplicate_primary_anchor_directions.append(item)
@@ -431,9 +428,6 @@ def _rewrite_direction_verifier_report(
             if not matched_support_unit:
                 unmapped_lead_support.append(item)
                 continue
-
-            if blocked_direct_claim_terms and _direction_mentions_any(item, blocked_direct_claim_terms):
-                blocked_term_directions.append(item)
 
             matched_key = _plan_unit_key(matched_support_unit)
             if matched_key in covered_secondary_keys:

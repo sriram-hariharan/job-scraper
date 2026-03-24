@@ -348,6 +348,62 @@ def _build_training_log_row(
     audit = payload.get("preferred_rewrite_selection_audit", {}) or {}
     verifier = payload.get("preferred_rewrite_verifier", {}) or {}
     llm_output = llm_output or {}
+    candidate_pool = audit.get("candidate_pool", []) or []
+    candidate_lineage = audit.get("candidate_pool_lineage", []) or []
+
+    def _candidate_by_id(candidate_id: str) -> Dict[str, Any]:
+        for candidate in candidate_pool:
+            if str(candidate.get("candidate_id", "") or "").strip() == str(candidate_id or "").strip():
+                return candidate
+        return {}
+
+    def _max_quality_score_for_family(prefix: str) -> Optional[float]:
+        scores: List[float] = []
+        for candidate in candidate_pool:
+            source_family = str(candidate.get("source_family", "") or "").strip()
+            if source_family == prefix:
+                score = candidate.get("quality_score")
+                if isinstance(score, (int, float)):
+                    scores.append(float(score))
+        return max(scores) if scores else None
+
+    def _count_valid_kept_family_candidates(prefix: str) -> int:
+        count = 0
+        for candidate in candidate_pool:
+            source_family = str(candidate.get("source_family", "") or "").strip()
+            if source_family != prefix:
+                continue
+            if candidate.get("covers_plan") and candidate.get("verifier_ok"):
+                count += 1
+        return count
+
+    def _has_lineage_family_candidate(prefix: str) -> bool:
+        for candidate in candidate_lineage:
+            source_family = str(candidate.get("source_family", "") or "").strip()
+            if source_family == prefix:
+                return True
+        return False
+
+    def _has_valid_lineage_family_candidate(prefix: str) -> bool:
+        for candidate in candidate_lineage:
+            source_family = str(candidate.get("source_family", "") or "").strip()
+            if source_family != prefix:
+                continue
+            resolved_to_candidate_id = str(candidate.get("resolved_to_candidate_id", "") or "").strip()
+            resolved_candidate = _candidate_by_id(resolved_to_candidate_id) if resolved_to_candidate_id else {}
+            if resolved_candidate.get("covers_plan") and resolved_candidate.get("verifier_ok"):
+                return True
+        return False
+
+    selected_candidate_id = str(audit.get("selected_candidate_id", "") or "").strip()
+    selected_candidate = _candidate_by_id(selected_candidate_id)
+    selected_equivalent_candidate_ids = audit.get("selected_equivalent_candidate_ids", []) or []
+
+    live_equivalent_candidate_ids = [
+        candidate_id
+        for candidate_id in selected_equivalent_candidate_ids
+        if str(candidate_id).startswith("live_llm")
+    ]
 
     return {
         "schema_version": "tailoring_training_log_v1",
@@ -389,6 +445,29 @@ def _build_training_log_row(
             "cache_hit": llm_output.get("cache_hit", False),
             "parse_error": llm_output.get("parse_error", ""),
             "prompt_version": llm_output.get("prompt_version", ""),
+        },
+        "eval_summary": {
+            "candidate_pool_count": len(candidate_pool),
+            "candidate_lineage_count": len(candidate_lineage),
+            "valid_candidate_count": sum(
+                1 for candidate in candidate_pool
+                if candidate.get("covers_plan") and candidate.get("verifier_ok")
+            ),
+            "selected_candidate_quality_score": selected_candidate.get("quality_score"),
+            "deterministic_best_quality_score": _max_quality_score_for_family("deterministic_planner"),
+            "live_best_quality_score": _max_quality_score_for_family("live_llm"),
+            "live_blended_best_quality_score": _max_quality_score_for_family("live_llm_blended"),
+            "deterministic_valid_candidate_count": _count_valid_kept_family_candidates("deterministic_planner"),
+            "live_valid_candidate_count": _count_valid_kept_family_candidates("live_llm"),
+            "live_blended_valid_candidate_count": _count_valid_kept_family_candidates("live_llm_blended"),
+            "has_live_candidate": _has_lineage_family_candidate("live_llm"),
+            "has_live_blended_candidate": _has_lineage_family_candidate("live_llm_blended"),
+            "has_valid_live_candidate": _has_valid_lineage_family_candidate("live_llm"),
+            "has_valid_live_blended_candidate": _has_valid_lineage_family_candidate("live_llm_blended"),
+            "selected_has_live_equivalent": len(live_equivalent_candidate_ids) > 0,
+            "live_equivalent_candidate_ids": live_equivalent_candidate_ids,
+            "selected_is_deterministic": str(audit.get("selected_source", "") or "") == "deterministic_planner",
+            "selected_reason": str(audit.get("selected_reason", "") or ""),
         },
         "source_family_audits": {
             "deterministic_planner": audit.get("deterministic_planner"),

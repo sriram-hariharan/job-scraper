@@ -371,6 +371,194 @@ def _build_keep_as_is(
 
     return items[:limit]
 
+def _fallback_recommended_rewrite_from_reuse(
+    preferred_rewrite_directions: List[str],
+    row: Dict[str, Any],
+) -> str:
+    overlaps = [
+        str(item or "").strip().lower()
+        for item in (row.get("overlaps", []) or [])
+        if str(item or "").strip()
+    ]
+    source = str(row.get("source", "") or "").strip().lower()
+    reuse_note = str(row.get("reuse_note", "") or "").strip()
+
+    for direction in preferred_rewrite_directions or []:
+        direction_text = str(direction or "").strip()
+        direction_lower = direction_text.lower()
+
+        if overlaps and any(term in direction_lower for term in overlaps):
+            return direction_text
+        if source and source in direction_lower:
+            return direction_text
+
+    if reuse_note:
+        return reuse_note
+
+    if overlaps:
+        return (
+            f"Keep this bullet, but tighten the wording so "
+            f"{', '.join(_truncate_list(overlaps, 4))} shows up earlier and more clearly."
+        )
+
+    return "Keep this bullet, but sharpen the wording around the strongest JD-aligned evidence already present."
+
+
+def _fallback_why_current_is_weak_from_reuse(row: Dict[str, Any]) -> str:
+    overlaps = row.get("overlaps", []) or []
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    if overlaps:
+        if evidence_type == "direct_overlap":
+            return (
+                f"This bullet already overlaps with {', '.join(_truncate_list(overlaps, 4))}, "
+                "but the overlap is not yet doing enough work up front."
+            )
+        return (
+            f"This bullet is directionally useful for {', '.join(_truncate_list(overlaps, 4))}, "
+            "but it currently reads more like background support than a strong JD-facing anchor."
+        )
+
+    return "This bullet is relevant, but the JD-facing signal is still too muted."
+
+
+def _fallback_why_rewrite_is_better_from_reuse(row: Dict[str, Any]) -> str:
+    overlaps = row.get("overlaps", []) or []
+    if overlaps:
+        return (
+            f"It surfaces {', '.join(_truncate_list(overlaps, 4))} earlier without adding any unsupported claim."
+        )
+    return "It improves JD alignment while staying anchored to evidence already in the resume."
+
+
+def _fallback_why_it_matters_from_reuse(row: Dict[str, Any]) -> str:
+    overlaps = row.get("overlaps", []) or []
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    if overlaps and evidence_type == "direct_overlap":
+        return (
+            f"This is already one of the strongest truthful anchors for {', '.join(_truncate_list(overlaps, 4))}."
+        )
+    if overlaps:
+        return (
+            f"This can support the JD story around {', '.join(_truncate_list(overlaps, 4))} without overstating ownership."
+        )
+    return "This is one of the stronger existing bullets to tighten before editing weaker sections."
+
+
+def _fallback_claim_safety_from_reuse(row: Dict[str, Any]) -> str:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    if evidence_type == "direct_overlap":
+        return "safe_strengthen"
+    if evidence_type in {"same_source_context", "semantic_similarity"}:
+        return "adjacent_only"
+    return "adjacent_only"
+
+
+def _fallback_edit_type_from_reuse(row: Dict[str, Any]) -> str:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    if evidence_type == "direct_overlap":
+        return "tighten"
+    if evidence_type == "same_source_context":
+        return "reinforce"
+    return "support"
+
+
+def _fallback_priority_from_reuse(index: int, row: Dict[str, Any]) -> str:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    overlaps = row.get("overlaps", []) or []
+
+    if evidence_type == "direct_overlap":
+        return "high"
+    if overlaps and index < 2:
+        return "medium"
+    return "low"
+
+
+def _reuse_candidate_to_edit_card(
+    row: Dict[str, Any],
+    preferred_rewrite_directions: List[str],
+    index: int,
+) -> Dict[str, Any]:
+    overlaps = list(row.get("overlaps", []) or [])
+    evidence = str(row.get("bullet", "") or row.get("parent_bullet", "") or "").strip()
+
+    return {
+        "card_id": f"edit_card_reuse_{index}",
+        "priority": _fallback_priority_from_reuse(index - 1, row),
+        "edit_type": _fallback_edit_type_from_reuse(row),
+        "section": row.get("section", ""),
+        "source": row.get("source", ""),
+        "jd_signal_terms": overlaps,
+        "current_evidence": evidence,
+        "parent_bullet": row.get("parent_bullet", ""),
+        "recommended_rewrite": _fallback_recommended_rewrite_from_reuse(
+            preferred_rewrite_directions,
+            row,
+        ),
+        "why_current_is_weak": _fallback_why_current_is_weak_from_reuse(row),
+        "why_rewrite_is_better": _fallback_why_rewrite_is_better_from_reuse(row),
+        "why_it_matters": _fallback_why_it_matters_from_reuse(row),
+        "claim_safety": _fallback_claim_safety_from_reuse(row),
+        "placement_guidance": _placement_guidance(row),
+    }
+
+
+def _backfill_edit_cards_from_bullet_reuse(
+    payload: Dict[str, Any],
+    preferred_rewrite_directions: List[str],
+    existing_cards: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    if len(existing_cards) >= limit:
+        return existing_cards[:limit]
+
+    cards = list(existing_cards)
+    seen_keys = {
+        (
+            str(card.get("section", "") or "").strip().lower(),
+            str(card.get("source", "") or "").strip().lower(),
+            str(card.get("current_evidence", "") or "").strip().lower(),
+        )
+        for card in cards
+    }
+
+    bullet_reuse_candidates = payload.get("bullet_reuse_candidates", []) or []
+
+    preferred_rows = []
+    secondary_rows = []
+
+    for row in bullet_reuse_candidates:
+        evidence_type = str(row.get("evidence_type", "") or "").strip()
+        if evidence_type == "direct_overlap":
+            preferred_rows.append(row)
+        elif evidence_type in {"same_source_context", "semantic_similarity"}:
+            secondary_rows.append(row)
+
+    candidate_rows = preferred_rows + secondary_rows
+
+    for row in candidate_rows:
+        if len(cards) >= limit:
+            break
+
+        evidence = str(row.get("bullet", "") or row.get("parent_bullet", "") or "").strip()
+        key = (
+            str(row.get("section", "") or "").strip().lower(),
+            str(row.get("source", "") or "").strip().lower(),
+            evidence.lower(),
+        )
+        if key in seen_keys:
+            continue
+
+        card = _reuse_candidate_to_edit_card(
+            row,
+            preferred_rewrite_directions,
+            len(cards) + 1,
+        )
+        cards.append(card)
+        seen_keys.add(key)
+
+    return cards[:limit]
 
 def _card_priority(index: int, evidence_type: str) -> str:
     if evidence_type == "direct_overlap":
@@ -487,7 +675,9 @@ def _build_edit_cards(
 ) -> List[Dict[str, Any]]:
     cards: List[Dict[str, Any]] = []
 
-    for index, candidate in enumerate((payload.get("rewrite_candidates", []) or [])[:limit], start=1):
+    rewrite_candidates = payload.get("rewrite_candidates", []) or []
+
+    for index, candidate in enumerate(rewrite_candidates[:limit], start=1):
         evidence_type = str(candidate.get("evidence_type", "") or "").strip()
         supported_terms = list(candidate.get("supported_terms", []) or [])
         recommended_rewrite = _recommended_rewrite_text(
@@ -513,6 +703,13 @@ def _build_edit_cards(
                 "placement_guidance": _placement_guidance(candidate),
             }
         )
+
+    cards = _backfill_edit_cards_from_bullet_reuse(
+        payload,
+        preferred_rewrite_directions,
+        cards,
+        limit,
+    )
 
     return cards
 
@@ -580,8 +777,8 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     recruiter_summary = _build_recruiter_summary(packet)
     keep_emphasize = _build_keep_emphasize(packet)
     do_not_claim = _build_do_not_claim(packet)
-    bullet_reuse = _build_bullet_reuse(packet)
     tailoring_plan = _build_tailoring_plan(packet)
+    bullet_reuse = _build_bullet_reuse(packet, tailoring_plan=tailoring_plan)
     rewrite_candidates = _build_rewrite_candidates(packet, tailoring_plan=tailoring_plan)
     evidence_layers = _build_evidence_layers(packet, tailoring_plan=tailoring_plan)
     tailoring_actions = _build_tailoring_actions(packet)

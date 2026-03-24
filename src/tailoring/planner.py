@@ -71,14 +71,50 @@ def _plan_row_key(row: Dict[str, Any]) -> tuple:
 def _facet_evidence_texts(facet_row: Dict[str, Any]) -> List[str]:
     texts: List[str] = []
 
-    for key in ("anchor_evidence", "facet_direct_evidence", "facet_context_evidence"):
-        for evidence in facet_row.get(key, []) or []:
-            if not isinstance(evidence, dict):
-                continue
+    def _append_text(value: Any) -> None:
+        text = str(value or "").strip()
+        if text:
+            texts.append(text)
 
-            text = str(evidence.get("text", "") or "").strip()
-            if text:
-                texts.append(text)
+    def _append_evidence_item(item: Any) -> None:
+        if isinstance(item, dict):
+            for key in (
+                "text",
+                "clause_text",
+                "evidence_unit",
+                "bullet",
+                "parent_bullet",
+                "excerpt",
+            ):
+                _append_text(item.get(key, ""))
+        elif isinstance(item, str):
+            _append_text(item)
+
+    for key in (
+        "anchor_evidence",
+        "facet_direct_evidence",
+        "facet_context_evidence",
+        "direct_evidence",
+        "context_evidence",
+        "matched_evidence",
+        "supporting_evidence",
+    ):
+        value = facet_row.get(key, [])
+        if isinstance(value, list):
+            for item in value:
+                _append_evidence_item(item)
+        else:
+            _append_evidence_item(value)
+
+    for key in (
+        "text",
+        "clause_text",
+        "evidence_unit",
+        "bullet",
+        "parent_bullet",
+        "excerpt",
+    ):
+        _append_text(facet_row.get(key, ""))
 
     return _unique_preserve_order(texts)
 
@@ -214,6 +250,58 @@ def _covered_facet_names_for_plan_units(
             covered.append(facet_name)
 
     return _unique_preserve_order(covered)
+
+def _facet_row_supported_terms(facet_row: Dict[str, Any]) -> List[str]:
+    return _unique_preserve_order(
+        list(facet_row.get("direct_terms", []) or [])
+        + list(facet_row.get("context_terms", []) or [])
+        + list(facet_row.get("skills_only_terms", []) or [])
+        + list(facet_row.get("facet_context_terms", []) or [])
+        + list(facet_row.get("job_terms", []) or [])
+    )[:6]
+
+
+def _fallback_plan_units_from_facet_rows(
+    facet_rows: List[Dict[str, Any]],
+    *,
+    primary: bool,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    units: List[Dict[str, Any]] = []
+    seen = set()
+
+    for facet_row in facet_rows:
+        facet_name = _facet_display_name(facet_row.get("facet", ""))
+        evidence_texts = _facet_evidence_texts(facet_row)
+        supported_terms = _facet_row_supported_terms(facet_row)
+
+        if not evidence_texts:
+            continue
+
+        evidence_unit = str(evidence_texts[0] or "").strip()
+        if not evidence_unit:
+            continue
+
+        key = (facet_name, evidence_unit)
+        if key in seen:
+            continue
+        seen.add(key)
+
+        units.append(
+            {
+                "section": "Experience",
+                "source": facet_name or "Facet evidence fallback",
+                "evidence_type": "direct_overlap" if primary else "same_source_context",
+                "supported_terms": supported_terms,
+                "evidence_unit": evidence_unit,
+                "parent_bullet": "",
+            }
+        )
+
+        if len(units) >= limit:
+            break
+
+    return units
 
 def _build_narrative_angle(packet: Dict[str, Any]) -> str:
     direct_facets = _top_direct_facets(packet, limit=2)
@@ -417,6 +505,39 @@ def _build_compatibility_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
 
     supported_rows = [row for row in rows if _row_supported_terms(row)]
     if not supported_rows:
+        fallback_primary_units = _fallback_plan_units_from_facet_rows(
+            direct_facets[:2],
+            primary=True,
+            limit=2,
+        )
+        fallback_secondary_units = _fallback_plan_units_from_facet_rows(
+            adjacent_facets[:2],
+            primary=False,
+            limit=2,
+        )
+
+        if fallback_primary_units or fallback_secondary_units:
+            primary_facet_coverage = [
+                str(unit.get("source", "") or "").strip()
+                for unit in fallback_primary_units
+                if str(unit.get("source", "") or "").strip()
+            ]
+            secondary_facet_coverage = [
+                str(unit.get("source", "") or "").strip()
+                for unit in fallback_secondary_units
+                if str(unit.get("source", "") or "").strip()
+                and str(unit.get("source", "") or "").strip() not in set(primary_facet_coverage)
+            ]
+
+            return {
+                "primary_anchor_units": fallback_primary_units,
+                "secondary_support_units": fallback_secondary_units,
+                "primary_facet_coverage": _unique_preserve_order(primary_facet_coverage),
+                "secondary_facet_coverage": _unique_preserve_order(secondary_facet_coverage),
+                "compatibility_mode": True,
+                "compatibility_reason": "facet_evidence_fallback_when_rewrite_rows_missing",
+            }
+
         return {
             "primary_anchor_units": [],
             "secondary_support_units": [],

@@ -6,6 +6,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
+def _load_csv_rows(path: Path) -> List[Dict[str, Any]]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        return [dict(row) for row in reader]
+
+
+
 def _load_jsonl_rows(path: Path) -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
     with path.open("r", encoding="utf-8") as handle:
@@ -61,6 +68,262 @@ def _counter_to_sorted_rows(counter: Counter, total: int) -> List[Dict[str, Any]
             }
         )
     return rows
+
+def _normalize_reviewer_status(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return "missing"
+    if text in {"done", "complete", "completed", "reviewed"}:
+        return "done"
+    if text in {"pending", "todo", "not_started", "not-started", "in_progress", "in-progress"}:
+        return "pending"
+    return text
+
+
+def _normalize_yes_no(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    if not text:
+        return "missing"
+    if text in {"yes", "y", "true", "1"}:
+        return "yes"
+    if text in {"no", "n", "false", "0"}:
+        return "no"
+    return text
+
+
+def _rate_row(rows: List[Dict[str, Any]], normalized_key: str, positive_value: str = "yes") -> Dict[str, Any]:
+    eligible = [row for row in rows if row.get(normalized_key, "missing") != "missing"]
+    numerator = sum(1 for row in eligible if row.get(normalized_key) == positive_value)
+    denominator = len(eligible)
+    pct = round((numerator / denominator) * 100.0, 2) if denominator else 0.0
+    return {
+        "numerator": numerator,
+        "denominator": denominator,
+        "pct": pct,
+    }
+
+
+def _reviewer_group_breakdown(
+    rows: List[Dict[str, Any]],
+    group_key: str,
+    top_n: int,
+) -> List[Dict[str, Any]]:
+    grouped: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        grouped[_bucket_value(row, group_key)].append(row)
+
+    ranked_keys = sorted(grouped.keys(), key=lambda key: (-len(grouped[key]), key))
+    output: List[Dict[str, Any]] = []
+
+    for value in ranked_keys[:top_n]:
+        group_rows = grouped[value]
+        total = len(group_rows)
+        output.append(
+            {
+                "key": value,
+                "count": total,
+                "reviewer_status": _counter_to_sorted_rows(
+                    Counter(row["reviewer_status_normalized"] for row in group_rows),
+                    total,
+                ),
+                "deterministic_correct": _counter_to_sorted_rows(
+                    Counter(row["deterministic_correct_normalized"] for row in group_rows),
+                    total,
+                ),
+                "live_better_than_deterministic": _counter_to_sorted_rows(
+                    Counter(row["live_better_than_deterministic_normalized"] for row in group_rows),
+                    total,
+                ),
+                "live_blended_better_than_deterministic": _counter_to_sorted_rows(
+                    Counter(row["live_blended_better_than_deterministic_normalized"] for row in group_rows),
+                    total,
+                ),
+                "equivalence_correct": _counter_to_sorted_rows(
+                    Counter(row["equivalence_correct_normalized"] for row in group_rows),
+                    total,
+                ),
+            }
+        )
+
+    return output
+
+
+def _reviewer_disagreement_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    disagreements: List[Dict[str, Any]] = []
+
+    for row in rows:
+        reasons: List[str] = []
+        if row.get("deterministic_correct_normalized") == "no":
+            reasons.append("deterministic_incorrect")
+        if row.get("live_better_than_deterministic_normalized") == "yes":
+            reasons.append("live_better")
+        if row.get("live_blended_better_than_deterministic_normalized") == "yes":
+            reasons.append("live_blended_better")
+        if row.get("equivalence_correct_normalized") == "no":
+            reasons.append("equivalence_incorrect")
+
+        if not reasons:
+            continue
+
+        disagreements.append(
+            {
+                "packet_key": _bucket_value(row, "packet_key"),
+                "resume_key": _bucket_value(row, "resume_key"),
+                "company": _bucket_value(row, "company", default=""),
+                "title": _bucket_value(row, "title", default=""),
+                "selection_outcome_bucket": _bucket_value(row, "selection_outcome_bucket"),
+                "live_outcome_bucket": _bucket_value(row, "live_outcome_bucket"),
+                "equivalence_outcome_bucket": _bucket_value(row, "equivalence_outcome_bucket"),
+                "fingerprint_relationship_bucket": _bucket_value(row, "fingerprint_relationship_bucket"),
+                "disagreement_reasons": reasons,
+                "reviewer_notes": _bucket_value(row, "reviewer_notes", default=""),
+            }
+        )
+
+    disagreements.sort(
+        key=lambda row: (
+            row["packet_key"],
+            row["resume_key"],
+        )
+    )
+    return disagreements
+
+
+def _build_reviewer_summary(rows: List[Dict[str, Any]], top_n: int) -> Dict[str, Any]:
+    normalized_rows: List[Dict[str, Any]] = []
+    for raw_row in rows:
+        row = dict(raw_row)
+        row["reviewer_status_normalized"] = _normalize_reviewer_status(row.get("reviewer_status", ""))
+        row["deterministic_correct_normalized"] = _normalize_yes_no(row.get("deterministic_correct", ""))
+        row["live_better_than_deterministic_normalized"] = _normalize_yes_no(
+            row.get("live_better_than_deterministic", "")
+        )
+        row["live_blended_better_than_deterministic_normalized"] = _normalize_yes_no(
+            row.get("live_blended_better_than_deterministic", "")
+        )
+        row["equivalence_correct_normalized"] = _normalize_yes_no(row.get("equivalence_correct", ""))
+        normalized_rows.append(row)
+
+    total = len(normalized_rows)
+    completed_rows = [
+        row for row in normalized_rows
+        if row["reviewer_status_normalized"] == "done"
+    ]
+
+    summary = {
+        "mode": "reviewer_csv",
+        "total_rows": total,
+        "completed_reviews": len(completed_rows),
+        "completion_rate_pct": round((len(completed_rows) / total) * 100.0, 2) if total else 0.0,
+        "reviewer_status": _counter_to_sorted_rows(
+            Counter(row["reviewer_status_normalized"] for row in normalized_rows),
+            total,
+        ),
+        "headline_metrics": {
+            "deterministic_correct_rate": _rate_row(completed_rows, "deterministic_correct_normalized"),
+            "live_better_than_deterministic_rate": _rate_row(
+                completed_rows,
+                "live_better_than_deterministic_normalized",
+            ),
+            "live_blended_better_than_deterministic_rate": _rate_row(
+                completed_rows,
+                "live_blended_better_than_deterministic_normalized",
+            ),
+            "equivalence_judgment_correct_rate": _rate_row(
+                completed_rows,
+                "equivalence_correct_normalized",
+            ),
+        },
+        "deterministic_correct": _counter_to_sorted_rows(
+            Counter(row["deterministic_correct_normalized"] for row in completed_rows),
+            len(completed_rows),
+        ),
+        "live_better_than_deterministic": _counter_to_sorted_rows(
+            Counter(row["live_better_than_deterministic_normalized"] for row in completed_rows),
+            len(completed_rows),
+        ),
+        "live_blended_better_than_deterministic": _counter_to_sorted_rows(
+            Counter(row["live_blended_better_than_deterministic_normalized"] for row in completed_rows),
+            len(completed_rows),
+        ),
+        "equivalence_correct": _counter_to_sorted_rows(
+            Counter(row["equivalence_correct_normalized"] for row in completed_rows),
+            len(completed_rows),
+        ),
+        "by_selection_outcome_bucket": _reviewer_group_breakdown(
+            completed_rows,
+            "selection_outcome_bucket",
+            top_n,
+        ),
+        "by_live_outcome_bucket": _reviewer_group_breakdown(
+            completed_rows,
+            "live_outcome_bucket",
+            top_n,
+        ),
+        "by_equivalence_outcome_bucket": _reviewer_group_breakdown(
+            completed_rows,
+            "equivalence_outcome_bucket",
+            top_n,
+        ),
+        "by_fingerprint_relationship_bucket": _reviewer_group_breakdown(
+            completed_rows,
+            "fingerprint_relationship_bucket",
+            top_n,
+        ),
+        "disagreement_rows": _reviewer_disagreement_rows(completed_rows),
+    }
+    return summary
+
+
+def _print_reviewer_headline_metrics(metrics: Dict[str, Dict[str, Any]]) -> None:
+    print("\nHeadline Metrics")
+    print("----------------")
+    for key, value in metrics.items():
+        print(
+            f"{key}: {value['numerator']}/{value['denominator']} "
+            f"({value['pct']:.2f}%)"
+        )
+
+
+def _print_reviewer_group_block(title: str, rows: List[Dict[str, Any]]) -> None:
+    print(f"\n{title}")
+    print("=" * len(title))
+
+    for item in rows:
+        print(f"\n{item['key']} | count={item['count']}")
+        for key in [
+            "reviewer_status",
+            "deterministic_correct",
+            "live_better_than_deterministic",
+            "live_blended_better_than_deterministic",
+            "equivalence_correct",
+        ]:
+            print(f"  {key}")
+            for bucket in item[key]:
+                print(f"    - {bucket['key']}: {bucket['count']} ({bucket['pct']:.2f}%)")
+
+
+def _print_reviewer_disagreements(rows: List[Dict[str, Any]]) -> None:
+    print("\nReviewer Disagreements")
+    print("======================")
+
+    if not rows:
+        print("none")
+        return
+
+    for item in rows:
+        print(
+            f"\n{item['packet_key']} | resume={item['resume_key']} | "
+            f"reasons={','.join(item['disagreement_reasons'])}"
+        )
+        print(f"  title: {item['company']} | {item['title']}")
+        print(
+            f"  selection={item['selection_outcome_bucket']} | "
+            f"live={item['live_outcome_bucket']} | "
+            f"equivalence={item['equivalence_outcome_bucket']} | "
+            f"fingerprint={item['fingerprint_relationship_bucket']}"
+        )
+        print(f"  notes: {item['reviewer_notes'] or 'n/a'}")
 
 
 def _group_breakdown(
@@ -536,12 +799,17 @@ def _write_reviewer_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Analyze tailoring training-log JSONL outputs."
+        description="Analyze tailoring training-log JSONL outputs or reviewer CSV exports."
     )
     parser.add_argument(
         "--input-jsonl",
         default="./outputs/application_planning/training_logs/tailoring_runs.jsonl",
         help="Path to the tailoring training-log JSONL file.",
+    )
+    parser.add_argument(
+        "--reviewer-csv-input",
+        default="",
+        help="Optional path to a completed reviewer CSV for human-agreement analysis.",
     )
     parser.add_argument(
         "--output-json",
@@ -575,6 +843,62 @@ def main() -> None:
         help="Optional path to write a reviewer CSV for latest keyed packet comparisons.",
     )
     args = parser.parse_args()
+
+    if args.reviewer_csv_input.strip():
+        reviewer_csv_path = Path(args.reviewer_csv_input)
+        if not reviewer_csv_path.exists():
+            raise FileNotFoundError(f"Reviewer CSV file not found: {reviewer_csv_path}")
+
+        reviewer_rows = _load_csv_rows(reviewer_csv_path)
+        if not reviewer_rows:
+            raise ValueError(f"No rows found in reviewer CSV: {reviewer_csv_path}")
+
+        summary = _build_reviewer_summary(reviewer_rows, top_n=max(args.top_n, 1))
+
+        print(
+            f"Loaded {len(reviewer_rows)} reviewer rows from {reviewer_csv_path}; "
+            f"completed reviews={summary['completed_reviews']}"
+        )
+        _print_counter_block("Reviewer Status", summary["reviewer_status"])
+        _print_reviewer_headline_metrics(summary["headline_metrics"])
+        _print_counter_block("Deterministic Correct", summary["deterministic_correct"])
+        _print_counter_block(
+            "Live Better Than Deterministic",
+            summary["live_better_than_deterministic"],
+        )
+        _print_counter_block(
+            "Live Blended Better Than Deterministic",
+            summary["live_blended_better_than_deterministic"],
+        )
+        _print_counter_block("Equivalence Correct", summary["equivalence_correct"])
+        _print_reviewer_group_block(
+            "By Selection Outcome Bucket",
+            summary["by_selection_outcome_bucket"],
+        )
+        _print_reviewer_group_block(
+            "By Live Outcome Bucket",
+            summary["by_live_outcome_bucket"],
+        )
+        _print_reviewer_group_block(
+            "By Equivalence Outcome Bucket",
+            summary["by_equivalence_outcome_bucket"],
+        )
+        _print_reviewer_group_block(
+            "By Fingerprint Relationship Bucket",
+            summary["by_fingerprint_relationship_bucket"],
+        )
+        _print_reviewer_disagreements(summary["disagreement_rows"])
+
+        if args.output_json.strip():
+            output_path = Path(args.output_json)
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            output_path.write_text(
+                json.dumps(summary, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            print(f"\nWrote summary JSON: {output_path}")
+
+        return
 
     input_path = Path(args.input_jsonl)
     if not input_path.exists():
@@ -630,12 +954,12 @@ def main() -> None:
             encoding="utf-8",
         )
         print(f"\nWrote summary JSON: {output_path}")
-    
+
     if args.output_packet_comparisons_csv.strip():
         csv_path = Path(args.output_packet_comparisons_csv)
         _write_packet_comparisons_csv(csv_path, summary["packet_comparisons"])
         print(f"Wrote packet comparison CSV: {csv_path}")
-    
+
     if args.output_reviewer_csv.strip():
         reviewer_csv_path = Path(args.output_reviewer_csv)
         _write_reviewer_csv(reviewer_csv_path, summary["packet_comparisons"])

@@ -511,6 +511,100 @@ def _build_training_log_row(
                 ),
             }
         )
+    
+    def _resolved_candidate_for_lineage_item(candidate: Dict[str, Any]) -> Dict[str, Any]:
+        
+        resolved_to_candidate_id = str(candidate.get("resolved_to_candidate_id", "") or "").strip()
+        if resolved_to_candidate_id:
+            resolved = candidate_lookup.get(resolved_to_candidate_id, {})
+            if resolved:
+                return resolved
+        return candidate_lookup.get(str(candidate.get("candidate_id", "") or "").strip(), {})
+
+    def _candidate_rank_tuple(candidate: Dict[str, Any]) -> tuple:
+        quality_score = candidate.get("quality_score")
+        quality_value = float(quality_score) if isinstance(quality_score, (int, float)) else float("-inf")
+        is_polished = 1 if candidate.get("is_polished", False) else 0
+        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+        return (quality_value, is_polished, candidate_id)
+
+    def _best_family_effective_candidate(prefix: str) -> Dict[str, Any]:
+        best_lineage_item: Optional[Dict[str, Any]] = None
+        best_effective_candidate: Optional[Dict[str, Any]] = None
+        best_rank: Optional[tuple] = None
+
+        for lineage_item in candidate_lineage:
+            source_family = str(lineage_item.get("source_family", "") or "").strip()
+            if source_family != prefix:
+                continue
+
+            effective_candidate = _resolved_candidate_for_lineage_item(lineage_item)
+            if not effective_candidate:
+                continue
+
+            if not (effective_candidate.get("covers_plan") and effective_candidate.get("verifier_ok")):
+                continue
+
+            rank = _candidate_rank_tuple(effective_candidate)
+            if best_rank is None or rank > best_rank:
+                best_rank = rank
+                best_lineage_item = lineage_item
+                best_effective_candidate = effective_candidate
+
+        if best_lineage_item is None or best_effective_candidate is None:
+            return {}
+
+        return {
+            "lineage_candidate_id": str(best_lineage_item.get("candidate_id", "") or "").strip(),
+            "effective_candidate_id": str(best_effective_candidate.get("candidate_id", "") or "").strip(),
+            "effective_source_family": str(best_effective_candidate.get("source_family", "") or "").strip(),
+            "directions_fingerprint": _directions_fingerprint(best_effective_candidate.get("directions", []) or []),
+        }
+
+    deterministic_family_fingerprint_info = _best_family_effective_candidate("deterministic_planner")
+    live_family_fingerprint_info = _best_family_effective_candidate("live_llm")
+    live_blended_family_fingerprint_info = _best_family_effective_candidate("live_llm_blended")
+
+    deterministic_family_fingerprint = str(
+        deterministic_family_fingerprint_info.get("directions_fingerprint", "") or ""
+    )
+    live_family_fingerprint = str(
+        live_family_fingerprint_info.get("directions_fingerprint", "") or ""
+    )
+    live_blended_family_fingerprint = str(
+        live_blended_family_fingerprint_info.get("directions_fingerprint", "") or ""
+    )
+
+    selected_matches_deterministic_family = (
+        bool(selected_candidate_fingerprint)
+        and bool(deterministic_family_fingerprint)
+        and selected_candidate_fingerprint == deterministic_family_fingerprint
+    )
+    selected_matches_live_family = (
+        bool(selected_candidate_fingerprint)
+        and bool(live_family_fingerprint)
+        and selected_candidate_fingerprint == live_family_fingerprint
+    )
+    selected_matches_live_blended_family = (
+        bool(selected_candidate_fingerprint)
+        and bool(live_blended_family_fingerprint)
+        and selected_candidate_fingerprint == live_blended_family_fingerprint
+    )
+    deterministic_matches_live_family = (
+        bool(deterministic_family_fingerprint)
+        and bool(live_family_fingerprint)
+        and deterministic_family_fingerprint == live_family_fingerprint
+    )
+    deterministic_matches_live_blended_family = (
+        bool(deterministic_family_fingerprint)
+        and bool(live_blended_family_fingerprint)
+        and deterministic_family_fingerprint == live_blended_family_fingerprint
+    )
+    live_matches_live_blended_family = (
+        bool(live_family_fingerprint)
+        and bool(live_blended_family_fingerprint)
+        and live_family_fingerprint == live_blended_family_fingerprint
+    )
     selected_source = str(audit.get("selected_source", "") or "").strip()
     selected_reason = str(audit.get("selected_reason", "") or "").strip()
 
@@ -558,7 +652,7 @@ def _build_training_log_row(
         equivalence_outcome_bucket = "equivalent_quality"
 
     return {
-        "schema_version": "tailoring_training_log_v5",
+        "schema_version": "tailoring_training_log_v6",
         "generated_at_utc": str(generated_at_utc or ""),
         "artifacts": {
             "output_json_path": str(output_json_path or ""),
@@ -602,6 +696,19 @@ def _build_training_log_row(
             "selected_candidate_fingerprint": selected_candidate_fingerprint,
             "selected_equivalent_candidate_fingerprints": selected_equivalent_candidate_fingerprints,
             "candidate_fingerprints": candidate_fingerprints,
+            "family_fingerprints": {
+                "deterministic_planner": deterministic_family_fingerprint_info,
+                "live_llm": live_family_fingerprint_info,
+                "live_llm_blended": live_blended_family_fingerprint_info,
+            },
+            "family_fingerprint_matches": {
+                "selected_matches_deterministic_family": selected_matches_deterministic_family,
+                "selected_matches_live_family": selected_matches_live_family,
+                "selected_matches_live_blended_family": selected_matches_live_blended_family,
+                "deterministic_matches_live_family": deterministic_matches_live_family,
+                "deterministic_matches_live_blended_family": deterministic_matches_live_blended_family,
+                "live_matches_live_blended_family": live_matches_live_blended_family,
+            },
         },
         "fallback_reason_codes": audit.get("fallback_reason_codes", []) or [],
         "llm": {
@@ -647,6 +754,15 @@ def _build_training_log_row(
             "equivalence_outcome_bucket": equivalence_outcome_bucket,
             "preferred_rewrite_fingerprint": preferred_rewrite_fingerprint,
             "selected_candidate_fingerprint": selected_candidate_fingerprint,
+            "deterministic_family_fingerprint": deterministic_family_fingerprint,
+            "live_family_fingerprint": live_family_fingerprint,
+            "live_blended_family_fingerprint": live_blended_family_fingerprint,
+            "selected_matches_deterministic_family": selected_matches_deterministic_family,
+            "selected_matches_live_family": selected_matches_live_family,
+            "selected_matches_live_blended_family": selected_matches_live_blended_family,
+            "deterministic_matches_live_family": deterministic_matches_live_family,
+            "deterministic_matches_live_blended_family": deterministic_matches_live_blended_family,
+            "live_matches_live_blended_family": live_matches_live_blended_family,
         },
         "source_family_audits": {
             "deterministic_planner": audit.get("deterministic_planner"),

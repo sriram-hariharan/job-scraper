@@ -187,6 +187,7 @@ def _packet_comparison_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         eval_summary = row.get("eval_summary", {}) or {}
         fingerprints = row.get("fingerprints", {}) or {}
         family_fingerprint_matches = fingerprints.get("family_fingerprint_matches", {}) or {}
+        artifacts = row.get("artifacts", {}) or {}
 
         item = {
             "packet_key": _analysis_key(row, "packet_key"),
@@ -200,6 +201,10 @@ def _packet_comparison_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             "equivalence_outcome_bucket": _bucket_value(row, "equivalence_outcome_bucket"),
             "compatibility_mode": bool(row.get("compatibility_mode", False)),
             "compatibility_reason": str(row.get("compatibility_reason", "") or "").strip(),
+            "packet_json_path": str(row.get("packet_json_path", "") or "").strip(),
+            "output_json_path": str(artifacts.get("output_json_path", "") or "").strip(),
+            "output_md_path": str(artifacts.get("output_md_path", "") or "").strip(),
+            "output_llm_json_path": str(artifacts.get("output_llm_json_path", "") or "").strip(),
             "preferred_rewrite_fingerprint": str(
                 eval_summary.get("preferred_rewrite_fingerprint", "") or ""
             ),
@@ -441,6 +446,94 @@ def _write_packet_comparisons_csv(path: Path, rows: List[Dict[str, Any]]) -> Non
                 }
             )
 
+def _write_reviewer_csv(path: Path, rows: List[Dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fieldnames = [
+        "packet_key",
+        "resume_key",
+        "company",
+        "title",
+        "selected_source",
+        "selected_reason",
+        "selection_outcome_bucket",
+        "live_outcome_bucket",
+        "equivalence_outcome_bucket",
+        "fingerprint_relationship_bucket",
+        "compatibility_mode",
+        "compatibility_reason",
+        "packet_generated_at_utc",
+        "packet_json_path",
+        "output_json_path",
+        "output_md_path",
+        "output_llm_json_path",
+        "preferred_rewrite_fingerprint",
+        "selected_candidate_fingerprint",
+        "deterministic_family_fingerprint",
+        "live_family_fingerprint",
+        "live_blended_family_fingerprint",
+        "selected_matches_deterministic_family",
+        "selected_matches_live_family",
+        "selected_matches_live_blended_family",
+        "deterministic_matches_live_family",
+        "deterministic_matches_live_blended_family",
+        "live_matches_live_blended_family",
+        "selected_equivalent_candidate_ids",
+        "reviewer_status",
+        "deterministic_correct",
+        "live_better_than_deterministic",
+        "live_blended_better_than_deterministic",
+        "equivalence_correct",
+        "reviewer_notes",
+    ]
+
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for item in rows:
+            writer.writerow(
+                {
+                    "packet_key": item.get("packet_key", ""),
+                    "resume_key": item.get("resume_key", ""),
+                    "company": item.get("company", ""),
+                    "title": item.get("title", ""),
+                    "selected_source": item.get("selected_source", ""),
+                    "selected_reason": item.get("selected_reason", ""),
+                    "selection_outcome_bucket": item.get("selection_outcome_bucket", ""),
+                    "live_outcome_bucket": item.get("live_outcome_bucket", ""),
+                    "equivalence_outcome_bucket": item.get("equivalence_outcome_bucket", ""),
+                    "fingerprint_relationship_bucket": item.get("fingerprint_relationship_bucket", ""),
+                    "compatibility_mode": item.get("compatibility_mode", False),
+                    "compatibility_reason": item.get("compatibility_reason", ""),
+                    "packet_generated_at_utc": item.get("packet_generated_at_utc", ""),
+                    "packet_json_path": item.get("packet_json_path", ""),
+                    "output_json_path": item.get("output_json_path", ""),
+                    "output_md_path": item.get("output_md_path", ""),
+                    "output_llm_json_path": item.get("output_llm_json_path", ""),
+                    "preferred_rewrite_fingerprint": item.get("preferred_rewrite_fingerprint", ""),
+                    "selected_candidate_fingerprint": item.get("selected_candidate_fingerprint", ""),
+                    "deterministic_family_fingerprint": item.get("deterministic_family_fingerprint", ""),
+                    "live_family_fingerprint": item.get("live_family_fingerprint", ""),
+                    "live_blended_family_fingerprint": item.get("live_blended_family_fingerprint", ""),
+                    "selected_matches_deterministic_family": item.get("selected_matches_deterministic_family", False),
+                    "selected_matches_live_family": item.get("selected_matches_live_family", False),
+                    "selected_matches_live_blended_family": item.get("selected_matches_live_blended_family", False),
+                    "deterministic_matches_live_family": item.get("deterministic_matches_live_family", False),
+                    "deterministic_matches_live_blended_family": item.get("deterministic_matches_live_blended_family", False),
+                    "live_matches_live_blended_family": item.get("live_matches_live_blended_family", False),
+                    "selected_equivalent_candidate_ids": ";".join(
+                        item.get("selected_equivalent_candidate_ids", []) or []
+                    ),
+                    "reviewer_status": "",
+                    "deterministic_correct": "",
+                    "live_better_than_deterministic": "",
+                    "live_blended_better_than_deterministic": "",
+                    "equivalence_correct": "",
+                    "reviewer_notes": "",
+                }
+            )
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Analyze tailoring training-log JSONL outputs."
@@ -475,6 +568,11 @@ def main() -> None:
         "--require-analysis-keys",
         action="store_true",
         help="Drop rows missing stable analysis keys such as packet_key and resume_key before summarizing.",
+    )
+    parser.add_argument(
+        "--output-reviewer-csv",
+        default="",
+        help="Optional path to write a reviewer CSV for latest keyed packet comparisons.",
     )
     args = parser.parse_args()
 
@@ -537,7 +635,11 @@ def main() -> None:
         csv_path = Path(args.output_packet_comparisons_csv)
         _write_packet_comparisons_csv(csv_path, summary["packet_comparisons"])
         print(f"Wrote packet comparison CSV: {csv_path}")
-
+    
+    if args.output_reviewer_csv.strip():
+        reviewer_csv_path = Path(args.output_reviewer_csv)
+        _write_reviewer_csv(reviewer_csv_path, summary["packet_comparisons"])
+        print(f"Wrote reviewer CSV: {reviewer_csv_path}")
 
 if __name__ == "__main__":
     main()

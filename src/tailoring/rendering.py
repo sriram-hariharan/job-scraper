@@ -333,6 +333,75 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         ),
     }
 
+def _build_training_log_row(
+    payload: Dict[str, Any],
+    llm_output: Optional[Dict[str, Any]],
+    packet_json_path: str = "",
+    generated_at_utc: str = "",
+    output_json_path: str = "",
+    output_md_path: str = "",
+    output_llm_json_path: str = "",
+) -> Dict[str, Any]:
+    job = payload.get("job", {}) or {}
+    selection = payload.get("selection", {}) or {}
+    summary = payload.get("summary", {}) or {}
+    audit = payload.get("preferred_rewrite_selection_audit", {}) or {}
+    verifier = payload.get("preferred_rewrite_verifier", {}) or {}
+    llm_output = llm_output or {}
+
+    return {
+        "schema_version": "tailoring_training_log_v1",
+        "generated_at_utc": str(generated_at_utc or ""),
+        "artifacts": {
+            "output_json_path": str(output_json_path or ""),
+            "output_md_path": str(output_md_path or ""),
+            "output_llm_json_path": str(output_llm_json_path or ""),
+        },
+        "packet_json_path": str(packet_json_path or ""),
+        "job": {
+            "company": job.get("company", ""),
+            "title": job.get("title", ""),
+            "location": job.get("location", ""),
+            "link": job.get("link", "") or job.get("url", ""),
+        },
+        "selection": {
+            "selected_resume": selection.get("selected_resume", ""),
+            "selected_score": selection.get("selected_score", 0.0),
+        },
+        "summary": summary,
+        "preferred_rewrite_source": payload.get("preferred_rewrite_source", ""),
+        "preferred_rewrite_directions": payload.get("preferred_rewrite_directions", []) or [],
+        "preferred_rewrite_verifier": verifier,
+        "selected_candidate_id": audit.get("selected_candidate_id", ""),
+        "selected_source": audit.get("selected_source", ""),
+        "selected_reason": audit.get("selected_reason", ""),
+        "selected_equivalent_candidate_ids": audit.get("selected_equivalent_candidate_ids", []) or [],
+        "fallback_reason_codes": audit.get("fallback_reason_codes", []) or [],
+        "llm": {
+            "requested": audit.get("llm_requested", False),
+            "parse_ok": audit.get("llm_parse_ok", False),
+            "strong_enough": audit.get("llm_strong_enough", False),
+            "requested_provider": llm_output.get("requested_provider", ""),
+            "requested_model": llm_output.get("requested_model", ""),
+            "resolved_provider": llm_output.get("resolved_provider", ""),
+            "resolved_model": llm_output.get("resolved_model", ""),
+            "fallback_used": llm_output.get("fallback_used", False),
+            "cache_hit": llm_output.get("cache_hit", False),
+            "parse_error": llm_output.get("parse_error", ""),
+            "prompt_version": llm_output.get("prompt_version", ""),
+        },
+        "source_family_audits": {
+            "deterministic_planner": audit.get("deterministic_planner"),
+            "live_llm": audit.get("live_llm"),
+            "live_llm_blended": audit.get("live_llm_blended"),
+        },
+        "candidate_pool": audit.get("candidate_pool", []) or [],
+        "candidate_pool_lineage": audit.get("candidate_pool_lineage", []) or [],
+        "planner_seed_rewrite_directions": payload.get("planner_seed_rewrite_directions", []) or [],
+        "tailoring_plan": payload.get("tailoring_plan", {}) or {},
+        "do_not_claim": payload.get("do_not_claim", []) or [],
+        "guardrail": payload.get("guardrail", ""),
+    }
 
 def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     job = payload.get("job", {})

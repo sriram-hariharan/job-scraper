@@ -1,5 +1,6 @@
 import argparse
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 from src.tailoring.packet_support import _load_packet, _source_label
@@ -7,6 +8,7 @@ from src.tailoring.rendering import (
     _build_payload,
     _build_operator_markdown_payload,
     _markdown_from_payload,
+    _build_training_log_row,
 )
 from src.tailoring.llm import _run_live_llm_tailoring
 
@@ -44,8 +46,15 @@ def main() -> None:
         action="store_true",
         help="Ignore any existing live LLM cache and regenerate the LLM tailoring output.",
     )
+    parser.add_argument(
+        "--training-log-jsonl",
+        default="",
+        help="Optional path to append one structured tailoring training-log JSONL row per run.",
+    )
     args = parser.parse_args()
 
+    generated_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
+    
     packet = _load_packet(Path(args.packet_json))
     payload = _build_payload(packet)
     final_payload = _build_operator_markdown_payload(payload, None)
@@ -115,6 +124,7 @@ def main() -> None:
     if args.output_md.strip():
         output_md_path = Path(args.output_md)
     
+    llm_output = None
     if args.use_llm:
         llm_output = _run_live_llm_tailoring(
             packet=packet,
@@ -197,6 +207,25 @@ def main() -> None:
         if output_md_path is not None:
             output_md_path.write_text(markdown, encoding="utf-8")
             print(f"Markdown written: {args.output_md}")
+    
+    if args.training_log_jsonl.strip():
+        training_log_path = Path(args.training_log_jsonl)
+        training_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+        training_log_row = _build_training_log_row(
+            final_payload,
+            llm_output,
+            packet_json_path=args.packet_json,
+            generated_at_utc=generated_at_utc,
+            output_json_path=args.output_json,
+            output_md_path=args.output_md,
+            output_llm_json_path=args.output_llm_json,
+        )
+
+        with training_log_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(training_log_row, ensure_ascii=False) + "\n")
+
+        print(f"Training log row appended: {training_log_path}")
 
 if __name__ == "__main__":
     main()

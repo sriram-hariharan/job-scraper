@@ -1,4 +1,7 @@
 from typing import List, Dict, Any, Optional
+from pathlib import Path
+import re
+import hashlib
 
 from src.tailoring.packet_support import (
     _top_direct_facets,
@@ -333,6 +336,31 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         ),
     }
 
+def _slugify_training_key(value: str) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"\.[a-z0-9]+$", "", text)
+    text = re.sub(r"[^a-z0-9]+", "_", text)
+    text = re.sub(r"_+", "_", text).strip("_")
+    return text
+
+
+def _packet_stem_key(path_value: str) -> str:
+    raw = str(path_value or "").strip()
+    if not raw:
+        return ""
+    return Path(raw).stem.strip()
+
+def _directions_fingerprint(directions: List[str]) -> str:
+    normalized = [
+        str(item or "").strip()
+        for item in (directions or [])
+        if str(item or "").strip()
+    ]
+    if not normalized:
+        return ""
+    payload = "\n".join(normalized)
+    return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:16]
+
 def _build_training_log_row(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
@@ -348,6 +376,19 @@ def _build_training_log_row(
     audit = payload.get("preferred_rewrite_selection_audit", {}) or {}
     verifier = payload.get("preferred_rewrite_verifier", {}) or {}
     llm_output = llm_output or {}
+    tailoring_plan = payload.get("tailoring_plan", {}) or {}
+
+    company_slug = _slugify_training_key(job.get("company", ""))
+    job_slug = _slugify_training_key(job.get("title", ""))
+    resume_slug = _slugify_training_key(selection.get("selected_resume", ""))
+    packet_key = _packet_stem_key(packet_json_path)
+
+    job_key = ""
+    if company_slug and job_slug:
+        job_key = f"{company_slug}__{job_slug}"
+    else:
+        job_key = company_slug or job_slug
+
     candidate_pool = audit.get("candidate_pool", []) or []
     candidate_lineage = audit.get("candidate_pool_lineage", []) or []
 
@@ -417,15 +458,124 @@ def _build_training_log_row(
         if str(candidate_id).startswith("live_llm")
     ]
 
+    combined_candidates: List[Dict[str, Any]] = []
+    seen_candidate_ids = set()
+
+    for candidate in list(candidate_pool) + list(candidate_lineage):
+        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+        if not candidate_id or candidate_id in seen_candidate_ids:
+            continue
+        combined_candidates.append(candidate)
+        seen_candidate_ids.add(candidate_id)
+
+    candidate_lookup = {
+        str(candidate.get("candidate_id", "") or "").strip(): candidate
+        for candidate in combined_candidates
+        if str(candidate.get("candidate_id", "") or "").strip()
+    }
+
+    def _candidate_fingerprint_by_id(candidate_id: str) -> str:
+        candidate = candidate_lookup.get(str(candidate_id or "").strip(), {})
+        return _directions_fingerprint(candidate.get("directions", []) or [])
+
+    preferred_rewrite_fingerprint = _directions_fingerprint(
+        payload.get("preferred_rewrite_directions", []) or []
+    )
+    selected_candidate_fingerprint = _candidate_fingerprint_by_id(selected_candidate_id)
+
+    selected_equivalent_candidate_fingerprints = [
+        {
+            "candidate_id": str(candidate_id or "").strip(),
+            "directions_fingerprint": _candidate_fingerprint_by_id(str(candidate_id or "").strip()),
+        }
+        for candidate_id in selected_equivalent_candidate_ids
+        if str(candidate_id or "").strip()
+    ]
+
+    candidate_fingerprints = []
+    for candidate in combined_candidates:
+        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+        resolved_to_candidate_id = str(candidate.get("resolved_to_candidate_id", "") or "").strip()
+
+        candidate_fingerprints.append(
+            {
+                "candidate_id": candidate_id,
+                "source_family": str(candidate.get("source_family", "") or "").strip(),
+                "is_polished": bool(candidate.get("is_polished", False)),
+                "status": str(candidate.get("status", "") or "").strip(),
+                "directions_fingerprint": _directions_fingerprint(candidate.get("directions", []) or []),
+                "resolved_to_candidate_id": resolved_to_candidate_id,
+                "resolved_to_directions_fingerprint": (
+                    _candidate_fingerprint_by_id(resolved_to_candidate_id)
+                    if resolved_to_candidate_id else ""
+                ),
+            }
+        )
+    selected_source = str(audit.get("selected_source", "") or "").strip()
+    selected_reason = str(audit.get("selected_reason", "") or "").strip()
+
+    has_valid_live_lineage_candidate = _has_valid_lineage_family_candidate("live_llm")
+    has_valid_live_blended_lineage_candidate = _has_valid_lineage_family_candidate("live_llm_blended")
+    has_any_valid_live_family_candidate = (
+        has_valid_live_lineage_candidate or has_valid_live_blended_lineage_candidate
+    )
+
+    has_live_equivalent = len(live_equivalent_candidate_ids) > 0
+
+    if selected_source == "deterministic_planner":
+        if has_live_equivalent:
+            selection_outcome_bucket = "deterministic_kept_equivalent_live"
+        elif has_any_valid_live_family_candidate:
+            selection_outcome_bucket = "deterministic_kept_live_valid_but_not_equivalent"
+        else:
+            selection_outcome_bucket = "deterministic_kept_no_valid_live"
+    elif selected_source.startswith("live_llm"):
+        selection_outcome_bucket = "live_selected"
+    else:
+        selection_outcome_bucket = "other_selected"
+
+    if has_any_valid_live_family_candidate:
+        if has_live_equivalent:
+            live_outcome_bucket = "valid_live_equivalent_to_selected"
+        else:
+            live_outcome_bucket = "valid_live_present"
+    else:
+        if audit.get("llm_requested"):
+            live_outcome_bucket = "no_valid_live_after_llm"
+        else:
+            live_outcome_bucket = "llm_not_requested"
+
+    if has_live_equivalent:
+        equivalence_outcome_bucket = "live_equivalent_selected"
+    elif has_any_valid_live_family_candidate:
+        equivalence_outcome_bucket = "valid_live_not_equivalent"
+    else:
+        equivalence_outcome_bucket = "no_live_equivalence"
+
+    if "identical_best" in selected_reason:
+        equivalence_outcome_bucket = "identical_best"
+    elif "equivalent_quality" in selected_reason:
+        equivalence_outcome_bucket = "equivalent_quality"
+
     return {
-        "schema_version": "tailoring_training_log_v2",
+        "schema_version": "tailoring_training_log_v5",
         "generated_at_utc": str(generated_at_utc or ""),
         "artifacts": {
             "output_json_path": str(output_json_path or ""),
             "output_md_path": str(output_md_path or ""),
             "output_llm_json_path": str(output_llm_json_path or ""),
         },
+        "analysis_keys": {
+            "packet_key": packet_key,
+            "job_key": job_key,
+            "resume_key": resume_slug,
+            "company_slug": company_slug,
+            "job_slug": job_slug,
+            "resume_slug": resume_slug,
+        },
         "packet_json_path": str(packet_json_path or ""),
+        "compatibility_mode": bool(tailoring_plan.get("compatibility_mode", False)),
+        "compatibility_reason": str(tailoring_plan.get("compatibility_reason", "") or ""),
         "job": {
             "company": job.get("company", ""),
             "title": job.get("title", ""),
@@ -444,6 +594,15 @@ def _build_training_log_row(
         "selected_source": audit.get("selected_source", ""),
         "selected_reason": audit.get("selected_reason", ""),
         "selected_equivalent_candidate_ids": audit.get("selected_equivalent_candidate_ids", []) or [],
+        "selection_outcome_bucket": selection_outcome_bucket,
+        "live_outcome_bucket": live_outcome_bucket,
+        "equivalence_outcome_bucket": equivalence_outcome_bucket,
+        "fingerprints": {
+            "preferred_rewrite_fingerprint": preferred_rewrite_fingerprint,
+            "selected_candidate_fingerprint": selected_candidate_fingerprint,
+            "selected_equivalent_candidate_fingerprints": selected_equivalent_candidate_fingerprints,
+            "candidate_fingerprints": candidate_fingerprints,
+        },
         "fallback_reason_codes": audit.get("fallback_reason_codes", []) or [],
         "llm": {
             "requested": audit.get("llm_requested", False),
@@ -483,6 +642,11 @@ def _build_training_log_row(
             "live_equivalent_candidate_ids": live_equivalent_candidate_ids,
             "selected_is_deterministic": str(audit.get("selected_source", "") or "") == "deterministic_planner",
             "selected_reason": str(audit.get("selected_reason", "") or ""),
+            "selection_outcome_bucket": selection_outcome_bucket,
+            "live_outcome_bucket": live_outcome_bucket,
+            "equivalence_outcome_bucket": equivalence_outcome_bucket,
+            "preferred_rewrite_fingerprint": preferred_rewrite_fingerprint,
+            "selected_candidate_fingerprint": selected_candidate_fingerprint,
         },
         "source_family_audits": {
             "deterministic_planner": audit.get("deterministic_planner"),

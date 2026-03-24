@@ -371,6 +371,115 @@ def _build_keep_as_is(
 
     return items[:limit]
 
+def _build_empty_state_reason(
+    packet: Dict[str, Any],
+    tailoring_plan: Dict[str, Any],
+    rewrite_candidates: List[Dict[str, Any]],
+    bullet_reuse: List[Dict[str, Any]],
+    keep_as_is: List[Dict[str, Any]],
+    claim_safety_notes: Dict[str, Any],
+    material_gaps: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if rewrite_candidates or bullet_reuse:
+        return {}
+
+    direct_terms = _unique_preserve_order(
+        _direct_terms(packet, "required") + _direct_terms(packet, "preferred")
+    )
+    frame_carefully = _unique_preserve_order(
+        list(claim_safety_notes.get("frame_carefully", []) or [])
+    )
+    do_not_add = _unique_preserve_order(
+        list(claim_safety_notes.get("do_not_add", []) or [])
+    )
+    blocker_labels = _unique_preserve_order(
+        [
+            str(item.get("label", "")).strip()
+            for item in material_gaps
+            if str(item.get("label", "")).strip()
+        ]
+        + list(tailoring_plan.get("true_unsupported_terms", []) or [])
+    )
+
+    if direct_terms:
+        return {
+            "code": "keep_existing_direct_evidence",
+            "title": "The best evidence is already in place",
+            "summary": (
+                "This resume already has some direct JD-aligned evidence, but there is no additional "
+                "bullet-level rewrite target strong enough to recommend safely."
+            ),
+            "main_blockers": _truncate_list(blocker_labels, 6),
+            "still_useful": _truncate_list(direct_terms, 6),
+            "next_step": (
+                "Keep the strongest matching bullets visible and focus on ordering, emphasis, "
+                "and truthful positioning rather than adding new JD claims."
+            ),
+        }
+
+    adjacent_facets = _top_adjacent_facets(packet, limit=6)
+    adjacent_evidence_backed = [
+        row for row in adjacent_facets
+        if row.get("facet_direct_evidence") or row.get("facet_context_evidence") or row.get("context_terms")
+    ]
+
+    if adjacent_evidence_backed:
+        useful_terms = _unique_preserve_order(
+            [
+                str(term).strip()
+                for row in adjacent_evidence_backed
+                for term in (
+                    list(row.get("job_terms", []) or [])
+                    + list(row.get("facet_context_terms", []) or [])
+                    + list(row.get("context_terms", []) or [])
+                )
+                if str(term).strip()
+            ]
+        )
+
+        return {
+            "code": "adjacent_support_only",
+            "title": "Only adjacent support was found",
+            "summary": (
+                "There is related context, but not enough bullet-level proof to turn it into a safe rewrite."
+            ),
+            "main_blockers": _truncate_list(blocker_labels, 6),
+            "still_useful": _truncate_list(useful_terms or frame_carefully, 6),
+            "next_step": (
+                "Use those areas only as secondary framing, and keep unsupported JD language explicit "
+                "unless a bullet proves it directly."
+            ),
+        }
+
+    if blocker_labels or do_not_add:
+        return {
+            "code": "material_gap_without_anchor",
+            "title": "Material gaps are still blocking safe edits",
+            "summary": (
+                "The selected resume does not show enough grounded bullet evidence for the missing JD areas, "
+                "so the safest output is to keep those gaps explicit."
+            ),
+            "main_blockers": _truncate_list(blocker_labels or do_not_add, 6),
+            "still_useful": [],
+            "next_step": (
+                "Do not invent missing skills or ownership claims. Keep the strongest existing evidence visible "
+                "and address true gaps only if you can support them truthfully."
+            ),
+        }
+
+    return {
+        "code": "no_grounded_rewrite_evidence",
+        "title": "No grounded rewrite anchors were found",
+        "summary": (
+            "This JD/resume pair does not have enough bullet-level evidence to suggest safe rewrite edits."
+        ),
+        "main_blockers": [],
+        "still_useful": [],
+        "next_step": (
+            "Keep the current resume truthful. Add JD language only where your existing experience actually proves it."
+        ),
+    }
+
 def _fallback_recommended_rewrite_from_reuse(
     preferred_rewrite_directions: List[str],
     row: Dict[str, Any],
@@ -785,6 +894,15 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     claim_safety_notes = _build_claim_safety_notes(packet, tailoring_plan)
     material_gaps = _build_material_gaps(packet, tailoring_plan)
     keep_as_is = _build_keep_as_is(keep_emphasize, bullet_reuse)
+    empty_state_reason = _build_empty_state_reason(
+        packet,
+        tailoring_plan,
+        rewrite_candidates,
+        bullet_reuse,
+        keep_as_is,
+        claim_safety_notes,
+        material_gaps,
+    )
     llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
     live_rewrite_prompt = _build_live_rewrite_prompt(
         packet,
@@ -802,6 +920,7 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         "recruiter_summary": recruiter_summary,
         "keep_emphasize": keep_emphasize,
         "keep_as_is": keep_as_is,
+        "empty_state_reason": empty_state_reason,
         "claim_safety_notes": claim_safety_notes,
         "material_gaps": material_gaps,
         "tailoring_actions": tailoring_actions,
@@ -1339,6 +1458,36 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Claim safety: {card.get('claim_safety', '')}")
             if card.get("placement_guidance"):
                 lines.append(f"- Placement guidance: {card.get('placement_guidance', '')}")
+            lines.append("")
+    
+    empty_state_reason = payload.get("empty_state_reason", {}) or {}
+
+    if not edit_cards and empty_state_reason:
+        lines.append("## Why There Are No Edit Cards")
+
+        if empty_state_reason.get("title"):
+            lines.append(f"- {empty_state_reason.get('title', '')}")
+
+        if empty_state_reason.get("summary"):
+            lines.append(f"- {empty_state_reason.get('summary', '')}")
+
+        main_blockers = empty_state_reason.get("main_blockers", []) or []
+        if main_blockers:
+            lines.append("### Main Blockers")
+            for item in main_blockers:
+                lines.append(f"- {item}")
+            lines.append("")
+
+        still_useful = empty_state_reason.get("still_useful", []) or []
+        if still_useful:
+            lines.append("### Still Useful")
+            for item in still_useful:
+                lines.append(f"- {item}")
+            lines.append("")
+
+        if empty_state_reason.get("next_step"):
+            lines.append(f"### Recommended Next Step")
+            lines.append(f"- {empty_state_reason.get('next_step', '')}")
             lines.append("")
 
     if keep_as_is:

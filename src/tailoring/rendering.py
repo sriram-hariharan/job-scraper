@@ -259,6 +259,284 @@ def _build_tailoring_actions(packet: Dict[str, Any]) -> List[str]:
 
     return _unique_preserve_order(actions)
 
+def _build_claim_safety_notes(
+    packet: Dict[str, Any],
+    tailoring_plan: Dict[str, Any],
+) -> Dict[str, Any]:
+    safe_to_strengthen = _unique_preserve_order(
+        _direct_terms(packet, "required") + _direct_terms(packet, "preferred")
+    )
+    frame_carefully = _unique_preserve_order(
+        _contextual_terms(packet, "required")
+        + _contextual_terms(packet, "preferred")
+        + _skills_only_terms(packet, "required")
+        + _skills_only_terms(packet, "preferred")
+        + list(tailoring_plan.get("adjacent_terms_to_keep_explicit", []) or [])
+    )
+    do_not_add = _unique_preserve_order(
+        _unsupported_terms(packet, "required")
+        + _unsupported_terms(packet, "preferred")
+        + list(tailoring_plan.get("true_unsupported_terms", []) or [])
+    )
+
+    return {
+        "safe_to_strengthen": _truncate_list(safe_to_strengthen, 8),
+        "frame_carefully": _truncate_list(frame_carefully, 8),
+        "do_not_add": _truncate_list(do_not_add, 8),
+        "guardrail": packet.get(
+            "guardrail",
+            "Only add or strengthen resume language when it is already truthful and supported by your actual work.",
+        ),
+    }
+
+
+def _build_material_gaps(
+    packet: Dict[str, Any],
+    tailoring_plan: Dict[str, Any],
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    seen = set()
+
+    for facet in tailoring_plan.get("true_gap_facets", []) or []:
+        label = _facet_display_name(facet)
+        norm = label.strip().lower()
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        items.append(
+            {
+                "gap_type": "facet",
+                "label": label,
+                "severity": "high",
+                "guidance": "This is a real JD gap. Do not invent it. Only address it if you have truthful evidence elsewhere.",
+            }
+        )
+        if len(items) >= limit:
+            return items
+
+    for term in _true_gap_terms(packet):
+        label = str(term or "").strip()
+        norm = label.lower()
+        if not norm or norm in seen:
+            continue
+        seen.add(norm)
+        items.append(
+            {
+                "gap_type": "exact_term",
+                "label": label,
+                "severity": "high",
+                "guidance": "This exact JD term is not directly supported. Leave it out unless you can prove it truthfully.",
+            }
+        )
+        if len(items) >= limit:
+            break
+
+    return items
+
+
+def _build_keep_as_is(
+    keep_emphasize: List[str],
+    bullet_reuse: List[Dict[str, Any]],
+    limit: int = 4,
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+
+    for row in bullet_reuse:
+        if row.get("evidence_type") != "direct_overlap":
+            continue
+
+        items.append(
+            {
+                "section": row.get("section", ""),
+                "source": row.get("source", ""),
+                "reason": "This already looks like a strong anchor. Keep the evidence, and only tighten wording if it improves JD alignment without changing the claim.",
+                "evidence": row.get("bullet", "") or row.get("parent_bullet", ""),
+                "overlaps": row.get("overlaps", []) or [],
+            }
+        )
+        if len(items) >= limit:
+            return items
+
+    for item in keep_emphasize[:limit]:
+        items.append(
+            {
+                "section": "",
+                "source": "",
+                "reason": str(item or "").strip(),
+                "evidence": "",
+                "overlaps": [],
+            }
+        )
+
+    return items[:limit]
+
+
+def _card_priority(index: int, evidence_type: str) -> str:
+    if evidence_type == "direct_overlap":
+        return "high"
+    if index < 2:
+        return "high"
+    if evidence_type in {"same_source_context", "semantic_similarity"}:
+        return "medium"
+    return "low"
+
+
+def _card_edit_type(evidence_type: str) -> str:
+    if evidence_type == "direct_overlap":
+        return "rewrite"
+    if evidence_type == "same_source_context":
+        return "reinforce"
+    return "support"
+
+
+def _card_claim_safety(evidence_type: str) -> str:
+    if evidence_type == "direct_overlap":
+        return "safe_strengthen"
+    if evidence_type in {"same_source_context", "semantic_similarity", "adjacent_context"}:
+        return "adjacent_only"
+    return "do_not_claim"
+
+
+def _recommended_rewrite_text(
+    preferred_rewrite_directions: List[str],
+    candidate: Dict[str, Any],
+) -> str:
+    supported_terms = [
+        str(item or "").strip().lower()
+        for item in (candidate.get("supported_terms", []) or [])
+        if str(item or "").strip()
+    ]
+    source = str(candidate.get("source", "") or "").strip().lower()
+
+    for direction in preferred_rewrite_directions or []:
+        direction_text = str(direction or "").strip()
+        direction_lower = direction_text.lower()
+
+        if supported_terms and any(term in direction_lower for term in supported_terms):
+            return direction_text
+
+        if source and source in direction_lower:
+            return direction_text
+
+    return str(candidate.get("action", "") or "").strip()
+
+
+def _why_current_is_weak(candidate: Dict[str, Any]) -> str:
+    evidence_type = str(candidate.get("evidence_type", "") or "").strip()
+    supported_terms = candidate.get("supported_terms", []) or []
+
+    if evidence_type == "direct_overlap":
+        if supported_terms:
+            return (
+                f"The evidence is relevant, but {', '.join(_truncate_list(supported_terms, 4))} "
+                "is not yet leading the bullet clearly."
+            )
+        return "The evidence is relevant, but the JD-aligned language is not yet leading the bullet clearly."
+
+    if evidence_type == "same_source_context":
+        return "This evidence helps credibility, but it reads more like supporting context than the main JD-facing claim."
+
+    if evidence_type == "semantic_similarity":
+        return "This is directionally relevant, but it is still too indirect to carry the main JD story by itself."
+
+    return "This evidence should support the story, not act as the primary ownership claim."
+
+
+def _why_rewrite_is_better(candidate: Dict[str, Any]) -> str:
+    supported_terms = candidate.get("supported_terms", []) or []
+    if supported_terms:
+        return (
+            f"It brings {', '.join(_truncate_list(supported_terms, 4))} forward while staying anchored to work you already did."
+        )
+    return "It makes the JD connection clearer without requiring a new unsupported claim."
+
+
+def _placement_guidance(candidate: Dict[str, Any]) -> str:
+    section = str(candidate.get("section", "") or "").strip()
+    source = str(candidate.get("source", "") or "").strip()
+
+    if section and source:
+        return f"Edit the {section} bullet tied to {source} before changing lower-priority sections."
+    if section:
+        return f"Edit this in the {section} section before changing lower-priority sections."
+    return "Update the strongest matching experience bullet first, then reorder only if needed."
+
+
+def _why_it_matters(candidate: Dict[str, Any]) -> str:
+    supported_terms = candidate.get("supported_terms", []) or []
+    evidence_type = str(candidate.get("evidence_type", "") or "").strip()
+
+    if supported_terms:
+        lead = ", ".join(_truncate_list(supported_terms, 4))
+        if evidence_type == "direct_overlap":
+            return f"This is one of the clearest truthful ways to surface {lead} earlier for the JD."
+        if evidence_type == "same_source_context":
+            return f"This can strengthen the main story around {lead} without overclaiming direct ownership."
+        return f"This can add adjacent support around {lead}, but it should not become the main claim."
+
+    if evidence_type == "direct_overlap":
+        return "This is directly supported evidence and should be one of the first bullets you tighten."
+    return "This can help support the JD story, but it is not the strongest anchor."
+
+
+def _build_edit_cards(
+    payload: Dict[str, Any],
+    preferred_rewrite_directions: List[str],
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    cards: List[Dict[str, Any]] = []
+
+    for index, candidate in enumerate((payload.get("rewrite_candidates", []) or [])[:limit], start=1):
+        evidence_type = str(candidate.get("evidence_type", "") or "").strip()
+        supported_terms = list(candidate.get("supported_terms", []) or [])
+        recommended_rewrite = _recommended_rewrite_text(
+            preferred_rewrite_directions,
+            candidate,
+        )
+
+        cards.append(
+            {
+                "card_id": f"edit_card_{index}",
+                "priority": _card_priority(index - 1, evidence_type),
+                "edit_type": _card_edit_type(evidence_type),
+                "section": candidate.get("section", ""),
+                "source": candidate.get("source", ""),
+                "jd_signal_terms": supported_terms,
+                "current_evidence": candidate.get("bullet_excerpt", ""),
+                "parent_bullet": candidate.get("parent_bullet", ""),
+                "recommended_rewrite": recommended_rewrite,
+                "why_current_is_weak": _why_current_is_weak(candidate),
+                "why_rewrite_is_better": _why_rewrite_is_better(candidate),
+                "why_it_matters": _why_it_matters(candidate),
+                "claim_safety": _card_claim_safety(evidence_type),
+                "placement_guidance": _placement_guidance(candidate),
+            }
+        )
+
+    return cards
+
+
+def _build_top_edit_priorities(
+    edit_cards: List[Dict[str, Any]],
+    limit: int = 5,
+) -> List[Dict[str, Any]]:
+    priorities: List[Dict[str, Any]] = []
+
+    for card in edit_cards[:limit]:
+        priorities.append(
+            {
+                "priority": card.get("priority", ""),
+                "edit_type": card.get("edit_type", ""),
+                "jd_signal": ", ".join(card.get("jd_signal_terms", []) or []),
+                "why_it_matters": card.get("why_it_matters", ""),
+                "target_section": card.get("section", ""),
+                "recommended_rewrite": card.get("recommended_rewrite", ""),
+            }
+        )
+
+    return priorities
+
 def _build_operator_markdown_payload(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
@@ -289,6 +567,13 @@ def _build_operator_markdown_payload(
         preferred_rewrite_directions,
     )
     operator_payload["preferred_rewrite_selection_audit"] = preferred_rewrite_selection_audit
+
+    edit_cards = _build_edit_cards(
+        operator_payload,
+        preferred_rewrite_directions,
+    )
+    operator_payload["edit_cards"] = edit_cards
+    operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
     return operator_payload
 
 def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
@@ -300,6 +585,9 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
     rewrite_candidates = _build_rewrite_candidates(packet, tailoring_plan=tailoring_plan)
     evidence_layers = _build_evidence_layers(packet, tailoring_plan=tailoring_plan)
     tailoring_actions = _build_tailoring_actions(packet)
+    claim_safety_notes = _build_claim_safety_notes(packet, tailoring_plan)
+    material_gaps = _build_material_gaps(packet, tailoring_plan)
+    keep_as_is = _build_keep_as_is(keep_emphasize, bullet_reuse)
     llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
     live_rewrite_prompt = _build_live_rewrite_prompt(
         packet,
@@ -316,6 +604,9 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         "summary": packet.get("summary", {}),
         "recruiter_summary": recruiter_summary,
         "keep_emphasize": keep_emphasize,
+        "keep_as_is": keep_as_is,
+        "claim_safety_notes": claim_safety_notes,
+        "material_gaps": material_gaps,
         "tailoring_actions": tailoring_actions,
         "tailoring_plan": tailoring_plan,
         "rewrite_candidates": rewrite_candidates,
@@ -778,41 +1069,162 @@ def _build_training_log_row(
     }
 
 def _markdown_from_payload(payload: Dict[str, Any]) -> str:
-    job = payload.get("job", {})
-    selection = payload.get("selection", {})
+    job = payload.get("job", {}) or {}
+    selection = payload.get("selection", {}) or {}
     tailoring_plan = payload.get("tailoring_plan", {}) or {}
+    top_edit_priorities = payload.get("top_edit_priorities", []) or []
+    edit_cards = payload.get("edit_cards", []) or []
+    keep_as_is = payload.get("keep_as_is", []) or []
+    claim_safety_notes = payload.get("claim_safety_notes", {}) or {}
+    material_gaps = payload.get("material_gaps", []) or []
+
     lines: List[str] = []
 
-    lines.append(f"# Tailoring Suggestions")
+    lines.append("# Tailoring Suggestions")
     lines.append("")
     lines.append(f"**Job:** {job.get('company', '')} | {job.get('title', '')}")
     lines.append(f"**Selected resume:** {selection.get('selected_resume', '')}")
     lines.append(f"**Selected score:** {selection.get('selected_score', 0.0):.3f}")
     lines.append("")
 
-    lines.append("## Recruiter Summary")
+    lines.append("## Start Here")
+    lines.append("- Work from the highest-impact edits first.")
+    lines.append("- Rewrite only what is already supported by real resume evidence.")
+    lines.append("- Use the claim-safety notes before adding JD language.")
+    lines.append("")
+
+    if top_edit_priorities:
+        lines.append("## Highest-Impact Edits")
+        for index, item in enumerate(top_edit_priorities, start=1):
+            lines.append(
+                f"### {index}. {str(item.get('priority', '')).title()} priority • "
+                f"{str(item.get('edit_type', '')).replace('_', ' ').title()}"
+            )
+            if item.get("jd_signal"):
+                lines.append(f"- JD signal: {item.get('jd_signal', '')}")
+            if item.get("target_section"):
+                lines.append(f"- Where to edit: {item.get('target_section', '')}")
+            if item.get("why_it_matters"):
+                lines.append(f"- Why this matters: {item.get('why_it_matters', '')}")
+            if item.get("recommended_rewrite"):
+                lines.append(f"- Safer rewrite direction: {item.get('recommended_rewrite', '')}")
+            lines.append("")
+
+    if edit_cards:
+        lines.append("## Bullet-Level Edit Cards")
+        for index, card in enumerate(edit_cards, start=1):
+            lines.append(
+                f"### Card {index} · {str(card.get('priority', '')).title()} priority · "
+                f"{str(card.get('edit_type', '')).replace('_', ' ').title()}"
+            )
+            if card.get("section"):
+                lines.append(f"- Section: {card.get('section', '')}")
+            if card.get("source"):
+                lines.append(f"- Evidence source: {card.get('source', '')}")
+            if card.get("jd_signal_terms"):
+                lines.append(
+                    f"- JD signal terms: {', '.join(card.get('jd_signal_terms', []) or [])}"
+                )
+            if card.get("current_evidence"):
+                lines.append("- Current evidence:")
+                lines.append(f"  > {card.get('current_evidence', '')}")
+            if card.get("parent_bullet"):
+                lines.append("- Parent bullet:")
+                lines.append(f"  > {card.get('parent_bullet', '')}")
+            if card.get("recommended_rewrite"):
+                lines.append("- Recommended rewrite direction:")
+                lines.append(f"  > {card.get('recommended_rewrite', '')}")
+            if card.get("why_current_is_weak"):
+                lines.append(f"- Why current wording is weak: {card.get('why_current_is_weak', '')}")
+            if card.get("why_rewrite_is_better"):
+                lines.append(f"- Why this rewrite is better: {card.get('why_rewrite_is_better', '')}")
+            if card.get("claim_safety"):
+                lines.append(f"- Claim safety: {card.get('claim_safety', '')}")
+            if card.get("placement_guidance"):
+                lines.append(f"- Placement guidance: {card.get('placement_guidance', '')}")
+            lines.append("")
+
+    if keep_as_is:
+        lines.append("## Keep / Do Not Over-Edit")
+        for item in keep_as_is:
+            overlaps = item.get("overlaps", []) or []
+            if item.get("section") or item.get("source"):
+                lines.append(
+                    f"- **[{item.get('section', '')}] {item.get('source', '')}**"
+                )
+            if overlaps:
+                lines.append(f"  - Strong overlap: {', '.join(overlaps)}")
+            if item.get("evidence"):
+                lines.append(f"  - Evidence: {item.get('evidence', '')}")
+            if item.get("reason"):
+                lines.append(f"  - Why keep it: {item.get('reason', '')}")
+        lines.append("")
+
+    lines.append("## Claim Safety Notes")
+    safe_to_strengthen = claim_safety_notes.get("safe_to_strengthen", []) or []
+    frame_carefully = claim_safety_notes.get("frame_carefully", []) or []
+    do_not_add = claim_safety_notes.get("do_not_add", []) or []
+
+    if safe_to_strengthen:
+        lines.append("### Safe to Strengthen")
+        for item in safe_to_strengthen:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    if frame_carefully:
+        lines.append("### Frame Carefully")
+        for item in frame_carefully:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    if do_not_add:
+        lines.append("### Do Not Add Unless Truly Supported")
+        for item in do_not_add:
+            lines.append(f"- {item}")
+        lines.append("")
+
+    if claim_safety_notes.get("guardrail"):
+        lines.append(f"**Guardrail:** {claim_safety_notes.get('guardrail', '')}")
+        lines.append("")
+
+    if material_gaps:
+        lines.append("## Material Gaps")
+        for item in material_gaps:
+            lines.append(
+                f"- **{item.get('label', '')}** | type={item.get('gap_type', '')} | severity={item.get('severity', '')}"
+            )
+            if item.get("guidance"):
+                lines.append(f"  - Guidance: {item.get('guidance', '')}")
+        lines.append("")
+
+    lines.append("## Audit Appendix")
+    lines.append("### Positioning Summary")
     lines.append(payload.get("recruiter_summary", ""))
     lines.append("")
 
-    lines.append("## Keep / Emphasize")
-    for item in payload.get("keep_emphasize", []):
-        lines.append(f"- {item}")
-    lines.append("")
-
-    lines.append("## Tailoring Actions")
+    lines.append("### Tailoring Actions")
     for item in payload.get("tailoring_actions", []):
         lines.append(f"- {item}")
     lines.append("")
 
-    lines.append("## Tailoring Plan")
+    lines.append("### Preferred Rewrite Directions")
+    lines.append(f"- Source: {payload.get('preferred_rewrite_source', 'deterministic')}")
+    for item in payload.get("preferred_rewrite_directions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+
+    lines.append("### Planner Seed Rewrite Directions")
+    for item in payload.get("planner_seed_rewrite_directions", []):
+        lines.append(f"- {item}")
+    lines.append("")
+
+    lines.append("### Tailoring Plan Snapshot")
     lines.append(f"- Narrative angle: {tailoring_plan.get('narrative_angle', '')}")
     lines.append(f"- Compatibility mode: {tailoring_plan.get('compatibility_mode', False)}")
     lines.append(f"- Compatibility reason: {tailoring_plan.get('compatibility_reason', '')}")
     lines.append(f"- Direct facets: {tailoring_plan.get('direct_facets', [])}")
     lines.append(f"- Adjacent facets: {tailoring_plan.get('adjacent_facets', [])}")
     lines.append(f"- True gap facets: {tailoring_plan.get('true_gap_facets', [])}")
-    lines.append(f"- Primary facet coverage: {tailoring_plan.get('primary_facet_coverage', [])}")
-    lines.append(f"- Secondary facet coverage: {tailoring_plan.get('secondary_facet_coverage', [])}")
     lines.append(
         f"- Contextual terms to frame carefully: {tailoring_plan.get('contextual_terms_to_frame_carefully', [])}"
     )
@@ -824,18 +1236,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     )
     lines.append("")
 
-    lines.append("## Priority Rewrite Directions")
-    lines.append(f"- Source: {payload.get('preferred_rewrite_source', 'deterministic')}")
-    for item in payload.get("preferred_rewrite_directions", []):
-        lines.append(f"- {item}")
-    lines.append("")
-
-    lines.append("## Planner Seed Rewrite Directions")
-    for item in payload.get("planner_seed_rewrite_directions", []):
-        lines.append(f"- {item}")
-    lines.append("")
-
-    lines.append("## Evidence-Backed Rewrite Ideas")
+    lines.append("### Evidence-Backed Rewrite Ideas")
     for row in payload.get("rewrite_candidates", []):
         lines.append(
             f"- **[{row.get('section', '')}] {row.get('source', '')}** | "
@@ -847,12 +1248,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             lines.append(f"  - Parent bullet: {row.get('parent_bullet', '')}")
     lines.append("")
 
-    lines.append("## Do Not Claim")
-    for item in payload.get("do_not_claim", []):
-        lines.append(f"- {item}")
-    lines.append("")
-
-    lines.append("## Bullet Reuse Candidates")
+    lines.append("### Bullet Reuse Candidates")
     for row in payload.get("bullet_reuse_candidates", []):
         lines.append(
             f"- **[{row.get('section', '')}] {row.get('source', '')}** | "

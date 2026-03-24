@@ -1,6 +1,7 @@
 
 from typing import Dict, Any, Optional, List
 import os
+import re
 import json
 import hashlib
 from datetime import datetime, timezone
@@ -35,7 +36,7 @@ LLM_TAILOR_PROVIDER = "gemini"
 LLM_TAILOR_MODEL = "gemini-2.5-flash"
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
-LLM_TAILOR_PROMPT_VERSION = "v3"
+LLM_TAILOR_PROMPT_VERSION = "v4"
 
 TAILOR_LLM_FALLBACK_ENABLED = (
     os.getenv(
@@ -276,6 +277,8 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("- Return JSON only.")
     lines.append("- Output key: rewrite_directions")
     lines.append("- Allowed prefixes only: Lead with, Support with, Keep gap explicit, Do not add")
+    lines.append('- When using Lead with or Support with, copy the exact source label only, for example: "Data Analyst II @ Accenture".')
+    lines.append('- Never use section labels like "Primary anchor evidence units 1", "Secondary supporting evidence units", or wrappers like "[experience] ... | type=same_source_context" as the source.')
     lines.append("- Prefer anchor-led rewrite directions first, then support if needed.")
 
     return "\n".join(lines)
@@ -375,20 +378,159 @@ def _empty_live_llm_parsed() -> Dict[str, Any]:
         "rewrite_directions": [],
     }
 
+def _build_live_source_alias_map(payload: Dict[str, Any]) -> Dict[str, str]:
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    alias_map: Dict[str, str] = {}
+
+    def _register_alias(alias: str, canonical: str) -> None:
+        alias_clean = str(alias or "").strip().rstrip(".")
+        canonical_clean = str(canonical or "").strip().rstrip(".")
+        if alias_clean and canonical_clean:
+            alias_map[alias_clean] = canonical_clean
+
+    def _register_row_aliases(prefix: str, rows: List[Dict[str, Any]]) -> None:
+        for idx, row in enumerate(rows or [], 1):
+            canonical = _display_row_source(row)
+            if not canonical:
+                continue
+
+            section = str(row.get("section", "") or "").strip()
+            evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+            _register_alias(canonical, canonical)
+            _register_alias(f"{prefix} {idx}", canonical)
+            _register_alias(f"{prefix} {idx}.", canonical)
+
+            if len(rows or []) == 1:
+                _register_alias(prefix, canonical)
+                _register_alias(f"{prefix}.", canonical)
+
+            if section:
+                _register_alias(f"[{section}] {canonical}", canonical)
+
+            if section and evidence_type:
+                _register_alias(f"[{section}] {canonical} | type={evidence_type}", canonical)
+                _register_alias(f"[{section}] {canonical} | type={evidence_type}.", canonical)
+
+    _register_row_aliases(
+        "Primary anchor evidence units",
+        list(evidence_layers.get("anchors", []) or [])[:4],
+    )
+    _register_row_aliases(
+        "Secondary supporting evidence units",
+        list(evidence_layers.get("supports", []) or [])[:4],
+    )
+    _register_row_aliases(
+        "Same-role context evidence units",
+        list(evidence_layers.get("context", []) or [])[:4],
+    )
+
+    return alias_map
+
+
+def _cleanup_live_source_label(source: str) -> str:
+    cleaned = str(source or "").strip().rstrip(".")
+    cleaned = re.sub(r"^\[[^\]]+\]\s*", "", cleaned).strip()
+    cleaned = re.sub(r"\s*\|\s*type=.*$", "", cleaned).strip()
+    return cleaned.rstrip(".")
+
+
+def _canonicalize_live_direction_sources(
+    directions: List[str],
+    payload: Dict[str, Any],
+) -> List[str]:
+    alias_map = _build_live_source_alias_map(payload)
+    normalized: List[str] = []
+
+    for item in directions or []:
+        text = str(item or "").strip()
+        if not text.startswith(("Lead with ", "Support with ")):
+            normalized.append(text)
+            continue
+
+        if " from " not in text:
+            normalized.append(text)
+            continue
+
+        body, source_part = text.rsplit(" from ", 1)
+        source_part = source_part.strip()
+
+        suffix = ""
+        if source_part.lower().endswith(" as secondary supporting evidence."):
+            suffix = " as secondary supporting evidence"
+            source_part = source_part[: -len(" as secondary supporting evidence.")].strip()
+        elif source_part.lower().endswith(" as secondary supporting evidence"):
+            suffix = " as secondary supporting evidence"
+            source_part = source_part[: -len(" as secondary supporting evidence")].strip()
+
+        source_clean = source_part.rstrip(".").strip()
+        canonical = alias_map.get(source_clean)
+        if canonical is None:
+            canonical = alias_map.get(_cleanup_live_source_label(source_clean))
+        if canonical is None:
+            canonical = _cleanup_live_source_label(source_clean) or source_clean
+
+        rebuilt = f"{body} from {canonical}{suffix}.".strip()
+        normalized.append(rebuilt)
+
+    return _unique_preserve_order([item for item in normalized if item])
 
 def _normalize_string_list(value: Any) -> List[str]:
     if not isinstance(value, list):
         return []
     return _unique_preserve_order([str(item).strip() for item in value if str(item).strip()])
 
+def _coerce_live_rewrite_direction(item: Any) -> str:
+    if isinstance(item, str):
+        return str(item).strip()
+
+    if not isinstance(item, dict):
+        return ""
+
+    prefix = str(item.get("prefix", "") or "").strip()
+    source = str(item.get("source", "") or "").strip()
+    direction = str(item.get("direction", "") or "").strip()
+
+    if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
+        return ""
+
+    if prefix in {"Lead with", "Support with"}:
+        parts = [prefix]
+        if direction:
+            parts.append(direction)
+        if source:
+            parts.append(f"from {source}")
+        text = " ".join(parts).strip()
+        return text if text.endswith(".") else f"{text}."
+
+    if prefix == "Keep gap explicit":
+        text = direction or source
+        text = f"Keep gap explicit {text}".strip()
+        return text if text.endswith(".") else f"{text}."
+
+    text = direction or source
+    text = f"Do not add {text}".strip()
+    return text if text.endswith(".") else f"{text}."
 
 def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    raw_rewrite_directions = parsed.get("rewrite_directions", []) or []
+    normalized_rewrite_directions = _unique_preserve_order(
+        [
+            _coerce_live_rewrite_direction(item)
+            for item in raw_rewrite_directions
+        ]
+    )
+    normalized_rewrite_directions = [
+        item for item in normalized_rewrite_directions
+        if item
+    ]
+
     return {
         "recruiter_summary": str(parsed.get("recruiter_summary", "")).strip(),
         "keep_emphasize": _normalize_string_list(parsed.get("keep_emphasize", [])),
         "tailoring_actions": _normalize_string_list(parsed.get("tailoring_actions", [])),
         "do_not_claim": _normalize_string_list(parsed.get("do_not_claim", [])),
-        "rewrite_directions": _normalize_string_list(parsed.get("rewrite_directions", [])),
+        "rewrite_directions": normalized_rewrite_directions,
     }
 
 def _canonical_json(value: Any) -> str:
@@ -668,6 +810,10 @@ You MUST obey these rules:
 
         if isinstance(value, dict):
             normalized = _normalize_live_llm_parsed(value)
+            normalized["rewrite_directions"] = _canonicalize_live_direction_sources(
+                normalized.get("rewrite_directions", []),
+                payload,
+            )
             return _attach_live_llm_cache_meta(
                 {
                     **_base_result_meta(llm_result),
@@ -685,6 +831,10 @@ You MUST obey these rules:
         raw = _raw_text(value)
         parsed = _extract_json_from_llm_response(raw)
         normalized = _normalize_live_llm_parsed(parsed)
+        normalized["rewrite_directions"] = _canonicalize_live_direction_sources(
+            normalized.get("rewrite_directions", []),
+            payload,
+        )
         return _attach_live_llm_cache_meta(
             {
                 **_base_result_meta(llm_result),

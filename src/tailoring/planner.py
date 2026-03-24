@@ -633,22 +633,35 @@ def _planner_seed_rewrite_directions(
     primary_anchor_units = plan.get("primary_anchor_units", []) or []
     secondary_support_units = plan.get("secondary_support_units", []) or []
 
+    adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
+    adjacent_facets = plan.get("adjacent_facets", []) or []
+    true_gap_terms = plan.get("true_unsupported_terms", []) or []
+    true_gap_facets = plan.get("true_gap_facets", []) or []
+
+    has_adjacent_guardrail = bool(adjacent_terms or adjacent_facets)
+    has_true_gap_guardrail = bool(true_gap_terms or true_gap_facets)
+
+    reserved_tail_slots = 0
+    if has_adjacent_guardrail:
+        reserved_tail_slots += 1
+    if has_true_gap_guardrail:
+        reserved_tail_slots += 1
+
     # Always cover every selected primary anchor first.
     for row in primary_anchor_units:
         direction = _plan_unit_to_direction(row, primary=True)
         if direction:
             directions.append(direction)
 
-    # Only then add secondary support lines if there is still room.
-    remaining_slots = max(0, limit - len(directions))
-    if remaining_slots > 0:
-        for row in secondary_support_units[:remaining_slots]:
-            direction = _plan_unit_to_direction(row, primary=False)
-            if direction:
-                directions.append(direction)
+    # Keep secondary support conservative: one support line is enough for plan coverage,
+    # and preserve room for required guardrail/gap lines.
+    support_slots_available = max(0, limit - len(directions) - reserved_tail_slots)
+    if support_slots_available > 0 and secondary_support_units:
+        first_secondary = secondary_support_units[0]
+        direction = _plan_unit_to_direction(first_secondary, primary=False)
+        if direction:
+            directions.append(direction)
 
-    adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
-    adjacent_facets = plan.get("adjacent_facets", []) or []
     if adjacent_terms:
         directions.append(
             f"Do not add direct ownership claims for {', '.join(_truncate_list(adjacent_terms, 4))}; use related evidence only as adjacent support."
@@ -658,8 +671,6 @@ def _planner_seed_rewrite_directions(
             f"Do not add direct ownership claims for {', '.join(_truncate_list(adjacent_facets, 2))}; use related evidence only as adjacent support."
         )
 
-    true_gap_terms = plan.get("true_unsupported_terms", []) or []
-    true_gap_facets = plan.get("true_gap_facets", []) or []
     if true_gap_terms:
         directions.append(
             f"Keep gap explicit for {', '.join(_truncate_list(true_gap_terms, 4))}."

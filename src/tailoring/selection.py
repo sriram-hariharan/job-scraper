@@ -23,8 +23,62 @@ from src.tailoring.planner import (
     _fallback_rewrite_directions_from_payload,
 )
 
-def _build_bullet_reuse(packet: Dict[str, Any], limit: int = 6) -> List[Dict[str, Any]]:
+def _build_bullet_reuse_from_plan_units(
+    tailoring_plan: Dict[str, Any],
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    rows = (
+        list(tailoring_plan.get("primary_anchor_units", []) or [])
+        + list(tailoring_plan.get("secondary_support_units", []) or [])
+    )[:limit]
+
+    reuse_rows: List[Dict[str, Any]] = []
+
+    for row in rows:
+        evidence_type = str(row.get("evidence_type", "") or "").strip() or "same_source_context"
+        overlaps = list(row.get("supported_terms", []) or [])
+        source = str(row.get("source", "") or "").strip()
+
+        if evidence_type == "direct_overlap":
+            reuse_note = (
+                "Use this as a primary anchor bullet recovered from packet evidence and keep the JD-facing terms earlier in the wording."
+            )
+        elif evidence_type == "same_source_context":
+            reuse_note = (
+                "Use this as supporting context recovered from packet evidence so the main anchor story feels more credible."
+            )
+        else:
+            reuse_note = (
+                "Use this as nearby supporting context only if it strengthens the same story truthfully."
+            )
+
+        reuse_rows.append(
+            {
+                "section": row.get("section", ""),
+                "source": source,
+                "overlaps": overlaps,
+                "evidence_type": evidence_type,
+                "bullet": row.get("evidence_unit", ""),
+                "parent_bullet": row.get("parent_bullet", ""),
+                "reuse_note": reuse_note,
+            }
+        )
+
+    return reuse_rows
+def _build_bullet_reuse(
+    packet: Dict[str, Any],
+    tailoring_plan: Optional[Dict[str, Any]] = None,
+    limit: int = 6,
+) -> List[Dict[str, Any]]:
+    tailoring_plan = tailoring_plan or {}
     rows = _rewrite_source_rows(packet)
+
+    if not rows:
+        return _build_bullet_reuse_from_plan_units(
+            tailoring_plan,
+            limit=limit,
+        )
+
     selected = rows[:limit]
 
     reuse_rows = []

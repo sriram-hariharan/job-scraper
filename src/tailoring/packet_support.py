@@ -149,10 +149,8 @@ def _facet_has_adjacent_support(row: Dict[str, Any]) -> bool:
 
     return bool(
         row.get("facet_direct_evidence")
-        or row.get("facet_context_terms")
         or row.get("facet_context_evidence")
         or row.get("context_terms")
-        or row.get("skills_only_terms")
     )
 
 

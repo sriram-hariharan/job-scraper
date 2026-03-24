@@ -344,6 +344,11 @@ def planning_dashboard() -> str:
             </div>
 
             <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+              <span class="label">Tailoring JSON Path</span>
+              <span id="tailoringModalJsonPath" class="tailoring-path-value">-</span>
+            </div>
+
+            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
               <span class="label">Tailoring LLM JSON Path</span>
               <span id="tailoringModalLlmJsonPath" class="tailoring-path-value">-</span>
             </div>
@@ -354,10 +359,20 @@ def planning_dashboard() -> str:
             </div>
           </div>
         </section>
-
         <section class="card tailoring-primary-card">
           <div class="section-header">
-            <h3>Tailoring Markdown</h3>
+            <h3>Action Plan</h3>
+          </div>
+
+          <div id="tailoringInteractiveSummary" class="tailoring-interactive-shell">
+            <div class="tailoring-empty-state">
+              Loading structured tailoring guidance...
+            </div>
+          </div>
+        </section>
+        <section class="card tailoring-primary-card">
+          <div class="section-header">
+            <h3>Full Guidance</h3>
             <div class="section-header-actions">
               <button
                 type="button"
@@ -379,6 +394,11 @@ def planning_dashboard() -> str:
           </div>
           <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
         </section>
+
+        <details class="card tailoring-accordion">
+          <summary>Deterministic Tailoring JSON</summary>
+          <pre id="tailoringJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
+        </details>
 
         <details class="card tailoring-accordion">
           <summary>LLM Tailoring JSON</summary>

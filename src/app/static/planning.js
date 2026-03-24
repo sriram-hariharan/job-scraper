@@ -1204,7 +1204,7 @@ function resetTailoringModalViewState() {
     modalScroll.scrollTop = 0;
   }
 
-  ["tailoringMarkdownContent", "tailoringLlmJsonContent", "tailoringPacketJsonContent"].forEach((id) => {
+  ["tailoringInteractiveSummary", "tailoringJsonContent", "tailoringMarkdownContent", "tailoringLlmJsonContent", "tailoringPacketJsonContent"].forEach((id) => {
     const el = qs(id);
     if (el) {
       el.scrollTop = 0;
@@ -1226,16 +1226,21 @@ function resetTailoringModalContent() {
   qs("tailoringModalStatus").innerHTML = buildTailoringStatusBadge("Unavailable", "muted");
   qs("tailoringModalError").textContent = "-";
   qs("tailoringModalMarkdownPath").textContent = "-";
+  qs("tailoringModalJsonPath").textContent = "-";
   qs("tailoringModalLlmJsonPath").textContent = "-";
   qs("tailoringModalPacketPath").textContent = "-";
 
   qs("tailoringProviderMeta").innerHTML = `<span class="summary-chip chip-muted">Loading provider…</span>`;
   qs("tailoringSourceChips").innerHTML = `<span class="summary-chip chip-muted">Loading provenance…</span>`;
 
+  qs("tailoringInteractiveSummary").innerHTML = `
+    <div class="tailoring-empty-state">No structured tailoring guidance loaded.</div>
+  `;
+  qs("tailoringJsonContent").textContent = "No artifact loaded.";
   qs("tailoringMarkdownContent").innerHTML = "<p>No artifact loaded.</p>";
   qs("tailoringLlmJsonContent").textContent = "No artifact loaded.";
   qs("tailoringPacketJsonContent").textContent = "No artifact loaded.";
-  
+
   setTailoringCopyButtonState({ label: "Copy", disabled: true, copied: false });
 
   resetTailoringModalViewState();
@@ -1248,6 +1253,7 @@ function openTailoringModal(row) {
   qs("tailoringModalTitle").textContent = row.job_title || "-";
   updateTailoringOverview(row, null);
   qs("tailoringModalMarkdownPath").textContent = row.tailoring_md || "-";
+  qs("tailoringModalJsonPath").textContent = row.tailoring_json || "-";
   qs("tailoringModalLlmJsonPath").textContent = row.tailoring_llm_json || "-";
   qs("tailoringModalPacketPath").textContent = row.packet_json || "-";
 
@@ -1258,6 +1264,10 @@ function openTailoringModal(row) {
     llmFailed: false,
   });
 
+  qs("tailoringInteractiveSummary").innerHTML = `
+    <div class="tailoring-empty-state">Loading structured tailoring guidance...</div>
+  `;
+  qs("tailoringJsonContent").textContent = "Loading deterministic tailoring JSON...";
   qs("tailoringMarkdownContent").innerHTML = "<p>Loading tailoring markdown...</p>";
   qs("tailoringLlmJsonContent").textContent = "Loading LLM tailoring JSON...";
   qs("tailoringPacketJsonContent").textContent = "Loading packet JSON...";
@@ -1360,8 +1370,293 @@ function renderArtifactIntoElement(elementId, artifact, emptyLabel = "Artifact n
   el.scrollTop = 0;
 }
 
+function buildTailoringTonePill(label, tone = "muted") {
+  return `<span class="tailoring-tone-pill tailoring-tone-pill--${escapeHtml(tone)}">${escapeHtml(label)}</span>`;
+}
+
+function buildTailoringList(items) {
+  const safeItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (!safeItems.length) {
+    return `<div class="tailoring-empty-inline">None</div>`;
+  }
+
+  return `
+    <ul class="tailoring-bullet-list">
+      ${safeItems.map((item) => `<li>${escapeHtml(String(item))}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderTopEditPriorities(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) return "";
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Highest-Impact Edits</div>
+      <div class="tailoring-priority-grid">
+        ${safeItems.map((item) => `
+          <article class="tailoring-priority-card">
+            <div class="tailoring-card-topline">
+              ${buildTailoringTonePill(String(item.priority || "priority").toUpperCase(), item.priority || "muted")}
+              ${buildTailoringTonePill(
+                String(item.edit_type || "edit").replaceAll("_", " "),
+                "neutral"
+              )}
+            </div>
+
+            ${item.jd_signal ? `<div class="tailoring-card-title">${escapeHtml(item.jd_signal)}</div>` : ""}
+            ${item.why_it_matters ? `<div class="tailoring-card-copy">${escapeHtml(item.why_it_matters)}</div>` : ""}
+            ${item.target_section ? `<div class="tailoring-card-meta">Where to edit: ${escapeHtml(item.target_section)}</div>` : ""}
+            ${item.recommended_rewrite ? `<div class="tailoring-card-rewrite">${escapeHtml(item.recommended_rewrite)}</div>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderEditCards(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) return "";
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Bullet-Level Edit Cards</div>
+      <div class="tailoring-edit-card-list">
+        ${safeItems.map((item, index) => `
+          <article class="tailoring-edit-card">
+            <div class="tailoring-card-topline">
+              <div class="tailoring-edit-card-label">Card ${index + 1}</div>
+              <div class="tailoring-chip-group">
+                ${buildTailoringTonePill(String(item.priority || "priority").toUpperCase(), item.priority || "muted")}
+                ${buildTailoringTonePill(
+                  String(item.claim_safety || "claim_safety").replaceAll("_", " "),
+                  item.claim_safety === "safe_strengthen" ? "safe" : item.claim_safety === "adjacent_only" ? "caution" : "danger"
+                )}
+              </div>
+            </div>
+
+            ${item.jd_signal_terms?.length ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">JD signal</span>
+                <span class="tailoring-info-value">${escapeHtml(item.jd_signal_terms.join(", "))}</span>
+              </div>
+            ` : ""}
+
+            ${item.section ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">Section</span>
+                <span class="tailoring-info-value">${escapeHtml(item.section)}</span>
+              </div>
+            ` : ""}
+
+            ${item.source ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">Evidence source</span>
+                <span class="tailoring-info-value">${escapeHtml(item.source)}</span>
+              </div>
+            ` : ""}
+
+            ${item.current_evidence ? `
+              <div class="tailoring-info-block">
+                <div class="tailoring-info-label">Current evidence</div>
+                <div class="tailoring-quote-block">${escapeHtml(item.current_evidence)}</div>
+              </div>
+            ` : ""}
+
+            ${item.parent_bullet ? `
+              <div class="tailoring-info-block">
+                <div class="tailoring-info-label">Parent bullet</div>
+                <div class="tailoring-quote-block">${escapeHtml(item.parent_bullet)}</div>
+              </div>
+            ` : ""}
+
+            ${item.recommended_rewrite ? `
+              <div class="tailoring-info-block">
+                <div class="tailoring-info-label">Recommended rewrite direction</div>
+                <div class="tailoring-rewrite-callout">${escapeHtml(item.recommended_rewrite)}</div>
+              </div>
+            ` : ""}
+
+            ${item.why_current_is_weak ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">Why current wording is weak</span>
+                <span class="tailoring-info-value">${escapeHtml(item.why_current_is_weak)}</span>
+              </div>
+            ` : ""}
+
+            ${item.why_rewrite_is_better ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">Why this rewrite is better</span>
+                <span class="tailoring-info-value">${escapeHtml(item.why_rewrite_is_better)}</span>
+              </div>
+            ` : ""}
+
+            ${item.placement_guidance ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">Placement guidance</span>
+                <span class="tailoring-info-value">${escapeHtml(item.placement_guidance)}</span>
+              </div>
+            ` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderClaimSafetyNotes(data) {
+  const notes = data && typeof data === "object" ? data : {};
+  const safeToStrengthen = Array.isArray(notes.safe_to_strengthen) ? notes.safe_to_strengthen : [];
+  const frameCarefully = Array.isArray(notes.frame_carefully) ? notes.frame_carefully : [];
+  const doNotAdd = Array.isArray(notes.do_not_add) ? notes.do_not_add : [];
+  const hasContent = safeToStrengthen.length || frameCarefully.length || doNotAdd.length || notes.guardrail;
+
+  if (!hasContent) return "";
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Claim Safety Notes</div>
+      <div class="tailoring-safety-grid">
+        <div class="tailoring-safety-card tailoring-safety-card--safe">
+          <div class="tailoring-safety-title">Safe to Strengthen</div>
+          ${buildTailoringList(safeToStrengthen)}
+        </div>
+        <div class="tailoring-safety-card tailoring-safety-card--caution">
+          <div class="tailoring-safety-title">Frame Carefully</div>
+          ${buildTailoringList(frameCarefully)}
+        </div>
+        <div class="tailoring-safety-card tailoring-safety-card--danger">
+          <div class="tailoring-safety-title">Do Not Add</div>
+          ${buildTailoringList(doNotAdd)}
+        </div>
+      </div>
+      ${notes.guardrail ? `<div class="tailoring-guardrail">${escapeHtml(notes.guardrail)}</div>` : ""}
+    </section>
+  `;
+}
+
+function renderMaterialGaps(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) return "";
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Material Gaps</div>
+      <div class="tailoring-gap-list">
+        ${safeItems.map((item) => `
+          <article class="tailoring-gap-card">
+            <div class="tailoring-card-topline">
+              ${buildTailoringTonePill(String(item.severity || "high").toUpperCase(), "danger")}
+              ${buildTailoringTonePill(String(item.gap_type || "gap").replaceAll("_", " "), "neutral")}
+            </div>
+            <div class="tailoring-card-title">${escapeHtml(item.label || "")}</div>
+            ${item.guidance ? `<div class="tailoring-card-copy">${escapeHtml(item.guidance)}</div>` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderKeepAsIs(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) return "";
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Keep / Do Not Over-Edit</div>
+      <div class="tailoring-keep-list">
+        ${safeItems.map((item) => `
+          <article class="tailoring-keep-card">
+            ${item.section || item.source ? `
+              <div class="tailoring-card-title">
+                ${escapeHtml([item.section, item.source].filter(Boolean).join(" • "))}
+              </div>
+            ` : ""}
+            ${item.reason ? `<div class="tailoring-card-copy">${escapeHtml(item.reason)}</div>` : ""}
+            ${item.evidence ? `<div class="tailoring-quote-block">${escapeHtml(item.evidence)}</div>` : ""}
+            ${item.overlaps?.length ? `
+              <div class="tailoring-info-row">
+                <span class="tailoring-info-label">Strong overlap</span>
+                <span class="tailoring-info-value">${escapeHtml(item.overlaps.join(", "))}</span>
+              </div>
+            ` : ""}
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function renderTailoringEmptyState(payload) {
+  const notes = payload && typeof payload === "object" ? payload.claim_safety_notes || {} : {};
+  const materialGaps = Array.isArray(payload?.material_gaps) ? payload.material_gaps : [];
+  const frameCarefully = Array.isArray(notes.frame_carefully) ? notes.frame_carefully : [];
+  const doNotAdd = Array.isArray(notes.do_not_add) ? notes.do_not_add : [];
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-empty-state">
+        <div class="tailoring-empty-title">No safe bullet-level rewrites were found</div>
+        <div class="tailoring-empty-copy">
+          This JD/resume pair does not have enough grounded rewrite evidence to suggest stronger bullet rewrites safely.
+        </div>
+        ${materialGaps.length ? `
+          <div class="tailoring-empty-subsection">
+            <div class="tailoring-empty-subtitle">Main blockers</div>
+            ${buildTailoringList(materialGaps.map((item) => item.label || "").filter(Boolean))}
+          </div>
+        ` : ""}
+        ${frameCarefully.length || doNotAdd.length ? `
+          <div class="tailoring-empty-subsection">
+            <div class="tailoring-empty-subtitle">Still useful</div>
+            ${buildTailoringList([
+              frameCarefully.length ? `Frame carefully: ${frameCarefully.join(", ")}` : "",
+              doNotAdd.length ? `Do not add: ${doNotAdd.join(", ")}` : "",
+            ].filter(Boolean))}
+          </div>
+        ` : ""}
+      </div>
+    </section>
+  `;
+}
+
+function renderTailoringInteractiveSummary(artifact) {
+  const root = qs("tailoringInteractiveSummary");
+  if (!root) return;
+
+  const payload = artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
+    ? artifact.data
+    : null;
+
+  if (!payload) {
+    root.innerHTML = `<div class="tailoring-empty-state">Structured tailoring guidance is not available for this row.</div>`;
+    return;
+  }
+
+  const topEditPriorities = Array.isArray(payload.top_edit_priorities) ? payload.top_edit_priorities : [];
+  const editCards = Array.isArray(payload.edit_cards) ? payload.edit_cards : [];
+  const keepAsIs = Array.isArray(payload.keep_as_is) ? payload.keep_as_is : [];
+  const materialGaps = Array.isArray(payload.material_gaps) ? payload.material_gaps : [];
+  const claimSafetyNotes = payload.claim_safety_notes || {};
+
+  const hasActionableCards = topEditPriorities.length || editCards.length;
+
+  root.innerHTML = `
+    ${hasActionableCards ? renderTopEditPriorities(topEditPriorities) : ""}
+    ${hasActionableCards ? renderEditCards(editCards) : renderTailoringEmptyState(payload)}
+    ${renderClaimSafetyNotes(claimSafetyNotes)}
+    ${renderMaterialGaps(materialGaps)}
+    ${renderKeepAsIs(keepAsIs)}
+  `;
+}
+
 function buildTailoringButtonHtml(row) {
-  const hasArtifacts = Boolean(row.tailoring_md || row.tailoring_llm_json || row.packet_json);
+  const hasArtifacts = Boolean(
+    row.tailoring_json || row.tailoring_md || row.tailoring_llm_json || row.packet_json
+  );  
   const label = hasArtifacts ? "View" : "Unavailable";
   const disabledAttr = hasArtifacts ? "" : "disabled";
 
@@ -1375,6 +1670,7 @@ function buildTailoringButtonHtml(row) {
       data-job-title="${escapeHtml(row.job_title || "")}"
       data-llm-tailoring-status="${escapeHtml(row.llm_tailoring_status || "")}"
       data-llm-error-type="${escapeHtml(row.llm_error_type || "")}"
+      data-tailoring-json="${escapeHtml(row.tailoring_json || "")}"
       data-tailoring-md="${escapeHtml(row.tailoring_md || "")}"
       data-tailoring-llm-json="${escapeHtml(row.tailoring_llm_json || "")}"
       data-packet-json="${escapeHtml(row.packet_json || "")}"
@@ -1390,6 +1686,7 @@ async function handleTailoringClick(button) {
     job_title: button.dataset.jobTitle || "",
     llm_tailoring_status: button.dataset.llmTailoringStatus || "",
     llm_error_type: button.dataset.llmErrorType || "",
+    tailoring_json: button.dataset.tailoringJson || "",
     tailoring_md: button.dataset.tailoringMd || "",
     tailoring_llm_json: button.dataset.tailoringLlmJson || "",
     packet_json: button.dataset.packetJson || "",
@@ -1397,12 +1694,15 @@ async function handleTailoringClick(button) {
 
   openTailoringModal(row);
 
-  const [markdownArtifact, llmJsonArtifact, packetArtifact] = await Promise.all([
+  const [tailoringJsonArtifact, markdownArtifact, llmJsonArtifact, packetArtifact] = await Promise.all([
+    loadArtifact(row.tailoring_json),
     loadArtifact(row.tailoring_md),
     loadArtifact(row.tailoring_llm_json),
     loadArtifact(row.packet_json),
   ]);
 
+  renderTailoringInteractiveSummary(tailoringJsonArtifact);
+  renderArtifactIntoElement("tailoringJsonContent", tailoringJsonArtifact);
   renderArtifactIntoElement("tailoringMarkdownContent", markdownArtifact);
   renderArtifactIntoElement("tailoringLlmJsonContent", llmJsonArtifact);
   renderArtifactIntoElement("tailoringPacketJsonContent", packetArtifact);

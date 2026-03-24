@@ -151,6 +151,33 @@ def _latest_rows_per_packet_resume(rows: List[Dict[str, Any]]) -> List[Dict[str,
     )
     return latest_rows
 
+def _fingerprint_relationship_bucket(item: Dict[str, Any]) -> str:
+    equivalence_bucket = str(item.get("equivalence_outcome_bucket", "") or "").strip()
+    live_bucket = str(item.get("live_outcome_bucket", "") or "").strip()
+
+    deterministic_matches_live = bool(item.get("deterministic_matches_live_family", False))
+    deterministic_matches_live_blended = bool(item.get("deterministic_matches_live_blended_family", False))
+    has_identical_live = deterministic_matches_live or deterministic_matches_live_blended
+
+    if equivalence_bucket == "identical_best":
+        return "identical_best"
+
+    if equivalence_bucket == "equivalent_quality":
+        if has_identical_live:
+            return "equivalent_quality_identical_text"
+        return "equivalent_quality_not_identical"
+
+    if live_bucket == "valid_live_present":
+        return "valid_live_not_equivalent"
+
+    if live_bucket == "no_valid_live_after_llm":
+        return "no_valid_live_after_llm"
+
+    if live_bucket == "llm_not_requested":
+        return "llm_not_requested"
+
+    return "other"
+
 def _packet_comparison_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     comparisons: List[Dict[str, Any]] = []
 
@@ -161,56 +188,56 @@ def _packet_comparison_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         fingerprints = row.get("fingerprints", {}) or {}
         family_fingerprint_matches = fingerprints.get("family_fingerprint_matches", {}) or {}
 
-        comparisons.append(
-            {
-                "packet_key": _analysis_key(row, "packet_key"),
-                "resume_key": _analysis_key(row, "resume_key"),
-                "company": str(job.get("company", "") or "").strip(),
-                "title": str(job.get("title", "") or "").strip(),
-                "selected_source": _bucket_value(row, "selected_source"),
-                "selected_reason": _bucket_value(row, "selected_reason"),
-                "selection_outcome_bucket": _bucket_value(row, "selection_outcome_bucket"),
-                "live_outcome_bucket": _bucket_value(row, "live_outcome_bucket"),
-                "equivalence_outcome_bucket": _bucket_value(row, "equivalence_outcome_bucket"),
-                "compatibility_mode": bool(row.get("compatibility_mode", False)),
-                "compatibility_reason": str(row.get("compatibility_reason", "") or "").strip(),
-                "preferred_rewrite_fingerprint": str(
-                    eval_summary.get("preferred_rewrite_fingerprint", "") or ""
-                ),
-                "selected_candidate_fingerprint": str(
-                    eval_summary.get("selected_candidate_fingerprint", "") or ""
-                ),
-                "deterministic_family_fingerprint": str(
-                    eval_summary.get("deterministic_family_fingerprint", "") or ""
-                ),
-                "live_family_fingerprint": str(
-                    eval_summary.get("live_family_fingerprint", "") or ""
-                ),
-                "live_blended_family_fingerprint": str(
-                    eval_summary.get("live_blended_family_fingerprint", "") or ""
-                ),
-                "selected_matches_deterministic_family": bool(
-                    eval_summary.get("selected_matches_deterministic_family", False)
-                ),
-                "selected_matches_live_family": bool(
-                    eval_summary.get("selected_matches_live_family", False)
-                ),
-                "selected_matches_live_blended_family": bool(
-                    eval_summary.get("selected_matches_live_blended_family", False)
-                ),
-                "deterministic_matches_live_family": bool(
-                    eval_summary.get("deterministic_matches_live_family", False)
-                ),
-                "deterministic_matches_live_blended_family": bool(
-                    eval_summary.get("deterministic_matches_live_blended_family", False)
-                ),
-                "live_matches_live_blended_family": bool(
-                    eval_summary.get("live_matches_live_blended_family", False)
-                ),
-                "selected_equivalent_candidate_ids": row.get("selected_equivalent_candidate_ids", []) or [],
-                "packet_generated_at_utc": _bucket_value(row, "generated_at_utc", default=""),
-            }
-        )
+        item = {
+            "packet_key": _analysis_key(row, "packet_key"),
+            "resume_key": _analysis_key(row, "resume_key"),
+            "company": str(job.get("company", "") or "").strip(),
+            "title": str(job.get("title", "") or "").strip(),
+            "selected_source": _bucket_value(row, "selected_source"),
+            "selected_reason": _bucket_value(row, "selected_reason"),
+            "selection_outcome_bucket": _bucket_value(row, "selection_outcome_bucket"),
+            "live_outcome_bucket": _bucket_value(row, "live_outcome_bucket"),
+            "equivalence_outcome_bucket": _bucket_value(row, "equivalence_outcome_bucket"),
+            "compatibility_mode": bool(row.get("compatibility_mode", False)),
+            "compatibility_reason": str(row.get("compatibility_reason", "") or "").strip(),
+            "preferred_rewrite_fingerprint": str(
+                eval_summary.get("preferred_rewrite_fingerprint", "") or ""
+            ),
+            "selected_candidate_fingerprint": str(
+                eval_summary.get("selected_candidate_fingerprint", "") or ""
+            ),
+            "deterministic_family_fingerprint": str(
+                eval_summary.get("deterministic_family_fingerprint", "") or ""
+            ),
+            "live_family_fingerprint": str(
+                eval_summary.get("live_family_fingerprint", "") or ""
+            ),
+            "live_blended_family_fingerprint": str(
+                eval_summary.get("live_blended_family_fingerprint", "") or ""
+            ),
+            "selected_matches_deterministic_family": bool(
+                eval_summary.get("selected_matches_deterministic_family", False)
+            ),
+            "selected_matches_live_family": bool(
+                eval_summary.get("selected_matches_live_family", False)
+            ),
+            "selected_matches_live_blended_family": bool(
+                eval_summary.get("selected_matches_live_blended_family", False)
+            ),
+            "deterministic_matches_live_family": bool(
+                eval_summary.get("deterministic_matches_live_family", False)
+            ),
+            "deterministic_matches_live_blended_family": bool(
+                eval_summary.get("deterministic_matches_live_blended_family", False)
+            ),
+            "live_matches_live_blended_family": bool(
+                eval_summary.get("live_matches_live_blended_family", False)
+            ),
+            "selected_equivalent_candidate_ids": row.get("selected_equivalent_candidate_ids", []) or [],
+            "packet_generated_at_utc": _bucket_value(row, "generated_at_utc", default=""),
+        }
+        item["fingerprint_relationship_bucket"] = _fingerprint_relationship_bucket(item)
+        comparisons.append(item)
 
     comparisons.sort(
         key=lambda item: (
@@ -228,13 +255,17 @@ def _build_summary(
     require_analysis_keys: bool = False,
 ) -> Dict[str, Any]:
     total = len(rows)
-
+    packet_comparisons = _packet_comparison_rows(rows)
     schema_counter = Counter(_bucket_value(row, "schema_version") for row in rows)
     selection_counter = Counter(_bucket_value(row, "selection_outcome_bucket") for row in rows)
     live_counter = Counter(_bucket_value(row, "live_outcome_bucket") for row in rows)
     equivalence_counter = Counter(_bucket_value(row, "equivalence_outcome_bucket") for row in rows)
     selected_source_counter = Counter(_bucket_value(row, "selected_source") for row in rows)
     compatibility_counter = Counter(_compatibility_value(row) for row in rows)
+    fingerprint_relationship_counter = Counter(
+        _bucket_value(item, "fingerprint_relationship_bucket")
+        for item in packet_comparisons
+    )
 
     summary = {
         "filters": {
@@ -248,6 +279,10 @@ def _build_summary(
         "equivalence_outcome_bucket": _counter_to_sorted_rows(equivalence_counter, total),
         "selected_source": _counter_to_sorted_rows(selected_source_counter, total),
         "compatibility_mode": _counter_to_sorted_rows(compatibility_counter, total),
+        "fingerprint_relationship_bucket": _counter_to_sorted_rows(
+            fingerprint_relationship_counter,
+            len(packet_comparisons),
+        ),
         "by_packet_key": _group_breakdown(
             rows,
             key_getter=lambda row: _analysis_key(row, "packet_key"),
@@ -258,7 +293,7 @@ def _build_summary(
             key_getter=lambda row: _analysis_key(row, "resume_key"),
             top_n=top_n,
         ),
-        "packet_comparisons": _packet_comparison_rows(rows),
+        "packet_comparisons": packet_comparisons,
     }
     return summary
 
@@ -312,6 +347,9 @@ def _print_packet_comparisons(rows: List[Dict[str, Any]]) -> None:
         print(
             f"  live_outcome={item['live_outcome_bucket']} | "
             f"equivalence_outcome={item['equivalence_outcome_bucket']}"
+        )
+        print(
+            f"  fingerprint_relationship_bucket={item['fingerprint_relationship_bucket']}"
         )
         print(
             f"  compatibility_mode={item['compatibility_mode']} | "
@@ -477,6 +515,10 @@ def main() -> None:
     _print_counter_block("Equivalence Outcome Bucket", summary["equivalence_outcome_bucket"])
     _print_counter_block("Selected Source", summary["selected_source"])
     _print_counter_block("Compatibility Mode", summary["compatibility_mode"])
+    _print_counter_block(
+        "Fingerprint Relationship Bucket",
+        summary["fingerprint_relationship_bucket"],
+    )
 
     _print_group_block("Top Packet Keys", summary["by_packet_key"])
     _print_group_block("Top Resume Keys", summary["by_resume_key"])

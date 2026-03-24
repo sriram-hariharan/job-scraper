@@ -586,7 +586,12 @@ def _normalize_live_rewrite_directions(
     primary_anchor_units = plan.get("primary_anchor_units", []) or []
     secondary_support_units = plan.get("secondary_support_units", []) or []
     adjacent_terms = list(plan.get("adjacent_terms_to_keep_explicit", []) or [])
+    adjacent_facets = list(plan.get("adjacent_facets", []) or [])
     true_gap_terms = list(plan.get("true_unsupported_terms", []) or [])
+    true_gap_facets = list(plan.get("true_gap_facets", []) or [])
+
+    adjacent_targets = adjacent_terms if adjacent_terms else adjacent_facets
+    true_gap_targets = true_gap_terms if true_gap_terms else true_gap_facets
 
     normalized: List[str] = []
     covered_primary_keys = set()
@@ -634,37 +639,100 @@ def _normalize_live_rewrite_directions(
 
     normalized = _unique_preserve_order(normalized)
 
-    # Canonicalize adjacent-support guardrail coverage.
-    if adjacent_terms:
-        adjacent_terms_covered_individually = all(
-            _direction_list_mentions_term(normalized, term)
-            for term in adjacent_terms
+    # If the plan has no anchor/support units, live should not keep synthetic Lead/Support lines.
+    if not primary_anchor_units and not secondary_support_units:
+        normalized = [
+            text for text in normalized
+            if _direction_prefix(text) in {"Do not add", "Keep gap explicit"}
+        ]
+
+    # Backfill any missing primary anchors with canonical deterministic lead lines.
+    for unit in primary_anchor_units:
+        unit_key = _plan_unit_key(unit)
+        if unit_key in covered_primary_keys:
+            continue
+
+        fallback_lead = _plan_unit_to_direction(unit, primary=True)
+        if fallback_lead:
+            normalized.append(fallback_lead)
+            covered_primary_keys.add(unit_key)
+
+    # Drop support lines that are really primary-anchor restatements once the lead is present.
+    filtered_supports: List[str] = []
+    for text in normalized:
+        if _direction_prefix(text) != "Support with":
+            filtered_supports.append(text)
+            continue
+
+        primary_match = _best_matching_plan_unit(text, primary_anchor_units)
+        secondary_match = _best_matching_plan_unit(text, secondary_support_units)
+
+        primary_score = (
+            _direction_plan_unit_match_score(text, primary_match)
+            if primary_match is not None
+            else 0
         )
-        has_canonical_adjacent = any(
-            text.startswith("Do not add")
-            and _direction_mentions_any(text, adjacent_terms)
-            for text in normalized
+        secondary_score = (
+            _direction_plan_unit_match_score(text, secondary_match)
+            if secondary_match is not None
+            else 0
         )
 
-        if adjacent_terms_covered_individually and not has_canonical_adjacent:
-            normalized = _drop_term_only_gap_lines(normalized, adjacent_terms)
-            canonical_adjacent = _canonical_adjacent_guardrail_direction(adjacent_terms)
+        if primary_match is not None and primary_score >= 4 and primary_score >= secondary_score:
+            continue
+
+        filtered_supports.append(text)
+
+    normalized = _unique_preserve_order(filtered_supports)
+
+    # Always rebuild the canonical adjacent-support guardrail required by coverage.
+    if adjacent_targets:
+        has_canonical_adjacent = any(
+            text.startswith("Do not add")
+            and _direction_mentions_any(text, adjacent_targets)
+            for text in normalized
+        )
+        if not has_canonical_adjacent:
+            canonical_adjacent = _canonical_adjacent_guardrail_direction(adjacent_targets)
             if canonical_adjacent:
                 normalized.append(canonical_adjacent)
 
-    # Canonicalize true-gap coverage to the full deterministic gap line.
-    if true_gap_terms:
-        has_any_true_gap_line = any(
+    # Always rebuild the canonical true-gap line required by coverage.
+    if true_gap_targets:
+        has_canonical_true_gap = any(
             text.startswith("Keep gap explicit")
-            and _direction_mentions_any(text, true_gap_terms)
+            and _direction_mentions_any(text, true_gap_targets)
             for text in normalized
         )
-
-        if has_any_true_gap_line:
-            normalized = _drop_term_only_gap_lines(normalized, true_gap_terms)
-            canonical_true_gap = _canonical_true_gap_direction(true_gap_terms)
+        if not has_canonical_true_gap:
+            canonical_true_gap = _canonical_true_gap_direction(true_gap_targets)
             if canonical_true_gap:
                 normalized.append(canonical_true_gap)
+
+    # Prune non-plan guardrail lines so they do not crowd out required plan coverage lines.
+    if adjacent_targets:
+        normalized = [
+            text for text in normalized
+            if _direction_prefix(text) != "Do not add"
+            or _direction_mentions_any(text, adjacent_targets)
+        ]
+    else:
+        normalized = [
+            text for text in normalized
+            if _direction_prefix(text) != "Do not add"
+        ]
+
+    if true_gap_targets:
+        normalized = [
+            text for text in normalized
+            if _direction_prefix(text) != "Keep gap explicit"
+            or _direction_mentions_any(text, true_gap_targets)
+        ]
+    else:
+        normalized = [
+            text for text in normalized
+            if _direction_prefix(text) != "Keep gap explicit"
+        ]
 
     # Ensure at least one selected secondary support unit is preserved when the plan has one.
     if secondary_support_units:
@@ -678,7 +746,6 @@ def _normalize_live_rewrite_directions(
             if fallback_support:
                 normalized.append(fallback_support)
 
-    # Reorder to deterministic plan shape before truncation.
     lead_lines = [text for text in normalized if _direction_prefix(text) == "Lead with"]
     support_lines = [text for text in normalized if _direction_prefix(text) == "Support with"]
     do_not_add_lines = [text for text in normalized if _direction_prefix(text) == "Do not add"]

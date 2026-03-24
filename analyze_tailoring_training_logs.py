@@ -116,8 +116,116 @@ def _group_breakdown(
 
     return output
 
+def _has_required_analysis_keys(row: Dict[str, Any]) -> bool:
+    packet_key = _analysis_key(row, "packet_key", default="")
+    resume_key = _analysis_key(row, "resume_key", default="")
+    return bool(packet_key) and packet_key != "missing" and bool(resume_key) and resume_key != "missing"
 
-def _build_summary(rows: List[Dict[str, Any]], top_n: int) -> Dict[str, Any]:
+def _latest_rows_per_packet_resume(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    grouped: Dict[tuple, List[Dict[str, Any]]] = defaultdict(list)
+
+    for row in rows:
+        packet_key = _analysis_key(row, "packet_key")
+        resume_key = _analysis_key(row, "resume_key")
+        grouped[(packet_key, resume_key)].append(row)
+
+    latest_rows: List[Dict[str, Any]] = []
+
+    for _, group_rows in grouped.items():
+        sorted_group = sorted(
+            group_rows,
+            key=lambda row: (
+                _bucket_value(row, "generated_at_utc", default=""),
+                _bucket_value(row, "schema_version", default=""),
+            ),
+        )
+        latest_rows.append(sorted_group[-1])
+
+    latest_rows.sort(
+        key=lambda row: (
+            _analysis_key(row, "packet_key"),
+            _analysis_key(row, "resume_key"),
+            _bucket_value(row, "generated_at_utc", default=""),
+        )
+    )
+    return latest_rows
+
+def _packet_comparison_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    comparisons: List[Dict[str, Any]] = []
+
+    for row in rows:
+        analysis_keys = row.get("analysis_keys", {}) or {}
+        job = row.get("job", {}) or {}
+        eval_summary = row.get("eval_summary", {}) or {}
+        fingerprints = row.get("fingerprints", {}) or {}
+        family_fingerprint_matches = fingerprints.get("family_fingerprint_matches", {}) or {}
+
+        comparisons.append(
+            {
+                "packet_key": _analysis_key(row, "packet_key"),
+                "resume_key": _analysis_key(row, "resume_key"),
+                "company": str(job.get("company", "") or "").strip(),
+                "title": str(job.get("title", "") or "").strip(),
+                "selected_source": _bucket_value(row, "selected_source"),
+                "selected_reason": _bucket_value(row, "selected_reason"),
+                "selection_outcome_bucket": _bucket_value(row, "selection_outcome_bucket"),
+                "live_outcome_bucket": _bucket_value(row, "live_outcome_bucket"),
+                "equivalence_outcome_bucket": _bucket_value(row, "equivalence_outcome_bucket"),
+                "compatibility_mode": bool(row.get("compatibility_mode", False)),
+                "compatibility_reason": str(row.get("compatibility_reason", "") or "").strip(),
+                "preferred_rewrite_fingerprint": str(
+                    eval_summary.get("preferred_rewrite_fingerprint", "") or ""
+                ),
+                "selected_candidate_fingerprint": str(
+                    eval_summary.get("selected_candidate_fingerprint", "") or ""
+                ),
+                "deterministic_family_fingerprint": str(
+                    eval_summary.get("deterministic_family_fingerprint", "") or ""
+                ),
+                "live_family_fingerprint": str(
+                    eval_summary.get("live_family_fingerprint", "") or ""
+                ),
+                "live_blended_family_fingerprint": str(
+                    eval_summary.get("live_blended_family_fingerprint", "") or ""
+                ),
+                "selected_matches_deterministic_family": bool(
+                    eval_summary.get("selected_matches_deterministic_family", False)
+                ),
+                "selected_matches_live_family": bool(
+                    eval_summary.get("selected_matches_live_family", False)
+                ),
+                "selected_matches_live_blended_family": bool(
+                    eval_summary.get("selected_matches_live_blended_family", False)
+                ),
+                "deterministic_matches_live_family": bool(
+                    eval_summary.get("deterministic_matches_live_family", False)
+                ),
+                "deterministic_matches_live_blended_family": bool(
+                    eval_summary.get("deterministic_matches_live_blended_family", False)
+                ),
+                "live_matches_live_blended_family": bool(
+                    eval_summary.get("live_matches_live_blended_family", False)
+                ),
+                "selected_equivalent_candidate_ids": row.get("selected_equivalent_candidate_ids", []) or [],
+                "packet_generated_at_utc": _bucket_value(row, "generated_at_utc", default=""),
+            }
+        )
+
+    comparisons.sort(
+        key=lambda item: (
+            item["packet_key"],
+            item["resume_key"],
+            item["packet_generated_at_utc"],
+        )
+    )
+    return comparisons
+
+def _build_summary(
+    rows: List[Dict[str, Any]],
+    top_n: int,
+    latest_per_packet_resume: bool = False,
+    require_analysis_keys: bool = False,
+) -> Dict[str, Any]:
     total = len(rows)
 
     schema_counter = Counter(_bucket_value(row, "schema_version") for row in rows)
@@ -128,6 +236,10 @@ def _build_summary(rows: List[Dict[str, Any]], top_n: int) -> Dict[str, Any]:
     compatibility_counter = Counter(_compatibility_value(row) for row in rows)
 
     summary = {
+        "filters": {
+            "latest_per_packet_resume": bool(latest_per_packet_resume),
+            "require_analysis_keys": bool(require_analysis_keys),
+        },
         "total_rows": total,
         "schema_version": _counter_to_sorted_rows(schema_counter, total),
         "selection_outcome_bucket": _counter_to_sorted_rows(selection_counter, total),
@@ -145,6 +257,7 @@ def _build_summary(rows: List[Dict[str, Any]], top_n: int) -> Dict[str, Any]:
             key_getter=lambda row: _analysis_key(row, "resume_key"),
             top_n=top_n,
         ),
+        "packet_comparisons": _packet_comparison_rows(rows),
     }
     return summary
 
@@ -183,6 +296,45 @@ def _print_group_block(title: str, rows: List[Dict[str, Any]]) -> None:
         for bucket in item["schema_version"]:
             print(f"    - {bucket['key']}: {bucket['count']} ({bucket['pct']:.2f}%)")
 
+def _print_packet_comparisons(rows: List[Dict[str, Any]]) -> None:
+    print("\nPacket Comparisons")
+    print("==================")
+
+    for item in rows:
+        print(
+            f"\n{item['packet_key']} | resume={item['resume_key']} | "
+            f"selected={item['selected_source']} | "
+            f"selection_bucket={item['selection_outcome_bucket']}"
+        )
+        print(f"  title: {item['company']} | {item['title']}")
+        print(f"  selected_reason: {item['selected_reason']}")
+        print(
+            f"  live_outcome={item['live_outcome_bucket']} | "
+            f"equivalence_outcome={item['equivalence_outcome_bucket']}"
+        )
+        print(
+            f"  compatibility_mode={item['compatibility_mode']} | "
+            f"compatibility_reason={item['compatibility_reason'] or 'n/a'}"
+        )
+        print(
+            f"  fingerprints | selected={item['selected_candidate_fingerprint']} | "
+            f"deterministic={item['deterministic_family_fingerprint']} | "
+            f"live={item['live_family_fingerprint']} | "
+            f"live_blended={item['live_blended_family_fingerprint']}"
+        )
+        print(
+            "  fingerprint_matches | "
+            f"selected=deterministic:{item['selected_matches_deterministic_family']} | "
+            f"selected=live:{item['selected_matches_live_family']} | "
+            f"selected=live_blended:{item['selected_matches_live_blended_family']} | "
+            f"deterministic=live:{item['deterministic_matches_live_family']} | "
+            f"deterministic=live_blended:{item['deterministic_matches_live_blended_family']} | "
+            f"live=live_blended:{item['live_matches_live_blended_family']}"
+        )
+        print(
+            f"  selected_equivalent_candidate_ids: "
+            f"{', '.join(item['selected_equivalent_candidate_ids']) if item['selected_equivalent_candidate_ids'] else 'none'}"
+        )
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -204,6 +356,16 @@ def main() -> None:
         default=10,
         help="Number of packet_key and resume_key groups to print.",
     )
+    parser.add_argument(
+        "--latest-per-packet-resume",
+        action="store_true",
+        help="Keep only the latest row for each (packet_key, resume_key) pair before summarizing.",
+    )
+    parser.add_argument(
+        "--require-analysis-keys",
+        action="store_true",
+        help="Drop rows missing stable analysis keys such as packet_key and resume_key before summarizing.",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input_jsonl)
@@ -214,9 +376,28 @@ def main() -> None:
     if not rows:
         raise ValueError(f"No rows found in training log: {input_path}")
 
-    summary = _build_summary(rows, top_n=max(args.top_n, 1))
+    analyzed_rows = rows
 
-    print(f"Loaded {summary['total_rows']} tailoring log rows from {input_path}")
+    if args.require_analysis_keys:
+        analyzed_rows = [
+            row for row in analyzed_rows
+            if _has_required_analysis_keys(row)
+        ]
+
+    if args.latest_per_packet_resume:
+        analyzed_rows = _latest_rows_per_packet_resume(analyzed_rows)
+
+    summary = _build_summary(
+        analyzed_rows,
+        top_n=max(args.top_n, 1),
+        latest_per_packet_resume=args.latest_per_packet_resume,
+        require_analysis_keys=args.require_analysis_keys,
+    )
+
+    print(
+        f"Loaded {len(rows)} tailoring log rows from {input_path}; "
+        f"analyzing {summary['total_rows']} rows"
+    )
 
     _print_counter_block("Schema Version", summary["schema_version"])
     _print_counter_block("Selection Outcome Bucket", summary["selection_outcome_bucket"])
@@ -227,6 +408,7 @@ def main() -> None:
 
     _print_group_block("Top Packet Keys", summary["by_packet_key"])
     _print_group_block("Top Resume Keys", summary["by_resume_key"])
+    _print_packet_comparisons(summary["packet_comparisons"])
 
     if args.output_json.strip():
         output_path = Path(args.output_json)

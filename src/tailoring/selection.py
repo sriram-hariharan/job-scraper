@@ -847,25 +847,60 @@ def _terminal_resolved_candidate_id(
 
 def _equivalent_candidate_ids_for_selected_candidate(
     selected_candidate_id: str,
+    candidate_pool: List[Dict[str, Any]],
     lineage: List[Dict[str, Any]],
 ) -> List[str]:
     selected_candidate_id = str(selected_candidate_id or "").strip()
     if not selected_candidate_id:
         return []
 
+    candidate_by_id = {
+        str(candidate.get("candidate_id", "") or "").strip(): candidate
+        for candidate in candidate_pool or []
+        if str(candidate.get("candidate_id", "") or "").strip()
+    }
+
     selected_terminal = _terminal_resolved_candidate_id(
         selected_candidate_id,
         lineage,
     )
-    equivalent: List[str] = []
+    selected_candidate = (
+        candidate_by_id.get(selected_terminal)
+        or candidate_by_id.get(selected_candidate_id)
+    )
+    if selected_candidate is None:
+        return []
 
+    selected_sort_key = _rewrite_candidate_sort_key(selected_candidate)
+    equivalent_terminal_ids = set()
+
+    for candidate in candidate_pool or []:
+        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+        if not candidate_id:
+            continue
+
+        audit = candidate.get("audit", {}) or {}
+        if not (audit.get("covers_plan") and audit.get("verifier_ok")):
+            continue
+
+        if _rewrite_candidate_sort_key(candidate) != selected_sort_key:
+            continue
+
+        terminal_id = _terminal_resolved_candidate_id(candidate_id, lineage) or candidate_id
+        if terminal_id:
+            equivalent_terminal_ids.add(terminal_id)
+
+    if selected_terminal:
+        equivalent_terminal_ids.add(selected_terminal)
+
+    equivalent: List[str] = []
     for item in lineage or []:
         candidate_id = str(item.get("candidate_id", "") or "").strip()
         if not candidate_id:
             continue
 
         candidate_terminal = _terminal_resolved_candidate_id(candidate_id, lineage)
-        if candidate_terminal == selected_terminal:
+        if candidate_terminal in equivalent_terminal_ids:
             equivalent.append(candidate_id)
 
     return _unique_preserve_order(equivalent)
@@ -1161,6 +1196,9 @@ def _choose_best_valid_rewrite_path(
     if best_key and deterministic_key and best_key == deterministic_key:
         return "deterministic_planner", "deterministic_kept_as_identical_best_candidate"
 
+    if _rewrite_candidate_sort_key(best_candidate) == _rewrite_candidate_sort_key(deterministic_candidate):
+        return "deterministic_planner", "deterministic_kept_as_equivalent_quality_candidate"
+
     if best_score >= deterministic_score + 2:
         return best_source, f"{best_source}_quality_beats_deterministic"
 
@@ -1332,6 +1370,7 @@ def _select_operator_rewrite_directions(
         audit["selected_candidate_id"] = best_live.get("candidate_id", "")
         audit["selected_equivalent_candidate_ids"] = _equivalent_candidate_ids_for_selected_candidate(
             best_live.get("candidate_id", ""),
+            candidate_pool,
             candidate_lineage,
         )
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
@@ -1342,6 +1381,7 @@ def _select_operator_rewrite_directions(
         audit["selected_candidate_id"] = best_blended.get("candidate_id", "")
         audit["selected_equivalent_candidate_ids"] = _equivalent_candidate_ids_for_selected_candidate(
             best_blended.get("candidate_id", ""),
+            candidate_pool,
             candidate_lineage,
         )
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])
@@ -1352,6 +1392,7 @@ def _select_operator_rewrite_directions(
         audit["selected_candidate_id"] = best_deterministic.get("candidate_id", "")
         audit["selected_equivalent_candidate_ids"] = _equivalent_candidate_ids_for_selected_candidate(
             best_deterministic.get("candidate_id", ""),
+            candidate_pool,
             candidate_lineage,
         )
         audit["fallback_reason_codes"] = _unique_preserve_order(audit["fallback_reason_codes"])

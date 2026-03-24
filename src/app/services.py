@@ -716,6 +716,9 @@ def regenerate_selected_resume_tailoring_payload(
     job_packets_dir = Path(output_dir) / "job_packets"
     job_packets_dir.mkdir(parents=True, exist_ok=True)
 
+    training_log_jsonl_path = Path(output_dir) / "training_logs" / "tailoring_runs.jsonl"
+    training_log_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
+
     file_slug = (
         f"{_slugify_text(company, 30)}__"
         f"{_slugify_text(title, 60)}__"
@@ -750,6 +753,8 @@ def regenerate_selected_resume_tailoring_payload(
         str(tailoring_json_path),
         "--output-md",
         str(tailoring_md_path),
+        "--training-log-jsonl",
+        str(training_log_jsonl_path),
     ]
 
     llm_status = {
@@ -869,6 +874,7 @@ def regenerate_selected_resume_tailoring_payload(
         "tailoring_json": str(tailoring_json_path),
         "tailoring_md": str(tailoring_md_path),
         "tailoring_llm_json": str(tailoring_llm_json_path) if tailoring_llm_json_path else "",
+        "training_log_jsonl": str(training_log_jsonl_path),
         "llm_tailoring_status": llm_status["llm_tailoring_status"],
         "manifest_path": str(manifest_path),
     }

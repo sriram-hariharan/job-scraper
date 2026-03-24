@@ -284,6 +284,11 @@ def main() -> None:
         action="store_true",
         help="When batch selecting resume variants, run LLM fallback ranking for jobs with no credible deterministic winner.",
     )
+    parser.add_argument(
+        "--training-log-jsonl",
+        default="",
+        help="Optional JSONL path to append structured tailoring training-log rows. Defaults to <output-dir>/training_logs/tailoring_runs.jsonl.",
+    )
     args = parser.parse_args()
 
     job_corpus_path = Path(args.job_corpus)
@@ -303,6 +308,14 @@ def main() -> None:
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
+    training_logs_dir = output_dir / "training_logs"
+    training_log_jsonl_path = (
+        Path(args.training_log_jsonl).expanduser()
+        if str(args.training_log_jsonl).strip()
+        else training_logs_dir / "tailoring_runs.jsonl"
+    )
+
+    training_log_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
 
     job_packets_dir = output_dir / "job_packets"
     job_packets_dir.mkdir(parents=True, exist_ok=True)
@@ -450,6 +463,8 @@ def main() -> None:
                     str(tailoring_json_path),
                     "--output-md",
                     str(tailoring_md_path),
+                    "--training-log-jsonl",
+                    str(training_log_jsonl_path),
                 ]
 
                 if args.generate_llm_tailoring:
@@ -586,6 +601,7 @@ def main() -> None:
     print(f"Execution queue  : {execution_queue_csv}")
     print(f"Packet manifest  : {manifest_csv}")
     print(f"Job packets dir  : {job_packets_dir}")
+    print(f"Training log     : {training_log_jsonl_path}")
     print(f"Packets created  : {packet_created_count}")
     print(f"Pending variant selection rows : {pending_variant_selection_count}")
     print(f"Tailoring step      : {'enabled' if args.generate_tailoring else 'disabled'}")

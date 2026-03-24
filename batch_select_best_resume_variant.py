@@ -657,7 +657,7 @@ def main() -> None:
 
     raw_records = _load_job_records(
         Path(args.job_corpus),
-        limit=args.job_limit,
+        limit=0,
     )
 
     job_records = [
@@ -668,6 +668,9 @@ def main() -> None:
             title_contains=args.title_contains,
         )
     ]
+
+    if args.job_limit > 0:
+        job_records = job_records[:args.job_limit]
 
     if not job_records:
         raise RuntimeError("No job records matched the provided filters.")

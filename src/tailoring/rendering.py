@@ -394,7 +394,19 @@ def _build_training_log_row(
             if resolved_candidate.get("covers_plan") and resolved_candidate.get("verifier_ok"):
                 return True
         return False
-
+    
+    def _count_valid_lineage_family_candidates(prefix: str) -> int:
+        count = 0
+        for candidate in candidate_lineage:
+            source_family = str(candidate.get("source_family", "") or "").strip()
+            if source_family != prefix:
+                continue
+            resolved_to_candidate_id = str(candidate.get("resolved_to_candidate_id", "") or "").strip()
+            resolved_candidate = _candidate_by_id(resolved_to_candidate_id) if resolved_to_candidate_id else {}
+            if resolved_candidate.get("covers_plan") and resolved_candidate.get("verifier_ok"):
+                count += 1
+        return count
+    
     selected_candidate_id = str(audit.get("selected_candidate_id", "") or "").strip()
     selected_candidate = _candidate_by_id(selected_candidate_id)
     selected_equivalent_candidate_ids = audit.get("selected_equivalent_candidate_ids", []) or []
@@ -406,7 +418,7 @@ def _build_training_log_row(
     ]
 
     return {
-        "schema_version": "tailoring_training_log_v1",
+        "schema_version": "tailoring_training_log_v2",
         "generated_at_utc": str(generated_at_utc or ""),
         "artifacts": {
             "output_json_path": str(output_json_path or ""),
@@ -457,13 +469,16 @@ def _build_training_log_row(
             "deterministic_best_quality_score": _max_quality_score_for_family("deterministic_planner"),
             "live_best_quality_score": _max_quality_score_for_family("live_llm"),
             "live_blended_best_quality_score": _max_quality_score_for_family("live_llm_blended"),
-            "deterministic_valid_candidate_count": _count_valid_kept_family_candidates("deterministic_planner"),
-            "live_valid_candidate_count": _count_valid_kept_family_candidates("live_llm"),
-            "live_blended_valid_candidate_count": _count_valid_kept_family_candidates("live_llm_blended"),
-            "has_live_candidate": _has_lineage_family_candidate("live_llm"),
-            "has_live_blended_candidate": _has_lineage_family_candidate("live_llm_blended"),
-            "has_valid_live_candidate": _has_valid_lineage_family_candidate("live_llm"),
-            "has_valid_live_blended_candidate": _has_valid_lineage_family_candidate("live_llm_blended"),
+            "deterministic_valid_kept_candidate_count": _count_valid_kept_family_candidates("deterministic_planner"),
+            "live_valid_kept_candidate_count": _count_valid_kept_family_candidates("live_llm"),
+            "live_blended_valid_kept_candidate_count": _count_valid_kept_family_candidates("live_llm_blended"),
+            "deterministic_valid_lineage_candidate_count": _count_valid_lineage_family_candidates("deterministic_planner"),
+            "live_valid_lineage_candidate_count": _count_valid_lineage_family_candidates("live_llm"),
+            "live_blended_valid_lineage_candidate_count": _count_valid_lineage_family_candidates("live_llm_blended"),
+            "has_live_lineage_candidate": _has_lineage_family_candidate("live_llm"),
+            "has_live_blended_lineage_candidate": _has_lineage_family_candidate("live_llm_blended"),
+            "has_valid_live_lineage_candidate": _has_valid_lineage_family_candidate("live_llm"),
+            "has_valid_live_blended_lineage_candidate": _has_valid_lineage_family_candidate("live_llm_blended"),
             "selected_has_live_equivalent": len(live_equivalent_candidate_ids) > 0,
             "live_equivalent_candidate_ids": live_equivalent_candidate_ids,
             "selected_is_deterministic": str(audit.get("selected_source", "") or "") == "deterministic_planner",

@@ -1592,30 +1592,52 @@ function renderKeepAsIs(items) {
 
 function renderTailoringEmptyState(payload) {
   const notes = payload && typeof payload === "object" ? payload.claim_safety_notes || {} : {};
+  const emptyState = payload && typeof payload === "object" ? payload.empty_state_reason || {} : {};
   const materialGaps = Array.isArray(payload?.material_gaps) ? payload.material_gaps : [];
   const frameCarefully = Array.isArray(notes.frame_carefully) ? notes.frame_carefully : [];
   const doNotAdd = Array.isArray(notes.do_not_add) ? notes.do_not_add : [];
 
+  const title = String(emptyState.title || "").trim() || "No safe bullet-level rewrites were found";
+  const summary = String(emptyState.summary || "").trim() ||
+    "This JD/resume pair does not have enough grounded rewrite evidence to suggest stronger bullet rewrites safely.";
+
+  const mainBlockers = Array.isArray(emptyState.main_blockers) && emptyState.main_blockers.length
+    ? emptyState.main_blockers
+    : materialGaps.map((item) => item.label || "").filter(Boolean);
+
+  const stillUseful = Array.isArray(emptyState.still_useful) && emptyState.still_useful.length
+    ? emptyState.still_useful
+    : [
+        frameCarefully.length ? `Frame carefully: ${frameCarefully.join(", ")}` : "",
+        doNotAdd.length ? `Do not add: ${doNotAdd.join(", ")}` : "",
+      ].filter(Boolean);
+
+  const nextStep = String(emptyState.next_step || "").trim();
+
   return `
     <section class="tailoring-section-block">
       <div class="tailoring-empty-state">
-        <div class="tailoring-empty-title">No safe bullet-level rewrites were found</div>
-        <div class="tailoring-empty-copy">
-          This JD/resume pair does not have enough grounded rewrite evidence to suggest stronger bullet rewrites safely.
-        </div>
-        ${materialGaps.length ? `
+        <div class="tailoring-empty-title">${escapeHtml(title)}</div>
+        <div class="tailoring-empty-copy">${escapeHtml(summary)}</div>
+
+        ${mainBlockers.length ? `
           <div class="tailoring-empty-subsection">
             <div class="tailoring-empty-subtitle">Main blockers</div>
-            ${buildTailoringList(materialGaps.map((item) => item.label || "").filter(Boolean))}
+            ${buildTailoringList(mainBlockers)}
           </div>
         ` : ""}
-        ${frameCarefully.length || doNotAdd.length ? `
+
+        ${stillUseful.length ? `
           <div class="tailoring-empty-subsection">
             <div class="tailoring-empty-subtitle">Still useful</div>
-            ${buildTailoringList([
-              frameCarefully.length ? `Frame carefully: ${frameCarefully.join(", ")}` : "",
-              doNotAdd.length ? `Do not add: ${doNotAdd.join(", ")}` : "",
-            ].filter(Boolean))}
+            ${buildTailoringList(stillUseful)}
+          </div>
+        ` : ""}
+
+        ${nextStep ? `
+          <div class="tailoring-empty-subsection">
+            <div class="tailoring-empty-subtitle">Recommended next step</div>
+            <div class="tailoring-card-copy">${escapeHtml(nextStep)}</div>
           </div>
         ` : ""}
       </div>

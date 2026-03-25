@@ -739,9 +739,11 @@ def regenerate_selected_resume_tailoring_payload(
         str(job_doc_id_to_index[job_doc_id_value]),
         "--resume-name-contains",
         chosen_resume,
+        "--disable-semantic-evidence",
         "--output-json",
         str(packet_json_path),
     ]
+    
     _run_checked_cmd(diff_cmd)
 
     tailoring_cmd = [

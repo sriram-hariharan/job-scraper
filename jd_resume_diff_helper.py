@@ -1355,6 +1355,7 @@ def _is_title_only_edge(
 
 def _payload_for_json(
     job_evidence,
+    selected_job_record: dict,
     selected_resume,
     selected_result,
     runner_up_result,
@@ -1371,7 +1372,14 @@ def _payload_for_json(
             "job_doc_id": job_evidence.job_doc_id,
             "company": job_evidence.company,
             "title": job_evidence.title,
+            "link": (
+                str(selected_job_record.get("link", "") or "").strip()
+                or str(selected_job_record.get("url", "") or "").strip()
+                or str(selected_job_record.get("job_url", "") or "").strip()
+                or str(selected_job_record.get("job_doc_id", "") or "").strip()
+            ),
         },
+        "job_snapshot": dict(selected_job_record or {}),
         "selection": {
             "selected_resume": selected_result.pair.resume_name,
             "selected_score": selected_result.final_score,
@@ -1603,6 +1611,7 @@ def main() -> None:
     if args.output_json.strip():
         payload = _payload_for_json(
             job_evidence=job_evidence,
+            selected_job_record=selected_job_record,
             selected_resume=selected_resume,
             selected_result=selected_result,
             runner_up_result=runner_up_result,

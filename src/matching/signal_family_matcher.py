@@ -140,3 +140,62 @@ def equivalent_signal_terms(term: str) -> List[str]:
     if not normalized:
         return []
     return list(_SIGNAL_EQUIVALENT_TERMS.get(normalized, []))
+
+def supported_signal_match_in_text(
+    text: str,
+    supported_terms: Sequence[str],
+) -> Dict[str, str]:
+    text_terms = prioritized_family_terms_from_text(text)
+    if not text_terms:
+        return {"matched_term": "", "supported_term": "", "family": ""}
+
+    supported = _unique_preserve_order(supported_terms)
+    if not supported:
+        return {"matched_term": "", "supported_term": "", "family": ""}
+
+    supported_by_family: Dict[str, List[str]] = {}
+    for term in supported:
+        family = family_for_term(term)
+        if not family:
+            continue
+        supported_by_family.setdefault(family, []).append(term)
+
+    for matched_term in text_terms:
+        matched_family = family_for_term(matched_term)
+        if not matched_family:
+            continue
+
+        family_supported_terms = supported_by_family.get(matched_family, [])
+        if not family_supported_terms:
+            continue
+
+        matched_norm = normalize_signal_text(matched_term)
+        equivalent_norms = {
+            normalize_signal_text(term)
+            for term in equivalent_signal_terms(matched_term)
+        }
+
+        # 1) exact canonical match
+        for supported_term in family_supported_terms:
+            supported_norm = normalize_signal_text(supported_term)
+            if supported_norm == matched_norm:
+                return {
+                    "matched_term": matched_term,
+                    "supported_term": supported_term,
+                    "family": matched_family,
+                }
+
+        # 2) equivalent canonical match
+        for supported_term in family_supported_terms:
+            supported_norm = normalize_signal_text(supported_term)
+            if supported_norm in equivalent_norms:
+                return {
+                    "matched_term": matched_term,
+                    "supported_term": supported_term,
+                    "family": matched_family,
+                }
+
+        # No exact/equivalent term in this family, so do not fabricate a canonical term.
+        continue
+
+    return {"matched_term": "", "supported_term": "", "family": ""}

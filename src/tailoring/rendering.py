@@ -2556,9 +2556,95 @@ def _apply_single_candidate_counterfactuals(
 
     return candidates
 
+def _resolve_patch_set_selection(
+    candidates: List[Dict[str, Any]],
+    selected_candidate_ids: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    requested_candidate_ids = _unique_preserve_order(
+        [
+            str(candidate_id or "").strip()
+            for candidate_id in (selected_candidate_ids or [])
+            if str(candidate_id or "").strip()
+        ]
+    )
+
+    candidate_by_id: Dict[str, Dict[str, Any]] = {}
+    patch_ready_rewrite_ids: List[str] = []
+
+    for candidate in candidates:
+        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+        if candidate_id and candidate_id not in candidate_by_id:
+            candidate_by_id[candidate_id] = candidate
+
+        operation_type = str(candidate.get("operation_type", "") or "").strip()
+        proposal_status = str(candidate.get("proposal_status", "") or "").strip()
+        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        patch_text = str(candidate.get("patch_text", "") or "").strip()
+
+        if (
+            operation_type == "rewrite"
+            and proposal_status == "patch_ready"
+            and source_bullet_id
+            and patch_text
+            and candidate_id
+        ):
+            patch_ready_rewrite_ids.append(candidate_id)
+
+    selection_mode = "selected_candidate_ids" if requested_candidate_ids else "all_patch_ready_rewrites"
+    candidate_ids_to_evaluate = requested_candidate_ids or patch_ready_rewrite_ids
+
+    selected_candidates: List[Dict[str, Any]] = []
+    skipped_candidate_ids: List[str] = []
+    missing_candidate_ids: List[str] = []
+    ineligible_candidate_ids: List[str] = []
+    duplicate_bullet_ids: List[str] = []
+
+    seen_bullet_ids = set()
+
+    for candidate_id in candidate_ids_to_evaluate:
+        candidate = candidate_by_id.get(candidate_id)
+        if candidate is None:
+            missing_candidate_ids.append(candidate_id)
+            skipped_candidate_ids.append(candidate_id)
+            continue
+
+        operation_type = str(candidate.get("operation_type", "") or "").strip()
+        proposal_status = str(candidate.get("proposal_status", "") or "").strip()
+        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        patch_text = str(candidate.get("patch_text", "") or "").strip()
+
+        if operation_type != "rewrite" or proposal_status != "patch_ready" or not source_bullet_id or not patch_text:
+            ineligible_candidate_ids.append(candidate_id)
+            skipped_candidate_ids.append(candidate_id)
+            continue
+
+        if source_bullet_id in seen_bullet_ids:
+            duplicate_bullet_ids.append(source_bullet_id)
+            skipped_candidate_ids.append(candidate_id)
+            continue
+
+        seen_bullet_ids.add(source_bullet_id)
+        selected_candidates.append(candidate)
+
+    return {
+        "selection_mode": selection_mode,
+        "requested_candidate_ids": requested_candidate_ids,
+        "selected_candidates": selected_candidates,
+        "selected_candidate_ids": [
+            str(candidate.get("candidate_id", "") or "").strip()
+            for candidate in selected_candidates
+            if str(candidate.get("candidate_id", "") or "").strip()
+        ],
+        "skipped_candidate_ids": skipped_candidate_ids,
+        "missing_candidate_ids": missing_candidate_ids,
+        "ineligible_candidate_ids": ineligible_candidate_ids,
+        "duplicate_source_bullet_ids": duplicate_bullet_ids,
+    }
+
 def _apply_patch_set_counterfactual_preview(
     payload: Dict[str, Any],
     candidates: List[Dict[str, Any]],
+    selected_candidate_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     context = _counterfactual_context_from_payload(payload)
 
@@ -2568,45 +2654,23 @@ def _apply_patch_set_counterfactual_preview(
         if original_result is not None else None
     )
 
-    selected_candidates: List[Dict[str, Any]] = []
-    skipped_candidate_ids: List[str] = []
-    seen_bullet_ids = set()
-    duplicate_bullet_ids: List[str] = []
-
-    for candidate in candidates:
-        operation_type = str(candidate.get("operation_type", "") or "").strip()
-        proposal_status = str(candidate.get("proposal_status", "") or "").strip()
-        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
-        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
-        patch_text = str(candidate.get("patch_text", "") or "").strip()
-
-        if operation_type != "rewrite" or proposal_status != "patch_ready":
-            if candidate_id:
-                skipped_candidate_ids.append(candidate_id)
-            continue
-
-        if not source_bullet_id or not patch_text:
-            if candidate_id:
-                skipped_candidate_ids.append(candidate_id)
-            continue
-
-        if source_bullet_id in seen_bullet_ids:
-            duplicate_bullet_ids.append(source_bullet_id)
-            if candidate_id:
-                skipped_candidate_ids.append(candidate_id)
-            continue
-
-        seen_bullet_ids.add(source_bullet_id)
-        selected_candidates.append(candidate)
+    selection = _resolve_patch_set_selection(
+        candidates,
+        selected_candidate_ids=selected_candidate_ids,
+    )
+    selected_candidates = list(selection.get("selected_candidates", []) or [])
+    skipped_candidate_ids = list(selection.get("skipped_candidate_ids", []) or [])
+    duplicate_bullet_ids = list(selection.get("duplicate_source_bullet_ids", []) or [])
+    missing_candidate_ids = list(selection.get("missing_candidate_ids", []) or [])
+    ineligible_candidate_ids = list(selection.get("ineligible_candidate_ids", []) or [])
 
     preview = {
-        "selection_mode": "all_patch_ready_rewrites",
-        "selected_candidate_ids": [
-            str(candidate.get("candidate_id", "") or "").strip()
-            for candidate in selected_candidates
-            if str(candidate.get("candidate_id", "") or "").strip()
-        ],
+        "selection_mode": str(selection.get("selection_mode", "") or "").strip(),
+        "requested_candidate_ids": list(selection.get("requested_candidate_ids", []) or []),
+        "selected_candidate_ids": list(selection.get("selected_candidate_ids", []) or []),
         "skipped_candidate_ids": skipped_candidate_ids,
+        "missing_candidate_ids": missing_candidate_ids,
+        "ineligible_candidate_ids": ineligible_candidate_ids,
         "selected_patch_count": len(selected_candidates),
         "status": "",
         "note": "",
@@ -2627,8 +2691,14 @@ def _apply_patch_set_counterfactual_preview(
         return preview
 
     if not selected_candidates:
-        preview["status"] = "no_patch_ready_rewrites"
-        preview["note"] = "No patch-ready rewrite candidates were available for a selected-set preview."
+        if selected_candidate_ids:
+            preview["status"] = "no_valid_selected_candidates"
+            preview["note"] = (
+                "None of the requested candidate IDs resolved to a valid patch-ready rewrite set."
+            )
+        else:
+            preview["status"] = "no_patch_ready_rewrites"
+            preview["note"] = "No patch-ready rewrite candidates were available for a selected-set preview."
         return preview
 
     if not context.get("ok", False):
@@ -3414,6 +3484,16 @@ def _build_operator_markdown_payload(
         operator_payload,
         operator_payload.get("replacement_candidates", []) or [],
     )
+
+    selected_patch_candidate_ids = list(payload.get("selected_patch_candidate_ids", []) or [])
+    if selected_patch_candidate_ids:
+        operator_payload["selected_patch_candidate_ids"] = selected_patch_candidate_ids
+        operator_payload["selected_patch_set_counterfactual_preview"] = _apply_patch_set_counterfactual_preview(
+            operator_payload,
+            operator_payload.get("replacement_candidates", []) or [],
+            selected_candidate_ids=selected_patch_candidate_ids,
+        )
+
     return operator_payload
 
 def _build_payload(

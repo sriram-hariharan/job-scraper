@@ -720,22 +720,60 @@ def _fallback_priority_from_reuse(index: int, row: Dict[str, Any]) -> str:
         return "medium"
     return "low"
 
+_PROMOTABLE_REUSE_FAMILY_PRIORITY = {
+    "experimentation": 0,
+    "analytics_ml": 1,
+    "tooling": 2,
+}
+
+
+def _resolved_reuse_signal_match(
+    payload: Dict[str, Any],
+    row: Dict[str, Any],
+) -> Dict[str, str]:
+    packet_supported_terms = _packet_term_support_terms(payload)
+    source_text = str(row.get("bullet", "") or row.get("parent_bullet", "") or "").strip()
+    return supported_signal_match_in_text(source_text, packet_supported_terms)
+
+
+def _reuse_row_rank(
+    payload: Dict[str, Any],
+    row: Dict[str, Any],
+) -> Tuple[int, int, int]:
+    signal_match = _resolved_reuse_signal_match(payload, row)
+    family = str(signal_match.get("family", "") or "").strip()
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    family_rank = _PROMOTABLE_REUSE_FAMILY_PRIORITY.get(family, 99)
+    evidence_rank = 0 if evidence_type == "direct_overlap" else 1
+    text_rank = abs(140 - len(str(row.get("bullet", "") or row.get("parent_bullet", "") or "").strip()))
+
+    return (family_rank, evidence_rank, text_rank)
 
 def _reuse_candidate_to_edit_card(
+    payload: Dict[str, Any],
     row: Dict[str, Any],
     preferred_rewrite_directions: List[str],
     index: int,
 ) -> Dict[str, Any]:
-    overlaps = list(row.get("overlaps", []) or [])
     evidence = str(row.get("bullet", "") or row.get("parent_bullet", "") or "").strip()
+    signal_match = _resolved_reuse_signal_match(payload, row)
+
+    matched_surface_signal = str(signal_match.get("matched_term", "") or "").strip()
+    canonical_supported_signal = str(signal_match.get("supported_term", "") or "").strip()
+
+    jd_signal_terms = [canonical_supported_signal] if canonical_supported_signal else list(row.get("overlaps", []) or [])
+
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    claim_safety = "safe_strengthen" if evidence_type == "direct_overlap" and jd_signal_terms else _fallback_claim_safety_from_reuse(row)
 
     return {
         "card_id": f"edit_card_reuse_{index}",
         "priority": _fallback_priority_from_reuse(index - 1, row),
-        "edit_type": _fallback_edit_type_from_reuse(row),
+        "edit_type": "rewrite" if jd_signal_terms and evidence_type == "direct_overlap" else _fallback_edit_type_from_reuse(row),
         "section": row.get("section", ""),
         "source": row.get("source", ""),
-        "jd_signal_terms": overlaps,
+        "jd_signal_terms": jd_signal_terms,
         "current_evidence": evidence,
         "parent_bullet": row.get("parent_bullet", ""),
         "recommended_rewrite": _fallback_recommended_rewrite_from_reuse(
@@ -745,12 +783,14 @@ def _reuse_candidate_to_edit_card(
         "why_current_is_weak": _fallback_why_current_is_weak_from_reuse(row),
         "why_rewrite_is_better": _fallback_why_rewrite_is_better_from_reuse(row),
         "why_it_matters": _fallback_why_it_matters_from_reuse(row),
-        "claim_safety": _fallback_claim_safety_from_reuse(row),
+        "claim_safety": claim_safety,
         "placement_guidance": _placement_guidance(row),
         "entry_id": row.get("entry_id", ""),
         "entry_index": row.get("entry_index", -1),
         "bullet_id": row.get("bullet_id", ""),
         "bullet_index": row.get("bullet_index", -1),
+        "matched_surface_signal": matched_surface_signal,
+        "canonical_supported_signal": canonical_supported_signal,
     }
 
 
@@ -785,7 +825,10 @@ def _backfill_edit_cards_from_bullet_reuse(
         elif evidence_type in {"same_source_context", "semantic_similarity"}:
             secondary_rows.append(row)
 
-    candidate_rows = preferred_rows + secondary_rows
+    candidate_rows = sorted(
+        preferred_rows + secondary_rows,
+        key=lambda row: _reuse_row_rank(payload, row),
+    )
 
     for row in candidate_rows:
         if len(cards) >= limit:
@@ -801,6 +844,7 @@ def _backfill_edit_cards_from_bullet_reuse(
             continue
 
         card = _reuse_candidate_to_edit_card(
+            payload,
             row,
             preferred_rewrite_directions,
             len(cards) + 1,
@@ -840,6 +884,10 @@ def _recommended_rewrite_text(
     preferred_rewrite_directions: List[str],
     candidate: Dict[str, Any],
 ) -> str:
+    action = str(candidate.get("action", "") or "").strip()
+    if action:
+        return action
+
     supported_terms = [
         str(item or "").strip().lower()
         for item in (candidate.get("supported_terms", []) or [])
@@ -851,13 +899,13 @@ def _recommended_rewrite_text(
         direction_text = str(direction or "").strip()
         direction_lower = direction_text.lower()
 
-        if supported_terms and any(term in direction_lower for term in supported_terms):
-            return direction_text
-
         if source and source in direction_lower:
             return direction_text
 
-    return str(candidate.get("action", "") or "").strip()
+        if supported_terms and any(term in direction_lower for term in supported_terms):
+            return direction_text
+
+    return ""
 
 
 def _why_current_is_weak(candidate: Dict[str, Any]) -> str:
@@ -959,23 +1007,215 @@ def _resolved_edit_card_evidence_type(
 
     return ""
 
+_CLAUSE_SPLIT_ACTION_VERBS = (
+    "Implemented",
+    "Designed",
+    "Developed",
+    "Built",
+    "Created",
+    "Led",
+    "Ran",
+    "Conducted",
+    "Engineered",
+    "Automated",
+    "Performed",
+)
+
+_STRUCTURAL_CLAUSE_FAMILY_PRIORITY = {
+    "experimentation": 0,
+    "analytics_ml": 1,
+}
+
+
+def _split_promotable_clauses(text: str) -> List[str]:
+    full_text = re.sub(r"\s+", " ", str(text or "").strip())
+    if not full_text:
+        return []
+
+    clauses: List[str] = []
+    sentence_parts = re.split(r"(?<=[.;])\s+", full_text)
+
+    verb_pattern = (
+        r"(?<!^)\s+(?=(?:"
+        + "|".join(re.escape(verb) for verb in _CLAUSE_SPLIT_ACTION_VERBS)
+        + r")\b)"
+    )
+
+    for part in sentence_parts:
+        for subpart in re.split(verb_pattern, part):
+            clause = str(subpart or "").strip(" ;,.")
+            if len(clause) >= 45:
+                clauses.append(clause)
+
+    return _unique_preserve_order(clauses)
+
+def _structural_source_text_from_reuse_row(row: Dict[str, Any]) -> str:
+    bullet = str(row.get("bullet", "") or "").strip()
+    parent_bullet = str(row.get("parent_bullet", "") or "").strip()
+
+    if parent_bullet and len(parent_bullet) > len(bullet):
+        return parent_bullet
+    return bullet or parent_bullet
+
+def _best_structural_clause_candidate(
+    text: str,
+    packet_supported_terms: List[str],
+) -> Dict[str, str]:
+    full_text = re.sub(r"\s+", " ", str(text or "").strip())
+    if not full_text:
+        return {}
+
+    clauses = _split_promotable_clauses(full_text)
+    if len(clauses) < 2:
+        return {}
+
+    best: Dict[str, str] = {}
+    best_rank: Optional[Tuple[int, int, int]] = None
+
+    for clause_index, clause_text in enumerate(clauses):
+        signal_match = supported_signal_match_in_text(
+            clause_text,
+            packet_supported_terms,
+        )
+
+        matched_surface_signal = str(signal_match.get("matched_term", "") or "").strip()
+        canonical_supported_signal = str(signal_match.get("supported_term", "") or "").strip()
+        family = str(signal_match.get("family", "") or "").strip()
+
+        if not matched_surface_signal or not canonical_supported_signal or not family:
+            continue
+
+        if family not in _STRUCTURAL_CLAUSE_FAMILY_PRIORITY:
+            continue
+
+        normalized_clause = _diagnosis_normalize_term(clause_text)
+        normalized_full = _diagnosis_normalize_term(full_text)
+        if normalized_clause == normalized_full:
+            continue
+
+        rank = (
+            _STRUCTURAL_CLAUSE_FAMILY_PRIORITY.get(family, 99),
+            0 if clause_index > 0 else 1,
+            abs(140 - len(clause_text)),
+        )
+
+        if best_rank is None or rank < best_rank:
+            best_rank = rank
+            best = {
+                "clause_text": clause_text,
+                "matched_surface_signal": matched_surface_signal,
+                "canonical_supported_signal": canonical_supported_signal,
+                "family": family,
+            }
+
+    return best
+
+
+def _structural_clause_edit_card_from_reuse(
+    row: Dict[str, Any],
+    clause_candidate: Dict[str, str],
+    index: int,
+) -> Dict[str, Any]:
+    full_evidence = _structural_source_text_from_reuse_row(row)
+    clause_text = str(clause_candidate.get("clause_text", "") or "").strip()
+    matched_surface_signal = str(clause_candidate.get("matched_surface_signal", "") or "").strip()
+    canonical_supported_signal = str(clause_candidate.get("canonical_supported_signal", "") or "").strip()
+
+    return {
+        "card_id": f"edit_card_struct_{index}",
+        "evidence_type": "direct_overlap",
+        "priority": "high",
+        "edit_type": "rewrite",
+        "section": row.get("section", ""),
+        "source": row.get("source", ""),
+        "jd_signal_terms": [canonical_supported_signal] if canonical_supported_signal else [],
+        # IMPORTANT: current_evidence must remain the original full bullet so patch application
+        # can target the stored resume bullet truthfully and deterministically.
+        "current_evidence": full_evidence,
+        "parent_bullet": full_evidence,
+        "recommended_rewrite": clause_text,
+        "why_current_is_weak": (
+            "The strongest JD-relevant signal is buried inside a longer multi-claim bullet instead of standing on its own."
+        ),
+        "why_rewrite_is_better": (
+            f"It isolates the already-explicit {canonical_supported_signal} evidence without inventing any new claim."
+        ),
+        "why_it_matters": (
+            f"This is the clearest grounded path to surface {canonical_supported_signal} as direct bullet evidence."
+        ),
+        "claim_safety": "safe_strengthen",
+        "placement_guidance": (
+            "Replace the original bullet with this already-explicit clause only if the shorter bullet still tells the story truthfully."
+        ),
+        "entry_id": row.get("entry_id", ""),
+        "entry_index": row.get("entry_index", -1),
+        "bullet_id": row.get("bullet_id", ""),
+        "bullet_index": row.get("bullet_index", -1),
+        "matched_surface_signal": matched_surface_signal,
+        "canonical_supported_signal": canonical_supported_signal,
+        "structural_operation": "extract_clause",
+        "structural_clause_text": clause_text,
+        # Optional display/debug aid
+        "focused_clause_text": clause_text,
+    }
+
 def _build_edit_cards(
     payload: Dict[str, Any],
     preferred_rewrite_directions: List[str],
     limit: int = 5,
 ) -> List[Dict[str, Any]]:
     cards: List[Dict[str, Any]] = []
+    seen_bullet_ids = set()
 
     rewrite_candidates = payload.get("rewrite_candidates", []) or []
+    bullet_reuse_candidates = payload.get("bullet_reuse_candidates", []) or []
     packet_supported_terms = _packet_term_support_terms(payload)
 
+    # Pass 0: prioritize structural hidden-clause candidates from grounded reuse bullets
+    for row in bullet_reuse_candidates:
+        if len(cards) >= limit:
+            break
+
+        evidence_type = str(row.get("evidence_type", "") or "").strip()
+        if evidence_type != "direct_overlap":
+            continue
+
+        bullet_id = str(row.get("bullet_id", "") or "").strip()
+        if bullet_id and bullet_id in seen_bullet_ids:
+            continue
+
+        full_evidence = _structural_source_text_from_reuse_row(row)
+        clause_candidate = _best_structural_clause_candidate(
+            full_evidence,
+            packet_supported_terms,
+        )
+        if not clause_candidate:
+            continue
+
+        card = _structural_clause_edit_card_from_reuse(
+            row,
+            clause_candidate,
+            len(cards) + 1,
+        )
+        cards.append(card)
+
+        if bullet_id:
+            seen_bullet_ids.add(bullet_id)
+
+    # Pass 1: current rewrite candidates
     for index, candidate in enumerate(rewrite_candidates[:limit], start=1):
+        if len(cards) >= limit:
+            break
+
+        bullet_id = str(candidate.get("bullet_id", "") or "").strip()
+        if bullet_id and bullet_id in seen_bullet_ids:
+            continue
+
         seed_terms = list(candidate.get("supported_terms", []) or [])
         current_evidence = str(candidate.get("bullet_excerpt", "") or "").strip()
         parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
         source_text = parent_bullet or current_evidence
 
-        packet_supported_terms = _packet_term_support_terms(payload)
         signal_match = supported_signal_match_in_text(
             source_text,
             packet_supported_terms,
@@ -1021,6 +1261,9 @@ def _build_edit_cards(
                 "canonical_supported_signal": canonical_supported_signal,
             }
         )
+
+        if bullet_id:
+            seen_bullet_ids.add(bullet_id)
 
     cards = _backfill_edit_cards_from_bullet_reuse(
         payload,
@@ -1150,6 +1393,8 @@ def _edit_card_to_bullet_diagnosis(
         "placement_guidance": str(card.get("placement_guidance", "") or "").strip(),
         "matched_surface_signal": str(card.get("matched_surface_signal", "") or "").strip(),
         "canonical_supported_signal": str(card.get("canonical_supported_signal", "") or "").strip(),
+        "structural_operation": str(card.get("structural_operation", "") or "").strip(),
+        "structural_clause_text": str(card.get("structural_clause_text", "") or "").strip(),
     }
 
 
@@ -1780,6 +2025,7 @@ def _patched_resume_evidence_for_candidate(
             original_resume,
             str(candidate.get("source_bullet_id", "") or "").strip(),
             str(candidate.get("patch_text", "") or "").strip(),
+            str(candidate.get("original_text", "") or "").strip(),
         )
 
     if operation_type == "reorder":
@@ -1908,6 +2154,79 @@ def _lowercase_first_character(value: str) -> str:
     if not text:
         return ""
     return text[:1].lower() + text[1:]
+
+def _deterministic_clause_extract_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    if str(diagnosis.get("structural_operation", "") or "").strip() != "extract_clause":
+        return None
+
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    clause_text = str(
+        diagnosis.get("structural_clause_text", "") or diagnosis.get("current_evidence", "") or ""
+    ).strip()
+
+    if not original_text or not clause_text:
+        return None
+
+    normalized_original = _diagnosis_normalize_term(original_text)
+    normalized_clause = _diagnosis_normalize_term(clause_text)
+
+    if normalized_clause == normalized_original:
+        return None
+
+    if normalized_clause not in normalized_original:
+        return None
+
+    matched_surface_signal = _diagnosis_normalize_term(
+        str(diagnosis.get("matched_surface_signal", "") or "").strip()
+    )
+    canonical_supported_signal = _diagnosis_normalize_term(
+        str(diagnosis.get("canonical_supported_signal", "") or "").strip()
+    )
+
+    promoted_clause = clause_text
+    if (
+        matched_surface_signal
+        and canonical_supported_signal
+        and matched_surface_signal != canonical_supported_signal
+        and matched_surface_signal in _diagnosis_normalize_term(promoted_clause)
+        and canonical_supported_signal not in _diagnosis_normalize_term(promoted_clause)
+    ):
+        promoted_clause = re.sub(
+            rf"\b{re.escape(matched_surface_signal)}\b",
+            canonical_supported_signal,
+            promoted_clause,
+            count=1,
+            flags=re.IGNORECASE,
+        ).strip()
+
+    clauses = _split_promotable_clauses(original_text)
+    if len(clauses) < 2:
+        return None
+
+    remaining_clauses: List[str] = []
+    for clause in clauses:
+        if _diagnosis_normalize_term(clause) == normalized_clause:
+            continue
+        cleaned = str(clause or "").strip().rstrip(" .")
+        if cleaned:
+            remaining_clauses.append(cleaned)
+
+    promoted_clean = str(promoted_clause or "").strip().rstrip(" .")
+    if not promoted_clean:
+        return None
+
+    patch_parts = [promoted_clean] + remaining_clauses
+    patch_text = ". ".join(part for part in patch_parts if part).strip()
+
+    if original_text.endswith("."):
+        patch_text += "."
+
+    if _diagnosis_normalize_term(patch_text) == normalized_original:
+        return None
+
+    return patch_text
 
 def _deterministic_exact_signal_variant_patch(
     diagnosis: Dict[str, Any],
@@ -2065,6 +2384,10 @@ def _deterministic_patch_text_from_diagnosis(
 
     if len(supported_terms) != 1:
         return "direction_only", "", ""
+
+    clause_patch = _deterministic_clause_extract_patch(diagnosis)
+    if clause_patch:
+        return "patch_ready", clause_patch, "deterministic_clause_extract"
 
     exact_signal_patch = _deterministic_exact_signal_variant_patch(diagnosis)
     if exact_signal_patch:
@@ -2263,7 +2586,12 @@ def _is_parent_signal_material_rewrite_diagnosis(
 ) -> bool:
     if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
         return False
-    return _deterministic_parent_signal_label_patch(diagnosis) is not None
+
+    return any([
+        _deterministic_clause_extract_patch(diagnosis) is not None,
+        _deterministic_exact_signal_variant_patch(diagnosis) is not None,
+        _deterministic_parent_signal_label_patch(diagnosis) is not None,
+    ])
 
 
 def _normalize_keep_candidate_for_existing_anchor(
@@ -2378,7 +2706,10 @@ def _build_operator_markdown_payload(
 
     return operator_payload
 
-def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
+def _build_payload(
+    packet: Dict[str, Any],
+    include_llm_prompts: bool = False,
+) -> Dict[str, Any]:
     recruiter_summary = _build_recruiter_summary(packet)
     keep_emphasize = _build_keep_emphasize(packet)
     do_not_claim = _build_do_not_claim(packet)
@@ -2400,20 +2731,24 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         material_gaps,
     )
     
-    from src.tailoring.llm import (
-        _build_llm_prompt,
-        _build_live_rewrite_prompt,
-    )
+    llm_prompt = ""
+    live_rewrite_prompt = ""
 
-    llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
-    live_rewrite_prompt = _build_live_rewrite_prompt(
-        packet,
-        {
-            "rewrite_candidates": rewrite_candidates,
-            "evidence_layers": evidence_layers,
-            "tailoring_plan": tailoring_plan,
-        },
-    )
+    if include_llm_prompts:
+        from src.tailoring.llm import (
+            _build_llm_prompt,
+            _build_live_rewrite_prompt,
+        )
+
+        llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
+        live_rewrite_prompt = _build_live_rewrite_prompt(
+            packet,
+            {
+                "rewrite_candidates": rewrite_candidates,
+                "evidence_layers": evidence_layers,
+                "tailoring_plan": tailoring_plan,
+            },
+        )
 
     return {
         "job": packet.get("job", {}),

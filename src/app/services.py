@@ -515,6 +515,56 @@ def _load_tailoring_json_artifact(path: Path) -> Dict[str, Any]:
         raise ValueError(f"Tailoring artifact must be a JSON object: {path}")
     return data
 
+def _infer_packet_json_path_from_tailoring_artifact(artifact_path: Path) -> Path:
+    name = artifact_path.name
+    suffix = "__tailoring.json"
+    if not name.endswith(suffix):
+        return Path("")
+    return artifact_path.with_name(f"{name[:-len(suffix)]}.json")
+
+
+def _artifact_needs_operator_rehydration(payload_data: Dict[str, Any]) -> bool:
+    replacement_candidates = list(payload_data.get("replacement_candidates", []) or [])
+    if replacement_candidates:
+        return False
+
+    return any(
+        [
+            list(payload_data.get("rewrite_candidates", []) or []),
+            list(payload_data.get("bullet_reuse_candidates", []) or []),
+            list(payload_data.get("edit_cards", []) or []),
+            list(payload_data.get("top_edit_priorities", []) or []),
+            list(payload_data.get("bullet_diagnoses", []) or []),
+        ]
+    )
+
+
+def _rehydrate_legacy_tailoring_operator_payload(
+    artifact_path: Path,
+    payload_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    data = dict(payload_data)
+
+    if not _artifact_needs_operator_rehydration(data):
+        return data
+
+    packet_path = _infer_packet_json_path_from_tailoring_artifact(artifact_path)
+    if not packet_path or not packet_path.exists() or not packet_path.is_file():
+        return data
+
+    try:
+        from src.tailoring.packet_support import _load_packet
+        from src.tailoring.rendering import _build_payload, _build_operator_markdown_payload
+
+        packet = _load_packet(packet_path)
+        rebuilt_base = _build_payload(packet, include_llm_prompts=False)
+        rebuilt_operator = _build_operator_markdown_payload(rebuilt_base, None)
+    except Exception:
+        return data
+
+    merged = dict(data)
+    merged.update(rebuilt_operator)
+    return merged
 
 def _tailoring_artifact_candidate_ids(payload: Dict[str, Any]) -> List[str]:
     candidate_ids: List[str] = []
@@ -563,6 +613,22 @@ def _load_latest_patch_selection_overlay(
 
     return latest_by_path
 
+def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, Any]:
+    from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+
+    data = dict(payload_data)
+
+    replacement_candidates = list(data.get("replacement_candidates", []) or [])
+    if not replacement_candidates:
+        return data
+
+    if not isinstance(data.get("patch_set_counterfactual_preview"), dict):
+        data["patch_set_counterfactual_preview"] = build_selected_patch_set_counterfactual_preview(
+            data,
+            selected_candidate_ids=None,
+        )
+
+    return data
 
 def _apply_saved_patch_selection_overlay(
     artifact_path: Path,
@@ -571,7 +637,7 @@ def _apply_saved_patch_selection_overlay(
 ) -> Dict[str, Any]:
     from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
 
-    data = dict(payload_data)
+    data = _ensure_tailoring_preview_fields(payload_data)
     data.setdefault("selected_patch_candidate_ids", [])
     data.setdefault("selected_patch_selection_status", "none")
     data.setdefault("selected_patch_selection_note", "")
@@ -1529,12 +1595,19 @@ def planning_artifact_payload(
 
     if suffix == ".json":
         data = json.loads(text)
-        if isinstance(data, dict) and data.get("replacement_candidates") is not None:
-            data = _apply_saved_patch_selection_overlay(
-                artifact_path,
-                data,
-                patch_selections_path=patch_selections_path,
-            )
+        if isinstance(data, dict):
+            if artifact_path.name.endswith("__tailoring.json"):
+                data = _rehydrate_legacy_tailoring_operator_payload(
+                    artifact_path,
+                    data,
+                )
+
+            if data.get("replacement_candidates") is not None:
+                data = _apply_saved_patch_selection_overlay(
+                    artifact_path,
+                    data,
+                    patch_selections_path=patch_selections_path,
+                )
         payload["data"] = data
     else:
         payload["text"] = text
@@ -1616,6 +1689,48 @@ def record_operator_resume_selection_payload(
         "decisions_path": str(decisions_path),
     }
 
+def preview_planning_patch_selection_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_candidate_ids: Any = None,
+) -> Dict[str, Any]:
+    from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Patch selection preview requires a tailoring JSON artifact.")
+
+    payload_data = _load_tailoring_json_artifact(artifact_path)
+
+    replacement_candidates = list(payload_data.get("replacement_candidates", []) or [])
+    if not replacement_candidates:
+        raise ValueError("Tailoring artifact does not contain replacement candidates.")
+
+    normalized_ids = _normalize_selected_patch_candidate_ids(selected_candidate_ids)
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
+    unknown_candidate_ids = [candidate_id for candidate_id in normalized_ids if candidate_id not in valid_candidate_ids]
+    if unknown_candidate_ids:
+        raise ValueError(
+            f"Unknown candidate IDs for this artifact: {', '.join(sorted(unknown_candidate_ids))}"
+        )
+
+    preview = build_selected_patch_set_counterfactual_preview(
+        payload_data,
+        selected_candidate_ids=normalized_ids,
+    )
+
+    return {
+        "ok": True,
+        "path": str(artifact_path),
+        "selected_patch_candidate_ids": normalized_ids,
+        "selected_patch_set_counterfactual_preview": preview,
+    }
+
 def record_planning_patch_selection_payload(
     patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -1644,8 +1759,6 @@ def record_planning_patch_selection_payload(
         raise ValueError("Tailoring artifact does not contain replacement candidates.")
 
     normalized_ids = _normalize_selected_patch_candidate_ids(selected_candidate_ids)
-    if not normalized_ids:
-        raise ValueError("selected_candidate_ids must contain at least one candidate ID.")
 
     valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
     unknown_candidate_ids = [candidate_id for candidate_id in normalized_ids if candidate_id not in valid_candidate_ids]

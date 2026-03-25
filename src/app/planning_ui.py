@@ -367,12 +367,39 @@ def planning_dashboard() -> str:
         </section>
         <section class="card tailoring-primary-card">
           <div class="section-header">
+            <h3>Patch Preview</h3>
+          </div>
+
+          <div id="tailoringPatchPreviewSummary" class="tailoring-interactive-shell">
+            <div class="tailoring-empty-state">
+              Loading patch preview...
+            </div>
+          </div>
+        </section>
+        <section class="card tailoring-primary-card">
+          <div class="section-header">
             <h3>Action Plan</h3>
           </div>
 
           <div id="tailoringInteractiveSummary" class="tailoring-interactive-shell">
             <div class="tailoring-empty-state">
               Loading structured tailoring guidance...
+            </div>
+          </div>
+        </section>
+        <section class="card tailoring-primary-card">
+          <div class="section-header">
+            <div>
+              <h3>Patch Selection Preview</h3>
+              <div class="subtext">
+                Select patch-ready rewrite candidates, preview the projected evaluator delta, and save the chosen patch set for this tailoring artifact.
+              </div>
+            </div>
+          </div>
+
+          <div id="tailoringPatchSelectionShell" class="tailoring-patch-selection-shell">
+            <div class="tailoring-empty-state">
+              Loading patch selection preview...
             </div>
           </div>
         </section>

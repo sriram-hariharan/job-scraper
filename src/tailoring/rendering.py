@@ -45,8 +45,10 @@ from src.tailoring.selection import (
 )
 
 from src.matching.signal_family_matcher import (
+    family_for_term,
     families_for_terms,
-    strongest_supported_signal_in_text,
+    prioritized_family_terms_from_text,
+    supported_signal_match_in_text,
 )
 
 _PROMOTABLE_SIGNAL_FAMILY_LABELS = {
@@ -968,20 +970,21 @@ def _build_edit_cards(
     packet_supported_terms = _packet_term_support_terms(payload)
 
     for index, candidate in enumerate(rewrite_candidates[:limit], start=1):
-        evidence_type = str(candidate.get("evidence_type", "") or "").strip()
         seed_terms = list(candidate.get("supported_terms", []) or [])
         current_evidence = str(candidate.get("bullet_excerpt", "") or "").strip()
         parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
         source_text = parent_bullet or current_evidence
 
-        strongest = strongest_supported_signal_in_text(
+        packet_supported_terms = _packet_term_support_terms(payload)
+        signal_match = supported_signal_match_in_text(
             source_text,
             packet_supported_terms,
         )
-        resolved_term = str(strongest.get("term", "") or "").strip()
 
-        supported_terms = [resolved_term] if resolved_term else seed_terms
+        matched_surface_signal = str(signal_match.get("matched_term", "") or "").strip()
+        canonical_supported_signal = str(signal_match.get("supported_term", "") or "").strip()
 
+        supported_terms = [canonical_supported_signal] if canonical_supported_signal else seed_terms
         evidence_type = _resolved_edit_card_evidence_type(
             candidate,
             supported_terms,
@@ -1014,6 +1017,8 @@ def _build_edit_cards(
                 "entry_index": candidate.get("entry_index", -1),
                 "bullet_id": candidate.get("bullet_id", ""),
                 "bullet_index": candidate.get("bullet_index", -1),
+                "matched_surface_signal": matched_surface_signal,
+                "canonical_supported_signal": canonical_supported_signal,
             }
         )
 
@@ -1143,6 +1148,8 @@ def _edit_card_to_bullet_diagnosis(
         "recommended_rewrite": str(card.get("recommended_rewrite", "") or "").strip(),
         "claim_safety": str(card.get("claim_safety", "") or "").strip(),
         "placement_guidance": str(card.get("placement_guidance", "") or "").strip(),
+        "matched_surface_signal": str(card.get("matched_surface_signal", "") or "").strip(),
+        "canonical_supported_signal": str(card.get("canonical_supported_signal", "") or "").strip(),
     }
 
 
@@ -1238,6 +1245,21 @@ def _replacement_candidate_risks(
         if _diagnosis_normalize_term(item) in do_not_add_norm
     ]
 
+    evidence_type = str(diagnosis.get("evidence_type", "") or "").strip()
+    claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
+
+    # Bullet-level direct proof should override packet-level contextual/default risk notes
+    # for the exact supported terms attached to this diagnosis.
+    if evidence_type == "direct_overlap" and claim_safety == "safe_strengthen":
+        adjacent_risk_signals = [
+            item for item in adjacent_risk_signals
+            if _diagnosis_normalize_term(item) not in jd_terms_norm
+        ]
+        unsupported_risk_signals = [
+            item for item in unsupported_risk_signals
+            if _diagnosis_normalize_term(item) not in jd_terms_norm
+        ]
+
     return {
         "adjacent_risk_signals": _unique_preserve_order(adjacent_risk_signals),
         "unsupported_risk_signals": _unique_preserve_order(unsupported_risk_signals),
@@ -1296,6 +1318,8 @@ def _diagnosis_to_replacement_candidate(
         "material_delta_found": proposal_status == "patch_ready",
         "projected_dimension_deltas": {},
         "projected_overall_delta": None,
+        "matched_surface_signal": str(diagnosis.get("matched_surface_signal", "") or "").strip(),
+        "canonical_supported_signal": str(diagnosis.get("canonical_supported_signal", "") or "").strip(),
     }
 
 def _keep_candidate_confidence(diagnosis: Dict[str, Any]) -> str:
@@ -1885,12 +1909,62 @@ def _lowercase_first_character(value: str) -> str:
         return ""
     return text[:1].lower() + text[1:]
 
+def _deterministic_exact_signal_variant_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[Tuple[str, str]]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
 
-_PARENT_SIGNAL_REQUIRED_DIMENSIONS = {
-    "experimentation": {"experimentation_depth"},
-    "analytics_ml": {"analytics_ml_depth"},
-}
+    matched_surface_signal = _diagnosis_normalize_term(
+        str(diagnosis.get("matched_surface_signal", "") or "").strip()
+    )
+    canonical_supported_signal = _diagnosis_normalize_term(
+        str(diagnosis.get("canonical_supported_signal", "") or "").strip()
+    )
 
+    if not matched_surface_signal or not canonical_supported_signal:
+        return None
+
+    if matched_surface_signal == canonical_supported_signal:
+        return None
+
+    normalized_text = _diagnosis_normalize_term(original_text)
+    if matched_surface_signal not in normalized_text:
+        return None
+
+    if canonical_supported_signal in normalized_text:
+        return None
+
+    supported_families = families_for_terms([canonical_supported_signal])
+    if len(supported_families) != 1:
+        return None
+
+    supported_family = supported_families[0]
+    impacted_dimensions = {
+        str(item).strip()
+        for item in (diagnosis.get("likely_impacted_dimensions", []) or [])
+        if str(item).strip()
+    }
+    required_dimensions = _PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS.get(
+        supported_family,
+        set(),
+    )
+    if required_dimensions and not (impacted_dimensions & required_dimensions):
+        return None
+
+    patch_text = re.sub(
+        rf"\b{re.escape(matched_surface_signal)}\b",
+        canonical_supported_signal,
+        original_text,
+        count=1,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    if _diagnosis_normalize_term(patch_text) == normalized_text:
+        return None
+
+    return canonical_supported_signal, patch_text
 
 def _deterministic_parent_signal_label_patch(
     diagnosis: Dict[str, Any],
@@ -1992,6 +2066,11 @@ def _deterministic_patch_text_from_diagnosis(
     if len(supported_terms) != 1:
         return "direction_only", "", ""
 
+    exact_signal_patch = _deterministic_exact_signal_variant_patch(diagnosis)
+    if exact_signal_patch:
+        _, patch_text = exact_signal_patch
+        return "patch_ready", patch_text, "deterministic_exact_signal_variant"
+
     parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
     if parent_signal_patch:
         _, patch_text = parent_signal_patch
@@ -2086,6 +2165,19 @@ def _materiality_validate_rewrite_candidate(
     )
     candidate["precheck_scorer_visible_evidence_changed"] = evidence_changed
     candidate["precheck_evidence_delta"] = evidence_delta
+
+    patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
+
+    if patch_generation_method == "deterministic_parent_signal_label" and overall_delta == 0.0:
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = "label_only_no_score_lift"
+        candidate["materiality_validation_note"] = (
+            "Parent-signal label patch changed modeled evidence but did not produce score lift, so it remains directional."
+        )
+        return candidate
 
     if overall_delta == 0.0 and not evidence_changed:
         candidate["proposal_status"] = "direction_only"

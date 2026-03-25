@@ -127,3 +127,16 @@ def strongest_supported_signal_in_text(
 
     first_term = text_terms[0]
     return {"term": first_term, "family": family_for_term(first_term)}
+
+
+_SIGNAL_EQUIVALENT_TERMS: Dict[str, List[str]] = {
+    "a/b test": ["a/b testing"],
+    "a/b testing": ["a/b test"],
+}
+
+
+def equivalent_signal_terms(term: str) -> List[str]:
+    normalized = normalize_signal_text(term)
+    if not normalized:
+        return []
+    return list(_SIGNAL_EQUIVALENT_TERMS.get(normalized, []))

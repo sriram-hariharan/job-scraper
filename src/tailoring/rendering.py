@@ -2,6 +2,13 @@ from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 import re
 import hashlib
+import json
+import copy
+
+from src.matching.job_adapter import build_job_evidence
+from src.matching.scorer import score_resume_job_match
+from src.resume.document_store import load_resume_documents_by_name
+from src.resume.evidence_builder import build_resume_evidence
 
 from src.tailoring.packet_support import (
     _top_direct_facets,
@@ -1412,6 +1419,313 @@ def _rewrite_candidate_to_reorder_companion(
         "projected_overall_delta": None,
     }
 
+def _candidate_source_group_id(candidate: Dict[str, Any]) -> str:
+    source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+    candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+
+    if source_bullet_id:
+        return f"source_group:{source_bullet_id}"
+
+    return f"source_group:{candidate_id}"
+
+
+def _candidate_conflict_group_id(candidate: Dict[str, Any]) -> str:
+    source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+    candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+
+    if source_bullet_id:
+        return f"conflict_group:{source_bullet_id}"
+
+    return f"conflict_group:{candidate_id}"
+
+
+def _apply_candidate_grouping(
+    candidates: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    conflict_buckets: Dict[str, List[Dict[str, Any]]] = {}
+
+    for candidate in candidates:
+        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        source_group_id = _candidate_source_group_id(candidate)
+        conflict_group_id = _candidate_conflict_group_id(candidate)
+
+        candidate["source_group_id"] = source_group_id
+        candidate["source_group_type"] = "single_bullet"
+        candidate["source_bullet_ids"] = [source_bullet_id] if source_bullet_id else []
+        candidate["conflict_group_id"] = conflict_group_id
+
+        conflict_buckets.setdefault(conflict_group_id, []).append(candidate)
+
+    for conflict_group_id, group_rows in conflict_buckets.items():
+        group_candidate_ids = [
+            str(row.get("candidate_id", "") or "").strip()
+            for row in group_rows
+            if str(row.get("candidate_id", "") or "").strip()
+        ]
+
+        for row in group_rows:
+            current_id = str(row.get("candidate_id", "") or "").strip()
+            existing_conflicts = list(row.get("conflicts_with", []) or [])
+
+            derived_conflicts = [
+                candidate_id
+                for candidate_id in group_candidate_ids
+                if candidate_id and candidate_id != current_id
+            ]
+
+            row["conflicts_with"] = _unique_preserve_order(
+                [*existing_conflicts, *derived_conflicts]
+            )
+
+    return candidates
+
+DEFAULT_COUNTERFACTUAL_JOB_CORPUS = Path("data/rag/job_corpus.jsonl")
+
+
+def _normalize_resume_text_for_counterfactual(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip()
+
+
+def _load_job_record_by_doc_id(
+    job_doc_id: str,
+    job_corpus_path: Path = DEFAULT_COUNTERFACTUAL_JOB_CORPUS,
+) -> Optional[Dict[str, Any]]:
+    target = str(job_doc_id or "").strip()
+    if not target or not job_corpus_path.exists():
+        return None
+
+    with job_corpus_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            job_evidence = build_job_evidence(record)
+            if str(getattr(job_evidence, "job_doc_id", "") or "").strip() == target:
+                return record
+
+    return None
+
+
+def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    selection = payload.get("selection", {}) or {}
+    job = payload.get("job", {}) or {}
+
+    selected_resume_name = str(selection.get("selected_resume", "") or "").strip()
+    job_doc_id = str(job.get("job_doc_id", "") or "").strip()
+
+    if not selected_resume_name or not job_doc_id:
+        return None
+
+    docs = load_resume_documents_by_name([selected_resume_name])
+    if not docs:
+        return None
+
+    job_record = _load_job_record_by_doc_id(job_doc_id)
+    if job_record is None:
+        return None
+
+    original_doc = docs[0]
+    original_resume = build_resume_evidence(original_doc)
+    job_evidence = build_job_evidence(job_record)
+    original_result = score_resume_job_match(original_resume, job_evidence)
+
+    return {
+        "resume_doc": original_doc,
+        "original_resume": original_resume,
+        "job_evidence": job_evidence,
+        "original_result": original_result,
+    }
+
+
+def _weighted_dimension_map(result: Any) -> Dict[str, float]:
+    output: Dict[str, float] = {}
+    for row in list(getattr(result, "dimension_scores", []) or []):
+        name = str(getattr(row, "name", "") or "").strip()
+        if not name:
+            continue
+        output[name] = float(getattr(row, "weighted_score", 0.0) or 0.0)
+    return output
+
+
+def _nonzero_dimension_deltas(original_result: Any, patched_result: Any) -> Dict[str, float]:
+    original_map = _weighted_dimension_map(original_result)
+    patched_map = _weighted_dimension_map(patched_result)
+
+    names = sorted(set(original_map) | set(patched_map))
+    deltas: Dict[str, float] = {}
+
+    for name in names:
+        delta = round(float(patched_map.get(name, 0.0)) - float(original_map.get(name, 0.0)), 6)
+        if abs(delta) > 0:
+            deltas[name] = delta
+
+    return deltas
+
+def _replace_bullet_in_resume_evidence(
+    resume_evidence: Any,
+    source_bullet_id: str,
+    patch_text: str,
+) -> str:
+    bullet_id = str(source_bullet_id or "").strip()
+    replacement = str(patch_text or "").strip()
+
+    if not bullet_id or not replacement:
+        return "missing_patch_inputs"
+
+    match_count = 0
+
+    for entry in list(getattr(resume_evidence, "experience_entries", []) or []):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for idx, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if idx >= len(bullets):
+                return "bullet_index_out_of_range"
+
+            bullets[idx] = replacement
+            entry.bullets = bullets
+            match_count += 1
+
+    for entry in list(getattr(resume_evidence, "project_entries", []) or []):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for idx, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if idx >= len(bullets):
+                return "bullet_index_out_of_range"
+
+            bullets[idx] = replacement
+            entry.bullets = bullets
+            match_count += 1
+
+    if match_count == 0:
+        return "bullet_id_not_found"
+
+    if match_count > 1:
+        return "bullet_id_not_unique"
+
+    return "ok"
+
+
+def _patched_resume_evidence_for_candidate(
+    original_resume: Any,
+    candidate: Dict[str, Any],
+) -> Tuple[Optional[Any], str]:
+    operation_type = str(candidate.get("operation_type", "") or "").strip()
+    proposal_status = str(candidate.get("proposal_status", "") or "").strip()
+
+    if proposal_status != "patch_ready":
+        return None, "not_patch_ready"
+
+    if operation_type == "rewrite":
+        patched_resume = copy.deepcopy(original_resume)
+        status = _replace_bullet_in_resume_evidence(
+            patched_resume,
+            str(candidate.get("source_bullet_id", "") or "").strip(),
+            str(candidate.get("patch_text", "") or "").strip(),
+        )
+        if status != "ok":
+            return None, status
+        return patched_resume, "ok"
+
+    if operation_type == "reorder":
+        # Current frozen evaluator does not model bullet order directly.
+        return original_resume, "order_not_modeled_in_v1"
+
+    if operation_type == "keep":
+        return original_resume, "keep_existing_baseline"
+
+    return None, "unsupported_operation"
+
+def _apply_single_candidate_counterfactuals(
+    payload: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    context = _counterfactual_context_from_payload(payload)
+    if context is None:
+        for row in candidates:
+            row["counterfactual_status"] = "unavailable"
+            row["counterfactual_note"] = "Could not load the selected resume or job record for projected scoring."
+            row["original_final_score"] = None
+            row["projected_final_score"] = None
+            row["projected_overall_delta"] = None
+            row["projected_dimension_deltas"] = {}
+        return candidates
+
+    original_result = context["original_result"]
+    original_score = round(float(getattr(original_result, "final_score", 0.0) or 0.0), 6)
+
+    for row in candidates:
+        patched_resume, status = _patched_resume_evidence_for_candidate(context["original_resume"], row)
+
+        row["original_final_score"] = original_score
+
+        if status == "not_patch_ready":
+            row["counterfactual_status"] = "not_patch_ready"
+            row["counterfactual_note"] = "Projected scoring is only available for patch-ready candidates."
+            row["projected_final_score"] = None
+            row["projected_overall_delta"] = None
+            row["projected_dimension_deltas"] = {}
+            continue
+
+        if status in {"bullet_id_not_found", "bullet_id_not_unique", "bullet_index_out_of_range"}:
+            row["counterfactual_status"] = status
+            row["counterfactual_note"] = (
+                "Could not safely apply the patch because the structured bullet lineage could not be matched uniquely."
+            )
+            row["projected_final_score"] = None
+            row["projected_overall_delta"] = None
+            row["projected_dimension_deltas"] = {}
+            continue
+
+        if status == "missing_patch_inputs":
+            row["counterfactual_status"] = "missing_patch_inputs"
+            row["counterfactual_note"] = "Projected scoring could not run because patch inputs were incomplete."
+            row["projected_final_score"] = None
+            row["projected_overall_delta"] = None
+            row["projected_dimension_deltas"] = {}
+            continue
+
+        if status == "unsupported_operation":
+            row["counterfactual_status"] = "unsupported_operation"
+            row["counterfactual_note"] = "Projected scoring is not implemented yet for this operation type."
+            row["projected_final_score"] = None
+            row["projected_overall_delta"] = None
+            row["projected_dimension_deltas"] = {}
+            continue
+
+        if status in {"order_not_modeled_in_v1", "keep_existing_baseline"}:
+            row["counterfactual_status"] = status
+            row["counterfactual_note"] = (
+                "Current frozen evaluator does not model bullet order directly, so reorder is neutral in v1."
+                if status == "order_not_modeled_in_v1"
+                else "Keeping the bullet unchanged does not change the frozen evaluator score."
+            )
+            row["projected_final_score"] = original_score
+            row["projected_overall_delta"] = 0.0
+            row["projected_dimension_deltas"] = {}
+            continue
+
+        patched_result = score_resume_job_match(patched_resume, context["job_evidence"])
+        patched_score = round(float(getattr(patched_result, "final_score", 0.0) or 0.0), 6)
+        overall_delta = round(patched_score - original_score, 6)
+
+        row["counterfactual_status"] = "scored"
+        row["counterfactual_note"] = "Projected delta computed under the frozen deterministic evaluator."
+        row["projected_final_score"] = patched_score
+        row["projected_overall_delta"] = overall_delta
+        row["projected_dimension_deltas"] = _nonzero_dimension_deltas(original_result, patched_result)
+
+    return candidates
+
 def _proposal_status_for_diagnosis(diagnosis: Dict[str, Any]) -> str:
     # Current deterministic rewrite candidates are directional, not final patch text.
     # Later phases may upgrade selected candidates to patch_ready after deterministic
@@ -1552,7 +1866,7 @@ def _build_replacement_candidates(
 
             expanded.append(reorder_candidate)
 
-    return expanded[:limit]
+    return _apply_candidate_grouping(expanded[:limit])
 
 def _build_bullet_diagnoses(
     packet: Dict[str, Any],
@@ -1630,6 +1944,10 @@ def _build_operator_markdown_payload(
     operator_payload["replacement_candidates"] = _build_replacement_candidates(
         operator_payload,
         operator_payload.get("bullet_diagnoses", []) or [],
+    )
+    operator_payload["replacement_candidates"] = _apply_single_candidate_counterfactuals(
+        operator_payload,
+        operator_payload.get("replacement_candidates", []) or [],
     )
 
     return operator_payload
@@ -2276,6 +2594,14 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Entry ID: {row.get('source_entry_id', '')}")
             if row.get("source_bullet_id"):
                 lines.append(f"- Bullet ID: {row.get('source_bullet_id', '')}")
+            if row.get("source_group_id"):
+                lines.append(f"- Source group ID: {row.get('source_group_id', '')}")
+            if row.get("source_group_type"):
+                lines.append(f"- Source group type: {row.get('source_group_type', '')}")
+            if row.get("conflict_group_id"):
+                lines.append(f"- Conflict group ID: {row.get('conflict_group_id', '')}")
+            if row.get("conflicts_with"):
+                lines.append(f"- Conflicts with: {', '.join(row.get('conflicts_with', []) or [])}")
             if row.get("supported_jd_signals"):
                 lines.append(f"- Supported JD signals: {', '.join(row.get('supported_jd_signals', []) or [])}")
             if row.get("likely_impacted_dimensions"):
@@ -2294,6 +2620,22 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Rewrite instruction: {row.get('rewrite_instruction', '')}")
             if row.get("patch_text"):
                 lines.append(f"- Patch text: {row.get('patch_text', '')}")
+            if row.get("original_final_score") is not None:
+                lines.append(f"- Original final score: {row.get('original_final_score')}")
+            if row.get("projected_final_score") is not None:
+                lines.append(f"- Projected final score: {row.get('projected_final_score')}")
+            if row.get("projected_overall_delta") is not None:
+                lines.append(f"- Projected overall delta: {row.get('projected_overall_delta')}")
+            if row.get("projected_dimension_deltas"):
+                formatted = ", ".join(
+                    f"{name}={value}"
+                    for name, value in (row.get("projected_dimension_deltas", {}) or {}).items()
+                )
+                lines.append(f"- Projected dimension deltas: {formatted}")
+            if row.get("counterfactual_status"):
+                lines.append(f"- Counterfactual status: {row.get('counterfactual_status', '')}")
+            if row.get("counterfactual_note"):
+                lines.append(f"- Counterfactual note: {row.get('counterfactual_note', '')}")
             if row.get("why_this_improves_match"):
                 lines.append(f"- Why this improves match: {row.get('why_this_improves_match', '')}")
             if row.get("adjacent_risk_signals"):

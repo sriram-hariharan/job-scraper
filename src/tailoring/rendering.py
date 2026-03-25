@@ -1103,6 +1103,133 @@ def _keep_as_is_to_bullet_diagnosis(
         "placement_guidance": "Keep this bullet visible before editing lower-value evidence.",
     }
 
+def _replacement_candidate_confidence(diagnosis: Dict[str, Any]) -> str:
+    score = 0
+
+    if str(diagnosis.get("claim_safety", "") or "").strip() == "safe_strengthen":
+        score += 2
+    elif str(diagnosis.get("claim_safety", "") or "").strip() == "adjacent_only":
+        score += 1
+
+    if str(diagnosis.get("priority", "") or "").strip() == "high":
+        score += 2
+    elif str(diagnosis.get("priority", "") or "").strip() == "medium":
+        score += 1
+
+    if diagnosis.get("likely_impacted_dimensions"):
+        score += 1
+
+    if score >= 4:
+        return "high"
+    if score >= 2:
+        return "medium"
+    return "low"
+
+
+def _replacement_candidate_risks(
+    payload: Dict[str, Any],
+    diagnosis: Dict[str, Any],
+) -> Dict[str, List[str]]:
+    claim_safety_notes = payload.get("claim_safety_notes", {}) or {}
+
+    jd_terms_raw = [
+        str(item or "").strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item or "").strip()
+    ]
+    jd_terms_norm = {_diagnosis_normalize_term(item) for item in jd_terms_raw}
+
+    frame_terms_raw = [
+        str(item or "").strip()
+        for item in (claim_safety_notes.get("frame_carefully", []) or [])
+        if str(item or "").strip()
+    ]
+    do_not_add_raw = [
+        str(item or "").strip()
+        for item in (claim_safety_notes.get("do_not_add", []) or [])
+        if str(item or "").strip()
+    ]
+
+    frame_terms_norm = {_diagnosis_normalize_term(item) for item in frame_terms_raw}
+    do_not_add_norm = {_diagnosis_normalize_term(item) for item in do_not_add_raw}
+
+    adjacent_risk_signals = [
+        item for item in jd_terms_raw
+        if _diagnosis_normalize_term(item) in frame_terms_norm
+    ]
+    unsupported_risk_signals = [
+        item for item in jd_terms_raw
+        if _diagnosis_normalize_term(item) in do_not_add_norm
+    ]
+
+    return {
+        "adjacent_risk_signals": _unique_preserve_order(adjacent_risk_signals),
+        "unsupported_risk_signals": _unique_preserve_order(unsupported_risk_signals),
+    }
+
+
+def _diagnosis_to_replacement_candidate(
+    payload: Dict[str, Any],
+    diagnosis: Dict[str, Any],
+    index: int,
+) -> Dict[str, Any]:
+    risks = _replacement_candidate_risks(payload, diagnosis)
+
+    bullet_id = str(diagnosis.get("bullet_id", "") or "").strip()
+    diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_{index}").strip()
+    candidate_id = diagnosis_id.replace("bullet_diag", "replacement", 1)
+
+    return {
+        "candidate_id": candidate_id,
+        "source_bullet_id": bullet_id,
+        "source_entry_id": str(diagnosis.get("entry_id", "") or "").strip(),
+        "section": str(diagnosis.get("section", "") or "").strip(),
+        "source": str(diagnosis.get("source", "") or "").strip(),
+        "operation_type": "rewrite",
+        "proposal_type": "directional_rewrite",
+        "original_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
+        "proposed_rewrite_direction": str(diagnosis.get("recommended_rewrite", "") or "").strip(),
+        "proposed_text": str(diagnosis.get("recommended_rewrite", "") or "").strip(),
+        "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
+        "adjacent_risk_signals": risks["adjacent_risk_signals"],
+        "unsupported_risk_signals": risks["unsupported_risk_signals"],
+        "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
+        "why_this_improves_match": str(diagnosis.get("why", "") or "").strip(),
+        "claim_safety": str(diagnosis.get("claim_safety", "") or "").strip(),
+        "placement_guidance": str(diagnosis.get("placement_guidance", "") or "").strip(),
+        "confidence": _replacement_candidate_confidence(diagnosis),
+        "conflicts_with": [],
+        "entry_index": diagnosis.get("entry_index", -1),
+        "bullet_index": diagnosis.get("bullet_index", -1),
+    }
+
+
+def _build_replacement_candidates(
+    payload: Dict[str, Any],
+    bullet_diagnoses: List[Dict[str, Any]],
+    limit: int = 8,
+) -> List[Dict[str, Any]]:
+    candidates: List[Dict[str, Any]] = []
+    seen_keys = set()
+
+    for index, diagnosis in enumerate(bullet_diagnoses, start=1):
+        if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
+            continue
+
+        key = _bullet_diagnosis_key(diagnosis)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+
+        candidates.append(
+            _diagnosis_to_replacement_candidate(payload, diagnosis, index)
+        )
+
+        if len(candidates) >= limit:
+            break
+
+    return candidates
 
 def _build_bullet_diagnoses(
     packet: Dict[str, Any],
@@ -1176,6 +1303,10 @@ def _build_operator_markdown_payload(
         operator_payload,
         edit_cards,
         operator_payload.get("keep_as_is", []) or [],
+    )
+    operator_payload["replacement_candidates"] = _build_replacement_candidates(
+        operator_payload,
+        operator_payload.get("bullet_diagnoses", []) or [],
     )
 
     return operator_payload
@@ -1804,6 +1935,48 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Recommended rewrite: {row.get('recommended_rewrite', '')}")
             if row.get("claim_safety"):
                 lines.append(f"- Claim safety: {row.get('claim_safety', '')}")
+            lines.append("")
+
+    replacement_candidates = payload.get("replacement_candidates", []) or []
+    if replacement_candidates:
+        lines.append("## Replacement Candidates")
+        for index, row in enumerate(replacement_candidates, start=1):
+            lines.append(
+                f"### Candidate {index} · {str(row.get('operation_type', '')).replace('_', ' ').title()} · "
+                f"{str(row.get('confidence', '')).title()} confidence"
+            )
+            if row.get("section"):
+                lines.append(f"- Section: {row.get('section', '')}")
+            if row.get("source"):
+                lines.append(f"- Source: {row.get('source', '')}")
+            if row.get("source_entry_id"):
+                lines.append(f"- Entry ID: {row.get('source_entry_id', '')}")
+            if row.get("source_bullet_id"):
+                lines.append(f"- Bullet ID: {row.get('source_bullet_id', '')}")
+            if row.get("supported_jd_signals"):
+                lines.append(f"- Supported JD signals: {', '.join(row.get('supported_jd_signals', []) or [])}")
+            if row.get("likely_impacted_dimensions"):
+                lines.append(
+                    f"- Likely impacted dimensions: {', '.join(row.get('likely_impacted_dimensions', []) or [])}"
+                )
+            if row.get("original_text"):
+                lines.append(f"- Original text: {row.get('original_text', '')}")
+            if row.get("proposed_rewrite_direction"):
+                lines.append(f"- Proposed rewrite direction: {row.get('proposed_rewrite_direction', '')}")
+            if row.get("why_this_improves_match"):
+                lines.append(f"- Why this improves match: {row.get('why_this_improves_match', '')}")
+            if row.get("adjacent_risk_signals"):
+                lines.append(
+                    f"- Adjacent-risk signals: {', '.join(row.get('adjacent_risk_signals', []) or [])}"
+                )
+            if row.get("unsupported_risk_signals"):
+                lines.append(
+                    f"- Unsupported-risk signals: {', '.join(row.get('unsupported_risk_signals', []) or [])}"
+                )
+            if row.get("claim_safety"):
+                lines.append(f"- Claim safety: {row.get('claim_safety', '')}")
+            if row.get("placement_guidance"):
+                lines.append(f"- Placement guidance: {row.get('placement_guidance', '')}")
             lines.append("")
 
     empty_state_reason = payload.get("empty_state_reason", {}) or {}

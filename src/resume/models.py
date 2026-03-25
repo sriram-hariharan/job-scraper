@@ -43,6 +43,8 @@ class ResumeDocument:
 
 @dataclass
 class ResumeExperienceEntry:
+    entry_id: str = ""
+    entry_index: Optional[int] = None
     company: str = ""
     title: str = ""
     location: str = ""
@@ -50,14 +52,18 @@ class ResumeExperienceEntry:
     end_date: str = ""
     duration_months: Optional[int] = None
     bullets: List[str] = field(default_factory=list)
+    bullet_ids: List[str] = field(default_factory=list)
     normalized_titles: List[str] = field(default_factory=list)
     normalized_skills: List[str] = field(default_factory=list)
 
 
 @dataclass
 class ResumeProjectEntry:
+    entry_id: str = ""
+    entry_index: Optional[int] = None
     name: str = ""
     bullets: List[str] = field(default_factory=list)
+    bullet_ids: List[str] = field(default_factory=list)
     normalized_skills: List[str] = field(default_factory=list)
 
 

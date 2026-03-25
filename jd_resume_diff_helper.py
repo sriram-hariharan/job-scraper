@@ -136,6 +136,20 @@ def _entry_context_text(section: str, source_title: str, source_company: str, no
     parts = [section, source_title, source_company, " ".join(normalized_skills or [])]
     return " | ".join(part for part in parts if str(part or "").strip())
 
+def _entry_id_value(entry) -> str:
+    return str(getattr(entry, "entry_id", "") or "")
+
+
+def _entry_index_value(entry) -> int:
+    value = getattr(entry, "entry_index", None)
+    return int(value) if value is not None else -1
+
+
+def _entry_bullet_id_value(entry, bullet_index: int) -> str:
+    bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+    if 0 <= bullet_index < len(bullet_ids):
+        return str(bullet_ids[bullet_index] or "")
+    return ""
 
 def _entry_is_semantically_eligible(
     *,
@@ -219,6 +233,9 @@ def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
         source_company: str,
         bullets: List[str],
         normalized_skills: List[str],
+        entry_id: str,
+        entry_index: int,
+        bullet_ids: List[str],
     ) -> None:
         if not _entry_is_semantically_eligible(
             job_targets=job_targets,
@@ -251,6 +268,13 @@ def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
                     "text": text,
                     "text_norm": text_norm,
                     "bullet_index": bullet_index,
+                    "entry_id": entry_id,
+                    "entry_index": entry_index,
+                    "bullet_id": (
+                        str(bullet_ids[bullet_index])
+                        if bullet_index < len(bullet_ids)
+                        else ""
+                    ),
                 }
             )
 
@@ -261,6 +285,9 @@ def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
             entry.company,
             entry.bullets,
             entry.normalized_skills,
+            _entry_id_value(entry),
+            _entry_index_value(entry),
+            list(getattr(entry, "bullet_ids", []) or []),
         )
 
     for entry in resume.project_entries:
@@ -270,6 +297,9 @@ def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
             "",
             entry.bullets,
             entry.normalized_skills,
+            _entry_id_value(entry),
+            _entry_index_value(entry),
+            list(getattr(entry, "bullet_ids", []) or []),
         )
 
     if not bullet_rows:
@@ -314,6 +344,9 @@ def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
                 "evidence_type": "semantic_similarity",
                 "semantic_score": round(float(score), 6),
                 "bullet_index": row["bullet_index"],
+                "entry_id": row["entry_id"],
+                "entry_index": row["entry_index"],
+                "bullet_id": row["bullet_id"],
             }
         )
         used_sources.add(src_key)
@@ -424,12 +457,20 @@ def _term_support_evidence_row(
     source_title: str,
     source_company: str,
     text: str = "",
+    entry_id: str = "",
+    entry_index: int = -1,
+    bullet_id: str = "",
+    bullet_index: int = -1,
 ) -> dict:
     return {
         "section": section,
         "source_title": source_title,
         "source_company": source_company,
         "text": text,
+        "entry_id": entry_id,
+        "entry_index": entry_index,
+        "bullet_id": bullet_id,
+        "bullet_index": bullet_index,
     }
 
 
@@ -445,7 +486,7 @@ def _build_single_term_support(resume, term: str) -> dict:
 
     experience_matches: List[dict] = []
     for entry in resume.experience_entries:
-        for bullet in entry.bullets:
+        for bullet_index, bullet in enumerate(entry.bullets):
             bullet_norm = _normalize_text(bullet)
             if not bullet_norm:
                 continue
@@ -456,6 +497,10 @@ def _build_single_term_support(resume, term: str) -> dict:
                         source_title=entry.title,
                         source_company=entry.company,
                         text=bullet,
+                        entry_id=_entry_id_value(entry),
+                        entry_index=_entry_index_value(entry),
+                        bullet_id=_entry_bullet_id_value(entry, bullet_index),
+                        bullet_index=bullet_index,
                     )
                 )
                 if len(experience_matches) >= 2:
@@ -473,7 +518,7 @@ def _build_single_term_support(resume, term: str) -> dict:
 
     project_matches: List[dict] = []
     for entry in resume.project_entries:
-        for bullet in entry.bullets:
+        for bullet_index, bullet in enumerate(entry.bullets):
             bullet_norm = _normalize_text(bullet)
             if not bullet_norm:
                 continue
@@ -484,6 +529,10 @@ def _build_single_term_support(resume, term: str) -> dict:
                         source_title=entry.name,
                         source_company="",
                         text=bullet,
+                        entry_id=_entry_id_value(entry),
+                        entry_index=_entry_index_value(entry),
+                        bullet_id=_entry_bullet_id_value(entry, bullet_index),
+                        bullet_index=bullet_index,
                     )
                 )
                 if len(project_matches) >= 2:
@@ -514,6 +563,8 @@ def _build_single_term_support(resume, term: str) -> dict:
                         source_title=entry.title,
                         source_company=entry.company,
                         text="",
+                        entry_id=_entry_id_value(entry),
+                        entry_index=_entry_index_value(entry),
                     )
                 ],
             }
@@ -533,6 +584,8 @@ def _build_single_term_support(resume, term: str) -> dict:
                         source_title=entry.name,
                         source_company="",
                         text="",
+                        entry_id=_entry_id_value(entry),
+                        entry_index=_entry_index_value(entry),
                     )
                 ],
             }
@@ -641,11 +694,17 @@ def _collect_facet_direct_evidence(resume, patterns: List[str], limit: int = 4) 
     seen = set()
 
     for entry in resume.experience_entries:
-        for bullet in entry.bullets:
+        for bullet_index, bullet in enumerate(entry.bullets):
             if not _text_matches_any_facet_pattern(bullet, patterns):
                 continue
 
-            key = ("experience", entry.title, entry.company, bullet)
+            key = (
+                "experience",
+                entry.title,
+                entry.company,
+                _entry_bullet_id_value(entry, bullet_index),
+                bullet,
+            )
             if key in seen:
                 continue
             seen.add(key)
@@ -656,6 +715,10 @@ def _collect_facet_direct_evidence(resume, patterns: List[str], limit: int = 4) 
                     source_title=entry.title,
                     source_company=entry.company,
                     text=bullet,
+                    entry_id=_entry_id_value(entry),
+                    entry_index=_entry_index_value(entry),
+                    bullet_id=_entry_bullet_id_value(entry, bullet_index),
+                    bullet_index=bullet_index,
                 )
             )
             if len(rows) >= limit:
@@ -677,6 +740,10 @@ def _collect_facet_direct_evidence(resume, patterns: List[str], limit: int = 4) 
                     source_title=entry.name,
                     source_company="",
                     text=bullet,
+                    entry_id=_entry_id_value(entry),
+                    entry_index=_entry_index_value(entry),
+                    bullet_id=_entry_bullet_id_value(entry, bullet_index),
+                    bullet_index=bullet_index,
                 )
             )
             if len(rows) >= limit:
@@ -705,6 +772,8 @@ def _collect_facet_context_support(resume, patterns: List[str], limit: int = 4) 
                     source_title=entry.title,
                     source_company=entry.company,
                     text="",
+                    entry_id=_entry_id_value(entry),
+                    entry_index=_entry_index_value(entry),
                 )
             )
             if len(evidence_rows) >= limit:
@@ -726,6 +795,8 @@ def _collect_facet_context_support(resume, patterns: List[str], limit: int = 4) 
                         source_title=entry.name,
                         source_company="",
                         text="",
+                        entry_id=_entry_id_value(entry),
+                        entry_index=_entry_index_value(entry),
                     )
                 )
                 if len(evidence_rows) >= limit:
@@ -864,6 +935,7 @@ def _collect_top_relevant_bullets(
 
     def _row_key(row: dict) -> tuple:
         return (
+            row.get("bullet_id", ""),
             row.get("section", ""),
             row.get("source_title", ""),
             row.get("source_company", ""),
@@ -877,6 +949,9 @@ def _collect_top_relevant_bullets(
         source_title: str,
         source_company: str,
         bullets: List[str],
+        bullet_ids: List[str],
+        entry_id: str,
+        entry_index: int,
     ) -> None:
         src_key = _source_key(section, source_title, source_company)
 
@@ -885,6 +960,9 @@ def _collect_top_relevant_bullets(
             "source_title": source_title,
             "source_company": source_company,
             "bullets": bullets,
+            "bullet_ids": bullet_ids,
+            "entry_id": entry_id,
+            "entry_index": entry_index,
         }
 
         for bullet_index, bullet in enumerate(bullets):
@@ -907,6 +985,13 @@ def _collect_top_relevant_bullets(
                     "evidence_type": "direct_overlap",
                     "source_key": src_key,
                     "bullet_index": bullet_index,
+                    "entry_id": entry_id,
+                    "entry_index": entry_index,
+                    "bullet_id": (
+                        str(bullet_ids[bullet_index])   
+                        if bullet_index < len(bullet_ids)
+                        else ""
+                    ),
                 }
             )
 
@@ -916,6 +1001,9 @@ def _collect_top_relevant_bullets(
             source_title=entry.title,
             source_company=entry.company,
             bullets=entry.bullets,
+            bullet_ids=list(getattr(entry, "bullet_ids", []) or []),
+            entry_id=_entry_id_value(entry),
+            entry_index=_entry_index_value(entry),
         )
 
     for entry in resume.project_entries:
@@ -924,6 +1012,9 @@ def _collect_top_relevant_bullets(
             source_title=entry.name,
             source_company="",
             bullets=entry.bullets,
+            bullet_ids=list(getattr(entry, "bullet_ids", []) or []),
+            entry_id=_entry_id_value(entry),
+            entry_index=_entry_index_value(entry),
         )
 
     direct_rows.sort(
@@ -1041,6 +1132,13 @@ def _collect_top_relevant_bullets(
                 "distance_to_anchor": (
                     min(abs(bullet_index - idx) for idx in anchor_indices)
                     if anchor_indices else 999
+                ),
+                "entry_id": source_meta.get("entry_id", ""),
+                "entry_index": source_meta.get("entry_index", -1),
+                "bullet_id": (
+                    str(source_meta.get("bullet_ids", [])[bullet_index])
+                    if bullet_index < len(source_meta.get("bullet_ids", []) or [])
+                    else ""
                 ),
             }
 
@@ -1161,6 +1259,9 @@ def _collect_top_relevant_evidence_units(
                 "semantic_score": row.get("semantic_score"),
                 "source_key": row.get("source_key", ""),
                 "bullet_index": row.get("bullet_index", -1),
+                "entry_id": row.get("entry_id", ""),
+                "entry_index": row.get("entry_index", -1),
+                "bullet_id": row.get("bullet_id", ""),
             }
 
             unit_key = (
@@ -1168,6 +1269,8 @@ def _collect_top_relevant_evidence_units(
                 unit_row["source_title"],
                 unit_row["source_company"],
                 unit_row["evidence_type"],
+                unit_row.get("bullet_id", ""),
+                unit_row["clause_index"],
                 unit_row["clause_text"],
             )
             if unit_key in seen_keys:

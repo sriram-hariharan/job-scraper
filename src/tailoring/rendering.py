@@ -1683,14 +1683,14 @@ def _diagnosis_to_reorder_candidate(
         "section": section,
         "source": str(diagnosis.get("source", "") or "").strip(),
         "operation_type": "reorder",
-        "proposal_type": "move_earlier",
-        "proposal_status": "patch_ready",
+        "proposal_type": "directional_reorder",
+        "proposal_status": "direction_only",
         "original_text": str(diagnosis.get("original_text", "") or "").strip(),
         "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
         "rewrite_instruction": "Move this bullet earlier in the same section so it appears before weaker or less relevant bullets.",
-        "proposed_text": str(diagnosis.get("original_text", "") or "").strip(),
-        "patch_text": str(diagnosis.get("original_text", "") or "").strip(),
-        "patch_ready": True,
+        "proposed_text": "",
+        "patch_text": "",
+        "patch_ready": False,
         "patch_generation_method": "deterministic_reorder_signal",
         "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
         "adjacent_risk_signals": [],
@@ -1705,7 +1705,11 @@ def _diagnosis_to_reorder_candidate(
         "entry_index": diagnosis.get("entry_index", -1),
         "bullet_index": diagnosis.get("bullet_index", -1),
         "llm_refinement_used": False,
-        "material_delta_found": True,
+        "material_delta_found": False,
+        "materiality_validation_status": "order_not_modeled_in_v1",
+        "materiality_validation_note": (
+            "Bullet order is not modeled as an exportable deterministic patch in v1, so this remains directional guidance."
+        ),
         "projected_dimension_deltas": {},
         "projected_overall_delta": None,
     }
@@ -1744,14 +1748,14 @@ def _rewrite_candidate_to_reorder_companion(
         "section": str(candidate.get("section", "") or "").strip(),
         "source": str(candidate.get("source", "") or "").strip(),
         "operation_type": "reorder",
-        "proposal_type": "move_earlier",
-        "proposal_status": "patch_ready",
+        "proposal_type": "directional_reorder",
+        "proposal_status": "direction_only",
         "original_text": str(candidate.get("original_text", "") or "").strip(),
         "current_evidence": str(candidate.get("current_evidence", "") or "").strip(),
         "rewrite_instruction": "Move this bullet earlier in the same section so it appears before weaker or less relevant bullets.",
-        "proposed_text": str(candidate.get("original_text", "") or "").strip(),
-        "patch_text": str(candidate.get("original_text", "") or "").strip(),
-        "patch_ready": True,
+        "proposed_text": "",
+        "patch_text": "",
+        "patch_ready": False,
         "patch_generation_method": "deterministic_reorder_signal",
         "supported_jd_signals": list(candidate.get("supported_jd_signals", []) or []),
         "adjacent_risk_signals": [],
@@ -1769,7 +1773,11 @@ def _rewrite_candidate_to_reorder_companion(
         "entry_index": candidate.get("entry_index", -1),
         "bullet_index": candidate.get("bullet_index", -1),
         "llm_refinement_used": False,
-        "material_delta_found": True,
+        "material_delta_found": False,
+        "materiality_validation_status": "order_not_modeled_in_v1",
+        "materiality_validation_note": (
+            "Bullet order is not modeled as an exportable deterministic patch in v1, so this remains directional guidance."
+        ),
         "projected_dimension_deltas": {},
         "projected_overall_delta": None,
     }
@@ -2507,14 +2515,18 @@ def _materiality_validate_rewrite_candidate(
 
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
 
-    if patch_generation_method == "deterministic_parent_signal_label" and overall_delta == 0.0:
-        candidate["proposal_status"] = "direction_only"
-        candidate["proposal_type"] = "directional_rewrite"
-        candidate["patch_ready"] = False
+    export_safe_neutral_methods = {
+        "deterministic_clause_extract",
+        "deterministic_exact_signal_variant",
+        "deterministic_parent_signal_label",
+        "deterministic_using_phrase",
+    }
+
+    if overall_delta == 0.0 and patch_generation_method in export_safe_neutral_methods:
         candidate["material_delta_found"] = False
-        candidate["materiality_validation_status"] = "label_only_no_score_lift"
+        candidate["materiality_validation_status"] = "export_safe_no_score_lift"
         candidate["materiality_validation_note"] = (
-            "Parent-signal label patch changed modeled evidence but did not produce score lift, so it remains directional."
+            "Deterministic rewrite is grounded and patch-safe for export, but the frozen scorer shows no projected score lift."
         )
         return candidate
 

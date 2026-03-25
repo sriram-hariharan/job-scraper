@@ -192,11 +192,13 @@ def planner(
 def planning_artifact(
     path: str,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+    patch_selections_path: str = str(services.DEFAULT_PATCH_SELECTIONS_PATH),
 ):
     try:
         return services.planning_artifact_payload(
             path=path,
             output_dir=Path(output_dir),
+            patch_selections_path=Path(patch_selections_path),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -281,7 +283,27 @@ def planning_regenerate_selected_resume(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-       
+
+@app.post("/planning/select-patches")
+def planning_select_patches(
+    payload: dict = Body(...),
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+    patch_selections_path: str = str(services.DEFAULT_PATCH_SELECTIONS_PATH),
+):
+    try:
+        return services.record_planning_patch_selection_payload(
+            patch_selections_path=Path(patch_selections_path),
+            output_dir=Path(output_dir),
+            tailoring_json_path=str(payload.get("tailoring_json_path", "") or ""),
+            job_doc_id=str(payload.get("job_doc_id", "") or ""),
+            queue_rank=str(payload.get("queue_rank", "") or ""),
+            selected_resume=str(payload.get("selected_resume", "") or ""),
+            selected_candidate_ids=payload.get("selected_candidate_ids", []),
+            note=str(payload.get("note", "") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.get("/application-actions")
 def application_actions(
     actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),

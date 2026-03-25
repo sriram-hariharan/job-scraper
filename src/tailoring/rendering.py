@@ -2749,6 +2749,16 @@ def _apply_patch_set_counterfactual_preview(
 
     return preview
 
+def build_selected_patch_set_counterfactual_preview(
+    payload: Dict[str, Any],
+    selected_candidate_ids: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    return _apply_patch_set_counterfactual_preview(
+        payload,
+        list(payload.get("replacement_candidates", []) or []),
+        selected_candidate_ids=selected_candidate_ids,
+    )
+
 def _lowercase_first_character(value: str) -> str:
     text = str(value or "").strip()
     if not text:

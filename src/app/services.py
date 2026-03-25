@@ -670,7 +670,7 @@ def regenerate_selected_resume_tailoring_payload(
     job_doc_id: str = "",
     queue_rank: str = "",
     selected_resume: str = "",
-    generate_llm_tailoring: bool = True,
+    generate_llm_tailoring: bool = False,
     refresh_llm_tailoring: bool = False,
 ) -> Dict[str, Any]:
     ja = _job_app()

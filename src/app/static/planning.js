@@ -566,12 +566,94 @@ function getResumeChoiceCandidates(row) {
   return candidates;
 }
 
+function buildResumeChoiceLoadingStepsHtml(steps) {
+  if (!Array.isArray(steps) || !steps.length) {
+    return "";
+  }
+
+  return steps.map((step) => {
+    const state = String(step?.state || "pending").trim();
+    const label = String(step?.label || "").trim();
+    const icon = state === "complete" ? "✓" : state === "current" ? "…" : "○";
+
+    return `
+      <div class="resume-choice-loading-step resume-choice-loading-step--${escapeHtml(state)}">
+        <span class="resume-choice-loading-step-icon">${escapeHtml(icon)}</span>
+        <span class="resume-choice-loading-step-label">${escapeHtml(label)}</span>
+      </div>
+    `;
+  }).join("");
+}
+
+function setResumeChoiceLoadingContent({
+  title = "Generating tailoring suggestions",
+  text = "Rebuilding packet and tailoring for the selected resume.",
+  steps = [],
+} = {}) {
+  const titleEl = qs("resumeChoiceLoadingTitle");
+  const textEl = qs("resumeChoiceLoadingText");
+  const stepsEl = qs("resumeChoiceLoadingSteps");
+
+  if (titleEl) titleEl.textContent = title;
+  if (textEl) textEl.textContent = text;
+
+  if (!stepsEl) return;
+
+  if (!Array.isArray(steps) || !steps.length) {
+    stepsEl.innerHTML = "";
+    stepsEl.classList.add("hidden");
+    return;
+  }
+
+  stepsEl.innerHTML = buildResumeChoiceLoadingStepsHtml(steps);
+  stepsEl.classList.remove("hidden");
+}
+
+function resetResumeChoiceLoadingContent() {
+  setResumeChoiceLoadingContent({
+    title: "Generating tailoring suggestions",
+    text: "Rebuilding packet and tailoring for the selected resume.",
+    steps: [],
+  });
+}
+
+async function persistSelectedResumeChoice(row, selectedResume) {
+  await postJson("/planning/select-resume", {
+    queue_rank: row.queue_rank || "",
+    job_doc_id: row.job_doc_id || "",
+    job_company: row.job_company || "",
+    job_title: row.job_title || "",
+    planning_action: row.action || "",
+    decision: "SELECT_RESUME",
+    selected_resume: selectedResume,
+    winner_resume: row.winner_resume || "",
+    winner_score: row.winner_score || "",
+    runner_up_resume: row.runner_up_resume || "",
+    runner_up_score: row.runner_up_score || "",
+    note: "Selected from planning resume choices modal.",
+  });
+}
+
+async function regenerateSelectedResumeChoice(row, selectedResume, {
+  generateLlmTailoring = false,
+  refreshLlmTailoring = false,
+} = {}) {
+  await postJson("/planning/regenerate-selected-resume", {
+    queue_rank: row.queue_rank || "",
+    job_doc_id: row.job_doc_id || "",
+    selected_resume: selectedResume,
+    generate_llm_tailoring: generateLlmTailoring,
+    refresh_llm_tailoring: refreshLlmTailoring,
+  });
+}
+
 function setResumeChoiceBusyState(isBusy, statusText = "") {
   resumeChoiceState.isBusy = Boolean(isBusy);
 
   const modal = getResumeChoiceModal();
   const overlay = qs("resumeChoiceLoadingOverlay");
   const selectBtn = qs("resumeChoiceSelectBtn");
+  const llmBtn = qs("resumeChoiceGenerateLlmBtn");
   const cancelBtn = qs("resumeChoiceCancelBtn");
   const closeBtn = qs("closeResumeChoiceModalBtn");
   const selectedResume = normalizeResumeName(resumeChoiceState.selectedResume);
@@ -580,6 +662,9 @@ function setResumeChoiceBusyState(isBusy, statusText = "") {
   overlay.classList.toggle("hidden", !resumeChoiceState.isBusy);
 
   selectBtn.disabled = resumeChoiceState.isBusy || !selectedResume;
+  if (llmBtn) {
+    llmBtn.disabled = resumeChoiceState.isBusy || !selectedResume;
+  }
   cancelBtn.disabled = resumeChoiceState.isBusy;
   closeBtn.disabled = resumeChoiceState.isBusy;
 
@@ -613,6 +698,7 @@ function resetResumeChoiceModal() {
   const previewFrame = qs("resumeChoicePreviewFrame");
   const previewEmpty = qs("resumeChoicePreviewEmpty");
   const selectBtn = qs("resumeChoiceSelectBtn");
+  const llmBtn = qs("resumeChoiceGenerateLlmBtn");
 
   previewFrame.src = "about:blank";
   previewFrame.classList.add("hidden");
@@ -623,6 +709,11 @@ function resetResumeChoiceModal() {
   qs("closeResumeChoiceModalBtn").disabled = false;
 
   selectBtn.disabled = true;
+  if (llmBtn) {
+    llmBtn.disabled = true;
+  }
+
+  resetResumeChoiceLoadingContent();
 }
 
 function closeResumeChoiceModal(force = false) {
@@ -666,6 +757,7 @@ function setResumeChoicePreview(resumeName) {
   const previewEmpty = qs("resumeChoicePreviewEmpty");
   const previewName = qs("resumeChoicePreviewName");
   const selectBtn = qs("resumeChoiceSelectBtn");
+  const llmBtn = qs("resumeChoiceGenerateLlmBtn");
 
   if (!safeName) {
     previewFrame.src = "about:blank";
@@ -673,6 +765,9 @@ function setResumeChoicePreview(resumeName) {
     previewEmpty.classList.remove("hidden");
     previewName.textContent = "Select a resume to preview";
     selectBtn.disabled = true;
+    if (llmBtn) {
+      llmBtn.disabled = true;
+    }
     return;
   }
 
@@ -685,6 +780,9 @@ function setResumeChoicePreview(resumeName) {
   previewEmpty.classList.add("hidden");
 
   selectBtn.disabled = resumeChoiceState.isBusy ? true : false;
+  if (llmBtn) {
+    llmBtn.disabled = resumeChoiceState.isBusy ? true : false;
+  }
   qs("resumeChoiceSaveStatus").textContent = `Selected: ${humanizeResumeDisplayName(safeName)}`;
 
   renderResumeChoiceCards();
@@ -721,7 +819,7 @@ function openResumeChoiceModal(row) {
   }
 }
 
-async function submitResumeChoiceSelection() {
+async function submitResumeChoiceSelection({ generateLlmTailoring = false } = {}) {
   const row = resumeChoiceState.row;
   const selectedResume = normalizeResumeName(resumeChoiceState.selectedResume);
 
@@ -729,34 +827,64 @@ async function submitResumeChoiceSelection() {
     throw new Error("Select a resume before saving.");
   }
 
-  setResumeChoiceBusyState(true, `Saving ${selectedResume}...`);
+  const displayName = humanizeResumeDisplayName(selectedResume);
 
-  await postJson("/planning/select-resume", {
-    queue_rank: row.queue_rank || "",
-    job_doc_id: row.job_doc_id || "",
-    job_company: row.job_company || "",
-    job_title: row.job_title || "",
-    planning_action: row.action || "",
-    decision: "SELECT_RESUME",
-    selected_resume: selectedResume,
-    winner_resume: row.winner_resume || "",
-    winner_score: row.winner_score || "",
-    runner_up_resume: row.runner_up_resume || "",
-    runner_up_score: row.runner_up_score || "",
-    note: "Selected from planning resume choices modal.",
-  });
+  const stepLabels = generateLlmTailoring
+    ? [
+        "Save selected resume",
+        "Run LLM tailoring for selected resume",
+        "Refresh planning row",
+      ]
+    : [
+        "Save selected resume",
+        "Regenerate deterministic tailoring",
+        "Refresh planning row",
+      ];
 
-  setResumeChoiceBusyState(true, `Generating tailoring suggestions for ${selectedResume}...`);
+  const loadingTitle = generateLlmTailoring
+    ? "Generating LLM tailoring"
+    : "Updating selected resume";
 
-  await postJson("/planning/regenerate-selected-resume", {
-    queue_rank: row.queue_rank || "",
-    job_doc_id: row.job_doc_id || "",
-    selected_resume: selectedResume,
-    generate_llm_tailoring: true,
-    refresh_llm_tailoring: false,
+  const loadingText = generateLlmTailoring
+    ? "Saving the selected resume, then running explicit LLM tailoring for that choice."
+    : "Saving the selected resume and regenerating deterministic tailoring.";
+
+  const renderSteps = (currentIndex) => {
+    const steps = stepLabels.map((label, index) => ({
+      label,
+      state:
+        index < currentIndex
+          ? "complete"
+          : index === currentIndex
+            ? "current"
+            : "pending",
+    }));
+
+    setResumeChoiceLoadingContent({
+      title: loadingTitle,
+      text: loadingText,
+      steps,
+    });
+  };
+
+  setResumeChoiceBusyState(true, `Saving ${displayName}...`);
+  renderSteps(0);
+  await persistSelectedResumeChoice(row, selectedResume);
+
+  setResumeChoiceBusyState(
+    true,
+    generateLlmTailoring
+      ? `Running LLM tailoring for ${displayName}...`
+      : `Generating deterministic tailoring for ${displayName}...`
+  );
+  renderSteps(1);
+  await regenerateSelectedResumeChoice(row, selectedResume, {
+    generateLlmTailoring,
+    refreshLlmTailoring: false,
   });
 
   setResumeChoiceBusyState(true, "Refreshing planning row...");
+  renderSteps(2);
   await loadPlanningTable();
   closeResumeChoiceModal(true);
 }
@@ -1999,10 +2127,21 @@ function attachPlanningHandlers() {
 
   qs("resumeChoiceSelectBtn").addEventListener("click", async () => {
     try {
-      await submitResumeChoiceSelection();
+      await submitResumeChoiceSelection({ generateLlmTailoring: false });
     } catch (err) {
       setResumeChoiceBusyState(false, "Failed to save resume choice.");
+      resetResumeChoiceLoadingContent();
       showAppError("Failed to save selected resume", err);
+    }
+  });
+
+  qs("resumeChoiceGenerateLlmBtn").addEventListener("click", async () => {
+    try {
+      await submitResumeChoiceSelection({ generateLlmTailoring: true });
+    } catch (err) {
+      setResumeChoiceBusyState(false, "Failed to generate LLM tailoring.");
+      resetResumeChoiceLoadingContent();
+      showAppError("Failed to generate LLM tailoring", err);
     }
   });
 

@@ -1854,6 +1854,134 @@ def _rewrite_candidate_to_reorder_companion(
         "projected_overall_delta": None,
     }
 
+def _candidate_promotable_family(candidate: Dict[str, Any]) -> str:
+    terms = list(candidate.get("supported_jd_signals", []) or candidate.get("jd_signal_terms", []) or [])
+    return _primary_promotable_family_from_terms(terms)
+
+
+def _suppress_anchor_candidates_for_diagnosis(
+    diagnosis: Dict[str, Any],
+    existing_candidates: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
+        return []
+
+    if str(diagnosis.get("diagnosis_reason_type", "") or "").strip() not in {"reinforce", "support"}:
+        return []
+
+    if str(diagnosis.get("evidence_type", "") or "").strip() != "same_source_context":
+        return []
+
+    if str(diagnosis.get("claim_safety", "") or "").strip() != "adjacent_only":
+        return []
+
+    section = str(diagnosis.get("section", "") or "").strip()
+    if section not in {"experience", "project"}:
+        return []
+
+    family = _primary_promotable_family_from_terms(
+        list(diagnosis.get("jd_signal_terms", []) or [])
+    )
+    if not family:
+        return []
+
+    anchors: List[Dict[str, Any]] = []
+    for candidate in existing_candidates:
+        if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+            continue
+        if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
+            continue
+        if str(candidate.get("evidence_type", "") or "").strip() != "direct_overlap":
+            continue
+        if str(candidate.get("section", "") or "").strip() != section:
+            continue
+        if _candidate_promotable_family(candidate) != family:
+            continue
+        anchors.append(candidate)
+
+    return anchors
+
+
+def _diagnosis_to_suppress_candidate(
+    diagnosis: Dict[str, Any],
+    index: int,
+    anchor_candidates: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_{index}").strip()
+    candidate_id = diagnosis_id.replace("bullet_diag", "replacement_suppress", 1)
+
+    family = _primary_promotable_family_from_terms(
+        list(diagnosis.get("jd_signal_terms", []) or [])
+    )
+    family_label = family.replace("_", " ").strip() if family else "target"
+    anchor_ids = [
+        str(row.get("candidate_id", "") or "").strip()
+        for row in anchor_candidates
+        if str(row.get("candidate_id", "") or "").strip()
+    ]
+    anchor_sources = _unique_preserve_order([
+        str(row.get("source", "") or "").strip()
+        for row in anchor_candidates
+        if str(row.get("source", "") or "").strip()
+    ])
+
+    if anchor_sources:
+        rewrite_instruction = (
+            f"If space is tight, suppress this bullet or move it below stronger {family_label} anchors "
+            f"because the main {family_label} story is already covered more directly by {', '.join(anchor_sources)}."
+        )
+    else:
+        rewrite_instruction = (
+            f"If space is tight, suppress this bullet or move it below stronger {family_label} anchors "
+            "because the main story is already covered more directly elsewhere in this section."
+        )
+
+    return {
+        "candidate_id": candidate_id,
+        "source_bullet_id": str(diagnosis.get("bullet_id", "") or "").strip(),
+        "source_entry_id": str(diagnosis.get("entry_id", "") or "").strip(),
+        "section": str(diagnosis.get("section", "") or "").strip(),
+        "evidence_type": str(diagnosis.get("evidence_type", "") or "").strip(),
+        "source": str(diagnosis.get("source", "") or "").strip(),
+        "operation_type": "suppress",
+        "proposal_type": "directional_suppress",
+        "proposal_status": "direction_only",
+        "original_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
+        "rewrite_instruction": rewrite_instruction,
+        "proposed_text": "",
+        "patch_text": "",
+        "patch_ready": False,
+        "patch_generation_method": "deterministic_suppress_direction",
+        "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
+        "why_this_improves_match": (
+            f"This bullet reads more like supporting context, while a stronger direct {family_label} anchor "
+            "already carries the main JD story."
+        ),
+        "claim_safety": "safe_suppress",
+        "safety_status": "safe_suppress",
+        "placement_guidance": (
+            "Only suppress this bullet if space is limited and the stronger direct anchor remains visible."
+        ),
+        "confidence": "medium",
+        "conflicts_with": anchor_ids,
+        "entry_index": diagnosis.get("entry_index", -1),
+        "bullet_index": diagnosis.get("bullet_index", -1),
+        "llm_refinement_used": False,
+        "material_delta_found": False,
+        "materiality_validation_status": "suppression_not_modeled_in_v1",
+        "materiality_validation_note": (
+            "Bullet suppression is not modeled as an exportable deterministic patch in v1, so this remains directional guidance."
+        ),
+        "projected_dimension_deltas": {},
+        "projected_overall_delta": None,
+        "matched_surface_signal": str(diagnosis.get("matched_surface_signal", "") or "").strip(),
+        "canonical_supported_signal": str(diagnosis.get("canonical_supported_signal", "") or "").strip(),
+    }
+
 def _candidate_source_group_id(candidate: Dict[str, Any]) -> str:
     source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
     candidate_id = str(candidate.get("candidate_id", "") or "").strip()
@@ -2788,13 +2916,25 @@ def _build_replacement_candidates(
                 continue
             seen_keys.add(key)
 
-            candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
-            candidate = _materiality_validate_rewrite_candidate(
-                payload,
-                candidate,
-                counterfactual_context,
+            suppress_anchors = _suppress_anchor_candidates_for_diagnosis(
+                diagnosis,
+                candidates,
             )
-            candidates.append(candidate)
+            if suppress_anchors:
+                candidate = _diagnosis_to_suppress_candidate(
+                    diagnosis,
+                    index,
+                    suppress_anchors,
+                )
+                candidates.append(candidate)
+            else:
+                candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
+                candidate = _materiality_validate_rewrite_candidate(
+                    payload,
+                    candidate,
+                    counterfactual_context,
+                )
+                candidates.append(candidate)
 
         elif action == "keep":
             keep_key = ("keep",) + key

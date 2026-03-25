@@ -11,6 +11,7 @@ from src.resume.document_store import load_resume_documents_by_name
 from src.resume.evidence_builder import (
     build_resume_evidence,
     build_counterfactual_resume_evidence,
+    build_counterfactual_resume_evidence_for_patches,
 )
 
 from src.tailoring.packet_support import (
@@ -2555,6 +2556,129 @@ def _apply_single_candidate_counterfactuals(
 
     return candidates
 
+def _apply_patch_set_counterfactual_preview(
+    payload: Dict[str, Any],
+    candidates: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    context = _counterfactual_context_from_payload(payload)
+
+    original_result = context["original_result"] if context.get("ok", False) else None
+    original_score = (
+        round(float(getattr(original_result, "final_score", 0.0) or 0.0), 6)
+        if original_result is not None else None
+    )
+
+    selected_candidates: List[Dict[str, Any]] = []
+    skipped_candidate_ids: List[str] = []
+    seen_bullet_ids = set()
+    duplicate_bullet_ids: List[str] = []
+
+    for candidate in candidates:
+        operation_type = str(candidate.get("operation_type", "") or "").strip()
+        proposal_status = str(candidate.get("proposal_status", "") or "").strip()
+        candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        patch_text = str(candidate.get("patch_text", "") or "").strip()
+
+        if operation_type != "rewrite" or proposal_status != "patch_ready":
+            if candidate_id:
+                skipped_candidate_ids.append(candidate_id)
+            continue
+
+        if not source_bullet_id or not patch_text:
+            if candidate_id:
+                skipped_candidate_ids.append(candidate_id)
+            continue
+
+        if source_bullet_id in seen_bullet_ids:
+            duplicate_bullet_ids.append(source_bullet_id)
+            if candidate_id:
+                skipped_candidate_ids.append(candidate_id)
+            continue
+
+        seen_bullet_ids.add(source_bullet_id)
+        selected_candidates.append(candidate)
+
+    preview = {
+        "selection_mode": "all_patch_ready_rewrites",
+        "selected_candidate_ids": [
+            str(candidate.get("candidate_id", "") or "").strip()
+            for candidate in selected_candidates
+            if str(candidate.get("candidate_id", "") or "").strip()
+        ],
+        "skipped_candidate_ids": skipped_candidate_ids,
+        "selected_patch_count": len(selected_candidates),
+        "status": "",
+        "note": "",
+        "original_final_score": original_score,
+        "projected_final_score": None,
+        "projected_overall_delta": None,
+        "projected_dimension_deltas": {},
+        "scorer_visible_evidence_changed": False,
+        "evidence_delta": {},
+        "duplicate_source_bullet_ids": duplicate_bullet_ids,
+    }
+
+    if duplicate_bullet_ids:
+        preview["status"] = "duplicate_source_bullet_id"
+        preview["note"] = (
+            "Could not compute a multi-patch preview because multiple patch-ready candidates target the same bullet."
+        )
+        return preview
+
+    if not selected_candidates:
+        preview["status"] = "no_patch_ready_rewrites"
+        preview["note"] = "No patch-ready rewrite candidates were available for a selected-set preview."
+        return preview
+
+    if not context.get("ok", False):
+        reason = str(context.get("reason", "") or "context_unavailable").strip()
+        preview["status"] = reason
+        preview["note"] = f"Could not load counterfactual context for selected-set preview: {reason}."
+        return preview
+
+    patches = [
+        {
+            "source_bullet_id": str(candidate.get("source_bullet_id", "") or "").strip(),
+            "patch_text": str(candidate.get("patch_text", "") or "").strip(),
+        }
+        for candidate in selected_candidates
+    ]
+
+    patched_resume, status = build_counterfactual_resume_evidence_for_patches(
+        context["original_resume"],
+        patches,
+    )
+
+    preview["status"] = status
+
+    if patched_resume is None or status != "ok":
+        preview["note"] = "Could not apply the selected patch set as a deterministic counterfactual resume state."
+        return preview
+
+    patched_result = score_resume_job_match(patched_resume, context["job_evidence"])
+    patched_score = round(float(getattr(patched_result, "final_score", 0.0) or 0.0), 6)
+    overall_delta = round(patched_score - original_score, 6)
+
+    original_snapshot = _resume_counterfactual_snapshot(context["original_resume"])
+    patched_snapshot = _resume_counterfactual_snapshot(patched_resume)
+    evidence_delta = _counterfactual_snapshot_delta(original_snapshot, patched_snapshot)
+
+    preview["status"] = "scored"
+    preview["note"] = (
+        "Projected delta computed under the frozen deterministic evaluator for the full selected patch set."
+    )
+    preview["projected_final_score"] = patched_score
+    preview["projected_overall_delta"] = overall_delta
+    preview["projected_dimension_deltas"] = _nonzero_dimension_deltas(
+        original_result,
+        patched_result,
+    )
+    preview["scorer_visible_evidence_changed"] = bool(evidence_delta)
+    preview["evidence_delta"] = evidence_delta
+
+    return preview
+
 def _lowercase_first_character(value: str) -> str:
     text = str(value or "").strip()
     if not text:
@@ -3286,7 +3410,10 @@ def _build_operator_markdown_payload(
         operator_payload,
         operator_payload.get("replacement_candidates", []) or [],
     )
-
+    operator_payload["patch_set_counterfactual_preview"] = _apply_patch_set_counterfactual_preview(
+        operator_payload,
+        operator_payload.get("replacement_candidates", []) or [],
+    )
     return operator_payload
 
 def _build_payload(

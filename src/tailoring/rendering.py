@@ -1178,6 +1178,9 @@ def _diagnosis_to_replacement_candidate(
     bullet_id = str(diagnosis.get("bullet_id", "") or "").strip()
     diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_{index}").strip()
     candidate_id = diagnosis_id.replace("bullet_diag", "replacement", 1)
+    proposal_status = _proposal_status_for_diagnosis(diagnosis)
+
+    rewrite_instruction = str(diagnosis.get("recommended_rewrite", "") or "").strip()
 
     return {
         "candidate_id": candidate_id,
@@ -1187,10 +1190,12 @@ def _diagnosis_to_replacement_candidate(
         "source": str(diagnosis.get("source", "") or "").strip(),
         "operation_type": "rewrite",
         "proposal_type": "directional_rewrite",
+        "proposal_status": proposal_status,
         "original_text": str(diagnosis.get("original_text", "") or "").strip(),
         "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
-        "proposed_rewrite_direction": str(diagnosis.get("recommended_rewrite", "") or "").strip(),
-        "proposed_text": str(diagnosis.get("recommended_rewrite", "") or "").strip(),
+        "rewrite_instruction": rewrite_instruction,
+        "proposed_text": "" if proposal_status == "direction_only" else rewrite_instruction,
+        "patch_text": "" if proposal_status == "direction_only" else rewrite_instruction,
         "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
         "adjacent_risk_signals": risks["adjacent_risk_signals"],
         "unsupported_risk_signals": risks["unsupported_risk_signals"],
@@ -1204,6 +1209,11 @@ def _diagnosis_to_replacement_candidate(
         "bullet_index": diagnosis.get("bullet_index", -1),
     }
 
+def _proposal_status_for_diagnosis(diagnosis: Dict[str, Any]) -> str:
+    # Current deterministic rewrite candidates are directional, not final patch text.
+    # Later phases may upgrade selected candidates to patch_ready after deterministic
+    # text synthesis or validated LLM refinement.
+    return "direction_only"
 
 def _build_replacement_candidates(
     payload: Dict[str, Any],
@@ -1961,8 +1971,12 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 )
             if row.get("original_text"):
                 lines.append(f"- Original text: {row.get('original_text', '')}")
-            if row.get("proposed_rewrite_direction"):
-                lines.append(f"- Proposed rewrite direction: {row.get('proposed_rewrite_direction', '')}")
+            if row.get("proposal_status"):
+                lines.append(f"- Proposal status: {row.get('proposal_status', '')}")
+            if row.get("rewrite_instruction"):
+                lines.append(f"- Rewrite instruction: {row.get('rewrite_instruction', '')}")
+            if row.get("patch_text"):
+                lines.append(f"- Patch text: {row.get('patch_text', '')}")
             if row.get("why_this_improves_match"):
                 lines.append(f"- Why this improves match: {row.get('why_this_improves_match', '')}")
             if row.get("adjacent_risk_signals"):

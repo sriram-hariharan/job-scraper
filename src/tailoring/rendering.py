@@ -8,7 +8,10 @@ import copy
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents_by_name
-from src.resume.evidence_builder import build_resume_evidence
+from src.resume.evidence_builder import (
+    build_resume_evidence,
+    build_counterfactual_resume_evidence,
+)
 
 from src.tailoring.packet_support import (
     _top_direct_facets,
@@ -1538,6 +1541,82 @@ def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Optional[Di
         "original_result": original_result,
     }
 
+def _sorted_unique_strings(values: List[Any]) -> List[str]:
+    cleaned = sorted(
+        {
+            str(value).strip()
+            for value in (values or [])
+            if str(value).strip()
+        }
+    )
+    return cleaned
+
+
+def _resume_counterfactual_snapshot(resume: Any) -> Dict[str, List[str]]:
+    explicit_skills = set()
+
+    explicit_skills.update(
+        str(value).strip().lower()
+        for value in list(getattr(resume, "skills", []) or [])
+        if str(value).strip()
+    )
+
+    for entry in list(getattr(resume, "experience_entries", []) or []):
+        explicit_skills.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    for entry in list(getattr(resume, "project_entries", []) or []):
+        explicit_skills.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    titles = list(getattr(resume, "titles", []) or [])
+    for entry in list(getattr(resume, "experience_entries", []) or []):
+        title = str(getattr(entry, "title", "") or "").strip()
+        if title:
+            titles.append(title)
+
+    project_skills: List[str] = []
+    for entry in list(getattr(resume, "project_entries", []) or []):
+        project_skills.extend(list(getattr(entry, "normalized_skills", []) or []))
+
+    return {
+        "explicit_skills": _sorted_unique_strings(list(explicit_skills)),
+        "titles": _sorted_unique_strings(titles),
+        "domain_signals": _sorted_unique_strings(list(getattr(resume, "domain_signals", []) or [])),
+        "analytics_ml_signals": _sorted_unique_strings(list(getattr(resume, "analytics_ml_signals", []) or [])),
+        "experimentation_signals": _sorted_unique_strings(list(getattr(resume, "experimentation_signals", []) or [])),
+        "tooling_signals": _sorted_unique_strings(list(getattr(resume, "tooling_signals", []) or [])),
+        "project_skills": _sorted_unique_strings(project_skills),
+    }
+
+
+def _counterfactual_snapshot_delta(
+    original_snapshot: Dict[str, List[str]],
+    patched_snapshot: Dict[str, List[str]],
+) -> Dict[str, Dict[str, List[str]]]:
+    keys = sorted(set(original_snapshot) | set(patched_snapshot))
+    delta: Dict[str, Dict[str, List[str]]] = {}
+
+    for key in keys:
+        original_values = set(original_snapshot.get(key, []) or [])
+        patched_values = set(patched_snapshot.get(key, []) or [])
+
+        added = sorted(patched_values - original_values)
+        removed = sorted(original_values - patched_values)
+
+        if added or removed:
+            delta[key] = {
+                "added": added,
+                "removed": removed,
+            }
+
+    return delta
 
 def _weighted_dimension_map(result: Any) -> Dict[str, float]:
     output: Dict[str, float] = {}
@@ -1626,15 +1705,11 @@ def _patched_resume_evidence_for_candidate(
         return None, "not_patch_ready"
 
     if operation_type == "rewrite":
-        patched_resume = copy.deepcopy(original_resume)
-        status = _replace_bullet_in_resume_evidence(
-            patched_resume,
+        return build_counterfactual_resume_evidence(
+            original_resume,
             str(candidate.get("source_bullet_id", "") or "").strip(),
             str(candidate.get("patch_text", "") or "").strip(),
         )
-        if status != "ok":
-            return None, status
-        return patched_resume, "ok"
 
     if operation_type == "reorder":
         # Current frozen evaluator does not model bullet order directly.
@@ -1662,11 +1737,16 @@ def _apply_single_candidate_counterfactuals(
 
     original_result = context["original_result"]
     original_score = round(float(getattr(original_result, "final_score", 0.0) or 0.0), 6)
+    original_snapshot = _resume_counterfactual_snapshot(context["original_resume"])
 
     for row in candidates:
         patched_resume, status = _patched_resume_evidence_for_candidate(context["original_resume"], row)
 
         row["original_final_score"] = original_score
+        row["original_evidence_snapshot"] = original_snapshot
+        row["patched_evidence_snapshot"] = {}
+        row["evidence_delta"] = {}
+        row["scorer_visible_evidence_changed"] = False
 
         if status == "not_patch_ready":
             row["counterfactual_status"] = "not_patch_ready"
@@ -1676,10 +1756,16 @@ def _apply_single_candidate_counterfactuals(
             row["projected_dimension_deltas"] = {}
             continue
 
-        if status in {"bullet_id_not_found", "bullet_id_not_unique", "bullet_index_out_of_range"}:
+        if status in {
+            "bullet_id_not_found",
+            "bullet_id_not_unique",
+            "bullet_index_out_of_range",
+            "raw_text_bullet_not_found",
+            "raw_text_bullet_not_unique",
+        }:
             row["counterfactual_status"] = status
             row["counterfactual_note"] = (
-                "Could not safely apply the patch because the structured bullet lineage could not be matched uniquely."
+                "Could not safely apply the patch to the source resume text with a unique deterministic match."
             )
             row["projected_final_score"] = None
             row["projected_overall_delta"] = None
@@ -1712,14 +1798,32 @@ def _apply_single_candidate_counterfactuals(
             row["projected_final_score"] = original_score
             row["projected_overall_delta"] = 0.0
             row["projected_dimension_deltas"] = {}
+            row["patched_evidence_snapshot"] = original_snapshot
+            row["evidence_delta"] = {}
+            row["scorer_visible_evidence_changed"] = False
             continue
 
         patched_result = score_resume_job_match(patched_resume, context["job_evidence"])
         patched_score = round(float(getattr(patched_result, "final_score", 0.0) or 0.0), 6)
         overall_delta = round(patched_score - original_score, 6)
 
-        row["counterfactual_status"] = "scored"
-        row["counterfactual_note"] = "Projected delta computed under the frozen deterministic evaluator."
+        patched_snapshot = _resume_counterfactual_snapshot(patched_resume)
+        evidence_delta = _counterfactual_snapshot_delta(original_snapshot, patched_snapshot)
+        evidence_changed = bool(evidence_delta)
+
+        row["patched_evidence_snapshot"] = patched_snapshot
+        row["evidence_delta"] = evidence_delta
+        row["scorer_visible_evidence_changed"] = evidence_changed
+
+        if overall_delta == 0.0 and not evidence_changed:
+            row["counterfactual_status"] = "scorer_neutral_no_evidence_change"
+            row["counterfactual_note"] = (
+                "Patch changed phrasing, but did not change scorer-visible evidence under the frozen deterministic evaluator."
+            )
+        else:
+            row["counterfactual_status"] = "scored"
+            row["counterfactual_note"] = "Projected delta computed under the frozen deterministic evaluator."
+
         row["projected_final_score"] = patched_score
         row["projected_overall_delta"] = overall_delta
         row["projected_dimension_deltas"] = _nonzero_dimension_deltas(original_result, patched_result)

@@ -1,6 +1,7 @@
 import re
 from typing import List, Optional, Tuple
 import hashlib
+import copy 
 
 from src.matching.dimensions import get_match_dimensions
 from src.resume.models import (
@@ -563,6 +564,328 @@ def _merge_orphan_experience_entries(
         merged.append(entry)
 
     return merged
+
+def _experience_entry_counterfactual_text(entry: ResumeExperienceEntry) -> str:
+    parts: List[str] = []
+
+    if entry.title:
+        parts.append(entry.title)
+    if entry.company:
+        parts.append(entry.company)
+    if entry.location:
+        parts.append(entry.location)
+    if entry.start_date:
+        parts.append(entry.start_date)
+    if entry.end_date:
+        parts.append(entry.end_date)
+
+    parts.extend(list(entry.bullets or []))
+    return " ".join(part for part in parts if str(part or "").strip()).strip()
+
+
+def _project_entry_counterfactual_text(entry: ResumeProjectEntry) -> str:
+    parts: List[str] = []
+
+    if entry.name:
+        parts.append(entry.name)
+
+    parts.extend(list(entry.bullets or []))
+    return " ".join(part for part in parts if str(part or "").strip()).strip()
+
+
+def rebuild_resume_evidence_from_structured_entries(
+    document: ResumeDocument,
+    *,
+    experience_entries: Optional[List[ResumeExperienceEntry]] = None,
+    project_entries: Optional[List[ResumeProjectEntry]] = None,
+    education_entries: Optional[List[ResumeEducationEntry]] = None,
+    certifications: Optional[List[str]] = None,
+) -> ResumeEvidence:
+    refreshed_experience_entries = copy.deepcopy(list(experience_entries or []))
+    refreshed_project_entries = copy.deepcopy(list(project_entries or []))
+    refreshed_education_entries = copy.deepcopy(list(education_entries or []))
+    refreshed_certifications = list(certifications or [])
+
+    structured_text_parts: List[str] = []
+    quantified_lines: List[str] = []
+
+    for entry in refreshed_experience_entries:
+        entry_text = _experience_entry_counterfactual_text(entry)
+        entry.normalized_titles = _extract_pattern_hits(entry_text, TITLE_PATTERNS)
+        entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+
+        if entry_text:
+            structured_text_parts.append(entry_text)
+
+        quantified_lines.extend(
+            bullet
+            for bullet in (entry.bullets or [])
+            if re.search(r"\b\d+(\.\d+)?%|\$\d+|\b\d+\+?\b", bullet or "")
+        )
+
+    for entry in refreshed_project_entries:
+        entry_text = _project_entry_counterfactual_text(entry)
+        entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+
+        if entry_text:
+            structured_text_parts.append(entry_text)
+
+        quantified_lines.extend(
+            bullet
+            for bullet in (entry.bullets or [])
+            if re.search(r"\b\d+(\.\d+)?%|\$\d+|\b\d+\+?\b", bullet or "")
+        )
+
+    for entry in refreshed_education_entries:
+        education_text = " ".join(
+            part for part in [
+                entry.school,
+                entry.degree,
+                entry.field_of_study,
+                entry.graduation_date,
+            ]
+            if str(part or "").strip()
+        ).strip()
+        if education_text:
+            structured_text_parts.append(education_text)
+
+    structured_text = "\n".join(part for part in structured_text_parts if part).strip()
+
+    companies = _unique_preserve_order(
+        [entry.company for entry in refreshed_experience_entries if entry.company]
+    )
+    locations = _unique_preserve_order(
+        [entry.location for entry in refreshed_experience_entries if entry.location]
+    )
+
+    titles = _unique_preserve_order(
+        [
+            title
+            for entry in refreshed_experience_entries
+            for title in ([entry.title] if entry.title else []) + list(entry.normalized_titles or [])
+        ]
+    )
+
+    skills = _unique_preserve_order(
+        [
+            skill
+            for entry in refreshed_experience_entries
+            for skill in list(entry.normalized_skills or [])
+        ]
+        + [
+            skill
+            for entry in refreshed_project_entries
+            for skill in list(entry.normalized_skills or [])
+        ]
+    )
+
+    return ResumeEvidence(
+        document=document,
+        titles=titles,
+        companies=companies,
+        locations=locations,
+        skills=skills,
+        certifications=refreshed_certifications,
+        education_entries=refreshed_education_entries,
+        experience_entries=refreshed_experience_entries,
+        project_entries=refreshed_project_entries,
+        domain_signals=_extract_pattern_hits(structured_text, DOMAIN_SIGNAL_PATTERNS),
+        analytics_ml_signals=_extract_pattern_hits(structured_text, ANALYTICS_ML_SIGNAL_PATTERNS),
+        experimentation_signals=_extract_pattern_hits(structured_text, EXPERIMENTATION_SIGNAL_PATTERNS),
+        tooling_signals=_extract_pattern_hits(structured_text, TOOLING_SIGNAL_PATTERNS),
+        quantified_bullets=_unique_preserve_order(quantified_lines),
+        notes={
+            "builder_version": "v2_counterfactual_structured_refresh",
+            "dimension_names": [dimension.name for dimension in get_match_dimensions()],
+        },
+    )
+
+
+def build_counterfactual_resume_evidence(
+    original_resume: ResumeEvidence,
+    source_bullet_id: str,
+    patch_text: str,
+) -> Tuple[Optional[ResumeEvidence], str]:
+    bullet_id = str(source_bullet_id or "").strip()
+    replacement = str(patch_text or "").strip()
+
+    if not bullet_id or not replacement:
+        return None, "missing_patch_inputs"
+
+    patched_resume = copy.deepcopy(original_resume)
+    match_count = 0
+
+    for entry in list(getattr(patched_resume, "experience_entries", []) or []):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for idx, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if idx >= len(bullets):
+                return None, "bullet_index_out_of_range"
+
+            bullets[idx] = replacement
+            entry.bullets = bullets
+            match_count += 1
+
+    for entry in list(getattr(patched_resume, "project_entries", []) or []):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for idx, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if idx >= len(bullets):
+                return None, "bullet_index_out_of_range"
+
+            bullets[idx] = replacement
+            entry.bullets = bullets
+            match_count += 1
+
+    if match_count == 0:
+        return None, "bullet_id_not_found"
+
+    if match_count > 1:
+        return None, "bullet_id_not_unique"
+
+    rebuilt_resume = rebuild_resume_evidence_from_structured_entries(
+        patched_resume.document,
+        experience_entries=patched_resume.experience_entries,
+        project_entries=patched_resume.project_entries,
+        education_entries=patched_resume.education_entries,
+        certifications=patched_resume.certifications,
+    )
+    return rebuilt_resume, "ok"
+
+def _bullet_text_by_id(
+    resume: ResumeEvidence,
+    source_bullet_id: str,
+) -> Tuple[Optional[str], str]:
+    bullet_id = str(source_bullet_id or "").strip()
+    if not bullet_id:
+        return None, "missing_patch_inputs"
+
+    matches: List[str] = []
+
+    for entry in list(getattr(resume, "experience_entries", []) or []):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for idx, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if idx >= len(bullets):
+                return None, "bullet_index_out_of_range"
+
+            matches.append(str(bullets[idx] or "").strip())
+
+    for entry in list(getattr(resume, "project_entries", []) or []):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for idx, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if idx >= len(bullets):
+                return None, "bullet_index_out_of_range"
+
+            matches.append(str(bullets[idx] or "").strip())
+
+    matches = [text for text in matches if text]
+
+    if not matches:
+        return None, "bullet_id_not_found"
+
+    unique_matches = _unique_preserve_order(matches)
+    if len(unique_matches) > 1:
+        return None, "bullet_id_not_unique"
+
+    return unique_matches[0], "ok"
+
+
+def _whitespace_flexible_pattern(text: str) -> Optional[re.Pattern]:
+    normalized = str(text or "").strip()
+    if not normalized:
+        return None
+
+    parts = [re.escape(part) for part in re.split(r"\s+", normalized) if part]
+    if not parts:
+        return None
+
+    return re.compile(r"\s+".join(parts))
+
+
+def _patched_resume_document(
+    document: ResumeDocument,
+    original_bullet_text: str,
+    patch_text: str,
+) -> Tuple[Optional[ResumeDocument], str]:
+    raw_text = str(getattr(document, "raw_text", "") or "")
+    original_bullet = str(original_bullet_text or "").strip()
+    replacement = str(patch_text or "").strip()
+
+    if not raw_text or not original_bullet or not replacement:
+        return None, "missing_patch_inputs"
+
+    pattern = _whitespace_flexible_pattern(original_bullet)
+    if pattern is None:
+        return None, "missing_patch_inputs"
+
+    matches = list(pattern.finditer(raw_text))
+    if not matches:
+        return None, "raw_text_bullet_not_found"
+
+    if len(matches) > 1:
+        return None, "raw_text_bullet_not_unique"
+
+    match = matches[0]
+    patched_raw_text = (
+        raw_text[:match.start()]
+        + replacement
+        + raw_text[match.end():]
+    )
+
+    patched_document = copy.deepcopy(document)
+    patched_document.raw_text = patched_raw_text
+    patched_document.normalized_text = _normalize(patched_raw_text)
+
+    return patched_document, "ok"
+
+
+def build_counterfactual_resume_evidence(
+    original_resume: ResumeEvidence,
+    source_bullet_id: str,
+    patch_text: str,
+) -> Tuple[Optional[ResumeEvidence], str]:
+    bullet_id = str(source_bullet_id or "").strip()
+    replacement = str(patch_text or "").strip()
+
+    if not bullet_id or not replacement:
+        return None, "missing_patch_inputs"
+
+    original_bullet_text, bullet_status = _bullet_text_by_id(original_resume, bullet_id)
+    if bullet_status != "ok" or not original_bullet_text:
+        return None, bullet_status
+
+    patched_document, patch_status = _patched_resume_document(
+        original_resume.document,
+        original_bullet_text,
+        replacement,
+    )
+    if patch_status != "ok" or patched_document is None:
+        return None, patch_status
+
+    rebuilt_resume = build_resume_evidence(patched_document)
+    rebuilt_resume.notes = dict(getattr(rebuilt_resume, "notes", {}) or {})
+    rebuilt_resume.notes["counterfactual_builder_version"] = "v3_full_document_patch"
+    rebuilt_resume.notes["counterfactual_source_bullet_id"] = bullet_id
+
+    return rebuilt_resume, "ok"
 
 def build_resume_evidence(document: ResumeDocument) -> ResumeEvidence:
     text = document.raw_text

@@ -12,7 +12,10 @@ from src.config.consts import (
 )
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
-from src.resume.document_store import load_resume_documents
+from src.resume.document_store import (
+    load_resume_documents,
+    load_resume_documents_by_name,
+)
 from src.resume.evidence_builder import build_resume_evidence
 from src.ai.embedding_model import get_model
 
@@ -839,7 +842,12 @@ def _build_resume_facet_support(resume, job) -> List[dict]:
 
     return facet_rows
 
-def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
+def _collect_top_relevant_bullets(
+    resume,
+    job,
+    top_k: int = 8,
+    enable_semantic: bool = True,
+) -> List[dict]:
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
 
     direct_rows: List[dict] = []
@@ -973,38 +981,35 @@ def _collect_top_relevant_bullets(resume, job, top_k: int = 8) -> List[dict]:
         _register_selected(row)
 
     # Pass 3: semantic bullets from the selected resume to improve meaning-based recall.
-    # First prefer new sources, then fill from already-used sources if still needed.
-    semantic_rows = _semantic_bullet_candidates(resume, job, top_k=max(4, top_k // 2))
+    # Skip this in fast targeted-regeneration mode.
+    if enable_semantic:
+        semantic_rows = _semantic_bullet_candidates(resume, job, top_k=max(4, top_k // 2))
 
-    semantic_new_source = []
-    semantic_existing_source = []
+        semantic_new_source = []
+        semantic_existing_source = []
 
-    for row in semantic_rows:
-        src_key = _source_key(
-            row.get("section", ""),
-            row.get("source_title", ""),
-            row.get("source_company", ""),
-        )
-        row["source_key"] = src_key
+        for row in semantic_rows:
+            src_key = _source_key(
+                row.get("section", ""),
+                row.get("source_title", ""),
+                row.get("source_company", ""),
+            )
+            row["source_key"] = src_key
 
-        if src_key in used_sources:
-            semantic_existing_source.append(row)
-        else:
-            semantic_new_source.append(row)
+            if src_key in used_sources:
+                semantic_existing_source.append(row)
+            else:
+                semantic_new_source.append(row)
 
-    for row in semantic_new_source:
-        if len(selected) >= top_k:
-            break
-        _register_selected(row)
+        for row in semantic_new_source:
+            if len(selected) >= top_k:
+                break
+            _register_selected(row)
 
-    for row in semantic_existing_source:
-        if len(selected) >= top_k:
-            break
-        _register_selected(row)
-
-    if len(selected) >= top_k:
-        reranked = _rerank_evidence_rows(selected)
-        return reranked[:top_k]
+        for row in semantic_existing_source:
+            if len(selected) >= top_k:
+                break
+            _register_selected(row)
 
     # Pass 4: add more bullets from already-proven relevant sources for richer role-level context.
     same_source_context_rows: List[dict] = []
@@ -1083,8 +1088,18 @@ def _split_bullet_into_clauses(text: str) -> List[str]:
     return _unique_preserve_order(clauses)
 
 
-def _collect_top_relevant_evidence_units(resume, job, top_k: int = 16) -> List[dict]:
-    parent_rows = _collect_top_relevant_bullets(resume, job, top_k=max(top_k, 10))
+def _collect_top_relevant_evidence_units(
+    resume,
+    job,
+    top_k: int = 16,
+    enable_semantic: bool = True,
+) -> List[dict]:
+    parent_rows = _collect_top_relevant_bullets(
+        resume,
+        job,
+        top_k=max(top_k, 10),
+        enable_semantic=enable_semantic,
+    )
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
 
     unit_rows: List[dict] = []
@@ -1288,7 +1303,24 @@ def _payload_for_json(
         "guardrail": "Only add or strengthen resume language when it is already truthful and supported by your actual work.",
     }
 
+def _load_candidate_resume_documents(resume_name_contains: str) -> List[object]:
+    raw = str(resume_name_contains or "").strip()
+    if not raw:
+        docs = load_resume_documents()
+        return sorted(docs, key=lambda doc: doc.resume_name)
 
+    # Fast path for targeted regeneration: exact resume filename lookup first.
+    exact_docs = load_resume_documents_by_name([raw])
+    if exact_docs:
+        return sorted(exact_docs, key=lambda doc: doc.resume_name)
+
+    # Backward-compatible fallback for older substring-based CLI usage.
+    needle = _normalize_text(raw)
+    docs = [
+        doc for doc in load_resume_documents()
+        if needle in _normalize_text(doc.resume_name)
+    ]
+    return sorted(docs, key=lambda doc: doc.resume_name)
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Show a JD-specific resume diff/tailoring helper for the best selected resume variant."
@@ -1330,6 +1362,11 @@ def main() -> None:
         default="",
         help="Optional path to write the JD diff output as JSON.",
     )
+    parser.add_argument(
+        "--disable-semantic-evidence",
+        action="store_true",
+        help="Skip semantic embedding-based evidence recovery. Intended for fast targeted resume regeneration.",
+    )
     args = parser.parse_args()
 
     job_records = _load_job_records(Path(args.job_corpus))
@@ -1341,15 +1378,8 @@ def main() -> None:
     )
     job_evidence = build_job_evidence(selected_job_record)
 
-    resume_docs = load_resume_documents()
-    if args.resume_name_contains.strip():
-        needle = _normalize_text(args.resume_name_contains)
-        resume_docs = [
-            doc for doc in resume_docs
-            if needle in _normalize_text(doc.resume_name)
-        ]
+    resume_docs = _load_candidate_resume_documents(args.resume_name_contains)
 
-    resume_docs = sorted(resume_docs, key=lambda doc: doc.resume_name)
     if not resume_docs:
         raise RuntimeError("No resume documents loaded after filters.")
 
@@ -1379,11 +1409,13 @@ def main() -> None:
         selected_resume,
         job_evidence,
         top_k=args.top_bullets,
+        enable_semantic=not args.disable_semantic_evidence,
     )
     top_evidence_units = _collect_top_relevant_evidence_units(
         selected_resume,
         job_evidence,
         top_k=max(args.top_bullets * 2, 12),
+        enable_semantic=not args.disable_semantic_evidence,
     )
 
     print("=" * 100)

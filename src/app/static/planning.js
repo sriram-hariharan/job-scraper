@@ -653,7 +653,7 @@ function renderResumeChoiceCards() {
         ${resumeChoiceState.isBusy ? "disabled" : ""}
       >
         <div class="resume-choice-card-role">${escapeHtml(candidate.role)}</div>
-        <div class="resume-choice-card-name">${escapeHtml(resumeName)}</div>
+        <div class="resume-choice-card-name">${escapeHtml(humanizeResumeDisplayName(resumeName))}</div>
         <div class="resume-choice-card-meta">Score: ${escapeHtml(candidate.score || "-")}</div>
       </button>
     `;
@@ -679,13 +679,13 @@ function setResumeChoicePreview(resumeName) {
   const previewUrl = buildResumePreviewUrl(safeName);
 
   resumeChoiceState.selectedResume = safeName;
-  previewName.textContent = safeName;
+  previewName.textContent = humanizeResumeDisplayName(safeName);
   previewFrame.src = previewUrl;
   previewFrame.classList.remove("hidden");
   previewEmpty.classList.add("hidden");
 
   selectBtn.disabled = resumeChoiceState.isBusy ? true : false;
-  qs("resumeChoiceSaveStatus").textContent = `Selected: ${safeName}`;
+  qs("resumeChoiceSaveStatus").textContent = `Selected: ${humanizeResumeDisplayName(safeName)}`;
 
   renderResumeChoiceCards();
 }
@@ -938,11 +938,17 @@ function stripPdfExtension(value) {
   return String(value || "").trim().replace(/\.pdf$/i, "");
 }
 
+function humanizeResumeDisplayName(value) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  return stripPdfExtension(raw).replaceAll("_", " ");
+}
+
 function buildCompactTextHtml(value, { maxLength = 36, emptyLabel = "-" } = {}) {
   const fullRaw = String(value || "").trim();
   if (!fullRaw) return escapeHtml(emptyLabel);
 
-  const full = stripPdfExtension(fullRaw);
+  const full = humanizeResumeDisplayName(fullRaw);
   const visible = truncateText(full, maxLength);
 
   return `<span title="${escapeHtml(fullRaw)}">${escapeHtml(visible)}</span>`;
@@ -1610,10 +1616,18 @@ function renderTailoringEmptyState(payload) {
     : [];
 
   const nextStep = String(emptyState.next_step || "").trim();
-
-  const missingJdFocus = Array.isArray(emptyState.missing_jd_focus) ? emptyState.missing_jd_focus : [];
-  const keepVisibleNow = Array.isArray(emptyState.keep_visible_now) ? emptyState.keep_visible_now : [];
+  const rawMissingJdFocus = Array.isArray(emptyState.missing_jd_focus) ? emptyState.missing_jd_focus : [];
   const resumeLimitationSummary = String(emptyState.resume_limitation_summary || "").trim();
+  const keepVisibleNow = Array.isArray(emptyState.keep_visible_now) ? emptyState.keep_visible_now : [];
+  const hasKeepCardsBelow = Array.isArray(payload?.keep_as_is) && payload.keep_as_is.length > 0;
+
+  const normalizeList = (items) =>
+    items.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean);
+
+  const sameList =
+    JSON.stringify(normalizeList(mainBlockers)) === JSON.stringify(normalizeList(rawMissingJdFocus));
+
+  const missingJdFocus = sameList ? [] : rawMissingJdFocus;
 
   const keepVisibleLines = keepVisibleNow.map((item) => {
     const label = String(item?.label || "").trim();
@@ -1663,7 +1677,7 @@ function renderTailoringEmptyState(payload) {
           </div>
         ` : ""}
 
-        ${keepVisibleLines.length ? `
+        ${!hasKeepCardsBelow && keepVisibleLines.length ? `
           <div class="tailoring-empty-subsection">
             <div class="tailoring-empty-subtitle">Keep visible now</div>
             ${buildTailoringList(keepVisibleLines)}

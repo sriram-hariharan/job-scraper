@@ -143,6 +143,16 @@ def _build_keep_emphasize(packet: Dict[str, Any]) -> List[str]:
 
     return _unique_preserve_order(items)
 
+def _display_resume_name(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return "The selected resume"
+
+    base = raw.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+    if base.lower().endswith(".pdf"):
+        base = base[:-4]
+
+    return base.replace("_", " ")
 
 def _build_do_not_claim(packet: Dict[str, Any]) -> List[str]:
     unsupported_required = _unsupported_terms(packet, "required")
@@ -404,7 +414,7 @@ def _build_resume_limitation_summary(
     adjacent_terms: List[str],
 ) -> str:
     selection = packet.get("selection", {}) or {}
-    resume_name = str(selection.get("selected_resume", "") or "The selected resume").strip()
+    resume_name = _display_resume_name(selection.get("selected_resume", ""))
 
     if direct_terms and blocker_labels:
         return (
@@ -1501,7 +1511,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     lines.append("# Tailoring Suggestions")
     lines.append("")
     lines.append(f"**Job:** {job.get('company', '')} | {job.get('title', '')}")
-    lines.append(f"**Selected resume:** {selection.get('selected_resume', '')}")
+    lines.append(f"**Selected resume:** {_display_resume_name(selection.get('selected_resume', ''))}")
     lines.append(f"**Selected score:** {selection.get('selected_score', 0.0):.3f}")
     lines.append("")
 

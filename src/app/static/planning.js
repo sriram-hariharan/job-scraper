@@ -1421,8 +1421,9 @@ function buildArtifactUrl(path) {
 }
 
 async function loadArtifact(path) {
-  if (!path) return null;
-  return fetchJson(buildArtifactUrl(path));
+  const raw = String(path || "").trim();
+  if (!raw || raw === ".") return null;
+  return fetchJson(buildArtifactUrl(raw));
 }
 
 function formatMarkdownInline(text) {

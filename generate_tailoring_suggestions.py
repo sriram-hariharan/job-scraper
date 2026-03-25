@@ -10,7 +10,6 @@ from src.tailoring.rendering import (
     _markdown_from_payload,
     _build_training_log_row,
 )
-from src.tailoring.llm import _run_live_llm_tailoring
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -56,7 +55,7 @@ def main() -> None:
     generated_at_utc = datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
     
     packet = _load_packet(Path(args.packet_json))
-    payload = _build_payload(packet)
+    payload = _build_payload(packet, include_llm_prompts=args.use_llm)
     final_payload = _build_operator_markdown_payload(payload, None)
     markdown = _markdown_from_payload(final_payload)
 
@@ -126,6 +125,7 @@ def main() -> None:
     
     llm_output = None
     if args.use_llm:
+        from src.tailoring.llm import _run_live_llm_tailoring
         llm_output = _run_live_llm_tailoring(
             packet=packet,
             payload=payload,

@@ -44,12 +44,20 @@ from src.tailoring.selection import (
     _rewrite_direction_verifier_report,
 )
 
-from src.config.consts import (
-    ANALYTICS_ML_SIGNAL_PATTERNS,
-    DOMAIN_SIGNAL_PATTERNS,
-    EXPERIMENTATION_SIGNAL_PATTERNS,
-    TOOLING_SIGNAL_PATTERNS,
+from src.matching.signal_family_matcher import (
+    families_for_terms,
+    strongest_supported_signal_in_text,
 )
+
+_PROMOTABLE_SIGNAL_FAMILY_LABELS = {
+    "experimentation": "Experimentation",
+    "analytics_ml": "Modeling",
+}
+
+_PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS = {
+    "experimentation": {"experimentation_depth"},
+    "analytics_ml": {"analytics_ml_depth"},
+}
 
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
@@ -907,6 +915,47 @@ def _why_it_matters(candidate: Dict[str, Any]) -> str:
         return "This is directly supported evidence and should be one of the first bullets you tighten."
     return "This can help support the JD story, but it is not the strongest anchor."
 
+def _packet_term_support_terms(packet: Dict[str, Any]) -> List[str]:
+    summary = packet.get("summary", {}) or {}
+    term_support = summary.get("term_support", {}) or {}
+
+    terms: List[str] = []
+    for bucket in ("required", "preferred"):
+        for row in (term_support.get(bucket, []) or []):
+            term = str(row.get("term", "") or "").strip()
+            if term:
+                terms.append(term)
+
+    terms.extend(
+        str(item).strip()
+        for item in (summary.get("matched_terms", []) or [])
+        if str(item).strip()
+    )
+    return _unique_preserve_order(terms)
+
+def _resolved_edit_card_evidence_type(
+    candidate: Dict[str, Any],
+    supported_terms: List[str],
+    source_text: str,
+) -> str:
+    evidence_type = str(candidate.get("evidence_type", "") or "").strip()
+    if evidence_type:
+        return evidence_type
+
+    text_norm = _diagnosis_normalize_term(source_text)
+    supported_norm = [
+        _diagnosis_normalize_term(term)
+        for term in (supported_terms or [])
+        if _diagnosis_normalize_term(term)
+    ]
+
+    if text_norm and supported_norm and any(term in text_norm for term in supported_norm):
+        return "direct_overlap"
+
+    if source_text:
+        return "same_source_context"
+
+    return ""
 
 def _build_edit_cards(
     payload: Dict[str, Any],
@@ -916,10 +965,29 @@ def _build_edit_cards(
     cards: List[Dict[str, Any]] = []
 
     rewrite_candidates = payload.get("rewrite_candidates", []) or []
+    packet_supported_terms = _packet_term_support_terms(payload)
 
     for index, candidate in enumerate(rewrite_candidates[:limit], start=1):
         evidence_type = str(candidate.get("evidence_type", "") or "").strip()
-        supported_terms = list(candidate.get("supported_terms", []) or [])
+        seed_terms = list(candidate.get("supported_terms", []) or [])
+        current_evidence = str(candidate.get("bullet_excerpt", "") or "").strip()
+        parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
+        source_text = parent_bullet or current_evidence
+
+        strongest = strongest_supported_signal_in_text(
+            source_text,
+            packet_supported_terms,
+        )
+        resolved_term = str(strongest.get("term", "") or "").strip()
+
+        supported_terms = [resolved_term] if resolved_term else seed_terms
+
+        evidence_type = _resolved_edit_card_evidence_type(
+            candidate,
+            supported_terms,
+            source_text,
+        )
+
         recommended_rewrite = _recommended_rewrite_text(
             preferred_rewrite_directions,
             candidate,
@@ -928,13 +996,14 @@ def _build_edit_cards(
         cards.append(
             {
                 "card_id": f"edit_card_{index}",
+                "evidence_type": evidence_type,
                 "priority": _card_priority(index - 1, evidence_type),
                 "edit_type": _card_edit_type(evidence_type),
                 "section": candidate.get("section", ""),
                 "source": candidate.get("source", ""),
                 "jd_signal_terms": supported_terms,
-                "current_evidence": candidate.get("bullet_excerpt", ""),
-                "parent_bullet": candidate.get("parent_bullet", ""),
+                "current_evidence": current_evidence,
+                "parent_bullet": parent_bullet,
                 "recommended_rewrite": recommended_rewrite,
                 "why_current_is_weak": _why_current_is_weak(candidate),
                 "why_rewrite_is_better": _why_rewrite_is_better(candidate),
@@ -990,11 +1059,11 @@ def _likely_impacted_dimensions(
     summary = packet.get("summary", {}) or {}
     term_support = summary.get("term_support", {}) or {}
 
-    terms = {
+    terms = [
         _diagnosis_normalize_term(item)
         for item in (jd_signal_terms or [])
         if _diagnosis_normalize_term(item)
-    }
+    ]
 
     required_terms = {
         _diagnosis_normalize_term(str(row.get("term", "") or ""))
@@ -1007,24 +1076,20 @@ def _likely_impacted_dimensions(
         if _diagnosis_normalize_term(str(row.get("term", "") or ""))
     }
 
-    tooling_terms = {_diagnosis_normalize_term(item) for item in TOOLING_SIGNAL_PATTERNS}
-    analytics_ml_terms = {_diagnosis_normalize_term(item) for item in ANALYTICS_ML_SIGNAL_PATTERNS}
-    experimentation_terms = {_diagnosis_normalize_term(item) for item in EXPERIMENTATION_SIGNAL_PATTERNS}
-    domain_terms = {_diagnosis_normalize_term(item) for item in DOMAIN_SIGNAL_PATTERNS}
-
+    families = set(families_for_terms(terms))
     impacted: List[str] = []
 
-    if terms & required_terms:
+    if set(terms) & required_terms:
         impacted.append("required_skills_alignment")
-    if terms & preferred_terms:
+    if set(terms) & preferred_terms:
         impacted.append("preferred_skills_alignment")
-    if terms & tooling_terms:
+    if "tooling" in families:
         impacted.append("tooling_alignment")
-    if terms & analytics_ml_terms:
+    if "analytics_ml" in families:
         impacted.append("analytics_ml_depth")
-    if terms & experimentation_terms:
+    if "experimentation" in families:
         impacted.append("experimentation_depth")
-    if terms & domain_terms:
+    if "domain" in families:
         impacted.append("domain_relevance")
     if str(section or "").strip() == "project":
         impacted.append("project_relevance")
@@ -1067,6 +1132,7 @@ def _edit_card_to_bullet_diagnosis(
         "bullet_index": card.get("bullet_index", -1),
         "original_text": parent_bullet or current_evidence,
         "current_evidence": current_evidence,
+        "evidence_type": str(card.get("evidence_type", "") or "").strip(),
         "jd_signal_terms": jd_signal_terms,
         "likely_impacted_dimensions": _likely_impacted_dimensions(
             packet,
@@ -1202,6 +1268,7 @@ def _diagnosis_to_replacement_candidate(
         "source_bullet_id": bullet_id,
         "source_entry_id": str(diagnosis.get("entry_id", "") or "").strip(),
         "section": str(diagnosis.get("section", "") or "").strip(),
+        "evidence_type": str(diagnosis.get("evidence_type", "") or "").strip(),
         "source": str(diagnosis.get("source", "") or "").strip(),
         "operation_type": "rewrite",
         "proposal_type": "directional_rewrite" if proposal_status == "direction_only" else "patch_ready_rewrite",
@@ -1511,23 +1578,50 @@ def _load_job_record_by_doc_id(
     return None
 
 
-def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     selection = payload.get("selection", {}) or {}
     job = payload.get("job", {}) or {}
+    job_snapshot = payload.get("job_snapshot", {}) or {}
 
     selected_resume_name = str(selection.get("selected_resume", "") or "").strip()
     job_doc_id = str(job.get("job_doc_id", "") or "").strip()
 
-    if not selected_resume_name or not job_doc_id:
-        return None
+    if not selected_resume_name:
+        return {
+            "ok": False,
+            "reason": "missing_selected_resume",
+        }
+
+    if not job_doc_id:
+        return {
+            "ok": False,
+            "reason": "missing_job_doc_id",
+        }
 
     docs = load_resume_documents_by_name([selected_resume_name])
     if not docs:
-        return None
+        return {
+            "ok": False,
+            "reason": "resume_not_found",
+            "selected_resume_name": selected_resume_name,
+            "job_doc_id": job_doc_id,
+        }
 
-    job_record = _load_job_record_by_doc_id(job_doc_id)
+    job_record = None
+
+    if isinstance(job_snapshot, dict) and job_snapshot:
+        job_record = dict(job_snapshot)
+
     if job_record is None:
-        return None
+        job_record = _load_job_record_by_doc_id(job_doc_id)
+
+    if job_record is None:
+        return {
+            "ok": False,
+            "reason": "job_record_not_found",
+            "selected_resume_name": selected_resume_name,
+            "job_doc_id": job_doc_id,
+        }
 
     original_doc = docs[0]
     original_resume = build_resume_evidence(original_doc)
@@ -1535,10 +1629,14 @@ def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Optional[Di
     original_result = score_resume_job_match(original_resume, job_evidence)
 
     return {
+        "ok": True,
+        "reason": "",
         "resume_doc": original_doc,
         "original_resume": original_resume,
         "job_evidence": job_evidence,
         "original_result": original_result,
+        "selected_resume_name": selected_resume_name,
+        "job_doc_id": job_doc_id,
     }
 
 def _sorted_unique_strings(values: List[Any]) -> List[str]:
@@ -1642,57 +1740,6 @@ def _nonzero_dimension_deltas(original_result: Any, patched_result: Any) -> Dict
 
     return deltas
 
-def _replace_bullet_in_resume_evidence(
-    resume_evidence: Any,
-    source_bullet_id: str,
-    patch_text: str,
-) -> str:
-    bullet_id = str(source_bullet_id or "").strip()
-    replacement = str(patch_text or "").strip()
-
-    if not bullet_id or not replacement:
-        return "missing_patch_inputs"
-
-    match_count = 0
-
-    for entry in list(getattr(resume_evidence, "experience_entries", []) or []):
-        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
-        bullets = list(getattr(entry, "bullets", []) or [])
-
-        for idx, current_bullet_id in enumerate(bullet_ids):
-            if str(current_bullet_id or "").strip() != bullet_id:
-                continue
-
-            if idx >= len(bullets):
-                return "bullet_index_out_of_range"
-
-            bullets[idx] = replacement
-            entry.bullets = bullets
-            match_count += 1
-
-    for entry in list(getattr(resume_evidence, "project_entries", []) or []):
-        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
-        bullets = list(getattr(entry, "bullets", []) or [])
-
-        for idx, current_bullet_id in enumerate(bullet_ids):
-            if str(current_bullet_id or "").strip() != bullet_id:
-                continue
-
-            if idx >= len(bullets):
-                return "bullet_index_out_of_range"
-
-            bullets[idx] = replacement
-            entry.bullets = bullets
-            match_count += 1
-
-    if match_count == 0:
-        return "bullet_id_not_found"
-
-    if match_count > 1:
-        return "bullet_id_not_unique"
-
-    return "ok"
-
 
 def _patched_resume_evidence_for_candidate(
     original_resume: Any,
@@ -1712,7 +1759,6 @@ def _patched_resume_evidence_for_candidate(
         )
 
     if operation_type == "reorder":
-        # Current frozen evaluator does not model bullet order directly.
         return original_resume, "order_not_modeled_in_v1"
 
     if operation_type == "keep":
@@ -1725,28 +1771,49 @@ def _apply_single_candidate_counterfactuals(
     candidates: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     context = _counterfactual_context_from_payload(payload)
-    if context is None:
-        for row in candidates:
-            row["counterfactual_status"] = "unavailable"
-            row["counterfactual_note"] = "Could not load the selected resume or job record for projected scoring."
-            row["original_final_score"] = None
+
+    original_result = context["original_result"] if context.get("ok", False) else None
+    original_score = (
+        round(float(getattr(original_result, "final_score", 0.0) or 0.0), 6)
+        if original_result is not None else None
+    )
+
+    for row in candidates:
+        row["original_final_score"] = original_score
+
+        if str(row.get("operation_type", "") or "").strip() == "keep":
+            row["counterfactual_status"] = "keep_existing_anchor"
+            row["counterfactual_note"] = (
+                "Existing anchor preserved for operator reference and not treated as a rewrite patch candidate."
+            )
+            row["projected_final_score"] = original_score
+            row["projected_overall_delta"] = 0.0 if original_score is not None else None
+            row["projected_dimension_deltas"] = {}
+            continue
+
+        if str(row.get("proposal_status", "") or "").strip() != "patch_ready":
+            row["counterfactual_status"] = "not_patch_ready"
+            row["counterfactual_note"] = "Projected scoring is only available for patch-ready candidates."
             row["projected_final_score"] = None
             row["projected_overall_delta"] = None
             row["projected_dimension_deltas"] = {}
-        return candidates
+            continue
 
-    original_result = context["original_result"]
-    original_score = round(float(getattr(original_result, "final_score", 0.0) or 0.0), 6)
-    original_snapshot = _resume_counterfactual_snapshot(context["original_resume"])
+        if not context.get("ok", False):
+            reason = str(context.get("reason", "") or "context_unavailable").strip()
+            row["counterfactual_status"] = reason
+            row["counterfactual_note"] = (
+                f"Could not load counterfactual context for projected scoring: {reason}."
+            )
+            row["projected_final_score"] = None
+            row["projected_overall_delta"] = None
+            row["projected_dimension_deltas"] = {}
+            continue
 
-    for row in candidates:
-        patched_resume, status = _patched_resume_evidence_for_candidate(context["original_resume"], row)
-
-        row["original_final_score"] = original_score
-        row["original_evidence_snapshot"] = original_snapshot
-        row["patched_evidence_snapshot"] = {}
-        row["evidence_delta"] = {}
-        row["scorer_visible_evidence_changed"] = False
+        patched_resume, status = _patched_resume_evidence_for_candidate(
+            context["original_resume"],
+            row,
+        )
 
         if status == "not_patch_ready":
             row["counterfactual_status"] = "not_patch_ready"
@@ -1798,43 +1865,19 @@ def _apply_single_candidate_counterfactuals(
             row["projected_final_score"] = original_score
             row["projected_overall_delta"] = 0.0
             row["projected_dimension_deltas"] = {}
-            row["patched_evidence_snapshot"] = original_snapshot
-            row["evidence_delta"] = {}
-            row["scorer_visible_evidence_changed"] = False
             continue
 
         patched_result = score_resume_job_match(patched_resume, context["job_evidence"])
         patched_score = round(float(getattr(patched_result, "final_score", 0.0) or 0.0), 6)
         overall_delta = round(patched_score - original_score, 6)
 
-        patched_snapshot = _resume_counterfactual_snapshot(patched_resume)
-        evidence_delta = _counterfactual_snapshot_delta(original_snapshot, patched_snapshot)
-        evidence_changed = bool(evidence_delta)
-
-        row["patched_evidence_snapshot"] = patched_snapshot
-        row["evidence_delta"] = evidence_delta
-        row["scorer_visible_evidence_changed"] = evidence_changed
-
-        if overall_delta == 0.0 and not evidence_changed:
-            row["counterfactual_status"] = "scorer_neutral_no_evidence_change"
-            row["counterfactual_note"] = (
-                "Patch changed phrasing, but did not change scorer-visible evidence under the frozen deterministic evaluator."
-            )
-        else:
-            row["counterfactual_status"] = "scored"
-            row["counterfactual_note"] = "Projected delta computed under the frozen deterministic evaluator."
-
+        row["counterfactual_status"] = "scored"
+        row["counterfactual_note"] = "Projected delta computed under the frozen deterministic evaluator."
         row["projected_final_score"] = patched_score
         row["projected_overall_delta"] = overall_delta
         row["projected_dimension_deltas"] = _nonzero_dimension_deltas(original_result, patched_result)
 
     return candidates
-
-def _proposal_status_for_diagnosis(diagnosis: Dict[str, Any]) -> str:
-    # Current deterministic rewrite candidates are directional, not final patch text.
-    # Later phases may upgrade selected candidates to patch_ready after deterministic
-    # text synthesis or validated LLM refinement.
-    return "direction_only"
 
 def _lowercase_first_character(value: str) -> str:
     text = str(value or "").strip()
@@ -1842,6 +1885,65 @@ def _lowercase_first_character(value: str) -> str:
         return ""
     return text[:1].lower() + text[1:]
 
+
+_PARENT_SIGNAL_REQUIRED_DIMENSIONS = {
+    "experimentation": {"experimentation_depth"},
+    "analytics_ml": {"analytics_ml_depth"},
+}
+
+
+def _deterministic_parent_signal_label_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[Tuple[str, str]]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    supported_terms = [
+        _diagnosis_normalize_term(item)
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if _diagnosis_normalize_term(item)
+    ]
+    if len(supported_terms) != 1:
+        return None
+
+    supported_families = [
+        family
+        for family in families_for_terms(supported_terms)
+        if family in _PROMOTABLE_SIGNAL_FAMILY_LABELS
+    ]
+    if len(supported_families) != 1:
+        return None
+
+    supported_family = supported_families[0]
+
+    impacted_dimensions = {
+        str(item).strip()
+        for item in (diagnosis.get("likely_impacted_dimensions", []) or [])
+        if str(item).strip()
+    }
+    required_dimensions = _PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS.get(
+        supported_family,
+        set(),
+    )
+    if required_dimensions and not (impacted_dimensions & required_dimensions):
+        return None
+
+    label = _PROMOTABLE_SIGNAL_FAMILY_LABELS[supported_family]
+    normalized_text = _diagnosis_normalize_term(original_text)
+    normalized_label = _diagnosis_normalize_term(label)
+
+    if normalized_label in normalized_text:
+        return None
+
+    if re.match(rf"^\s*{re.escape(label)}\s*:", original_text, flags=re.IGNORECASE):
+        return None
+
+    patch_text = f"{label}: {original_text}".strip()
+    if _diagnosis_normalize_term(patch_text) == normalized_text:
+        return None
+
+    return supported_family, patch_text
 
 def _using_phrase_match_for_supported_term(
     original_text: str,
@@ -1890,6 +1992,11 @@ def _deterministic_patch_text_from_diagnosis(
     if len(supported_terms) != 1:
         return "direction_only", "", ""
 
+    parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
+    if parent_signal_patch:
+        _, patch_text = parent_signal_patch
+        return "patch_ready", patch_text, "deterministic_parent_signal_label"
+
     match = _using_phrase_match_for_supported_term(original_text, supported_terms)
     if not match:
         return "direction_only", "", ""
@@ -1930,10 +2037,11 @@ def _materiality_validate_rewrite_candidate(
     if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
         return candidate
 
-    if context is None:
-        candidate["materiality_validation_status"] = "context_unavailable"
+    if not context.get("ok", False):
+        reason = str(context.get("reason", "") or "context_unavailable").strip()
+        candidate["materiality_validation_status"] = reason
         candidate["materiality_validation_note"] = (
-            "Could not pre-validate patch materiality because the selected resume/job context was unavailable."
+            f"Could not pre-validate patch materiality because counterfactual context was unavailable: {reason}."
         )
         return candidate
 
@@ -2028,9 +2136,11 @@ def _build_replacement_candidates(
             keep_key = ("keep",) + key
             if keep_key not in seen_keys:
                 seen_keys.add(keep_key)
-                candidates.append(
-                    _diagnosis_to_keep_candidate(diagnosis, index)
+                keep_candidate = _diagnosis_to_keep_candidate(diagnosis, index)
+                keep_candidate = _normalize_keep_candidate_for_existing_anchor(
+                    keep_candidate
                 )
+                candidates.append(keep_candidate)
 
         if len(candidates) >= limit:
             break
@@ -2056,12 +2166,39 @@ def _build_replacement_candidates(
 
     return _apply_candidate_grouping(expanded[:limit])
 
+def _is_parent_signal_material_rewrite_diagnosis(
+    diagnosis: Dict[str, Any],
+) -> bool:
+    if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
+        return False
+    return _deterministic_parent_signal_label_patch(diagnosis) is not None
+
+
+def _normalize_keep_candidate_for_existing_anchor(
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    candidate["proposal_status"] = "keep_only"
+    candidate["proposal_type"] = "keep_existing_anchor"
+    candidate["patch_ready"] = False
+    candidate["material_delta_found"] = False
+    candidate["materiality_validation_status"] = "not_applicable_keep_existing"
+    candidate["materiality_validation_note"] = (
+        "Existing anchor preserved for operator reference and not treated as a rewrite patch candidate."
+    )
+    candidate["precheck_projected_overall_delta"] = None
+    candidate["precheck_projected_dimension_deltas"] = {}
+    candidate["precheck_scorer_visible_evidence_changed"] = False
+    candidate["precheck_evidence_delta"] = {}
+    return candidate
+
 def _build_bullet_diagnoses(
     packet: Dict[str, Any],
     edit_cards: List[Dict[str, Any]],
     keep_as_is: List[Dict[str, Any]],
     limit: int = 12,
 ) -> List[Dict[str, Any]]:
+    prioritized_edit_diagnoses: List[Dict[str, Any]] = []
+    regular_edit_diagnoses: List[Dict[str, Any]] = []
     diagnoses: List[Dict[str, Any]] = []
     seen_keys = set()
 
@@ -2071,9 +2208,18 @@ def _build_bullet_diagnoses(
         if key in seen_keys:
             continue
         seen_keys.add(key)
-        diagnoses.append(diagnosis)
-        if len(diagnoses) >= limit:
-            return diagnoses
+
+        if _is_parent_signal_material_rewrite_diagnosis(diagnosis):
+            prioritized_edit_diagnoses.append(diagnosis)
+        else:
+            regular_edit_diagnoses.append(diagnosis)
+
+    diagnoses.extend(prioritized_edit_diagnoses)
+    diagnoses.extend(regular_edit_diagnoses)
+    diagnoses = diagnoses[:limit]
+
+    if len(diagnoses) >= limit:
+        return diagnoses
 
     for index, row in enumerate(keep_as_is, start=1):
         diagnosis = _keep_as_is_to_bullet_diagnosis(packet, row, index)

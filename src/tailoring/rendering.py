@@ -883,16 +883,38 @@ def _card_claim_safety(evidence_type: str) -> str:
 def _recommended_rewrite_text(
     preferred_rewrite_directions: List[str],
     candidate: Dict[str, Any],
+    supported_terms: List[str],
 ) -> str:
-    action = str(candidate.get("action", "") or "").strip()
-    if action:
-        return action
-
-    supported_terms = [
+    local_terms = [
         str(item or "").strip().lower()
-        for item in (candidate.get("supported_terms", []) or [])
+        for item in (supported_terms or [])
         if str(item or "").strip()
     ]
+    evidence_type = str(candidate.get("evidence_type", "") or "").strip()
+    action = str(candidate.get("action", "") or "").strip()
+
+    # Preserve only explicit structural instructions that should not be rephrased.
+    if action and (
+        action.startswith("Use this clause as a primary anchor")
+        or action.startswith("Move this bullet earlier")
+        or action.startswith("Keep this bullet")
+    ):
+        return action
+
+    # If this card already has grounded local supported terms, force a local rewrite
+    # so broader same-source directions cannot leak in.
+    if local_terms:
+        lead = ", ".join(_truncate_list(local_terms, 4))
+        if evidence_type == "same_source_context":
+            return (
+                f"Support with {lead} only after the primary anchors, and keep it as reinforcing evidence "
+                "rather than the main ownership claim."
+            )
+        return (
+            f"Lead with {lead} in this opening clause, then keep the remaining parent-bullet context "
+            "only if it preserves the same story truthfully."
+        )
+
     source = str(candidate.get("source", "") or "").strip().lower()
 
     for direction in preferred_rewrite_directions or []:
@@ -902,15 +924,10 @@ def _recommended_rewrite_text(
         if source and source in direction_lower:
             return direction_text
 
-        if supported_terms and any(term in direction_lower for term in supported_terms):
-            return direction_text
+    return action
 
-    return ""
-
-
-def _why_current_is_weak(candidate: Dict[str, Any]) -> str:
+def _why_current_is_weak(candidate: Dict[str, Any], supported_terms: List[str]) -> str:
     evidence_type = str(candidate.get("evidence_type", "") or "").strip()
-    supported_terms = candidate.get("supported_terms", []) or []
 
     if evidence_type == "direct_overlap":
         if supported_terms:
@@ -929,8 +946,7 @@ def _why_current_is_weak(candidate: Dict[str, Any]) -> str:
     return "This evidence should support the story, not act as the primary ownership claim."
 
 
-def _why_rewrite_is_better(candidate: Dict[str, Any]) -> str:
-    supported_terms = candidate.get("supported_terms", []) or []
+def _why_rewrite_is_better(candidate: Dict[str, Any], supported_terms: List[str]) -> str:
     if supported_terms:
         return (
             f"It brings {', '.join(_truncate_list(supported_terms, 4))} forward while staying anchored to work you already did."
@@ -949,8 +965,7 @@ def _placement_guidance(candidate: Dict[str, Any]) -> str:
     return "Update the strongest matching experience bullet first, then reorder only if needed."
 
 
-def _why_it_matters(candidate: Dict[str, Any]) -> str:
-    supported_terms = candidate.get("supported_terms", []) or []
+def _why_it_matters(candidate: Dict[str, Any], supported_terms: List[str]) -> str:
     evidence_type = str(candidate.get("evidence_type", "") or "").strip()
 
     if supported_terms:
@@ -1234,6 +1249,7 @@ def _build_edit_cards(
         recommended_rewrite = _recommended_rewrite_text(
             preferred_rewrite_directions,
             candidate,
+            supported_terms,
         )
 
         cards.append(
@@ -1248,9 +1264,9 @@ def _build_edit_cards(
                 "current_evidence": current_evidence,
                 "parent_bullet": parent_bullet,
                 "recommended_rewrite": recommended_rewrite,
-                "why_current_is_weak": _why_current_is_weak(candidate),
-                "why_rewrite_is_better": _why_rewrite_is_better(candidate),
-                "why_it_matters": _why_it_matters(candidate),
+                "why_current_is_weak": _why_current_is_weak(candidate, supported_terms),
+                "why_rewrite_is_better": _why_rewrite_is_better(candidate, supported_terms),
+                "why_it_matters": _why_it_matters(candidate, supported_terms),
                 "claim_safety": _card_claim_safety(evidence_type),
                 "placement_guidance": _placement_guidance(candidate),
                 "entry_id": candidate.get("entry_id", ""),

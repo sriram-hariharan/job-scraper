@@ -1,5 +1,6 @@
 import re
 from typing import List, Optional, Tuple
+import hashlib
 
 from src.matching.dimensions import get_match_dimensions
 from src.resume.models import (
@@ -60,6 +61,25 @@ def _extract_quantified_lines(text: str) -> List[str]:
 def _clean_lines(text: str) -> List[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
+def _stable_id_fragment(*parts: object) -> str:
+    basis_parts = [_normalize(str(part or "")) for part in parts if _normalize(str(part or ""))]
+    basis = "||".join(basis_parts) if basis_parts else "empty"
+    return hashlib.sha1(basis.encode("utf-8")).hexdigest()[:12]
+
+
+def _make_entry_id(section: str, entry_index: int, *parts: object) -> str:
+    return f"{section}:{entry_index}:{_stable_id_fragment(section, entry_index, *parts)}"
+
+
+def _make_bullet_ids(entry_id: str, bullets: List[str]) -> List[str]:
+    bullet_ids: List[str] = []
+
+    for bullet_index, bullet in enumerate(bullets):
+        bullet_ids.append(
+            f"{entry_id}:b{bullet_index}:{_stable_id_fragment(entry_id, bullet_index, bullet)}"
+        )
+
+    return bullet_ids
 
 def _normalize_heading(line: str) -> str:
     line = _normalize(line)
@@ -368,7 +388,7 @@ def _build_experience_entries(text: str) -> List[ResumeExperienceEntry]:
     blocks = _split_experience_blocks(experience_lines)
     entries: List[ResumeExperienceEntry] = []
 
-    for block in blocks:
+    for block_index, block in enumerate(blocks):
         
         header_lines: List[str] = []
         content_lines: List[str] = []
@@ -417,13 +437,27 @@ def _build_experience_entries(text: str) -> List[ResumeExperienceEntry]:
                 (_extract_inline_date(line) for line in header_lines if _extract_inline_date(line)),
                 "",
             )
+
+        trimmed_bullets = bullet_lines[:12]
+        entry_id = _make_entry_id(
+            "experience",
+            block_index,
+            company,
+            title,
+            date_line,
+            " ".join(header_lines),
+        )
+
         entries.append(
             ResumeExperienceEntry(
+                entry_id=entry_id,
+                entry_index=block_index,
                 company=company,
                 title=title,
                 start_date=date_line,
                 end_date="",
-                bullets=bullet_lines[:12],
+                bullets=trimmed_bullets,
+                bullet_ids=_make_bullet_ids(entry_id, trimmed_bullets),
                 normalized_titles=_extract_pattern_hits(" ".join(header_lines + bullet_lines), TITLE_PATTERNS),
                 normalized_skills=_extract_pattern_hits(" ".join(header_lines + bullet_lines), COMMON_SKILL_PATTERNS),
             )
@@ -436,9 +470,15 @@ def _build_experience_entries(text: str) -> List[ResumeExperienceEntry]:
     if not fallback_bullets:
         return []
 
+    fallback_clean_bullets = [_strip_bullet_marker(line) for line in fallback_bullets]
+    fallback_entry_id = _make_entry_id("experience", 0, "fallback")
+
     return [
         ResumeExperienceEntry(
-            bullets=[_strip_bullet_marker(line) for line in fallback_bullets],
+            entry_id=fallback_entry_id,
+            entry_index=0,
+            bullets=fallback_clean_bullets,
+            bullet_ids=_make_bullet_ids(fallback_entry_id, fallback_clean_bullets),
             normalized_titles=_extract_pattern_hits(" ".join(fallback_bullets), TITLE_PATTERNS),
             normalized_skills=_extract_pattern_hits(" ".join(fallback_bullets), COMMON_SKILL_PATTERNS),
         )
@@ -459,10 +499,16 @@ def _build_project_entries(text: str) -> List[ResumeProjectEntry]:
     if not bullets:
         return []
 
+    trimmed_bullets = bullets[:12]
+    entry_id = _make_entry_id("project", 0, "Projects")
+
     return [
         ResumeProjectEntry(
+            entry_id=entry_id,
+            entry_index=0,
             name="Projects",
-            bullets=bullets[:12],
+            bullets=trimmed_bullets,
+            bullet_ids=_make_bullet_ids(entry_id, trimmed_bullets),
             normalized_skills=_extract_pattern_hits(" ".join(bullets), COMMON_SKILL_PATTERNS),
         )
     ]
@@ -505,6 +551,7 @@ def _merge_orphan_experience_entries(
         if is_orphan and merged:
             prev = merged[-1]
             prev.bullets.extend(entry.bullets)
+            prev.bullet_ids.extend(entry.bullet_ids)
             prev.normalized_titles = _unique_preserve_order(
                 prev.normalized_titles + entry.normalized_titles
             )

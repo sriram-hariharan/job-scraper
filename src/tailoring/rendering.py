@@ -1858,6 +1858,56 @@ def _candidate_promotable_family(candidate: Dict[str, Any]) -> str:
     terms = list(candidate.get("supported_jd_signals", []) or candidate.get("jd_signal_terms", []) or [])
     return _primary_promotable_family_from_terms(terms)
 
+def _promotable_family_display_label(family: str) -> str:
+    raw_family = str(family or "").strip()
+    if not raw_family:
+        return ""
+
+    label = _PROMOTABLE_SIGNAL_FAMILY_LABELS.get(raw_family, "")
+    if label:
+        return label.strip().lower()
+
+    return raw_family.replace("_", " ").strip().lower()
+
+
+def _rationale_focus_label_from_terms(terms: List[str]) -> str:
+    normalized_terms = _unique_preserve_order(
+        [
+            str(term or "").strip().lower()
+            for term in (terms or [])
+            if str(term or "").strip()
+        ]
+    )
+    if not normalized_terms:
+        return "target"
+
+    promotable_families = _unique_preserve_order(
+        [
+            family
+            for family in (
+                str(family_for_term(term) or "").strip()
+                for term in normalized_terms
+            )
+            if family in _PROMOTABLE_REUSE_FAMILY_PRIORITY
+        ]
+    )
+
+    explicit_focus = " / ".join(_truncate_list(normalized_terms, 3))
+
+    if len(promotable_families) == 1:
+        family = promotable_families[0]
+
+        # "tooling" is too vague for operator-facing rationale text.
+        # Prefer the actual surfaced terms in that case.
+        if family == "tooling":
+            return explicit_focus or "tooling"
+
+        return _promotable_family_display_label(family) or explicit_focus or "target"
+
+    if len(promotable_families) > 1:
+        return explicit_focus or "multi-signal evidence"
+
+    return explicit_focus or "target"
 
 def _suppress_anchor_candidates_for_diagnosis(
     diagnosis: Dict[str, Any],
@@ -1910,10 +1960,9 @@ def _diagnosis_to_suppress_candidate(
     diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_{index}").strip()
     candidate_id = diagnosis_id.replace("bullet_diag", "replacement_suppress", 1)
 
-    family = _primary_promotable_family_from_terms(
+    focus_label = _rationale_focus_label_from_terms(
         list(diagnosis.get("jd_signal_terms", []) or [])
     )
-    family_label = family.replace("_", " ").strip() if family else "target"
     anchor_ids = [
         str(row.get("candidate_id", "") or "").strip()
         for row in anchor_candidates
@@ -1927,13 +1976,13 @@ def _diagnosis_to_suppress_candidate(
 
     if anchor_sources:
         rewrite_instruction = (
-            f"If space is tight, suppress this bullet or move it below stronger {family_label} anchors "
-            f"because the main {family_label} story is already covered more directly by {', '.join(anchor_sources)}."
+            f"If space is tight, suppress this bullet or move it below a stronger anchor for {focus_label} "
+            f"because the clearest direct evidence for {focus_label} is already covered more directly by {', '.join(anchor_sources)}."
         )
     else:
         rewrite_instruction = (
-            f"If space is tight, suppress this bullet or move it below stronger {family_label} anchors "
-            "because the main story is already covered more directly elsewhere in this section."
+            f"If space is tight, suppress this bullet or move it below a stronger anchor for {focus_label} "
+            f"because the clearest direct evidence for {focus_label} is already covered more directly elsewhere in this section."
         )
 
     return {
@@ -1958,8 +2007,8 @@ def _diagnosis_to_suppress_candidate(
         "unsupported_risk_signals": [],
         "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
         "why_this_improves_match": (
-            f"This bullet reads more like supporting context, while a stronger direct {family_label} anchor "
-            "already carries the main JD story."
+            f"This bullet reads more like supporting context, while a stronger direct anchor already carries "
+            f"the clearest evidence for {focus_label}."
         ),
         "claim_safety": "safe_suppress",
         "safety_status": "safe_suppress",
@@ -2016,10 +2065,9 @@ def _diagnosis_to_merge_candidate(
     diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_{index}").strip()
     candidate_id = diagnosis_id.replace("bullet_diag", "replacement_merge", 1)
 
-    family = _primary_promotable_family_from_terms(
+    focus_label = _rationale_focus_label_from_terms(
         list(diagnosis.get("jd_signal_terms", []) or [])
     )
-    family_label = family.replace("_", " ").strip() if family else "target"
 
     anchor_ids = _unique_preserve_order([
         str(row.get("candidate_id", "") or "").strip()
@@ -2045,14 +2093,14 @@ def _diagnosis_to_merge_candidate(
     if anchor_sources:
         rewrite_instruction = (
             f"If you want a tighter one-bullet story, merge the supporting context from this bullet into the stronger "
-            f"{family_label} anchor from {', '.join(anchor_sources)}. Keep the direct anchor as the lead claim and "
-            "borrow only details from this bullet that remain literally true."
+            f"direct anchor for {focus_label} from {', '.join(anchor_sources)}. Keep the direct anchor as the lead claim "
+            "and borrow only details from this bullet that remain literally true."
         )
     else:
         rewrite_instruction = (
             f"If you want a tighter one-bullet story, merge the supporting context from this bullet into the stronger "
-            f"{family_label} anchor in the same role entry. Keep the direct anchor as the lead claim and borrow only "
-            "details from this bullet that remain literally true."
+            f"direct anchor for {focus_label} in the same role entry. Keep the direct anchor as the lead claim and borrow "
+            "only details from this bullet that remain literally true."
         )
 
     return {
@@ -2077,7 +2125,7 @@ def _diagnosis_to_merge_candidate(
         "unsupported_risk_signals": [],
         "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
         "why_this_improves_match": (
-            f"This bullet has supporting {family_label} context, but a stronger direct anchor in the same role entry "
+            f"This bullet adds supporting context for {focus_label}, but a stronger direct anchor in the same role entry "
             "already carries the lead claim more clearly."
         ),
         "claim_safety": "safe_merge",

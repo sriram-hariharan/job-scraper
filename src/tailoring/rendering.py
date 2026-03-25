@@ -61,6 +61,25 @@ _PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS = {
     "analytics_ml": {"analytics_ml_depth"},
 }
 
+_CLAUSE_SPLIT_ACTION_VERBS = (
+    "Implemented",
+    "Designed",
+    "Developed",
+    "Built",
+    "Created",
+    "Led",
+    "Ran",
+    "Conducted",
+    "Engineered",
+    "Automated",
+    "Performed",
+)
+
+_STRUCTURAL_CLAUSE_FAMILY_PRIORITY = {
+    "experimentation": 0,
+    "analytics_ml": 1,
+}
+
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
@@ -764,11 +783,16 @@ def _reuse_candidate_to_edit_card(
 
     jd_signal_terms = [canonical_supported_signal] if canonical_supported_signal else list(row.get("overlaps", []) or [])
 
-    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    evidence_type = _resolved_edit_card_evidence_type(
+        row,
+        jd_signal_terms,
+        evidence,
+    )
     claim_safety = "safe_strengthen" if evidence_type == "direct_overlap" and jd_signal_terms else _fallback_claim_safety_from_reuse(row)
 
     return {
         "card_id": f"edit_card_reuse_{index}",
+        "evidence_type": evidence_type,
         "priority": _fallback_priority_from_reuse(index - 1, row),
         "edit_type": "rewrite" if jd_signal_terms and evidence_type == "direct_overlap" else _fallback_edit_type_from_reuse(row),
         "section": row.get("section", ""),
@@ -798,6 +822,7 @@ def _backfill_edit_cards_from_bullet_reuse(
     payload: Dict[str, Any],
     preferred_rewrite_directions: List[str],
     existing_cards: List[Dict[str, Any]],
+    seen_family_keys: set,
     limit: int,
 ) -> List[Dict[str, Any]]:
     if len(existing_cards) >= limit:
@@ -813,6 +838,7 @@ def _backfill_edit_cards_from_bullet_reuse(
         for card in cards
     }
 
+    local_seen_family_keys = set(seen_family_keys)
     bullet_reuse_candidates = payload.get("bullet_reuse_candidates", []) or []
 
     preferred_rows = []
@@ -849,8 +875,15 @@ def _backfill_edit_cards_from_bullet_reuse(
             preferred_rewrite_directions,
             len(cards) + 1,
         )
+
+        family_key = _edit_card_family_dedup_key(card)
+        if family_key and family_key in local_seen_family_keys:
+            continue
+
         cards.append(card)
         seen_keys.add(key)
+        if family_key:
+            local_seen_family_keys.add(family_key)
 
     return cards[:limit]
 
@@ -1022,24 +1055,49 @@ def _resolved_edit_card_evidence_type(
 
     return ""
 
-_CLAUSE_SPLIT_ACTION_VERBS = (
-    "Implemented",
-    "Designed",
-    "Developed",
-    "Built",
-    "Created",
-    "Led",
-    "Ran",
-    "Conducted",
-    "Engineered",
-    "Automated",
-    "Performed",
-)
+def _primary_promotable_family_from_terms(terms: List[str]) -> str:
+    normalized_terms = [
+        str(term or "").strip()
+        for term in (terms or [])
+        if str(term or "").strip()
+    ]
+    if not normalized_terms:
+        return ""
 
-_STRUCTURAL_CLAUSE_FAMILY_PRIORITY = {
-    "experimentation": 0,
-    "analytics_ml": 1,
-}
+    for term in normalized_terms:
+        family = str(family_for_term(term) or "").strip()
+        if family in _PROMOTABLE_REUSE_FAMILY_PRIORITY:
+            return family
+
+    for family in families_for_terms(normalized_terms):
+        family = str(family or "").strip()
+        if family in _PROMOTABLE_REUSE_FAMILY_PRIORITY:
+            return family
+
+    return ""
+
+
+def _edit_card_family_dedup_key(card: Dict[str, Any]) -> Tuple[str, str]:
+    evidence_type = str(card.get("evidence_type", "") or "").strip()
+    edit_type = str(card.get("edit_type", "") or "").strip()
+    section = str(card.get("section", "") or "").strip().lower()
+
+    if evidence_type != "direct_overlap":
+        return ()
+
+    if edit_type != "rewrite":
+        return ()
+
+    if section not in {"experience", "project"}:
+        return ()
+
+    family = _primary_promotable_family_from_terms(
+        list(card.get("jd_signal_terms", []) or [])
+    )
+    if not family:
+        return ()
+
+    return (section, family)
 
 
 def _split_promotable_clauses(text: str) -> List[str]:
@@ -1181,6 +1239,7 @@ def _build_edit_cards(
 ) -> List[Dict[str, Any]]:
     cards: List[Dict[str, Any]] = []
     seen_bullet_ids = set()
+    seen_family_keys = set()
 
     rewrite_candidates = payload.get("rewrite_candidates", []) or []
     bullet_reuse_candidates = payload.get("bullet_reuse_candidates", []) or []
@@ -1212,10 +1271,16 @@ def _build_edit_cards(
             clause_candidate,
             len(cards) + 1,
         )
+        family_key = _edit_card_family_dedup_key(card)
+        if family_key and family_key in seen_family_keys:
+            continue
+
         cards.append(card)
 
         if bullet_id:
             seen_bullet_ids.add(bullet_id)
+        if family_key:
+            seen_family_keys.add(family_key)
 
     # Pass 1: current rewrite candidates
     for index, candidate in enumerate(rewrite_candidates[:limit], start=1):
@@ -1252,39 +1317,46 @@ def _build_edit_cards(
             supported_terms,
         )
 
-        cards.append(
-            {
-                "card_id": f"edit_card_{index}",
-                "evidence_type": evidence_type,
-                "priority": _card_priority(index - 1, evidence_type),
-                "edit_type": _card_edit_type(evidence_type),
-                "section": candidate.get("section", ""),
-                "source": candidate.get("source", ""),
-                "jd_signal_terms": supported_terms,
-                "current_evidence": current_evidence,
-                "parent_bullet": parent_bullet,
-                "recommended_rewrite": recommended_rewrite,
-                "why_current_is_weak": _why_current_is_weak(candidate, supported_terms),
-                "why_rewrite_is_better": _why_rewrite_is_better(candidate, supported_terms),
-                "why_it_matters": _why_it_matters(candidate, supported_terms),
-                "claim_safety": _card_claim_safety(evidence_type),
-                "placement_guidance": _placement_guidance(candidate),
-                "entry_id": candidate.get("entry_id", ""),
-                "entry_index": candidate.get("entry_index", -1),
-                "bullet_id": candidate.get("bullet_id", ""),
-                "bullet_index": candidate.get("bullet_index", -1),
-                "matched_surface_signal": matched_surface_signal,
-                "canonical_supported_signal": canonical_supported_signal,
-            }
-        )
+        card = {
+            "card_id": f"edit_card_{index}",
+            "evidence_type": evidence_type,
+            "priority": _card_priority(index - 1, evidence_type),
+            "edit_type": _card_edit_type(evidence_type),
+            "section": candidate.get("section", ""),
+            "source": candidate.get("source", ""),
+            "jd_signal_terms": supported_terms,
+            "current_evidence": current_evidence,
+            "parent_bullet": parent_bullet,
+            "recommended_rewrite": recommended_rewrite,
+            "why_current_is_weak": _why_current_is_weak(candidate, supported_terms),
+            "why_rewrite_is_better": _why_rewrite_is_better(candidate, supported_terms),
+            "why_it_matters": _why_it_matters(candidate, supported_terms),
+            "claim_safety": _card_claim_safety(evidence_type),
+            "placement_guidance": _placement_guidance(candidate),
+            "entry_id": candidate.get("entry_id", ""),
+            "entry_index": candidate.get("entry_index", -1),
+            "bullet_id": candidate.get("bullet_id", ""),
+            "bullet_index": candidate.get("bullet_index", -1),
+            "matched_surface_signal": matched_surface_signal,
+            "canonical_supported_signal": canonical_supported_signal,
+        }
+
+        family_key = _edit_card_family_dedup_key(card)
+        if family_key and family_key in seen_family_keys:
+            continue
+
+        cards.append(card)
 
         if bullet_id:
             seen_bullet_ids.add(bullet_id)
+        if family_key:
+            seen_family_keys.add(family_key)
 
     cards = _backfill_edit_cards_from_bullet_reuse(
         payload,
         preferred_rewrite_directions,
         cards,
+        seen_family_keys,
         limit,
     )
 

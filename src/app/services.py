@@ -4,6 +4,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
 import csv
+import hashlib
 import json
 import os
 import re
@@ -20,6 +21,20 @@ DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
 DEFAULT_PROFILE_RESUME_DIR = Path(
     os.environ.get("PROFILE_RESUME_DIR", "data/profile_resumes")
 ).expanduser()
+DEFAULT_PATCH_SELECTIONS_PATH = DEFAULT_OUTPUT_DIR / "patch_selections.csv"
+
+PATCH_SELECTION_HEADERS = [
+    "selection_timestamp",
+    "job_doc_id",
+    "queue_rank",
+    "job_company",
+    "job_title",
+    "selected_resume",
+    "tailoring_json_path",
+    "artifact_signature",
+    "selected_candidate_ids_json",
+    "note",
+]
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -459,6 +474,148 @@ def run_live_pipeline_payload(
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+def _normalize_selected_patch_candidate_ids(value: Any) -> List[str]:
+    if isinstance(value, list):
+        raw_items = value
+    else:
+        raw_text = _clean_text(value)
+        if not raw_text:
+            raw_items = []
+        else:
+            try:
+                parsed = json.loads(raw_text)
+                raw_items = parsed if isinstance(parsed, list) else [raw_text]
+            except Exception:
+                raw_items = [part.strip() for part in raw_text.split(",") if part.strip()]
+
+    normalized: List[str] = []
+    seen = set()
+
+    for item in raw_items:
+        candidate_id = _clean_text(item)
+        if not candidate_id or candidate_id in seen:
+            continue
+        seen.add(candidate_id)
+        normalized.append(candidate_id)
+
+    return normalized
+
+
+def _serialize_selected_patch_candidate_ids(value: Any) -> str:
+    return json.dumps(
+        _normalize_selected_patch_candidate_ids(value),
+        ensure_ascii=False,
+    )
+
+
+def _load_tailoring_json_artifact(path: Path) -> Dict[str, Any]:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Tailoring artifact must be a JSON object: {path}")
+    return data
+
+
+def _tailoring_artifact_candidate_ids(payload: Dict[str, Any]) -> List[str]:
+    candidate_ids: List[str] = []
+    seen = set()
+
+    for row in list(payload.get("replacement_candidates", []) or []):
+        candidate_id = _clean_text(row.get("candidate_id"))
+        if not candidate_id or candidate_id in seen:
+            continue
+        seen.add(candidate_id)
+        candidate_ids.append(candidate_id)
+
+    return candidate_ids
+
+
+def _tailoring_artifact_signature(payload: Dict[str, Any]) -> str:
+    job = payload.get("job", {}) or {}
+    selection = payload.get("selection", {}) or {}
+
+    signature_payload = {
+        "company": _clean_text(job.get("company")),
+        "title": _clean_text(job.get("title")),
+        "selected_resume": _clean_text(selection.get("selected_resume")),
+        "replacement_candidate_ids": sorted(_tailoring_artifact_candidate_ids(payload)),
+    }
+
+    blob = json.dumps(signature_payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def _load_latest_patch_selection_overlay(
+    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
+) -> Dict[str, Dict[str, str]]:
+    if not patch_selections_path.exists():
+        return {}
+
+    ja = _job_app()
+    rows = ja._load_csv_rows(patch_selections_path)
+    latest_by_path: Dict[str, Dict[str, str]] = {}
+
+    for row in rows:
+        artifact_path = _clean_text(row.get("tailoring_json_path"))
+        if not artifact_path:
+            continue
+        latest_by_path[artifact_path] = dict(row)
+
+    return latest_by_path
+
+
+def _apply_saved_patch_selection_overlay(
+    artifact_path: Path,
+    payload_data: Dict[str, Any],
+    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
+) -> Dict[str, Any]:
+    from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+
+    data = dict(payload_data)
+    data.setdefault("selected_patch_candidate_ids", [])
+    data.setdefault("selected_patch_selection_status", "none")
+    data.setdefault("selected_patch_selection_note", "")
+    data.setdefault("selected_patch_selection_timestamp", "")
+
+    latest_by_path = _load_latest_patch_selection_overlay(patch_selections_path)
+    selection_row = latest_by_path.get(str(artifact_path))
+
+    if not selection_row:
+        return data
+
+    saved_signature = _clean_text(selection_row.get("artifact_signature"))
+    current_signature = _tailoring_artifact_signature(data)
+
+    data["selected_patch_selection_timestamp"] = _clean_text(selection_row.get("selection_timestamp"))
+
+    if saved_signature and saved_signature != current_signature:
+        data["selected_patch_selection_status"] = "stale_signature"
+        data["selected_patch_selection_note"] = (
+            "Saved patch selection was ignored because the tailoring artifact changed after the selection was recorded."
+        )
+        return data
+
+    requested_ids = _normalize_selected_patch_candidate_ids(
+        selection_row.get("selected_candidate_ids_json", "")
+    )
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(data))
+    selected_ids = [candidate_id for candidate_id in requested_ids if candidate_id in valid_candidate_ids]
+
+    if not selected_ids:
+        data["selected_patch_selection_status"] = "no_valid_candidates"
+        data["selected_patch_selection_note"] = (
+            "Saved patch selection exists, but none of the candidate IDs are valid for the current artifact."
+        )
+        return data
+
+    data["selected_patch_candidate_ids"] = selected_ids
+    data["selected_patch_selection_status"] = "applied"
+    data["selected_patch_selection_note"] = "Saved patch selection applied to this tailoring artifact."
+    data["selected_patch_set_counterfactual_preview"] = build_selected_patch_set_counterfactual_preview(
+        data,
+        selected_candidate_ids=selected_ids,
+    )
+    return data
 
 def _sanitize_optional_resume_filename(value: Any) -> str:
     raw = _clean_text(value)
@@ -1358,6 +1515,7 @@ def _resolve_planning_artifact_path(
 def planning_artifact_payload(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
+    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
     suffix = artifact_path.suffix.lower()
@@ -1370,7 +1528,14 @@ def planning_artifact_payload(
     }
 
     if suffix == ".json":
-        payload["data"] = json.loads(text)
+        data = json.loads(text)
+        if isinstance(data, dict) and data.get("replacement_candidates") is not None:
+            data = _apply_saved_patch_selection_overlay(
+                artifact_path,
+                data,
+                patch_selections_path=patch_selections_path,
+            )
+        payload["data"] = data
     else:
         payload["text"] = text
 
@@ -1449,6 +1614,89 @@ def record_operator_resume_selection_payload(
         "ok": True,
         "row": row,
         "decisions_path": str(decisions_path),
+    }
+
+def record_planning_patch_selection_payload(
+    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    job_doc_id: str = "",
+    queue_rank: str = "",
+    selected_resume: str = "",
+    selected_candidate_ids: Any = None,
+    note: str = "",
+) -> Dict[str, Any]:
+    from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Patch selection requires a tailoring JSON artifact.")
+
+    payload_data = _load_tailoring_json_artifact(artifact_path)
+
+    replacement_candidates = list(payload_data.get("replacement_candidates", []) or [])
+    if not replacement_candidates:
+        raise ValueError("Tailoring artifact does not contain replacement candidates.")
+
+    normalized_ids = _normalize_selected_patch_candidate_ids(selected_candidate_ids)
+    if not normalized_ids:
+        raise ValueError("selected_candidate_ids must contain at least one candidate ID.")
+
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
+    unknown_candidate_ids = [candidate_id for candidate_id in normalized_ids if candidate_id not in valid_candidate_ids]
+    if unknown_candidate_ids:
+        raise ValueError(
+            f"Unknown candidate IDs for this artifact: {', '.join(sorted(unknown_candidate_ids))}"
+        )
+
+    job = payload_data.get("job", {}) or {}
+    selection = payload_data.get("selection", {}) or {}
+
+    artifact_selected_resume = _clean_text(selection.get("selected_resume"))
+    requested_selected_resume = _sanitize_optional_resume_filename(selected_resume)
+
+    if requested_selected_resume and artifact_selected_resume and requested_selected_resume != artifact_selected_resume:
+        raise ValueError(
+            f"selected_resume does not match the tailoring artifact resume. "
+            f"artifact={artifact_selected_resume!r} request={requested_selected_resume!r}"
+        )
+
+    row = {
+        "selection_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "job_doc_id": _clean_text(job_doc_id) or _clean_text(job.get("job_doc_id")),
+        "queue_rank": _clean_text(queue_rank),
+        "job_company": _clean_text(job.get("company")),
+        "job_title": _clean_text(job.get("title")),
+        "selected_resume": requested_selected_resume or artifact_selected_resume,
+        "tailoring_json_path": str(artifact_path),
+        "artifact_signature": _tailoring_artifact_signature(payload_data),
+        "selected_candidate_ids_json": _serialize_selected_patch_candidate_ids(normalized_ids),
+        "note": _clean_text(note),
+    }
+
+    ja = _job_app()
+    ja._append_csv_row(
+        patch_selections_path,
+        PATCH_SELECTION_HEADERS,
+        row,
+    )
+
+    preview = build_selected_patch_set_counterfactual_preview(
+        payload_data,
+        selected_candidate_ids=normalized_ids,
+    )
+
+    return {
+        "ok": True,
+        "patch_selections_path": str(patch_selections_path),
+        "selected_patch_candidate_ids": normalized_ids,
+        "selection": row,
+        "selected_patch_set_counterfactual_preview": preview,
     }
 
 def record_application_action_payload(

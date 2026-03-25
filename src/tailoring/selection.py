@@ -61,10 +61,15 @@ def _build_bullet_reuse_from_plan_units(
                 "bullet": row.get("evidence_unit", ""),
                 "parent_bullet": row.get("parent_bullet", ""),
                 "reuse_note": reuse_note,
+                "entry_id": row.get("entry_id", ""),
+                "entry_index": row.get("entry_index", -1),
+                "bullet_id": row.get("bullet_id", ""),
+                "bullet_index": row.get("bullet_index", -1),
             }
         )
 
     return reuse_rows
+
 def _build_bullet_reuse(
     packet: Dict[str, Any],
     tailoring_plan: Optional[Dict[str, Any]] = None,
@@ -123,6 +128,10 @@ def _build_bullet_reuse(
                 "bullet": row.get("clause_text") or row.get("text", ""),
                 "parent_bullet": row.get("parent_bullet", ""),
                 "reuse_note": reuse_note,
+                "entry_id": row.get("entry_id", ""),
+                "entry_index": row.get("entry_index", -1),
+                "bullet_id": row.get("bullet_id", ""),
+                "bullet_index": row.get("bullet_index", -1),
             }
         )
 
@@ -168,6 +177,7 @@ def _build_rewrite_candidates(
         source = _source_label(row)
         evidence_type = row.get("evidence_type", "direct_overlap")
         source_key = (
+            row.get("bullet_id", ""),
             row.get("section", ""),
             source,
             evidence_type,
@@ -209,6 +219,10 @@ def _build_rewrite_candidates(
                 "action": action,
                 "bullet_excerpt": _row_evidence_excerpt(row),
                 "parent_bullet": row.get("parent_bullet", ""),
+                "entry_id": row.get("entry_id", ""),
+                "entry_index": row.get("entry_index", -1),
+                "bullet_id": row.get("bullet_id", ""),
+                "bullet_index": row.get("bullet_index", -1),
             }
         )
         used_keys.add(source_key)
@@ -309,6 +323,10 @@ def _rewrite_candidate_from_plan_unit(
         "action": action,
         "bullet_excerpt": _short_bullet(evidence_unit, 220),
         "parent_bullet": parent_bullet,
+        "entry_id": unit.get("entry_id", ""),
+        "entry_index": unit.get("entry_index", -1),
+        "bullet_id": unit.get("bullet_id", ""),
+        "bullet_index": unit.get("bullet_index", -1),
     }
 
 def _direction_plan_unit_match_score(direction: str, row: Dict[str, Any]) -> int:

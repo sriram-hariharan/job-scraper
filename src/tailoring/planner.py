@@ -21,6 +21,7 @@ from src.tailoring.packet_support import (
 
 def _plan_unit_key(unit: Dict[str, Any]) -> tuple:
     return (
+        str(unit.get("bullet_id", "") or "").strip(),
         str(unit.get("section", "") or "").strip(),
         str(unit.get("source", "") or "").strip(),
         str(unit.get("evidence_type", "") or "").strip(),
@@ -47,6 +48,10 @@ def _find_rewrite_row_for_plan_unit(
         "clause_text": unit.get("evidence_unit", ""),
         "parent_bullet": unit.get("parent_bullet", ""),
         "unit_kind": "clause_unit",
+        "entry_id": unit.get("entry_id", ""),
+        "entry_index": unit.get("entry_index", -1),
+        "bullet_id": unit.get("bullet_id", ""),
+        "bullet_index": unit.get("bullet_index", -1),
     }
 
 def _plan_unit_row(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -57,10 +62,15 @@ def _plan_unit_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "supported_terms": _row_supported_terms(row)[:6],
         "evidence_unit": row.get("clause_text") or row.get("text", ""),
         "parent_bullet": row.get("parent_bullet", ""),
+        "entry_id": row.get("entry_id", ""),
+        "entry_index": row.get("entry_index", -1),
+        "bullet_id": row.get("bullet_id", ""),
+        "bullet_index": row.get("bullet_index", -1),
     }
 
 def _plan_row_key(row: Dict[str, Any]) -> tuple:
     return (
+        str(row.get("bullet_id", "") or "").strip(),
         str(row.get("section", "") or "").strip(),
         _source_label(row),
         str(row.get("evidence_type", "") or "").strip(),

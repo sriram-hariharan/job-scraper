@@ -716,6 +716,10 @@ def _reuse_candidate_to_edit_card(
         "why_it_matters": _fallback_why_it_matters_from_reuse(row),
         "claim_safety": _fallback_claim_safety_from_reuse(row),
         "placement_guidance": _placement_guidance(row),
+        "entry_id": row.get("entry_id", ""),
+        "entry_index": row.get("entry_index", -1),
+        "bullet_id": row.get("bullet_id", ""),
+        "bullet_index": row.get("bullet_index", -1),
     }
 
 
@@ -916,6 +920,10 @@ def _build_edit_cards(
                 "why_it_matters": _why_it_matters(candidate),
                 "claim_safety": _card_claim_safety(evidence_type),
                 "placement_guidance": _placement_guidance(candidate),
+                "entry_id": candidate.get("entry_id", ""),
+                "entry_index": candidate.get("entry_index", -1),
+                "bullet_id": candidate.get("bullet_id", ""),
+                "bullet_index": candidate.get("bullet_index", -1),
             }
         )
 
@@ -1549,6 +1557,14 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Section: {card.get('section', '')}")
             if card.get("source"):
                 lines.append(f"- Evidence source: {card.get('source', '')}")
+            
+            if card.get("entry_id"):
+                lines.append(f"- Entry ID: {card.get('entry_id', '')}")
+            if card.get("bullet_id"):
+                lines.append(f"- Bullet ID: {card.get('bullet_id', '')}")
+            if card.get("bullet_index", -1) is not None and int(card.get("bullet_index", -1)) >= 0:
+                lines.append(f"- Bullet index: {card.get('bullet_index', -1)}")
+
             if card.get("jd_signal_terms"):
                 lines.append(
                     f"- JD signal terms: {', '.join(card.get('jd_signal_terms', []) or [])}"
@@ -1746,6 +1762,12 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             f"- **[{row.get('section', '')}] {row.get('source', '')}** | "
             f"type={row.get('evidence_type', '')} | overlaps={row.get('overlaps', [])}"
         )
+        if row.get("entry_id"):
+            lines.append(f"  - Entry ID: {row.get('entry_id', '')}")
+        if row.get("bullet_id"):
+            lines.append(f"  - Bullet ID: {row.get('bullet_id', '')}")
+        if row.get("bullet_index", -1) is not None and int(row.get("bullet_index", -1)) >= 0:
+            lines.append(f"  - Bullet index: {row.get('bullet_index', -1)}")
         lines.append(f"  - Evidence unit: {row.get('bullet', '')}")
         if row.get("parent_bullet"):
             lines.append(f"  - Parent bullet: {row.get('parent_bullet', '')}")

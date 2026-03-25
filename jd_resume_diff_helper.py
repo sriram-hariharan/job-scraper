@@ -42,7 +42,7 @@ def _load_job_records(job_corpus_path: Path) -> List[dict]:
     return records
 
 
-def _normalize_text(value: str) -> str:
+def _normalize_match_text(value: str) -> str:
     text = str(value or "").lower().strip()
     if not text:
         return ""
@@ -53,6 +53,13 @@ def _normalize_text(value: str) -> str:
     text = text.replace("&", " and ")
     text = re.sub(r"[^a-z0-9+/\-\s]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _normalize_text(value: str) -> str:
+    text = _normalize_match_text(value)
+    if not text:
+        return ""
     return _SKILL_ALIASES.get(text, text)
 
 
@@ -78,7 +85,44 @@ def _normalized_skill_list(values: List[str]) -> List[str]:
 
 
 def _contains_signal(text: str, signal: str) -> bool:
-    return re.search(rf"\b{re.escape(_normalize_text(signal))}\b", text) is not None
+    text_norm = _normalize_match_text(text)
+    signal_norm = _normalize_match_text(signal)
+
+    if not text_norm or not signal_norm:
+        return False
+
+    return re.search(rf"\b{re.escape(signal_norm)}\b", text_norm) is not None
+
+def _canonical_term_variants(term: str) -> List[str]:
+    canonical = _normalize_text(term)
+    if not canonical:
+        return []
+
+    variants = [canonical, _normalize_match_text(canonical)]
+
+    for alias, mapped in _SKILL_ALIASES.items():
+        if _normalize_text(mapped) == canonical:
+            variants.append(_normalize_match_text(alias))
+
+    return _unique_preserve_order([v for v in variants if v])
+
+
+def _canonical_job_target_hits(text: str, job_targets: List[str]) -> List[str]:
+    text_norm = _normalize_match_text(text)
+    if not text_norm:
+        return []
+
+    hits: List[str] = []
+    for target in job_targets:
+        canonical = _normalize_text(target)
+        if not canonical:
+            continue
+
+        variants = _canonical_term_variants(canonical)
+        if any(_contains_signal(text_norm, variant) for variant in variants):
+            hits.append(canonical)
+
+    return _unique_preserve_order(hits)
 
 def _context_tokens(value: str) -> List[str]:
     text = _normalize_text(value)
@@ -256,7 +300,7 @@ def _semantic_bullet_candidates(resume, job, top_k: int = 4) -> List[dict]:
             if not text_norm:
                 continue
 
-            exact_overlaps = [term for term in job_targets if _contains_signal(text_norm, term)]
+            exact_overlaps = _canonical_job_target_hits(text, job_targets)
             if exact_overlaps:
                 continue
 
@@ -487,10 +531,9 @@ def _build_single_term_support(resume, term: str) -> dict:
     experience_matches: List[dict] = []
     for entry in resume.experience_entries:
         for bullet_index, bullet in enumerate(entry.bullets):
-            bullet_norm = _normalize_text(bullet)
-            if not bullet_norm:
+            if not _normalize_text(bullet):
                 continue
-            if _contains_signal(bullet_norm, normalized_term):
+            if normalized_term in _canonical_job_target_hits(bullet, [normalized_term]):
                 experience_matches.append(
                     _term_support_evidence_row(
                         section="experience",
@@ -522,7 +565,7 @@ def _build_single_term_support(resume, term: str) -> dict:
             bullet_norm = _normalize_text(bullet)
             if not bullet_norm:
                 continue
-            if _contains_signal(bullet_norm, normalized_term):
+            if normalized_term in _canonical_job_target_hits(bullet, [normalized_term]):
                 project_matches.append(
                     _term_support_evidence_row(
                         section="project",
@@ -970,7 +1013,7 @@ def _collect_top_relevant_bullets(
             if not bullet_norm:
                 continue
 
-            overlaps = [term for term in job_targets if _contains_signal(bullet_norm, term)]
+            overlaps = _canonical_job_target_hits(bullet, job_targets)
             if not overlaps:
                 continue
 
@@ -1064,6 +1107,29 @@ def _collect_top_relevant_bullets(
         if row["source_key"] in used_sources:
             continue
         _register_selected(row)
+
+    # Pass 1b: diversify across uncovered canonical overlap terms so unique
+    # promotable bullets (for example A/B testing) are not crowded out by
+    # repeated python/sql bullets from already-covered sources.
+    covered_terms = {
+        term
+        for row in selected
+        for term in (row.get("overlaps", []) or [])
+    }
+
+    for row in direct_rows:
+        if len(selected) >= top_k:
+            break
+
+        new_terms = [
+            term for term in (row.get("overlaps", []) or [])
+            if term not in covered_terms
+        ]
+        if not new_terms:
+            continue
+
+        _register_selected(row)
+        covered_terms.update(new_terms)
 
     # Pass 2: fill remaining slots with strongest remaining direct-overlap bullets.
     for row in direct_rows:
@@ -1231,10 +1297,7 @@ def _collect_top_relevant_evidence_units(
             if not clause_norm:
                 continue
 
-            clause_overlaps = [
-                term for term in job_targets
-                if _contains_signal(clause_norm, term)
-            ]
+            clause_overlaps = _canonical_job_target_hits(clause_text, job_targets)
 
             if evidence_type == "direct_overlap" and not clause_overlaps:
                 continue

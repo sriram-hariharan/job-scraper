@@ -276,7 +276,7 @@ def planning_regenerate_selected_resume(
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
             queue_rank=str(payload.get("queue_rank", "") or ""),
             selected_resume=str(payload.get("selected_resume", "") or ""),
-            generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", True)),
+            generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
             refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
         )
     except ValueError as exc:

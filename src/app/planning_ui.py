@@ -273,10 +273,13 @@ def planning_dashboard() -> str:
             <div class="resume-choice-loading-overlay hidden" id="resumeChoiceLoadingOverlay">
               <div class="resume-choice-loading-card">
                 <div class="loading-spinner"></div>
-                <div class="resume-choice-loading-title">Generating tailoring suggestions</div>
-                <div class="resume-choice-loading-text">
+                <div class="resume-choice-loading-title" id="resumeChoiceLoadingTitle">
+                  Generating tailoring suggestions
+                </div>
+                <div class="resume-choice-loading-text" id="resumeChoiceLoadingText">
                   Rebuilding packet and tailoring for the selected resume.
                 </div>
+                <div class="resume-choice-loading-steps hidden" id="resumeChoiceLoadingSteps"></div>
               </div>
             </div>
           </div>
@@ -287,6 +290,9 @@ def planning_dashboard() -> str:
         <div class="resume-choice-status" id="resumeChoiceSaveStatus">No resume selected yet.</div>
         <div class="resume-choice-actions-right">
           <button class="ghost-btn" id="resumeChoiceCancelBtn" type="button">Close</button>
+          <button class="ghost-btn" id="resumeChoiceGenerateLlmBtn" type="button" disabled>
+            Generate LLM Tailoring
+          </button>
           <button id="resumeChoiceSelectBtn" type="button" disabled>Select Resume</button>
         </div>
       </div>

@@ -71,6 +71,46 @@ def _resolved_tailoring_paths(patterns: List[str], include_llm: bool) -> List[Pa
 
     return paths
 
+def _resolved_manifest_paths(manifest_path: Path, include_llm: bool) -> List[Path]:
+    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    if isinstance(raw, dict):
+        raw_paths = raw.get("paths", [])
+    elif isinstance(raw, list):
+        raw_paths = raw
+    else:
+        raise ValueError(
+            f"Manifest must be a JSON object with 'paths' or a JSON list: {manifest_path}"
+        )
+
+    if not isinstance(raw_paths, list):
+        raise ValueError(f"Manifest 'paths' must be a list: {manifest_path}")
+
+    paths: List[Path] = []
+    seen = set()
+
+    for item in raw_paths:
+        if not isinstance(item, str):
+            raise ValueError(f"Manifest paths must be strings: {manifest_path}")
+
+        path = Path(item)
+        if not path.is_file():
+            raise ValueError(f"Manifest path does not exist: {path}")
+
+        name = path.name.lower()
+        if "tailoring" not in name or not name.endswith(".json"):
+            raise ValueError(f"Manifest path is not a tailoring JSON artifact: {path}")
+
+        if not include_llm and name.endswith("tailoring_llm.json"):
+            continue
+
+        normalized = str(path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        paths.append(path)
+
+    return paths
 
 def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
     job = payload.get("job", {}) or {}
@@ -338,13 +378,23 @@ def main() -> None:
         default="",
         help="Optional path to write machine-readable summary JSON.",
     )
+    parser.add_argument(
+        "--manifest",
+        default="",
+        help="Optional JSON manifest listing exact tailoring artifact paths to analyze.",
+    )
     args = parser.parse_args()
 
-    patterns = args.glob or [
-        "outputs/**/*.json",
-    ]
-
-    paths = _resolved_tailoring_paths(patterns, include_llm=args.include_llm)
+    if args.manifest.strip():
+        paths = _resolved_manifest_paths(
+            Path(args.manifest.strip()),
+            include_llm=args.include_llm,
+        )
+    else:
+        patterns = args.glob or [
+            "outputs/**/*.json",
+        ]
+        paths = _resolved_tailoring_paths(patterns, include_llm=args.include_llm)
     if not paths:
         raise ValueError("No tailoring JSON artifacts matched the supplied glob patterns.")
 

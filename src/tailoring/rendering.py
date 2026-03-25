@@ -34,6 +34,13 @@ from src.tailoring.selection import (
     _rewrite_direction_verifier_report,
 )
 
+from src.config.consts import (
+    ANALYTICS_ML_SIGNAL_PATTERNS,
+    DOMAIN_SIGNAL_PATTERNS,
+    EXPERIMENTATION_SIGNAL_PATTERNS,
+    TOOLING_SIGNAL_PATTERNS,
+)
+
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
@@ -358,6 +365,10 @@ def _build_keep_as_is(
                 "reason": "This already looks like a strong anchor. Keep the evidence, and only tighten wording if it improves JD alignment without changing the claim.",
                 "evidence": row.get("bullet", "") or row.get("parent_bullet", ""),
                 "overlaps": row.get("overlaps", []) or [],
+                "entry_id": row.get("entry_id", ""),
+                "entry_index": row.get("entry_index", -1),
+                "bullet_id": row.get("bullet_id", ""),
+                "bullet_index": row.get("bullet_index", -1),
             }
         )
         if len(items) >= limit:
@@ -957,6 +968,173 @@ def _build_top_edit_priorities(
 
     return priorities
 
+def _diagnosis_normalize_term(value: str) -> str:
+    return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+
+def _likely_impacted_dimensions(
+    packet: Dict[str, Any],
+    section: str,
+    jd_signal_terms: List[str],
+) -> List[str]:
+    summary = packet.get("summary", {}) or {}
+    term_support = summary.get("term_support", {}) or {}
+
+    terms = {
+        _diagnosis_normalize_term(item)
+        for item in (jd_signal_terms or [])
+        if _diagnosis_normalize_term(item)
+    }
+
+    required_terms = {
+        _diagnosis_normalize_term(str(row.get("term", "") or ""))
+        for row in (term_support.get("required", []) or [])
+        if _diagnosis_normalize_term(str(row.get("term", "") or ""))
+    }
+    preferred_terms = {
+        _diagnosis_normalize_term(str(row.get("term", "") or ""))
+        for row in (term_support.get("preferred", []) or [])
+        if _diagnosis_normalize_term(str(row.get("term", "") or ""))
+    }
+
+    tooling_terms = {_diagnosis_normalize_term(item) for item in TOOLING_SIGNAL_PATTERNS}
+    analytics_ml_terms = {_diagnosis_normalize_term(item) for item in ANALYTICS_ML_SIGNAL_PATTERNS}
+    experimentation_terms = {_diagnosis_normalize_term(item) for item in EXPERIMENTATION_SIGNAL_PATTERNS}
+    domain_terms = {_diagnosis_normalize_term(item) for item in DOMAIN_SIGNAL_PATTERNS}
+
+    impacted: List[str] = []
+
+    if terms & required_terms:
+        impacted.append("required_skills_alignment")
+    if terms & preferred_terms:
+        impacted.append("preferred_skills_alignment")
+    if terms & tooling_terms:
+        impacted.append("tooling_alignment")
+    if terms & analytics_ml_terms:
+        impacted.append("analytics_ml_depth")
+    if terms & experimentation_terms:
+        impacted.append("experimentation_depth")
+    if terms & domain_terms:
+        impacted.append("domain_relevance")
+    if str(section or "").strip() == "project":
+        impacted.append("project_relevance")
+
+    return _unique_preserve_order(impacted)
+
+
+def _bullet_diagnosis_key(item: Dict[str, Any]) -> tuple:
+    bullet_id = str(item.get("bullet_id", "") or "").strip()
+    if bullet_id:
+        return ("bullet", bullet_id)
+
+    return (
+        "fallback",
+        str(item.get("section", "") or "").strip(),
+        str(item.get("source", "") or "").strip(),
+        str(item.get("current_evidence", "") or item.get("evidence", "") or "").strip(),
+    )
+
+
+def _edit_card_to_bullet_diagnosis(
+    packet: Dict[str, Any],
+    card: Dict[str, Any],
+    index: int,
+) -> Dict[str, Any]:
+    jd_signal_terms = list(card.get("jd_signal_terms", []) or [])
+    current_evidence = str(card.get("current_evidence", "") or "").strip()
+    parent_bullet = str(card.get("parent_bullet", "") or "").strip()
+
+    return {
+        "diagnosis_id": f"bullet_diag_{index}",
+        "diagnosis_action": "rewrite",
+        "diagnosis_reason_type": str(card.get("edit_type", "") or "").strip(),
+        "priority": str(card.get("priority", "") or "").strip(),
+        "section": str(card.get("section", "") or "").strip(),
+        "source": str(card.get("source", "") or "").strip(),
+        "entry_id": str(card.get("entry_id", "") or "").strip(),
+        "entry_index": card.get("entry_index", -1),
+        "bullet_id": str(card.get("bullet_id", "") or "").strip(),
+        "bullet_index": card.get("bullet_index", -1),
+        "original_text": parent_bullet or current_evidence,
+        "current_evidence": current_evidence,
+        "jd_signal_terms": jd_signal_terms,
+        "likely_impacted_dimensions": _likely_impacted_dimensions(
+            packet,
+            str(card.get("section", "") or ""),
+            jd_signal_terms,
+        ),
+        "why": str(card.get("why_it_matters", "") or card.get("why_rewrite_is_better", "") or "").strip(),
+        "recommended_rewrite": str(card.get("recommended_rewrite", "") or "").strip(),
+        "claim_safety": str(card.get("claim_safety", "") or "").strip(),
+        "placement_guidance": str(card.get("placement_guidance", "") or "").strip(),
+    }
+
+
+def _keep_as_is_to_bullet_diagnosis(
+    packet: Dict[str, Any],
+    row: Dict[str, Any],
+    index: int,
+) -> Dict[str, Any]:
+    overlaps = list(row.get("overlaps", []) or [])
+    evidence = str(row.get("evidence", "") or "").strip()
+
+    return {
+        "diagnosis_id": f"bullet_diag_keep_{index}",
+        "diagnosis_action": "keep",
+        "diagnosis_reason_type": "keep_as_is",
+        "priority": "medium",
+        "section": str(row.get("section", "") or "").strip(),
+        "source": str(row.get("source", "") or "").strip(),
+        "entry_id": str(row.get("entry_id", "") or "").strip(),
+        "entry_index": row.get("entry_index", -1),
+        "bullet_id": str(row.get("bullet_id", "") or "").strip(),
+        "bullet_index": row.get("bullet_index", -1),
+        "original_text": evidence,
+        "current_evidence": evidence,
+        "jd_signal_terms": overlaps,
+        "likely_impacted_dimensions": _likely_impacted_dimensions(
+            packet,
+            str(row.get("section", "") or ""),
+            overlaps,
+        ),
+        "why": str(row.get("reason", "") or "").strip(),
+        "recommended_rewrite": "",
+        "claim_safety": "keep_visible",
+        "placement_guidance": "Keep this bullet visible before editing lower-value evidence.",
+    }
+
+
+def _build_bullet_diagnoses(
+    packet: Dict[str, Any],
+    edit_cards: List[Dict[str, Any]],
+    keep_as_is: List[Dict[str, Any]],
+    limit: int = 12,
+) -> List[Dict[str, Any]]:
+    diagnoses: List[Dict[str, Any]] = []
+    seen_keys = set()
+
+    for index, card in enumerate(edit_cards, start=1):
+        diagnosis = _edit_card_to_bullet_diagnosis(packet, card, index)
+        key = _bullet_diagnosis_key(diagnosis)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        diagnoses.append(diagnosis)
+        if len(diagnoses) >= limit:
+            return diagnoses
+
+    for index, row in enumerate(keep_as_is, start=1):
+        diagnosis = _keep_as_is_to_bullet_diagnosis(packet, row, index)
+        key = _bullet_diagnosis_key(diagnosis)
+        if key in seen_keys:
+            continue
+        seen_keys.add(key)
+        diagnoses.append(diagnosis)
+        if len(diagnoses) >= limit:
+            break
+
+    return diagnoses
+
 def _build_operator_markdown_payload(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
@@ -994,6 +1172,12 @@ def _build_operator_markdown_payload(
     )
     operator_payload["edit_cards"] = edit_cards
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
+    operator_payload["bullet_diagnoses"] = _build_bullet_diagnoses(
+        operator_payload,
+        edit_cards,
+        operator_payload.get("keep_as_is", []) or [],
+    )
+
     return operator_payload
 
 def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
@@ -1587,7 +1771,41 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             if card.get("placement_guidance"):
                 lines.append(f"- Placement guidance: {card.get('placement_guidance', '')}")
             lines.append("")
-    
+
+    bullet_diagnoses = payload.get("bullet_diagnoses", []) or []
+    if bullet_diagnoses:
+        lines.append("## Bullet Diagnoses")
+        for index, row in enumerate(bullet_diagnoses, start=1):
+            lines.append(
+                f"### Diagnosis {index} · {str(row.get('diagnosis_action', '')).replace('_', ' ').title()} · "
+                f"{str(row.get('priority', '')).title()} priority"
+            )
+            if row.get("section"):
+                lines.append(f"- Section: {row.get('section', '')}")
+            if row.get("source"):
+                lines.append(f"- Source: {row.get('source', '')}")
+            if row.get("entry_id"):
+                lines.append(f"- Entry ID: {row.get('entry_id', '')}")
+            if row.get("bullet_id"):
+                lines.append(f"- Bullet ID: {row.get('bullet_id', '')}")
+            if row.get("bullet_index", -1) is not None and int(row.get("bullet_index", -1)) >= 0:
+                lines.append(f"- Bullet index: {row.get('bullet_index', -1)}")
+            if row.get("jd_signal_terms"):
+                lines.append(f"- JD signals: {', '.join(row.get('jd_signal_terms', []) or [])}")
+            if row.get("likely_impacted_dimensions"):
+                lines.append(
+                    f"- Likely impacted dimensions: {', '.join(row.get('likely_impacted_dimensions', []) or [])}"
+                )
+            if row.get("original_text"):
+                lines.append(f"- Original text: {row.get('original_text', '')}")
+            if row.get("why"):
+                lines.append(f"- Why: {row.get('why', '')}")
+            if row.get("recommended_rewrite"):
+                lines.append(f"- Recommended rewrite: {row.get('recommended_rewrite', '')}")
+            if row.get("claim_safety"):
+                lines.append(f"- Claim safety: {row.get('claim_safety', '')}")
+            lines.append("")
+
     empty_state_reason = payload.get("empty_state_reason", {}) or {}
 
     if not edit_cards and empty_state_reason:

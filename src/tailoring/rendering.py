@@ -1221,6 +1221,197 @@ def _diagnosis_to_replacement_candidate(
         "projected_overall_delta": None,
     }
 
+def _keep_candidate_confidence(diagnosis: Dict[str, Any]) -> str:
+    impacted = list(diagnosis.get("likely_impacted_dimensions", []) or [])
+    terms = list(diagnosis.get("jd_signal_terms", []) or [])
+
+    score = 0
+    if terms:
+        score += 1
+    if impacted:
+        score += 1
+    if str(diagnosis.get("priority", "") or "").strip() in {"high", "medium"}:
+        score += 1
+
+    if score >= 3:
+        return "high"
+    if score >= 2:
+        return "medium"
+    return "low"
+
+
+def _should_create_reorder_candidate(diagnosis: Dict[str, Any]) -> bool:
+    if str(diagnosis.get("diagnosis_action", "") or "").strip() != "keep":
+        return False
+
+    section = str(diagnosis.get("section", "") or "").strip()
+    if section not in {"experience", "project"}:
+        return False
+
+    jd_signal_terms = list(diagnosis.get("jd_signal_terms", []) or [])
+    if not jd_signal_terms:
+        return False
+
+    impacted = list(diagnosis.get("likely_impacted_dimensions", []) or [])
+    if not impacted:
+        return False
+
+    claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
+    if claim_safety not in {"keep_visible", "safe_strengthen"}:
+        return False
+
+    return True
+
+
+def _diagnosis_to_keep_candidate(
+    diagnosis: Dict[str, Any],
+    index: int,
+) -> Dict[str, Any]:
+    diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_keep_{index}").strip()
+    candidate_id = diagnosis_id.replace("bullet_diag", "replacement", 1)
+
+    return {
+        "candidate_id": candidate_id,
+        "source_bullet_id": str(diagnosis.get("bullet_id", "") or "").strip(),
+        "source_entry_id": str(diagnosis.get("entry_id", "") or "").strip(),
+        "section": str(diagnosis.get("section", "") or "").strip(),
+        "source": str(diagnosis.get("source", "") or "").strip(),
+        "operation_type": "keep",
+        "proposal_type": "keep_visible",
+        "proposal_status": "patch_ready",
+        "original_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
+        "rewrite_instruction": "",
+        "proposed_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "patch_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "patch_ready": True,
+        "patch_generation_method": "deterministic_keep_existing",
+        "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
+        "why_this_improves_match": str(diagnosis.get("why", "") or "").strip(),
+        "claim_safety": str(diagnosis.get("claim_safety", "") or "").strip(),
+        "safety_status": str(diagnosis.get("claim_safety", "") or "").strip(),
+        "placement_guidance": "Keep this bullet visible in the final tailored resume.",
+        "confidence": _keep_candidate_confidence(diagnosis),
+        "conflicts_with": [],
+        "entry_index": diagnosis.get("entry_index", -1),
+        "bullet_index": diagnosis.get("bullet_index", -1),
+        "llm_refinement_used": False,
+        "material_delta_found": True,
+        "projected_dimension_deltas": {},
+        "projected_overall_delta": None,
+    }
+
+
+def _diagnosis_to_reorder_candidate(
+    diagnosis: Dict[str, Any],
+    index: int,
+) -> Dict[str, Any]:
+    diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_keep_{index}").strip()
+    candidate_id = diagnosis_id.replace("bullet_diag", "replacement_reorder", 1)
+
+    section = str(diagnosis.get("section", "") or "").strip()
+
+    return {
+        "candidate_id": candidate_id,
+        "source_bullet_id": str(diagnosis.get("bullet_id", "") or "").strip(),
+        "source_entry_id": str(diagnosis.get("entry_id", "") or "").strip(),
+        "section": section,
+        "source": str(diagnosis.get("source", "") or "").strip(),
+        "operation_type": "reorder",
+        "proposal_type": "move_earlier",
+        "proposal_status": "patch_ready",
+        "original_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
+        "rewrite_instruction": "Move this bullet earlier in the same section so it appears before weaker or less relevant bullets.",
+        "proposed_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "patch_text": str(diagnosis.get("original_text", "") or "").strip(),
+        "patch_ready": True,
+        "patch_generation_method": "deterministic_reorder_signal",
+        "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
+        "why_this_improves_match": str(diagnosis.get("why", "") or "").strip(),
+        "claim_safety": "safe_reorder",
+        "safety_status": "safe_reorder",
+        "placement_guidance": f"Move this bullet earlier within the {section} section before lower-value evidence.",
+        "confidence": _keep_candidate_confidence(diagnosis),
+        "conflicts_with": [],
+        "entry_index": diagnosis.get("entry_index", -1),
+        "bullet_index": diagnosis.get("bullet_index", -1),
+        "llm_refinement_used": False,
+        "material_delta_found": True,
+        "projected_dimension_deltas": {},
+        "projected_overall_delta": None,
+    }
+
+def _should_create_reorder_companion(candidate: Dict[str, Any]) -> bool:
+    if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+        return False
+
+    if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
+        return False
+
+    if str(candidate.get("confidence", "") or "").strip() not in {"high", "medium"}:
+        return False
+
+    section = str(candidate.get("section", "") or "").strip()
+    if section not in {"experience", "project"}:
+        return False
+
+    supported_terms = list(candidate.get("supported_jd_signals", []) or [])
+    if not supported_terms:
+        return False
+
+    return True
+
+
+def _rewrite_candidate_to_reorder_companion(
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    base_candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+    reorder_candidate_id = f"{base_candidate_id}__reorder"
+
+    return {
+        "candidate_id": reorder_candidate_id,
+        "source_bullet_id": str(candidate.get("source_bullet_id", "") or "").strip(),
+        "source_entry_id": str(candidate.get("source_entry_id", "") or "").strip(),
+        "section": str(candidate.get("section", "") or "").strip(),
+        "source": str(candidate.get("source", "") or "").strip(),
+        "operation_type": "reorder",
+        "proposal_type": "move_earlier",
+        "proposal_status": "patch_ready",
+        "original_text": str(candidate.get("original_text", "") or "").strip(),
+        "current_evidence": str(candidate.get("current_evidence", "") or "").strip(),
+        "rewrite_instruction": "Move this bullet earlier in the same section so it appears before weaker or less relevant bullets.",
+        "proposed_text": str(candidate.get("original_text", "") or "").strip(),
+        "patch_text": str(candidate.get("original_text", "") or "").strip(),
+        "patch_ready": True,
+        "patch_generation_method": "deterministic_reorder_signal",
+        "supported_jd_signals": list(candidate.get("supported_jd_signals", []) or []),
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "likely_impacted_dimensions": list(candidate.get("likely_impacted_dimensions", []) or []),
+        "why_this_improves_match": str(candidate.get("why_this_improves_match", "") or "").strip(),
+        "claim_safety": "safe_reorder",
+        "safety_status": "safe_reorder",
+        "placement_guidance": (
+            f"Move this bullet earlier within the {str(candidate.get('section', '') or '').strip()} section "
+            "before lower-value evidence."
+        ),
+        "confidence": str(candidate.get("confidence", "") or "medium").strip(),
+        "conflicts_with": [base_candidate_id],
+        "entry_index": candidate.get("entry_index", -1),
+        "bullet_index": candidate.get("bullet_index", -1),
+        "llm_refinement_used": False,
+        "material_delta_found": True,
+        "projected_dimension_deltas": {},
+        "projected_overall_delta": None,
+    }
+
 def _proposal_status_for_diagnosis(diagnosis: Dict[str, Any]) -> str:
     # Current deterministic rewrite candidates are directional, not final patch text.
     # Later phases may upgrade selected candidates to patch_ready after deterministic
@@ -1313,28 +1504,55 @@ def _deterministic_patch_text_from_diagnosis(
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
-    limit: int = 8,
+    limit: int = 12,
 ) -> List[Dict[str, Any]]:
     candidates: List[Dict[str, Any]] = []
     seen_keys = set()
 
+    # Pass 1: primary candidates from diagnoses
     for index, diagnosis in enumerate(bullet_diagnoses, start=1):
-        if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
-            continue
-
+        action = str(diagnosis.get("diagnosis_action", "") or "").strip()
         key = _bullet_diagnosis_key(diagnosis)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
 
-        candidates.append(
-            _diagnosis_to_replacement_candidate(payload, diagnosis, index)
-        )
+        if action == "rewrite":
+            if key in seen_keys:
+                continue
+            seen_keys.add(key)
+            candidates.append(
+                _diagnosis_to_replacement_candidate(payload, diagnosis, index)
+            )
+
+        elif action == "keep":
+            keep_key = ("keep",) + key
+            if keep_key not in seen_keys:
+                seen_keys.add(keep_key)
+                candidates.append(
+                    _diagnosis_to_keep_candidate(diagnosis, index)
+                )
 
         if len(candidates) >= limit:
             break
 
-    return candidates
+    # Pass 2: reorder companions for strong patch-ready rewrite candidates
+    expanded: List[Dict[str, Any]] = []
+    for candidate in candidates:
+        expanded.append(candidate)
+
+        if len(expanded) >= limit:
+            continue
+
+        if _should_create_reorder_companion(candidate):
+            reorder_candidate = _rewrite_candidate_to_reorder_companion(candidate)
+            reorder_id = str(reorder_candidate.get("candidate_id", "") or "").strip()
+
+            candidate_conflicts = list(candidate.get("conflicts_with", []) or [])
+            if reorder_id not in candidate_conflicts:
+                candidate_conflicts.append(reorder_id)
+            candidate["conflicts_with"] = candidate_conflicts
+
+            expanded.append(reorder_candidate)
+
+    return expanded[:limit]
 
 def _build_bullet_diagnoses(
     packet: Dict[str, Any],
@@ -2068,6 +2286,8 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Original text: {row.get('original_text', '')}")
             if row.get("proposal_status"):
                 lines.append(f"- Proposal status: {row.get('proposal_status', '')}")
+            if row.get("proposal_type"):
+                lines.append(f"- Proposal type: {row.get('proposal_type', '')}")
             if row.get("patch_generation_method"):
                 lines.append(f"- Patch generation method: {row.get('patch_generation_method', '')}")
             if row.get("rewrite_instruction"):

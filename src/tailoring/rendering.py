@@ -34,11 +34,6 @@ from src.tailoring.selection import (
     _rewrite_direction_verifier_report,
 )
 
-from src.tailoring.llm import (
-    _build_llm_prompt,
-    _build_live_rewrite_prompt,
-)
-
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
     selection = packet.get("selection", {})
@@ -371,6 +366,68 @@ def _build_keep_as_is(
 
     return items[:limit]
 
+def _build_keep_visible_now(
+    keep_as_is: List[Dict[str, Any]],
+    limit: int = 3,
+) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+
+    for row in keep_as_is[:limit]:
+        label_parts = [
+            str(row.get("section", "") or "").strip(),
+            str(row.get("source", "") or "").strip(),
+        ]
+        label = " • ".join(part for part in label_parts if part)
+
+        overlaps = [
+            str(item or "").strip()
+            for item in (row.get("overlaps", []) or [])
+            if str(item or "").strip()
+        ]
+
+        items.append(
+            {
+                "label": label,
+                "evidence": str(row.get("evidence", "") or "").strip(),
+                "reason": str(row.get("reason", "") or "").strip(),
+                "overlaps": _truncate_list(overlaps, 4),
+            }
+        )
+
+    return items
+
+
+def _build_resume_limitation_summary(
+    packet: Dict[str, Any],
+    blocker_labels: List[str],
+    direct_terms: List[str],
+    adjacent_terms: List[str],
+) -> str:
+    selection = packet.get("selection", {}) or {}
+    resume_name = str(selection.get("selected_resume", "") or "The selected resume").strip()
+
+    if direct_terms and blocker_labels:
+        return (
+            f"{resume_name} already has some direct JD-aligned evidence, but it still does not show grounded "
+            f"bullet proof for {', '.join(_truncate_list(blocker_labels, 3))}."
+        )
+
+    if blocker_labels:
+        return (
+            f"{resume_name} is missing grounded bullet evidence for {', '.join(_truncate_list(blocker_labels, 3))}, "
+            "so this is a keep-visible and gap-explicit case, not a rewrite-heavy case."
+        )
+
+    if adjacent_terms:
+        return (
+            f"{resume_name} has related context for {', '.join(_truncate_list(adjacent_terms, 3))}, "
+            "but not enough bullet-level proof to recommend stronger rewrite claims safely."
+        )
+
+    return (
+        f"{resume_name} does not provide enough bullet-level evidence for stronger tailoring edits on this JD."
+    )
+
 def _build_empty_state_reason(
     packet: Dict[str, Any],
     tailoring_plan: Dict[str, Any],
@@ -401,6 +458,33 @@ def _build_empty_state_reason(
         + list(tailoring_plan.get("true_unsupported_terms", []) or [])
     )
 
+    keep_visible_now = _build_keep_visible_now(keep_as_is, limit=3)
+
+    adjacent_facets = _top_adjacent_facets(packet, limit=6)
+    adjacent_evidence_backed = [
+        row for row in adjacent_facets
+        if row.get("facet_direct_evidence") or row.get("facet_context_evidence") or row.get("context_terms")
+    ]
+    adjacent_useful_terms = _unique_preserve_order(
+        [
+            str(term).strip()
+            for row in adjacent_evidence_backed
+            for term in (
+                list(row.get("job_terms", []) or [])
+                + list(row.get("facet_context_terms", []) or [])
+                + list(row.get("context_terms", []) or [])
+            )
+            if str(term).strip()
+        ]
+    )
+
+    resume_limitation_summary = _build_resume_limitation_summary(
+        packet,
+        blocker_labels,
+        direct_terms,
+        adjacent_useful_terms or frame_carefully,
+    )
+
     if direct_terms:
         return {
             "code": "keep_existing_direct_evidence",
@@ -415,6 +499,9 @@ def _build_empty_state_reason(
                 "Keep the strongest matching bullets visible and focus on ordering, emphasis, "
                 "and truthful positioning rather than adding new JD claims."
             ),
+            "missing_jd_focus": _truncate_list(blocker_labels, 6),
+            "keep_visible_now": keep_visible_now,
+            "resume_limitation_summary": resume_limitation_summary,
         }
 
     adjacent_facets = _top_adjacent_facets(packet, limit=6)
@@ -449,6 +536,9 @@ def _build_empty_state_reason(
                 "Use those areas only as secondary framing, and keep unsupported JD language explicit "
                 "unless a bullet proves it directly."
             ),
+            "missing_jd_focus": _truncate_list(blocker_labels, 6),
+            "keep_visible_now": keep_visible_now,
+            "resume_limitation_summary": resume_limitation_summary,
         }
 
     if blocker_labels or do_not_add:
@@ -465,6 +555,9 @@ def _build_empty_state_reason(
                 "Do not invent missing skills or ownership claims. Keep the strongest existing evidence visible "
                 "and address true gaps only if you can support them truthfully."
             ),
+            "missing_jd_focus": _truncate_list(blocker_labels or do_not_add, 6),
+            "keep_visible_now": keep_visible_now,
+            "resume_limitation_summary": resume_limitation_summary,
         }
 
     return {
@@ -478,6 +571,9 @@ def _build_empty_state_reason(
         "next_step": (
             "Keep the current resume truthful. Add JD language only where your existing experience actually proves it."
         ),
+        "missing_jd_focus": [],
+        "keep_visible_now": keep_visible_now,
+        "resume_limitation_summary": resume_limitation_summary,
     }
 
 def _fallback_recommended_rewrite_from_reuse(
@@ -903,6 +999,12 @@ def _build_payload(packet: Dict[str, Any]) -> Dict[str, Any]:
         claim_safety_notes,
         material_gaps,
     )
+    
+    from src.tailoring.llm import (
+        _build_llm_prompt,
+        _build_live_rewrite_prompt,
+    )
+
     llm_prompt = _build_llm_prompt(packet, tailoring_plan=tailoring_plan)
     live_rewrite_prompt = _build_live_rewrite_prompt(
         packet,
@@ -1483,6 +1585,40 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             lines.append("### Still Useful")
             for item in still_useful:
                 lines.append(f"- {item}")
+            lines.append("")
+        
+        missing_jd_focus = empty_state_reason.get("missing_jd_focus", []) or []
+        if missing_jd_focus:
+            lines.append("### Missing JD Focus")
+            for item in missing_jd_focus:
+                lines.append(f"- {item}")
+            lines.append("")
+
+        if empty_state_reason.get("resume_limitation_summary"):
+            lines.append("### Selected Resume Limitation")
+            lines.append(f"- {empty_state_reason.get('resume_limitation_summary', '')}")
+            lines.append("")
+
+        keep_visible_now = empty_state_reason.get("keep_visible_now", []) or []
+        if keep_visible_now:
+            lines.append("### Keep Visible Now")
+            for item in keep_visible_now:
+                label = str(item.get("label", "") or "").strip()
+                evidence = str(item.get("evidence", "") or "").strip()
+                reason = str(item.get("reason", "") or "").strip()
+                overlaps = item.get("overlaps", []) or []
+
+                if label:
+                    lines.append(f"- **{label}**")
+                else:
+                    lines.append("- **Existing anchor**")
+
+                if overlaps:
+                    lines.append(f"  - Overlap: {', '.join(overlaps)}")
+                if evidence:
+                    lines.append(f"  - Evidence: {evidence}")
+                if reason:
+                    lines.append(f"  - Why keep it visible: {reason}")
             lines.append("")
 
         if empty_state_reason.get("next_step"):

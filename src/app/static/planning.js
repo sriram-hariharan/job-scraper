@@ -1605,14 +1605,29 @@ function renderTailoringEmptyState(payload) {
     ? emptyState.main_blockers
     : materialGaps.map((item) => item.label || "").filter(Boolean);
 
-  const stillUseful = Array.isArray(emptyState.still_useful) && emptyState.still_useful.length
+  const stillUseful = Array.isArray(emptyState.still_useful)
     ? emptyState.still_useful
-    : [
-        frameCarefully.length ? `Frame carefully: ${frameCarefully.join(", ")}` : "",
-        doNotAdd.length ? `Do not add: ${doNotAdd.join(", ")}` : "",
-      ].filter(Boolean);
+    : [];
 
   const nextStep = String(emptyState.next_step || "").trim();
+
+  const missingJdFocus = Array.isArray(emptyState.missing_jd_focus) ? emptyState.missing_jd_focus : [];
+  const keepVisibleNow = Array.isArray(emptyState.keep_visible_now) ? emptyState.keep_visible_now : [];
+  const resumeLimitationSummary = String(emptyState.resume_limitation_summary || "").trim();
+
+  const keepVisibleLines = keepVisibleNow.map((item) => {
+    const label = String(item?.label || "").trim();
+    const evidence = String(item?.evidence || "").trim();
+    const reason = String(item?.reason || "").trim();
+    const overlaps = Array.isArray(item?.overlaps) ? item.overlaps.filter(Boolean) : [];
+
+    return [
+      label,
+      overlaps.length ? `Overlap: ${overlaps.join(", ")}` : "",
+      evidence,
+      reason,
+    ].filter(Boolean).join(" — ");
+  }).filter(Boolean);
 
   return `
     <section class="tailoring-section-block">
@@ -1627,10 +1642,31 @@ function renderTailoringEmptyState(payload) {
           </div>
         ` : ""}
 
+        ${missingJdFocus.length ? `
+          <div class="tailoring-empty-subsection">
+            <div class="tailoring-empty-subtitle">Missing JD focus</div>
+            ${buildTailoringList(missingJdFocus)}
+          </div>
+        ` : ""}
+
         ${stillUseful.length ? `
           <div class="tailoring-empty-subsection">
             <div class="tailoring-empty-subtitle">Still useful</div>
             ${buildTailoringList(stillUseful)}
+          </div>
+        ` : ""}
+
+        ${resumeLimitationSummary ? `
+          <div class="tailoring-empty-subsection">
+            <div class="tailoring-empty-subtitle">Selected resume limitation</div>
+            <div class="tailoring-card-copy">${escapeHtml(resumeLimitationSummary)}</div>
+          </div>
+        ` : ""}
+
+        ${keepVisibleLines.length ? `
+          <div class="tailoring-empty-subsection">
+            <div class="tailoring-empty-subtitle">Keep visible now</div>
+            ${buildTailoringList(keepVisibleLines)}
           </div>
         ` : ""}
 

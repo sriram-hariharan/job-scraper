@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from pathlib import Path
 import re
 import hashlib
@@ -1178,9 +1178,14 @@ def _diagnosis_to_replacement_candidate(
     bullet_id = str(diagnosis.get("bullet_id", "") or "").strip()
     diagnosis_id = str(diagnosis.get("diagnosis_id", "") or f"bullet_diag_{index}").strip()
     candidate_id = diagnosis_id.replace("bullet_diag", "replacement", 1)
-    proposal_status = _proposal_status_for_diagnosis(diagnosis)
 
     rewrite_instruction = str(diagnosis.get("recommended_rewrite", "") or "").strip()
+
+    proposal_status, patch_text, patch_generation_method = _deterministic_patch_text_from_diagnosis(
+        diagnosis,
+        risks["adjacent_risk_signals"],
+        risks["unsupported_risk_signals"],
+    )
 
     return {
         "candidate_id": candidate_id,
@@ -1189,24 +1194,31 @@ def _diagnosis_to_replacement_candidate(
         "section": str(diagnosis.get("section", "") or "").strip(),
         "source": str(diagnosis.get("source", "") or "").strip(),
         "operation_type": "rewrite",
-        "proposal_type": "directional_rewrite",
+        "proposal_type": "directional_rewrite" if proposal_status == "direction_only" else "patch_ready_rewrite",
         "proposal_status": proposal_status,
         "original_text": str(diagnosis.get("original_text", "") or "").strip(),
         "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
         "rewrite_instruction": rewrite_instruction,
-        "proposed_text": "" if proposal_status == "direction_only" else rewrite_instruction,
-        "patch_text": "" if proposal_status == "direction_only" else rewrite_instruction,
+        "proposed_text": patch_text,
+        "patch_text": patch_text,
+        "patch_ready": proposal_status == "patch_ready",
+        "patch_generation_method": patch_generation_method,
         "supported_jd_signals": list(diagnosis.get("jd_signal_terms", []) or []),
         "adjacent_risk_signals": risks["adjacent_risk_signals"],
         "unsupported_risk_signals": risks["unsupported_risk_signals"],
         "likely_impacted_dimensions": list(diagnosis.get("likely_impacted_dimensions", []) or []),
         "why_this_improves_match": str(diagnosis.get("why", "") or "").strip(),
         "claim_safety": str(diagnosis.get("claim_safety", "") or "").strip(),
+        "safety_status": str(diagnosis.get("claim_safety", "") or "").strip(),
         "placement_guidance": str(diagnosis.get("placement_guidance", "") or "").strip(),
         "confidence": _replacement_candidate_confidence(diagnosis),
         "conflicts_with": [],
         "entry_index": diagnosis.get("entry_index", -1),
         "bullet_index": diagnosis.get("bullet_index", -1),
+        "llm_refinement_used": False,
+        "material_delta_found": proposal_status == "patch_ready",
+        "projected_dimension_deltas": {},
+        "projected_overall_delta": None,
     }
 
 def _proposal_status_for_diagnosis(diagnosis: Dict[str, Any]) -> str:
@@ -1214,6 +1226,89 @@ def _proposal_status_for_diagnosis(diagnosis: Dict[str, Any]) -> str:
     # Later phases may upgrade selected candidates to patch_ready after deterministic
     # text synthesis or validated LLM refinement.
     return "direction_only"
+
+def _lowercase_first_character(value: str) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text[:1].lower() + text[1:]
+
+
+def _using_phrase_match_for_supported_term(
+    original_text: str,
+    supported_terms: List[str],
+) -> Optional[re.Match]:
+    text = str(original_text or "").strip()
+    if not text:
+        return None
+
+    normalized_supported = {
+        _diagnosis_normalize_term(item)
+        for item in (supported_terms or [])
+        if _diagnosis_normalize_term(item)
+    }
+    if not normalized_supported:
+        return None
+
+    for match in re.finditer(r"\busing\s+(?P<phrase>[^,.;]+)", text, flags=re.IGNORECASE):
+        phrase = str(match.group("phrase") or "").strip()
+        phrase_norm = _diagnosis_normalize_term(phrase)
+        if any(term in phrase_norm for term in normalized_supported):
+            return match
+
+    return None
+
+
+def _deterministic_patch_text_from_diagnosis(
+    diagnosis: Dict[str, Any],
+    adjacent_risk_signals: List[str],
+    unsupported_risk_signals: List[str],
+) -> Tuple[str, str, str]:
+    claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
+    confidence = _replacement_candidate_confidence(diagnosis)
+    supported_terms = list(diagnosis.get("jd_signal_terms", []) or [])
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+
+    if claim_safety != "safe_strengthen":
+        return "direction_only", "", ""
+
+    if confidence != "high":
+        return "direction_only", "", ""
+
+    if adjacent_risk_signals or unsupported_risk_signals:
+        return "direction_only", "", ""
+
+    if len(supported_terms) != 1:
+        return "direction_only", "", ""
+
+    match = _using_phrase_match_for_supported_term(original_text, supported_terms)
+    if not match:
+        return "direction_only", "", ""
+
+    phrase = str(match.group("phrase") or "").strip()
+    before = original_text[: match.start()].strip(" ,")
+    after = original_text[match.end() :].lstrip(" ,")
+
+    if not before:
+        return "direction_only", "", ""
+
+    rest = " ".join(part for part in [before, after] if str(part or "").strip()).strip()
+    if not rest:
+        return "direction_only", "", ""
+
+    rest = re.sub(r"\s+", " ", rest)
+    rest = _lowercase_first_character(rest)
+
+    patch_text = f"Using {phrase}, {rest}".strip()
+    patch_text = re.sub(r"\s+,", ",", patch_text)
+    patch_text = patch_text.rstrip(" .")
+    if original_text.endswith("."):
+        patch_text += "."
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return "direction_only", "", ""
+
+    return "patch_ready", patch_text, "deterministic_using_phrase"
 
 def _build_replacement_candidates(
     payload: Dict[str, Any],
@@ -1973,6 +2068,8 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Original text: {row.get('original_text', '')}")
             if row.get("proposal_status"):
                 lines.append(f"- Proposal status: {row.get('proposal_status', '')}")
+            if row.get("patch_generation_method"):
+                lines.append(f"- Patch generation method: {row.get('patch_generation_method', '')}")
             if row.get("rewrite_instruction"):
                 lines.append(f"- Rewrite instruction: {row.get('rewrite_instruction', '')}")
             if row.get("patch_text"):

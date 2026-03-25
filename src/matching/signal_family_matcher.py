@@ -130,8 +130,8 @@ def strongest_supported_signal_in_text(
 
 
 _SIGNAL_EQUIVALENT_TERMS: Dict[str, List[str]] = {
-    "a/b test": ["a/b testing"],
-    "a/b testing": ["a/b test"],
+    "a/b test": ["a/b testing", "a/b experiment", "a/b experiments"],
+    "a/b testing": ["a/b test", "a/b experiment", "a/b experiments"],
 }
 
 
@@ -145,57 +145,31 @@ def supported_signal_match_in_text(
     text: str,
     supported_terms: Sequence[str],
 ) -> Dict[str, str]:
-    text_terms = prioritized_family_terms_from_text(text)
-    if not text_terms:
+    text_norm = normalize_signal_text(text)
+    if not text_norm:
         return {"matched_term": "", "supported_term": "", "family": ""}
 
     supported = _unique_preserve_order(supported_terms)
     if not supported:
         return {"matched_term": "", "supported_term": "", "family": ""}
 
-    supported_by_family: Dict[str, List[str]] = {}
-    for term in supported:
-        family = family_for_term(term)
+    for supported_term in supported:
+        family = family_for_term(supported_term)
         if not family:
             continue
-        supported_by_family.setdefault(family, []).append(term)
 
-    for matched_term in text_terms:
-        matched_family = family_for_term(matched_term)
-        if not matched_family:
-            continue
+        supported_norm = normalize_signal_text(supported_term)
+        candidate_variants = [supported_term] + equivalent_signal_terms(supported_term)
 
-        family_supported_terms = supported_by_family.get(matched_family, [])
-        if not family_supported_terms:
-            continue
-
-        matched_norm = normalize_signal_text(matched_term)
-        equivalent_norms = {
-            normalize_signal_text(term)
-            for term in equivalent_signal_terms(matched_term)
-        }
-
-        # 1) exact canonical match
-        for supported_term in family_supported_terms:
-            supported_norm = normalize_signal_text(supported_term)
-            if supported_norm == matched_norm:
+        for variant in candidate_variants:
+            variant_norm = normalize_signal_text(variant)
+            if not variant_norm:
+                continue
+            if variant_norm in text_norm:
                 return {
-                    "matched_term": matched_term,
+                    "matched_term": variant,
                     "supported_term": supported_term,
-                    "family": matched_family,
+                    "family": family,
                 }
-
-        # 2) equivalent canonical match
-        for supported_term in family_supported_terms:
-            supported_norm = normalize_signal_text(supported_term)
-            if supported_norm in equivalent_norms:
-                return {
-                    "matched_term": matched_term,
-                    "supported_term": supported_term,
-                    "family": matched_family,
-                }
-
-        # No exact/equivalent term in this family, so do not fabricate a canonical term.
-        continue
 
     return {"matched_term": "", "supported_term": "", "family": ""}

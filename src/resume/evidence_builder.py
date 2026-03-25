@@ -356,25 +356,47 @@ def _infer_title_and_company(header_lines: List[str]) -> Tuple[str, str]:
 def _consolidate_role_bullets(lines: List[str]) -> List[str]:
     bullets: List[str] = []
     current_bullet = ""
+    pending_new_bullet = False
 
     for line in lines:
         raw_line = (line or "").strip()
         if not raw_line:
             continue
 
+        is_bullet_line = _looks_like_bullet_line(raw_line)
         clean_line = _strip_bullet_marker(raw_line)
+
+        # Standalone bullet marker line like "●"
+        # Treat it as a hard bullet boundary.
+        if is_bullet_line and not clean_line:
+            if current_bullet:
+                bullets.append(current_bullet.strip())
+                current_bullet = ""
+            pending_new_bullet = True
+            continue
+
         if not clean_line:
             continue
 
-        if _looks_like_bullet_line(raw_line):
+        if is_bullet_line:
             if current_bullet:
                 bullets.append(current_bullet.strip())
             current_bullet = clean_line
-        else:
+            pending_new_bullet = False
+            continue
+
+        # If the previous line was only a bullet marker, this line starts a new bullet.
+        if pending_new_bullet:
             if current_bullet:
-                current_bullet = f"{current_bullet} {clean_line}".strip()
-            else:
-                current_bullet = clean_line
+                bullets.append(current_bullet.strip())
+            current_bullet = clean_line
+            pending_new_bullet = False
+            continue
+
+        if current_bullet:
+            current_bullet = f"{current_bullet} {clean_line}".strip()
+        else:
+            current_bullet = clean_line
 
     if current_bullet:
         bullets.append(current_bullet.strip())
@@ -395,33 +417,48 @@ def _build_experience_entries(text: str) -> List[ResumeExperienceEntry]:
         content_lines: List[str] = []
 
         for line in block:
-            clean_line = _strip_bullet_marker(line)
-
-            if not clean_line:
+            raw_line = (line or "").strip()
+            if not raw_line:
                 continue
+
+            is_bullet_line = _looks_like_bullet_line(raw_line)
+            clean_line = _strip_bullet_marker(raw_line)
 
             already_have_date = any(
                 _is_probable_date_line(h) or _extract_inline_date(h)
                 for h in header_lines
             )
 
-            if _looks_like_bullet_line(line):
-                content_lines.append(line)
+            # Preserve standalone bullet-marker lines like "●" so
+            # _consolidate_role_bullets() can treat them as real bullet boundaries.
+            if is_bullet_line and not clean_line:
+                content_lines.append(raw_line)
                 continue
 
-            if _is_probable_date_line(line) and not already_have_date and len(content_lines) <= 1:
+            if not clean_line:
+                continue
+
+            if is_bullet_line:
+                content_lines.append(raw_line)
+                continue
+
+            if _is_probable_date_line(raw_line) and not already_have_date and len(content_lines) <= 1:
                 header_lines.append(clean_line)
                 continue
 
             if (
                 not content_lines
                 and len(header_lines) < 3
-                and (_looks_like_role_header(line) or _is_probable_date_line(line) or _extract_inline_date(line))
+                and (
+                    _looks_like_role_header(raw_line)
+                    or _is_probable_date_line(raw_line)
+                    or _extract_inline_date(raw_line)
+                )
             ):
                 header_lines.append(clean_line)
                 continue
 
-            content_lines.append(line)
+            content_lines.append(raw_line)
 
         bullet_lines = _consolidate_role_bullets(content_lines)
 
@@ -705,59 +742,46 @@ def build_counterfactual_resume_evidence(
     original_resume: ResumeEvidence,
     source_bullet_id: str,
     patch_text: str,
+    source_raw_text: str = "",
 ) -> Tuple[Optional[ResumeEvidence], str]:
     bullet_id = str(source_bullet_id or "").strip()
     replacement = str(patch_text or "").strip()
+    original_raw_text = str(source_raw_text or "").strip()
 
-    if not bullet_id or not replacement:
+    if not replacement:
         return None, "missing_patch_inputs"
 
-    patched_resume = copy.deepcopy(original_resume)
-    match_count = 0
+    # Structural/raw-text fallback path:
+    # if there is no stable bullet_id anchor, patch the full original bullet text
+    # directly in the raw resume document, then rebuild evidence from that document.
+    if not bullet_id and original_raw_text:
+        patched_document, status = _patched_resume_document(
+            original_resume.document,
+            original_raw_text,
+            replacement,
+        )
+        if patched_document is None:
+            return None, status
 
-    for entry in list(getattr(patched_resume, "experience_entries", []) or []):
-        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
-        bullets = list(getattr(entry, "bullets", []) or [])
+        rebuilt_resume = build_resume_evidence(patched_document)
+        return rebuilt_resume, "ok"
 
-        for idx, current_bullet_id in enumerate(bullet_ids):
-            if str(current_bullet_id or "").strip() != bullet_id:
-                continue
+    if not bullet_id:
+        return None, "missing_patch_inputs"
 
-            if idx >= len(bullets):
-                return None, "bullet_index_out_of_range"
+    original_bullet_text, status = _bullet_text_by_id(original_resume, bullet_id)
+    if original_bullet_text is None:
+        return None, status
 
-            bullets[idx] = replacement
-            entry.bullets = bullets
-            match_count += 1
-
-    for entry in list(getattr(patched_resume, "project_entries", []) or []):
-        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
-        bullets = list(getattr(entry, "bullets", []) or [])
-
-        for idx, current_bullet_id in enumerate(bullet_ids):
-            if str(current_bullet_id or "").strip() != bullet_id:
-                continue
-
-            if idx >= len(bullets):
-                return None, "bullet_index_out_of_range"
-
-            bullets[idx] = replacement
-            entry.bullets = bullets
-            match_count += 1
-
-    if match_count == 0:
-        return None, "bullet_id_not_found"
-
-    if match_count > 1:
-        return None, "bullet_id_not_unique"
-
-    rebuilt_resume = rebuild_resume_evidence_from_structured_entries(
-        patched_resume.document,
-        experience_entries=patched_resume.experience_entries,
-        project_entries=patched_resume.project_entries,
-        education_entries=patched_resume.education_entries,
-        certifications=patched_resume.certifications,
+    patched_document, status = _patched_resume_document(
+        original_resume.document,
+        original_bullet_text,
+        replacement,
     )
+    if patched_document is None:
+        return None, status
+
+    rebuilt_resume = build_resume_evidence(patched_document)
     return rebuilt_resume, "ok"
 
 def _bullet_text_by_id(
@@ -825,67 +849,49 @@ def _patched_resume_document(
     original_bullet_text: str,
     patch_text: str,
 ) -> Tuple[Optional[ResumeDocument], str]:
-    raw_text = str(getattr(document, "raw_text", "") or "")
     original_bullet = str(original_bullet_text or "").strip()
     replacement = str(patch_text or "").strip()
 
-    if not raw_text or not original_bullet or not replacement:
+    if not original_bullet or not replacement:
         return None, "missing_patch_inputs"
 
     pattern = _whitespace_flexible_pattern(original_bullet)
     if pattern is None:
         return None, "missing_patch_inputs"
 
-    matches = list(pattern.finditer(raw_text))
-    if not matches:
-        return None, "raw_text_bullet_not_found"
+    candidate_fields = [
+        ("raw_text", str(getattr(document, "raw_text", "") or "")),
+        ("text", str(getattr(document, "text", "") or "")),
+    ]
 
-    if len(matches) > 1:
-        return None, "raw_text_bullet_not_unique"
+    for field_name, field_value in candidate_fields:
+        if not field_value:
+            continue
 
-    match = matches[0]
-    patched_raw_text = (
-        raw_text[:match.start()]
-        + replacement
-        + raw_text[match.end():]
-    )
+        matches = list(pattern.finditer(field_value))
+        if not matches:
+            continue
 
-    patched_document = copy.deepcopy(document)
-    patched_document.raw_text = patched_raw_text
-    patched_document.normalized_text = _normalize(patched_raw_text)
+        if len(matches) > 1:
+            return None, "raw_text_bullet_not_unique"
 
-    return patched_document, "ok"
+        start, end = matches[0].span()
+        patched_value = field_value[:start] + replacement + field_value[end:]
 
+        patched_document = copy.deepcopy(document)
 
-def build_counterfactual_resume_evidence(
-    original_resume: ResumeEvidence,
-    source_bullet_id: str,
-    patch_text: str,
-) -> Tuple[Optional[ResumeEvidence], str]:
-    bullet_id = str(source_bullet_id or "").strip()
-    replacement = str(patch_text or "").strip()
+        if field_name == "raw_text":
+            patched_document.raw_text = patched_value
+            if hasattr(patched_document, "text") and str(getattr(patched_document, "text", "") or "").strip():
+                patched_document.text = patched_value
+        else:
+            patched_document.text = patched_value
+            if hasattr(patched_document, "raw_text") and str(getattr(patched_document, "raw_text", "") or "").strip():
+                patched_document.raw_text = patched_value
 
-    if not bullet_id or not replacement:
-        return None, "missing_patch_inputs"
+        return patched_document, "ok"
 
-    original_bullet_text, bullet_status = _bullet_text_by_id(original_resume, bullet_id)
-    if bullet_status != "ok" or not original_bullet_text:
-        return None, bullet_status
-
-    patched_document, patch_status = _patched_resume_document(
-        original_resume.document,
-        original_bullet_text,
-        replacement,
-    )
-    if patch_status != "ok" or patched_document is None:
-        return None, patch_status
-
-    rebuilt_resume = build_resume_evidence(patched_document)
-    rebuilt_resume.notes = dict(getattr(rebuilt_resume, "notes", {}) or {})
-    rebuilt_resume.notes["counterfactual_builder_version"] = "v3_full_document_patch"
-    rebuilt_resume.notes["counterfactual_source_bullet_id"] = bullet_id
-
-    return rebuilt_resume, "ok"
+    return None, "raw_text_bullet_not_found"
 
 def build_resume_evidence(document: ResumeDocument) -> ResumeEvidence:
     text = document.raw_text

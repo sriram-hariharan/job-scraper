@@ -984,10 +984,13 @@ _SKILL_ALIASES = {
     "ab testing": "a/b testing",
     "a b testing": "a/b testing",
     "a/b test": "a/b testing",
+    "a/b experiment": "a/b testing",
+    "a/b experiments": "a/b testing",
+    "experiment": "experimentation",
+    "experiments": "experimentation",
     "ml": "machine learning",
     "nlp": "natural language processing",
     "powerbi": "power bi",
-    "experiment": "experimentation",
 }
 
 _ANALYTICS_ML_SIGNAL_CANONICAL = {

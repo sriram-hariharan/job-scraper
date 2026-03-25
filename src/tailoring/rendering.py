@@ -1919,6 +1919,84 @@ def _deterministic_patch_text_from_diagnosis(
 
     return "patch_ready", patch_text, "deterministic_using_phrase"
 
+def _materiality_validate_rewrite_candidate(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+    context: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+        return candidate
+
+    if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
+        return candidate
+
+    if context is None:
+        candidate["materiality_validation_status"] = "context_unavailable"
+        candidate["materiality_validation_note"] = (
+            "Could not pre-validate patch materiality because the selected resume/job context was unavailable."
+        )
+        return candidate
+
+    patched_resume, status = _patched_resume_evidence_for_candidate(
+        context["original_resume"],
+        candidate,
+    )
+
+    candidate["materiality_validation_status"] = status
+    candidate["materiality_validation_note"] = ""
+    candidate["precheck_projected_overall_delta"] = None
+    candidate["precheck_projected_dimension_deltas"] = {}
+    candidate["precheck_scorer_visible_evidence_changed"] = False
+    candidate["precheck_evidence_delta"] = {}
+
+    if patched_resume is None or status not in {"ok"}:
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_note"] = (
+            "Deterministic patch could not be pre-validated as a safe material candidate."
+        )
+        return candidate
+
+    original_result = context["original_result"]
+    original_score = round(float(getattr(original_result, "final_score", 0.0) or 0.0), 6)
+    original_snapshot = _resume_counterfactual_snapshot(context["original_resume"])
+
+    patched_result = score_resume_job_match(patched_resume, context["job_evidence"])
+    patched_score = round(float(getattr(patched_result, "final_score", 0.0) or 0.0), 6)
+    overall_delta = round(patched_score - original_score, 6)
+
+    patched_snapshot = _resume_counterfactual_snapshot(patched_resume)
+    evidence_delta = _counterfactual_snapshot_delta(original_snapshot, patched_snapshot)
+    evidence_changed = bool(evidence_delta)
+
+    candidate["precheck_projected_overall_delta"] = overall_delta
+    candidate["precheck_projected_dimension_deltas"] = _nonzero_dimension_deltas(
+        original_result,
+        patched_result,
+    )
+    candidate["precheck_scorer_visible_evidence_changed"] = evidence_changed
+    candidate["precheck_evidence_delta"] = evidence_delta
+
+    if overall_delta == 0.0 and not evidence_changed:
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = "scorer_neutral_no_evidence_change"
+        candidate["materiality_validation_note"] = (
+            "Deterministic rewrite changes phrasing only and does not change scorer-visible evidence, so it remains directional."
+        )
+        return candidate
+
+    candidate["material_delta_found"] = True
+    candidate["materiality_validation_status"] = "material_candidate"
+    candidate["materiality_validation_note"] = (
+        "Deterministic rewrite survived pre-validation as a scorer-material patch candidate."
+    )
+    return candidate
+
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
@@ -1926,6 +2004,7 @@ def _build_replacement_candidates(
 ) -> List[Dict[str, Any]]:
     candidates: List[Dict[str, Any]] = []
     seen_keys = set()
+    counterfactual_context = _counterfactual_context_from_payload(payload)
 
     # Pass 1: primary candidates from diagnoses
     for index, diagnosis in enumerate(bullet_diagnoses, start=1):
@@ -1936,9 +2015,14 @@ def _build_replacement_candidates(
             if key in seen_keys:
                 continue
             seen_keys.add(key)
-            candidates.append(
-                _diagnosis_to_replacement_candidate(payload, diagnosis, index)
+
+            candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
+            candidate = _materiality_validate_rewrite_candidate(
+                payload,
+                candidate,
+                counterfactual_context,
             )
+            candidates.append(candidate)
 
         elif action == "keep":
             keep_key = ("keep",) + key

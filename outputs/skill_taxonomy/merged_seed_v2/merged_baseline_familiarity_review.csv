@@ -1,4 +1,0 @@
-family,term,public_baseline_candidate,public_recovered_count,public_recovered_examples
-classical_ml_methods,linear regression,True,0,
-classical_ml_methods,logistic regression,True,0,
-model_development_basics,machine learning algorithms,True,0,

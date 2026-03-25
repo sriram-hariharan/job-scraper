@@ -284,6 +284,20 @@ def planning_regenerate_selected_resume(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+@app.post("/planning/preview-selected-patches")
+def planning_preview_selected_patches(
+    payload: dict = Body(...),
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
+    try:
+        return services.preview_planning_patch_selection_payload(
+            output_dir=Path(output_dir),
+            tailoring_json_path=str(payload.get("tailoring_json_path", "") or ""),
+            selected_candidate_ids=payload.get("selected_candidate_ids", []),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.post("/planning/select-patches")
 def planning_select_patches(
     payload: dict = Body(...),

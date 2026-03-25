@@ -9,6 +9,17 @@ let resumeChoiceState = {
   isBusy: false,
 };
 
+let currentTailoringState = {
+  row: null,
+  tailoringJsonPath: "",
+  artifactData: null,
+  selectedCandidateIds: [],
+  livePreview: null,
+  previewRequestSeq: 0,
+  isPreviewing: false,
+  isSaving: false,
+};
+
 const planningTableState = {
   rows: [],
   metaLabel: "Loading...",
@@ -299,6 +310,349 @@ function formatScore100(value) {
   if (!Number.isFinite(parsed)) return String(value);
   const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
   return normalized.toFixed(2);
+}
+
+function formatSignedScore100(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "-";
+  const parsed = Number(String(value).replaceAll(",", "").trim());
+  if (!Number.isFinite(parsed)) return String(value);
+
+  const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
+  const prefix = normalized > 0 ? "+" : "";
+  return `${prefix}${normalized.toFixed(2)}`;
+}
+
+function humanizeUnderscoreLabel(value, emptyLabel = "-") {
+  const text = String(value || "").trim();
+  if (!text) return emptyLabel;
+  return text.replaceAll("_", " ");
+}
+
+function setInnerHtmlIfPresent(id, html) {
+  const el = qs(id);
+  if (!el) return;
+  el.innerHTML = html;
+}
+
+function previewToneForStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "scored") return "safe";
+  if (
+    normalized === "no_patch_ready_rewrites" ||
+    normalized === "no_valid_selected_candidates" ||
+    normalized === "none"
+  ) {
+    return "muted";
+  }
+  if (
+    normalized === "duplicate_source_bullet_id" ||
+    normalized === "stale_signature" ||
+    normalized === "no_valid_candidates"
+  ) {
+    return "caution";
+  }
+  return "danger";
+}
+
+function selectionToneForStatus(status) {
+  const normalized = String(status || "").trim().toLowerCase();
+
+  if (normalized === "applied") return "safe";
+  if (normalized === "none") return "muted";
+  if (normalized === "stale_signature" || normalized === "no_valid_candidates") return "caution";
+  return "muted";
+}
+
+function renderPatchPreviewDimensionDeltas(deltas) {
+  const entries = Object.entries(deltas || {});
+  if (!entries.length) {
+    return `<div class="tailoring-empty-inline">No scorer-visible dimension deltas.</div>`;
+  }
+
+  const sorted = entries.sort((a, b) => Math.abs(Number(b[1] || 0)) - Math.abs(Number(a[1] || 0)));
+
+  return `
+    <div class="tailoring-chip-group">
+      ${sorted.map(([key, value]) => {
+        const numeric = Number(value || 0);
+        const tone = numeric > 0 ? "safe" : numeric < 0 ? "danger" : "muted";
+        return buildTailoringTonePill(
+          `${humanizeUnderscoreLabel(key)} ${formatSignedScore100(numeric)}`,
+          tone
+        );
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderPatchPreviewCandidateList(candidateIds, emptyLabel = "None") {
+  const safeIds = Array.isArray(candidateIds)
+    ? candidateIds.map((item) => String(item || "").trim()).filter(Boolean)
+    : [];
+
+  if (!safeIds.length) {
+    return `<div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>`;
+  }
+
+  return `
+    <div class="tailoring-chip-group">
+      ${safeIds.map((candidateId) => buildTailoringTonePill(candidateId, "neutral")).join("")}
+    </div>
+  `;
+}
+
+function renderPatchPreviewCard({
+  title = "",
+  preview = null,
+  selectionStatus = "",
+  selectionNote = "",
+  explicitSelectedIds = [],
+  emptyLabel = "No patch preview available.",
+} = {}) {
+  const hasPreview = preview && typeof preview === "object" && Object.keys(preview).length > 0;
+
+  if (!hasPreview) {
+    return `
+      <section class="tailoring-section-block">
+        <div class="tailoring-section-title">${escapeHtml(title)}</div>
+
+        <div class="tailoring-info-row">
+          <span class="tailoring-info-label">Selection status</span>
+          <span class="tailoring-info-value">
+            ${buildTailoringTonePill(humanizeUnderscoreLabel(selectionStatus || "none"), selectionToneForStatus(selectionStatus || "none"))}
+          </span>
+        </div>
+
+        ${selectionNote ? `
+          <div class="tailoring-info-block">
+            <div class="tailoring-info-label">Note</div>
+            <div class="tailoring-card-copy">${escapeHtml(selectionNote)}</div>
+          </div>
+        ` : ""}
+
+        ${explicitSelectedIds.length ? `
+          <div class="tailoring-info-block">
+            <div class="tailoring-info-label">Selected candidate IDs</div>
+            ${renderPatchPreviewCandidateList(explicitSelectedIds)}
+          </div>
+        ` : ""}
+
+        <div class="tailoring-empty-state">
+          ${escapeHtml(emptyLabel)}
+        </div>
+      </section>
+    `;
+  }
+
+  const status = String(preview.status || "").trim();
+  const note = String(preview.note || "").trim();
+  const selectedCandidateIds = Array.isArray(preview.selected_candidate_ids) ? preview.selected_candidate_ids : [];
+  const requestedCandidateIds = Array.isArray(preview.requested_candidate_ids) ? preview.requested_candidate_ids : [];
+  const missingCandidateIds = Array.isArray(preview.missing_candidate_ids) ? preview.missing_candidate_ids : [];
+  const ineligibleCandidateIds = Array.isArray(preview.ineligible_candidate_ids) ? preview.ineligible_candidate_ids : [];
+  const duplicateSourceBulletIds = Array.isArray(preview.duplicate_source_bullet_ids) ? preview.duplicate_source_bullet_ids : [];
+  const selectionMode = String(preview.selection_mode || "").trim();
+  const projectedOverallDelta = preview.projected_overall_delta;
+  const scorerVisibleEvidenceChanged = Boolean(preview.scorer_visible_evidence_changed);
+  const selectedPatchCount = Number(preview.selected_patch_count || 0);
+  const dimensionDeltas = preview.projected_dimension_deltas || {};
+
+  const scopeLabel =
+    selectionMode === "selected_candidate_ids"
+      ? "Selected candidate IDs"
+      : "All patch-ready rewrites";
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">${escapeHtml(title)}</div>
+
+      <div class="tailoring-card-topline">
+        <div class="tailoring-chip-group">
+          ${buildTailoringTonePill(scopeLabel, "neutral")}
+          ${buildTailoringTonePill(humanizeUnderscoreLabel(status, "unknown"), previewToneForStatus(status))}
+          ${selectionStatus ? buildTailoringTonePill(humanizeUnderscoreLabel(selectionStatus), selectionToneForStatus(selectionStatus)) : ""}
+        </div>
+      </div>
+
+      <div class="tailoring-meta-grid">
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Selected patch count</span>
+          <span>${escapeHtml(String(selectedPatchCount))}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Projected overall delta</span>
+          <span>${escapeHtml(formatSignedScore100(projectedOverallDelta))}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Scorer-visible evidence changed</span>
+          <span>${scorerVisibleEvidenceChanged ? "Yes" : "No"}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Original score</span>
+          <span>${escapeHtml(formatScore100(preview.original_final_score))}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Projected score</span>
+          <span>${escapeHtml(formatScore100(preview.projected_final_score))}</span>
+        </div>
+      </div>
+
+      ${selectionNote ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Saved selection note</div>
+          <div class="tailoring-card-copy">${escapeHtml(selectionNote)}</div>
+        </div>
+      ` : ""}
+
+      ${note ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Preview note</div>
+          <div class="tailoring-card-copy">${escapeHtml(note)}</div>
+        </div>
+      ` : ""}
+
+      ${requestedCandidateIds.length ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Requested candidate IDs</div>
+          ${renderPatchPreviewCandidateList(requestedCandidateIds)}
+        </div>
+      ` : ""}
+
+      ${selectedCandidateIds.length ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Applied candidate IDs</div>
+          ${renderPatchPreviewCandidateList(selectedCandidateIds)}
+        </div>
+      ` : ""}
+
+      ${missingCandidateIds.length ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Missing candidate IDs</div>
+          ${renderPatchPreviewCandidateList(missingCandidateIds)}
+        </div>
+      ` : ""}
+
+      ${ineligibleCandidateIds.length ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Ineligible candidate IDs</div>
+          ${renderPatchPreviewCandidateList(ineligibleCandidateIds)}
+        </div>
+      ` : ""}
+
+      ${duplicateSourceBulletIds.length ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Duplicate source bullet IDs</div>
+          ${renderPatchPreviewCandidateList(duplicateSourceBulletIds)}
+        </div>
+      ` : ""}
+
+      <div class="tailoring-info-block">
+        <div class="tailoring-info-label">Projected dimension deltas</div>
+        ${renderPatchPreviewDimensionDeltas(dimensionDeltas)}
+      </div>
+    </section>
+  `;
+}
+
+function renderTailoringPatchPreviewSummary(artifact) {
+  const root = qs("tailoringPatchPreviewSummary");
+  if (!root) return;
+
+  const payload = artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
+    ? artifact.data
+    : null;
+
+  if (!payload) {
+    root.innerHTML = `<div class="tailoring-empty-state">Patch preview is not available for this row.</div>`;
+    return;
+  }
+
+  const selectedPreview = payload.selected_patch_set_counterfactual_preview || null;
+  const autoPreview = payload.patch_set_counterfactual_preview || null;
+  const selectionStatus = String(payload.selected_patch_selection_status || "none").trim();
+  const selectionNote = String(payload.selected_patch_selection_note || "").trim();
+  const explicitSelectedIds = Array.isArray(payload.selected_patch_candidate_ids)
+    ? payload.selected_patch_candidate_ids
+    : [];
+
+  root.innerHTML = `
+    ${renderPatchPreviewCard({
+      title: "Saved Patch Selection Preview",
+      preview: selectedPreview,
+      selectionStatus,
+      selectionNote,
+      explicitSelectedIds,
+      emptyLabel: selectionStatus === "none"
+        ? "No saved patch selection yet."
+        : "Saved patch selection preview is not available.",
+    })}
+
+    ${renderPatchPreviewCard({
+      title: "Auto Preview (All Patch-Ready Rewrites)",
+      preview: autoPreview,
+      emptyLabel: "Automatic patch preview is not available.",
+    })}
+  `;
+}
+
+function renderTailoringPatchSelectionSummary(artifact) {
+  const root = qs("tailoringPatchSelectionShell");
+  if (!root) return;
+
+  const payload = artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
+    ? artifact.data
+    : null;
+
+  if (!payload) {
+    root.innerHTML = `<div class="tailoring-empty-state">Patch selection preview is not available for this row.</div>`;
+    return;
+  }
+
+  const selectedIds = Array.isArray(payload.selected_patch_candidate_ids)
+    ? payload.selected_patch_candidate_ids
+    : [];
+  const selectionStatus = String(payload.selected_patch_selection_status || "none").trim();
+  const selectionNote = String(payload.selected_patch_selection_note || "").trim();
+  const preview = payload.selected_patch_set_counterfactual_preview || null;
+
+  root.innerHTML = `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Current saved selection</div>
+
+      <div class="tailoring-card-topline">
+        <div class="tailoring-chip-group">
+          ${buildTailoringTonePill(humanizeUnderscoreLabel(selectionStatus || "none"), selectionToneForStatus(selectionStatus || "none"))}
+          ${buildTailoringTonePill(`${selectedIds.length} selected`, selectedIds.length ? "neutral" : "muted")}
+        </div>
+      </div>
+
+      ${selectionNote ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Selection note</div>
+          <div class="tailoring-card-copy">${escapeHtml(selectionNote)}</div>
+        </div>
+      ` : ""}
+
+      <div class="tailoring-info-block">
+        <div class="tailoring-info-label">Selected candidate IDs</div>
+        ${renderPatchPreviewCandidateList(selectedIds, "No saved candidate selection.")}
+      </div>
+
+      ${preview ? `
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Projected overall delta</div>
+          <div class="tailoring-card-copy">${escapeHtml(formatSignedScore100(preview.projected_overall_delta))}</div>
+        </div>
+      ` : `
+        <div class="tailoring-empty-inline">No saved selected-set preview available yet.</div>
+      `}
+    </section>
+  `;
 }
 
 function planningUndecidedOnlyEnabled() {
@@ -1351,7 +1705,6 @@ function resetTailoringModalViewState() {
 }
 
 function resetTailoringModalContent() {
-
   currentTailoringMarkdownRaw = "";
   clearTailoringCopyResetTimer();
 
@@ -1367,9 +1720,18 @@ function resetTailoringModalContent() {
   qs("tailoringProviderMeta").innerHTML = `<span class="summary-chip chip-muted">Loading provider…</span>`;
   qs("tailoringSourceChips").innerHTML = `<span class="summary-chip chip-muted">Loading provenance…</span>`;
 
-  qs("tailoringInteractiveSummary").innerHTML = `
+  setInnerHtmlIfPresent("tailoringPatchPreviewSummary", `
+    <div class="tailoring-empty-state">No patch preview loaded.</div>
+  `);
+
+  setInnerHtmlIfPresent("tailoringInteractiveSummary", `
     <div class="tailoring-empty-state">No structured tailoring guidance loaded.</div>
-  `;
+  `);
+
+  setInnerHtmlIfPresent("tailoringPatchSelectionShell", `
+    <div class="tailoring-empty-state">No patch selection preview loaded.</div>
+  `);
+
   qs("tailoringJsonContent").textContent = "No artifact loaded.";
   qs("tailoringMarkdownContent").innerHTML = "<p>No artifact loaded.</p>";
   qs("tailoringLlmJsonContent").textContent = "No artifact loaded.";
@@ -1398,9 +1760,18 @@ function openTailoringModal(row) {
     llmFailed: false,
   });
 
-  qs("tailoringInteractiveSummary").innerHTML = `
+  setInnerHtmlIfPresent("tailoringPatchPreviewSummary", `
+    <div class="tailoring-empty-state">Loading patch preview...</div>
+  `);
+
+  setInnerHtmlIfPresent("tailoringInteractiveSummary", `
     <div class="tailoring-empty-state">Loading structured tailoring guidance...</div>
-  `;
+  `);
+
+  setInnerHtmlIfPresent("tailoringPatchSelectionShell", `
+    <div class="tailoring-empty-state">Loading patch selection preview...</div>
+  `);
+
   qs("tailoringJsonContent").textContent = "Loading deterministic tailoring JSON...";
   qs("tailoringMarkdownContent").innerHTML = "<p>Loading tailoring markdown...</p>";
   qs("tailoringLlmJsonContent").textContent = "Loading LLM tailoring JSON...";
@@ -1902,7 +2273,10 @@ async function handleTailoringClick(button) {
     loadArtifact(row.packet_json),
   ]);
 
+  renderTailoringPatchPreviewSummary(tailoringJsonArtifact);
+  renderTailoringPatchPreviewSummary(tailoringJsonArtifact);
   renderTailoringInteractiveSummary(tailoringJsonArtifact);
+  renderTailoringPatchSelectionSummary(tailoringJsonArtifact);
   renderArtifactIntoElement("tailoringJsonContent", tailoringJsonArtifact);
   renderArtifactIntoElement("tailoringMarkdownContent", markdownArtifact);
   renderArtifactIntoElement("tailoringLlmJsonContent", llmJsonArtifact);

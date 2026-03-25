@@ -2560,6 +2560,8 @@ def _resolve_patch_set_selection(
     candidates: List[Dict[str, Any]],
     selected_candidate_ids: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
+    explicit_selection = selected_candidate_ids is not None
+
     requested_candidate_ids = _unique_preserve_order(
         [
             str(candidate_id or "").strip()
@@ -2590,8 +2592,8 @@ def _resolve_patch_set_selection(
         ):
             patch_ready_rewrite_ids.append(candidate_id)
 
-    selection_mode = "selected_candidate_ids" if requested_candidate_ids else "all_patch_ready_rewrites"
-    candidate_ids_to_evaluate = requested_candidate_ids or patch_ready_rewrite_ids
+    selection_mode = "selected_candidate_ids" if explicit_selection else "all_patch_ready_rewrites"
+    candidate_ids_to_evaluate = requested_candidate_ids if explicit_selection else patch_ready_rewrite_ids
 
     selected_candidates: List[Dict[str, Any]] = []
     skipped_candidate_ids: List[str] = []
@@ -2639,6 +2641,7 @@ def _resolve_patch_set_selection(
         "missing_candidate_ids": missing_candidate_ids,
         "ineligible_candidate_ids": ineligible_candidate_ids,
         "duplicate_source_bullet_ids": duplicate_bullet_ids,
+        "explicit_selection": explicit_selection,
     }
 
 def _apply_patch_set_counterfactual_preview(
@@ -2658,6 +2661,7 @@ def _apply_patch_set_counterfactual_preview(
         candidates,
         selected_candidate_ids=selected_candidate_ids,
     )
+    explicit_selection = bool(selection.get("explicit_selection", False))
     selected_candidates = list(selection.get("selected_candidates", []) or [])
     skipped_candidate_ids = list(selection.get("skipped_candidate_ids", []) or [])
     duplicate_bullet_ids = list(selection.get("duplicate_source_bullet_ids", []) or [])
@@ -2691,7 +2695,14 @@ def _apply_patch_set_counterfactual_preview(
         return preview
 
     if not selected_candidates:
-        if selected_candidate_ids:
+        if explicit_selection and not preview["requested_candidate_ids"]:
+            preview["status"] = "no_selected_candidates"
+            preview["note"] = "No patch candidates are currently selected."
+            preview["projected_final_score"] = original_score
+            preview["projected_overall_delta"] = 0.0 if original_score is not None else None
+            return preview
+
+        if explicit_selection:
             preview["status"] = "no_valid_selected_candidates"
             preview["note"] = (
                 "None of the requested candidate IDs resolved to a valid patch-ready rewrite set."

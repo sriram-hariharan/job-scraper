@@ -2386,6 +2386,150 @@ def _using_phrase_match_for_supported_term(
 
     return None
 
+def _deterministic_front_supported_phrase_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    supported_terms = [
+        _diagnosis_normalize_term(item)
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if _diagnosis_normalize_term(item)
+    ]
+    if len(supported_terms) != 1:
+        return None
+
+    matched_surface_signal = _diagnosis_normalize_term(
+        str(diagnosis.get("matched_surface_signal", "") or "").strip()
+    )
+    canonical_supported_signal = _diagnosis_normalize_term(
+        str(diagnosis.get("canonical_supported_signal", "") or "").strip()
+    )
+
+    supported_targets = {
+        term
+        for term in [
+            supported_terms[0],
+            matched_surface_signal,
+            canonical_supported_signal,
+        ]
+        if term
+    }
+    if not supported_targets:
+        return None
+
+    lead_match = re.match(r"^(?P<verb>[A-Z][A-Za-z-]+)\s+(?P<body>.+)$", original_text)
+    if not lead_match:
+        return None
+
+    verb = str(lead_match.group("verb") or "").strip()
+    body = str(lead_match.group("body") or "").strip()
+    if not verb or not body:
+        return None
+
+    tail_match = re.match(
+        r"^(?P<head>.+?)(?P<tail>\s+(?:to|for|on|in|with|by|under|across|within|against)\b.*)?$",
+        body,
+        flags=re.IGNORECASE,
+    )
+    if not tail_match:
+        return None
+
+    head = str(tail_match.group("head") or "").strip()
+    tail = str(tail_match.group("tail") or "").rstrip()
+    if not head:
+        return None
+
+    if "," in head or ";" in head or ":" in head:
+        return None
+
+    parts = re.split(r"\s+and\s+", head, maxsplit=1, flags=re.IGNORECASE)
+    if len(parts) != 2:
+        return None
+
+    left = str(parts[0] or "").strip()
+    right = str(parts[1] or "").strip()
+    if not left or not right:
+        return None
+    
+    left_tokens = left.split()
+    right_tokens = right.split()
+
+    # Keep this builder narrow. It should only fire for simple coordinated
+    # noun-phrase style openings like "parameterized SQL queries and Python scripts",
+    # not for shared-head constructions like "lapse and retention risk assessments"
+    # or near-synonym reshuffles like "experiments and A/B tests".
+    if len(left_tokens) < 2 or len(right_tokens) < 2:
+        return None
+
+    blocked_phrase_markers = {
+        "using",
+        "with",
+        "to",
+        "for",
+        "on",
+        "in",
+        "by",
+        "under",
+        "across",
+        "within",
+        "against",
+    }
+    if any(token.lower() in blocked_phrase_markers for token in left_tokens):
+        return None
+    if any(token.lower() in blocked_phrase_markers for token in right_tokens):
+        return None
+
+    left_last = left_tokens[-1].lower()
+    right_last = right_tokens[-1].lower()
+
+    # Reject likely shared-head / category-shuffle cases. These tend to produce
+    # broken rewrites like "retention risk assessments ... and lapse ..."
+    if left_last == right_last:
+        return None
+
+    generic_heads = {
+        "experiment",
+        "experiments",
+        "test",
+        "tests",
+        "assessment",
+        "assessments",
+        "analysis",
+        "analyses",
+        "model",
+        "models",
+        "rule",
+        "rules",
+        "policy",
+        "policies",
+        "risk",
+        "risks",
+    }
+    if left_last in generic_heads and right_last in generic_heads:
+        return None
+
+    left_norm = _diagnosis_normalize_term(left)
+    right_norm = _diagnosis_normalize_term(right)
+
+    left_has_supported = any(term in left_norm for term in supported_targets)
+    right_has_supported = any(term in right_norm for term in supported_targets)
+
+    if left_has_supported:
+        return None
+
+    if not right_has_supported:
+        return None
+
+    reordered_head = f"{right} and {left}".strip()
+    patch_text = f"{verb} {reordered_head}{tail}".strip()
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    return patch_text
 
 def _deterministic_patch_text_from_diagnosis(
     diagnosis: Dict[str, Any],
@@ -2417,6 +2561,10 @@ def _deterministic_patch_text_from_diagnosis(
     if exact_signal_patch:
         _, patch_text = exact_signal_patch
         return "patch_ready", patch_text, "deterministic_exact_signal_variant"
+    
+    front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
+    if front_supported_phrase_patch:
+        return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase"
 
     parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
     if parent_signal_patch:
@@ -2520,6 +2668,7 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_exact_signal_variant",
         "deterministic_parent_signal_label",
         "deterministic_using_phrase",
+        "deterministic_front_supported_phrase",
     }
 
     if overall_delta == 0.0 and patch_generation_method in export_safe_neutral_methods:

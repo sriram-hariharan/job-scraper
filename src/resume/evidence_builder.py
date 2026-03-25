@@ -769,17 +769,56 @@ def build_counterfactual_resume_evidence(
     if not bullet_id:
         return None, "missing_patch_inputs"
 
-    original_bullet_text, status = _bullet_text_by_id(original_resume, bullet_id)
-    if original_bullet_text is None:
-        return None, status
-
-    patched_document, status = _patched_resume_document(
-        original_resume.document,
-        original_bullet_text,
-        replacement,
+    return build_counterfactual_resume_evidence_for_patches(
+        original_resume,
+        [
+            {
+                "source_bullet_id": bullet_id,
+                "patch_text": replacement,
+            }
+        ],
     )
-    if patched_document is None:
-        return None, status
+
+def build_counterfactual_resume_evidence_for_patches(
+    original_resume: ResumeEvidence,
+    patches: List[dict],
+) -> Tuple[Optional[ResumeEvidence], str]:
+    cleaned_patches: List[Tuple[str, str, str]] = []
+    seen_bullet_ids = set()
+
+    for patch in list(patches or []):
+        if not isinstance(patch, dict):
+            return None, "invalid_patch_spec"
+
+        bullet_id = str(patch.get("source_bullet_id", "") or "").strip()
+        replacement = str(patch.get("patch_text", "") or "").strip()
+
+        if not bullet_id or not replacement:
+            return None, "missing_patch_inputs"
+
+        if bullet_id in seen_bullet_ids:
+            return None, "duplicate_patch_bullet_id"
+
+        original_bullet_text, status = _bullet_text_by_id(original_resume, bullet_id)
+        if original_bullet_text is None:
+            return None, status
+
+        seen_bullet_ids.add(bullet_id)
+        cleaned_patches.append((bullet_id, original_bullet_text, replacement))
+
+    if not cleaned_patches:
+        return None, "missing_patch_inputs"
+
+    patched_document = copy.deepcopy(original_resume.document)
+
+    for _, original_bullet_text, replacement in cleaned_patches:
+        patched_document, status = _patched_resume_document(
+            patched_document,
+            original_bullet_text,
+            replacement,
+        )
+        if patched_document is None:
+            return None, status
 
     rebuilt_resume = build_resume_evidence(patched_document)
     return rebuilt_resume, "ok"
@@ -831,6 +870,50 @@ def _bullet_text_by_id(
 
     return unique_matches[0], "ok"
 
+def _structured_bullet_slot(
+    experience_entries: List[ResumeExperienceEntry],
+    project_entries: List[ResumeProjectEntry],
+    source_bullet_id: str,
+) -> Tuple[Optional[Tuple[str, int, int]], str]:
+    bullet_id = str(source_bullet_id or "").strip()
+    if not bullet_id:
+        return None, "missing_patch_inputs"
+
+    matches: List[Tuple[str, int, int]] = []
+
+    for entry_index, entry in enumerate(experience_entries):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for bullet_index, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if bullet_index >= len(bullets):
+                return None, "bullet_index_out_of_range"
+
+            matches.append(("experience", entry_index, bullet_index))
+
+    for entry_index, entry in enumerate(project_entries):
+        bullet_ids = list(getattr(entry, "bullet_ids", []) or [])
+        bullets = list(getattr(entry, "bullets", []) or [])
+
+        for bullet_index, current_bullet_id in enumerate(bullet_ids):
+            if str(current_bullet_id or "").strip() != bullet_id:
+                continue
+
+            if bullet_index >= len(bullets):
+                return None, "bullet_index_out_of_range"
+
+            matches.append(("project", entry_index, bullet_index))
+
+    if not matches:
+        return None, "bullet_id_not_found"
+
+    if len(matches) > 1:
+        return None, "bullet_id_not_unique"
+
+    return matches[0], "ok"
 
 def _whitespace_flexible_pattern(text: str) -> Optional[re.Pattern]:
     normalized = str(text or "").strip()

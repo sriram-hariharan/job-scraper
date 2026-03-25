@@ -743,7 +743,7 @@ def regenerate_selected_resume_tailoring_payload(
         "--output-json",
         str(packet_json_path),
     ]
-    
+
     _run_checked_cmd(diff_cmd)
 
     tailoring_cmd = [
@@ -769,6 +769,7 @@ def regenerate_selected_resume_tailoring_payload(
         "llm_retryable": "",
         "llm_retry_used": "",
     }
+    llm_json_value = ""
 
     if generate_llm_tailoring:
         tailoring_cmd.extend(
@@ -785,8 +786,7 @@ def regenerate_selected_resume_tailoring_payload(
 
     if generate_llm_tailoring:
         llm_status = _read_regenerated_llm_status(tailoring_llm_json_path)
-    else:
-        tailoring_llm_json_path = Path("")
+        llm_json_value = str(tailoring_llm_json_path)
 
     manifest_path = Path(output_dir) / "job_packet_manifest.csv"
     manifest_rows, fieldnames = _load_csv_rows_with_fieldnames(manifest_path)
@@ -820,7 +820,7 @@ def regenerate_selected_resume_tailoring_payload(
         row["packet_json"] = str(packet_json_path)
         row["tailoring_json"] = str(tailoring_json_path)
         row["tailoring_md"] = str(tailoring_md_path)
-        row["tailoring_llm_json"] = str(tailoring_llm_json_path) if tailoring_llm_json_path else ""
+        row["tailoring_llm_json"] = llm_json_value
         row["llm_tailoring_status"] = llm_status["llm_tailoring_status"]
         row["llm_cache_hit"] = llm_status["llm_cache_hit"]
         row["llm_parse_ok"] = llm_status["llm_parse_ok"]
@@ -852,7 +852,7 @@ def regenerate_selected_resume_tailoring_payload(
         manifest_row["packet_json"] = str(packet_json_path)
         manifest_row["tailoring_json"] = str(tailoring_json_path)
         manifest_row["tailoring_md"] = str(tailoring_md_path)
-        manifest_row["tailoring_llm_json"] = str(tailoring_llm_json_path) if tailoring_llm_json_path else ""
+        manifest_row["tailoring_llm_json"] = llm_json_value
         manifest_row["llm_tailoring_status"] = llm_status["llm_tailoring_status"]
         manifest_row["llm_cache_hit"] = llm_status["llm_cache_hit"]
         manifest_row["llm_parse_ok"] = llm_status["llm_parse_ok"]
@@ -875,7 +875,7 @@ def regenerate_selected_resume_tailoring_payload(
         "packet_json": str(packet_json_path),
         "tailoring_json": str(tailoring_json_path),
         "tailoring_md": str(tailoring_md_path),
-        "tailoring_llm_json": str(tailoring_llm_json_path) if tailoring_llm_json_path else "",
+        "tailoring_llm_json": llm_json_value,
         "training_log_jsonl": str(training_log_jsonl_path),
         "llm_tailoring_status": llm_status["llm_tailoring_status"],
         "manifest_path": str(manifest_path),

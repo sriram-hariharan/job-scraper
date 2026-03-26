@@ -2591,6 +2591,256 @@ def _sorted_unique_strings(values: List[Any]) -> List[str]:
     )
     return cleaned
 
+def _entry_text_fragments(entry: Any) -> List[str]:
+    fragments: List[str] = []
+
+    def _append_value(value: Any) -> None:
+        if isinstance(value, str):
+            text = str(value).strip()
+            if text:
+                fragments.append(text)
+            return
+
+        if isinstance(value, dict):
+            for key in ("text", "bullet", "content", "description", "summary"):
+                text = str(value.get(key, "") or "").strip()
+                if text:
+                    fragments.append(text)
+                    return
+            return
+
+        text = str(getattr(value, "text", "") or getattr(value, "content", "") or "").strip()
+        if text:
+            fragments.append(text)
+
+    for attr in (
+        "bullets",
+        "bullet_texts",
+        "highlights",
+        "accomplishments",
+        "responsibilities",
+    ):
+        raw = getattr(entry, attr, None)
+        if isinstance(raw, (list, tuple)):
+            for item in raw:
+                _append_value(item)
+
+    for attr in (
+        "summary",
+        "description",
+        "text",
+        "raw_text",
+    ):
+        raw = getattr(entry, attr, None)
+        if raw:
+            _append_value(raw)
+
+    return _sorted_unique_strings(fragments)
+
+
+def _resume_lead_signal_snapshot(
+    resume: Any,
+    max_words: int = 10,
+) -> Dict[str, List[str]]:
+    lead_family_terms: List[str] = []
+    lead_explicit_skills: List[str] = []
+
+    explicit_skill_lexicon = {
+        str(value).strip().lower()
+        for value in list(getattr(resume, "skills", []) or [])
+        if str(value).strip()
+    }
+
+    for entry in list(getattr(resume, "experience_entries", []) or []):
+        explicit_skill_lexicon.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    for entry in list(getattr(resume, "project_entries", []) or []):
+        explicit_skill_lexicon.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    for entry in list(getattr(resume, "experience_entries", []) or []) + list(getattr(resume, "project_entries", []) or []):
+        for fragment in _entry_text_fragments(entry):
+            words = re.findall(r"\S+", fragment)
+            lead_text = " ".join(words[:max_words]).strip()
+            if not lead_text:
+                continue
+
+            lead_family_terms.extend(prioritized_family_terms_from_text(lead_text))
+
+            lead_text_norm = _diagnosis_normalize_term(lead_text)
+            for skill in explicit_skill_lexicon:
+                if skill and skill in lead_text_norm:
+                    lead_explicit_skills.append(skill)
+
+    return {
+        "lead_family_terms": _sorted_unique_strings(lead_family_terms),
+        "lead_explicit_skills": _sorted_unique_strings(lead_explicit_skills),
+    }
+
+def _entry_ordered_text_fragments(entry: Any) -> List[Tuple[str, str]]:
+    def _coerce_text(value: Any) -> str:
+        if isinstance(value, str):
+            return str(value).strip()
+
+        if isinstance(value, dict):
+            for key in ("text", "bullet", "content", "description", "summary"):
+                text = str(value.get(key, "") or "").strip()
+                if text:
+                    return text
+            return ""
+
+        return str(
+            getattr(value, "text", "") or getattr(value, "content", "") or ""
+        ).strip()
+
+    for attr in (
+        "bullets",
+        "bullet_texts",
+        "highlights",
+        "accomplishments",
+        "responsibilities",
+    ):
+        raw = getattr(entry, attr, None)
+        if isinstance(raw, (list, tuple)) and raw:
+            output: List[Tuple[str, str]] = []
+            for idx, item in enumerate(raw):
+                text = _coerce_text(item)
+                if text:
+                    output.append((f"{attr}:{idx}", text))
+            if output:
+                return output
+
+    fallback: List[Tuple[str, str]] = []
+    for attr in ("summary", "description", "text", "raw_text"):
+        raw = getattr(entry, attr, None)
+        text = _coerce_text(raw)
+        if text:
+            fallback.append((attr, text))
+
+    return fallback
+
+
+def _resume_lead_signal_snapshot_by_bullet(
+    resume: Any,
+    max_words: int = 10,
+) -> Dict[str, Dict[str, List[str]]]:
+    explicit_skill_lexicon = {
+        str(value).strip().lower()
+        for value in list(getattr(resume, "skills", []) or [])
+        if str(value).strip()
+    }
+
+    for entry in list(getattr(resume, "experience_entries", []) or []):
+        explicit_skill_lexicon.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    for entry in list(getattr(resume, "project_entries", []) or []):
+        explicit_skill_lexicon.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    by_bullet: Dict[str, Dict[str, List[str]]] = {}
+
+    def _collect(entries: List[Any], prefix: str) -> None:
+        for idx, entry in enumerate(entries):
+            raw_entry_id = str(getattr(entry, "entry_id", "") or "").strip()
+            entry_id = raw_entry_id or f"{prefix}:{idx}"
+
+            for fragment_key, fragment_text in _entry_ordered_text_fragments(entry):
+                words = re.findall(r"\S+", fragment_text)
+                lead_text = " ".join(words[:max_words]).strip()
+                if not lead_text:
+                    continue
+
+                lead_family_terms = prioritized_family_terms_from_text(lead_text)
+
+                lead_text_norm = _diagnosis_normalize_term(lead_text)
+                lead_explicit_skills = [
+                    skill
+                    for skill in explicit_skill_lexicon
+                    if skill and skill in lead_text_norm
+                ]
+
+                bullet_key = f"{prefix}:{entry_id}:{fragment_key}"
+                by_bullet[bullet_key] = {
+                    "lead_family_terms": _sorted_unique_strings(lead_family_terms),
+                    "lead_explicit_skills": _sorted_unique_strings(lead_explicit_skills),
+                }
+
+    _collect(list(getattr(resume, "experience_entries", []) or []), "experience")
+    _collect(list(getattr(resume, "project_entries", []) or []), "project")
+
+    return by_bullet
+
+def _resume_lead_signal_snapshot_by_entry(
+    resume: Any,
+    max_words: int = 10,
+) -> Dict[str, Dict[str, List[str]]]:
+    explicit_skill_lexicon = {
+        str(value).strip().lower()
+        for value in list(getattr(resume, "skills", []) or [])
+        if str(value).strip()
+    }
+
+    for entry in list(getattr(resume, "experience_entries", []) or []):
+        explicit_skill_lexicon.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    for entry in list(getattr(resume, "project_entries", []) or []):
+        explicit_skill_lexicon.update(
+            str(value).strip().lower()
+            for value in list(getattr(entry, "normalized_skills", []) or [])
+            if str(value).strip()
+        )
+
+    by_entry: Dict[str, Dict[str, List[str]]] = {}
+
+    def _collect(entries: List[Any], prefix: str) -> None:
+        for idx, entry in enumerate(entries):
+            raw_entry_id = str(getattr(entry, "entry_id", "") or "").strip()
+            entry_id = raw_entry_id or f"{prefix}:{idx}"
+            entry_key = f"{prefix}:{entry_id}"
+
+            lead_family_terms: List[str] = []
+            lead_explicit_skills: List[str] = []
+
+            for fragment in _entry_text_fragments(entry):
+                words = re.findall(r"\S+", fragment)
+                lead_text = " ".join(words[:max_words]).strip()
+                if not lead_text:
+                    continue
+
+                lead_family_terms.extend(prioritized_family_terms_from_text(lead_text))
+
+                lead_text_norm = _diagnosis_normalize_term(lead_text)
+                for skill in explicit_skill_lexicon:
+                    if skill and skill in lead_text_norm:
+                        lead_explicit_skills.append(skill)
+
+            by_entry[entry_key] = {
+                "lead_family_terms": _sorted_unique_strings(lead_family_terms),
+                "lead_explicit_skills": _sorted_unique_strings(lead_explicit_skills),
+            }
+
+    _collect(list(getattr(resume, "experience_entries", []) or []), "experience")
+    _collect(list(getattr(resume, "project_entries", []) or []), "project")
+
+    return by_entry
 
 def _resume_counterfactual_snapshot(resume: Any) -> Dict[str, List[str]]:
     explicit_skills = set()
@@ -2625,6 +2875,39 @@ def _resume_counterfactual_snapshot(resume: Any) -> Dict[str, List[str]]:
     for entry in list(getattr(resume, "project_entries", []) or []):
         project_skills.extend(list(getattr(entry, "normalized_skills", []) or []))
 
+    lead_snapshot = _resume_lead_signal_snapshot(resume)
+    entry_lead_snapshot = _resume_lead_signal_snapshot_by_entry(resume)
+    bullet_lead_snapshot = _resume_lead_signal_snapshot_by_bullet(resume)
+
+    entry_lead_family_terms: List[str] = []
+    entry_lead_explicit_skills: List[str] = []
+    bullet_lead_family_terms: List[str] = []
+    bullet_lead_explicit_skills: List[str] = []
+
+    for entry_key, snapshot in entry_lead_snapshot.items():
+        entry_lead_family_terms.extend(
+            f"{entry_key}|{term}"
+            for term in list(snapshot.get("lead_family_terms", []) or [])
+            if str(term).strip()
+        )
+        entry_lead_explicit_skills.extend(
+            f"{entry_key}|{skill}"
+            for skill in list(snapshot.get("lead_explicit_skills", []) or [])
+            if str(skill).strip()
+        )
+    
+    for bullet_key, snapshot in bullet_lead_snapshot.items():
+        bullet_lead_family_terms.extend(
+            f"{bullet_key}|{term}"
+            for term in list(snapshot.get("lead_family_terms", []) or [])
+            if str(term).strip()
+        )
+        bullet_lead_explicit_skills.extend(
+            f"{bullet_key}|{skill}"
+            for skill in list(snapshot.get("lead_explicit_skills", []) or [])
+            if str(skill).strip()
+        )
+
     return {
         "explicit_skills": _sorted_unique_strings(list(explicit_skills)),
         "titles": _sorted_unique_strings(titles),
@@ -2633,6 +2916,12 @@ def _resume_counterfactual_snapshot(resume: Any) -> Dict[str, List[str]]:
         "experimentation_signals": _sorted_unique_strings(list(getattr(resume, "experimentation_signals", []) or [])),
         "tooling_signals": _sorted_unique_strings(list(getattr(resume, "tooling_signals", []) or [])),
         "project_skills": _sorted_unique_strings(project_skills),
+        "lead_family_terms": lead_snapshot["lead_family_terms"],
+        "lead_explicit_skills": lead_snapshot["lead_explicit_skills"],
+        "entry_lead_family_terms": _sorted_unique_strings(entry_lead_family_terms),
+        "entry_lead_explicit_skills": _sorted_unique_strings(entry_lead_explicit_skills),
+        "bullet_lead_family_terms": _sorted_unique_strings(bullet_lead_family_terms),
+        "bullet_lead_explicit_skills": _sorted_unique_strings(bullet_lead_explicit_skills),
     }
 
 

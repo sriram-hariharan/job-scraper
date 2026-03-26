@@ -996,6 +996,19 @@ def _rewrite_path_audit(
         "directions": actionable[:6],
     }
 
+def _deterministic_candidate_preference_rank(candidate: Dict[str, Any]) -> int:
+    candidate_id = str(candidate.get("candidate_id", "") or "").strip()
+
+    preference = {
+        "deterministic_planner_term_first": 5,
+        "deterministic_planner_evidence_first": 4,
+        "deterministic_planner_mixed": 3,
+        "deterministic_planner": 2,
+        "deterministic_planner_polished": 1,
+    }
+
+    return preference.get(candidate_id, 0)
+
 def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> tuple:
     audit = candidate.get("audit", {}) or {}
     quality = audit.get("quality", {}) or {}
@@ -1008,11 +1021,12 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> tuple:
         int(quality.get("source_mention_count", 0)),
         int(quality.get("evidence_mention_count", 0)),
         int(quality.get("full_anchor_line_count", 0)),
-        1 if candidate.get("is_polished") else 0,
         -int(quality.get("weak_anchor_line_count", 0)),
         -int(quality.get("truncated_line_count", 0)),
         -int(quality.get("plannerese_line_count", 0)),
         -int(quality.get("generic_skill_tail_count", 0)),
+        _deterministic_candidate_preference_rank(candidate),
+        1 if candidate.get("is_polished") else 0,
     )
 
 def _candidate_directions_key(directions: List[str]) -> tuple:

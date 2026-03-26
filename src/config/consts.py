@@ -1176,7 +1176,10 @@ _BAD_COUNTERFACTUAL_STATUSES = {
     "unsupported_operation",
 }
 
-_DIRECT_APPLY_MATERIALITY_STATUSES = {
+_DIRECT_APPLY_READY_MATERIALITY_STATUSES = {
     "material_candidate",
+}
+
+_DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES = {
     "export_safe_no_score_lift",
 }

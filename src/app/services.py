@@ -11,8 +11,11 @@ import re
 import subprocess
 import sys
 
+from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
 
-DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
+DEFAULT_OUTPUT_DIR = Path(
+    os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
+).expanduser()
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
 DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv"

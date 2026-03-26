@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Set
 from src.matching.job_adapter import build_job_evidence
 
+from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
 
 def _normalize_text(value: str) -> str:
     return " ".join(str(value or "").lower().split()).strip()
@@ -245,7 +246,7 @@ def main() -> None:
     )
     parser.add_argument(
         "--output-dir",
-        default="outputs/application_planning",
+        default=ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
         help="Directory to write planning outputs.",
     )
     parser.add_argument(

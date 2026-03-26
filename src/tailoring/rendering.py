@@ -45,11 +45,13 @@ from src.tailoring.selection import (
 )
 
 from src.matching.signal_family_matcher import (
+    expandable_aliases_for_supported_term,
     family_for_term,
     families_for_terms,
     prioritized_family_terms_from_text,
     supported_signal_match_in_text,
 )
+
 from src.config.consts import ACTION_VERB_HINTS
 
 _PROMOTABLE_SIGNAL_FAMILY_LABELS = {
@@ -3436,6 +3438,64 @@ def _deterministic_clause_extract_patch(
 
     return patch_text
 
+def _deterministic_family_alias_expansion_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    raw_supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+    normalized_supported_terms = [
+        _diagnosis_normalize_term(item)
+        for item in raw_supported_terms
+        if _diagnosis_normalize_term(item)
+    ]
+    if len(normalized_supported_terms) != 1:
+        return None
+
+    supported_term = normalized_supported_terms[0]
+    supported_surface = next(
+        (
+            raw
+            for raw in raw_supported_terms
+            if _diagnosis_normalize_term(raw) == supported_term
+        ),
+        supported_term,
+    )
+
+    if _supported_term_already_salient_early(original_text, [supported_term]):
+        return None
+
+    opening_clause = original_text.split(",", 1)[0].strip()
+    if not opening_clause:
+        return None
+
+    alias_variants = expandable_aliases_for_supported_term(supported_term)
+    if not alias_variants:
+        return None
+
+    for alias in alias_variants:
+        pattern = re.compile(
+            rf"(?<![A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])",
+            flags=re.IGNORECASE,
+        )
+        if not pattern.search(opening_clause):
+            continue
+
+        patch_text = pattern.sub(supported_surface, original_text, count=1).strip()
+
+        if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+            continue
+
+        return patch_text
+
+    return None
+
 def _deterministic_exact_signal_variant_patch(
     diagnosis: Dict[str, Any],
 ) -> Optional[Tuple[str, str]]:
@@ -3875,6 +3935,72 @@ def _natural_join_terms(terms: List[str]) -> str:
         return f"{items[0]} and {items[1]}"
     return f"{', '.join(items[:-1])}, and {items[-1]}"
 
+def _cleanup_using_phrase_segment(value: str) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    text = re.sub(r"^&\s*", "", text)
+    return text.strip(" ,")
+
+
+def _natural_join_surface_segments(segments: List[str]) -> str:
+    items = [
+        _cleanup_using_phrase_segment(item)
+        for item in (segments or [])
+        if _cleanup_using_phrase_segment(item)
+    ]
+    items = _unique_preserve_order(items)
+
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+
+def _supported_using_phrase_segments(
+    match: re.Match,
+    supported_terms: List[str],
+) -> List[str]:
+    phrase = str(match.group("phrase") or "").strip()
+    if not phrase:
+        return []
+
+    normalized_supported = [
+        _diagnosis_normalize_term(item)
+        for item in (supported_terms or [])
+        if _diagnosis_normalize_term(item)
+    ]
+    if not normalized_supported:
+        return []
+
+    raw_segments = re.split(r"\s*,\s*", phrase)
+    kept_segments: List[str] = []
+    seen_supported = set()
+
+    for raw_segment in raw_segments:
+        segment = _cleanup_using_phrase_segment(raw_segment)
+        if not segment:
+            continue
+
+        segment_norm = _diagnosis_normalize_term(segment)
+        matched_terms = [
+            term
+            for term in normalized_supported
+            if term in segment_norm and term not in seen_supported
+        ]
+        if not matched_terms:
+            continue
+
+        kept_segments.append(segment)
+        seen_supported.update(matched_terms)
+
+    if kept_segments:
+        return kept_segments
+
+    fallback_phrase = _cleanup_using_phrase_segment(phrase)
+    return [fallback_phrase] if fallback_phrase else []
+
 def _deterministic_lead_preserving_using_phrase_patch(
     diagnosis: Dict[str, Any],
     supported_terms: List[str],
@@ -3885,26 +4011,30 @@ def _deterministic_lead_preserving_using_phrase_patch(
         return None
 
     before = re.sub(r"\s+", " ", original_text[: match.start()].strip(" ,"))
-    after = re.sub(r"\s+", " ", original_text[match.end() :].lstrip(" ,"))
+    after_raw = original_text[match.end() :]
 
     if not before:
         return None
 
-    phrase_terms = [
-        str(item).strip()
-        for item in (supported_terms or [])
-        if str(item).strip()
-    ]
-    phrase = _natural_join_terms(phrase_terms)
+    surface_segments = _supported_using_phrase_segments(
+        match,
+        supported_terms,
+    )
+    phrase = _natural_join_surface_segments(surface_segments)
     if not phrase:
         phrase = str(match.group("phrase") or "").strip()
 
+    phrase = re.sub(r"\s+", " ", str(phrase or "").strip())
     if not phrase:
         return None
 
+    after_has_leading_comma = bool(re.match(r"^\s*,", str(after_raw or "")))
+    after = re.sub(r"^\s*,\s*", "", str(after_raw or "").strip())
+    after = re.sub(r"\s+", " ", after).strip()
+
     patch_text = f"{before} using {phrase}".strip()
     if after:
-        patch_text = f"{patch_text} {after}".strip()
+        patch_text = f"{patch_text}, {after}" if after_has_leading_comma else f"{patch_text} {after}"
 
     patch_text = re.sub(r"\s+", " ", patch_text)
     patch_text = re.sub(r"\s+,", ",", patch_text)
@@ -3954,6 +4084,10 @@ def _deterministic_patch_text_from_diagnosis(
         if exact_signal_patch:
             _, patch_text = exact_signal_patch
             return "patch_ready", patch_text, "deterministic_exact_signal_variant"
+        
+        family_alias_patch = _deterministic_family_alias_expansion_patch(diagnosis)
+        if family_alias_patch:
+            return "patch_ready", family_alias_patch, "deterministic_family_alias_expansion"
 
         front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
         if front_supported_phrase_patch:
@@ -4020,6 +4154,7 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
         "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
+        "deterministic_family_alias_expansion",
     }
 
     return patch_generation_method_base in signal_fronting_methods
@@ -4044,6 +4179,7 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
         "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
+        "deterministic_family_alias_expansion",
     }
 
 def _materiality_validate_rewrite_candidate(
@@ -4117,6 +4253,7 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
         "deterministic_front_supported_phrase",
+        "deterministic_family_alias_expansion",
     }
 
     if overall_delta == 0.0 and not evidence_changed:

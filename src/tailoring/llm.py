@@ -1,5 +1,5 @@
 
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 import os
 import re
 import json
@@ -32,6 +32,11 @@ from src.tailoring.selection import (
     _build_rewrite_candidates,
 )
 
+from src.config.consts import (
+    ACTION_VERB_HINTS
+)
+
+_PATCH_REFINEMENT_LEAD_VERB_STOPWORDS = set(ACTION_VERB_HINTS)
 LLM_TAILOR_PROVIDER = "gemini"
 LLM_TAILOR_MODEL = "gemini-2.5-flash"
 LLM_TAILOR_MAX_TOKENS = 700
@@ -63,6 +68,80 @@ LIVE_REWRITE_RESPONSE_SCHEMA = {
     },
     "required": ["rewrite_directions"],
 }
+
+PATCH_REFINEMENT_PROVIDER = os.getenv(
+    "PATCH_REFINEMENT_PROVIDER",
+    "groq",
+).strip().lower()
+
+PATCH_REFINEMENT_MODEL = os.getenv(
+    "PATCH_REFINEMENT_MODEL",
+    "llama-3.3-70b-versatile",
+).strip()
+
+PATCH_REFINEMENT_MAX_TOKENS = 260
+PATCH_REFINEMENT_TEMPERATURE = 0
+PATCH_REFINEMENT_PROMPT_VERSION = "v1"
+
+PATCH_REFINEMENT_RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "abstain": {"type": "boolean"},
+        "refined_patch_text": {"type": "string"},
+        "reason": {"type": "string"},
+        "preserved_terms": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "risk_flags": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": [
+        "abstain",
+        "refined_patch_text",
+        "reason",
+        "preserved_terms",
+        "risk_flags",
+    ],
+}
+
+def _patch_refinement_protected_phrases(candidate: Dict[str, Any]) -> List[str]:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+
+    phrases: List[str] = []
+
+    # Keep supported signals and canonical signal
+    phrases.extend(list(candidate.get("supported_jd_signals", []) or []))
+    canonical = str(candidate.get("canonical_supported_signal", "") or "").strip()
+    if canonical:
+        phrases.append(canonical)
+
+    # Capture meaningful phrases after "using", "with", "via", "for"
+    for pattern in [
+        r"\busing ([^.,;]+)",
+        r"\bwith ([^.,;]+)",
+        r"\bvia ([^.,;]+)",
+        r"\bfor ([^.,;]+)",
+    ]:
+        for match in re.findall(pattern, original_text, flags=re.IGNORECASE):
+            value = re.sub(r"\s+", " ", str(match or "").strip())
+            if value:
+                phrases.append(value)
+
+    # Capture noun-like technical phrases you already know are meaningful
+    for phrase in [
+        "customer segmentation",
+        "risk mitigation",
+        "policyholder default probabilities",
+        "early terminations",
+        "lapse and retention risk assessments",
+    ]:
+        if phrase.lower() in original_text.lower():
+            phrases.append(phrase)
+
+    return _unique_preserve_order([p for p in phrases if str(p).strip()])
 
 def _build_llm_prompt(
     packet: Dict[str, Any],
@@ -532,6 +611,458 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "do_not_claim": _normalize_string_list(parsed.get("do_not_claim", [])),
         "rewrite_directions": normalized_rewrite_directions,
     }
+
+def _normalize_patch_refinement_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "abstain": bool(parsed.get("abstain", False)),
+        "refined_patch_text": str(parsed.get("refined_patch_text", "") or "").strip(),
+        "reason": str(parsed.get("reason", "") or "").strip(),
+        "preserved_terms": _normalize_string_list(parsed.get("preserved_terms", [])),
+        "risk_flags": _normalize_string_list(parsed.get("risk_flags", [])),
+    }
+
+
+def _patch_refinement_numeric_tokens(text: str) -> List[str]:
+    matches = re.findall(r"\b\d+(?:\.\d+)?(?:k|m)?\+?%?\b", str(text or ""), flags=re.IGNORECASE)
+    return _unique_preserve_order([str(item).strip() for item in matches if str(item).strip()])
+
+
+def _patch_refinement_contains_term(text: str, term: str) -> bool:
+    text_norm = re.sub(r"\s+", " ", str(text or "").strip().lower())
+    term_norm = re.sub(r"\s+", " ", str(term or "").strip().lower())
+    if not text_norm or not term_norm:
+        return False
+    return term_norm in text_norm
+
+
+def _patch_refinement_lead_token(text: str) -> str:
+    tokens = re.findall(r"[A-Za-z][A-Za-z\-]+", str(text or ""))
+    return tokens[0].lower() if tokens else ""
+
+
+def _collect_patch_refinement_sibling_openings(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+    limit: int = 8,
+) -> List[str]:
+    source_entry_id = str(
+        candidate.get("source_entry_id", "") or candidate.get("entry_id", "")
+    ).strip()
+    section = str(candidate.get("section", "") or "").strip()
+    source = str(candidate.get("source", "") or "").strip()
+    original_text = re.sub(r"\s+", " ", str(candidate.get("original_text", "") or "")).strip().lower()
+
+    openings: List[str] = []
+    for row in list(payload.get("bullet_diagnoses", []) or []):
+        row_text = re.sub(r"\s+", " ", str(row.get("original_text", "") or "")).strip()
+        if not row_text or row_text.lower() == original_text:
+            continue
+
+        row_entry_id = str(row.get("entry_id", "") or "").strip()
+        row_section = str(row.get("section", "") or "").strip()
+        row_source = str(row.get("source", "") or "").strip()
+
+        if source_entry_id:
+            if row_entry_id != source_entry_id:
+                continue
+        else:
+            if section and row_section != section:
+                continue
+            if source and row_source != source:
+                continue
+
+        lead = _patch_refinement_lead_token(row_text)
+        if lead:
+            openings.append(lead)
+
+    return _unique_preserve_order(openings)[:limit]
+
+
+def _patch_refinement_core_terms(candidate: Dict[str, Any]) -> List[str]:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    raw_tokens = re.findall(
+        r"\b(?:[A-Z]{2,}[A-Za-z0-9.+/\-]*|[A-Z][A-Za-z0-9.+/\-]{2,})\b",
+        original_text,
+    )
+
+    filtered_tokens: List[str] = []
+    for token in raw_tokens:
+        token_clean = str(token or "").strip()
+        if not token_clean:
+            continue
+        if token_clean.lower() in _PATCH_REFINEMENT_LEAD_VERB_STOPWORDS:
+            continue
+        filtered_tokens.append(token_clean)
+
+    return _unique_preserve_order(supported_terms + filtered_tokens)
+
+def _build_patch_refinement_prompt(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> str:
+    job = payload.get("job", {}) or {}
+    section = str(candidate.get("section", "") or "").strip()
+    source = str(candidate.get("source", "") or "").strip()
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
+    supported_signals = list(candidate.get("supported_jd_signals", []) or [])
+    unsupported_risk_signals = list(candidate.get("unsupported_risk_signals", []) or [])
+    adjacent_risk_signals = list(candidate.get("adjacent_risk_signals", []) or [])
+    protected_numbers = _patch_refinement_numeric_tokens(original_text)
+    protected_core_terms = _patch_refinement_core_terms(candidate)
+    sibling_openings = _collect_patch_refinement_sibling_openings(payload, candidate)
+    original_lead = _patch_refinement_lead_token(original_text)
+    protected_phrases = _patch_refinement_protected_phrases(candidate)
+
+    lines: List[str] = []
+    lines.append("Return ONLY valid JSON.")
+    lines.append("")
+    lines.append("Goal:")
+    lines.append("Refine one already-approved deterministic resume bullet rewrite into cleaner final wording.")
+    lines.append("")
+    lines.append("Hard rules:")
+    lines.append("1. Use ONLY the evidence already present in the original bullet.")
+    lines.append("2. Do NOT invent tools, methods, ownership, scope, domains, metrics, or responsibilities.")
+    lines.append("3. Preserve all numbers, percentages, counts, and metrics exactly unless abstaining.")
+    lines.append("4. Keep the same claim strength as the original supported evidence.")
+    lines.append("5. Do NOT add unsupported JD terms.")
+    lines.append("6. Do NOT drop meaningful technical detail, methods, tools, or the second clause if it carries real evidence.")
+    lines.append("7. Carry the same tone, specificity, and technical depth as the original bullet.")
+    lines.append("8. Prefer a cleaner non-redundant opening structure when it preserves the same meaning.")
+    lines.append("9. If nearby bullets already start with similar verbs, prefer a different opening ONLY when it stays equally truthful and natural.")
+    lines.append("10. Do NOT force synonym churn just for variety.")
+    lines.append("11. If you cannot materially improve clarity safely, set abstain=true.")
+    lines.append("12. Output one bullet only, not commentary.")
+    lines.append("13. Do NOT drop meaningful multi-word technical or method phrases from the original bullet.")
+    lines.append("14. If your reason is that the original bullet is already strong, concise, or clear, abstain instead of rewriting.")
+    lines.append("")
+    lines.append("Style target:")
+    lines.append("- Sound like a strong real resume bullet, not a keyword shuffle.")
+    lines.append("- Keep it concise but do not compress away important evidence.")
+    lines.append("- Preserve measurable outcomes and technical nouns.")
+    lines.append(f"- Protected substantive phrases: {protected_phrases}")
+    lines.append("")
+    lines.append("Job context:")
+    lines.append(f"- Company: {job.get('company', '')}")
+    lines.append(f"- Title: {job.get('title', '')}")
+    lines.append("")
+    lines.append("Source bullet context:")
+    lines.append(f"- Section: {section}")
+    lines.append(f"- Source: {source}")
+    lines.append(f"- Supported JD signals: {supported_signals}")
+    lines.append(f"- Unsupported risk signals: {unsupported_risk_signals}")
+    lines.append(f"- Adjacent risk signals: {adjacent_risk_signals}")
+    lines.append(f"- Protected numeric tokens: {protected_numbers}")
+    lines.append(f"- Protected core technical terms: {protected_core_terms}")
+    lines.append(f"- Original lead token: {original_lead}")
+    lines.append(f"- Sibling bullet lead tokens to avoid repeating when possible: {sibling_openings}")
+    lines.append("")
+    lines.append("Original bullet:")
+    lines.append(original_text)
+    lines.append("")
+    lines.append("Deterministic patch draft:")
+    lines.append(deterministic_patch_text)
+    lines.append("")
+    lines.append("Output contract:")
+    lines.append("- abstain: boolean")
+    lines.append("- refined_patch_text: final bullet text, or empty string if abstaining")
+    lines.append("- reason: one short sentence")
+    lines.append("- preserved_terms: terms or metrics you intentionally preserved")
+    lines.append("- risk_flags: empty list when safe")
+    return "\n".join(lines)
+
+def _patch_refinement_similarity_ratio(a: str, b: str) -> float:
+    from difflib import SequenceMatcher
+
+    a_norm = re.sub(r"\s+", " ", str(a or "").strip().lower())
+    b_norm = re.sub(r"\s+", " ", str(b or "").strip().lower())
+    if not a_norm and not b_norm:
+        return 1.0
+    return SequenceMatcher(None, a_norm, b_norm).ratio()
+
+def _validate_patch_refinement_output(
+    candidate: Dict[str, Any],
+    refined_patch_text: str,
+) -> Tuple[bool, str]:
+    refined = re.sub(r"\s+", " ", str(refined_patch_text or "")).strip()
+    if not refined:
+        return False, "empty_refined_patch"
+
+    original_text = re.sub(r"\s+", " ", str(candidate.get("original_text", "") or "")).strip()
+    deterministic_patch_text = re.sub(r"\s+", " ", str(candidate.get("patch_text", "") or "")).strip()
+
+    if refined.lower() == original_text.lower():
+        return False, "same_as_original"
+
+    if refined.lower() == deterministic_patch_text.lower():
+        return False, "same_as_deterministic"
+
+    similarity_to_original = _patch_refinement_similarity_ratio(refined, original_text)
+    similarity_to_deterministic = _patch_refinement_similarity_ratio(refined, deterministic_patch_text)
+
+    if similarity_to_original >= 0.985:
+        return False, "near_same_as_original"
+
+    if similarity_to_deterministic >= 0.985:
+        return False, "near_same_as_deterministic"
+    
+    protected_numbers = _patch_refinement_numeric_tokens(original_text)
+    refined_norm = refined.lower()
+    for token in protected_numbers:
+        if token.lower() not in refined_norm:
+            return False, f"missing_numeric_token:{token}"
+    
+    protected_phrases = _patch_refinement_protected_phrases(candidate)
+    for phrase in protected_phrases:
+        phrase_clean = str(phrase or "").strip()
+        if not phrase_clean:
+            continue
+        if not _patch_refinement_contains_term(refined, phrase_clean):
+            return False, f"missing_protected_phrase:{phrase_clean}"
+
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    if supported_terms and not any(_patch_refinement_contains_term(refined, term) for term in supported_terms):
+        return False, "missing_supported_signal"
+
+    protected_core_terms = _patch_refinement_core_terms(candidate)
+    for term in protected_core_terms:
+        term_clean = str(term or "").strip()
+        if not term_clean:
+            continue
+        if not _patch_refinement_contains_term(refined, term_clean):
+            return False, f"missing_core_term:{term_clean}"
+
+    original_norm = original_text.lower()
+    for term in list(candidate.get("unsupported_risk_signals", []) or []):
+        term_clean = str(term or "").strip()
+        if not term_clean:
+            continue
+        if term_clean.lower() in refined_norm and term_clean.lower() not in original_norm:
+            return False, f"introduced_unsupported_term:{term_clean}"
+
+    original_words = re.findall(r"\b[\w.+/\-]+\b", original_text)
+    refined_words = re.findall(r"\b[\w.+/\-]+\b", refined)
+
+    if len(original_words) >= 18:
+        min_words = max(12, int(len(original_words) * 0.72))
+        if len(refined_words) < min_words:
+            return False, "possible_information_loss"
+
+    return True, "ok"
+
+
+def _maybe_refine_patch_ready_rewrite_candidate(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+        return candidate
+
+    if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
+        return candidate
+
+    deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
+    if not deterministic_patch_text:
+        return candidate
+
+    prompt = _build_patch_refinement_prompt(payload, candidate)
+
+    system_prompt = """
+You rewrite one resume bullet under strict evidence constraints.
+
+Rules:
+1. Use only the supplied original bullet evidence.
+2. Do not invent tools, methods, metrics, scope, or ownership.
+3. Preserve every numeric metric exactly.
+4. Keep the same support level as the original evidence.
+5. If the deterministic draft is already as good as you can make it safely, abstain.
+6. Return valid JSON only.
+"""
+
+    requested_provider = "groq"
+    requested_model = "llama-3.3-70b-versatile"
+
+    try:
+        llm_result = run_chat_completion_with_metadata(
+            provider=requested_provider,
+            model=requested_model,
+            temperature=PATCH_REFINEMENT_TEMPERATURE,
+            max_tokens=PATCH_REFINEMENT_MAX_TOKENS,
+            response_mime_type="application/json",
+            response_schema=PATCH_REFINEMENT_RESPONSE_SCHEMA,
+            return_parsed=True,
+            thinking_budget=0,
+            fallback_enabled=False,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    except Exception as exc:
+        updated = dict(candidate)
+        updated["llm_refinement_used"] = False
+        updated["llm_refinement_status"] = "call_failed"
+        updated["llm_refinement_note"] = str(exc)
+        updated["llm_refinement_requested_provider"] = requested_provider
+        updated["llm_refinement_requested_model"] = requested_model
+        return updated
+
+    value = llm_result.get("content")
+    parsed_raw = None
+
+    if isinstance(value, dict):
+        parsed_raw = value
+    else:
+        parsed_candidate = llm_result.get("parsed")
+        if isinstance(parsed_candidate, dict):
+            parsed_raw = parsed_candidate
+        else:
+            raw_text = str(value or "").strip()
+            if raw_text:
+                try:
+                    parsed_raw = _extract_json_from_llm_response(raw_text)
+                except Exception as exc:
+                    updated = dict(candidate)
+                    updated["llm_refinement_used"] = False
+                    updated["llm_refinement_status"] = "parse_failed"
+                    updated["llm_refinement_note"] = str(exc)
+                    updated["llm_refinement_rejected_text"] = raw_text
+                    updated["llm_refinement_provider"] = str(
+                        llm_result.get("provider", "") or requested_provider
+                    ).strip()
+                    updated["llm_refinement_model"] = str(
+                        llm_result.get("model", "") or requested_model
+                    ).strip()
+                    updated["llm_refinement_requested_provider"] = requested_provider
+                    updated["llm_refinement_requested_model"] = requested_model
+                    return updated
+            else:
+                updated = dict(candidate)
+                updated["llm_refinement_used"] = False
+                updated["llm_refinement_status"] = "parse_failed"
+                updated["llm_refinement_note"] = "empty_llm_response"
+                updated["llm_refinement_rejected_text"] = ""
+                updated["llm_refinement_provider"] = str(
+                    llm_result.get("provider", "") or requested_provider
+                ).strip()
+                updated["llm_refinement_model"] = str(
+                    llm_result.get("model", "") or requested_model
+                ).strip()
+                updated["llm_refinement_requested_provider"] = requested_provider
+                updated["llm_refinement_requested_model"] = requested_model
+                return updated
+
+    parsed = _normalize_patch_refinement_parsed(parsed_raw or {})
+
+    updated = dict(candidate)
+
+    reason_text = str(parsed.get("reason", "") or "").strip().lower()
+    refined_patch_text = str(parsed.get("refined_patch_text", "") or "").strip()
+
+    if (
+        refined_patch_text
+        and any(token in reason_text for token in ["already clear", "already concise", "already strong"])
+    ):
+        updated["llm_refinement_used"] = False
+        updated["llm_refinement_status"] = "validation_failed"
+        updated["llm_refinement_note"] = "should_have_abstained"
+        updated["llm_refinement_rejected_text"] = refined_patch_text
+        updated["llm_refinement_provider"] = str(
+            llm_result.get("provider", "") or requested_provider
+        ).strip()
+        updated["llm_refinement_model"] = str(
+            llm_result.get("model", "") or requested_model
+        ).strip()
+        updated["llm_refinement_requested_provider"] = requested_provider
+        updated["llm_refinement_requested_model"] = requested_model
+        updated["proposal_status"] = "direction_only"
+        updated["patch_ready"] = False
+        updated["material_delta_found"] = False
+        updated["patch_text"] = ""
+        updated["proposed_text"] = ""
+        updated["materiality_validation_status"] = "llm_abstained_keep_original"
+        updated["materiality_validation_note"] = (
+            "LLM refinement determined the original bullet is already the best safe wording, "
+            "so no final rewrite patch is surfaced."
+        )
+        return updated
+
+    updated["llm_refinement_provider"] = str(
+        llm_result.get("provider", "") or requested_provider
+    ).strip()
+    updated["llm_refinement_model"] = str(
+        llm_result.get("model", "") or requested_model
+    ).strip()
+    updated["llm_refinement_requested_provider"] = requested_provider
+    updated["llm_refinement_requested_model"] = requested_model
+    updated["llm_refinement_reason"] = parsed.get("reason", "")
+    updated["llm_refinement_preserved_terms"] = list(parsed.get("preserved_terms", []) or [])
+    updated["llm_refinement_risk_flags"] = list(parsed.get("risk_flags", []) or [])
+
+    if parsed.get("abstain", False):
+        updated["llm_refinement_used"] = False
+        updated["llm_refinement_status"] = "abstained"
+        updated["llm_refinement_note"] = parsed.get("reason", "")
+        updated["llm_refinement_rejected_text"] = str(parsed.get("refined_patch_text", "") or "").strip()
+        updated["proposal_status"] = "direction_only"
+        updated["patch_ready"] = False
+        updated["material_delta_found"] = False
+        updated["patch_text"] = ""
+        updated["proposed_text"] = ""
+        updated["materiality_validation_status"] = "llm_abstained_keep_original"
+        updated["materiality_validation_note"] = (
+            "LLM refinement abstained because the original bullet is already the strongest safe wording."
+        )
+        return updated
+
+    is_valid, validation_reason = _validate_patch_refinement_output(candidate, refined_patch_text)
+
+    if not is_valid:
+        updated["llm_refinement_used"] = False
+        updated["llm_refinement_status"] = "validation_failed"
+        updated["llm_refinement_note"] = validation_reason
+        updated["llm_refinement_rejected_text"] = refined_patch_text
+
+        if validation_reason in {
+            "same_as_original",
+            "near_same_as_original",
+            "should_have_abstained",
+        }:
+            updated["proposal_status"] = "direction_only"
+            updated["patch_ready"] = False
+            updated["material_delta_found"] = False
+            updated["patch_text"] = ""
+            updated["proposed_text"] = ""
+            updated["materiality_validation_status"] = "llm_abstained_keep_original"
+            updated["materiality_validation_note"] = (
+                "LLM refinement did not produce a materially better final rewrite, so the original bullet is kept."
+            )
+
+        return updated
+
+    updated["deterministic_patch_text"] = deterministic_patch_text
+    updated["patch_text"] = refined_patch_text
+    updated["proposed_text"] = refined_patch_text
+    updated["llm_refinement_used"] = True
+    updated["llm_refinement_status"] = "accepted"
+    updated["llm_refinement_note"] = parsed.get("reason", "")
+    updated["patch_generation_method"] = (
+        f"{str(candidate.get('patch_generation_method', '') or '').strip()}+llm_refine"
+    ).strip("+")
+
+    return updated
 
 def _canonical_json(value: Any) -> str:
     return json.dumps(

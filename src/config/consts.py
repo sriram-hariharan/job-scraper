@@ -1123,3 +1123,41 @@ REWRITE_DIRECTION_PREFIXES = (
     "Keep gap explicit",
     "Do not add",
 )
+
+# ============================================================
+# TAILORING CONSTANTS
+# ============================================================
+
+ACTION_VERB_HINTS = [
+    "achieved",
+    "analyzed",
+    "architected",
+    "automated",
+    "built",
+    "conducted",
+    "created",
+    "deduced",
+    "delivered",
+    "designed",
+    "developed",
+    "drove",
+    "enhanced",
+    "evaluated",
+    "generated",
+    "identified",
+    "implemented",
+    "improved",
+    "increased",
+    "led",
+    "leveraged",
+    "managed",
+    "manipulated",
+    "modeled",
+    "optimized",
+    "performed",
+    "predicted",
+    "reduced",
+    "streamlined",
+    "supported",
+    "used",
+]

@@ -20,7 +20,8 @@ from src.config.consts import (
     TOOLING_SIGNAL_PATTERNS,
     ANALYTICS_ML_SIGNAL_PATTERNS,
     SECTION_ALIASES,
-    ROLE_WORD_HINTS
+    ROLE_WORD_HINTS,
+    ACTION_VERB_HINTS
 )
 
 def _normalize(text: str) -> str:
@@ -353,6 +354,41 @@ def _infer_title_and_company(header_lines: List[str]) -> Tuple[str, str]:
 
     return title, company
 
+def _looks_like_completed_bullet(text: str) -> bool:
+    value = str(text or "").strip()
+    if not value:
+        return False
+
+    return bool(
+        re.search(r"(?:[.!?]\s*$|\b\d+(?:\.\d+)?%$|\b\d+\+?$|\$\d[\d,]*(?:\.\d+)?$)", value)
+    )
+
+
+def _looks_like_unmarked_bullet_start(line: str) -> bool:
+    value = str(line or "").strip()
+    if not value:
+        return False
+
+    if _looks_like_bullet_line(value):
+        return False
+
+    if value[:1].islower():
+        return False
+
+    first_word_match = re.match(r"^([A-Za-z][A-Za-z\-]+)\b", value)
+    if not first_word_match:
+        return False
+
+    first_word = first_word_match.group(1).lower()
+
+    if first_word in ACTION_VERB_HINTS:
+        return True
+
+    if re.match(r"^[A-Z][a-z]+ed\b", value):
+        return True
+
+    return False
+
 def _consolidate_role_bullets(lines: List[str]) -> List[str]:
     bullets: List[str] = []
     current_bullet = ""
@@ -391,6 +427,16 @@ def _consolidate_role_bullets(lines: List[str]) -> List[str]:
                 bullets.append(current_bullet.strip())
             current_bullet = clean_line
             pending_new_bullet = False
+            continue
+
+        if (
+            current_bullet
+            and not pending_new_bullet
+            and _looks_like_completed_bullet(current_bullet)
+            and _looks_like_unmarked_bullet_start(clean_line)
+        ):
+            bullets.append(current_bullet.strip())
+            current_bullet = clean_line
             continue
 
         if current_bullet:

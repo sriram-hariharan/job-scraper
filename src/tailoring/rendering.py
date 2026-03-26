@@ -1233,6 +1233,111 @@ def _structural_clause_edit_card_from_reuse(
         "focused_clause_text": clause_text,
     }
 
+def _replacement_candidate_lookup_key(item: Dict[str, Any]) -> tuple:
+    source_bullet_id = str(
+        item.get("source_bullet_id", "") or item.get("bullet_id", "") or ""
+    ).strip()
+    if source_bullet_id:
+        return ("bullet", source_bullet_id)
+
+    source_entry_id = str(
+        item.get("source_entry_id", "") or item.get("entry_id", "") or ""
+    ).strip()
+
+    current_evidence = (
+        str(item.get("current_evidence", "") or "").strip()
+        or str(item.get("parent_bullet", "") or "").strip()
+        or str(item.get("bullet_excerpt", "") or "").strip()
+        or str(item.get("original_text", "") or "").strip()
+    )
+
+    if source_entry_id and current_evidence:
+        return ("entry_evidence", source_entry_id, current_evidence)
+
+    return (
+        "fallback",
+        str(item.get("section", "") or "").strip(),
+        str(item.get("source", "") or "").strip(),
+        current_evidence,
+    )
+
+
+def _patch_ready_rewrite_lookup(
+    payload: Dict[str, Any],
+) -> Dict[tuple, Dict[str, Any]]:
+    lookup: Dict[tuple, Dict[str, Any]] = {}
+
+    for candidate in (payload.get("replacement_candidates", []) or []):
+        if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+            continue
+        if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
+            continue
+
+        patch_text = str(candidate.get("patch_text", "") or "").strip()
+        if not patch_text:
+            continue
+
+        key = _replacement_candidate_lookup_key(candidate)
+        existing = lookup.get(key)
+
+        def _rank(row: Dict[str, Any]) -> tuple:
+            status = str(row.get("materiality_validation_status", "") or "").strip()
+            return (
+                1 if status == "material_candidate" else 0,
+                1 if status == "export_safe_no_score_lift" else 0,
+                len(str(row.get("patch_text", "") or "").strip()),
+            )
+
+        if existing is None or _rank(candidate) > _rank(existing):
+            lookup[key] = candidate
+
+    return lookup
+
+
+def _rewrite_card_fields_from_patch_ready_candidate(
+    replacement_candidate: Dict[str, Any],
+    supported_terms: List[str],
+) -> Dict[str, Any]:
+    patch_text = str(replacement_candidate.get("patch_text", "") or "").strip()
+    status = str(replacement_candidate.get("materiality_validation_status", "") or "").strip()
+    patch_method = str(replacement_candidate.get("patch_generation_method", "") or "").strip()
+
+    if status == "material_candidate":
+        why_it_matters = (
+            "This deterministic rewrite survived pre-validation as a scorer-material patch candidate."
+        )
+    elif status == "export_safe_no_score_lift":
+        lead = ", ".join(_truncate_list(supported_terms, 4)) if supported_terms else "the JD signal"
+        why_it_matters = (
+            f"This deterministic rewrite safely surfaces {lead} earlier and is export-safe, even though the frozen scorer shows no projected score lift."
+        )
+    else:
+        why_it_matters = (
+            "This deterministic rewrite survived validation as a grounded patch-ready candidate."
+        )
+
+    return {
+        "edit_type": "rewrite",
+        "claim_safety": "safe_strengthen",
+        "recommended_rewrite": patch_text,
+        "why_current_is_weak": (
+            f"The evidence is relevant, but {', '.join(_truncate_list(supported_terms, 4))} "
+            "is not yet leading the bullet clearly."
+            if supported_terms
+            else "The evidence is relevant, but the JD-aligned language is not yet leading the bullet clearly."
+        ),
+        "why_rewrite_is_better": (
+            "It replaces generic direction-only guidance with a grounded deterministic bullet patch."
+        ),
+        "why_it_matters": why_it_matters,
+        "patch_generation_method": patch_method,
+        "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        "replacement_materiality_validation_status": status,
+        "replacement_materiality_validation_note": str(
+            replacement_candidate.get("materiality_validation_note", "") or ""
+        ).strip(),
+    }
+
 def _build_edit_cards(
     payload: Dict[str, Any],
     preferred_rewrite_directions: List[str],
@@ -1245,6 +1350,7 @@ def _build_edit_cards(
     rewrite_candidates = payload.get("rewrite_candidates", []) or []
     bullet_reuse_candidates = payload.get("bullet_reuse_candidates", []) or []
     packet_supported_terms = _packet_term_support_terms(payload)
+    patch_ready_lookup = _patch_ready_rewrite_lookup(payload)
 
     # Pass 0: prioritize structural hidden-clause candidates from grounded reuse bullets
     for row in bullet_reuse_candidates:
@@ -1312,27 +1418,48 @@ def _build_edit_cards(
             source_text,
         )
 
+        candidate_lookup_key = _replacement_candidate_lookup_key(
+            {
+                "bullet_id": candidate.get("bullet_id", ""),
+                "source_bullet_id": candidate.get("source_bullet_id", ""),
+                "entry_id": candidate.get("entry_id", ""),
+                "source_entry_id": candidate.get("source_entry_id", ""),
+                "section": candidate.get("section", ""),
+                "source": candidate.get("source", ""),
+                "current_evidence": parent_bullet or current_evidence,
+                "parent_bullet": parent_bullet,
+                "bullet_excerpt": current_evidence,
+                "original_text": source_text,
+            }
+        )
+        patch_ready_candidate = patch_ready_lookup.get(candidate_lookup_key)
+
         recommended_rewrite = _recommended_rewrite_text(
             preferred_rewrite_directions,
             candidate,
             supported_terms,
         )
+        edit_type = _card_edit_type(evidence_type)
+        claim_safety = _card_claim_safety(evidence_type)
+        why_current_is_weak = _why_current_is_weak(candidate, supported_terms)
+        why_rewrite_is_better = _why_rewrite_is_better(candidate, supported_terms)
+        why_it_matters = _why_it_matters(candidate, supported_terms)
 
         card = {
             "card_id": f"edit_card_{index}",
             "evidence_type": evidence_type,
             "priority": _card_priority(index - 1, evidence_type),
-            "edit_type": _card_edit_type(evidence_type),
+            "edit_type": edit_type,
             "section": candidate.get("section", ""),
             "source": candidate.get("source", ""),
             "jd_signal_terms": supported_terms,
             "current_evidence": current_evidence,
             "parent_bullet": parent_bullet,
             "recommended_rewrite": recommended_rewrite,
-            "why_current_is_weak": _why_current_is_weak(candidate, supported_terms),
-            "why_rewrite_is_better": _why_rewrite_is_better(candidate, supported_terms),
-            "why_it_matters": _why_it_matters(candidate, supported_terms),
-            "claim_safety": _card_claim_safety(evidence_type),
+            "why_current_is_weak": why_current_is_weak,
+            "why_rewrite_is_better": why_rewrite_is_better,
+            "why_it_matters": why_it_matters,
+            "claim_safety": claim_safety,
             "placement_guidance": _placement_guidance(candidate),
             "entry_id": candidate.get("entry_id", ""),
             "entry_index": candidate.get("entry_index", -1),
@@ -1341,6 +1468,14 @@ def _build_edit_cards(
             "matched_surface_signal": matched_surface_signal,
             "canonical_supported_signal": canonical_supported_signal,
         }
+
+        if patch_ready_candidate is not None:
+            card.update(
+                _rewrite_card_fields_from_patch_ready_candidate(
+                    patch_ready_candidate,
+                    supported_terms,
+                )
+            )
 
         family_key = _edit_card_family_dedup_key(card)
         if family_key and family_key in seen_family_keys:
@@ -1596,19 +1731,6 @@ def _normalize_direct_overlap_rewrite_diagnosis(
 
     original_text = str(diagnosis.get("original_text", "") or "").strip()
 
-    if _supported_term_already_explicit_anywhere(original_text, supported_terms):
-        normalized = dict(diagnosis)
-        normalized["diagnosis_action"] = "keep"
-        normalized["diagnosis_reason_type"] = "keep_existing_anchor"
-        normalized["claim_safety"] = "keep_visible"
-        normalized["recommended_rewrite"] = ""
-        normalized["why"] = (
-            str(normalized.get("why", "") or "").strip()
-            or "This bullet already states the supported JD signal explicitly, so keep it as the visible anchor instead of forcing a rewrite."
-        )
-        normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
-        return normalized
-
     risks = _replacement_candidate_risks(packet, diagnosis)
 
     proposal_status, _, patch_generation_method = _deterministic_patch_text_from_diagnosis(
@@ -1621,6 +1743,30 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     normalized["precomputed_patch_generation_method"] = patch_generation_method
 
     if proposal_status == "patch_ready":
+        return normalized
+
+    if _supported_term_already_salient_early(original_text, supported_terms):
+        normalized["diagnosis_action"] = "keep"
+        normalized["diagnosis_reason_type"] = "keep_existing_anchor"
+        normalized["claim_safety"] = "keep_visible"
+        normalized["recommended_rewrite"] = ""
+        normalized["why"] = (
+            str(normalized.get("why", "") or "").strip()
+            or "This bullet already surfaces the supported JD signal early enough to remain the visible anchor without forcing a rewrite."
+        )
+        normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
+        return normalized
+
+    if _supported_term_already_explicit_anywhere(original_text, supported_terms):
+        normalized["diagnosis_action"] = "keep"
+        normalized["diagnosis_reason_type"] = "keep_existing_anchor"
+        normalized["claim_safety"] = "keep_visible"
+        normalized["recommended_rewrite"] = ""
+        normalized["why"] = (
+            str(normalized.get("why", "") or "").strip()
+            or "This bullet already states the supported JD signal explicitly, and no stronger deterministic patch survived validation, so keep it as the visible anchor."
+        )
+        normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
         return normalized
 
     normalized["diagnosis_action"] = "keep"
@@ -3078,8 +3224,8 @@ def _deterministic_parent_signal_label_patch(
 def _supported_term_already_salient_early(
     text: str,
     supported_terms: List[str],
-    max_words: int = 10,
-    max_chars: int = 80,
+    max_word_index: int = 2,
+    max_char_index: int = 18,
 ) -> bool:
     raw_text = str(text or "").strip()
     if not raw_text:
@@ -3093,17 +3239,31 @@ def _supported_term_already_salient_early(
     if not normalized_terms:
         return False
 
-    words = raw_text.split()
-    early_word_window = _diagnosis_normalize_term(" ".join(words[:max_words]))
-    early_char_window = _diagnosis_normalize_term(raw_text[:max_chars])
+    lower_text = raw_text.lower()
+
+    earliest_word_index: Optional[int] = None
+    earliest_char_index: Optional[int] = None
 
     for term in normalized_terms:
-        if term in early_word_window:
-            return True
-        if term in early_char_window:
-            return True
+        char_index = lower_text.find(term.lower())
+        if char_index < 0:
+            continue
 
-    return False
+        word_index = len(re.findall(r"\S+", raw_text[:char_index]))
+
+        if earliest_char_index is None or char_index < earliest_char_index:
+            earliest_char_index = char_index
+
+        if earliest_word_index is None or word_index < earliest_word_index:
+            earliest_word_index = word_index
+
+    if earliest_char_index is None or earliest_word_index is None:
+        return False
+
+    return (
+        earliest_word_index <= max_word_index
+        or earliest_char_index <= max_char_index
+    )
 
 
 def _family_already_explicit_in_text(
@@ -3752,15 +3912,32 @@ def _build_operator_markdown_payload(
     )
     operator_payload["preferred_rewrite_selection_audit"] = preferred_rewrite_selection_audit
 
-    edit_cards = _build_edit_cards(
+    initial_edit_cards = _build_edit_cards(
         operator_payload,
         preferred_rewrite_directions,
     )
 
     bullet_diagnoses = _build_bullet_diagnoses(
         operator_payload,
-        edit_cards,
+        initial_edit_cards,
         operator_payload.get("keep_as_is", []) or [],
+    )
+
+    operator_payload["bullet_diagnoses"] = bullet_diagnoses
+
+    operator_payload["replacement_candidates"] = _build_replacement_candidates(
+        operator_payload,
+        bullet_diagnoses,
+        llm_output=llm_output,
+    )
+    operator_payload["replacement_candidates"] = _apply_single_candidate_counterfactuals(
+        operator_payload,
+        operator_payload.get("replacement_candidates", []) or [],
+    )
+
+    edit_cards = _build_edit_cards(
+        operator_payload,
+        preferred_rewrite_directions,
     )
 
     edit_cards = _align_edit_cards_with_final_diagnoses(
@@ -3770,17 +3947,7 @@ def _build_operator_markdown_payload(
 
     operator_payload["edit_cards"] = edit_cards
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
-    operator_payload["bullet_diagnoses"] = bullet_diagnoses
 
-    operator_payload["replacement_candidates"] = _build_replacement_candidates(
-        operator_payload,
-        operator_payload.get("bullet_diagnoses", []) or [],
-        llm_output=llm_output,
-    )
-    operator_payload["replacement_candidates"] = _apply_single_candidate_counterfactuals(
-        operator_payload,
-        operator_payload.get("replacement_candidates", []) or [],
-    )
     operator_payload["patch_set_counterfactual_preview"] = _apply_patch_set_counterfactual_preview(
         operator_payload,
         operator_payload.get("replacement_candidates", []) or [],

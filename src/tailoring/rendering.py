@@ -3640,7 +3640,22 @@ def _using_phrase_match_for_supported_term(
         if _all_supported_terms_already_salient_early(text, list(normalized_supported)):
             return None
 
-    for match in re.finditer(r"\busing\s+(?P<phrase>[^,.;]+)", text, flags=re.IGNORECASE):
+    using_pattern = re.compile(
+        r"""
+        \busing\s+
+        (?P<phrase>
+            .*?
+        )
+        (?=
+            ,\s+(?:informing|enhancing|improving|ensuring|reducing|leveraging|driving|leading|resulting|enabling|revealing|uncovering|which|that)\b
+            |[.;]
+            |$
+        )
+        """,
+        flags=re.IGNORECASE | re.VERBOSE,
+    )
+
+    for match in using_pattern.finditer(text):
         phrase = str(match.group("phrase") or "").strip()
         phrase_norm = _diagnosis_normalize_term(phrase)
         if any(term in phrase_norm for term in normalized_supported):
@@ -3858,10 +3873,10 @@ def _deterministic_patch_text_from_diagnosis(
             _, patch_text = parent_signal_patch
             return "patch_ready", patch_text, "deterministic_parent_signal_label"
 
-    # Allow the using-phrase operator to handle up to 2 explicit supported terms.
-    # This safely broadens the rewrite lane for bullets like
-    # "using Python ... and customer segmentation ..."
-    if len(supported_terms) > 2:
+    # Allow the using-phrase operator to handle up to 3 explicit supported terms.
+    # This covers bullets like:
+    # "using Python for scenario modeling, SQL for data aggregation, & Tableau ..."
+    if len(supported_terms) > 3:
         return "direction_only", "", ""
 
     matched_supported_term_count = _using_phrase_supported_term_count(
@@ -3871,8 +3886,8 @@ def _deterministic_patch_text_from_diagnosis(
     if matched_supported_term_count <= 0:
         return "direction_only", "", ""
 
-    # For 2-signal cases, require the using-phrase span to cover both supported terms.
-    if len(supported_terms) == 2 and matched_supported_term_count < 2:
+    # For multi-signal cases, require the using-phrase span to cover every supported term.
+    if len(supported_terms) >= 2 and matched_supported_term_count < len(supported_terms):
         return "direction_only", "", ""
 
     match = _using_phrase_match_for_supported_term(original_text, supported_terms)

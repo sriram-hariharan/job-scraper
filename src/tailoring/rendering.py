@@ -1520,6 +1520,120 @@ def _keep_as_is_to_bullet_diagnosis(
         "placement_guidance": "Keep this bullet visible before editing lower-value evidence.",
     }
 
+def _normalize_reinforce_context_diagnosis(
+    diagnosis: Dict[str, Any],
+) -> Dict[str, Any]:
+    if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
+        return diagnosis
+
+    evidence_type = str(diagnosis.get("evidence_type", "") or "").strip()
+    reason_type = str(diagnosis.get("diagnosis_reason_type", "") or "").strip()
+    claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
+    matched_surface_signal = str(diagnosis.get("matched_surface_signal", "") or "").strip()
+    canonical_supported_signal = str(diagnosis.get("canonical_supported_signal", "") or "").strip()
+
+    should_keep_context = (
+        evidence_type == "same_source_context"
+        and (
+            reason_type == "reinforce"
+            or claim_safety == "adjacent_only"
+            or (not matched_surface_signal and not canonical_supported_signal)
+        )
+    )
+
+    if not should_keep_context:
+        return diagnosis
+
+    normalized = dict(diagnosis)
+    normalized["diagnosis_action"] = "keep"
+    normalized["diagnosis_reason_type"] = "keep_context_anchor"
+    normalized["claim_safety"] = "keep_visible"
+    normalized["recommended_rewrite"] = ""
+    normalized["why"] = (
+        str(normalized.get("why", "") or "").strip()
+        or "This bullet is reinforcing context for the main story and should stay visible instead of entering the rewrite lane."
+    )
+    normalized["placement_guidance"] = "Keep this supporting bullet visible near the main anchor."
+    return normalized
+
+def _supported_term_already_explicit_anywhere(
+    text: str,
+    supported_terms: List[str],
+) -> bool:
+    raw_text = str(text or "").strip()
+    if not raw_text:
+        return False
+
+    normalized_text = _diagnosis_normalize_term(raw_text)
+    normalized_terms = [
+        _diagnosis_normalize_term(term)
+        for term in (supported_terms or [])
+        if _diagnosis_normalize_term(term)
+    ]
+    if not normalized_terms:
+        return False
+
+    return any(term in normalized_text for term in normalized_terms)
+
+def _normalize_direct_overlap_rewrite_diagnosis(
+    packet: Dict[str, Any],
+    diagnosis: Dict[str, Any],
+) -> Dict[str, Any]:
+    if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
+        return diagnosis
+
+    if str(diagnosis.get("evidence_type", "") or "").strip() != "direct_overlap":
+        return diagnosis
+
+    if str(diagnosis.get("claim_safety", "") or "").strip() != "safe_strengthen":
+        return diagnosis
+
+    supported_terms = _unique_preserve_order(
+        list(diagnosis.get("jd_signal_terms", []) or [])
+        + [str(diagnosis.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+
+    if _supported_term_already_explicit_anywhere(original_text, supported_terms):
+        normalized = dict(diagnosis)
+        normalized["diagnosis_action"] = "keep"
+        normalized["diagnosis_reason_type"] = "keep_existing_anchor"
+        normalized["claim_safety"] = "keep_visible"
+        normalized["recommended_rewrite"] = ""
+        normalized["why"] = (
+            str(normalized.get("why", "") or "").strip()
+            or "This bullet already states the supported JD signal explicitly, so keep it as the visible anchor instead of forcing a rewrite."
+        )
+        normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
+        return normalized
+
+    risks = _replacement_candidate_risks(packet, diagnosis)
+
+    proposal_status, _, patch_generation_method = _deterministic_patch_text_from_diagnosis(
+        diagnosis,
+        risks["adjacent_risk_signals"],
+        risks["unsupported_risk_signals"],
+    )
+
+    normalized = dict(diagnosis)
+    normalized["precomputed_patch_generation_method"] = patch_generation_method
+
+    if proposal_status == "patch_ready":
+        return normalized
+
+    normalized["diagnosis_action"] = "keep"
+    normalized["diagnosis_reason_type"] = "keep_existing_anchor"
+    normalized["claim_safety"] = "keep_visible"
+    normalized["recommended_rewrite"] = ""
+    normalized["why"] = (
+        str(normalized.get("why", "") or "").strip()
+        or "This bullet already appears to be the strongest safe wording for the supported JD signal, so keep it visible instead of forcing a rewrite."
+    )
+    normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
+    return normalized
+
 def _replacement_candidate_confidence(diagnosis: Dict[str, Any]) -> str:
     score = 0
 
@@ -2930,6 +3044,8 @@ def _deterministic_parent_signal_label_patch(
         return None
 
     supported_family = supported_families[0]
+    if _family_already_explicit_in_text(original_text, supported_family):
+        return None
 
     impacted_dimensions = {
         str(item).strip()
@@ -2959,6 +3075,76 @@ def _deterministic_parent_signal_label_patch(
 
     return supported_family, patch_text
 
+def _supported_term_already_salient_early(
+    text: str,
+    supported_terms: List[str],
+    max_words: int = 10,
+    max_chars: int = 80,
+) -> bool:
+    raw_text = str(text or "").strip()
+    if not raw_text:
+        return False
+
+    normalized_terms = [
+        _diagnosis_normalize_term(term)
+        for term in (supported_terms or [])
+        if _diagnosis_normalize_term(term)
+    ]
+    if not normalized_terms:
+        return False
+
+    words = raw_text.split()
+    early_word_window = _diagnosis_normalize_term(" ".join(words[:max_words]))
+    early_char_window = _diagnosis_normalize_term(raw_text[:max_chars])
+
+    for term in normalized_terms:
+        if term in early_word_window:
+            return True
+        if term in early_char_window:
+            return True
+
+    return False
+
+
+def _family_already_explicit_in_text(
+    text: str,
+    family: str,
+) -> bool:
+    raw_text = str(text or "").strip()
+    if not raw_text:
+        return False
+
+    normalized_text = _diagnosis_normalize_term(raw_text)
+    family_terms = prioritized_family_terms_from_text(raw_text)
+
+    for term in family_terms:
+        if str(family_for_term(term) or "").strip() == family:
+            return True
+
+    if family == "analytics_ml":
+        if any(token in normalized_text for token in [
+            "machine learning",
+            "ml ",
+            " ml",
+            "model ",
+            "models",
+            "supervised ml",
+            "gradient boosting",
+        ]):
+            return True
+
+    if family == "experimentation":
+        if any(token in normalized_text for token in [
+            "experiment",
+            "experiments",
+            "a/b",
+            "ab test",
+            "testing",
+        ]):
+            return True
+
+    return False
+
 def _using_phrase_match_for_supported_term(
     original_text: str,
     supported_terms: List[str],
@@ -2973,6 +3159,9 @@ def _using_phrase_match_for_supported_term(
         if _diagnosis_normalize_term(item)
     }
     if not normalized_supported:
+        return None
+
+    if _supported_term_already_salient_early(text, list(normalized_supported)):
         return None
 
     for match in re.finditer(r"\busing\s+(?P<phrase>[^,.;]+)", text, flags=re.IGNORECASE):
@@ -3259,6 +3448,7 @@ def _materiality_validate_rewrite_candidate(
     candidate["precheck_evidence_delta"] = evidence_delta
 
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
+    patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
 
     export_safe_neutral_methods = {
         "deterministic_clause_extract",
@@ -3268,7 +3458,7 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_front_supported_phrase",
     }
 
-    if overall_delta == 0.0 and patch_generation_method in export_safe_neutral_methods:
+    if overall_delta == 0.0 and patch_generation_method_base in export_safe_neutral_methods:
         candidate["material_delta_found"] = False
         candidate["materiality_validation_status"] = "export_safe_no_score_lift"
         candidate["materiality_validation_note"] = (
@@ -3297,6 +3487,7 @@ def _materiality_validate_rewrite_candidate(
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
+    llm_output: Optional[Dict[str, Any]] = None,
     limit: int = 12,
 ) -> List[Dict[str, Any]]:
     candidates: List[Dict[str, Any]] = []
@@ -3338,6 +3529,14 @@ def _build_replacement_candidates(
                     candidates.append(candidate)
                 else:
                     candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
+
+                    if llm_output is not None:
+                        from src.tailoring.llm import _maybe_refine_patch_ready_rewrite_candidate
+                        candidate = _maybe_refine_patch_ready_rewrite_candidate(
+                            payload,
+                            candidate,
+                        )
+
                     candidate = _materiality_validate_rewrite_candidate(
                         payload,
                         candidate,
@@ -3422,12 +3621,18 @@ def _build_bullet_diagnoses(
 
     for index, card in enumerate(edit_cards, start=1):
         diagnosis = _edit_card_to_bullet_diagnosis(packet, card, index)
+        diagnosis = _normalize_reinforce_context_diagnosis(diagnosis)
+        diagnosis = _normalize_direct_overlap_rewrite_diagnosis(packet, diagnosis)
+
         key = _bullet_diagnosis_key(diagnosis)
         if key in seen_keys:
             continue
         seen_keys.add(key)
 
-        if _is_parent_signal_material_rewrite_diagnosis(diagnosis):
+        if (
+            str(diagnosis.get("diagnosis_action", "") or "").strip() == "rewrite"
+            and _is_parent_signal_material_rewrite_diagnosis(diagnosis)
+        ):
             prioritized_edit_diagnoses.append(diagnosis)
         else:
             regular_edit_diagnoses.append(diagnosis)
@@ -3496,6 +3701,7 @@ def _build_operator_markdown_payload(
     operator_payload["replacement_candidates"] = _build_replacement_candidates(
         operator_payload,
         operator_payload.get("bullet_diagnoses", []) or [],
+        llm_output=llm_output,
     )
     operator_payload["replacement_candidates"] = _apply_single_candidate_counterfactuals(
         operator_payload,

@@ -3145,6 +3145,14 @@ def _apply_single_candidate_counterfactuals(
 
     return candidates
 
+def _patch_candidate_bullet_id(candidate: Dict[str, Any]) -> str:
+    return (
+        str(candidate.get("source_bullet_id", "") or "").strip()
+        or str(candidate.get("bullet_id", "") or "").strip()
+        or str(candidate.get("diagnosis_id", "") or "").strip()
+        or str(candidate.get("candidate_id", "") or "").strip()
+    )
+
 def _resolve_patch_set_selection(
     candidates: List[Dict[str, Any]],
     selected_candidate_ids: Optional[List[str]] = None,
@@ -3169,7 +3177,7 @@ def _resolve_patch_set_selection(
 
         operation_type = str(candidate.get("operation_type", "") or "").strip()
         proposal_status = str(candidate.get("proposal_status", "") or "").strip()
-        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        source_bullet_id = _patch_candidate_bullet_id(candidate)
         patch_text = str(candidate.get("patch_text", "") or "").strip()
 
         if (
@@ -3201,7 +3209,7 @@ def _resolve_patch_set_selection(
 
         operation_type = str(candidate.get("operation_type", "") or "").strip()
         proposal_status = str(candidate.get("proposal_status", "") or "").strip()
-        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        source_bullet_id = _patch_candidate_bullet_id(candidate)
         patch_text = str(candidate.get("patch_text", "") or "").strip()
 
         if operation_type != "rewrite" or proposal_status != "patch_ready" or not source_bullet_id or not patch_text:

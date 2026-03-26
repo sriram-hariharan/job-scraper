@@ -787,7 +787,97 @@ def _direction_has_generic_skill_tail(direction: str) -> bool:
     return any(marker in text for marker in generic_markers)
 
 
+def _direction_supported_term_hits(direction: str, unit: Dict[str, Any]) -> List[str]:
+    text = str(direction or "").strip()
+    supported_terms = [
+        str(term).strip()
+        for term in (unit.get("supported_terms", []) or [])
+        if str(term).strip()
+    ]
+    return [term for term in supported_terms if _direction_mentions_any(text, [term])]
+
+
+def _direction_mentions_unit_source(direction: str, unit: Dict[str, Any]) -> bool:
+    text = str(direction or "").strip()
+    source = str(unit.get("source", "") or "").strip()
+    return bool(source and _direction_mentions_any(text, [source]))
+
+
+def _direction_mentions_unit_evidence(direction: str, unit: Dict[str, Any]) -> bool:
+    text = str(direction or "").strip()
+    evidence_unit = str(unit.get("evidence_unit", "") or "").strip()
+    if not evidence_unit:
+        return False
+
+    evidence_markers = [
+        evidence_unit[:80],
+        _short_bullet(evidence_unit, 140),
+    ]
+    return _direction_mentions_any(text, evidence_markers)
+
+
+def _best_direction_match_for_unit(
+    directions: List[str],
+    unit: Dict[str, Any],
+    allowed_prefixes: set[str],
+) -> Dict[str, Any]:
+    best_direction = ""
+    best_match_score = 0
+    best_supported_term_hits: List[str] = []
+    best_mentions_source = False
+    best_mentions_evidence = False
+
+    for item in directions or []:
+        prefix = _direction_prefix(item)
+        if prefix not in allowed_prefixes:
+            continue
+
+        match_score = _direction_plan_unit_match_score(item, unit)
+        if match_score <= 0:
+            continue
+
+        supported_term_hits = _direction_supported_term_hits(item, unit)
+        mentions_source = _direction_mentions_unit_source(item, unit)
+        mentions_evidence = _direction_mentions_unit_evidence(item, unit)
+
+        sort_key = (
+            match_score,
+            len(supported_term_hits),
+            1 if mentions_source else 0,
+            1 if mentions_evidence else 0,
+            1 if not _direction_has_truncation(item) else 0,
+            1 if not _direction_has_plannerese(item) else 0,
+            1 if not _direction_has_generic_skill_tail(item) else 0,
+        )
+        best_sort_key = (
+            best_match_score,
+            len(best_supported_term_hits),
+            1 if best_mentions_source else 0,
+            1 if best_mentions_evidence else 0,
+            1 if not _direction_has_truncation(best_direction) else 0,
+            1 if not _direction_has_plannerese(best_direction) else 0,
+            1 if not _direction_has_generic_skill_tail(best_direction) else 0,
+        )
+
+        if sort_key > best_sort_key:
+            best_direction = item
+            best_match_score = match_score
+            best_supported_term_hits = supported_term_hits
+            best_mentions_source = mentions_source
+            best_mentions_evidence = mentions_evidence
+
+    return {
+        "direction": best_direction,
+        "match_score": best_match_score,
+        "supported_term_hits": best_supported_term_hits,
+        "supported_term_hit_count": len(best_supported_term_hits),
+        "mentions_source": best_mentions_source,
+        "mentions_evidence": best_mentions_evidence,
+    }
+
+
 def _rewrite_direction_quality_report(
+    payload: Dict[str, Any],
     directions: List[str],
 ) -> Dict[str, Any]:
     actionable = [
@@ -809,22 +899,78 @@ def _rewrite_direction_quality_report(
         if not _direction_has_truncation(item)
     ]
 
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = plan.get("primary_anchor_units", []) or []
+    secondary_support_units = plan.get("secondary_support_units", []) or []
+
+    unit_matches: List[Dict[str, Any]] = []
+    for idx, unit in enumerate(primary_anchor_units):
+        match = _best_direction_match_for_unit(actionable, unit, {"Lead with"})
+        match["bucket"] = "primary_anchor"
+        match["unit_index"] = idx
+        unit_matches.append(match)
+
+    if secondary_support_units:
+        match = _best_direction_match_for_unit(
+            actionable,
+            secondary_support_units[0],
+            {"Support with"},
+        )
+        match["bucket"] = "secondary_support"
+        match["unit_index"] = 0
+        unit_matches.append(match)
+
+    matched_required_unit_count = sum(1 for item in unit_matches if item.get("direction"))
+    strong_required_unit_count = sum(
+        1
+        for item in unit_matches
+        if item.get("direction")
+        and int(item.get("match_score", 0)) >= 7
+        and int(item.get("supported_term_hit_count", 0)) > 0
+    )
+    supported_term_hit_count = sum(
+        int(item.get("supported_term_hit_count", 0))
+        for item in unit_matches
+    )
+    source_mention_count = sum(1 for item in unit_matches if item.get("mentions_source"))
+    evidence_mention_count = sum(1 for item in unit_matches if item.get("mentions_evidence"))
+
+    plan_units = primary_anchor_units + (secondary_support_units[:1] if secondary_support_units else [])
+    weak_anchor_lines = [
+        item for item in lead_support_lines
+        if not any(_direction_supported_term_hits(item, unit) for unit in plan_units)
+    ]
+
     score = (
         2 * len(full_anchor_lines)
+        + 2 * matched_required_unit_count
+        + 3 * strong_required_unit_count
+        + 1 * supported_term_hit_count
+        + 1 * source_mention_count
+        + 1 * evidence_mention_count
         - 2 * len(truncated_lines)
         - 2 * len(plannerese_lines)
         - 1 * len(generic_skill_tail_lines)
+        - 2 * len(weak_anchor_lines)
     )
 
     return {
         "score": score,
         "full_anchor_line_count": len(full_anchor_lines),
+        "matched_required_unit_count": matched_required_unit_count,
+        "strong_required_unit_count": strong_required_unit_count,
+        "supported_term_hit_count": supported_term_hit_count,
+        "source_mention_count": source_mention_count,
+        "evidence_mention_count": evidence_mention_count,
+        "weak_anchor_line_count": len(weak_anchor_lines),
         "truncated_line_count": len(truncated_lines),
         "plannerese_line_count": len(plannerese_lines),
         "generic_skill_tail_count": len(generic_skill_tail_lines),
         "truncated_lines": truncated_lines,
         "plannerese_lines": plannerese_lines,
         "generic_skill_tail_lines": generic_skill_tail_lines,
+        "weak_anchor_lines": weak_anchor_lines,
+        "unit_matches": unit_matches,
     }
 
 def _rewrite_path_audit(
@@ -838,7 +984,7 @@ def _rewrite_path_audit(
     ]
     verifier = _rewrite_direction_verifier_report(payload, actionable)
     covers_plan = _rewrite_directions_cover_plan(payload, actionable)
-    quality = _rewrite_direction_quality_report(actionable)
+    quality = _rewrite_direction_quality_report(payload, actionable)
 
     return {
         "count": len(actionable),
@@ -856,8 +1002,14 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> tuple:
 
     return (
         int(audit.get("quality_score", 0)),
-        1 if candidate.get("is_polished") else 0,
+        int(quality.get("matched_required_unit_count", 0)),
+        int(quality.get("strong_required_unit_count", 0)),
+        int(quality.get("supported_term_hit_count", 0)),
+        int(quality.get("source_mention_count", 0)),
+        int(quality.get("evidence_mention_count", 0)),
         int(quality.get("full_anchor_line_count", 0)),
+        1 if candidate.get("is_polished") else 0,
+        -int(quality.get("weak_anchor_line_count", 0)),
         -int(quality.get("truncated_line_count", 0)),
         -int(quality.get("plannerese_line_count", 0)),
         -int(quality.get("generic_skill_tail_count", 0)),
@@ -979,6 +1131,141 @@ def _equivalent_candidate_ids_for_selected_candidate(
 
     return _unique_preserve_order(equivalent)
 
+def _planner_guardrail_directions(directions: List[str]) -> List[str]:
+    rows: List[str] = []
+
+    for item in directions or []:
+        text = str(item or "").strip()
+        if not _is_actionable_rewrite_direction(text):
+            continue
+
+        prefix = _direction_prefix(text)
+        if prefix not in {"Lead with", "Support with"}:
+            rows.append(text)
+
+    return _unique_preserve_order(rows)
+
+
+def _structured_direction_from_plan_unit(
+    prefix: str,
+    unit: Dict[str, Any],
+    *,
+    mode: str = "term_first",
+) -> str:
+    source = str(unit.get("source", "") or "").strip()
+    evidence_unit = str(unit.get("evidence_unit", "") or "").strip()
+    supported_terms = [
+        str(term).strip()
+        for term in (unit.get("supported_terms", []) or [])
+        if str(term).strip()
+    ]
+    supported_text = ", ".join(supported_terms)
+
+    if mode == "evidence_first":
+        head_parts = [prefix]
+        if source and supported_text:
+            head_parts.append(f"{source} evidence for {supported_text}:")
+        elif source:
+            head_parts.append(f"{source} evidence:")
+        elif supported_text:
+            head_parts.append(f"evidence for {supported_text}:")
+        else:
+            head_parts.append("evidence:")
+
+        text = " ".join(head_parts).strip()
+        if evidence_unit:
+            text = f"{text} {evidence_unit}".strip()
+        return text
+
+    head_parts = [prefix]
+    if supported_text:
+        head_parts.append(supported_text)
+
+    if source:
+        head_parts.append(f"from {source}:")
+    elif supported_text:
+        head_parts.append(":")
+
+    text = " ".join(head_parts).replace(" :", ":").strip()
+    if evidence_unit:
+        text = f"{text} {evidence_unit}".strip()
+
+    return text
+
+
+def _planner_structured_candidate_variants(
+    payload: Dict[str, Any],
+    planner_directions: List[str],
+) -> List[Dict[str, Any]]:
+    plan = payload.get("tailoring_plan", {}) or {}
+    primary_anchor_units = list(plan.get("primary_anchor_units", []) or [])
+    secondary_support_units = list(plan.get("secondary_support_units", []) or [])
+    guardrails = _planner_guardrail_directions(planner_directions)
+
+    if not primary_anchor_units:
+        return []
+
+    variants: List[Dict[str, Any]] = []
+
+    def _emit(candidate_id: str, lead_mode: str, support_mode: str) -> None:
+        rows: List[str] = []
+
+        for unit in primary_anchor_units[:3]:
+            line = _structured_direction_from_plan_unit(
+                "Lead with",
+                unit,
+                mode=lead_mode,
+            )
+            if line:
+                rows.append(line)
+
+        for unit in secondary_support_units[:1]:
+            line = _structured_direction_from_plan_unit(
+                "Support with",
+                unit,
+                mode=support_mode,
+            )
+            if line:
+                rows.append(line)
+
+        rows.extend(guardrails[:2])
+        rows = _unique_preserve_order(
+            [
+                str(item).strip()
+                for item in rows
+                if _is_actionable_rewrite_direction(item)
+            ]
+        )
+
+        if not rows:
+            return
+
+        variants.append(
+            {
+                "candidate_id": candidate_id,
+                "source_family": "deterministic_planner",
+                "directions": rows[:6],
+            }
+        )
+
+    _emit(
+        "deterministic_planner_term_first",
+        "term_first",
+        "term_first",
+    )
+    _emit(
+        "deterministic_planner_evidence_first",
+        "evidence_first",
+        "evidence_first",
+    )
+    _emit(
+        "deterministic_planner_mixed",
+        "term_first",
+        "evidence_first",
+    )
+
+    return variants
+
 def _build_rewrite_candidate_pool(
     payload: Dict[str, Any],
     planner_directions: List[str],
@@ -1012,6 +1299,13 @@ def _build_rewrite_candidate_pool(
             "deterministic_planner",
             _polish_selected_rewrite_directions(payload, planner_directions),
         )
+
+        for candidate in _planner_structured_candidate_variants(payload, planner_directions):
+            _add_candidate(
+                candidate["candidate_id"],
+                candidate["source_family"],
+                candidate["directions"],
+            )
 
     if live_directions:
         _add_candidate("live_llm", "live_llm", live_directions)
@@ -1212,7 +1506,13 @@ def _candidate_pool_audit_rows(candidates: List[Dict[str, Any]]) -> List[Dict[st
                 "covers_plan": bool(audit.get("covers_plan")),
                 "verifier_ok": bool(audit.get("verifier_ok")),
                 "quality_score": int(audit.get("quality_score", 0)),
+                "matched_required_unit_count": int(quality.get("matched_required_unit_count", 0)),
+                "strong_required_unit_count": int(quality.get("strong_required_unit_count", 0)),
+                "supported_term_hit_count": int(quality.get("supported_term_hit_count", 0)),
+                "source_mention_count": int(quality.get("source_mention_count", 0)),
+                "evidence_mention_count": int(quality.get("evidence_mention_count", 0)),
                 "full_anchor_line_count": int(quality.get("full_anchor_line_count", 0)),
+                "weak_anchor_line_count": int(quality.get("weak_anchor_line_count", 0)),
                 "truncated_line_count": int(quality.get("truncated_line_count", 0)),
                 "plannerese_line_count": int(quality.get("plannerese_line_count", 0)),
                 "generic_skill_tail_count": int(quality.get("generic_skill_tail_count", 0)),
@@ -1270,16 +1570,37 @@ def _choose_best_valid_rewrite_path(
     if best_key and deterministic_key and best_key == deterministic_key:
         return "deterministic_planner", "deterministic_kept_as_identical_best_candidate"
 
-    if _rewrite_candidate_sort_key(best_candidate) == _rewrite_candidate_sort_key(deterministic_candidate):
+    deterministic_sort_key = _rewrite_candidate_sort_key(deterministic_candidate)
+    best_sort_key = _rewrite_candidate_sort_key(best_candidate)
+
+    if best_sort_key == deterministic_sort_key:
         return "deterministic_planner", "deterministic_kept_as_equivalent_quality_candidate"
+
+    best_quality = best_audit.get("quality", {}) or {}
+    deterministic_quality = deterministic_audit.get("quality", {}) or {}
+
+    if int(best_quality.get("matched_required_unit_count", 0)) > int(
+        deterministic_quality.get("matched_required_unit_count", 0)
+    ):
+        return best_source, f"{best_source}_wins_on_required_unit_coverage"
+
+    if int(best_quality.get("strong_required_unit_count", 0)) > int(
+        deterministic_quality.get("strong_required_unit_count", 0)
+    ):
+        return best_source, f"{best_source}_wins_on_anchor_fidelity"
+
+    if int(best_quality.get("supported_term_hit_count", 0)) > int(
+        deterministic_quality.get("supported_term_hit_count", 0)
+    ):
+        return best_source, f"{best_source}_wins_on_supported_term_specificity"
 
     if best_score >= deterministic_score + 2:
         return best_source, f"{best_source}_quality_beats_deterministic"
 
     if (
         best_score > deterministic_score
-        and best_audit.get("quality", {}).get("truncated_line_count", 0)
-        < deterministic_audit.get("quality", {}).get("truncated_line_count", 0)
+        and best_quality.get("truncated_line_count", 0)
+        < deterministic_quality.get("truncated_line_count", 0)
     ):
         return best_source, f"{best_source}_wins_on_truncation_quality"
 

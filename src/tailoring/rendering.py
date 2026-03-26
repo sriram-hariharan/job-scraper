@@ -4614,6 +4614,19 @@ def _build_operator_markdown_payload(
     )
 
     operator_payload["edit_cards"] = edit_cards
+
+    from src.tailoring.replacement_selector import build_final_replacement_plan
+
+    final_replacement_plan = build_final_replacement_plan(
+        operator_payload.get("replacement_candidates", []) or [],
+        edit_cards,
+    )
+
+    operator_payload["final_replacement_decisions"] = final_replacement_plan.get("decisions", [])
+    operator_payload["app_ready_replacements"] = final_replacement_plan.get("app_ready_replacements", [])
+    operator_payload["direction_only_replacements"] = final_replacement_plan.get("direction_only_replacements", [])
+    operator_payload["final_replacement_summary"] = final_replacement_plan.get("summary", {})
+
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
 
     operator_payload["patch_set_counterfactual_preview"] = _apply_patch_set_counterfactual_preview(

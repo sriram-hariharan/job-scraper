@@ -11,6 +11,51 @@ from src.tailoring.rendering import (
     _build_training_log_row,
 )
 
+def _print_rewrite_ideas_console(final_payload: dict) -> None:
+    print("-" * 100)
+    print("EVIDENCE-BACKED REWRITE IDEAS")
+    print("-" * 100)
+
+    rewrite_cards = [
+        row
+        for row in (final_payload.get("edit_cards", []) or [])
+        if str(row.get("edit_type", "") or "").strip() == "rewrite"
+    ]
+
+    if rewrite_cards:
+        for row in rewrite_cards:
+            print(
+                f"- [{row.get('section', '')}] {row.get('source', '')} | "
+                f"type={row.get('evidence_type', '')} | supports={row.get('jd_signal_terms', [])}"
+            )
+
+            if str(row.get("replacement_materiality_validation_status", "") or "").strip():
+                print(
+                    f"  Patch status: {row.get('replacement_materiality_validation_status', '')}"
+                )
+
+            if str(row.get("patch_generation_method", "") or "").strip():
+                print(
+                    f"  Patch method: {row.get('patch_generation_method', '')}"
+                )
+
+            print(f"  Proposed rewrite: {row.get('recommended_rewrite', '')}")
+            print(f"  Evidence: {row.get('current_evidence', '')}")
+            if row.get("parent_bullet"):
+                print(f"  Parent bullet: {row.get('parent_bullet', '')}")
+        print()
+        return
+
+    for row in final_payload.get("rewrite_candidates", []):
+        print(
+            f"- [{row.get('section', '')}] {row.get('source', '')} | "
+            f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
+        )
+        print(f"  Action: {row.get('action', '')}")
+        print(f"  Evidence: {row.get('bullet_excerpt', '')}")
+        if row.get("parent_bullet"):
+            print(f"  Parent bullet: {row.get('parent_bullet', '')}")
+    print()
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate grounded tailoring suggestions from a JD diff packet."
@@ -86,17 +131,7 @@ def main() -> None:
         print(f"- {item}")
     print()
 
-    print("-" * 100)
-    print("EVIDENCE-BACKED REWRITE IDEAS")
-    print("-" * 100)
-    for row in payload.get("rewrite_candidates", []):
-        print(
-            f"- [{row.get('section', '')}] {row.get('source', '')} | "
-            f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
-        )
-        print(f"  Action: {row.get('action', '')}")
-        print(f"  Evidence: {row.get('bullet_excerpt', '')}")
-    print()
+    _print_rewrite_ideas_console(final_payload)
 
     print("-" * 100)
     print("EVIDENCE LAYERS")
@@ -187,6 +222,9 @@ def main() -> None:
         
         final_payload = _build_operator_markdown_payload(payload, llm_output)
         markdown = _markdown_from_payload(final_payload)
+
+        print()
+        _print_rewrite_ideas_console(final_payload)
 
         if output_json_path is not None:
             output_json_path.write_text(json.dumps(final_payload, indent=2), encoding="utf-8")

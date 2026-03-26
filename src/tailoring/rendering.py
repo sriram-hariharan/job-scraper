@@ -3546,6 +3546,54 @@ def _deterministic_patch_text_from_diagnosis(
 
     return "patch_ready", patch_text, "deterministic_using_phrase"
 
+def _fronting_rewrite_counts_as_material_without_score_lift(
+    candidate: Dict[str, Any],
+    evidence_changed: bool,
+) -> bool:
+    if not evidence_changed:
+        return False
+
+    supported_jd_signals = [
+        str(item).strip()
+        for item in (candidate.get("supported_jd_signals", []) or [])
+        if str(item).strip()
+    ]
+    if not supported_jd_signals:
+        return False
+
+    patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
+    patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
+
+    signal_fronting_methods = {
+        "deterministic_using_phrase",
+        "deterministic_front_supported_phrase",
+        "deterministic_clause_extract",
+        "deterministic_exact_signal_variant",
+    }
+
+    return patch_generation_method_base in signal_fronting_methods
+
+def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
+    candidate: Dict[str, Any],
+) -> bool:
+    supported_jd_signals = [
+        str(item).strip()
+        for item in (candidate.get("supported_jd_signals", []) or [])
+        if str(item).strip()
+    ]
+    if not supported_jd_signals:
+        return False
+
+    patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
+    patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
+
+    return patch_generation_method_base in {
+        "deterministic_using_phrase",
+        "deterministic_front_supported_phrase",
+        "deterministic_clause_extract",
+        "deterministic_exact_signal_variant",
+    }
+
 def _materiality_validate_rewrite_candidate(
     payload: Dict[str, Any],
     candidate: Dict[str, Any],
@@ -3618,15 +3666,15 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_front_supported_phrase",
     }
 
-    if overall_delta == 0.0 and patch_generation_method_base in export_safe_neutral_methods:
-        candidate["material_delta_found"] = False
-        candidate["materiality_validation_status"] = "export_safe_no_score_lift"
-        candidate["materiality_validation_note"] = (
-            "Deterministic rewrite is grounded and patch-safe for export, but the frozen scorer shows no projected score lift."
-        )
-        return candidate
-
     if overall_delta == 0.0 and not evidence_changed:
+        if _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(candidate):
+            candidate["material_delta_found"] = False
+            candidate["materiality_validation_status"] = "export_safe_no_score_lift"
+            candidate["materiality_validation_note"] = (
+                "Deterministic signal-fronting rewrite is grounded and patch-safe for export, but the scorer-visible evidence snapshot did not change and the frozen scorer shows no projected score lift."
+            )
+            return candidate
+
         candidate["proposal_status"] = "direction_only"
         candidate["proposal_type"] = "directional_rewrite"
         candidate["patch_ready"] = False
@@ -3634,6 +3682,25 @@ def _materiality_validate_rewrite_candidate(
         candidate["materiality_validation_status"] = "scorer_neutral_no_evidence_change"
         candidate["materiality_validation_note"] = (
             "Deterministic rewrite changes phrasing only and does not change scorer-visible evidence, so it remains directional."
+        )
+        return candidate
+
+    if overall_delta == 0.0 and _fronting_rewrite_counts_as_material_without_score_lift(
+        candidate,
+        evidence_changed,
+    ):
+        candidate["material_delta_found"] = True
+        candidate["materiality_validation_status"] = "material_candidate"
+        candidate["materiality_validation_note"] = (
+            "Deterministic signal-fronting rewrite changed scorer-visible evidence and is treated as materially better even though the frozen scorer shows no projected score lift."
+        )
+        return candidate
+
+    if overall_delta == 0.0 and patch_generation_method_base in export_safe_neutral_methods:
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = "export_safe_no_score_lift"
+        candidate["materiality_validation_note"] = (
+            "Deterministic rewrite is grounded and patch-safe for export, but the frozen scorer shows no projected score lift."
         )
         return candidate
 
@@ -4479,6 +4546,70 @@ def _build_training_log_row(
         "guardrail": payload.get("guardrail", ""),
     }
 
+def _rewrite_idea_card_lookup(payload: Dict[str, Any]) -> Dict[tuple, Dict[str, Any]]:
+    lookup: Dict[tuple, Dict[str, Any]] = {}
+
+    for card in (payload.get("edit_cards", []) or []):
+        if str(card.get("edit_type", "") or "").strip() != "rewrite":
+            continue
+
+        recommended_rewrite = str(card.get("recommended_rewrite", "") or "").strip()
+        if not recommended_rewrite:
+            continue
+
+        key = _replacement_candidate_lookup_key(
+            {
+                "bullet_id": card.get("bullet_id", ""),
+                "source_bullet_id": card.get("source_bullet_id", ""),
+                "entry_id": card.get("entry_id", ""),
+                "source_entry_id": card.get("source_entry_id", ""),
+                "section": card.get("section", ""),
+                "source": card.get("source", ""),
+                "current_evidence": card.get("parent_bullet", "") or card.get("current_evidence", ""),
+                "parent_bullet": card.get("parent_bullet", ""),
+                "bullet_excerpt": card.get("current_evidence", ""),
+                "original_text": card.get("parent_bullet", "") or card.get("current_evidence", ""),
+            }
+        )
+
+        existing = lookup.get(key)
+
+        def _rank(item: Dict[str, Any]) -> tuple:
+            return (
+                1 if str(item.get("replacement_candidate_id", "") or "").strip() else 0,
+                1 if str(item.get("patch_generation_method", "") or "").strip() else 0,
+                len(str(item.get("recommended_rewrite", "") or "").strip()),
+            )
+
+        if existing is None or _rank(card) > _rank(existing):
+            lookup[key] = card
+
+    return lookup
+
+
+def _rewrite_idea_override_card(
+    payload: Dict[str, Any],
+    rewrite_candidate: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    lookup = _rewrite_idea_card_lookup(payload)
+
+    key = _replacement_candidate_lookup_key(
+        {
+            "bullet_id": rewrite_candidate.get("bullet_id", ""),
+            "source_bullet_id": rewrite_candidate.get("source_bullet_id", ""),
+            "entry_id": rewrite_candidate.get("entry_id", ""),
+            "source_entry_id": rewrite_candidate.get("source_entry_id", ""),
+            "section": rewrite_candidate.get("section", ""),
+            "source": rewrite_candidate.get("source", ""),
+            "current_evidence": rewrite_candidate.get("parent_bullet", "") or rewrite_candidate.get("bullet_excerpt", ""),
+            "parent_bullet": rewrite_candidate.get("parent_bullet", ""),
+            "bullet_excerpt": rewrite_candidate.get("bullet_excerpt", ""),
+            "original_text": rewrite_candidate.get("parent_bullet", "") or rewrite_candidate.get("bullet_excerpt", ""),
+        }
+    )
+
+    return lookup.get(key)
+
 def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     job = payload.get("job", {}) or {}
     selection = payload.get("selection", {}) or {}
@@ -4829,11 +4960,31 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
 
     lines.append("### Evidence-Backed Rewrite Ideas")
     for row in payload.get("rewrite_candidates", []):
+        override_card = _rewrite_idea_override_card(payload, row)
+
+        action_text = str(row.get("action", "") or "").strip()
+        action_label = "Action"
+
+        if override_card is not None and str(override_card.get("recommended_rewrite", "") or "").strip():
+            action_text = str(override_card.get("recommended_rewrite", "") or "").strip()
+            action_label = "Proposed rewrite"
+
         lines.append(
             f"- **[{row.get('section', '')}] {row.get('source', '')}** | "
             f"type={row.get('evidence_type', '')} | supports={row.get('supported_terms', [])}"
         )
-        lines.append(f"  - Action: {row.get('action', '')}")
+
+        if override_card is not None and str(override_card.get("replacement_materiality_validation_status", "") or "").strip():
+            lines.append(
+                f"  - Patch status: {override_card.get('replacement_materiality_validation_status', '')}"
+            )
+
+        if override_card is not None and str(override_card.get("patch_generation_method", "") or "").strip():
+            lines.append(
+                f"  - Patch method: {override_card.get('patch_generation_method', '')}"
+            )
+
+        lines.append(f"  - {action_label}: {action_text}")
         lines.append(f"  - Evidence unit: {row.get('bullet_excerpt', '')}")
         if row.get("parent_bullet"):
             lines.append(f"  - Parent bullet: {row.get('parent_bullet', '')}")

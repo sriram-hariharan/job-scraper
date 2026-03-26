@@ -3656,6 +3656,71 @@ def _build_bullet_diagnoses(
 
     return diagnoses
 
+def _keep_style_edit_type_from_diagnosis_reason(reason_type: str) -> str:
+    reason = str(reason_type or "").strip()
+    if reason == "keep_context_anchor":
+        return "supporting_context"
+    return "keep_visible"
+
+
+def _align_edit_card_with_final_diagnosis(
+    card: Dict[str, Any],
+    diagnosis: Dict[str, Any],
+) -> Dict[str, Any]:
+    reason_type = str(diagnosis.get("diagnosis_reason_type", "") or "").strip()
+    if reason_type not in {"keep_existing_anchor", "keep_context_anchor"}:
+        return card
+
+    aligned = dict(card)
+    aligned["final_diagnosis_action"] = str(diagnosis.get("diagnosis_action", "") or "").strip()
+    aligned["final_diagnosis_reason_type"] = reason_type
+    aligned["edit_type"] = _keep_style_edit_type_from_diagnosis_reason(reason_type)
+    aligned["claim_safety"] = "keep_visible"
+    aligned["recommended_rewrite"] = ""
+    aligned["why_current_is_weak"] = ""
+    aligned["why_rewrite_is_better"] = ""
+    aligned["why_it_matters"] = (
+        str(diagnosis.get("why", "") or "").strip()
+        or str(card.get("why_it_matters", "") or "").strip()
+    )
+    aligned["placement_guidance"] = (
+        str(diagnosis.get("placement_guidance", "") or "").strip()
+        or str(card.get("placement_guidance", "") or "").strip()
+    )
+
+    return aligned
+
+
+def _align_edit_cards_with_final_diagnoses(
+    edit_cards: List[Dict[str, Any]],
+    bullet_diagnoses: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    diagnosis_by_key: Dict[tuple, Dict[str, Any]] = {}
+
+    for diagnosis in bullet_diagnoses or []:
+        key = _bullet_diagnosis_key(diagnosis)
+        diagnosis_by_key[key] = diagnosis
+
+    aligned_cards: List[Dict[str, Any]] = []
+
+    for card in edit_cards or []:
+        key = _bullet_diagnosis_key(
+            {
+                "bullet_id": str(card.get("bullet_id", "") or "").strip(),
+                "section": str(card.get("section", "") or "").strip(),
+                "source": str(card.get("source", "") or "").strip(),
+                "current_evidence": str(card.get("current_evidence", "") or "").strip(),
+            }
+        )
+        diagnosis = diagnosis_by_key.get(key)
+        if diagnosis is None:
+            aligned_cards.append(card)
+            continue
+
+        aligned_cards.append(_align_edit_card_with_final_diagnosis(card, diagnosis))
+
+    return aligned_cards
+
 def _build_operator_markdown_payload(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
@@ -3691,13 +3756,22 @@ def _build_operator_markdown_payload(
         operator_payload,
         preferred_rewrite_directions,
     )
-    operator_payload["edit_cards"] = edit_cards
-    operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
-    operator_payload["bullet_diagnoses"] = _build_bullet_diagnoses(
+
+    bullet_diagnoses = _build_bullet_diagnoses(
         operator_payload,
         edit_cards,
         operator_payload.get("keep_as_is", []) or [],
     )
+
+    edit_cards = _align_edit_cards_with_final_diagnoses(
+        edit_cards,
+        bullet_diagnoses,
+    )
+
+    operator_payload["edit_cards"] = edit_cards
+    operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
+    operator_payload["bullet_diagnoses"] = bullet_diagnoses
+
     operator_payload["replacement_candidates"] = _build_replacement_candidates(
         operator_payload,
         operator_payload.get("bullet_diagnoses", []) or [],

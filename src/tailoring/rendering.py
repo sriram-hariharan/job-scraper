@@ -3,7 +3,6 @@ from pathlib import Path
 import re
 import hashlib
 import json
-import copy
 
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
@@ -51,6 +50,7 @@ from src.matching.signal_family_matcher import (
     prioritized_family_terms_from_text,
     supported_signal_match_in_text,
 )
+from src.config.consts import ACTION_VERB_HINTS
 
 _PROMOTABLE_SIGNAL_FAMILY_LABELS = {
     "experimentation": "Experimentation",
@@ -80,6 +80,26 @@ _STRUCTURAL_CLAUSE_FAMILY_PRIORITY = {
     "experimentation": 0,
     "analytics_ml": 1,
 }
+
+_ACTION_VERB_HINTS_LOWER = {
+    str(item).strip().lower()
+    for item in ACTION_VERB_HINTS
+    if str(item).strip()
+}
+
+def _rewrite_lead_token(text: str) -> str:
+    tokens = re.findall(r"[A-Za-z][A-Za-z\-]+", str(text or ""))
+    return tokens[0].lower() if tokens else ""
+
+def _using_phrase_fronting_would_break_bullet_tone(original_text: str) -> bool:
+    lead = _rewrite_lead_token(original_text)
+    if not lead:
+        return False
+
+    if lead in {"using", "with", "via", "by", "through"}:
+        return False
+
+    return lead in _ACTION_VERB_HINTS_LOWER or lead.endswith("ed")
 
 def _build_recruiter_summary(packet: Dict[str, Any]) -> str:
     job = packet.get("job", {})
@@ -1749,6 +1769,18 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     normalized["precomputed_patch_generation_method"] = patch_generation_method
 
     if proposal_status == "patch_ready":
+        return normalized
+    
+    rewrite_direction = str(normalized.get("recommended_rewrite", "") or "").strip()
+    has_grounded_directional_rewrite = (
+        bool(rewrite_direction)
+        and rewrite_direction.startswith(("Lead with", "Support with"))
+    )
+
+    if has_grounded_directional_rewrite and not _supported_term_already_salient_early(
+        original_text,
+        supported_terms,
+    ):
         return normalized
 
     if _supported_term_already_salient_early(original_text, supported_terms):
@@ -3827,6 +3859,65 @@ def _using_phrase_supported_term_count(
 
     return sum(1 for term in normalized_supported if term in phrase_norm)
 
+def _natural_join_terms(terms: List[str]) -> str:
+    items = [
+        str(item).strip()
+        for item in (terms or [])
+        if str(item).strip()
+    ]
+    items = _unique_preserve_order(items)
+
+    if not items:
+        return ""
+    if len(items) == 1:
+        return items[0]
+    if len(items) == 2:
+        return f"{items[0]} and {items[1]}"
+    return f"{', '.join(items[:-1])}, and {items[-1]}"
+
+def _deterministic_lead_preserving_using_phrase_patch(
+    diagnosis: Dict[str, Any],
+    supported_terms: List[str],
+    match: re.Match,
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    before = re.sub(r"\s+", " ", original_text[: match.start()].strip(" ,"))
+    after = re.sub(r"\s+", " ", original_text[match.end() :].lstrip(" ,"))
+
+    if not before:
+        return None
+
+    phrase_terms = [
+        str(item).strip()
+        for item in (supported_terms or [])
+        if str(item).strip()
+    ]
+    phrase = _natural_join_terms(phrase_terms)
+    if not phrase:
+        phrase = str(match.group("phrase") or "").strip()
+
+    if not phrase:
+        return None
+
+    patch_text = f"{before} using {phrase}".strip()
+    if after:
+        patch_text = f"{patch_text} {after}".strip()
+
+    patch_text = re.sub(r"\s+", " ", patch_text)
+    patch_text = re.sub(r"\s+,", ",", patch_text)
+    patch_text = patch_text.rstrip(" .")
+
+    if original_text.endswith("."):
+        patch_text += "."
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    return patch_text
+
 def _deterministic_patch_text_from_diagnosis(
     diagnosis: Dict[str, Any],
     adjacent_risk_signals: List[str],
@@ -3894,30 +3985,15 @@ def _deterministic_patch_text_from_diagnosis(
     if not match:
         return "direction_only", "", ""
 
-    phrase = str(match.group("phrase") or "").strip()
-    before = original_text[: match.start()].strip(" ,")
-    after = original_text[match.end() :].lstrip(" ,")
-
-    if not before:
+    patch_text = _deterministic_lead_preserving_using_phrase_patch(
+        diagnosis,
+        supported_terms,
+        match,
+    )
+    if not patch_text:
         return "direction_only", "", ""
 
-    rest = " ".join(part for part in [before, after] if str(part or "").strip()).strip()
-    if not rest:
-        return "direction_only", "", ""
-
-    rest = re.sub(r"\s+", " ", rest)
-    rest = _lowercase_first_character(rest)
-
-    patch_text = f"Using {phrase}, {rest}".strip()
-    patch_text = re.sub(r"\s+,", ",", patch_text)
-    patch_text = patch_text.rstrip(" .")
-    if original_text.endswith("."):
-        patch_text += "."
-
-    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
-        return "direction_only", "", ""
-
-    return "patch_ready", patch_text, "deterministic_using_phrase"
+    return "patch_ready", patch_text, "deterministic_lead_preserving_using_phrase"
     
     
 def _fronting_rewrite_counts_as_material_without_score_lift(
@@ -3940,6 +4016,7 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
 
     signal_fronting_methods = {
         "deterministic_using_phrase",
+        "deterministic_lead_preserving_using_phrase",
         "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
@@ -3963,6 +4040,7 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
 
     return patch_generation_method_base in {
         "deterministic_using_phrase",
+        "deterministic_lead_preserving_using_phrase",
         "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
@@ -4037,6 +4115,7 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_exact_signal_variant",
         "deterministic_parent_signal_label",
         "deterministic_using_phrase",
+        "deterministic_lead_preserving_using_phrase",
         "deterministic_front_supported_phrase",
     }
 
@@ -4131,18 +4210,29 @@ def _build_replacement_candidates(
                 else:
                     candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
 
-                    if llm_output is not None:
-                        from src.tailoring.llm import _maybe_refine_patch_ready_rewrite_candidate
-                        candidate = _maybe_refine_patch_ready_rewrite_candidate(
-                            payload,
-                            candidate,
-                        )
-
                     candidate = _materiality_validate_rewrite_candidate(
                         payload,
                         candidate,
                         counterfactual_context,
                     )
+
+                    if (
+                        llm_output is not None
+                        and str(candidate.get("operation_type", "") or "").strip() == "rewrite"
+                        and str(candidate.get("proposal_status", "") or "").strip() == "patch_ready"
+                        and str(candidate.get("materiality_validation_status", "") or "").strip() == "material_candidate"
+                    ):
+                        from src.tailoring.llm import _maybe_refine_patch_ready_rewrite_candidate
+                        candidate = _maybe_refine_patch_ready_rewrite_candidate(
+                            payload,
+                            candidate,
+                        )
+                        candidate = _materiality_validate_rewrite_candidate(
+                            payload,
+                            candidate,
+                            counterfactual_context,
+                        )
+
                     candidates.append(candidate)
 
         elif action == "keep":

@@ -742,12 +742,17 @@ def _build_patch_refinement_prompt(
     lines.append("12. Output one bullet only, not commentary.")
     lines.append("13. Do NOT drop meaningful multi-word technical or method phrases from the original bullet.")
     lines.append("14. If your reason is that the original bullet is already strong, concise, or clear, abstain instead of rewriting.")
+    lines.append("15. Keep the same opening tense/style as the original bullet.")
+    lines.append("16. Preserve the original lead action word unless abstaining.")
+    lines.append("17. If the original bullet starts with a past-tense action word, the refined bullet must also start with that same past-tense action word.")
+    lines.append("18. Do NOT switch a past-tense bullet into gerund/opening-phrase style such as Using, With, By, Through, or Via.")
     lines.append("")
     lines.append("Style target:")
     lines.append("- Sound like a strong real resume bullet, not a keyword shuffle.")
     lines.append("- Keep it concise but do not compress away important evidence.")
     lines.append("- Preserve measurable outcomes and technical nouns.")
     lines.append(f"- Protected substantive phrases: {protected_phrases}")
+    lines.append("- Match the original bullet's opening verb style and tense.")
     lines.append("")
     lines.append("Job context:")
     lines.append(f"- Company: {job.get('company', '')}")
@@ -776,6 +781,10 @@ def _build_patch_refinement_prompt(
     lines.append("- reason: one short sentence")
     lines.append("- preserved_terms: terms or metrics you intentionally preserved")
     lines.append("- risk_flags: empty list when safe")
+    lines.append("")
+    lines.append("Opening-style constraints:")
+    lines.append(f"- Original lead token: {original_lead or '<none>'}")
+    lines.append(f"- Nearby sibling bullet openings: {sibling_openings or []}")
     return "\n".join(lines)
 
 def _patch_refinement_similarity_ratio(a: str, b: str) -> float:
@@ -860,6 +869,12 @@ def _validate_patch_refinement_output(
         if len(refined_words) < min_words:
             return False, "possible_information_loss"
 
+    original_lead = _patch_refinement_lead_token(original_text)
+    refined_lead = _patch_refinement_lead_token(refined)
+
+    if original_lead and refined_lead and refined_lead != original_lead:
+        return False, f"lead_token_changed:{original_lead}->{refined_lead}"
+    
     return True, "ok"
 
 
@@ -873,6 +888,9 @@ def _maybe_refine_patch_ready_rewrite_candidate(
     if str(candidate.get("proposal_status", "") or "").strip() != "patch_ready":
         return candidate
 
+    if str(candidate.get("materiality_validation_status", "") or "").strip() != "material_candidate":
+        return candidate
+    
     deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
     if not deterministic_patch_text:
         return candidate
@@ -891,8 +909,8 @@ Rules:
 6. Return valid JSON only.
 """
 
-    requested_provider = "groq"
-    requested_model = "llama-3.3-70b-versatile"
+    requested_provider = PATCH_REFINEMENT_PROVIDER
+    requested_model = PATCH_REFINEMENT_MODEL
 
     try:
         llm_result = run_chat_completion_with_metadata(
@@ -976,7 +994,7 @@ Rules:
         and any(token in reason_text for token in ["already clear", "already concise", "already strong"])
     ):
         updated["llm_refinement_used"] = False
-        updated["llm_refinement_status"] = "validation_failed"
+        updated["llm_refinement_status"] = "validation_failed_kept_deterministic"
         updated["llm_refinement_note"] = "should_have_abstained"
         updated["llm_refinement_rejected_text"] = refined_patch_text
         updated["llm_refinement_provider"] = str(
@@ -987,15 +1005,8 @@ Rules:
         ).strip()
         updated["llm_refinement_requested_provider"] = requested_provider
         updated["llm_refinement_requested_model"] = requested_model
-        updated["proposal_status"] = "direction_only"
-        updated["patch_ready"] = False
-        updated["material_delta_found"] = False
-        updated["patch_text"] = ""
-        updated["proposed_text"] = ""
-        updated["materiality_validation_status"] = "llm_abstained_keep_original"
         updated["materiality_validation_note"] = (
-            "LLM refinement determined the original bullet is already the best safe wording, "
-            "so no final rewrite patch is surfaced."
+            "LLM refinement should have abstained, so the deterministic material candidate was kept unchanged."
         )
         return updated
 
@@ -1013,17 +1024,11 @@ Rules:
 
     if parsed.get("abstain", False):
         updated["llm_refinement_used"] = False
-        updated["llm_refinement_status"] = "abstained"
+        updated["llm_refinement_status"] = "abstained_kept_deterministic"
         updated["llm_refinement_note"] = parsed.get("reason", "")
         updated["llm_refinement_rejected_text"] = str(parsed.get("refined_patch_text", "") or "").strip()
-        updated["proposal_status"] = "direction_only"
-        updated["patch_ready"] = False
-        updated["material_delta_found"] = False
-        updated["patch_text"] = ""
-        updated["proposed_text"] = ""
-        updated["materiality_validation_status"] = "llm_abstained_keep_original"
         updated["materiality_validation_note"] = (
-            "LLM refinement abstained because the original bullet is already the strongest safe wording."
+            "LLM refinement abstained, so the deterministic material candidate was kept unchanged."
         )
         return updated
 
@@ -1038,16 +1043,14 @@ Rules:
         if validation_reason in {
             "same_as_original",
             "near_same_as_original",
+            "same_as_deterministic",
+            "near_same_as_deterministic",
             "should_have_abstained",
-        }:
-            updated["proposal_status"] = "direction_only"
-            updated["patch_ready"] = False
-            updated["material_delta_found"] = False
-            updated["patch_text"] = ""
-            updated["proposed_text"] = ""
-            updated["materiality_validation_status"] = "llm_abstained_keep_original"
+            "lead_token_changed",
+        } or str(validation_reason).startswith("lead_token_changed:"):
+            updated["llm_refinement_status"] = "validation_failed_kept_deterministic"
             updated["materiality_validation_note"] = (
-                "LLM refinement did not produce a materially better final rewrite, so the original bullet is kept."
+                "LLM refinement did not produce a safer or better final rewrite, so the deterministic material candidate was kept."
             )
 
         return updated

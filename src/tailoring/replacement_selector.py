@@ -23,6 +23,13 @@ def _unique_preserve_order(items: List[str]) -> List[str]:
         ordered.append(key)
     return ordered
 
+def _candidate_bullet_id(candidate: Dict[str, Any]) -> str:
+    return (
+        _text(candidate.get("source_bullet_id", ""))
+        or _text(candidate.get("bullet_id", ""))
+        or _text(candidate.get("diagnosis_id", ""))
+        or _text(candidate.get("candidate_id", ""))
+    )
 
 def _candidate_confidence_rank(candidate: Dict[str, Any]) -> int:
     confidence = _text(candidate.get("confidence", "")).lower()
@@ -164,7 +171,7 @@ def _group_rewrite_candidates(
         if _text(candidate.get("operation_type", "")) != "rewrite":
             continue
 
-        bullet_id = _text(candidate.get("source_bullet_id", ""))
+        bullet_id = _candidate_bullet_id(candidate)
         if not bullet_id:
             continue
 
@@ -190,6 +197,7 @@ def build_final_replacement_plan(
         )
         best_candidate = ordered_candidates[0]
         card = card_by_bullet_id.get(bullet_id, {})
+        resolved_bullet_id = _candidate_bullet_id(best_candidate) or bullet_id
 
         original_text = _text(best_candidate.get("original_text", "")) or _text(card.get("current_evidence", ""))
         rewrite_direction = _text(best_candidate.get("rewrite_instruction", "")) or _text(card.get("recommended_rewrite", ""))
@@ -200,7 +208,7 @@ def build_final_replacement_plan(
                     "decision_id": f"final_replacement:{bullet_id}",
                     "replacement_status": "direct_apply_ready",
                     "apply_priority": _apply_priority(best_candidate),
-                    "source_bullet_id": bullet_id,
+                    "source_bullet_id": resolved_bullet_id,
                     "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
                     "section": _text(best_candidate.get("section", "")),
                     "source": _text(best_candidate.get("source", "")),
@@ -227,7 +235,7 @@ def build_final_replacement_plan(
                     "decision_id": f"final_replacement:{bullet_id}",
                     "replacement_status": "direct_apply_optional",
                     "apply_priority": _apply_priority(best_candidate),
-                    "source_bullet_id": bullet_id,
+                    "source_bullet_id": resolved_bullet_id,
                     "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
                     "section": _text(best_candidate.get("section", "")),
                     "source": _text(best_candidate.get("source", "")),
@@ -254,7 +262,7 @@ def build_final_replacement_plan(
                     "decision_id": f"final_replacement:{bullet_id}",
                     "replacement_status": "direction_only",
                     "apply_priority": _apply_priority(best_candidate),
-                    "source_bullet_id": bullet_id,
+                    "source_bullet_id": resolved_bullet_id,
                     "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
                     "section": _text(best_candidate.get("section", "")),
                     "source": _text(best_candidate.get("source", "")),
@@ -280,7 +288,7 @@ def build_final_replacement_plan(
                 "decision_id": f"final_replacement:{bullet_id}",
                 "replacement_status": "keep_original",
                 "apply_priority": "low",
-                "source_bullet_id": bullet_id,
+                "source_bullet_id": resolved_bullet_id,
                 "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
                 "section": _text(best_candidate.get("section", "")),
                 "source": _text(best_candidate.get("source", "")),

@@ -367,23 +367,28 @@ def planning_dashboard() -> str:
         </section>
         <section class="card tailoring-primary-card">
           <div class="section-header">
+            <div>
+              <h3>Replacement Plan</h3>
+              <div class="subtext">
+                Apply-now replacements are shown first, optional polish second, and guidance-only suggestions below.
+              </div>
+            </div>
+          </div>
+
+          <div id="tailoringInteractiveSummary" class="tailoring-interactive-shell">
+            <div class="tailoring-empty-state">
+              Loading replacement plan...
+            </div>
+          </div>
+        </section>
+        <section class="card tailoring-primary-card">
+          <div class="section-header">
             <h3>Patch Preview</h3>
           </div>
 
           <div id="tailoringPatchPreviewSummary" class="tailoring-interactive-shell">
             <div class="tailoring-empty-state">
               Loading patch preview...
-            </div>
-          </div>
-        </section>
-        <section class="card tailoring-primary-card">
-          <div class="section-header">
-            <h3>Action Plan</h3>
-          </div>
-
-          <div id="tailoringInteractiveSummary" class="tailoring-interactive-shell">
-            <div class="tailoring-empty-state">
-              Loading structured tailoring guidance...
             </div>
           </div>
         </section>

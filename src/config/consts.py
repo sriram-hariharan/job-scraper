@@ -1161,3 +1161,22 @@ ACTION_VERB_HINTS = [
     "supported",
     "used",
 ]
+
+# ============================================================
+# REPLACEMENT SELECTION
+# ============================================================
+
+_BAD_COUNTERFACTUAL_STATUSES = {
+    "bullet_id_not_found",
+    "bullet_id_not_unique",
+    "bullet_index_out_of_range",
+    "raw_text_bullet_not_found",
+    "raw_text_bullet_not_unique",
+    "missing_patch_inputs",
+    "unsupported_operation",
+}
+
+_DIRECT_APPLY_MATERIALITY_STATUSES = {
+    "material_candidate",
+    "export_safe_no_score_lift",
+}

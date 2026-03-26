@@ -582,6 +582,18 @@ def _tailoring_artifact_candidate_ids(payload: Dict[str, Any]) -> List[str]:
 
     return candidate_ids
 
+def _default_selected_candidate_ids_from_replacement_plan(payload: Dict[str, Any]) -> List[str]:
+    selected_ids: List[str] = []
+    seen = set()
+
+    for row in list(payload.get("app_ready_replacements", []) or []):
+        candidate_id = _clean_text(row.get("replacement_candidate_id"))
+        if not candidate_id or candidate_id in seen:
+            continue
+        seen.add(candidate_id)
+        selected_ids.append(candidate_id)
+
+    return selected_ids
 
 def _tailoring_artifact_signature(payload: Dict[str, Any]) -> str:
     job = payload.get("job", {}) or {}
@@ -650,6 +662,19 @@ def _apply_saved_patch_selection_overlay(
     selection_row = latest_by_path.get(str(artifact_path))
 
     if not selection_row:
+        default_selected_ids = _default_selected_candidate_ids_from_replacement_plan(data)
+        if not default_selected_ids:
+            return data
+
+        data["selected_patch_candidate_ids"] = default_selected_ids
+        data["selected_patch_selection_status"] = "auto_from_replacement_plan"
+        data["selected_patch_selection_note"] = (
+            "No saved manual patch selection found. Defaulting to apply-now replacements from the final replacement plan."
+        )
+        data["selected_patch_set_counterfactual_preview"] = build_selected_patch_set_counterfactual_preview(
+            data,
+            selected_candidate_ids=default_selected_ids,
+        )
         return data
 
     saved_signature = _clean_text(selection_row.get("artifact_signature"))
@@ -1715,6 +1740,8 @@ def preview_planning_patch_selection_payload(
         raise ValueError("Tailoring artifact does not contain replacement candidates.")
 
     normalized_ids = _normalize_selected_patch_candidate_ids(selected_candidate_ids)
+    if not normalized_ids:
+        normalized_ids = _default_selected_candidate_ids_from_replacement_plan(payload_data)
     valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
     unknown_candidate_ids = [candidate_id for candidate_id in normalized_ids if candidate_id not in valid_candidate_ids]
     if unknown_candidate_ids:
@@ -1762,6 +1789,8 @@ def record_planning_patch_selection_payload(
         raise ValueError("Tailoring artifact does not contain replacement candidates.")
 
     normalized_ids = _normalize_selected_patch_candidate_ids(selected_candidate_ids)
+    if not normalized_ids:
+        normalized_ids = _default_selected_candidate_ids_from_replacement_plan(payload_data)
 
     valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
     unknown_candidate_ids = [candidate_id for candidate_id in normalized_ids if candidate_id not in valid_candidate_ids]

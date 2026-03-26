@@ -1398,7 +1398,11 @@ def _build_edit_cards(
         if bullet_id and bullet_id in seen_bullet_ids:
             continue
 
-        seed_terms = list(candidate.get("supported_terms", []) or [])
+        seed_terms = [
+            str(term).strip()
+            for term in (candidate.get("supported_terms", []) or [])
+            if str(term).strip()
+        ]
         current_evidence = str(candidate.get("bullet_excerpt", "") or "").strip()
         parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
         source_text = parent_bullet or current_evidence
@@ -1411,7 +1415,9 @@ def _build_edit_cards(
         matched_surface_signal = str(signal_match.get("matched_term", "") or "").strip()
         canonical_supported_signal = str(signal_match.get("supported_term", "") or "").strip()
 
-        supported_terms = [canonical_supported_signal] if canonical_supported_signal else seed_terms
+        supported_terms = _unique_preserve_order(
+            ([canonical_supported_signal] if canonical_supported_signal else []) + seed_terms
+        )
         evidence_type = _resolved_edit_card_evidence_type(
             candidate,
             supported_terms,
@@ -3305,6 +3311,23 @@ def _family_already_explicit_in_text(
 
     return False
 
+def _all_supported_terms_already_salient_early(
+    text: str,
+    supported_terms: List[str],
+) -> bool:
+    normalized_supported = [
+        _diagnosis_normalize_term(item)
+        for item in (supported_terms or [])
+        if _diagnosis_normalize_term(item)
+    ]
+    if not normalized_supported:
+        return False
+
+    return all(
+        _supported_term_already_salient_early(text, [term])
+        for term in normalized_supported
+    )
+
 def _using_phrase_match_for_supported_term(
     original_text: str,
     supported_terms: List[str],
@@ -3321,8 +3344,12 @@ def _using_phrase_match_for_supported_term(
     if not normalized_supported:
         return None
 
-    if _supported_term_already_salient_early(text, list(normalized_supported)):
-        return None
+    if len(normalized_supported) == 1:
+        if _supported_term_already_salient_early(text, list(normalized_supported)):
+            return None
+    else:
+        if _all_supported_terms_already_salient_early(text, list(normalized_supported)):
+            return None
 
     for match in re.finditer(r"\busing\s+(?P<phrase>[^,.;]+)", text, flags=re.IGNORECASE):
         phrase = str(match.group("phrase") or "").strip()
@@ -3477,6 +3504,25 @@ def _deterministic_front_supported_phrase_patch(
 
     return patch_text
 
+def _using_phrase_supported_term_count(
+    original_text: str,
+    supported_terms: List[str],
+) -> int:
+    match = _using_phrase_match_for_supported_term(original_text, supported_terms)
+    if not match:
+        return 0
+
+    phrase = str(match.group("phrase") or "").strip()
+    phrase_norm = _diagnosis_normalize_term(phrase)
+
+    normalized_supported = [
+        _diagnosis_normalize_term(item)
+        for item in (supported_terms or [])
+        if _diagnosis_normalize_term(item)
+    ]
+
+    return sum(1 for term in normalized_supported if term in phrase_norm)
+
 def _deterministic_patch_text_from_diagnosis(
     diagnosis: Dict[str, Any],
     adjacent_risk_signals: List[str],
@@ -3484,7 +3530,11 @@ def _deterministic_patch_text_from_diagnosis(
 ) -> Tuple[str, str, str]:
     claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
     confidence = _replacement_candidate_confidence(diagnosis)
-    supported_terms = list(diagnosis.get("jd_signal_terms", []) or [])
+    supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
     original_text = str(diagnosis.get("original_text", "") or "").strip()
 
     if claim_safety != "safe_strengthen":
@@ -3496,26 +3546,45 @@ def _deterministic_patch_text_from_diagnosis(
     if adjacent_risk_signals or unsupported_risk_signals:
         return "direction_only", "", ""
 
-    if len(supported_terms) != 1:
+    if not supported_terms:
         return "direction_only", "", ""
 
-    clause_patch = _deterministic_clause_extract_patch(diagnosis)
-    if clause_patch:
-        return "patch_ready", clause_patch, "deterministic_clause_extract"
+    # Keep the narrower single-signal operators exactly as they are.
+    if len(supported_terms) == 1:
+        clause_patch = _deterministic_clause_extract_patch(diagnosis)
+        if clause_patch:
+            return "patch_ready", clause_patch, "deterministic_clause_extract"
 
-    exact_signal_patch = _deterministic_exact_signal_variant_patch(diagnosis)
-    if exact_signal_patch:
-        _, patch_text = exact_signal_patch
-        return "patch_ready", patch_text, "deterministic_exact_signal_variant"
-    
-    front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
-    if front_supported_phrase_patch:
-        return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase"
+        exact_signal_patch = _deterministic_exact_signal_variant_patch(diagnosis)
+        if exact_signal_patch:
+            _, patch_text = exact_signal_patch
+            return "patch_ready", patch_text, "deterministic_exact_signal_variant"
 
-    parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
-    if parent_signal_patch:
-        _, patch_text = parent_signal_patch
-        return "patch_ready", patch_text, "deterministic_parent_signal_label"
+        front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
+        if front_supported_phrase_patch:
+            return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase"
+
+        parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
+        if parent_signal_patch:
+            _, patch_text = parent_signal_patch
+            return "patch_ready", patch_text, "deterministic_parent_signal_label"
+
+    # Allow the using-phrase operator to handle up to 2 explicit supported terms.
+    # This safely broadens the rewrite lane for bullets like
+    # "using Python ... and customer segmentation ..."
+    if len(supported_terms) > 2:
+        return "direction_only", "", ""
+
+    matched_supported_term_count = _using_phrase_supported_term_count(
+        original_text,
+        supported_terms,
+    )
+    if matched_supported_term_count <= 0:
+        return "direction_only", "", ""
+
+    # For 2-signal cases, require the using-phrase span to cover both supported terms.
+    if len(supported_terms) == 2 and matched_supported_term_count < 2:
+        return "direction_only", "", ""
 
     match = _using_phrase_match_for_supported_term(original_text, supported_terms)
     if not match:
@@ -3545,7 +3614,8 @@ def _deterministic_patch_text_from_diagnosis(
         return "direction_only", "", ""
 
     return "patch_ready", patch_text, "deterministic_using_phrase"
-
+    
+    
 def _fronting_rewrite_counts_as_material_without_score_lift(
     candidate: Dict[str, Any],
     evidence_changed: bool,

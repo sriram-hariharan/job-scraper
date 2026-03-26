@@ -3,7 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional, Tuple
 from src.config.consts import (
     _BAD_COUNTERFACTUAL_STATUSES,
-    _DIRECT_APPLY_MATERIALITY_STATUSES,
+    _DIRECT_APPLY_READY_MATERIALITY_STATUSES,
+    _DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES,
 )
 
 
@@ -70,16 +71,12 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
     )
 
 
-def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
+def _passes_direct_apply_safety(candidate: Dict[str, Any]) -> bool:
     if _text(candidate.get("operation_type", "")) != "rewrite":
         return False
     if _text(candidate.get("proposal_status", "")) != "patch_ready":
         return False
     if not _text(candidate.get("patch_text", "")):
-        return False
-
-    materiality_status = _text(candidate.get("materiality_validation_status", ""))
-    if materiality_status not in _DIRECT_APPLY_MATERIALITY_STATUSES:
         return False
 
     if list(candidate.get("unsupported_risk_signals", []) or []):
@@ -90,6 +87,25 @@ def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
         return False
 
     return True
+
+
+def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
+    if not _passes_direct_apply_safety(candidate):
+        return False
+
+    materiality_status = _text(candidate.get("materiality_validation_status", ""))
+    return materiality_status in _DIRECT_APPLY_READY_MATERIALITY_STATUSES
+
+
+def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
+    if not _passes_direct_apply_safety(candidate):
+        return False
+
+    materiality_status = _text(candidate.get("materiality_validation_status", ""))
+    if materiality_status not in _DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES:
+        return False
+
+    return _candidate_confidence_rank(candidate) >= 2
 
 
 def _apply_priority(candidate: Dict[str, Any]) -> str:
@@ -205,6 +221,33 @@ def build_final_replacement_plan(
             )
             continue
 
+        if _is_direct_apply_optional(best_candidate):
+            decisions.append(
+                {
+                    "decision_id": f"final_replacement:{bullet_id}",
+                    "replacement_status": "direct_apply_optional",
+                    "apply_priority": _apply_priority(best_candidate),
+                    "source_bullet_id": bullet_id,
+                    "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
+                    "section": _text(best_candidate.get("section", "")),
+                    "source": _text(best_candidate.get("source", "")),
+                    "replacement_candidate_id": _text(best_candidate.get("candidate_id", "")),
+                    "replacement_source": _replacement_source(best_candidate),
+                    "patch_generation_method": _text(best_candidate.get("patch_generation_method", "")),
+                    "materiality_validation_status": _text(best_candidate.get("materiality_validation_status", "")),
+                    "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                    "confidence": _text(best_candidate.get("confidence", "")),
+                    "original_text": original_text,
+                    "final_replacement_text": _text(best_candidate.get("patch_text", "")),
+                    "rewrite_direction": rewrite_direction,
+                    "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
+                    "adjacent_risk_signals": list(best_candidate.get("adjacent_risk_signals", []) or []),
+                    "unsupported_risk_signals": list(best_candidate.get("unsupported_risk_signals", []) or []),
+                    "likely_impacted_dimensions": list(best_candidate.get("likely_impacted_dimensions", []) or []),
+                }
+            )
+            continue
+
         if rewrite_direction:
             decisions.append(
                 {
@@ -260,7 +303,10 @@ def build_final_replacement_plan(
     decisions = sorted(
         decisions,
         key=lambda item: (
-            1 if _text(item.get("replacement_status", "")) == "direct_apply_ready" else 0,
+            3 if _text(item.get("replacement_status", "")) == "direct_apply_ready"
+            else 2 if _text(item.get("replacement_status", "")) == "direct_apply_optional"
+            else 1 if _text(item.get("replacement_status", "")) == "direction_only"
+            else 0,
             1 if _text(item.get("apply_priority", "")) == "high" else 0,
             1 if _text(item.get("apply_priority", "")) == "medium" else 0,
             len(_text(item.get("final_replacement_text", ""))),
@@ -272,6 +318,10 @@ def build_final_replacement_plan(
         row for row in decisions
         if _text(row.get("replacement_status", "")) == "direct_apply_ready"
     ]
+    direct_apply_optional_replacements = [
+        row for row in decisions
+        if _text(row.get("replacement_status", "")) == "direct_apply_optional"
+    ]
     direction_only_replacements = [
         row for row in decisions
         if _text(row.get("replacement_status", "")) == "direction_only"
@@ -280,6 +330,7 @@ def build_final_replacement_plan(
     summary = {
         "total_rewrite_bullets": len(decisions),
         "direct_apply_ready_count": len(app_ready_replacements),
+        "direct_apply_optional_count": len(direct_apply_optional_replacements),
         "direction_only_count": len(direction_only_replacements),
         "keep_original_count": len(
             [row for row in decisions if _text(row.get("replacement_status", "")) == "keep_original"]
@@ -287,11 +338,15 @@ def build_final_replacement_plan(
         "selected_candidate_ids": _unique_preserve_order(
             [_text(row.get("replacement_candidate_id", "")) for row in app_ready_replacements]
         ),
+        "optional_candidate_ids": _unique_preserve_order(
+            [_text(row.get("replacement_candidate_id", "")) for row in direct_apply_optional_replacements]
+        ),
     }
 
     return {
         "decisions": decisions,
         "app_ready_replacements": app_ready_replacements,
+        "direct_apply_optional_replacements": direct_apply_optional_replacements,
         "direction_only_replacements": direction_only_replacements,
         "summary": summary,
     }

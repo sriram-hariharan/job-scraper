@@ -4624,6 +4624,7 @@ def _build_operator_markdown_payload(
 
     operator_payload["final_replacement_decisions"] = final_replacement_plan.get("decisions", [])
     operator_payload["app_ready_replacements"] = final_replacement_plan.get("app_ready_replacements", [])
+    operator_payload["direct_apply_optional_replacements"] = final_replacement_plan.get("direct_apply_optional_replacements", [])
     operator_payload["direction_only_replacements"] = final_replacement_plan.get("direction_only_replacements", [])
     operator_payload["final_replacement_summary"] = final_replacement_plan.get("summary", {})
 

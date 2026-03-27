@@ -30,19 +30,35 @@ job-scraper-489208-d8667c88c023.json
 *.db-journal
 *.db-wal
 *.db-shm
+*.sqbpro
 
 # runtime state
 data/seen_job_ids.txt
+data/seen_job_ids\ 2.txt
 data/*.db
 data/*cache*
 data/ats_cache.json
+data/discovery_offsets.json
+data/company_crawl_state.json
 
-# generated planning outputs
-outputs/application_planning/
-# keep these tracked benchmark files if you want them in repo
+# RAG index and corpus (large generated files)
+data/rag/index/
+data/rag/job_corpus.jsonl
+
+# Embeddings (binary, large)
+data/resume_embeddings/
+
+# outputs and archive
+outputs/
+archive/
+
+# keep these tracked benchmark files
 !outputs/skill_extraction_gold_template.jsonl
 !outputs/skill_extraction_gold_template_backup.jsonl
 !outputs/skill_extraction_gold_first3_only.jsonl
+
+# trace files
 *_trace.txt
-*.log
+
+# resumes (local only)
 data/profile_resumes/

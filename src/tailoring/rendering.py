@@ -1315,6 +1315,32 @@ def _patch_ready_rewrite_lookup(
 
     return lookup
 
+def _directional_rewrite_lookup(
+    payload: Dict[str, Any],
+) -> Dict[tuple, Dict[str, Any]]:
+    lookup: Dict[tuple, Dict[str, Any]] = {}
+
+    for candidate in (payload.get("replacement_candidates", []) or []):
+        if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+            continue
+        if str(candidate.get("proposal_status", "") or "").strip() != "direction_only":
+            continue
+
+        key = _replacement_candidate_lookup_key(candidate)
+        existing = lookup.get(key)
+
+        def _rank(row: Dict[str, Any]) -> tuple:
+            reason = str(row.get("direction_only_reason", "") or "").strip()
+            return (
+                1 if reason == "multi_signal_already_explicit_reorder_preferred" else 0,
+                1 if reason == "supported_terms_too_generic_to_front" else 0,
+                len(str(row.get("rewrite_instruction", "") or "").strip()),
+            )
+
+        if existing is None or _rank(candidate) > _rank(existing):
+            lookup[key] = candidate
+
+    return lookup
 
 def _rewrite_card_fields_from_patch_ready_candidate(
     replacement_candidate: Dict[str, Any],
@@ -1360,6 +1386,80 @@ def _rewrite_card_fields_from_patch_ready_candidate(
         ).strip(),
     }
 
+
+def _rewrite_card_fields_from_directional_candidate(
+    replacement_candidate: Dict[str, Any],
+    supported_terms: List[str],
+) -> Dict[str, Any]:
+    reason = str(replacement_candidate.get("direction_only_reason", "") or "").strip()
+    rewrite_instruction = str(replacement_candidate.get("rewrite_instruction", "") or "").strip()
+
+    lead = ", ".join(_truncate_list(supported_terms, 4)) if supported_terms else "the supported JD signals"
+
+    if reason == "multi_signal_already_explicit_reorder_preferred":
+        return {
+            "edit_type": "keep_visible",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                f"The bullet already explicitly contains {lead}, so the issue is visibility/order, not wording."
+            ),
+            "why_rewrite_is_better": (
+                "A textual rewrite is unnecessary here. Moving this bullet earlier is the cleaner ATS and recruiter-facing action."
+            ),
+            "why_it_matters": (
+                f"This bullet already has the right signal set ({lead}); it should be kept highly visible instead of rewritten."
+            ),
+            "placement_guidance": (
+                "Move this bullet earlier within the section if stronger ATS visibility is needed."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+
+    if reason == "supported_terms_too_generic_to_front":
+        return {
+            "edit_type": "support",
+            "claim_safety": "adjacent_only",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                "The matched supported term is too generic to front safely as a standalone rewrite target."
+            ),
+            "why_rewrite_is_better": (
+                "The safer move is to keep this bullet as secondary support rather than force a direct rewrite around a generic term."
+            ),
+            "why_it_matters": (
+                "This helps preserve truthfulness and avoids ATS-looking but weak rewrites."
+            ),
+            "placement_guidance": (
+                "Keep this bullet as supporting context only unless a stronger direct signal is available."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+
+    return {
+        "edit_type": "support",
+        "claim_safety": "adjacent_only",
+        "recommended_rewrite": "",
+        "why_current_is_weak": (
+            "This candidate does not justify a grounded rewrite, but it may still support the JD story."
+        ),
+        "why_rewrite_is_better": (
+            "The safer action is directional emphasis rather than textual rewriting."
+        ),
+        "why_it_matters": (
+            rewrite_instruction
+            or "This is better handled as visibility or supporting-context guidance."
+        ),
+        "placement_guidance": (
+            "Keep visible only if it supports stronger primary anchors."
+        ),
+        "direction_only_reason": reason or "directional_rewrite_preferred",
+        "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+    }
+
+
 def _build_edit_cards(
     payload: Dict[str, Any],
     preferred_rewrite_directions: List[str],
@@ -1373,6 +1473,7 @@ def _build_edit_cards(
     bullet_reuse_candidates = payload.get("bullet_reuse_candidates", []) or []
     packet_supported_terms = _packet_term_support_terms(payload)
     patch_ready_lookup = _patch_ready_rewrite_lookup(payload)
+    directional_lookup = _directional_rewrite_lookup(payload)
 
     # Pass 0: prioritize structural hidden-clause candidates from grounded reuse bullets
     for row in bullet_reuse_candidates:
@@ -1461,6 +1562,7 @@ def _build_edit_cards(
             }
         )
         patch_ready_candidate = patch_ready_lookup.get(candidate_lookup_key)
+        directional_candidate = directional_lookup.get(candidate_lookup_key)
 
         recommended_rewrite = _recommended_rewrite_text(
             preferred_rewrite_directions,
@@ -1501,6 +1603,13 @@ def _build_edit_cards(
             card.update(
                 _rewrite_card_fields_from_patch_ready_candidate(
                     patch_ready_candidate,
+                    supported_terms,
+                )
+            )
+        elif directional_candidate is not None:
+            card.update(
+                _rewrite_card_fields_from_directional_candidate(
+                    directional_candidate,
                     supported_terms,
                 )
             )
@@ -1913,11 +2022,37 @@ def _diagnosis_to_replacement_candidate(
 
     rewrite_instruction = str(diagnosis.get("recommended_rewrite", "") or "").strip()
 
-    proposal_status, patch_text, patch_generation_method = _deterministic_patch_text_from_diagnosis(
-        diagnosis,
-        risks["adjacent_risk_signals"],
-        risks["unsupported_risk_signals"],
-    )
+    directional_only_reason = ""
+
+    reroute_directional_only, reroute_reason = _should_reroute_rewrite_to_directional_only(diagnosis)
+    if reroute_directional_only:
+        proposal_status = "direction_only"
+        patch_text = ""
+        patch_generation_method = ""
+        directional_only_reason = reroute_reason
+
+        if reroute_reason == "multi_signal_already_explicit_reorder_preferred":
+            rewrite_instruction = (
+                "Do not rewrite this bullet text. The supported JD signals are already explicit. "
+                "Prefer moving this bullet earlier within the section if stronger ATS visibility is needed."
+            )
+        elif reroute_reason == "supported_terms_too_generic_to_front":
+            rewrite_instruction = (
+                "Do not force a rewrite around generic supported terms. Keep this directional only unless a stronger direct signal is available."
+            )
+        elif reroute_reason == "rewrite_instruction_pathological":
+            rewrite_instruction = (
+                "Do not rewrite this bullet from the current instruction because the rewrite instruction is malformed or overlong. Keep this directional only."
+            )
+    else:
+        proposal_status, patch_text, patch_generation_method = _deterministic_patch_text_from_diagnosis(
+            diagnosis,
+            risks["adjacent_risk_signals"],
+            risks["unsupported_risk_signals"],
+        )
+
+    if proposal_status == "direction_only" and not directional_only_reason:
+        directional_only_reason = "directional_rewrite_preferred"
 
     return {
         "candidate_id": candidate_id,
@@ -1929,6 +2064,7 @@ def _diagnosis_to_replacement_candidate(
         "operation_type": "rewrite",
         "proposal_type": "directional_rewrite" if proposal_status == "direction_only" else "patch_ready_rewrite",
         "proposal_status": proposal_status,
+        "direction_only_reason": directional_only_reason,
         "original_text": str(diagnosis.get("original_text", "") or "").strip(),
         "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
         "rewrite_instruction": rewrite_instruction,
@@ -2587,6 +2723,9 @@ def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Dict[str, A
 
     if isinstance(job_snapshot, dict) and job_snapshot:
         job_record = dict(job_snapshot)
+
+    if job_record is None and isinstance(job, dict) and job:
+        job_record = dict(job)
 
     if job_record is None:
         job_record = _load_job_record_by_doc_id(job_doc_id)
@@ -3504,6 +3643,434 @@ def _deterministic_family_alias_expansion_patch(
 
     return None
 
+def _diagnosis_contains_supported_term_alias(
+    text: str,
+    supported_term: str,
+) -> bool:
+    raw_text = str(text or "").strip()
+    if not raw_text or not str(supported_term or "").strip():
+        return False
+
+    normalized_text = _diagnosis_normalize_term(raw_text)
+    canonical = _diagnosis_normalize_term(supported_term)
+    if canonical and canonical in normalized_text:
+        return True
+
+    for alias in expandable_aliases_for_supported_term(str(supported_term).strip()):
+        alias_norm = _diagnosis_normalize_term(alias)
+        if alias_norm and alias_norm in normalized_text:
+            return True
+
+    return False
+
+
+def _all_supported_terms_already_explicit(
+    diagnosis: Dict[str, Any],
+) -> bool:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+    if not original_text or not supported_terms:
+        return False
+
+    return all(
+        _diagnosis_contains_supported_term_alias(original_text, term)
+        for term in supported_terms
+    )
+
+
+def _rewrite_instruction_is_pathological(
+    diagnosis: Dict[str, Any],
+) -> bool:
+    instruction = str(
+        diagnosis.get("rewrite_instruction", "") or diagnosis.get("recommended_rewrite", "") or ""
+    ).strip()
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+
+    if not instruction:
+        return False
+
+    if original_text and len(instruction) >= len(original_text) * 0.9:
+        return True
+
+    normalized_instruction = _diagnosis_normalize_term(instruction)
+    normalized_original = _diagnosis_normalize_term(original_text)
+    if normalized_original and normalized_original in normalized_instruction:
+        return True
+
+    return False
+
+
+def _supported_terms_too_generic_to_front(
+    diagnosis: Dict[str, Any],
+) -> bool:
+    supported_terms = [
+        str(item).strip().lower()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+    canonical_supported_signal = str(diagnosis.get("canonical_supported_signal", "") or "").strip().lower()
+
+    generic_terms = {
+        "validation",
+        "etl pipelines",
+        "analysis",
+        "analytics",
+        "reporting",
+    }
+
+    if canonical_supported_signal:
+        return False
+
+    if not supported_terms:
+        return False
+
+    return all(term in generic_terms for term in supported_terms)
+
+
+def _should_reroute_rewrite_to_directional_only(
+    diagnosis: Dict[str, Any],
+) -> Tuple[bool, str]:
+    supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+
+    if _rewrite_instruction_is_pathological(diagnosis):
+        return True, "rewrite_instruction_pathological"
+
+    if _supported_terms_too_generic_to_front(diagnosis):
+        return True, "supported_terms_too_generic_to_front"
+
+    if len(supported_terms) >= 2 and _all_supported_terms_already_explicit(diagnosis):
+        return True, "multi_signal_already_explicit_reorder_preferred"
+
+    return False, ""
+
+def _supported_signal_surface_pairs(
+    diagnosis: Dict[str, Any],
+) -> List[Tuple[str, str]]:
+    raw_supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+
+    pairs: List[Tuple[str, str]] = []
+    seen = set()
+
+    for raw in raw_supported_terms:
+        normalized = _diagnosis_normalize_term(raw)
+        if not normalized:
+            continue
+
+        surface = raw
+        key = (normalized, surface.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        pairs.append((normalized, surface))
+
+    return pairs
+
+
+def _replace_earliest_supported_alias(
+    text: str,
+    supported_term: str,
+    supported_surface: str,
+) -> Optional[str]:
+    raw_text = str(text or "").strip()
+    if not raw_text:
+        return None
+
+    normalized_text = _diagnosis_normalize_term(raw_text)
+    normalized_surface = _diagnosis_normalize_term(supported_surface)
+
+    if normalized_surface and normalized_surface in normalized_text:
+        return None
+
+    alias_variants = [
+        alias
+        for alias in expandable_aliases_for_supported_term(supported_term)
+        if _diagnosis_normalize_term(alias) != normalized_surface
+    ]
+    if not alias_variants:
+        return None
+
+    best_match = None
+
+    for alias in alias_variants:
+        pattern = re.compile(
+            rf"(?<![A-Za-z0-9]){re.escape(alias)}(?![A-Za-z0-9])",
+            flags=re.IGNORECASE,
+        )
+        match = pattern.search(raw_text)
+        if not match:
+            continue
+
+        if best_match is None or match.start() < best_match[0]:
+            best_match = (match.start(), pattern)
+
+    if best_match is None:
+        return None
+
+    _, pattern = best_match
+    patched = pattern.sub(supported_surface, raw_text, count=1).strip()
+
+    if _diagnosis_normalize_term(patched) == normalized_text:
+        return None
+
+    return patched
+
+
+def _deterministic_supported_alias_expansion_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    supported_pairs = _supported_signal_surface_pairs(diagnosis)
+    if not supported_pairs or len(supported_pairs) > 3:
+        return None
+
+    patch_text = original_text
+    changed = False
+
+    for supported_term, supported_surface in supported_pairs:
+        patched = _replace_earliest_supported_alias(
+            patch_text,
+            supported_term,
+            supported_surface,
+        )
+        if not patched:
+            continue
+
+        patch_text = patched
+        changed = True
+
+    if not changed:
+        return None
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    return patch_text
+
+def _split_result_clause(text: str) -> Tuple[str, str]:
+    raw = str(text or "").strip()
+    if not raw:
+        return "", ""
+
+    markers = [
+        ", informing ",
+        ", improving ",
+        ", enabling ",
+        ", resulting in ",
+        ", leading to ",
+        ", reducing ",
+        ", increasing ",
+        ", enhancing ",
+        ", driving ",
+    ]
+
+    lowered = raw.lower()
+    for marker in markers:
+        idx = lowered.find(marker)
+        if idx != -1:
+            return raw[:idx].strip(), raw[idx:].strip()
+
+    return raw, ""
+
+
+def _compression_candidate_is_cluttered(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+
+    comma_count = raw.count(",")
+    word_count = len(raw.split())
+    has_using_span = " using " in raw.lower()
+    has_result_clause = any(
+        marker in raw.lower()
+        for marker in [
+            ", informing ",
+            ", improving ",
+            ", enabling ",
+            ", resulting in ",
+            ", leading to ",
+            ", reducing ",
+            ", increasing ",
+            ", enhancing ",
+            ", driving ",
+        ]
+    )
+
+    return (
+        word_count >= 22
+        and comma_count >= 2
+        and has_using_span
+        and has_result_clause
+    )
+
+
+def _build_clarity_preserving_compression_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not _compression_candidate_is_cluttered(original_text):
+        return None
+
+    intro, result_clause = _split_result_clause(original_text)
+    if not intro or not result_clause:
+        return None
+
+    using_match = re.search(
+        r"^(?P<lead>.+?\busing\b)\s+(?P<body>.+)$",
+        intro,
+        flags=re.IGNORECASE,
+    )
+    if not using_match:
+        return None
+
+    lead = str(using_match.group("lead") or "").strip()
+    body = str(using_match.group("body") or "").strip()
+    if not lead or not body:
+        return None
+
+    body = body.replace(" & ", ", ")
+    body = re.sub(r"\s+", " ", body).strip()
+
+    segments = [seg.strip(" ,") for seg in body.split(",") if seg.strip(" ,")]
+    if len(segments) < 2:
+        return None
+
+    compact_body = ", ".join(segments[:-1])
+    final_segment = segments[-1]
+
+    if compact_body:
+        compressed_intro = f"{lead} {compact_body}, and {final_segment}"
+    else:
+        compressed_intro = f"{lead} {final_segment}"
+
+    patch_text = f"{compressed_intro}{result_clause}"
+    patch_text = re.sub(r"\s+", " ", patch_text).strip()
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    return patch_text
+
+
+def _compression_patch_preserves_evidence(
+    diagnosis: Dict[str, Any],
+    patch_text: str,
+) -> bool:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    patched_text = str(patch_text or "").strip()
+
+    if not original_text or not patched_text:
+        return False
+
+    original_norm = _diagnosis_normalize_term(original_text)
+    patched_norm = _diagnosis_normalize_term(patched_text)
+
+    if not original_norm or not patched_norm:
+        return False
+
+    if original_norm == patched_norm:
+        return False
+
+    def _contains_term_or_alias_local(text: str, term: str) -> bool:
+        text_norm = _diagnosis_normalize_term(text)
+        raw_term = str(term or "").strip()
+        if not text_norm or not raw_term:
+            return False
+
+        variants = _unique_preserve_order(
+            [raw_term] + list(expandable_aliases_for_supported_term(raw_term))
+        )
+
+        for variant in variants:
+            variant_norm = _diagnosis_normalize_term(variant)
+            if variant_norm and variant_norm in text_norm:
+                return True
+
+        return False
+
+    # 1) Preserve all numeric evidence exactly.
+    original_numbers = re.findall(
+        r"\b\d+(?:\.\d+)?(?:k|m)?\+?%?\b",
+        original_text,
+        flags=re.IGNORECASE,
+    )
+    for token in _unique_preserve_order([str(item).strip() for item in original_numbers if str(item).strip()]):
+        if token.lower() not in patched_text.lower():
+            return False
+
+    # 2) Preserve supported JD signals / canonical signal, allowing alias equivalence.
+    supported_terms = _unique_preserve_order(
+        [
+            str(item).strip()
+            for item in (
+                list(diagnosis.get("jd_signal_terms", []) or [])
+                + [str(diagnosis.get("canonical_supported_signal", "") or "").strip()]
+            )
+            if str(item).strip()
+        ]
+    )
+    for term in supported_terms:
+        if not _contains_term_or_alias_local(patched_text, term):
+            return False
+
+    # 3) Preserve important capitalized / acronym technical tokens from the original.
+    raw_tokens = re.findall(
+        r"\b(?:[A-Z]{2,}[A-Za-z0-9.+/\-]*|[A-Z][A-Za-z0-9.+/\-]{2,})\b",
+        original_text,
+    )
+    protected_core_terms = _unique_preserve_order(
+        [
+            str(token).strip()
+            for token in raw_tokens
+            if str(token).strip() and str(token).strip().lower() not in _ACTION_VERB_HINTS_LOWER
+        ]
+    )
+    for term in protected_core_terms:
+        if _diagnosis_normalize_term(term) not in patched_norm:
+            return False
+
+    # 4) Preserve the result clause verbatim in normalized form.
+    _, original_result_clause = _split_result_clause(original_text)
+    _, patched_result_clause = _split_result_clause(patched_text)
+
+    original_result_norm = _diagnosis_normalize_term(original_result_clause)
+    patched_result_norm = _diagnosis_normalize_term(patched_result_clause)
+
+    if original_result_norm:
+        if not patched_result_norm:
+            return False
+        if original_result_norm != patched_result_norm:
+            return False
+
+    return True
+
+
+def _deterministic_clarity_preserving_compression_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    patch_text = _build_clarity_preserving_compression_patch(diagnosis)
+    if not patch_text:
+        return None
+
+    if not _compression_patch_preserves_evidence(diagnosis, patch_text):
+        return None
+
+    return patch_text
+
 def _deterministic_exact_signal_variant_patch(
     diagnosis: Dict[str, Any],
 ) -> Optional[Tuple[str, str]]:
@@ -4096,46 +4663,37 @@ def _deterministic_patch_text_from_diagnosis(
         family_alias_patch = _deterministic_family_alias_expansion_patch(diagnosis)
         if family_alias_patch:
             return "patch_ready", family_alias_patch, "deterministic_family_alias_expansion"
+        
+        supported_alias_patch = _deterministic_supported_alias_expansion_patch(diagnosis)
+        if supported_alias_patch:
+            return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion"
 
         front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
         if front_supported_phrase_patch:
             return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase"
+        
+        compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
+        if compression_patch:
+            return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression"
 
         parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
         if parent_signal_patch:
             _, patch_text = parent_signal_patch
             return "patch_ready", patch_text, "deterministic_parent_signal_label"
 
-    # Allow the using-phrase operator to handle up to 3 explicit supported terms.
-    # This covers bullets like:
-    # "using Python for scenario modeling, SQL for data aggregation, & Tableau ..."
-    if len(supported_terms) > 3:
-        return "direction_only", "", ""
+    # The current using-phrase operator is intentionally quarantined from exportable
+    # patch generation because span surgery on multi-tool "using ..." bullets has shown
+    # malformed outputs and no material lift in regression batches.
 
-    matched_supported_term_count = _using_phrase_supported_term_count(
-        original_text,
-        supported_terms,
-    )
-    if matched_supported_term_count <= 0:
-        return "direction_only", "", ""
-
-    # For multi-signal cases, require the using-phrase span to cover every supported term.
-    if len(supported_terms) >= 2 and matched_supported_term_count < len(supported_terms):
-        return "direction_only", "", ""
-
-    match = _using_phrase_match_for_supported_term(original_text, supported_terms)
-    if not match:
-        return "direction_only", "", ""
-
-    patch_text = _deterministic_lead_preserving_using_phrase_patch(
-        diagnosis,
-        supported_terms,
-        match,
-    )
-    if not patch_text:
-        return "direction_only", "", ""
-
-    return "patch_ready", patch_text, "deterministic_lead_preserving_using_phrase"
+    supported_alias_patch = _deterministic_supported_alias_expansion_patch(diagnosis)
+    if supported_alias_patch:
+        return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion"
+    
+    compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
+    if compression_patch:
+        return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression"
+    
+    return "direction_only", "", ""
     
     
 def _fronting_rewrite_counts_as_material_without_score_lift(
@@ -4163,6 +4721,8 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
         "deterministic_family_alias_expansion",
+        "deterministic_supported_alias_expansion",
+        "deterministic_clarity_preserving_compression",
     }
 
     return patch_generation_method_base in signal_fronting_methods
@@ -4188,6 +4748,8 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
         "deterministic_family_alias_expansion",
+        "deterministic_supported_alias_expansion",
+        "deterministic_clarity_preserving_compression",
     }
 
 def _materiality_validate_rewrite_candidate(
@@ -5444,6 +6006,8 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Original text: {row.get('original_text', '')}")
             if row.get("proposal_status"):
                 lines.append(f"- Proposal status: {row.get('proposal_status', '')}")
+            if row.get("direction_only_reason"):
+                lines.append(f"- Direction-only reason: {row.get('direction_only_reason', '')}")
             if row.get("proposal_type"):
                 lines.append(f"- Proposal type: {row.get('proposal_type', '')}")
             if row.get("patch_generation_method"):

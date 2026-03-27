@@ -9,8 +9,6 @@ from pathlib import Path
 
 from src.ai.llm_client import (
     FALLBACK_ENABLED as LLM_FALLBACK_ENABLED,
-    FALLBACK_MODEL as LLM_FALLBACK_MODEL,
-    FALLBACK_PROVIDER as LLM_FALLBACK_PROVIDER,
     run_chat_completion_with_metadata,
 )
 
@@ -34,8 +32,13 @@ from src.tailoring.selection import (
 
 from src.config.consts import (
     ACTION_VERB_HINTS,
+    TAILORING_ROLE_FAMILY_FALLBACK,
+    TAILORING_ROLE_FRAMING_PROFILES,
+    TAILORING_STYLE_ONLY_CHURN_HINTS,
+    TAILORING_WRITER_STRONG_GAIN_TARGETS,
     _SKILL_ALIASES,
 )
+
 from src.matching.signal_family_matcher import (
     equivalent_signal_terms,
     normalize_signal_text,
@@ -1331,6 +1334,148 @@ def _patch_refinement_alignment_context(
         "title_terms": sorted(title_terms),
     }
 
+def _patch_refinement_role_family(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> str:
+    job = payload.get("job", {}) or {}
+    title = str(job.get("title", "") or "").lower()
+
+    candidate_terms = _unique_preserve_order(
+        [
+            str(item).strip().lower()
+            for item in (
+                list(candidate.get("supported_jd_signals", []) or [])
+                + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+            )
+            if str(item).strip()
+        ]
+    )
+    candidate_terms.extend(
+        [
+            str(item).strip().lower()
+            for item in list(payload.get("summary", {}).get("matched_terms", []) or [])
+            if str(item).strip()
+        ]
+    )
+    candidate_term_text = " ".join(_unique_preserve_order(candidate_terms))
+
+    best_family = TAILORING_ROLE_FAMILY_FALLBACK
+    best_score = -1
+
+    for family_name, profile in TAILORING_ROLE_FRAMING_PROFILES.items():
+        score = 0
+
+        for token in profile.get("title_tokens_any", []) or []:
+            token_clean = str(token).strip().lower()
+            if token_clean and token_clean in title:
+                score += 3
+
+        for term in profile.get("signal_terms_any", []) or []:
+            term_clean = str(term).strip().lower()
+            if term_clean and term_clean in candidate_term_text:
+                score += 1
+
+        if score > best_score:
+            best_score = score
+            best_family = family_name
+
+    return best_family
+
+
+def _patch_refinement_role_profile(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    family = _patch_refinement_role_family(payload, candidate)
+    profile = dict(TAILORING_ROLE_FRAMING_PROFILES.get(family, {}) or {})
+    profile["family_name"] = family
+    return profile
+
+
+def _patch_refinement_style_only_delta(
+    deterministic_patch_text: str,
+    candidate_patch_text: str,
+) -> bool:
+    det = str(deterministic_patch_text or "").strip().lower()
+    cand = str(candidate_patch_text or "").strip().lower()
+
+    if not det or not cand or det == cand:
+        return True
+
+    det_tokens = re.findall(r"[a-zA-Z0-9\+\#\-]+", det)
+    cand_tokens = re.findall(r"[a-zA-Z0-9\+\#\-]+", cand)
+
+    det_set = set(det_tokens)
+    cand_set = set(cand_tokens)
+    added = cand_set - det_set
+
+    if not added:
+        return True
+
+    meaningful_added = {
+        token for token in added
+        if token not in {item.lower() for item in TAILORING_STYLE_ONLY_CHURN_HINTS}
+    }
+
+    return len(meaningful_added) == 0
+
+
+def _patch_refinement_deterministic_alignment_sufficient(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> Tuple[bool, str]:
+    deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
+    if not deterministic_patch_text:
+        return False, ""
+
+    alignment = _patch_refinement_alignment_context(payload, candidate)
+    matched_terms = [
+        str(term).strip()
+        for term in list(alignment.get("matched_jd_terms", []) or [])
+        if str(term).strip()
+    ]
+    if not matched_terms:
+        return False, ""
+
+    surfaced_terms = [
+        term for term in matched_terms
+        if _patch_refinement_contains_term_or_alias(deterministic_patch_text, term)
+    ]
+
+    protected_phrases = _patch_refinement_protected_phrases(candidate)
+    supported_phrase_set = {
+        normalize_signal_text(term)
+        for term in (
+            list(candidate.get("supported_jd_signals", []) or [])
+            + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+        )
+        if str(term or "").strip()
+    }
+
+    missing_protected = []
+    for phrase in protected_phrases:
+        phrase_clean = str(phrase or "").strip()
+        if not phrase_clean:
+            continue
+
+        phrase_norm = normalize_signal_text(phrase_clean)
+        if phrase_norm in supported_phrase_set:
+            if not _patch_refinement_contains_term_or_alias(deterministic_patch_text, phrase_clean):
+                missing_protected.append(phrase_clean)
+            continue
+
+        if phrase_clean.lower() not in deterministic_patch_text.lower():
+            missing_protected.append(phrase_clean)
+
+    if surfaced_terms and not missing_protected:
+        return True, (
+            "deterministic patch already surfaces matched JD vocabulary clearly "
+            "while preserving protected phrases"
+        )
+
+    return False, ""
+
 def _patch_refinement_protected_numbers(candidate: Dict[str, Any]) -> List[str]:
     original_text = str(candidate.get("original_text", "") or "").strip()
     return _patch_refinement_numeric_tokens(original_text)
@@ -1370,6 +1515,7 @@ def _build_patch_refinement_writer_prompt(
     protected_phrases = _patch_refinement_protected_phrases(candidate)
     sibling_openings = _patch_refinement_sibling_openings(payload, candidate)
     alignment = _patch_refinement_alignment_context(payload, candidate)
+    role_profile = _patch_refinement_role_profile(payload, candidate)
 
     lines: List[str] = []
     lines.append("Return plain text only.")
@@ -1398,6 +1544,8 @@ def _build_patch_refinement_writer_prompt(
     lines.append("10. Do NOT mirror JD phrasing unless the mirrored term is already supported by the bullet.")
     lines.append("11. Borrow terminology, not whole JD sentence structure.")
     lines.append("12. If the best change is only stylistic, abstain.")
+    lines.append("13. Do NOT replace a preserved protected phrase with a broader paraphrase.")
+    lines.append("14. Do NOT change only connective wording such as using, leveraging, to enhance, or which improved unless the rewrite also adds stronger supported alignment.")
     lines.append("")
     lines.append("Quality bar:")
     lines.append("- stronger supported alignment, not just smoother wording")
@@ -1405,6 +1553,16 @@ def _build_patch_refinement_writer_prompt(
     lines.append("- same claim, same evidence, same tone")
     lines.append("- no keyword stuffing")
     lines.append("- no awkward ATS bait phrasing")
+    lines.append("")
+    lines.append(f"Resolved role family: {role_profile.get('family_name', TAILORING_ROLE_FAMILY_FALLBACK)}")
+    lines.append(f"Role-family ATS priority terms: {role_profile.get('ats_priority_terms_any', [])}")
+    lines.append(f"Role-family facet priority order: {role_profile.get('facet_priority_order', [])}")
+    lines.append(f"Strong gain targets: {TAILORING_WRITER_STRONG_GAIN_TARGETS}")
+    lines.append("Role-family appeal targets:")
+    for item in role_profile.get("appeal_targets", []) or []:
+        lines.append(f"- {item}")
+    if not (role_profile.get("appeal_targets", []) or []):
+        lines.append("- none")
     lines.append("")
     lines.append(f"Job company: {job.get('company', '')}")
     lines.append(f"Job title: {job.get('title', '')}")
@@ -1449,6 +1607,7 @@ def _build_patch_refinement_judge_prompt(
     deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
     original_lead = _patch_refinement_lead_token(original_text)
     alignment = _patch_refinement_alignment_context(payload, candidate)
+    role_profile = _patch_refinement_role_profile(payload, candidate)
 
     lines: List[str] = []
     lines.append("Return plain text only.")
@@ -1471,6 +1630,7 @@ def _build_patch_refinement_judge_prompt(
     lines.append("7. Prefer stronger supported business/result framing over style-only improvement.")
     lines.append("8. Reject options whose best improvement is only stylistic.")
     lines.append("9. Reject long-copying of JD sentence phrasing.")
+    lines.append("10. Reject options that only change connective or stylistic wording without net supported alignment gain over deterministic.")
     lines.append("")
     lines.append(f"Original lead token: {original_lead}")
     lines.append(f"Matched JD terms: {alignment.get('matched_jd_terms', [])}")
@@ -1482,6 +1642,15 @@ def _build_patch_refinement_judge_prompt(
     lines.append("")
     lines.append("Original bullet:")
     lines.append(original_text)
+    lines.append("")
+    lines.append(f"Resolved role family: {role_profile.get('family_name', TAILORING_ROLE_FAMILY_FALLBACK)}")
+    lines.append(f"Role-family ATS priority terms: {role_profile.get('ats_priority_terms_any', [])}")
+    lines.append(f"Role-family facet priority order: {role_profile.get('facet_priority_order', [])}")
+    lines.append("Role-family appeal targets:")
+    for item in role_profile.get("appeal_targets", []) or []:
+        lines.append(f"- {item}")
+    if not (role_profile.get("appeal_targets", []) or []):
+        lines.append("- none")
     lines.append("")
     lines.append("Deterministic draft:")
     lines.append(deterministic_patch_text)
@@ -1868,6 +2037,16 @@ def _maybe_refine_patch_ready_rewrite_candidate(
         return candidate
 
     candidate = _stamp_patch_refinement_baseline(candidate)
+    deterministic_sufficient, deterministic_sufficient_note = _patch_refinement_deterministic_alignment_sufficient(
+        payload,
+        candidate,
+    )
+    if deterministic_sufficient:
+        return _keep_deterministic_with_status(
+            candidate,
+            status="deterministic_alignment_sufficient_kept_deterministic",
+            note=deterministic_sufficient_note,
+        )
 
     writer_system_prompt = """
 You are the writer stage for one resume bullet under strict evidence constraints.
@@ -1912,6 +2091,20 @@ OPTION_2: <single rewritten bullet>
         candidate,
         list(writer_parsed.get("options", []) or []),
     )
+    filtered_writer_options: List[Dict[str, Any]] = []
+    for option in validated_writer_options:
+        patch_text = str(option.get("patch_text", "") or "").strip()
+        if _patch_refinement_style_only_delta(deterministic_patch_text, patch_text):
+            invalid_writer_options.append(
+                {
+                    **dict(option),
+                    "validation_reason": "style_only_delta_vs_deterministic",
+                }
+            )
+            continue
+        filtered_writer_options.append(option)
+
+    validated_writer_options = filtered_writer_options
 
     if not validated_writer_options:
         return _keep_deterministic_with_status(

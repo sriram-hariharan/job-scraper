@@ -1438,24 +1438,63 @@ def _rewrite_card_fields_from_directional_candidate(
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
         }
 
+    if reason == "rewrite_instruction_pathological":
+        return {
+            "edit_type": "suppress_rewrite",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                "The current rewrite instruction is malformed, overlong, or too close to the original bullet to trust as a grounded operator action."
+            ),
+            "why_rewrite_is_better": (
+                "The safer move is to suppress the rewrite itself and keep the bullet unchanged until a grounded deterministic patch exists."
+            ),
+            "why_it_matters": (
+                "This prevents malformed rewrite guidance from being surfaced as if it were a legitimate text edit."
+            ),
+            "placement_guidance": (
+                "Do not apply the current rewrite instruction. Keep the bullet visible as-is unless a grounded deterministic patch is generated later."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+
+    if rewrite_instruction:
+        return {
+            "edit_type": "keep_visible",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                "This candidate does not justify a grounded text rewrite, but it may still deserve directional handling."
+            ),
+            "why_rewrite_is_better": (
+                "The safer action is directional guidance only, not textual rewriting."
+            ),
+            "why_it_matters": rewrite_instruction,
+            "placement_guidance": (
+                "Treat this as directional-only guidance. Do not convert it into a textual rewrite unless a grounded deterministic patch exists."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+
     return {
-        "edit_type": "support",
-        "claim_safety": "adjacent_only",
+        "edit_type": "keep_visible",
+        "claim_safety": "keep_visible",
         "recommended_rewrite": "",
         "why_current_is_weak": (
-            "This candidate does not justify a grounded rewrite, but it may still support the JD story."
+            "This candidate does not justify a grounded text rewrite."
         ),
         "why_rewrite_is_better": (
-            "The safer action is directional emphasis rather than textual rewriting."
+            "The safer action is to keep it in the directional-only lane instead of fabricating a rewrite."
         ),
         "why_it_matters": (
-            rewrite_instruction
-            or "This is better handled as visibility or supporting-context guidance."
+            "This is a legitimate directional-only recommendation, not a text rewrite candidate."
         ),
         "placement_guidance": (
-            "Keep visible only if it supports stronger primary anchors."
+            "Keep this bullet visible only if it strengthens stronger primary anchors or ordering decisions."
         ),
-        "direction_only_reason": reason or "directional_rewrite_preferred",
+        "direction_only_reason": reason,
         "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
     }
 
@@ -2050,9 +2089,6 @@ def _diagnosis_to_replacement_candidate(
             risks["adjacent_risk_signals"],
             risks["unsupported_risk_signals"],
         )
-
-    if proposal_status == "direction_only" and not directional_only_reason:
-        directional_only_reason = "directional_rewrite_preferred"
 
     return {
         "candidate_id": candidate_id,

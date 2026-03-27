@@ -1333,6 +1333,7 @@ def _directional_rewrite_lookup(
             reason = str(row.get("direction_only_reason", "") or "").strip()
             return (
                 1 if reason == "multi_signal_already_explicit_reorder_preferred" else 0,
+                1 if reason == "single_signal_already_explicit_reorder_preferred" else 0,
                 1 if reason == "supported_terms_too_generic_to_front" else 0,
                 len(str(row.get("rewrite_instruction", "") or "").strip()),
             )
@@ -1416,7 +1417,28 @@ def _rewrite_card_fields_from_directional_candidate(
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
         }
-
+    
+    if reason == "single_signal_already_explicit_reorder_preferred":
+        return {
+            "edit_type": "keep_visible",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                f"The bullet already states {lead} explicitly, so the issue is visibility/order, not missing wording."
+            ),
+            "why_rewrite_is_better": (
+                "A textual rewrite is unnecessary here. Keeping this bullet visible or moving it earlier is cleaner than forcing a one-signal fronting edit."
+            ),
+            "why_it_matters": (
+                f"This bullet already proves {lead} directly; treat it as an anchor instead of a rewrite target."
+            ),
+            "placement_guidance": (
+                "Keep this bullet visible and move it earlier within the section only if stronger ATS visibility is needed."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+    
     if reason == "supported_terms_too_generic_to_front":
         return {
             "edit_type": "support",
@@ -3842,6 +3864,23 @@ def _all_supported_terms_already_explicit(
         for term in supported_terms
     )
 
+def _single_supported_term_already_explicit(
+    diagnosis: Dict[str, Any],
+) -> bool:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+
+    if not original_text or len(supported_terms) != 1:
+        return False
+
+    return _diagnosis_contains_supported_term_alias(
+        original_text,
+        supported_terms[0],
+    )
 
 def _rewrite_instruction_is_pathological(
     diagnosis: Dict[str, Any],
@@ -4841,6 +4880,9 @@ def _deterministic_patch_text_from_diagnosis(
         if parent_signal_patch:
             _, patch_text = parent_signal_patch
             return "patch_ready", patch_text, "deterministic_parent_signal_label", ""
+        
+        if _single_supported_term_already_explicit(diagnosis):
+            return "direction_only", "", "", "single_signal_already_explicit_reorder_preferred"
 
     # The current using-phrase operator is intentionally quarantined from exportable
     # patch generation because span surgery on multi-tool "using ..." bullets has shown

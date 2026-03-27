@@ -13,19 +13,29 @@ from src.tailoring.rendering import (
 
 def _print_rewrite_ideas_console(final_payload: dict) -> None:
     print("-" * 100)
-    print("EVIDENCE-BACKED REWRITE IDEAS")
+    print("EVIDENCE-BACKED EDIT RECOMMENDATIONS")
     print("-" * 100)
+
+    edit_cards = list(final_payload.get("edit_cards", []) or [])
 
     rewrite_cards = [
         row
-        for row in (final_payload.get("edit_cards", []) or [])
+        for row in edit_cards
         if str(row.get("edit_type", "") or "").strip() == "rewrite"
     ]
 
+    directional_cards = [
+        row
+        for row in edit_cards
+        if str(row.get("edit_type", "") or "").strip() != "rewrite"
+    ]
+
     if rewrite_cards:
+        print("PATCH-READY / REWRITE")
         for row in rewrite_cards:
             print(
                 f"- [{row.get('section', '')}] {row.get('source', '')} | "
+                f"action={row.get('edit_type', '')} | "
                 f"type={row.get('evidence_type', '')} | supports={row.get('jd_signal_terms', [])}"
             )
 
@@ -40,10 +50,39 @@ def _print_rewrite_ideas_console(final_payload: dict) -> None:
                 )
 
             print(f"  Proposed rewrite: {row.get('recommended_rewrite', '')}")
+            print(f"  Why it matters: {row.get('why_it_matters', '')}")
+            print(f"  Placement guidance: {row.get('placement_guidance', '')}")
             print(f"  Evidence: {row.get('current_evidence', '')}")
             if row.get("parent_bullet"):
                 print(f"  Parent bullet: {row.get('parent_bullet', '')}")
         print()
+
+    if directional_cards:
+        print("DIRECTIONAL-ONLY ACTIONS")
+        for row in directional_cards:
+            print(
+                f"- [{row.get('section', '')}] {row.get('source', '')} | "
+                f"action={row.get('edit_type', '')} | "
+                f"type={row.get('evidence_type', '')} | supports={row.get('jd_signal_terms', [])}"
+            )
+
+            if str(row.get("direction_only_reason", "") or "").strip():
+                print(
+                    f"  Direction-only reason: {row.get('direction_only_reason', '')}"
+                )
+
+            if str(row.get("why_it_matters", "") or "").strip():
+                print(f"  Why it matters: {row.get('why_it_matters', '')}")
+
+            if str(row.get("placement_guidance", "") or "").strip():
+                print(f"  Placement guidance: {row.get('placement_guidance', '')}")
+
+            print(f"  Evidence: {row.get('current_evidence', '')}")
+            if row.get("parent_bullet"):
+                print(f"  Parent bullet: {row.get('parent_bullet', '')}")
+        print()
+
+    if rewrite_cards or directional_cards:
         return
 
     for row in final_payload.get("rewrite_candidates", []):
@@ -56,6 +95,7 @@ def _print_rewrite_ideas_console(final_payload: dict) -> None:
         if row.get("parent_bullet"):
             print(f"  Parent bullet: {row.get('parent_bullet', '')}")
     print()
+    
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Generate grounded tailoring suggestions from a JD diff packet."

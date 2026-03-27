@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 from groq import Groq
 from google import genai
@@ -13,6 +14,11 @@ DEFAULT_MODEL = os.getenv("LLM_MODEL", "llama-3.1-8b-instant").strip()
 FALLBACK_ENABLED = os.getenv("LLM_FALLBACK_ENABLED", "false").strip().lower() == "true"
 FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "gemini").strip().lower()
 FALLBACK_MODEL = os.getenv("LLM_FALLBACK_MODEL", "gemini-2.5-flash").strip()
+
+_GROQ_MODELS_WITHOUT_JSON_SCHEMA = {
+    "llama-3.1-8b-instant",
+    "llama-3.3-70b-versatile",
+}
 
 _groq_client = None
 _gemini_client = None
@@ -94,19 +100,114 @@ def _messages_to_gemini_prompt(messages):
 
     return "\n\n".join(parts)
 
+def _coerce_groq_message_content(content):
+    if isinstance(content, str):
+        return content.strip()
 
-def _run_groq_chat_completion(messages, model, temperature, max_tokens):
+    if isinstance(content, list):
+        parts = []
+        for item in content:
+            if isinstance(item, str):
+                text = item.strip()
+                if text:
+                    parts.append(text)
+                continue
+
+            if isinstance(item, dict):
+                text = str(item.get("text") or item.get("content") or "").strip()
+                if text:
+                    parts.append(text)
+                continue
+
+            text = str(item or "").strip()
+            if text:
+                parts.append(text)
+
+        return "\n".join(parts).strip()
+
+    if isinstance(content, dict):
+        text = str(content.get("text") or content.get("content") or "").strip()
+        if text:
+            return text
+
+    return str(content or "").strip()
+
+
+def _run_groq_chat_completion(
+    messages,
+    model,
+    temperature,
+    max_tokens,
+    response_mime_type=None,
+    response_schema=None,
+    return_parsed=False,
+    thinking_budget=None,
+):
     increment_provider_metric("groq_calls")
     client = get_groq_client()
 
-    completion = client.chat.completions.create(
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        messages=messages,
-    )
+    request_kwargs = {
+        "model": model,
+        "temperature": temperature,
+        "max_completion_tokens": max_tokens,
+        "messages": messages,
+    }
 
-    return completion.choices[0].message.content
+    model_name = str(model or "").strip().lower()
+    if model_name.startswith("openai/gpt-oss-"):
+        request_kwargs["include_reasoning"] = False
+
+    if response_mime_type == "application/json":
+        supports_json_schema = model_name not in _GROQ_MODELS_WITHOUT_JSON_SCHEMA
+        if response_schema is not None and supports_json_schema:
+            request_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_output",
+                    "strict": True,
+                    "schema": response_schema,
+                },
+            }
+        else:
+            request_kwargs["response_format"] = {"type": "json_object"}
+
+    completion = client.chat.completions.create(**request_kwargs)
+
+    message = completion.choices[0].message
+    content = getattr(message, "content", None)
+    text = _coerce_groq_message_content(content)
+
+    if not text:
+        refusal = getattr(message, "refusal", None)
+        reasoning = getattr(message, "reasoning", None)
+
+        detail_parts = []
+        if refusal:
+            detail_parts.append(f"refusal={refusal}")
+        if reasoning:
+            detail_parts.append("reasoning_present=true")
+
+        detail = ", ".join(detail_parts) if detail_parts else "no_content_returned"
+
+        try:
+            raw_dump = message.model_dump()
+        except Exception:
+            raw_dump = str(message)
+
+        print("\n[GROQ DEBUG] model =", model)
+        print("[GROQ DEBUG] response_mime_type =", response_mime_type)
+        print("[GROQ DEBUG] response_schema_present =", response_schema is not None)
+        print("[GROQ DEBUG] raw message dump =", json.dumps(raw_dump, indent=2, default=str))
+
+        raise RuntimeError(f"Groq returned no usable content ({detail})")
+
+    if return_parsed and response_mime_type == "application/json":
+        try:
+            return json.loads(text)
+        except Exception:
+            return text
+
+    return text
 
 
 def _run_gemini_chat_completion(
@@ -170,15 +271,17 @@ def _run_single_provider(
 ):
     provider_name = provider_name.strip().lower()
 
-    # if provider_name == "groq":
-    #     if return_parsed or response_schema is not None:
-    #         raise ValueError("Structured parsed output is not supported through the Groq wrapper")
-    #     return _run_groq_chat_completion(messages, model, temperature, max_tokens)
-
     if provider_name == "groq":
-        # Groq does not support the Gemini-style parsed/schema path in this wrapper.
-        # For structured requests, return raw text and let the caller parse/validate it.
-        return _run_groq_chat_completion(messages, model, temperature, max_tokens)
+        return _run_groq_chat_completion(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
+            return_parsed=return_parsed,
+            thinking_budget=thinking_budget,
+        )
 
     if provider_name == "gemini":
         return _run_gemini_chat_completion(

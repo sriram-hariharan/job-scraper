@@ -40,6 +40,44 @@ def _candidate_signal_key(candidate: Dict[str, Any]) -> str:
     cleaned = [_safe_text(item) for item in terms if _safe_text(item)]
     return " | ".join(cleaned) if cleaned else "missing"
 
+def _safe_list(value: Any) -> List[str]:
+    if not isinstance(value, list):
+        return []
+    return [_safe_text(item) for item in value if _safe_text(item)]
+
+
+def _llm_candidate_eval_row(candidate: Dict[str, Any]) -> Dict[str, Any] | None:
+    status = _safe_text(candidate.get("llm_refinement_status"), "")
+    if not status:
+        return None
+
+    judge_winner = _safe_text(candidate.get("llm_judge_winner"), "missing")
+    judge_reason = _safe_text(candidate.get("llm_judge_reason"), "")
+    quality_flags = _safe_list(candidate.get("llm_judge_quality_flags", []))
+    rejected_options = _safe_list(candidate.get("llm_judge_rejected_options", []))
+
+    valid_writer_options = candidate.get("llm_writer_options", []) or []
+    invalid_writer_options = candidate.get("llm_writer_invalid_options", []) or []
+
+    if not isinstance(valid_writer_options, list):
+        valid_writer_options = []
+    if not isinstance(invalid_writer_options, list):
+        invalid_writer_options = []
+
+    return {
+        "candidate_id": _safe_text(candidate.get("candidate_id"), "missing"),
+        "status": status,
+        "judge_winner": judge_winner,
+        "judge_reason": judge_reason,
+        "quality_flags": quality_flags,
+        "rejected_options": rejected_options,
+        "valid_writer_option_count": len(valid_writer_options),
+        "invalid_writer_option_count": len(invalid_writer_options),
+        "patch_generation_method": _safe_text(candidate.get("patch_generation_method"), ""),
+        "original_text": _safe_text(candidate.get("original_text"), ""),
+        "deterministic_or_final_patch_text": _safe_text(candidate.get("patch_text"), ""),
+    }
+
 def _rewrite_edit_cards(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         row
@@ -132,6 +170,20 @@ def _resolved_manifest_paths(manifest_path: Path, include_llm: bool) -> List[Pat
     return paths
 
 def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
+    llm_status_counter: Counter = Counter()
+    llm_judge_winner_counter: Counter = Counter()
+    llm_quality_flag_counter: Counter = Counter()
+
+    llm_writer_selected_count = 0
+    llm_judge_kept_deterministic_count = 0
+    llm_judge_abstain_count = 0
+    llm_writer_abstained_count = 0
+    llm_writer_no_valid_count = 0
+    llm_invalid_option_count = 0
+
+    writer_win_cases: List[Dict[str, Any]] = []
+    low_quality_cases: List[Dict[str, Any]] = []
+
     job = payload.get("job", {}) or {}
     selection = payload.get("selection", {}) or {}
 
@@ -235,6 +287,44 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
                     f"keep_not_keep_only:{candidate_id}"
                 )
 
+        llm_eval = _llm_candidate_eval_row(candidate)
+        if llm_eval is not None:
+            status = llm_eval["status"]
+            judge_winner = llm_eval["judge_winner"]
+
+            llm_status_counter[status] += 1
+            llm_judge_winner_counter[judge_winner] += 1
+            llm_invalid_option_count += int(llm_eval["invalid_writer_option_count"])
+
+            for flag in llm_eval["quality_flags"]:
+                llm_quality_flag_counter[flag] += 1
+
+            if status == "judge_selected_writer_option":
+                llm_writer_selected_count += 1
+                writer_win_cases.append(llm_eval)
+
+            if status == "judge_kept_deterministic":
+                if judge_winner == "abstain":
+                    llm_judge_abstain_count += 1
+                else:
+                    llm_judge_kept_deterministic_count += 1
+
+            if status == "writer_abstained_kept_deterministic":
+                llm_writer_abstained_count += 1
+
+            if status == "writer_no_valid_options_kept_deterministic":
+                llm_writer_no_valid_count += 1
+
+            if (
+                "validation_failed" in status
+                or "call_failed" in status
+                or status in {
+                    "writer_no_valid_options_kept_deterministic",
+                    "judge_invalid_winner_kept_deterministic",
+                }
+            ):
+                low_quality_cases.append(llm_eval)
+
     duplicate_signal_keys = [
         {"key": key, "count": count}
         for key, count in sorted(candidate_signal_counter.items(), key=lambda item: (-item[1], item[0]))
@@ -269,6 +359,17 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
         "materiality_validation_counts": dict(materiality_validation_counter),
         "duplicate_signal_keys": duplicate_signal_keys,
         "invariant_violations": invariant_violations,
+        "llm_status_counts": dict(llm_status_counter),
+        "llm_judge_winner_counts": dict(llm_judge_winner_counter),
+        "llm_quality_flag_counts": dict(llm_quality_flag_counter),
+        "llm_writer_selected_count": llm_writer_selected_count,
+        "llm_judge_kept_deterministic_count": llm_judge_kept_deterministic_count,
+        "llm_judge_abstain_count": llm_judge_abstain_count,
+        "llm_writer_abstained_count": llm_writer_abstained_count,
+        "llm_writer_no_valid_count": llm_writer_no_valid_count,
+        "llm_invalid_option_count": llm_invalid_option_count,
+        "writer_win_cases": writer_win_cases,
+        "low_quality_cases": low_quality_cases,
     }
 
 
@@ -280,7 +381,12 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
     patch_generation_counter: Counter = Counter()
     materiality_validation_counter: Counter = Counter()
     invariant_counter: Counter = Counter()
+    llm_status_counter: Counter = Counter()
+    llm_judge_winner_counter: Counter = Counter()
+    llm_quality_flag_counter: Counter = Counter()
 
+    files_with_llm_writer_wins = 0
+    files_with_llm_low_quality_cases = 0
     files_with_patch_ready_rewrites = 0
     files_with_material_candidates = 0
     files_with_surfaced_patch_rewrite_cards = 0
@@ -314,6 +420,19 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
             empty_candidate_files += 1
         if row["missing_proposal_status_count"] > 0:
             files_with_missing_proposal_status += 1
+        if row["llm_writer_selected_count"] > 0:
+            files_with_llm_writer_wins += 1
+        if row["low_quality_cases"]:
+            files_with_llm_low_quality_cases += 1
+
+        for key, count in row["llm_status_counts"].items():
+            llm_status_counter[key] += int(count)
+
+        for key, count in row["llm_judge_winner_counts"].items():
+            llm_judge_winner_counter[key] += int(count)
+
+        for key, count in row["llm_quality_flag_counts"].items():
+            llm_quality_flag_counter[key] += int(count)
 
         for key, count in row["operation_counts"].items():
             operation_counter[key] += int(count)
@@ -356,6 +475,11 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
         "aggregate_materiality_validation_counts": _counter_rows(materiality_validation_counter, sum(materiality_validation_counter.values())),
         "aggregate_invariant_issue_counts": _counter_rows(invariant_counter, sum(invariant_counter.values())),
         "files": file_rows,
+        "files_with_llm_writer_wins": files_with_llm_writer_wins,
+        "files_with_llm_low_quality_cases": files_with_llm_low_quality_cases,
+        "aggregate_llm_status_counts": _counter_rows(llm_status_counter, sum(llm_status_counter.values())),
+        "aggregate_llm_judge_winner_counts": _counter_rows(llm_judge_winner_counter, sum(llm_judge_winner_counter.values())),
+        "aggregate_llm_quality_flag_counts": _counter_rows(llm_quality_flag_counter, sum(llm_quality_flag_counter.values())),
     }
 
 def _phase4_regression_failures(
@@ -537,12 +661,17 @@ def main() -> None:
     print(f"files_with_directional_merge: {summary['files_with_directional_merge']}")
     print(f"files_with_duplicate_signal_keys: {summary['files_with_duplicate_signal_keys']}")
     print(f"files_with_invariant_violations: {summary['files_with_invariant_violations']}")
+    print(f"files_with_llm_writer_wins: {summary['files_with_llm_writer_wins']}")
+    print(f"files_with_llm_low_quality_cases: {summary['files_with_llm_low_quality_cases']}")
 
     _print_counter_block("Aggregate Operation Counts", summary["aggregate_operation_counts"])
     _print_counter_block("Aggregate Proposal Status Counts", summary["aggregate_proposal_status_counts"])
     _print_counter_block("Aggregate Patch Generation Counts", summary["aggregate_patch_generation_counts"])
     _print_counter_block("Aggregate Materiality Validation Counts", summary["aggregate_materiality_validation_counts"])
     _print_counter_block("Aggregate Invariant Issue Counts", summary["aggregate_invariant_issue_counts"])
+    _print_counter_block("Aggregate LLM Status Counts", summary["aggregate_llm_status_counts"])
+    _print_counter_block("Aggregate LLM Judge Winner Counts", summary["aggregate_llm_judge_winner_counts"])
+    _print_counter_block("Aggregate LLM Quality Flag Counts", summary["aggregate_llm_quality_flag_counts"])
     _print_file_rows(summary, max(args.top_n, 1))
 
     if args.output_json.strip():

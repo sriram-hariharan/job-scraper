@@ -2216,6 +2216,17 @@ def _diagnosis_to_replacement_candidate(
                 "Do not rewrite this bullet text. The supported JD signals are already explicit. "
                 "Prefer moving this bullet earlier within the section if stronger ATS visibility is needed."
             )
+        elif reroute_reason == "single_signal_already_explicit_reorder_preferred":
+            supported_terms = [
+                str(item).strip()
+                for item in (diagnosis.get("jd_signal_terms", []) or [])
+                if str(item).strip()
+            ]
+            lead = supported_terms[0] if supported_terms else "the supported JD signal"
+            rewrite_instruction = (
+                f"Do not rewrite this bullet text. {lead} is already stated explicitly. "
+                "Keep this bullet visible and move it earlier within the section only if stronger ATS visibility is needed."
+            )
         elif reroute_reason == "supported_terms_too_generic_to_front":
             rewrite_instruction = (
                 "Do not force a rewrite around generic supported terms. Keep this directional only unless a stronger direct signal is available."
@@ -2224,7 +2235,6 @@ def _diagnosis_to_replacement_candidate(
             rewrite_instruction = (
                 "Do not rewrite this bullet from the current instruction because the rewrite instruction is malformed or overlong. Keep this directional only."
             )
-
     else:
         proposal_status, patch_text, patch_generation_method, deterministic_directional_reason = _deterministic_patch_text_from_diagnosis(
             diagnosis,
@@ -3940,14 +3950,17 @@ def _should_reroute_rewrite_to_directional_only(
         if str(item).strip()
     ]
 
-    if _rewrite_instruction_is_pathological(diagnosis):
-        return True, "rewrite_instruction_pathological"
-
     if _supported_terms_too_generic_to_front(diagnosis):
         return True, "supported_terms_too_generic_to_front"
 
     if len(supported_terms) >= 2 and _all_supported_terms_already_explicit(diagnosis):
         return True, "multi_signal_already_explicit_reorder_preferred"
+
+    if len(supported_terms) == 1 and _single_supported_term_already_explicit(diagnosis):
+        return True, "single_signal_already_explicit_reorder_preferred"
+
+    if _rewrite_instruction_is_pathological(diagnosis):
+        return True, "rewrite_instruction_pathological"
 
     return False, ""
 

@@ -4309,6 +4309,65 @@ def _materiality_validate_rewrite_candidate(
     )
     return candidate
 
+def _apply_post_refinement_export_gate(
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+        return candidate
+
+    if str(candidate.get("llm_refinement_status", "") or "").strip() != "judge_selected_writer_option":
+        if str(candidate.get("llm_refinement_status", "") or "").strip():
+            candidate["llm_export_decision"] = str(candidate.get("llm_export_decision", "") or "deterministic_kept").strip()
+        return candidate
+
+    if str(candidate.get("materiality_validation_status", "") or "").strip() == "material_candidate":
+        candidate["llm_export_decision"] = "writer_kept_material"
+        return candidate
+
+    baseline_patch_text = str(candidate.get("llm_pre_refinement_patch_text", "") or "").strip()
+    baseline_method = str(candidate.get("llm_pre_refinement_patch_generation_method", "") or "").strip()
+    baseline_status = str(candidate.get("llm_pre_refinement_materiality_validation_status", "") or "").strip()
+    baseline_note = str(candidate.get("llm_pre_refinement_materiality_validation_note", "") or "").strip()
+
+    if not baseline_patch_text:
+        candidate["llm_export_decision"] = "writer_selected_nonmaterial_no_baseline_available"
+        return candidate
+
+    reverted = dict(candidate)
+
+    reverted["llm_export_decision"] = "writer_selected_nonmaterial_reverted_to_deterministic"
+    reverted["llm_shadow_selected_patch_text"] = str(candidate.get("patch_text", "") or "").strip()
+    reverted["llm_shadow_selected_materiality_validation_status"] = str(candidate.get("materiality_validation_status", "") or "").strip()
+    reverted["llm_shadow_selected_materiality_validation_note"] = str(candidate.get("materiality_validation_note", "") or "").strip()
+
+    reverted["patch_text"] = baseline_patch_text
+    reverted["proposed_text"] = baseline_patch_text
+    reverted["patch_generation_method"] = baseline_method or str(candidate.get("patch_generation_method", "") or "").strip()
+
+    reverted["materiality_validation_status"] = baseline_status or "material_candidate"
+    reverted["materiality_validation_note"] = (
+        baseline_note
+        or "Writer-selected patch was kept for shadow evaluation only; shipped export reverted to the last scorer-material deterministic patch."
+    )
+    reverted["material_delta_found"] = True
+    reverted["proposal_status"] = "patch_ready"
+    reverted["proposal_type"] = "patch_ready_rewrite"
+
+    reverted["precheck_projected_overall_delta"] = candidate.get(
+        "llm_pre_refinement_precheck_projected_overall_delta"
+    )
+    reverted["precheck_projected_dimension_deltas"] = dict(
+        candidate.get("llm_pre_refinement_precheck_projected_dimension_deltas", {}) or {}
+    )
+    reverted["precheck_scorer_visible_evidence_changed"] = bool(
+        candidate.get("llm_pre_refinement_precheck_scorer_visible_evidence_changed", False)
+    )
+    reverted["precheck_evidence_delta"] = dict(
+        candidate.get("llm_pre_refinement_precheck_evidence_delta", {}) or {}
+    )
+
+    return reverted
+
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
@@ -4362,8 +4421,7 @@ def _build_replacement_candidates(
                     )
 
                     if (
-                        llm_output is not None
-                        and str(candidate.get("operation_type", "") or "").strip() == "rewrite"
+                        str(candidate.get("operation_type", "") or "").strip() == "rewrite"
                         and str(candidate.get("proposal_status", "") or "").strip() == "patch_ready"
                         and str(candidate.get("materiality_validation_status", "") or "").strip() == "material_candidate"
                     ):
@@ -4377,7 +4435,8 @@ def _build_replacement_candidates(
                             candidate,
                             counterfactual_context,
                         )
-
+                        candidate = _apply_post_refinement_export_gate(candidate)
+                        
                     candidates.append(candidate)
 
         elif action == "keep":

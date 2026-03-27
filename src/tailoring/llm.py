@@ -33,12 +33,17 @@ from src.tailoring.selection import (
 )
 
 from src.config.consts import (
-    ACTION_VERB_HINTS
+    ACTION_VERB_HINTS,
+    _SKILL_ALIASES,
+)
+from src.matching.signal_family_matcher import (
+    equivalent_signal_terms,
+    normalize_signal_text,
 )
 
 _PATCH_REFINEMENT_LEAD_VERB_STOPWORDS = set(ACTION_VERB_HINTS)
-LLM_TAILOR_PROVIDER = "gemini"
-LLM_TAILOR_MODEL = "gemini-2.5-flash"
+LLM_TAILOR_PROVIDER = os.getenv("LLM_TAILOR_PROVIDER", "groq").strip().lower()
+LLM_TAILOR_MODEL = os.getenv("LLM_TAILOR_MODEL", "llama-3.3-70b-versatile").strip()
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
 LLM_TAILOR_PROMPT_VERSION = "v4"
@@ -51,11 +56,12 @@ TAILOR_LLM_FALLBACK_ENABLED = (
 )
 TAILOR_LLM_FALLBACK_PROVIDER = os.getenv(
     "TAILOR_LLM_FALLBACK_PROVIDER",
-    LLM_FALLBACK_PROVIDER,
+    "groq",
 ).strip().lower()
+
 TAILOR_LLM_FALLBACK_MODEL = os.getenv(
     "TAILOR_LLM_FALLBACK_MODEL",
-    LLM_FALLBACK_MODEL,
+    "llama-3.3-70b-versatile",
 ).strip()
 
 LIVE_REWRITE_RESPONSE_SCHEMA = {
@@ -106,6 +112,165 @@ PATCH_REFINEMENT_RESPONSE_SCHEMA = {
         "risk_flags",
     ],
 }
+
+PATCH_REFINEMENT_WRITER_PROVIDER = os.getenv(
+    "PATCH_REFINEMENT_WRITER_PROVIDER",
+    PATCH_REFINEMENT_PROVIDER,
+).strip().lower()
+
+PATCH_REFINEMENT_WRITER_MODEL = os.getenv(
+    "PATCH_REFINEMENT_WRITER_MODEL",
+    PATCH_REFINEMENT_MODEL,
+).strip()
+
+PATCH_REFINEMENT_WRITER_MAX_TOKENS = 420
+PATCH_REFINEMENT_WRITER_TEMPERATURE = 0
+PATCH_REFINEMENT_WRITER_PROMPT_VERSION = "v2"
+
+PATCH_REFINEMENT_JUDGE_PROVIDER = os.getenv(
+    "PATCH_REFINEMENT_JUDGE_PROVIDER",
+    PATCH_REFINEMENT_PROVIDER,
+).strip().lower()
+
+PATCH_REFINEMENT_JUDGE_MODEL = os.getenv(
+    "PATCH_REFINEMENT_JUDGE_MODEL",
+    "llama-3.3-70b-versatile",
+).strip()
+
+PATCH_REFINEMENT_JUDGE_MAX_TOKENS = 500
+PATCH_REFINEMENT_JUDGE_TEMPERATURE = 0
+PATCH_REFINEMENT_JUDGE_PROMPT_VERSION = "v1"
+
+PATCH_REFINEMENT_WRITER_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "abstain": {"type": "boolean"},
+        "abstain_reason": {"type": "string"},
+        "options": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "patch_text": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "preserved_terms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "risk_flags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["patch_text", "reason", "preserved_terms", "risk_flags"],
+            },
+        },
+    },
+    "required": ["abstain", "abstain_reason", "options"],
+}
+
+PATCH_REFINEMENT_JUDGE_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "winner": {"type": "string"},
+        "reason": {"type": "string"},
+        "rejected_options": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+        "quality_flags": {
+            "type": "array",
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["winner", "reason", "rejected_options", "quality_flags"],
+}
+
+def _parse_patch_refinement_writer_text(raw_text: str) -> Dict[str, Any]:
+    text = str(raw_text or "").strip()
+    if not text:
+        return {
+            "abstain": True,
+            "abstain_reason": "empty_writer_response",
+            "options": [],
+        }
+
+    cleaned = text.replace("```", "").strip()
+
+    if cleaned.startswith("{"):
+        try:
+            parsed = _extract_json_from_llm_response(cleaned)
+            return _normalize_patch_refinement_writer_parsed(parsed)
+        except Exception:
+            pass
+
+    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
+    options: List[Dict[str, Any]] = []
+
+    abstain_match = re.match(r"(?is)^abstain\s*:\s*(.+)$", cleaned)
+    if abstain_match:
+        return {
+            "abstain": True,
+            "abstain_reason": abstain_match.group(1).strip(),
+            "options": [],
+        }
+
+    for line in lines:
+        match = re.match(r"(?i)^option[_ ]?([12])\s*:\s*(.+)$", line)
+        if not match:
+            continue
+
+        patch_text = str(match.group(2) or "").strip()
+        if not patch_text:
+            continue
+
+        options.append(
+            {
+                "patch_text": patch_text,
+                "reason": "",
+                "preserved_terms": [],
+                "risk_flags": [],
+            }
+        )
+
+    return {
+        "abstain": False if options else True,
+        "abstain_reason": "" if options else "no_parseable_writer_options",
+        "options": options[:2],
+    }
+
+def _partition_writer_options_by_validation(
+    candidate: Dict[str, Any],
+    writer_options: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    valid_options: List[Dict[str, Any]] = []
+    invalid_options: List[Dict[str, Any]] = []
+
+    for idx, option in enumerate(writer_options or [], start=1):
+        patch_text = str(option.get("patch_text", "") or "").strip()
+        normalized = {
+            "option_id": f"writer_option_{idx}",
+            "patch_text": patch_text,
+            "reason": str(option.get("reason", "") or "").strip(),
+            "preserved_terms": list(option.get("preserved_terms", []) or []),
+            "risk_flags": list(option.get("risk_flags", []) or []),
+        }
+
+        is_valid, validation_reason = _validate_patch_refinement_output(candidate, patch_text)
+        if is_valid:
+            valid_options.append(normalized)
+        else:
+            invalid_options.append(
+                {
+                    **normalized,
+                    "validation_reason": str(validation_reason or "").strip(),
+                }
+            )
+
+    return valid_options, invalid_options
 
 def _patch_refinement_protected_phrases(candidate: Dict[str, Any]) -> List[str]:
     original_text = str(candidate.get("original_text", "") or "").strip()
@@ -406,32 +571,235 @@ def _escape_control_chars_inside_json_strings(text: str) -> str:
 
     return "".join(chars)
 
+def _coerce_llm_content_text(value: Any) -> str:
+    if isinstance(value, str):
+        return str(value).strip()
+
+    if isinstance(value, dict):
+        if "text" in value and value.get("text"):
+            return str(value.get("text") or "").strip()
+        if "content" in value and value.get("content"):
+            return str(value.get("content") or "").strip()
+
+    if isinstance(value, list):
+        parts: List[str] = []
+        for item in value:
+            if isinstance(item, str):
+                text = str(item).strip()
+                if text:
+                    parts.append(text)
+                continue
+
+            if isinstance(item, dict):
+                if item.get("type") == "text" and item.get("text"):
+                    text = str(item.get("text") or "").strip()
+                    if text:
+                        parts.append(text)
+                    continue
+
+                if item.get("content"):
+                    text = str(item.get("content") or "").strip()
+                    if text:
+                        parts.append(text)
+                    continue
+
+        return "\n".join(parts).strip()
+
+    return str(value or "").strip()
+
+
+def _normalize_json_like_text(text: str) -> str:
+    value = str(text or "").strip()
+    if not value:
+        return ""
+
+    value = value.replace("```json", "```").replace("```JSON", "```")
+    value = value.replace("```", "").strip()
+
+    value = (
+        value.replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+    )
+
+    value = re.sub(r",(\s*[}\]])", r"\1", value)
+    return value.strip()
+
+
+def _extract_first_balanced_json_object(text: str) -> str:
+    value = str(text or "")
+    start = value.find("{")
+    if start == -1:
+        return ""
+
+    depth = 0
+    in_string = False
+    escape = False
+
+    for idx in range(start, len(value)):
+        ch = value[idx]
+
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+            continue
+
+        if ch == "{":
+            depth += 1
+            continue
+
+        if ch == "}":
+            depth -= 1
+            if depth == 0:
+                return value[start : idx + 1].strip()
+
+    return ""
+
+def _parse_patch_refinement_judge_text(raw_text: str) -> Dict[str, Any]:
+    text = str(raw_text or "").strip()
+    if not text:
+        return {
+            "winner": "abstain",
+            "reason": "empty_judge_response",
+            "rejected_options": [],
+            "quality_flags": [],
+        }
+
+    cleaned = text.replace("```", "").strip()
+
+    if cleaned.startswith("{"):
+        try:
+            parsed = _extract_json_from_llm_response(cleaned)
+            return _normalize_patch_refinement_judge_parsed(parsed)
+        except Exception:
+            pass
+
+    winner = "abstain"
+    reason = ""
+    rejected_options: List[str] = []
+    quality_flags: List[str] = []
+
+    for line in [line.strip() for line in cleaned.splitlines() if line.strip()]:
+        winner_match = re.match(r"(?i)^winner\s*:\s*(.+)$", line)
+        if winner_match:
+            candidate = winner_match.group(1).strip()
+            if candidate in {"deterministic", "writer_option_1", "writer_option_2", "abstain"}:
+                winner = candidate
+            continue
+
+        reason_match = re.match(r"(?i)^reason\s*:\s*(.+)$", line)
+        if reason_match:
+            reason = reason_match.group(1).strip()
+            continue
+
+        rejected_match = re.match(r"(?i)^rejected(?:_options)?\s*:\s*(.+)$", line)
+        if rejected_match:
+            raw = rejected_match.group(1).strip()
+            if raw.lower() != "none":
+                rejected_options = [part.strip() for part in raw.split(",") if part.strip()]
+            continue
+
+        flags_match = re.match(r"(?i)^quality_flags?\s*:\s*(.+)$", line)
+        if flags_match:
+            raw = flags_match.group(1).strip()
+            if raw.lower() != "none":
+                quality_flags = [part.strip() for part in raw.split(",") if part.strip()]
+            continue
+
+    return {
+        "winner": winner,
+        "reason": reason,
+        "rejected_options": rejected_options,
+        "quality_flags": quality_flags,
+    }
+
+def _run_patch_refinement_judge_plain_call(
+    *,
+    provider: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    system_prompt: str,
+    user_prompt: str,
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, str], Optional[str], str]:
+    requested_provider = str(provider or "").strip().lower()
+    requested_model = str(model or "").strip()
+
+    metadata = {
+        "requested_provider": requested_provider,
+        "requested_model": requested_model,
+        "provider": requested_provider,
+        "model": requested_model,
+    }
+
+    try:
+        llm_result = run_chat_completion_with_metadata(
+            provider=requested_provider,
+            model=requested_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type=None,
+            response_schema=None,
+            return_parsed=False,
+            thinking_budget=0,
+            fallback_enabled=False,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+    except Exception as exc:
+        return None, metadata, "call_failed", str(exc)
+
+    metadata["provider"] = str(llm_result.get("provider", "") or requested_provider).strip()
+    metadata["model"] = str(llm_result.get("model", "") or requested_model).strip()
+
+    raw_text = _coerce_llm_content_text(llm_result.get("content"))
+    if not raw_text:
+        return None, metadata, "empty_llm_response", ""
+
+    parsed = _parse_patch_refinement_judge_text(raw_text)
+    return parsed, metadata, None, raw_text
+
 def _extract_json_from_llm_response(response: str) -> dict:
-    raw = str(response or "").strip()
+    raw = _normalize_json_like_text(response)
     if not raw:
         raise ValueError("Empty LLM response")
-
-    cleaned = raw.replace("```json", "```").replace("```JSON", "```")
-    cleaned = cleaned.replace("```", "").strip()
 
     candidates: List[str] = []
 
     def _add_candidate(text: str) -> None:
-        candidate = str(text or "").strip()
+        candidate = _normalize_json_like_text(text)
         if not candidate:
             return
+
         if candidate not in candidates:
             candidates.append(candidate)
 
-        start = candidate.find("{")
-        end = candidate.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            sliced = candidate[start:end + 1].strip()
-            if sliced and sliced not in candidates:
-                candidates.append(sliced)
+        balanced = _extract_first_balanced_json_object(candidate)
+        if balanced and balanced not in candidates:
+            candidates.append(balanced)
 
-    _add_candidate(cleaned)
-    _add_candidate(_escape_control_chars_inside_json_strings(cleaned))
+        escaped = _escape_control_chars_inside_json_strings(candidate)
+        if escaped and escaped not in candidates:
+            candidates.append(escaped)
+
+        balanced_escaped = _extract_first_balanced_json_object(escaped)
+        if balanced_escaped and balanced_escaped not in candidates:
+            candidates.append(balanced_escaped)
+
+    _add_candidate(raw)
 
     last_error = None
     for candidate in candidates:
@@ -612,6 +980,20 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "rewrite_directions": normalized_rewrite_directions,
     }
 
+def _stamp_patch_refinement_baseline(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    stamped = dict(candidate)
+    stamped["llm_pre_refinement_patch_text"] = str(candidate.get("patch_text", "") or "").strip()
+    stamped["llm_pre_refinement_patch_generation_method"] = str(candidate.get("patch_generation_method", "") or "").strip()
+    stamped["llm_pre_refinement_materiality_validation_status"] = str(candidate.get("materiality_validation_status", "") or "").strip()
+    stamped["llm_pre_refinement_materiality_validation_note"] = str(candidate.get("materiality_validation_note", "") or "").strip()
+    stamped["llm_pre_refinement_precheck_projected_overall_delta"] = candidate.get("precheck_projected_overall_delta")
+    stamped["llm_pre_refinement_precheck_projected_dimension_deltas"] = dict(candidate.get("precheck_projected_dimension_deltas", {}) or {})
+    stamped["llm_pre_refinement_precheck_scorer_visible_evidence_changed"] = bool(
+        candidate.get("precheck_scorer_visible_evidence_changed", False)
+    )
+    stamped["llm_pre_refinement_precheck_evidence_delta"] = dict(candidate.get("precheck_evidence_delta", {}) or {})
+    return stamped
+
 def _normalize_patch_refinement_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "abstain": bool(parsed.get("abstain", False)),
@@ -621,6 +1003,551 @@ def _normalize_patch_refinement_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]
         "risk_flags": _normalize_string_list(parsed.get("risk_flags", [])),
     }
 
+def _normalize_patch_refinement_writer_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    raw_options = parsed.get("options", []) or []
+    options: List[Dict[str, Any]] = []
+    seen = set()
+
+    for item in raw_options:
+        if not isinstance(item, dict):
+            continue
+
+        patch_text = str(item.get("patch_text", "") or "").strip()
+        reason = str(item.get("reason", "") or "").strip()
+
+        if not patch_text:
+            continue
+
+        key = re.sub(r"\s+", " ", patch_text.strip().lower())
+        if key in seen:
+            continue
+        seen.add(key)
+
+        options.append(
+            {
+                "patch_text": patch_text,
+                "reason": reason,
+                "preserved_terms": _normalize_string_list(item.get("preserved_terms", [])),
+                "risk_flags": _normalize_string_list(item.get("risk_flags", [])),
+            }
+        )
+
+        if len(options) >= 2:
+            break
+
+    return {
+        "abstain": bool(parsed.get("abstain", False)),
+        "abstain_reason": str(parsed.get("abstain_reason", "") or "").strip(),
+        "options": options,
+    }
+
+def _partition_writer_options_by_validation(
+    candidate: Dict[str, Any],
+    writer_options: List[Dict[str, Any]],
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    valid_options: List[Dict[str, Any]] = []
+    invalid_options: List[Dict[str, Any]] = []
+
+    for idx, option in enumerate(writer_options or [], start=1):
+        patch_text = str(option.get("patch_text", "") or "").strip()
+        normalized = {
+            "option_id": f"writer_option_{idx}",
+            "patch_text": patch_text,
+            "reason": str(option.get("reason", "") or "").strip(),
+            "preserved_terms": list(option.get("preserved_terms", []) or []),
+            "risk_flags": list(option.get("risk_flags", []) or []),
+        }
+
+        is_valid, validation_reason = _validate_patch_refinement_output(candidate, patch_text)
+        if is_valid:
+            valid_options.append(normalized)
+        else:
+            invalid_options.append(
+                {
+                    **normalized,
+                    "validation_reason": str(validation_reason or "").strip(),
+                }
+            )
+
+    return valid_options, invalid_options
+
+def _normalize_patch_refinement_judge_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
+    winner = str(parsed.get("winner", "") or "").strip()
+    if winner not in {"deterministic", "writer_option_1", "writer_option_2", "abstain"}:
+        winner = "abstain"
+
+    return {
+        "winner": winner,
+        "reason": str(parsed.get("reason", "") or "").strip(),
+        "rejected_options": _normalize_string_list(parsed.get("rejected_options", [])),
+        "quality_flags": _normalize_string_list(parsed.get("quality_flags", [])),
+    }
+
+
+def _run_patch_refinement_structured_call(
+    *,
+    provider: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    response_mime_type: Optional[str] = "application/json",
+    response_schema: Optional[Dict[str, Any]] = None,
+    system_prompt: str,
+    user_prompt: str,
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, str], Optional[str], str]:
+    requested_provider = str(provider or "").strip().lower()
+    requested_model = str(model or "").strip()
+
+    metadata = {
+        "requested_provider": requested_provider,
+        "requested_model": requested_model,
+        "provider": requested_provider,
+        "model": requested_model,
+    }
+
+    try:
+        llm_result = run_chat_completion_with_metadata(
+            provider=requested_provider,
+            model=requested_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
+            return_parsed=True,
+            thinking_budget=0,
+            fallback_enabled=False,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+    except Exception as exc:
+        return None, metadata, "call_failed", str(exc)
+
+    metadata["provider"] = str(
+        llm_result.get("provider", "") or requested_provider
+    ).strip()
+    metadata["model"] = str(
+        llm_result.get("model", "") or requested_model
+    ).strip()
+
+    value = llm_result.get("content")
+    parsed_raw = None
+    raw_text = ""
+
+    if isinstance(value, dict):
+        parsed_raw = value
+    else:
+        parsed_candidate = llm_result.get("parsed")
+        if isinstance(parsed_candidate, dict):
+            parsed_raw = parsed_candidate
+        else:
+            raw_text = _coerce_llm_content_text(value)
+            if raw_text:
+                try:
+                    parsed_raw = _extract_json_from_llm_response(raw_text)
+                except Exception as exc:
+                    return None, metadata, "parse_failed", str(exc)
+            else:
+                return None, metadata, "parse_failed", "empty_llm_response"
+
+    return parsed_raw or {}, metadata, None, raw_text
+
+def _run_patch_refinement_writer_plain_call(
+    *,
+    provider: str,
+    model: str,
+    temperature: float,
+    max_tokens: int,
+    system_prompt: str,
+    user_prompt: str,
+) -> Tuple[Optional[Dict[str, Any]], Dict[str, str], Optional[str], str]:
+    requested_provider = str(provider or "").strip().lower()
+    requested_model = str(model or "").strip()
+
+    metadata = {
+        "requested_provider": requested_provider,
+        "requested_model": requested_model,
+        "provider": requested_provider,
+        "model": requested_model,
+    }
+
+    try:
+        llm_result = run_chat_completion_with_metadata(
+            provider=requested_provider,
+            model=requested_model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type=None,
+            response_schema=None,
+            return_parsed=False,
+            thinking_budget=0,
+            fallback_enabled=False,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+    except Exception as exc:
+        return None, metadata, "call_failed", str(exc)
+
+    metadata["provider"] = str(llm_result.get("provider", "") or requested_provider).strip()
+    metadata["model"] = str(llm_result.get("model", "") or requested_model).strip()
+
+    raw_text = _coerce_llm_content_text(llm_result.get("content"))
+    if not raw_text:
+        return None, metadata, "empty_llm_response", ""
+
+    parsed = _parse_patch_refinement_writer_text(raw_text)
+    return parsed, metadata, None, raw_text
+
+def _patch_refinement_job_text_blocks(payload: Dict[str, Any]) -> List[str]:
+    job = payload.get("job", {}) or {}
+    blocks: List[str] = []
+
+    for key in (
+        "description",
+        "job_description",
+        "text",
+        "content",
+        "summary",
+        "responsibilities",
+        "requirements",
+        "qualifications",
+        "preferred_qualifications",
+        "basic_qualifications",
+    ):
+        value = job.get(key)
+        if isinstance(value, str):
+            text = re.sub(r"\s+", " ", value).strip()
+            if text:
+                blocks.append(text)
+        elif isinstance(value, list):
+            for item in value:
+                text = re.sub(r"\s+", " ", str(item or "")).strip()
+                if text:
+                    blocks.append(text)
+
+    return _unique_preserve_order(blocks)
+
+
+def _patch_refinement_title_terms(payload: Dict[str, Any]) -> List[str]:
+    job = payload.get("job", {}) or {}
+    title = str(job.get("title", "") or "").strip()
+    if not title:
+        return []
+
+    raw_terms = re.findall(r"[A-Za-z0-9\+\#\-]+", title.lower())
+    return _unique_preserve_order(
+        [term for term in raw_terms if len(term) > 2 and term not in {"and", "senior"}]
+    )
+
+
+def _patch_refinement_alignment_terms(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> List[str]:
+    summary = payload.get("summary", {}) or {}
+
+    supported_terms = [
+        str(item).strip()
+        for item in (
+            list(candidate.get("supported_jd_signals", []) or [])
+            + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+            + list(summary.get("matched_terms", []) or [])
+        )
+        if str(item).strip()
+    ]
+
+    expanded: List[str] = []
+    for term in supported_terms:
+        expanded.append(term)
+        expanded.extend(list(equivalent_signal_terms(term) or []))
+
+    return _unique_preserve_order(
+        [str(term).strip() for term in expanded if str(term).strip()]
+    )
+
+
+def _split_patch_refinement_jd_snippets(text: str) -> List[str]:
+    raw = re.split(r"(?<=[.!?])\s+|\n+", str(text or ""))
+    snippets: List[str] = []
+
+    for item in raw:
+        snippet = re.sub(r"\s+", " ", str(item or "").strip())
+        if len(snippet) >= 40:
+            snippets.append(snippet)
+
+    return _unique_preserve_order(snippets)
+
+
+def _patch_refinement_alignment_context(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+    max_snippets: int = 2,
+) -> Dict[str, Any]:
+    matched_terms = _patch_refinement_alignment_terms(payload, candidate)
+    normalized_terms = {
+        normalize_signal_text(term)
+        for term in matched_terms
+        if normalize_signal_text(term)
+    }
+    title_terms = set(_patch_refinement_title_terms(payload))
+
+    scored: List[Tuple[int, int, str]] = []
+
+    for block in _patch_refinement_job_text_blocks(payload):
+        for snippet in _split_patch_refinement_jd_snippets(block):
+            normalized_snippet = normalize_signal_text(snippet)
+            snippet_lower = snippet.lower()
+
+            matched_hits = [
+                term for term in normalized_terms
+                if term and term in normalized_snippet
+            ]
+            title_hits = [
+                term for term in title_terms
+                if term and term in snippet_lower
+            ]
+
+            if not matched_hits and not title_hits:
+                continue
+
+            score = len(matched_hits) * 10 + len(title_hits)
+            scored.append((score, len(snippet), snippet))
+
+    scored.sort(key=lambda row: (-row[0], row[1], row[2]))
+
+    matched_snippets: List[str] = []
+    for _, _, snippet in scored:
+        if snippet not in matched_snippets:
+            matched_snippets.append(snippet)
+        if len(matched_snippets) >= max_snippets:
+            break
+
+    return {
+        "matched_jd_terms": matched_terms[:12],
+        "matched_jd_snippets": matched_snippets,
+        "title_terms": sorted(title_terms),
+    }
+
+def _patch_refinement_protected_numbers(candidate: Dict[str, Any]) -> List[str]:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    return _patch_refinement_numeric_tokens(original_text)
+
+
+def _patch_refinement_protected_core_terms(candidate: Dict[str, Any]) -> List[str]:
+    return _patch_refinement_core_terms(candidate)
+
+
+def _patch_refinement_sibling_openings(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> List[str]:
+    return _collect_patch_refinement_sibling_openings(payload, candidate)
+
+def _build_patch_refinement_writer_prompt(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> str:
+    job = payload.get("job", {}) or {}
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
+    original_lead = _patch_refinement_lead_token(original_text)
+
+    supported_signals = _unique_preserve_order(
+        [
+            str(item).strip()
+            for item in (
+                list(candidate.get("supported_jd_signals", []) or [])
+                + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+            )
+            if str(item).strip()
+        ]
+    )
+    protected_numbers = _patch_refinement_protected_numbers(candidate)
+    protected_core_terms = _patch_refinement_protected_core_terms(candidate)
+    protected_phrases = _patch_refinement_protected_phrases(candidate)
+    sibling_openings = _patch_refinement_sibling_openings(payload, candidate)
+    alignment = _patch_refinement_alignment_context(payload, candidate)
+
+    lines: List[str] = []
+    lines.append("Return plain text only.")
+    lines.append("")
+    lines.append("You are the WRITER stage for one resume-bullet rewrite.")
+    lines.append("")
+    lines.append("Primary objective:")
+    lines.append("Produce up to 2 stronger final bullet options only when they are clearly better than the deterministic draft in supported JD alignment or supported business/result framing.")
+    lines.append("")
+    lines.append("Improvement priority order:")
+    lines.append("1. Stronger supported JD signal salience.")
+    lines.append("2. Stronger supported business/result framing.")
+    lines.append("3. Stronger specificity.")
+    lines.append("4. Otherwise abstain.")
+    lines.append("")
+    lines.append("Hard rules:")
+    lines.append("1. Use ONLY the original bullet evidence.")
+    lines.append("2. Do NOT invent tools, methods, scope, ownership, metrics, or domains.")
+    lines.append("3. Preserve every numeric token exactly.")
+    lines.append("4. Preserve protected phrases and core technical terms.")
+    lines.append("5. Preserve the same factual claim strength.")
+    lines.append("6. Keep the same opening tense/style as the original bullet.")
+    lines.append("7. Keep the same original lead action word.")
+    lines.append("8. Do NOT switch to gerund/opening-phrase style like Using, With, By, Through, or Via.")
+    lines.append("9. Do NOT output keyword shuffle, synonym churn, or style-only smoothing.")
+    lines.append("10. Do NOT mirror JD phrasing unless the mirrored term is already supported by the bullet.")
+    lines.append("11. Borrow terminology, not whole JD sentence structure.")
+    lines.append("12. If the best change is only stylistic, abstain.")
+    lines.append("")
+    lines.append("Quality bar:")
+    lines.append("- stronger supported alignment, not just smoother wording")
+    lines.append("- stronger supported business/result framing when available")
+    lines.append("- same claim, same evidence, same tone")
+    lines.append("- no keyword stuffing")
+    lines.append("- no awkward ATS bait phrasing")
+    lines.append("")
+    lines.append(f"Job company: {job.get('company', '')}")
+    lines.append(f"Job title: {job.get('title', '')}")
+    lines.append(f"Original lead token: {original_lead}")
+    lines.append(f"Sibling bullet openings to avoid repeating when possible: {sibling_openings or []}")
+    lines.append(f"Supported JD signals: {supported_signals}")
+    lines.append(f"Matched JD terms you may surface more clearly: {alignment.get('matched_jd_terms', [])}")
+    lines.append(f"Protected numeric tokens: {protected_numbers}")
+    lines.append(f"Protected core technical terms: {protected_core_terms}")
+    lines.append(f"Protected substantive phrases: {protected_phrases}")
+    lines.append("")
+    lines.append("Matched JD snippets (borrow terminology only, do not copy long phrasing):")
+    for snippet in alignment.get("matched_jd_snippets", []) or []:
+        lines.append(f"- {snippet}")
+    if not (alignment.get("matched_jd_snippets", []) or []):
+        lines.append("- none")
+    lines.append("")
+    lines.append("Original bullet:")
+    lines.append(original_text)
+    lines.append("")
+    lines.append("Deterministic draft:")
+    lines.append(deterministic_patch_text)
+    lines.append("")
+    lines.append("Output contract:")
+    lines.append("Return plain text only.")
+    lines.append("Do NOT use markdown.")
+    lines.append("Do NOT use code fences.")
+    lines.append("Either return exactly:")
+    lines.append("ABSTAIN: <short reason>")
+    lines.append("Or return up to two lines in exactly this format:")
+    lines.append("OPTION_1: <single rewritten bullet>")
+    lines.append("OPTION_2: <single rewritten bullet>")
+    return "\n".join(lines)
+
+
+def _build_patch_refinement_judge_prompt(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+    writer_options: List[Dict[str, Any]],
+) -> str:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
+    original_lead = _patch_refinement_lead_token(original_text)
+    alignment = _patch_refinement_alignment_context(payload, candidate)
+
+    lines: List[str] = []
+    lines.append("Return plain text only.")
+    lines.append("")
+    lines.append("You are the JUDGE stage for one resume-bullet rewrite.")
+    lines.append("")
+    lines.append("Choose one winner:")
+    lines.append("- deterministic")
+    lines.append("- writer_option_1")
+    lines.append("- writer_option_2")
+    lines.append("- abstain")
+    lines.append("")
+    lines.append("Judging rules:")
+    lines.append("1. Truthfulness beats polish.")
+    lines.append("2. The winner must keep the same claim, same tone, and same lead-token style.")
+    lines.append("3. Reject keyword shuffle, near-duplicates, awkward phrasing, and trivial term swaps.")
+    lines.append("4. Choose deterministic unless a writer option is clearly stronger.")
+    lines.append("5. Choose abstain if none are good enough to surface.")
+    lines.append("6. Prefer stronger supported JD alignment over generic smoothness.")
+    lines.append("7. Prefer stronger supported business/result framing over style-only improvement.")
+    lines.append("8. Reject options whose best improvement is only stylistic.")
+    lines.append("9. Reject long-copying of JD sentence phrasing.")
+    lines.append("")
+    lines.append(f"Original lead token: {original_lead}")
+    lines.append(f"Matched JD terms: {alignment.get('matched_jd_terms', [])}")
+    lines.append("Matched JD snippets:")
+    for snippet in alignment.get("matched_jd_snippets", []) or []:
+        lines.append(f"- {snippet}")
+    if not (alignment.get("matched_jd_snippets", []) or []):
+        lines.append("- none")
+    lines.append("")
+    lines.append("Original bullet:")
+    lines.append(original_text)
+    lines.append("")
+    lines.append("Deterministic draft:")
+    lines.append(deterministic_patch_text)
+    lines.append("")
+
+    for idx, option in enumerate(writer_options, start=1):
+        lines.append(f"writer_option_{idx}:")
+        lines.append(str(option.get("patch_text", "") or "").strip())
+        lines.append(f"writer_option_{idx}_reason: {str(option.get('reason', '') or '').strip()}")
+        lines.append("")
+
+    lines.append("Output contract:")
+    lines.append("Return plain text only.")
+    lines.append("Do NOT use markdown.")
+    lines.append("Do NOT use code fences.")
+    lines.append("Use exactly these lines:")
+    lines.append("WINNER: deterministic | writer_option_1 | writer_option_2 | abstain")
+    lines.append("REASON: <one short sentence>")
+    lines.append("REJECTED: <comma-separated option ids or none>")
+    lines.append("QUALITY_FLAGS: <comma-separated tags or none>")
+    return "\n".join(lines)
+
+
+def _keep_deterministic_with_status(
+    candidate: Dict[str, Any],
+    *,
+    status: str,
+    note: str,
+    writer_metadata: Optional[Dict[str, str]] = None,
+    judge_metadata: Optional[Dict[str, str]] = None,
+    rejected_text: str = "",
+    writer_options: Optional[List[Dict[str, Any]]] = None,
+    invalid_writer_options: Optional[List[Dict[str, Any]]] = None,
+    judge_winner: str = "",
+    judge_reason: str = "",
+    judge_rejected_options: Optional[List[str]] = None,
+    judge_quality_flags: Optional[List[str]] = None,
+) -> Dict[str, Any]:
+    updated = dict(candidate)
+    updated["llm_refinement_used"] = False
+    updated["llm_refinement_status"] = status
+    updated["llm_refinement_note"] = note
+    updated["llm_refinement_rejected_text"] = str(rejected_text or "").strip()
+
+    updated["llm_writer_options"] = list(writer_options or [])
+    updated["llm_writer_invalid_options"] = list(invalid_writer_options or [])
+
+    updated["llm_judge_winner"] = str(judge_winner or "").strip()
+    updated["llm_judge_reason"] = str(judge_reason or "").strip()
+    updated["llm_judge_rejected_options"] = list(judge_rejected_options or [])
+    updated["llm_judge_quality_flags"] = list(judge_quality_flags or [])
+
+    writer_metadata = writer_metadata or {}
+    judge_metadata = judge_metadata or {}
+
+    updated["llm_writer_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+    updated["llm_writer_model"] = str(writer_metadata.get("model", "") or "").strip()
+    updated["llm_writer_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+    updated["llm_writer_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+
+    updated["llm_judge_provider"] = str(judge_metadata.get("provider", "") or "").strip()
+    updated["llm_judge_model"] = str(judge_metadata.get("model", "") or "").strip()
+    updated["llm_judge_requested_provider"] = str(judge_metadata.get("requested_provider", "") or "").strip()
+    updated["llm_judge_requested_model"] = str(judge_metadata.get("requested_model", "") or "").strip()
+
+    return updated
 
 def _patch_refinement_numeric_tokens(text: str) -> List[str]:
     matches = re.findall(r"\b\d+(?:\.\d+)?(?:k|m)?\+?%?\b", str(text or ""), flags=re.IGNORECASE)
@@ -634,7 +1561,36 @@ def _patch_refinement_contains_term(text: str, term: str) -> bool:
         return False
     return term_norm in text_norm
 
+def _patch_refinement_term_variants(term: str) -> List[str]:
+    raw = str(term or "").strip()
+    normalized = normalize_signal_text(raw)
+    if not normalized:
+        return []
 
+    variants: List[str] = [raw]
+
+    canonical_from_alias = _SKILL_ALIASES.get(normalized, "")
+    if canonical_from_alias:
+        variants.append(canonical_from_alias)
+
+    variants.extend(equivalent_signal_terms(raw))
+
+    reverse_aliases = [
+        alias
+        for alias, canonical in _SKILL_ALIASES.items()
+        if normalize_signal_text(canonical) == normalized
+    ]
+    variants.extend(reverse_aliases)
+
+    return _unique_preserve_order([str(item).strip() for item in variants if str(item).strip()])
+
+
+def _patch_refinement_contains_term_or_alias(text: str, term: str) -> bool:
+    variants = _patch_refinement_term_variants(term)
+    if not variants:
+        return _patch_refinement_contains_term(text, term)
+
+    return any(_patch_refinement_contains_term(text, variant) for variant in variants)
 def _patch_refinement_lead_token(text: str) -> str:
     tokens = re.findall(r"[A-Za-z][A-Za-z\-]+", str(text or ""))
     return tokens[0].lower() if tokens else ""
@@ -829,10 +1785,26 @@ def _validate_patch_refinement_output(
             return False, f"missing_numeric_token:{token}"
     
     protected_phrases = _patch_refinement_protected_phrases(candidate)
+    supported_phrase_set = {
+        normalize_signal_text(term)
+        for term in (
+            list(candidate.get("supported_jd_signals", []) or [])
+            + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+        )
+        if str(term or "").strip()
+    }
+
     for phrase in protected_phrases:
         phrase_clean = str(phrase or "").strip()
         if not phrase_clean:
             continue
+
+        phrase_norm = normalize_signal_text(phrase_clean)
+        if phrase_norm in supported_phrase_set:
+            if not _patch_refinement_contains_term_or_alias(refined, phrase_clean):
+                return False, f"missing_protected_phrase:{phrase_clean}"
+            continue
+
         if not _patch_refinement_contains_term(refined, phrase_clean):
             return False, f"missing_protected_phrase:{phrase_clean}"
 
@@ -842,7 +1814,7 @@ def _validate_patch_refinement_output(
     )
     supported_terms = [term for term in supported_terms if str(term or "").strip()]
 
-    if supported_terms and not any(_patch_refinement_contains_term(refined, term) for term in supported_terms):
+    if supported_terms and not any(_patch_refinement_contains_term_or_alias(refined, term) for term in supported_terms):
         return False, "missing_supported_signal"
 
     protected_core_terms = _patch_refinement_core_terms(candidate)
@@ -850,7 +1822,7 @@ def _validate_patch_refinement_output(
         term_clean = str(term or "").strip()
         if not term_clean:
             continue
-        if not _patch_refinement_contains_term(refined, term_clean):
+        if not _patch_refinement_contains_term_or_alias(refined, term_clean):
             return False, f"missing_core_term:{term_clean}"
 
     original_norm = original_text.lower()
@@ -890,181 +1862,176 @@ def _maybe_refine_patch_ready_rewrite_candidate(
 
     if str(candidate.get("materiality_validation_status", "") or "").strip() != "material_candidate":
         return candidate
-    
+
     deterministic_patch_text = str(candidate.get("patch_text", "") or "").strip()
     if not deterministic_patch_text:
         return candidate
 
-    prompt = _build_patch_refinement_prompt(payload, candidate)
+    candidate = _stamp_patch_refinement_baseline(candidate)
 
-    system_prompt = """
-You rewrite one resume bullet under strict evidence constraints.
-
-Rules:
-1. Use only the supplied original bullet evidence.
-2. Do not invent tools, methods, metrics, scope, or ownership.
-3. Preserve every numeric metric exactly.
-4. Keep the same support level as the original evidence.
-5. If the deterministic draft is already as good as you can make it safely, abstain.
-6. Return valid JSON only.
+    writer_system_prompt = """
+You are the writer stage for one resume bullet under strict evidence constraints.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Either return:
+ABSTAIN: <short reason>
+or up to two lines:
+OPTION_1: <single rewritten bullet>
+OPTION_2: <single rewritten bullet>
 """
+    writer_prompt = _build_patch_refinement_writer_prompt(payload, candidate)
 
-    requested_provider = PATCH_REFINEMENT_PROVIDER
-    requested_model = PATCH_REFINEMENT_MODEL
+    writer_raw, writer_metadata, writer_error_type, writer_error_note = _run_patch_refinement_writer_plain_call(
+        provider=PATCH_REFINEMENT_WRITER_PROVIDER,
+        model=PATCH_REFINEMENT_WRITER_MODEL,
+        temperature=PATCH_REFINEMENT_WRITER_TEMPERATURE,
+        max_tokens=PATCH_REFINEMENT_WRITER_MAX_TOKENS,
+        system_prompt=writer_system_prompt,
+        user_prompt=writer_prompt,
+    )
 
-    try:
-        llm_result = run_chat_completion_with_metadata(
-            provider=requested_provider,
-            model=requested_model,
-            temperature=PATCH_REFINEMENT_TEMPERATURE,
-            max_tokens=PATCH_REFINEMENT_MAX_TOKENS,
-            response_mime_type="application/json",
-            response_schema=PATCH_REFINEMENT_RESPONSE_SCHEMA,
-            return_parsed=True,
-            thinking_budget=0,
-            fallback_enabled=False,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
+    if writer_error_type:
+        return _keep_deterministic_with_status(
+            candidate,
+            status=f"{writer_error_type}_kept_deterministic",
+            note=writer_error_note,
+            writer_metadata=writer_metadata,
         )
-    except Exception as exc:
-        updated = dict(candidate)
-        updated["llm_refinement_used"] = False
-        updated["llm_refinement_status"] = "call_failed"
-        updated["llm_refinement_note"] = str(exc)
-        updated["llm_refinement_requested_provider"] = requested_provider
-        updated["llm_refinement_requested_model"] = requested_model
-        return updated
 
-    value = llm_result.get("content")
-    parsed_raw = None
+    writer_parsed = _normalize_patch_refinement_writer_parsed(writer_raw or {})
+    if writer_parsed.get("abstain", False):
+        return _keep_deterministic_with_status(
+            candidate,
+            status="writer_abstained_kept_deterministic",
+            note=str(writer_parsed.get("abstain_reason", "") or "").strip() or "writer_abstained",
+            writer_metadata=writer_metadata,
+        )
 
-    if isinstance(value, dict):
-        parsed_raw = value
-    else:
-        parsed_candidate = llm_result.get("parsed")
-        if isinstance(parsed_candidate, dict):
-            parsed_raw = parsed_candidate
-        else:
-            raw_text = str(value or "").strip()
-            if raw_text:
-                try:
-                    parsed_raw = _extract_json_from_llm_response(raw_text)
-                except Exception as exc:
-                    updated = dict(candidate)
-                    updated["llm_refinement_used"] = False
-                    updated["llm_refinement_status"] = "parse_failed"
-                    updated["llm_refinement_note"] = str(exc)
-                    updated["llm_refinement_rejected_text"] = raw_text
-                    updated["llm_refinement_provider"] = str(
-                        llm_result.get("provider", "") or requested_provider
-                    ).strip()
-                    updated["llm_refinement_model"] = str(
-                        llm_result.get("model", "") or requested_model
-                    ).strip()
-                    updated["llm_refinement_requested_provider"] = requested_provider
-                    updated["llm_refinement_requested_model"] = requested_model
-                    return updated
-            else:
-                updated = dict(candidate)
-                updated["llm_refinement_used"] = False
-                updated["llm_refinement_status"] = "parse_failed"
-                updated["llm_refinement_note"] = "empty_llm_response"
-                updated["llm_refinement_rejected_text"] = ""
-                updated["llm_refinement_provider"] = str(
-                    llm_result.get("provider", "") or requested_provider
-                ).strip()
-                updated["llm_refinement_model"] = str(
-                    llm_result.get("model", "") or requested_model
-                ).strip()
-                updated["llm_refinement_requested_provider"] = requested_provider
-                updated["llm_refinement_requested_model"] = requested_model
-                return updated
+    validated_writer_options, invalid_writer_options = _partition_writer_options_by_validation(
+        candidate,
+        list(writer_parsed.get("options", []) or []),
+    )
 
-    parsed = _normalize_patch_refinement_parsed(parsed_raw or {})
+    if not validated_writer_options:
+        return _keep_deterministic_with_status(
+            candidate,
+            status="writer_no_valid_options_kept_deterministic",
+            note="writer produced no valid rewrite options better than deterministic",
+            writer_metadata=writer_metadata,
+            writer_options=[],
+            invalid_writer_options=invalid_writer_options,
+        )
+
+    judge_system_prompt = """
+You are the judge stage for one resume bullet rewrite.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+"""
+    judge_prompt = _build_patch_refinement_judge_prompt(
+        payload,
+        candidate,
+        validated_writer_options,
+    )
+
+    judge_raw, judge_metadata, judge_error_type, judge_error_note = _run_patch_refinement_judge_plain_call(
+        provider=PATCH_REFINEMENT_JUDGE_PROVIDER,
+        model=PATCH_REFINEMENT_JUDGE_MODEL,
+        temperature=PATCH_REFINEMENT_JUDGE_TEMPERATURE,
+        max_tokens=PATCH_REFINEMENT_JUDGE_MAX_TOKENS,
+        system_prompt=judge_system_prompt,
+        user_prompt=judge_prompt,
+    )
+
+    if judge_error_type:
+        return _keep_deterministic_with_status(
+            candidate,
+            status=f"judge_{judge_error_type}_kept_deterministic",
+            note=judge_error_note,
+            writer_metadata=writer_metadata,
+            judge_metadata=judge_metadata,
+            writer_options=validated_writer_options,
+            invalid_writer_options=invalid_writer_options,
+        )
+
+    judge_parsed = _normalize_patch_refinement_judge_parsed(judge_raw or {})
+    winner = str(judge_parsed.get("winner", "") or "").strip()
+
+    if winner in {"deterministic", "abstain"}:
+        return _keep_deterministic_with_status(
+            candidate,
+            status="judge_kept_deterministic",
+            note=str(judge_parsed.get("reason", "") or "").strip() or "judge_kept_deterministic",
+            writer_metadata=writer_metadata,
+            judge_metadata=judge_metadata,
+            writer_options=validated_writer_options,
+            invalid_writer_options=invalid_writer_options,
+            judge_winner=winner,
+            judge_reason=str(judge_parsed.get("reason", "") or "").strip(),
+            judge_rejected_options=list(judge_parsed.get("rejected_options", []) or []),
+            judge_quality_flags=list(judge_parsed.get("quality_flags", []) or []),
+        )
+
+    selected_option = next(
+        (item for item in validated_writer_options if str(item.get("option_id", "") or "").strip() == winner),
+        None,
+    )
+
+    if selected_option is None:
+        return _keep_deterministic_with_status(
+            candidate,
+            status="judge_invalid_winner_kept_deterministic",
+            note="judge selected an unavailable option",
+            writer_metadata=writer_metadata,
+            judge_metadata=judge_metadata,
+            writer_options=validated_writer_options,
+            invalid_writer_options=invalid_writer_options,
+            judge_winner=winner,
+            judge_reason="judge selected an unavailable option",
+            judge_rejected_options=list(judge_parsed.get("rejected_options", []) or []),
+            judge_quality_flags=list(judge_parsed.get("quality_flags", []) or []),
+        )
 
     updated = dict(candidate)
-
-    reason_text = str(parsed.get("reason", "") or "").strip().lower()
-    refined_patch_text = str(parsed.get("refined_patch_text", "") or "").strip()
-
-    if (
-        refined_patch_text
-        and any(token in reason_text for token in ["already clear", "already concise", "already strong"])
-    ):
-        updated["llm_refinement_used"] = False
-        updated["llm_refinement_status"] = "validation_failed_kept_deterministic"
-        updated["llm_refinement_note"] = "should_have_abstained"
-        updated["llm_refinement_rejected_text"] = refined_patch_text
-        updated["llm_refinement_provider"] = str(
-            llm_result.get("provider", "") or requested_provider
-        ).strip()
-        updated["llm_refinement_model"] = str(
-            llm_result.get("model", "") or requested_model
-        ).strip()
-        updated["llm_refinement_requested_provider"] = requested_provider
-        updated["llm_refinement_requested_model"] = requested_model
-        updated["materiality_validation_note"] = (
-            "LLM refinement should have abstained, so the deterministic material candidate was kept unchanged."
-        )
-        return updated
-
-    updated["llm_refinement_provider"] = str(
-        llm_result.get("provider", "") or requested_provider
-    ).strip()
-    updated["llm_refinement_model"] = str(
-        llm_result.get("model", "") or requested_model
-    ).strip()
-    updated["llm_refinement_requested_provider"] = requested_provider
-    updated["llm_refinement_requested_model"] = requested_model
-    updated["llm_refinement_reason"] = parsed.get("reason", "")
-    updated["llm_refinement_preserved_terms"] = list(parsed.get("preserved_terms", []) or [])
-    updated["llm_refinement_risk_flags"] = list(parsed.get("risk_flags", []) or [])
-
-    if parsed.get("abstain", False):
-        updated["llm_refinement_used"] = False
-        updated["llm_refinement_status"] = "abstained_kept_deterministic"
-        updated["llm_refinement_note"] = parsed.get("reason", "")
-        updated["llm_refinement_rejected_text"] = str(parsed.get("refined_patch_text", "") or "").strip()
-        updated["materiality_validation_note"] = (
-            "LLM refinement abstained, so the deterministic material candidate was kept unchanged."
-        )
-        return updated
-
-    is_valid, validation_reason = _validate_patch_refinement_output(candidate, refined_patch_text)
-
-    if not is_valid:
-        updated["llm_refinement_used"] = False
-        updated["llm_refinement_status"] = "validation_failed"
-        updated["llm_refinement_note"] = validation_reason
-        updated["llm_refinement_rejected_text"] = refined_patch_text
-
-        if validation_reason in {
-            "same_as_original",
-            "near_same_as_original",
-            "same_as_deterministic",
-            "near_same_as_deterministic",
-            "should_have_abstained",
-            "lead_token_changed",
-        } or str(validation_reason).startswith("lead_token_changed:"):
-            updated["llm_refinement_status"] = "validation_failed_kept_deterministic"
-            updated["materiality_validation_note"] = (
-                "LLM refinement did not produce a safer or better final rewrite, so the deterministic material candidate was kept."
-            )
-
-        return updated
-
-    updated["deterministic_patch_text"] = deterministic_patch_text
-    updated["patch_text"] = refined_patch_text
-    updated["proposed_text"] = refined_patch_text
+    updated["patch_text"] = str(selected_option.get("patch_text", "") or "").strip()
+    updated["proposed_text"] = updated["patch_text"]
     updated["llm_refinement_used"] = True
-    updated["llm_refinement_status"] = "accepted"
-    updated["llm_refinement_note"] = parsed.get("reason", "")
-    updated["patch_generation_method"] = (
-        f"{str(candidate.get('patch_generation_method', '') or '').strip()}+llm_refine"
-    ).strip("+")
+    updated["llm_refinement_status"] = "judge_selected_writer_option"
+    updated["llm_refinement_note"] = str(judge_parsed.get("reason", "") or "").strip()
+    updated["llm_refinement_reason"] = str(selected_option.get("reason", "") or "").strip()
+    updated["llm_refinement_preserved_terms"] = list(selected_option.get("preserved_terms", []) or [])
+    updated["llm_refinement_risk_flags"] = list(selected_option.get("risk_flags", []) or [])
+    updated["llm_refinement_selected_option_id"] = str(selected_option.get("option_id", "") or "").strip()
+    updated["llm_writer_options"] = validated_writer_options
+    updated["llm_judge_winner"] = winner
+    updated["llm_writer_invalid_options"] = invalid_writer_options
+    updated["llm_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
+    updated["llm_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
+    updated["llm_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
 
+    updated["llm_refinement_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+    updated["llm_refinement_model"] = str(writer_metadata.get("model", "") or "").strip()
+    updated["llm_refinement_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+    updated["llm_refinement_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+
+    updated["llm_writer_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+    updated["llm_writer_model"] = str(writer_metadata.get("model", "") or "").strip()
+    updated["llm_writer_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+    updated["llm_writer_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+
+    updated["llm_judge_provider"] = str(judge_metadata.get("provider", "") or "").strip()
+    updated["llm_judge_model"] = str(judge_metadata.get("model", "") or "").strip()
+    updated["llm_judge_requested_provider"] = str(judge_metadata.get("requested_provider", "") or "").strip()
+    updated["llm_judge_requested_model"] = str(judge_metadata.get("requested_model", "") or "").strip()
+
+    updated["llm_selected_patch_text"] = str(selected_option.get("patch_text", "") or "").strip()
+    updated["llm_selected_patch_reason"] = str(judge_parsed.get("reason", "") or "").strip()
+    updated["llm_export_decision"] = "pending_post_validation"
+
+    updated["patch_generation_method"] = (
+        str(updated.get("patch_generation_method", "") or "").strip() + "+llm_writer_judge"
+    ).strip("+")
     return updated
 
 def _canonical_json(value: Any) -> str:

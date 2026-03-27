@@ -1459,6 +1459,48 @@ def _rewrite_card_fields_from_directional_candidate(
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
         }
 
+    if reason == "scorer_neutral_no_evidence_change":
+        return {
+            "edit_type": "keep_visible",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                "The proposed rewrite is grounded, but it does not change scorer-visible evidence in the frozen validation pass."
+            ),
+            "why_rewrite_is_better": (
+                "This is optional phrasing polish only, not a materially stronger evidence claim."
+            ),
+            "why_it_matters": (
+                "Keep the bullet visible as-is unless you specifically want minor wording cleanup that stays literally true."
+            ),
+            "placement_guidance": (
+                "Do not treat this as a required patch. Keep the current bullet unless you want cosmetic phrasing cleanup only."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+
+    if reason == "materiality_prevalidation_failed":
+        return {
+            "edit_type": "suppress_rewrite",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                "This rewrite candidate could not be pre-validated as a safe material change."
+            ),
+            "why_rewrite_is_better": (
+                "Until deterministic counterfactual validation succeeds, the safer move is to suppress the rewrite and keep the bullet unchanged."
+            ),
+            "why_it_matters": (
+                "This avoids surfacing an unvalidated rewrite as if it were a trustworthy patch."
+            ),
+            "placement_guidance": (
+                "Keep the bullet unchanged unless a later deterministic rerun validates the rewrite as material."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+    
     if rewrite_instruction:
         return {
             "edit_type": "keep_visible",
@@ -1986,7 +2028,7 @@ def _normalize_direct_overlap_rewrite_diagnosis(
 
     risks = _replacement_candidate_risks(packet, diagnosis)
 
-    proposal_status, _, patch_generation_method = _deterministic_patch_text_from_diagnosis(
+    proposal_status, _, patch_generation_method, _ = _deterministic_patch_text_from_diagnosis(
         diagnosis,
         risks["adjacent_risk_signals"],
         risks["unsupported_risk_signals"],
@@ -2160,12 +2202,18 @@ def _diagnosis_to_replacement_candidate(
             rewrite_instruction = (
                 "Do not rewrite this bullet from the current instruction because the rewrite instruction is malformed or overlong. Keep this directional only."
             )
+
     else:
-        proposal_status, patch_text, patch_generation_method = _deterministic_patch_text_from_diagnosis(
+        proposal_status, patch_text, patch_generation_method, deterministic_directional_reason = _deterministic_patch_text_from_diagnosis(
             diagnosis,
             risks["adjacent_risk_signals"],
             risks["unsupported_risk_signals"],
         )
+        if proposal_status == "direction_only":
+            directional_only_reason = (
+                str(directional_only_reason or "").strip()
+                or str(deterministic_directional_reason or "").strip()
+            )
 
     return {
         "candidate_id": candidate_id,
@@ -4740,7 +4788,7 @@ def _deterministic_patch_text_from_diagnosis(
     diagnosis: Dict[str, Any],
     adjacent_risk_signals: List[str],
     unsupported_risk_signals: List[str],
-) -> Tuple[str, str, str]:
+) -> Tuple[str, str, str, str]:
     claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
     confidence = _replacement_candidate_confidence(diagnosis)
     supported_terms = [
@@ -4751,48 +4799,48 @@ def _deterministic_patch_text_from_diagnosis(
     original_text = str(diagnosis.get("original_text", "") or "").strip()
 
     if claim_safety != "safe_strengthen":
-        return "direction_only", "", ""
+        return "direction_only", "", "", "claim_safety_not_safe_strengthen"
 
     if confidence != "high":
-        return "direction_only", "", ""
+        return "direction_only", "", "", "insufficient_confidence"
 
     if adjacent_risk_signals or unsupported_risk_signals:
-        return "direction_only", "", ""
+        return "direction_only", "", "", "risk_signals_present"
 
     if not supported_terms:
-        return "direction_only", "", ""
+        return "direction_only", "", "", "missing_supported_terms"
 
     # Keep the narrower single-signal operators exactly as they are.
     if len(supported_terms) == 1:
         clause_patch = _deterministic_clause_extract_patch(diagnosis)
         if clause_patch:
-            return "patch_ready", clause_patch, "deterministic_clause_extract"
+            return "patch_ready", clause_patch, "deterministic_clause_extract", ""
 
         exact_signal_patch = _deterministic_exact_signal_variant_patch(diagnosis)
         if exact_signal_patch:
             _, patch_text = exact_signal_patch
-            return "patch_ready", patch_text, "deterministic_exact_signal_variant"
-        
+            return "patch_ready", patch_text, "deterministic_exact_signal_variant", ""
+
         family_alias_patch = _deterministic_family_alias_expansion_patch(diagnosis)
         if family_alias_patch:
-            return "patch_ready", family_alias_patch, "deterministic_family_alias_expansion"
-        
+            return "patch_ready", family_alias_patch, "deterministic_family_alias_expansion", ""
+
         supported_alias_patch = _deterministic_supported_alias_expansion_patch(diagnosis)
         if supported_alias_patch:
-            return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion"
+            return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion", ""
 
         front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
         if front_supported_phrase_patch:
-            return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase"
-        
+            return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase", ""
+
         compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
         if compression_patch:
-            return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression"
+            return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression", ""
 
         parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
         if parent_signal_patch:
             _, patch_text = parent_signal_patch
-            return "patch_ready", patch_text, "deterministic_parent_signal_label"
+            return "patch_ready", patch_text, "deterministic_parent_signal_label", ""
 
     # The current using-phrase operator is intentionally quarantined from exportable
     # patch generation because span surgery on multi-tool "using ..." bullets has shown
@@ -4800,13 +4848,13 @@ def _deterministic_patch_text_from_diagnosis(
 
     supported_alias_patch = _deterministic_supported_alias_expansion_patch(diagnosis)
     if supported_alias_patch:
-        return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion"
-    
+        return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion", ""
+
     compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
     if compression_patch:
-        return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression"
-    
-    return "direction_only", "", ""
+        return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression", ""
+
+    return "direction_only", "", "", "deterministic_patch_not_available"
     
     
 def _fronting_rewrite_counts_as_material_without_score_lift(
@@ -4899,6 +4947,10 @@ def _materiality_validate_rewrite_candidate(
     if patched_resume is None or status not in {"ok"}:
         candidate["proposal_status"] = "direction_only"
         candidate["proposal_type"] = "directional_rewrite"
+        candidate["direction_only_reason"] = (
+            str(candidate.get("direction_only_reason", "") or "").strip()
+            or "materiality_prevalidation_failed"
+        )
         candidate["patch_ready"] = False
         candidate["material_delta_found"] = False
         candidate["materiality_validation_note"] = (
@@ -4950,6 +5002,10 @@ def _materiality_validate_rewrite_candidate(
 
         candidate["proposal_status"] = "direction_only"
         candidate["proposal_type"] = "directional_rewrite"
+        candidate["direction_only_reason"] = (
+            str(candidate.get("direction_only_reason", "") or "").strip()
+            or "scorer_neutral_no_evidence_change"
+        )
         candidate["patch_ready"] = False
         candidate["material_delta_found"] = False
         candidate["materiality_validation_status"] = "scorer_neutral_no_evidence_change"
@@ -5984,6 +6040,12 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     claim_safety_notes = payload.get("claim_safety_notes", {}) or {}
     material_gaps = payload.get("material_gaps", []) or []
 
+    final_replacement_decisions = payload.get("final_replacement_decisions", []) or []
+    app_ready_replacements = payload.get("app_ready_replacements", []) or []
+    direct_apply_optional_replacements = payload.get("direct_apply_optional_replacements", []) or []
+    direction_only_replacements = payload.get("direction_only_replacements", []) or []
+    final_replacement_summary = payload.get("final_replacement_summary", {}) or {}
+
     lines: List[str] = []
 
     lines.append("# Tailoring Suggestions")
@@ -6015,9 +6077,96 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             if item.get("recommended_rewrite"):
                 lines.append(f"- Safer rewrite direction: {item.get('recommended_rewrite', '')}")
             lines.append("")
+    
+    if final_replacement_summary:
+        lines.append("## Final Replacement Summary")
+        if final_replacement_summary.get("total_rewrite_bullets") is not None:
+            lines.append(
+                f"- Total rewrite-tracked bullets: {final_replacement_summary.get('total_rewrite_bullets', 0)}"
+            )
+        lines.append(
+            f"- Direct apply ready: {final_replacement_summary.get('direct_apply_ready_count', 0)}"
+        )
+        lines.append(
+            f"- Direct apply optional: {final_replacement_summary.get('direct_apply_optional_count', 0)}"
+        )
+        lines.append(
+            f"- Direction only: {final_replacement_summary.get('direction_only_count', 0)}"
+        )
+        lines.append(
+            f"- Keep original: {final_replacement_summary.get('keep_original_count', 0)}"
+        )
+        lines.append("")
+
+    if app_ready_replacements:
+        lines.append("## Apply Now")
+        for index, row in enumerate(app_ready_replacements, start=1):
+            lines.append(
+                f"### Apply {index} · {str(row.get('apply_priority', '')).title()} priority · Direct Apply Ready"
+            )
+            if row.get("section"):
+                lines.append(f"- Section: {row.get('section', '')}")
+            if row.get("source"):
+                lines.append(f"- Source: {row.get('source', '')}")
+            if row.get("materiality_validation_status"):
+                lines.append(
+                    f"- Validation status: {row.get('materiality_validation_status', '')}"
+                )
+            if row.get("original_text"):
+                lines.append("- Original text:")
+                lines.append(f"  > {row.get('original_text', '')}")
+            if row.get("final_replacement_text"):
+                lines.append("- Final replacement text:")
+                lines.append(f"  > {row.get('final_replacement_text', '')}")
+            if row.get("why_selected"):
+                lines.append(f"- Why selected: {row.get('why_selected', '')}")
+            lines.append("")
+
+    if direct_apply_optional_replacements:
+        lines.append("## Optional Direct-Apply Replacements")
+        for index, row in enumerate(direct_apply_optional_replacements, start=1):
+            lines.append(
+                f"### Optional {index} · {str(row.get('apply_priority', '')).title()} priority · Direct Apply Optional"
+            )
+            if row.get("section"):
+                lines.append(f"- Section: {row.get('section', '')}")
+            if row.get("source"):
+                lines.append(f"- Source: {row.get('source', '')}")
+            if row.get("materiality_validation_status"):
+                lines.append(
+                    f"- Validation status: {row.get('materiality_validation_status', '')}"
+                )
+            if row.get("original_text"):
+                lines.append("- Original text:")
+                lines.append(f"  > {row.get('original_text', '')}")
+            if row.get("final_replacement_text"):
+                lines.append("- Optional replacement text:")
+                lines.append(f"  > {row.get('final_replacement_text', '')}")
+            if row.get("why_selected"):
+                lines.append(f"- Why selected: {row.get('why_selected', '')}")
+            lines.append("")
+
+    if direction_only_replacements:
+        lines.append("## Direction-Only Recommendations")
+        for index, row in enumerate(direction_only_replacements, start=1):
+            lines.append(
+                f"### Direction {index} · {str(row.get('apply_priority', '')).title()} priority"
+            )
+            if row.get("section"):
+                lines.append(f"- Section: {row.get('section', '')}")
+            if row.get("source"):
+                lines.append(f"- Source: {row.get('source', '')}")
+            if row.get("original_text"):
+                lines.append("- Current bullet:")
+                lines.append(f"  > {row.get('original_text', '')}")
+            if row.get("rewrite_direction"):
+                lines.append(f"- Recommended action: {row.get('rewrite_direction', '')}")
+            if row.get("why_selected"):
+                lines.append(f"- Why selected: {row.get('why_selected', '')}")
+            lines.append("")
 
     if edit_cards:
-        lines.append("## Bullet-Level Edit Cards")
+        lines.append("## Appendix: Bullet-Level Edit Cards")
         for index, card in enumerate(edit_cards, start=1):
             lines.append(
                 f"### Card {index} · {str(card.get('priority', '')).title()} priority · "
@@ -6060,7 +6209,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
 
     bullet_diagnoses = payload.get("bullet_diagnoses", []) or []
     if bullet_diagnoses:
-        lines.append("## Bullet Diagnoses")
+        lines.append("## Appendix: Bullet Diagnoses")
         for index, row in enumerate(bullet_diagnoses, start=1):
             lines.append(
                 f"### Diagnosis {index} · {str(row.get('diagnosis_action', '')).replace('_', ' ').title()} · "
@@ -6094,7 +6243,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
 
     replacement_candidates = payload.get("replacement_candidates", []) or []
     if replacement_candidates:
-        lines.append("## Replacement Candidates")
+        lines.append("## Appendix: Raw Replacement Candidate Inventory")
         for index, row in enumerate(replacement_candidates, start=1):
             lines.append(
                 f"### Candidate {index} · {str(row.get('operation_type', '')).replace('_', ' ').title()} · "

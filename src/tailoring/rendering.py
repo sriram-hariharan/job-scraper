@@ -1757,6 +1757,54 @@ def _bullet_diagnosis_key(item: Dict[str, Any]) -> tuple:
         str(item.get("current_evidence", "") or item.get("evidence", "") or "").strip(),
     )
 
+def _bullet_diagnosis_dedupe_key(item: Dict[str, Any]) -> tuple:
+    bullet_id = str(item.get("bullet_id", "") or "").strip()
+    if bullet_id:
+        return ("bullet", bullet_id)
+
+    section = str(item.get("section", "") or "").strip()
+    source = str(item.get("source", "") or "").strip()
+    entry_id = str(item.get("entry_id", "") or "").strip()
+    bullet_index = item.get("bullet_index", -1)
+    diagnosis_action = str(item.get("diagnosis_action", "") or "").strip()
+
+    jd_terms = tuple(sorted({
+        _diagnosis_normalize_term(str(term))
+        for term in (
+            list(item.get("jd_signal_terms", []) or [])
+            + list(item.get("overlaps", []) or [])
+        )
+        if _diagnosis_normalize_term(str(term))
+    }))
+
+    if entry_id and isinstance(bullet_index, int) and bullet_index >= 0:
+        return (
+            "entry_bullet",
+            section,
+            source,
+            entry_id,
+            bullet_index,
+            diagnosis_action,
+            jd_terms,
+        )
+
+    if entry_id:
+        return (
+            "entry",
+            section,
+            source,
+            entry_id,
+            diagnosis_action,
+            jd_terms,
+        )
+
+    return (
+        "source_terms",
+        section,
+        source,
+        diagnosis_action,
+        jd_terms,
+    )
 
 def _edit_card_to_bullet_diagnosis(
     packet: Dict[str, Any],
@@ -1767,10 +1815,39 @@ def _edit_card_to_bullet_diagnosis(
     current_evidence = str(card.get("current_evidence", "") or "").strip()
     parent_bullet = str(card.get("parent_bullet", "") or "").strip()
 
+    edit_type = str(card.get("edit_type", "") or "").strip()
+    final_diagnosis_action = str(card.get("final_diagnosis_action", "") or "").strip()
+    final_diagnosis_reason_type = str(card.get("final_diagnosis_reason_type", "") or "").strip()
+
+    if final_diagnosis_action:
+        diagnosis_action = final_diagnosis_action
+    elif edit_type == "rewrite":
+        diagnosis_action = "rewrite"
+    else:
+        diagnosis_action = "keep"
+
+    if final_diagnosis_reason_type:
+        diagnosis_reason_type = final_diagnosis_reason_type
+    elif edit_type in {"support", "supporting_context"}:
+        diagnosis_reason_type = "keep_context_anchor"
+    elif diagnosis_action == "keep":
+        diagnosis_reason_type = "keep_existing_anchor"
+    else:
+        diagnosis_reason_type = edit_type
+
+    recommended_rewrite = str(card.get("recommended_rewrite", "") or "").strip()
+    if diagnosis_action != "rewrite":
+        recommended_rewrite = ""
+
+    why = (
+        str(card.get("why_it_matters", "") or "").strip()
+        or str(card.get("why_rewrite_is_better", "") or "").strip()
+    )
+
     return {
         "diagnosis_id": f"bullet_diag_{index}",
-        "diagnosis_action": "rewrite",
-        "diagnosis_reason_type": str(card.get("edit_type", "") or "").strip(),
+        "diagnosis_action": diagnosis_action,
+        "diagnosis_reason_type": diagnosis_reason_type,
         "priority": str(card.get("priority", "") or "").strip(),
         "section": str(card.get("section", "") or "").strip(),
         "source": str(card.get("source", "") or "").strip(),
@@ -1787,8 +1864,8 @@ def _edit_card_to_bullet_diagnosis(
             str(card.get("section", "") or ""),
             jd_signal_terms,
         ),
-        "why": str(card.get("why_it_matters", "") or card.get("why_rewrite_is_better", "") or "").strip(),
-        "recommended_rewrite": str(card.get("recommended_rewrite", "") or "").strip(),
+        "why": why,
+        "recommended_rewrite": recommended_rewrite,
         "claim_safety": str(card.get("claim_safety", "") or "").strip(),
         "placement_guidance": str(card.get("placement_guidance", "") or "").strip(),
         "matched_surface_signal": str(card.get("matched_surface_signal", "") or "").strip(),
@@ -5117,7 +5194,7 @@ def _build_bullet_diagnoses(
         diagnosis = _normalize_reinforce_context_diagnosis(diagnosis)
         diagnosis = _normalize_direct_overlap_rewrite_diagnosis(packet, diagnosis)
 
-        key = _bullet_diagnosis_key(diagnosis)
+        key = _bullet_diagnosis_dedupe_key(diagnosis)
         if key in seen_keys:
             continue
         seen_keys.add(key)
@@ -5139,7 +5216,7 @@ def _build_bullet_diagnoses(
 
     for index, row in enumerate(keep_as_is, start=1):
         diagnosis = _keep_as_is_to_bullet_diagnosis(packet, row, index)
-        key = _bullet_diagnosis_key(diagnosis)
+        key = _bullet_diagnosis_dedupe_key(diagnosis)
         if key in seen_keys:
             continue
         seen_keys.add(key)
@@ -5279,6 +5356,13 @@ def _build_operator_markdown_payload(
     )
 
     operator_payload["edit_cards"] = edit_cards
+
+    final_bullet_diagnoses = _build_bullet_diagnoses(
+        operator_payload,
+        edit_cards,
+        operator_payload.get("keep_as_is", []) or [],
+    )
+    operator_payload["bullet_diagnoses"] = final_bullet_diagnoses
 
     from src.tailoring.replacement_selector import build_final_replacement_plan
 

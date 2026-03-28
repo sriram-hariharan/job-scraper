@@ -4699,3 +4699,72 @@ th.sortable-col {
     padding: 14px;
   }
 }
+
+/* === tailoring workspace selection state === */
+
+.tailoring-edit-card--selected {
+  border-color: rgba(145, 242, 195, 0.32);
+  background:
+    linear-gradient(180deg, rgba(145, 242, 195, 0.08) 0%, rgba(18, 25, 51, 0.88) 100%);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.16),
+    inset 0 0 0 1px rgba(145, 242, 195, 0.08);
+}
+
+.tailoring-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.tailoring-select-btn {
+  min-width: 96px;
+  border-color: rgba(120, 166, 255, 0.24);
+  background: rgba(120, 166, 255, 0.08);
+  color: #dbe6ff;
+}
+
+.tailoring-select-btn:hover {
+  opacity: 1;
+}
+
+.tailoring-select-btn.is-selected {
+  border-color: rgba(145, 242, 195, 0.34);
+  background: rgba(145, 242, 195, 0.14);
+  color: #d7f8ea;
+}
+
+/* === tailoring workspace PDF match highlight === */
+
+.tailoring-workspace-pdf-page {
+  position: relative;
+}
+
+.tailoring-workspace-pdf-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.tailoring-workspace-pdf-highlight {
+  position: absolute;
+  border-radius: 8px;
+  background: rgba(145, 242, 195, 0.18);
+  border: 1px solid rgba(145, 242, 195, 0.62);
+  box-shadow:
+    0 0 0 2px rgba(145, 242, 195, 0.14),
+    0 10px 24px rgba(0, 0, 0, 0.16);
+  animation: tailoring-pdf-highlight-pulse 1.2s ease-out 1;
+}
+
+@keyframes tailoring-pdf-highlight-pulse {
+  0% {
+    transform: scale(0.985);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

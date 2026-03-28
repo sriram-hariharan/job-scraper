@@ -29,12 +29,20 @@ const planningTableState = {
   },
 };
 
+const tailoringWorkspaceState = {
+  artifact: null,
+  selectedCandidateIds: [],
+  candidateLookup: new Map(),
+};
+
 const tailoringWorkspacePdfState = {
   pdfDoc: null,
   resumeName: "",
   scale: 1.1,
   renderToken: 0,
   pdfjsPromise: null,
+  pageTextIndex: [],
+  highlightedCandidateId: "",
 };
 
 function escapeHtml(value) {
@@ -912,6 +920,245 @@ function buildResumePreviewUrl(resumeName) {
   return `${buildResumePdfFileUrl(resumeName)}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
 }
 
+function normalizeTailoringWorkspaceText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[•▪◦·]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/[^a-z0-9%$&.,+\-/ ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractTailoringWorkspaceAnchorText(value, maxWords = 12) {
+  const normalized = normalizeTailoringWorkspaceText(value);
+  if (!normalized) return "";
+  return normalized.split(" ").slice(0, maxWords).join(" ");
+}
+
+function getTailoringWorkspaceSelectableItems(payload) {
+  return [
+    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
+    ...(Array.isArray(payload?.direct_apply_optional_replacements)
+      ? payload.direct_apply_optional_replacements
+      : []),
+  ];
+}
+
+function buildTailoringWorkspaceCandidateLookup(payload) {
+  const lookup = new Map();
+
+  getTailoringWorkspaceSelectableItems(payload).forEach((item) => {
+    const candidateId = getTailoringReplacementCandidateId(item);
+    if (!candidateId) return;
+    lookup.set(candidateId, item);
+  });
+
+  return lookup;
+}
+
+function getTailoringWorkspaceCandidateItem(candidateId) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId) return null;
+  return tailoringWorkspaceState.candidateLookup.get(safeCandidateId) || null;
+}
+
+function buildTailoringWorkspacePdfLineIndex(textContent, viewport) {
+  const items = Array.isArray(textContent?.items) ? textContent.items : [];
+  const lines = [];
+  const yTolerance = 6;
+
+  items.forEach((item) => {
+    const text = String(item?.str || "").trim();
+    if (!text) return;
+
+    const transform = Array.isArray(item.transform) ? item.transform : [1, 0, 0, 1, 0, 0];
+    const [x, y] = viewport.convertToViewportPoint(transform[4], transform[5]);
+    const width = Math.max(12, Number(item.width || 0) * viewport.scale);
+    const height = Math.max(12, Math.abs((item.height || transform[3] || 0) * viewport.scale));
+    const top = y - height;
+
+    let line = lines.find((entry) => Math.abs(entry.top - top) <= yTolerance);
+    if (!line) {
+      line = {
+        top,
+        left: x,
+        right: x + width,
+        bottom: top + height,
+        segments: [],
+      };
+      lines.push(line);
+    }
+
+    line.left = Math.min(line.left, x);
+    line.right = Math.max(line.right, x + width);
+    line.bottom = Math.max(line.bottom, top + height);
+    line.segments.push({ x, text });
+  });
+
+  return lines
+    .sort((a, b) => a.top - b.top)
+    .map((line, index) => {
+      const text = line.segments
+        .sort((a, b) => a.x - b.x)
+        .map((segment) => segment.text)
+        .join(" ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+      return {
+        lineId: index + 1,
+        text,
+        normalizedText: normalizeTailoringWorkspaceText(text),
+        bbox: {
+          left: Math.max(0, line.left - 6),
+          top: Math.max(0, line.top - 2),
+          width: Math.max(24, line.right - line.left + 12),
+          height: Math.max(18, line.bottom - line.top + 4),
+        },
+      };
+    });
+}
+
+function scoreTailoringWorkspaceLineMatch(targetText, lineText) {
+  const targetNormalized = normalizeTailoringWorkspaceText(targetText);
+  const lineNormalized = normalizeTailoringWorkspaceText(lineText);
+
+  if (!targetNormalized || !lineNormalized) return 0;
+  if (lineNormalized.includes(targetNormalized)) return 1000 + targetNormalized.length;
+
+  const anchor = extractTailoringWorkspaceAnchorText(targetText);
+  if (anchor && lineNormalized.includes(anchor)) return 800 + anchor.length;
+
+  const anchorTokens = (anchor || targetNormalized)
+    .split(" ")
+    .filter((token) => token.length >= 4);
+
+  let hits = 0;
+  anchorTokens.forEach((token) => {
+    if (lineNormalized.includes(token)) hits += 1;
+  });
+
+  if (!hits) return 0;
+  return hits * 25;
+}
+
+function findTailoringWorkspaceBestPdfMatch(targetText) {
+  const safeTarget = String(targetText || "").trim();
+  if (!safeTarget) return null;
+
+  let best = null;
+
+  tailoringWorkspacePdfState.pageTextIndex.forEach((pageEntry) => {
+    (pageEntry.lines || []).forEach((line) => {
+      const score = scoreTailoringWorkspaceLineMatch(safeTarget, line.text);
+      if (!score) return;
+
+      if (!best || score > best.score) {
+        best = {
+          pageNumber: pageEntry.pageNumber,
+          lineText: line.text,
+          bbox: line.bbox,
+          score,
+        };
+      }
+    });
+  });
+
+  return best && best.score >= 50 ? best : null;
+}
+
+function buildTailoringWorkspaceDefaultPreviewMeta() {
+  if (!tailoringWorkspacePdfState.pdfDoc) {
+    return "Resume preview is not available for this workspace row.";
+  }
+
+  const pageCount = tailoringWorkspacePdfState.pdfDoc.numPages;
+  return `${pageCount} page${pageCount === 1 ? "" : "s"} • ${Math.round(
+    tailoringWorkspacePdfState.scale * 100
+  )}%`;
+}
+
+function clearTailoringWorkspacePdfHighlight({ restoreMeta = true } = {}) {
+  const pagesRoot = qs("tailoringWorkspacePdfPages");
+  if (pagesRoot) {
+    pagesRoot.querySelectorAll(".tailoring-workspace-pdf-highlight").forEach((node) => node.remove());
+  }
+
+  tailoringWorkspacePdfState.highlightedCandidateId = "";
+
+  if (restoreMeta) {
+    setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
+  }
+}
+
+function applyTailoringWorkspacePdfHighlight(match, candidateId = "") {
+  clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
+
+  if (!match) return;
+
+  const pageShell = document.querySelector(
+    `.tailoring-workspace-pdf-page[data-page-number="${String(match.pageNumber)}"]`
+  );
+  if (!pageShell) return;
+
+  const overlay = pageShell.querySelector(".tailoring-workspace-pdf-overlay");
+  if (!overlay) return;
+
+  const highlight = document.createElement("div");
+  highlight.className = "tailoring-workspace-pdf-highlight";
+  highlight.style.left = `${match.bbox.left}px`;
+  highlight.style.top = `${match.bbox.top}px`;
+  highlight.style.width = `${match.bbox.width}px`;
+  highlight.style.height = `${match.bbox.height}px`;
+
+  overlay.appendChild(highlight);
+  tailoringWorkspacePdfState.highlightedCandidateId = String(candidateId || "").trim();
+
+  pageShell.scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+  });
+
+  setTailoringWorkspacePreviewMeta(
+    `Matched bullet on page ${match.pageNumber} • ${Math.round(tailoringWorkspacePdfState.scale * 100)}%`
+  );
+}
+
+function focusTailoringWorkspaceCandidateInPreview(candidateId) {
+  const item = getTailoringWorkspaceCandidateItem(candidateId);
+  if (!item || !tailoringWorkspacePdfState.pdfDoc) return;
+
+  const targetText =
+    String(item.original_text || "").trim() ||
+    String(item.final_replacement_text || "").trim();
+
+  if (!targetText) {
+    clearTailoringWorkspacePdfHighlight();
+    return;
+  }
+
+  const match = findTailoringWorkspaceBestPdfMatch(targetText);
+  if (!match) {
+    clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
+    setTailoringWorkspacePreviewMeta("Could not find a matching bullet in the current PDF preview.");
+    return;
+  }
+
+  applyTailoringWorkspacePdfHighlight(match, candidateId);
+}
+
+function syncTailoringWorkspacePreviewHighlight() {
+  const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
+
+  if (!selectedIds.length) {
+    clearTailoringWorkspacePdfHighlight();
+    return;
+  }
+
+  focusTailoringWorkspaceCandidateInPreview(selectedIds[selectedIds.length - 1]);
+}
+
 function setTailoringWorkspacePreviewMeta(message) {
   const meta = qs("tailoringWorkspacePreviewMeta");
   if (meta) {
@@ -940,6 +1187,8 @@ async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not
   const empty = qs("tailoringWorkspacePreviewEmpty");
   const pages = qs("tailoringWorkspacePdfPages");
 
+  clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
+
   if (pages) {
     pages.innerHTML = "";
     pages.classList.add("hidden");
@@ -960,6 +1209,9 @@ async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not
 
   tailoringWorkspacePdfState.pdfDoc = null;
   tailoringWorkspacePdfState.resumeName = "";
+  tailoringWorkspacePdfState.pageTextIndex = [];
+  tailoringWorkspacePdfState.highlightedCandidateId = "";
+
   setTailoringWorkspacePreviewMeta(emptyText);
   updateTailoringWorkspaceZoomLabel();
 }
@@ -986,6 +1238,7 @@ async function renderTailoringWorkspacePdfPages() {
   updateTailoringWorkspaceZoomLabel();
 
   const fragment = document.createDocumentFragment();
+  const pageTextIndex = [];
 
   for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
     if (token !== tailoringWorkspacePdfState.renderToken) return;
@@ -1017,25 +1270,41 @@ async function renderTailoringWorkspacePdfPages() {
 
     await page.render(renderContext).promise;
 
+    const textContent = await page.getTextContent();
+    const lineIndex = buildTailoringWorkspacePdfLineIndex(textContent, viewport);
+
     if (token !== tailoringWorkspacePdfState.renderToken) return;
 
     const pageShell = document.createElement("div");
     pageShell.className = "tailoring-workspace-pdf-page";
-    pageShell.appendChild(canvas);
+    pageShell.dataset.pageNumber = String(pageNumber);
+    pageShell.style.width = `${viewport.width}px`;
+    pageShell.style.height = `${viewport.height}px`;
 
+    const overlay = document.createElement("div");
+    overlay.className = "tailoring-workspace-pdf-overlay";
+
+    pageShell.appendChild(canvas);
+    pageShell.appendChild(overlay);
     fragment.appendChild(pageShell);
+
+    pageTextIndex.push({
+      pageNumber,
+      lines: lineIndex,
+    });
   }
 
   if (token !== tailoringWorkspacePdfState.renderToken) return;
+
+  tailoringWorkspacePdfState.pageTextIndex = pageTextIndex;
 
   pagesRoot.innerHTML = "";
   pagesRoot.appendChild(fragment);
   pagesRoot.classList.remove("hidden");
   empty.classList.add("hidden");
 
-  setTailoringWorkspacePreviewMeta(
-    `${pageCount} page${pageCount === 1 ? "" : "s"} • ${Math.round(scale * 100)}%`
-  );
+  setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
+  syncTailoringWorkspacePreviewHighlight();
 }
 
 async function setTailoringWorkspacePreview(resumeName) {
@@ -2362,6 +2631,164 @@ function renderReplacementPlanSummary(summary) {
   `;
 }
 
+function getTailoringReplacementCandidateId(item) {
+  return String(
+    item?.replacement_candidate_id ||
+    item?.candidate_id ||
+    ""
+  ).trim();
+}
+
+function collectTailoringWorkspaceSelectableCandidateIds(payload) {
+  const ids = [];
+  const seen = new Set();
+
+  [
+    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
+    ...(Array.isArray(payload?.direct_apply_optional_replacements)
+      ? payload.direct_apply_optional_replacements
+      : []),
+  ].forEach((item) => {
+    const candidateId = getTailoringReplacementCandidateId(item);
+    if (!candidateId || seen.has(candidateId)) return;
+    seen.add(candidateId);
+    ids.push(candidateId);
+  });
+
+  return ids;
+}
+
+function normalizeTailoringWorkspaceSelectedCandidateIds(payload, candidateIds) {
+  const validIds = new Set(collectTailoringWorkspaceSelectableCandidateIds(payload));
+  const normalized = [];
+  const seen = new Set();
+
+  (Array.isArray(candidateIds) ? candidateIds : []).forEach((value) => {
+    const candidateId = String(value || "").trim();
+    if (!candidateId || seen.has(candidateId) || !validIds.has(candidateId)) return;
+    seen.add(candidateId);
+    normalized.push(candidateId);
+  });
+
+  return normalized;
+}
+
+function getTailoringWorkspacePayload() {
+  const artifact = tailoringWorkspaceState.artifact;
+  return artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
+    ? artifact.data
+    : null;
+}
+
+function getTailoringWorkspaceSelectedCandidateIds() {
+  return Array.isArray(tailoringWorkspaceState.selectedCandidateIds)
+    ? tailoringWorkspaceState.selectedCandidateIds.slice()
+    : [];
+}
+
+function updateTailoringWorkspaceMetaSummary(payload) {
+  const meta = qs("tailoringWorkspaceMeta");
+  if (!meta) return;
+
+  const selectableCount = collectTailoringWorkspaceSelectableCandidateIds(payload).length;
+  const selectedCount = getTailoringWorkspaceSelectedCandidateIds().length;
+
+  if (!payload) {
+    meta.textContent = "Actionable suggestions are not available for this row.";
+    return;
+  }
+
+  if (!selectableCount) {
+    meta.textContent = "Suggestions loaded. This row has review guidance, but no selectable rewrite candidates.";
+    return;
+  }
+
+  meta.textContent = `${selectedCount} of ${selectableCount} actionable suggestions selected. Direction-only guidance stays read-only.`;
+}
+
+function rerenderTailoringWorkspaceSelectionView() {
+  if (!tailoringWorkspaceState.artifact) return;
+
+  renderTailoringInteractiveSummaryInto(
+    "tailoringWorkspaceInteractiveSummary",
+    tailoringWorkspaceState.artifact,
+    {
+      includeDiagnostics: false,
+      selectionEnabled: true,
+      selectedCandidateIds: getTailoringWorkspaceSelectedCandidateIds(),
+    }
+  );
+
+  updateTailoringWorkspaceMetaSummary(getTailoringWorkspacePayload());
+}
+
+function initializeTailoringWorkspaceSelectionState(artifact) {
+  tailoringWorkspaceState.artifact = artifact;
+
+  const payload =
+    artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
+      ? artifact.data
+      : null;
+
+  if (!payload) {
+    tailoringWorkspaceState.selectedCandidateIds = [];
+    tailoringWorkspaceState.candidateLookup = new Map();
+    return;
+  }
+
+  tailoringWorkspaceState.candidateLookup = buildTailoringWorkspaceCandidateLookup(payload);
+
+  const selectionStatus = String(payload.selected_patch_selection_status || "").trim().toLowerCase();
+
+  const initialSelectedIds =
+    selectionStatus === "applied"
+      ? (Array.isArray(payload.selected_patch_candidate_ids) ? payload.selected_patch_candidate_ids : [])
+      : [];
+
+  tailoringWorkspaceState.selectedCandidateIds = normalizeTailoringWorkspaceSelectedCandidateIds(
+    payload,
+    initialSelectedIds
+  );
+}
+
+function toggleTailoringWorkspaceCandidateSelection(candidateId) {
+  const payload = getTailoringWorkspacePayload();
+  const safeCandidateId = String(candidateId || "").trim();
+
+  if (!payload || !safeCandidateId) return;
+
+  const current = new Set(getTailoringWorkspaceSelectedCandidateIds());
+
+  if (current.has(safeCandidateId)) {
+    current.delete(safeCandidateId);
+  } else {
+    current.add(safeCandidateId);
+  }
+
+  tailoringWorkspaceState.selectedCandidateIds = normalizeTailoringWorkspaceSelectedCandidateIds(
+    payload,
+    Array.from(current)
+  );
+
+  rerenderTailoringWorkspaceSelectionView();
+  syncTailoringWorkspacePreviewHighlight();
+}
+
+function bindTailoringWorkspaceSelectionHandlers() {
+  const root = qs("tailoringWorkspaceInteractiveSummary");
+  if (!root || root.dataset.selectionBound === "true") return;
+
+  root.dataset.selectionBound = "true";
+
+  root.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-tailoring-select-candidate]");
+    if (!button) return;
+
+    event.preventDefault();
+    toggleTailoringWorkspaceCandidateSelection(button.dataset.tailoringSelectCandidate || "");
+  });
+}
+
 function renderReplacementDecisionSection({
   title,
   subtitle = "",
@@ -2369,8 +2796,16 @@ function renderReplacementDecisionSection({
   emptyLabel = "None",
   tone = "neutral",
   mode = "replacement",
+  selectionEnabled = false,
+  selectedCandidateIds = [],
 }) {
   const safeItems = Array.isArray(items) ? items : [];
+  const selectedSet = new Set(
+    (Array.isArray(selectedCandidateIds) ? selectedCandidateIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
   if (!safeItems.length) {
     return `
       <section class="tailoring-section-block">
@@ -2393,6 +2828,10 @@ function renderReplacementDecisionSection({
             ? item.likely_impacted_dimensions.filter(Boolean)
             : [];
 
+          const candidateId = mode === "replacement" ? getTailoringReplacementCandidateId(item) : "";
+          const isSelectable = Boolean(selectionEnabled && mode === "replacement" && candidateId);
+          const isSelected = Boolean(isSelectable && selectedSet.has(candidateId));
+
           const statusLabel =
             item.replacement_status === "direct_apply_ready"
               ? "Ready to use"
@@ -2401,7 +2840,7 @@ function renderReplacementDecisionSection({
                 : "Review only";
 
           return `
-            <article class="tailoring-edit-card">
+            <article class="tailoring-edit-card ${isSelected ? "tailoring-edit-card--selected" : ""}">
               <div class="tailoring-card-topline">
                 <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
                 <div class="tailoring-chip-group">
@@ -2447,6 +2886,18 @@ function renderReplacementDecisionSection({
                   <span class="tailoring-info-value">${escapeHtml(
                     likelyImpactedDimensions.map((value) => humanizeUnderscoreLabel(value)).join(", ")
                   )}</span>
+                </div>
+              ` : ""}
+
+              ${isSelectable ? `
+                <div class="tailoring-card-actions">
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
+                    data-tailoring-select-candidate="${escapeHtml(candidateId)}"
+                  >
+                    ${isSelected ? "Selected" : "Select"}
+                  </button>
                 </div>
               ` : ""}
             </article>
@@ -2711,7 +3162,7 @@ function renderTailoringEmptyState(payload) {
 function renderTailoringInteractiveSummaryInto(
   rootId,
   artifact,
-  { includeDiagnostics = true } = {}
+  { includeDiagnostics = true, selectionEnabled = false, selectedCandidateIds = [] } = {}
 ) {
   const root = qs(rootId);
   if (!root) return;
@@ -2763,6 +3214,8 @@ function renderTailoringInteractiveSummaryInto(
         emptyLabel: "No ready-to-use edits.",
         tone: "safe",
         mode: "replacement",
+        selectionEnabled,
+        selectedCandidateIds,
       })
     : "";
 
@@ -2774,6 +3227,8 @@ function renderTailoringInteractiveSummaryInto(
         emptyLabel: "No optional improvements.",
         tone: "caution",
         mode: "replacement",
+        selectionEnabled,
+        selectedCandidateIds,
       })
     : "";
 
@@ -2806,18 +3261,25 @@ async function initTailoringWorkspacePage() {
   const root = qs("tailoringWorkspaceInteractiveSummary");
 
   if (!root) return true;
-  
-  setTailoringWorkspacePreview(resumeName);
+
+  const previewPromise = setTailoringWorkspacePreview(resumeName);
 
   if (!tailoringJsonPath) {
     if (meta) {
       meta.textContent = "No tailoring JSON path was provided for this workspace row.";
     }
+
     root.innerHTML = `
       <div class="tailoring-empty-state">
         Suggested changes are not available for this row yet.
       </div>
     `;
+
+    tailoringWorkspaceState.artifact = null;
+    tailoringWorkspaceState.selectedCandidateIds = [];
+    tailoringWorkspaceState.candidateLookup = new Map();
+
+    await previewPromise;
     return true;
   }
 
@@ -2827,15 +3289,12 @@ async function initTailoringWorkspacePage() {
     }
 
     const tailoringJsonArtifact = await loadArtifact(tailoringJsonPath);
-    renderTailoringInteractiveSummaryInto(
-      "tailoringWorkspaceInteractiveSummary",
-      tailoringJsonArtifact,
-      { includeDiagnostics: false }
-    );
 
-    if (meta) {
-      meta.textContent = "Actionable suggestions loaded. Diagnostics stay hidden on this page for now.";
-    }
+    initializeTailoringWorkspaceSelectionState(tailoringJsonArtifact);
+    rerenderTailoringWorkspaceSelectionView();
+
+    await previewPromise;
+    syncTailoringWorkspacePreviewHighlight();
   } catch (err) {
     if (meta) {
       meta.textContent = "Failed to load suggestion set.";
@@ -2846,6 +3305,10 @@ async function initTailoringWorkspacePage() {
         Failed to load suggested changes for this workspace row.
       </div>
     `;
+
+    tailoringWorkspaceState.artifact = null;
+    tailoringWorkspaceState.selectedCandidateIds = [];
+    tailoringWorkspaceState.candidateLookup = new Map();
 
     console.error("Failed to initialize tailoring workspace", err);
   }
@@ -3231,6 +3694,7 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (isTailoringWorkspacePage) {
     bindTailoringWorkspacePreviewControls();
+    bindTailoringWorkspaceSelectionHandlers();
     await initTailoringWorkspacePage();
   }
 });

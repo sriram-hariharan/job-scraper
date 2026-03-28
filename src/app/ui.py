@@ -48,7 +48,6 @@ def executive_dashboard() -> str:
             <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
           </div>
         </header>
-
     <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
 
     <section class="stats-grid">

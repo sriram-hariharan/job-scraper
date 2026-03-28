@@ -25,11 +25,6 @@ def intelligence_dashboard() -> str:
         <h1>Job Intelligence Dashboard</h1>
         <p class="subtext">Search the job corpus and ask grounded questions over retrieved jobs.</p>
       </div>
-      <div class="header-actions">
-        <a class="ghost-link-btn" href="/">Executive Dashboard</a>
-        <a class="ghost-link-btn" href="/planning">Planning Detail</a>
-        <a class="ghost-link-btn" href="/decisions-ui">Decisions</a>
-      </div>
     </header>
 
     <section class="card controls-card">

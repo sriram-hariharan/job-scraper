@@ -1,46 +1,66 @@
 from html import escape
 
-PRIMARY_NAV_ITEMS = [
-    ("Executive", "/"),
-    ("Planning", "/planning"),
-    ("Decisions", "/decisions-ui"),
-    ("Intelligence", "/intelligence"),
+NAV_ITEMS = [
+    ("Executive", "/", "E"),
+    ("Planning", "/planning", "P"),
+    ("Decisions", "/decisions-ui", "D"),
+    ("Intelligence", "/intelligence", "I"),
+    ("Applications", "/applications", "A"),
+    ("Tailoring Workspace", "/tailoring-workspace", "T"),
 ]
-
-APPLICATIONS_NAV_ITEM = ("Applications", "/applications")
 
 USER_NAME = "Sriram"
 USER_INITIAL = USER_NAME[:1].upper()
 
 
 def render_top_shell(active_href: str) -> str:
-    primary_links = []
-    for label, href in PRIMARY_NAV_ITEMS:
-        active_class = "top-nav-link active" if href == active_href else "top-nav-link"
-        primary_links.append(
-            f'<a class="{active_class}" href="{escape(href)}">{escape(label)}</a>'
+    nav_links = []
+
+    for label, href, short_label in NAV_ITEMS:
+        active_class = "app-shell-nav-link active" if href == active_href else "app-shell-nav-link"
+        nav_links.append(
+            f"""
+            <a
+              class="{active_class}"
+              href="{escape(href)}"
+              data-nav-label="{escape(label)}"
+              aria-label="{escape(label)}"
+              title="{escape(label)}"
+            >
+              <span class="app-shell-nav-short" aria-hidden="true">{escape(short_label)}</span>
+              <span class="app-shell-nav-label">{escape(label)}</span>
+            </a>
+            """.strip()
         )
 
-    applications_label, applications_href = APPLICATIONS_NAV_ITEM
-    applications_class = (
-        "state-nav-link active"
-        if applications_href == active_href
-        else "state-nav-link"
-    )
-
     return f"""
-<section class="top-shell">
-  <div class="top-shell-left">
-    <div class="top-nav-links">
-      {''.join(primary_links)}
-    </div>
+<button
+  type="button"
+  class="app-shell-menu-btn"
+  id="appShellMenuBtn"
+  aria-label="Toggle sidebar"
+  title="Toggle sidebar"
+  aria-pressed="false"
+>
+  <span class="app-shell-menu-btn-line" aria-hidden="true"></span>
+  <span class="app-shell-menu-btn-line" aria-hidden="true"></span>
+  <span class="app-shell-menu-btn-line" aria-hidden="true"></span>
+</button>
+
+<aside class="app-shell" id="appShell">
+  <div class="app-shell-brand-row">
+    <a class="app-shell-brand" href="/" aria-label="Job Stack home">
+      <span class="app-shell-brand-text">Job Stack</span>
+    </a>
   </div>
 
-  <div class="top-shell-right">
-    <div class="state-nav-links">
-      <a class="{applications_class}" href="{escape(applications_href)}">{escape(applications_label)}</a>
-    </div>
+  <nav class="app-shell-nav" aria-label="Dashboard navigation">
+    {''.join(nav_links)}
+  </nav>
 
+  </aside>
+
+  <div class="app-shell-top-right">
     <div class="profile-menu-shell" id="profileMenuShell">
       <button
         type="button"
@@ -54,22 +74,21 @@ def render_top_shell(active_href: str) -> str:
       </button>
 
       <div class="profile-dropdown hidden" id="profileDropdown">
-  <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
-      <div class="profile-dropdown-actions">
-        <a class="profile-dropdown-nav-btn" href="/profile">
-          <span class="profile-dropdown-nav-copy">
-            <span class="profile-dropdown-nav-title">My Profile</span>
-            <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
-          </span>
-          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-        </a>
+        <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
+        <div class="profile-dropdown-actions">
+          <a class="profile-dropdown-nav-btn" href="/profile">
+            <span class="profile-dropdown-nav-copy">
+              <span class="profile-dropdown-nav-title">My Profile</span>
+              <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
+            </span>
+            <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+          </a>
 
-        <button type="button" class="profile-dropdown-danger-btn" disabled>
-          Log out
-        </button>
+          <button type="button" class="profile-dropdown-danger-btn" disabled>
+            Log out
+          </button>
+        </div>
       </div>
     </div>
-    </div>
   </div>
-</section>
 """.strip()

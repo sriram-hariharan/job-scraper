@@ -25,12 +25,7 @@ def planning_dashboard() -> str:
     <header class="page-header">
       <div>
         <h1>Planning Detail Dashboard</h1>
-          <p class="subtext">Wide planning view with queue, selector state, fallback, and operator decision fields.</p>
-      </div>
-      <div class="header-actions">
-        <a class="ghost-link-btn" href="/">Executive Dashboard</a>
-        <a class="ghost-link-btn" href="/decisions-ui">Decisions</a>
-        <a class="ghost-link-btn" href="/intelligence">Intelligence</a>
+        <p class="subtext">Wide planning view with queue, selector state, fallback, and operator decision fields.</p>
       </div>
     </header>
 
@@ -632,7 +627,7 @@ def tailoring_workspace(
   <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_5" />
 </head>
 <body>
-{render_top_shell("/planning")}
+{render_top_shell("/tailoring-workspace")}
   <div
     class="page tailoring-workspace-page"
     data-job-doc-id="{job_doc_id_safe}"
@@ -651,10 +646,6 @@ def tailoring_workspace(
         <p class="subtext">
           Review suggested bullet replacements on the left and resume preview on the right.
         </p>
-      </div>
-
-      <div class="header-actions">
-        <a class="ghost-link-btn" href="/planning">Back to Planning</a>
       </div>
     </header>
 

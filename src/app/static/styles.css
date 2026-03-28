@@ -14,6 +14,9 @@
 * {
   box-sizing: border-box;
 }
+.hidden {
+  display: none !important;
+}
 
 body {
   margin: 0;
@@ -3557,6 +3560,73 @@ thead .sticky-apply-col {
   }
 }
 
+/* === tailoring modal density cleanup === */
+
+.tailoring-overview-card--compact {
+  padding: 12px 14px;
+}
+
+.tailoring-meta-grid--compact {
+  margin-bottom: 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.tailoring-meta-grid--compact .info-pair {
+  padding: 8px 10px;
+  gap: 3px;
+  min-height: 0;
+}
+
+.tailoring-meta-grid--compact .label {
+  font-size: 11px;
+}
+
+#tailoringModal .pipeline-modal-scroll {
+  gap: 14px;
+}
+
+.tailoring-provenance-bar {
+  margin: 0 0 12px 0;
+  gap: 10px 14px;
+}
+
+.tailoring-manual-accordion--notes > .tailoring-manual-accordion-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  border-top: 1px solid rgba(120, 166, 255, 0.12);
+}
+
+.tailoring-notes-header {
+  margin-bottom: 0;
+  align-items: center;
+}
+
+.tailoring-accordion--notes .tailoring-artifact--markdown {
+  min-height: 0;
+  max-height: 320px;
+  padding: 18px 20px;
+  font-size: 15px;
+  line-height: 1.72;
+}
+
+@media (max-width: 900px) {
+  .tailoring-meta-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .tailoring-manual-accordion--notes > .tailoring-manual-accordion-panel {
+    padding: 14px 16px 16px;
+  }
+
+  .tailoring-accordion--notes .tailoring-artifact--markdown {
+    max-height: 280px;
+    padding: 16px;
+  }
+}
+
 /* === planning tailoring modal readability pass === */
 
 .tailoring-modal-card {
@@ -3584,12 +3654,98 @@ thead .sticky-apply-col {
 
 .tailoring-overview-card,
 .tailoring-primary-card,
-.tailoring-accordion {
+.tailoring-manual-accordion {
   background: rgba(18, 25, 51, 0.92);
   border: 1px solid rgba(120, 166, 255, 0.14);
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 255, 255, 0.02);
+}
+
+.tailoring-manual-accordion {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tailoring-manual-accordion-toggle {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #eef2ff;
+  cursor: pointer;
+  position: relative;
+  display: block;
+  padding: 16px 52px 16px 18px;
+  text-align: left;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.2;
+  box-shadow: none;
+}
+
+.tailoring-manual-accordion-toggle:hover {
+  opacity: 1;
+}
+
+.tailoring-manual-accordion-toggle:focus-visible {
+  outline: 2px solid rgba(120, 166, 255, 0.45);
+  outline-offset: -2px;
+}
+
+.tailoring-manual-accordion-label {
+  display: block;
+  min-width: 0;
+}
+
+.tailoring-manual-accordion-toggle::after {
+  content: "+";
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.tailoring-manual-accordion-toggle[aria-expanded="true"]::after {
+  content: "−";
+  color: var(--accent);
+}
+
+.tailoring-manual-accordion-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 18px 18px;
+  border-top: 1px solid rgba(120, 166, 255, 0.12);
+}
+
+.tailoring-manual-accordion-panel.hidden {
+  display: none !important;
+}
+
+.tailoring-manual-accordion-panel .modal-body {
+  margin-bottom: 0;
+}
+
+.tailoring-manual-accordion-panel--code {
+  padding: 0;
+  gap: 0;
+  border-top: 0;
+}
+
+.tailoring-manual-accordion-panel--code .tailoring-artifact--code {
+  min-height: 0;
+  max-height: 360px;
+  margin: 0;
+  border: 0;
+  border-top: 1px solid rgba(120, 166, 255, 0.12);
+  border-radius: 0;
+  padding: 18px 20px;
+  background: linear-gradient(180deg, rgba(7, 11, 25, 0.82) 0%, rgba(14, 20, 42, 0.9) 100%);
 }
 
 .tailoring-overview-card,
@@ -3650,51 +3806,6 @@ thead .sticky-apply-col {
   line-height: 1.72;
 }
 
-.tailoring-accordion {
-  padding: 0;
-  overflow: hidden;
-}
-
-.tailoring-accordion summary {
-  list-style: none;
-  cursor: pointer;
-  padding: 16px 18px;
-  color: #eef2ff;
-  font-size: 18px;
-  font-weight: 800;
-  line-height: 1.2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.tailoring-accordion summary::-webkit-details-marker {
-  display: none;
-}
-
-.tailoring-accordion summary::after {
-  content: "+";
-  color: var(--muted);
-  font-size: 22px;
-  line-height: 1;
-}
-
-.tailoring-accordion[open] summary::after {
-  content: "−";
-  color: var(--accent);
-}
-
-.tailoring-accordion > .tailoring-artifact--code {
-  min-height: 0;
-  max-height: 360px;
-  margin: 0;
-  border: 0;
-  border-top: 1px solid rgba(120, 166, 255, 0.12);
-  border-radius: 0;
-  padding: 18px 20px;
-  background: linear-gradient(180deg, rgba(7, 11, 25, 0.82) 0%, rgba(14, 20, 42, 0.9) 100%);
-}
-
 #tailoringModal .pipeline-modal-scroll {
   gap: 18px;
   padding-bottom: 4px;
@@ -3717,12 +3828,20 @@ thead .sticky-apply-col {
     font-size: 15px;
   }
 
-  .tailoring-accordion summary {
+  .tailoring-manual-accordion-toggle {
+    padding: 14px 44px 14px 16px;
     font-size: 16px;
-    padding: 14px 16px;
   }
 
-  .tailoring-accordion > .tailoring-artifact--code {
+  .tailoring-manual-accordion-toggle::after {
+    right: 16px;
+  }
+
+  .tailoring-manual-accordion-panel {
+    padding: 14px 16px 16px;
+  }
+
+  .tailoring-manual-accordion-panel--code .tailoring-artifact--code {
     padding: 16px;
   }
 }

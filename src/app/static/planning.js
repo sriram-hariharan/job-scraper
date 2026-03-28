@@ -2904,7 +2904,15 @@ function updateTailoringWorkspaceSelectionActionBar() {
   saveBtn.disabled = tailoringWorkspaceState.isSaving || !hasSelection;
   downloadBtn.disabled = !hasResume;
 
-  saveBtn.textContent = tailoringWorkspaceState.isSaving ? "Saving..." : "Save changes";
+  discardBtn.setAttribute("aria-label", "Discard selection");
+  downloadBtn.setAttribute(
+    "aria-label",
+    hasResume ? "Download resume" : "Resume download unavailable"
+  );
+  saveBtn.setAttribute(
+    "aria-label",
+    tailoringWorkspaceState.isSaving ? "Saving changes" : "Save changes"
+  );
 }
 
 function renderTailoringWorkspacePatchPreviewSection(payload) {

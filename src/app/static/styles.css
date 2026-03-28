@@ -4562,6 +4562,171 @@ th.sortable-col {
   margin-top: 2px;
 }
 
+.tailoring-workspace-selection-actions {
+  gap: 18px;
+}
+
+.tailoring-workspace-action-tooltip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tailoring-workspace-action-tooltip::before,
+.tailoring-workspace-action-tooltip::after {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.tailoring-workspace-action-tooltip::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 4px);
+  transform: translateX(-50%) translateY(4px);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(9, 14, 31, 0.98);
+}
+
+.tailoring-workspace-action-tooltip::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  white-space: nowrap;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background: rgba(9, 14, 31, 0.98);
+  border: 1px solid rgba(120, 166, 255, 0.22);
+  color: #eef4ff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  z-index: 40;
+}
+
+.tailoring-workspace-action-tooltip:hover::before,
+.tailoring-workspace-action-tooltip:hover::after,
+.tailoring-workspace-action-tooltip:focus-within::before,
+.tailoring-workspace-action-tooltip:focus-within::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.tailoring-workspace-icon-btn,
+.ghost-btn.tailoring-workspace-icon-btn {
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #dbe6ff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tailoring-workspace-icon-btn--save {
+  color: var(--accent);
+}
+
+.tailoring-workspace-icon-btn:hover:not(:disabled),
+.ghost-btn.tailoring-workspace-icon-btn:hover:not(:disabled) {
+  opacity: 1;
+  background: transparent;
+  color: #f3f7ff;
+  transform: translateY(-1px);
+}
+
+.tailoring-workspace-icon-btn--save:hover:not(:disabled) {
+  color: #9ec1ff;
+}
+
+.tailoring-workspace-icon-btn:disabled,
+.ghost-btn.tailoring-workspace-icon-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tailoring-workspace-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  background-color: currentColor;
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+.tailoring-workspace-icon--discard {
+  -webkit-mask-image: url("/static/media/discard_img.svg");
+  mask-image: url("/static/media/discard_img.svg");
+}
+
+.tailoring-workspace-icon--download {
+  -webkit-mask-image: url("/static/media/download_img.svg");
+  mask-image: url("/static/media/download_img.svg");
+}
+
+.tailoring-workspace-icon--save {
+  -webkit-mask-image: url("/static/media/save_img.svg");
+  mask-image: url("/static/media/save_img.svg");
+}
+
+.tailoring-workspace-action-btn {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  flex-shrink: 0;
+}
+
+.tailoring-workspace-action-btn--primary {
+  background: var(--accent);
+  color: #08101f;
+  border: 1px solid rgba(120, 166, 255, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.tailoring-workspace-action-btn:hover:not(:disabled) {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+.tailoring-workspace-action-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tailoring-workspace-action-btn[data-busy="true"] {
+  opacity: 0.72;
+}
+
+.tailoring-workspace-action-icon {
+  width: 22px;
+  height: 22px;
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
+}
+
 #tailoringWorkspaceSelectionStatus {
   line-height: 1.5;
 }

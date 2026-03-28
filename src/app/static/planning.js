@@ -567,8 +567,11 @@ function renderTailoringPatchPreviewSummary(artifact) {
     ? artifact.data
     : null;
 
-  if (!payload) {
-    root.innerHTML = `<div class="tailoring-empty-state">Patch preview is not available for this row.</div>`;
+  const shouldShow = shouldShowPatchPreviewSection(payload);
+  setTailoringSectionVisible("tailoringPatchPreviewSummary", shouldShow);
+
+  if (!shouldShow) {
+    root.innerHTML = "";
     return;
   }
 
@@ -608,8 +611,11 @@ function renderTailoringPatchSelectionSummary(artifact) {
     ? artifact.data
     : null;
 
-  if (!payload) {
-    root.innerHTML = `<div class="tailoring-empty-state">Patch selection preview is not available for this row.</div>`;
+  const shouldShow = shouldShowPatchSelectionSection(payload);
+  setTailoringSectionVisible("tailoringPatchSelectionShell", shouldShow);
+
+  if (!shouldShow) {
+    root.innerHTML = "";
     return;
   }
 
@@ -1306,7 +1312,7 @@ function clearTailoringCopyResetTimer() {
   }
 }
 
-function setTailoringCopyButtonState({ label = "Copy", disabled = true, copied = false } = {}) {
+function setTailoringCopyButtonState({ label = "Copy notes", disabled = true, copied = false } = {}) {
   const button = qs("copyTailoringMarkdownBtn");
   const labelEl = qs("copyTailoringMarkdownLabel");
   if (!button || !labelEl) return;
@@ -1318,7 +1324,7 @@ function setTailoringCopyButtonState({ label = "Copy", disabled = true, copied =
 
 function syncTailoringCopyButtonState() {
   setTailoringCopyButtonState({
-    label: "Copy",
+    label: "Copy notes",
     disabled: !String(currentTailoringMarkdownRaw || "").trim(),
     copied: false,
   });
@@ -1382,7 +1388,7 @@ async function handleCopyTailoringMarkdown() {
       syncTailoringCopyButtonState();
     }, 1600);
 
-    showAppError("Failed to copy tailoring markdown", err);
+    showAppError("Failed to copy notes", err);
   }
 }
 
@@ -1699,9 +1705,7 @@ function resetTailoringModalViewState() {
     }
   });
 
-  document.querySelectorAll("#tailoringModal .tailoring-accordion").forEach((el) => {
-    el.open = false;
-  });
+  collapseTailoringManualAccordions();
 }
 
 function resetTailoringModalContent() {
@@ -1720,24 +1724,23 @@ function resetTailoringModalContent() {
   qs("tailoringProviderMeta").innerHTML = `<span class="summary-chip chip-muted">Loading provider…</span>`;
   qs("tailoringSourceChips").innerHTML = `<span class="summary-chip chip-muted">Loading provenance…</span>`;
 
-  setInnerHtmlIfPresent("tailoringPatchPreviewSummary", `
-    <div class="tailoring-empty-state">No patch preview loaded.</div>
-  `);
+  setTailoringSectionVisible("tailoringInteractiveSummary", true);
+  setTailoringSectionVisible("tailoringPatchPreviewSummary", false);
+  setTailoringSectionVisible("tailoringPatchSelectionShell", false);
 
   setInnerHtmlIfPresent("tailoringInteractiveSummary", `
-    <div class="tailoring-empty-state">No replacement plan loaded.</div>
+    <div class="tailoring-empty-state">No guidance summary loaded.</div>
   `);
 
-  setInnerHtmlIfPresent("tailoringPatchSelectionShell", `
-    <div class="tailoring-empty-state">No patch selection preview loaded.</div>
-  `);
+  setInnerHtmlIfPresent("tailoringPatchPreviewSummary", "");
+  setInnerHtmlIfPresent("tailoringPatchSelectionShell", "");
 
   qs("tailoringJsonContent").textContent = "No artifact loaded.";
   qs("tailoringMarkdownContent").innerHTML = "<p>No artifact loaded.</p>";
   qs("tailoringLlmJsonContent").textContent = "No artifact loaded.";
   qs("tailoringPacketJsonContent").textContent = "No artifact loaded.";
 
-  setTailoringCopyButtonState({ label: "Copy", disabled: true, copied: false });
+  setTailoringCopyButtonState({ label: "Copy notes", disabled: true, copied: false });
 
   resetTailoringModalViewState();
 }
@@ -1760,17 +1763,16 @@ function openTailoringModal(row) {
     llmFailed: false,
   });
 
-  setInnerHtmlIfPresent("tailoringPatchPreviewSummary", `
-    <div class="tailoring-empty-state">Loading patch preview...</div>
-  `);
+  setTailoringSectionVisible("tailoringInteractiveSummary", true);
+  setTailoringSectionVisible("tailoringPatchPreviewSummary", false);
+  setTailoringSectionVisible("tailoringPatchSelectionShell", false);
 
   setInnerHtmlIfPresent("tailoringInteractiveSummary", `
-    <div class="tailoring-empty-state">Loading replacement plan...</div>
+    <div class="tailoring-empty-state">Loading guidance summary...</div>
   `);
 
-  setInnerHtmlIfPresent("tailoringPatchSelectionShell", `
-    <div class="tailoring-empty-state">Loading patch selection preview...</div>
-  `);
+  setInnerHtmlIfPresent("tailoringPatchPreviewSummary", "");
+  setInnerHtmlIfPresent("tailoringPatchSelectionShell", "");
 
   qs("tailoringJsonContent").textContent = "Loading deterministic tailoring JSON...";
   qs("tailoringMarkdownContent").innerHTML = "<p>Loading tailoring markdown...</p>";
@@ -1778,7 +1780,7 @@ function openTailoringModal(row) {
   qs("tailoringPacketJsonContent").textContent = "Loading packet JSON...";
 
   currentTailoringMarkdownRaw = "";
-  setTailoringCopyButtonState({ label: "Loading...", disabled: true, copied: false });
+  setTailoringCopyButtonState({ label: "Loading notes...", disabled: true, copied: false });
 
   resetTailoringModalViewState();
 
@@ -2023,18 +2025,18 @@ function renderClaimSafetyNotes(data) {
 
   return `
     <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Claim Safety Notes</div>
+      <div class="tailoring-section-title">Do not exaggerate</div>
       <div class="tailoring-safety-grid">
         <div class="tailoring-safety-card tailoring-safety-card--safe">
-          <div class="tailoring-safety-title">Safe to Strengthen</div>
+          <div class="tailoring-safety-title">Safe to say</div>
           ${buildTailoringList(safeToStrengthen)}
         </div>
         <div class="tailoring-safety-card tailoring-safety-card--caution">
-          <div class="tailoring-safety-title">Frame Carefully</div>
+          <div class="tailoring-safety-title">Use carefully</div>
           ${buildTailoringList(frameCarefully)}
         </div>
         <div class="tailoring-safety-card tailoring-safety-card--danger">
-          <div class="tailoring-safety-title">Do Not Add</div>
+          <div class="tailoring-safety-title">Do not claim</div>
           ${buildTailoringList(doNotAdd)}
         </div>
       </div>
@@ -2049,14 +2051,10 @@ function renderMaterialGaps(items) {
 
   return `
     <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Material Gaps</div>
+      <div class="tailoring-section-title">Missing proof</div>
       <div class="tailoring-gap-list">
         ${safeItems.map((item) => `
           <article class="tailoring-gap-card">
-            <div class="tailoring-card-topline">
-              ${buildTailoringTonePill(String(item.severity || "high").toUpperCase(), "danger")}
-              ${buildTailoringTonePill(String(item.gap_type || "gap").replaceAll("_", " "), "neutral")}
-            </div>
             <div class="tailoring-card-title">${escapeHtml(item.label || "")}</div>
             ${item.guidance ? `<div class="tailoring-card-copy">${escapeHtml(item.guidance)}</div>` : ""}
           </article>
@@ -2072,7 +2070,7 @@ function renderKeepAsIs(items) {
 
   return `
     <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Keep / Do Not Over-Edit</div>
+      <div class="tailoring-section-title">Leave these as they are</div>
       <div class="tailoring-keep-list">
         ${safeItems.map((item) => `
           <article class="tailoring-keep-card">
@@ -2085,7 +2083,7 @@ function renderKeepAsIs(items) {
             ${item.evidence ? `<div class="tailoring-quote-block">${escapeHtml(item.evidence)}</div>` : ""}
             ${item.overlaps?.length ? `
               <div class="tailoring-info-row">
-                <span class="tailoring-info-label">Strong overlap</span>
+                <span class="tailoring-info-label">Strong match</span>
                 <span class="tailoring-info-value">${escapeHtml(item.overlaps.join(", "))}</span>
               </div>
             ` : ""}
@@ -2099,51 +2097,37 @@ function renderKeepAsIs(items) {
 function renderReplacementPlanSummary(summary) {
   const data = summary && typeof summary === "object" ? summary : {};
   const total = Number(data.total_rewrite_bullets || 0);
-  const ready = Number(data.direct_apply_ready_count || 0);
-  const optional = Number(data.direct_apply_optional_count || 0);
-  const directionOnly = Number(data.direction_only_count || 0);
-  const keep = Number(data.keep_original_count || 0);
+  const ready = Number(data.direct_apply_ready_count || 0) + Number(data.direct_apply_optional_count || 0);
+  const reviewOnly = Number(data.direction_only_count || 0);
 
   return `
     <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Replacement Summary</div>
+      <div class="tailoring-section-title">Quick summary</div>
       <div class="tailoring-priority-grid">
         <article class="tailoring-priority-card">
           <div class="tailoring-card-topline">
             ${buildTailoringTonePill("TOTAL", "neutral")}
           </div>
           <div class="tailoring-card-title">${escapeHtml(String(total))}</div>
-          <div class="tailoring-card-copy">Rewrite-worthy bullets evaluated</div>
+          <div class="tailoring-card-copy">Suggestions found</div>
         </article>
 
         <article class="tailoring-priority-card">
           <div class="tailoring-card-topline">
-            ${buildTailoringTonePill("APPLY NOW", "safe")}
+            ${buildTailoringTonePill("READY", "safe")}
           </div>
           <div class="tailoring-card-title">${escapeHtml(String(ready))}</div>
-          <div class="tailoring-card-copy">Direct replacements with score-lift intent</div>
+          <div class="tailoring-card-copy">Ready to use or lightly polish</div>
         </article>
 
         <article class="tailoring-priority-card">
           <div class="tailoring-card-topline">
-            ${buildTailoringTonePill("OPTIONAL", "caution")}
+            ${buildTailoringTonePill("REVIEW", "muted")}
           </div>
-          <div class="tailoring-card-title">${escapeHtml(String(optional))}</div>
-          <div class="tailoring-card-copy">Safe polish replacements without expected score lift</div>
-        </article>
-
-        <article class="tailoring-priority-card">
-          <div class="tailoring-card-topline">
-            ${buildTailoringTonePill("GUIDANCE", "muted")}
-          </div>
-          <div class="tailoring-card-title">${escapeHtml(String(directionOnly))}</div>
-          <div class="tailoring-card-copy">Direction-only bullets without a direct patch</div>
+          <div class="tailoring-card-title">${escapeHtml(String(reviewOnly))}</div>
+          <div class="tailoring-card-copy">Needs manual judgment</div>
         </article>
       </div>
-
-      ${keep ? `
-        <div class="tailoring-card-meta">Keep original: ${escapeHtml(String(keep))}</div>
-      ` : ""}
     </section>
   `;
 }
@@ -2174,63 +2158,65 @@ function renderReplacementDecisionSection({
 
       <div class="tailoring-edit-card-list">
         ${safeItems.map((item, index) => {
-          const patchMethod = String(item.patch_generation_method || "").replaceAll("_", " ");
-          const materiality = String(item.materiality_validation_status || "").replaceAll("_", " ");
           const priority = String(item.apply_priority || "low");
           const likelyImpactedDimensions = Array.isArray(item.likely_impacted_dimensions)
             ? item.likely_impacted_dimensions.filter(Boolean)
             : [];
 
+          const statusLabel =
+            item.replacement_status === "direct_apply_ready"
+              ? "Ready to use"
+              : item.replacement_status === "direct_apply_optional"
+                ? "Nice to improve"
+                : "Review only";
+
           return `
             <article class="tailoring-edit-card">
               <div class="tailoring-card-topline">
-                <div class="tailoring-edit-card-label">Replacement ${index + 1}</div>
+                <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
                 <div class="tailoring-chip-group">
-                  ${buildTailoringTonePill(String(item.replacement_status || "").replaceAll("_", " "), tone)}
-                  ${buildTailoringTonePill(priority.toUpperCase(), priority === "high" ? "safe" : priority === "medium" ? "caution" : "muted")}
-                  ${patchMethod ? buildTailoringTonePill(patchMethod, "neutral") : ""}
+                  ${buildTailoringTonePill(statusLabel, tone)}
+                  ${buildTailoringTonePill(
+                    priority === "high" ? "High priority" : priority === "medium" ? "Medium priority" : "Low priority",
+                    priority === "high" ? "safe" : priority === "medium" ? "caution" : "muted"
+                  )}
                 </div>
               </div>
 
-              ${materiality ? `
-                <div class="tailoring-info-row">
-                  <span class="tailoring-info-label">Impact class</span>
-                  <span class="tailoring-info-value">${escapeHtml(materiality)}</span>
-                </div>
-              ` : ""}
-
               ${item.original_text ? `
                 <div class="tailoring-info-block">
-                  <div class="tailoring-info-label">Original bullet</div>
+                  <div class="tailoring-info-label">Current bullet</div>
                   <div class="tailoring-quote-block">${escapeHtml(item.original_text)}</div>
                 </div>
               ` : ""}
 
               ${mode !== "direction_only" && item.final_replacement_text ? `
                 <div class="tailoring-info-block">
-                  <div class="tailoring-info-label">Recommended replacement</div>
+                  <div class="tailoring-info-label">Suggested edit</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.final_replacement_text)}</div>
                 </div>
               ` : ""}
 
               ${mode === "direction_only" && item.rewrite_direction ? `
                 <div class="tailoring-info-block">
-                  <div class="tailoring-info-label">Rewrite direction</div>
+                  <div class="tailoring-info-label">Suggested change</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.rewrite_direction)}</div>
                 </div>
               ` : ""}
 
               ${item.why_selected ? `
                 <div class="tailoring-info-row">
-                  <span class="tailoring-info-label">Why selected</span>
+                  <span class="tailoring-info-label">Why this helps</span>
                   <span class="tailoring-info-value">${escapeHtml(item.why_selected)}</span>
                 </div>
               ` : ""}
 
               ${likelyImpactedDimensions.length ? `
                 <div class="tailoring-info-row">
-                  <span class="tailoring-info-label">Likely impacted dimensions</span>
-                  <span class="tailoring-info-value">${escapeHtml(likelyImpactedDimensions.join(", "))}</span>
+                  <span class="tailoring-info-label">What this improves</span>
+                  <span class="tailoring-info-value">${escapeHtml(
+                    likelyImpactedDimensions.map((value) => humanizeUnderscoreLabel(value)).join(", ")
+                  )}</span>
                 </div>
               ` : ""}
             </article>
@@ -2241,16 +2227,141 @@ function renderReplacementDecisionSection({
   `;
 }
 
+function hasTailoringItems(items) {
+  return Array.isArray(items) && items.some(Boolean);
+}
+
+function setTailoringSectionVisible(contentId, isVisible) {
+  const root = qs(contentId);
+  if (!root) return;
+
+  const section = root.closest("section");
+  if (!section) return;
+
+  section.classList.toggle("hidden", !isVisible);
+}
+
+function setTailoringManualAccordionExpanded(toggleButton, panel, isExpanded) {
+  if (!toggleButton || !panel) return;
+
+  toggleButton.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+  panel.classList.toggle("hidden", !isExpanded);
+}
+
+function toggleTailoringManualAccordion(toggleButton) {
+  if (!toggleButton) return;
+
+  const panelId =
+    toggleButton.getAttribute("aria-controls") ||
+    toggleButton.dataset.tailoringAccordionToggle;
+
+  const panel = panelId ? qs(panelId) : null;
+  if (!panel) return;
+
+  const isExpanded = toggleButton.getAttribute("aria-expanded") === "true";
+  setTailoringManualAccordionExpanded(toggleButton, panel, !isExpanded);
+}
+
+function collapseTailoringManualAccordions() {
+  document.querySelectorAll("[data-tailoring-accordion-toggle]").forEach((toggleButton) => {
+    const panelId =
+      toggleButton.getAttribute("aria-controls") ||
+      toggleButton.dataset.tailoringAccordionToggle;
+
+    const panel = panelId ? qs(panelId) : null;
+    setTailoringManualAccordionExpanded(toggleButton, panel, false);
+  });
+}
+
+function isFinitePreviewNumber(value) {
+  if (value === null || value === undefined) return false;
+
+  const text = String(value).trim();
+  if (!text || text === "-") return false;
+
+  const parsed = Number(text.replaceAll(",", ""));
+  return Number.isFinite(parsed);
+}
+
+function hasRenderableDimensionDeltas(deltas) {
+  return Object.values(deltas || {}).some((value) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed);
+  });
+}
+
+function hasMeaningfulPatchPreview(preview) {
+  if (!preview || typeof preview !== "object" || !Object.keys(preview).length) {
+    return false;
+  }
+
+  const status = String(preview.status || "").trim().toLowerCase();
+  if (!status) return false;
+
+  if (
+    [
+      "none",
+      "no_patch_ready_rewrites",
+      "no_valid_selected_candidates",
+    ].includes(status)
+  ) {
+    return false;
+  }
+
+  const projectedScorePresent = isFinitePreviewNumber(preview.projected_final_score);
+  const originalScorePresent = isFinitePreviewNumber(preview.original_final_score);
+  const overallDeltaPresent = isFinitePreviewNumber(preview.projected_overall_delta);
+  const evidenceChanged = Boolean(preview.scorer_visible_evidence_changed);
+  const dimensionDeltasPresent = hasRenderableDimensionDeltas(preview.projected_dimension_deltas);
+
+  const appliedCandidateIdsPresent =
+    Array.isArray(preview.selected_candidate_ids) &&
+    preview.selected_candidate_ids.some((value) => String(value || "").trim());
+
+  if (status === "scored") {
+    return (
+      projectedScorePresent ||
+      originalScorePresent ||
+      overallDeltaPresent ||
+      evidenceChanged ||
+      dimensionDeltasPresent ||
+      appliedCandidateIdsPresent
+    );
+  }
+
+  return (
+    projectedScorePresent ||
+    overallDeltaPresent ||
+    evidenceChanged ||
+    dimensionDeltasPresent
+  );
+}
+
+function shouldShowPatchPreviewSection(payload) {
+  if (!payload || typeof payload !== "object") return false;
+
+  const selectedPreview = payload.selected_patch_set_counterfactual_preview || null;
+  const autoPreview = payload.patch_set_counterfactual_preview || null;
+
+  return (
+    hasMeaningfulPatchPreview(selectedPreview) ||
+    hasMeaningfulPatchPreview(autoPreview)
+  );
+}
+
+function shouldShowPatchSelectionSection(payload) {
+  if (!payload || typeof payload !== "object") return false;
+
+  const preview = payload.selected_patch_set_counterfactual_preview || null;
+  return hasMeaningfulPatchPreview(preview);
+}
+
 function renderLegacyDiagnosticDetails(payload) {
-  const topEditPriorities = Array.isArray(payload.top_edit_priorities) ? payload.top_edit_priorities : [];
-  const editCards = Array.isArray(payload.edit_cards) ? payload.edit_cards : [];
   const keepAsIs = Array.isArray(payload.keep_as_is) ? payload.keep_as_is : [];
   const materialGaps = Array.isArray(payload.material_gaps) ? payload.material_gaps : [];
   const claimSafetyNotes = payload.claim_safety_notes || {};
 
   const hasDiagnosticContent =
-    topEditPriorities.length ||
-    editCards.length ||
     keepAsIs.length ||
     materialGaps.length ||
     (claimSafetyNotes && Object.keys(claimSafetyNotes).length);
@@ -2259,16 +2370,15 @@ function renderLegacyDiagnosticDetails(payload) {
 
   return `
     <details class="tailoring-section-block">
-      <summary class="tailoring-section-title">Diagnostic Detail</summary>
-      <div class="tailoring-card-copy">Underlying deterministic guidance and safety notes.</div>
-      ${topEditPriorities.length ? renderTopEditPriorities(topEditPriorities) : ""}
-      ${editCards.length ? renderEditCards(editCards) : ""}
+      <summary class="tailoring-section-title">More detail</summary>
+      <div class="tailoring-card-copy">Extra context for review.</div>
       ${renderClaimSafetyNotes(claimSafetyNotes)}
       ${renderMaterialGaps(materialGaps)}
       ${renderKeepAsIs(keepAsIs)}
     </details>
   `;
 }
+
 function renderTailoringEmptyState(payload) {
   const notes = payload && typeof payload === "object" ? payload.claim_safety_notes || {} : {};
   const emptyState = payload && typeof payload === "object" ? payload.empty_state_reason || {} : {};
@@ -2377,7 +2487,7 @@ function renderTailoringInteractiveSummary(artifact) {
     : null;
 
   if (!payload) {
-    root.innerHTML = `<div class="tailoring-empty-state">Replacement plan is not available for this row.</div>`;
+    root.innerHTML = `<div class="tailoring-empty-state">Suggested changes are not available for this row.</div>`;
     return;
   }
 
@@ -2400,36 +2510,44 @@ function renderTailoringInteractiveSummary(artifact) {
     return;
   }
 
+  const recommendedHtml = Array.isArray(directionOnly) && directionOnly.length
+    ? renderReplacementDecisionSection({
+        title: "Recommended changes",
+        subtitle: "These are the main edits to review first.",
+        items: directionOnly,
+        emptyLabel: "No review-only suggestions.",
+        tone: "muted",
+        mode: "direction_only",
+      })
+    : "";
+
+  const readyHtml = Array.isArray(appReady) && appReady.length
+    ? renderReplacementDecisionSection({
+        title: "Ready to use",
+        subtitle: "These edits are ready to use as written.",
+        items: appReady,
+        emptyLabel: "No ready-to-use edits.",
+        tone: "safe",
+        mode: "replacement",
+      })
+    : "";
+
+  const optionalHtml = Array.isArray(directApplyOptional) && directApplyOptional.length
+    ? renderReplacementDecisionSection({
+        title: "Nice to improve",
+        subtitle: "These are safe wording improvements, but not the main fit drivers.",
+        items: directApplyOptional,
+        emptyLabel: "No optional improvements.",
+        tone: "caution",
+        mode: "replacement",
+      })
+    : "";
+
   root.innerHTML = `
     ${renderReplacementPlanSummary(summary)}
-
-    ${renderReplacementDecisionSection({
-      title: "Replace Now",
-      subtitle: "These bullets are direct replacement candidates with the strongest fit-improvement signal.",
-      items: appReady,
-      emptyLabel: "No apply-now replacements.",
-      tone: "safe",
-      mode: "replacement",
-    })}
-
-    ${renderReplacementDecisionSection({
-      title: "Optional Polish",
-      subtitle: "These replacements are safe wording improvements, but not expected score-lift drivers.",
-      items: directApplyOptional,
-      emptyLabel: "No optional polish replacements.",
-      tone: "caution",
-      mode: "replacement",
-    })}
-
-    ${renderReplacementDecisionSection({
-      title: "Guidance Only",
-      subtitle: "These bullets are rewrite-worthy, but no safe direct replacement survived final selection.",
-      items: directionOnly,
-      emptyLabel: "No guidance-only bullets.",
-      tone: "muted",
-      mode: "direction_only",
-    })}
-
+    ${recommendedHtml}
+    ${readyHtml}
+    ${optionalHtml}
     ${renderLegacyDiagnosticDetails(payload)}
   `;
 }
@@ -2438,7 +2556,7 @@ function buildTailoringButtonHtml(row) {
   const hasArtifacts = Boolean(
     row.tailoring_json || row.tailoring_md || row.tailoring_llm_json || row.packet_json
   );  
-  const label = hasArtifacts ? "View" : "Unavailable";
+  const label = hasArtifacts ? "Suggestions" : "Unavailable";
   const disabledAttr = hasArtifacts ? "" : "disabled";
 
   return `
@@ -2557,7 +2675,7 @@ function renderPlanningRows(rows, metaLabel) {
   if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="19" class="empty-state">No rows found.</td>
+        <td colspan="20" class="empty-state">No rows found.</td>
       </tr>
     `;
     qs("planningTableMeta").textContent = planningTableState.metaLabel;
@@ -2608,7 +2726,7 @@ function renderPlanningRows(rows, metaLabel) {
 
 async function loadPlanningTable() {
   const tbody = qs("planningTableBody");
-  tbody.innerHTML = renderTableLoading(19, "Loading planning rows...");
+  tbody.innerHTML = renderTableLoading(20, "Loading planning rows...");
   qs("planningTableMeta").textContent = "Loading...";
 
   const url = buildPlanningUrl();
@@ -2757,9 +2875,14 @@ function attachPlanningHandlers() {
   });
 
   qs("closeTailoringModalBtn").addEventListener("click", closeTailoringModal);
-  qs("closeTailoringFooterBtn").addEventListener("click", closeTailoringModal);
 
   getTailoringModal().addEventListener("click", (event) => {
+    const toggleButton = event.target.closest("[data-tailoring-accordion-toggle]");
+    if (toggleButton) {
+      toggleTailoringManualAccordion(toggleButton);
+      return;
+    }
+
     if (event.target === getTailoringModal()) {
       closeTailoringModal();
     }

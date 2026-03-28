@@ -15,7 +15,7 @@ def planning_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning Detail Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_ui_20260328_1" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -302,8 +302,8 @@ def planning_dashboard() -> str:
     <div class="modal-card pipeline-modal-card tailoring-modal-card">
       <div class="modal-header">
         <div>
-          <h3>Tailoring Detail</h3>
-          <div class="subtext" id="tailoringModalMeta">Planning artifact details for the selected job.</div>
+          <h3>Resume suggestions</h3>
+          <div class="subtext" id="tailoringModalMeta">Suggested resume updates for this job.</div>
         </div>
         <button class="ghost-btn modal-close-btn" id="closeTailoringModalBtn" type="button">Close</button>
       </div>
@@ -318,139 +318,241 @@ def planning_dashboard() -> str:
       </div>
 
       <div class="pipeline-modal-scroll" id="tailoringModalScroll">
-        <section class="card tailoring-overview-card">
-          <div class="section-header section-header--compact">
-            <h3>Overview</h3>
-          </div>
-
-          <div class="modal-body tailoring-meta-grid">
+        <section class="card tailoring-overview-card tailoring-overview-card--compact">
+          <div class="modal-body tailoring-meta-grid tailoring-meta-grid--compact">
             <div class="info-pair tailoring-meta-item">
               <span class="label">Company</span>
               <span id="tailoringModalCompany">-</span>
             </div>
 
             <div class="info-pair tailoring-meta-item">
-              <span class="label">Title</span>
+              <span class="label">Role</span>
               <span id="tailoringModalTitle">-</span>
             </div>
 
             <div class="info-pair tailoring-meta-item">
-              <span class="label">Tailoring Status</span>
+              <span class="label">Status</span>
               <span id="tailoringModalStatus" class="tailoring-status-value">-</span>
-            </div>
-
-            <div class="info-pair tailoring-meta-item">
-              <span class="label">LLM Error</span>
-              <span id="tailoringModalError" class="tailoring-error-value">-</span>
-            </div>
-
-            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
-              <span class="label">Tailoring Markdown Path</span>
-              <span id="tailoringModalMarkdownPath" class="tailoring-path-value">-</span>
-            </div>
-
-            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
-              <span class="label">Tailoring JSON Path</span>
-              <span id="tailoringModalJsonPath" class="tailoring-path-value">-</span>
-            </div>
-
-            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
-              <span class="label">Tailoring LLM JSON Path</span>
-              <span id="tailoringModalLlmJsonPath" class="tailoring-path-value">-</span>
-            </div>
-
-            <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
-              <span class="label">Packet JSON Path</span>
-              <span id="tailoringModalPacketPath" class="tailoring-path-value">-</span>
             </div>
           </div>
         </section>
+
         <section class="card tailoring-primary-card">
           <div class="section-header">
             <div>
-              <h3>Replacement Plan</h3>
+              <h3>Suggested changes</h3>
               <div class="subtext">
-                Apply-now replacements are shown first, optional polish second, and guidance-only suggestions below.
+                Start here. These are the most useful resume suggestions for this job.
               </div>
             </div>
           </div>
 
           <div id="tailoringInteractiveSummary" class="tailoring-interactive-shell">
             <div class="tailoring-empty-state">
-              Loading replacement plan...
+              Loading suggested changes...
             </div>
           </div>
         </section>
-        <section class="card tailoring-primary-card">
+
+        <section class="card tailoring-primary-card hidden">
           <div class="section-header">
-            <h3>Patch Preview</h3>
+            <h3>Score preview</h3>
           </div>
 
-          <div id="tailoringPatchPreviewSummary" class="tailoring-interactive-shell">
-            <div class="tailoring-empty-state">
-              Loading patch preview...
-            </div>
-          </div>
+          <div id="tailoringPatchPreviewSummary" class="tailoring-interactive-shell"></div>
         </section>
-        <section class="card tailoring-primary-card">
+
+        <section class="card tailoring-primary-card hidden">
           <div class="section-header">
             <div>
-              <h3>Patch Selection Preview</h3>
+              <h3>Saved patch preview</h3>
               <div class="subtext">
-                Select patch-ready rewrite candidates, preview the projected evaluator delta, and save the chosen patch set for this tailoring artifact.
+                Only shown when a saved patch selection or patch impact preview exists.
               </div>
             </div>
           </div>
 
-          <div id="tailoringPatchSelectionShell" class="tailoring-patch-selection-shell">
-            <div class="tailoring-empty-state">
-              Loading patch selection preview...
-            </div>
-          </div>
-        </section>
-        <section class="card tailoring-primary-card">
-          <div class="section-header">
-            <h3>Full Guidance</h3>
-            <div class="section-header-actions">
-              <button
-                type="button"
-                class="ghost-btn tailoring-copy-btn"
-                id="copyTailoringMarkdownBtn"
-                title="Copy tailoring markdown"
-                aria-label="Copy tailoring markdown"
-                disabled
-              >
-                <span class="tailoring-copy-btn-icon" aria-hidden="true">
-                  <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                    <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                    <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
-                  </svg>
-                </span>
-                <span id="copyTailoringMarkdownLabel">Copy</span>
-              </button>
-            </div>
-          </div>
-          <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
+          <div id="tailoringPatchSelectionShell" class="tailoring-patch-selection-shell"></div>
         </section>
 
         <details class="card tailoring-accordion">
-          <summary>Deterministic Tailoring JSON</summary>
+                  <section class="card tailoring-manual-accordion">
+          <button
+            type="button"
+            class="tailoring-manual-accordion-toggle"
+            data-tailoring-accordion-toggle="tailoringTechnicalDetailsPanel"
+            aria-expanded="false"
+            aria-controls="tailoringTechnicalDetailsPanel"
+          >
+            <span class="tailoring-manual-accordion-label">Technical details</span>
+          </button>
+
+          <div id="tailoringTechnicalDetailsPanel" class="tailoring-manual-accordion-panel hidden">
+            <div class="modal-body tailoring-meta-grid">
+              <div class="info-pair tailoring-meta-item">
+                <span class="label">Issue</span>
+                <span id="tailoringModalError" class="tailoring-error-value">-</span>
+              </div>
+
+              <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+                <span class="label">Notes file</span>
+                <span id="tailoringModalMarkdownPath" class="tailoring-path-value">-</span>
+              </div>
+
+              <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+                <span class="label">Rule-based JSON</span>
+                <span id="tailoringModalJsonPath" class="tailoring-path-value">-</span>
+              </div>
+
+              <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+                <span class="label">AI JSON</span>
+                <span id="tailoringModalLlmJsonPath" class="tailoring-path-value">-</span>
+              </div>
+
+              <div class="info-pair tailoring-meta-item tailoring-meta-item--path">
+                <span class="label">Packet JSON</span>
+                <span id="tailoringModalPacketPath" class="tailoring-path-value">-</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="card tailoring-manual-accordion tailoring-manual-accordion--notes">
+          <button
+            type="button"
+            class="tailoring-manual-accordion-toggle"
+            data-tailoring-accordion-toggle="tailoringFullNotesPanel"
+            aria-expanded="false"
+            aria-controls="tailoringFullNotesPanel"
+          >
+            <span class="tailoring-manual-accordion-label">Full notes</span>
+          </button>
+
+          <div id="tailoringFullNotesPanel" class="tailoring-manual-accordion-panel tailoring-manual-accordion-panel--notes hidden">
+            <div class="section-header tailoring-notes-header">
+              <div class="subtext">
+                Human-readable notes for deeper review.
+              </div>
+
+              <div class="section-header-actions">
+                <button
+                  type="button"
+                  class="ghost-btn tailoring-copy-btn"
+                  id="copyTailoringMarkdownBtn"
+                  title="Copy notes"
+                  aria-label="Copy notes"
+                  disabled
+                >
+                  <span class="tailoring-copy-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                      <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
+                    </svg>
+                  </span>
+                  <span id="copyTailoringMarkdownLabel">Copy notes</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
+          </div>
+        </section>
+
+        <section class="card tailoring-manual-accordion">
+          <button
+            type="button"
+            class="tailoring-manual-accordion-toggle"
+            data-tailoring-accordion-toggle="tailoringDeterministicJsonPanel"
+            aria-expanded="false"
+            aria-controls="tailoringDeterministicJsonPanel"
+          >
+            <span class="tailoring-manual-accordion-label">Deterministic Tailoring JSON</span>
+          </button>
+
+          <div id="tailoringDeterministicJsonPanel" class="tailoring-manual-accordion-panel tailoring-manual-accordion-panel--code hidden">
+            <pre id="tailoringJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
+          </div>
+        </section>
+
+        <section class="card tailoring-manual-accordion">
+          <button
+            type="button"
+            class="tailoring-manual-accordion-toggle"
+            data-tailoring-accordion-toggle="tailoringLlmJsonPanel"
+            aria-expanded="false"
+            aria-controls="tailoringLlmJsonPanel"
+          >
+            <span class="tailoring-manual-accordion-label">LLM Tailoring JSON</span>
+          </button>
+
+          <div id="tailoringLlmJsonPanel" class="tailoring-manual-accordion-panel tailoring-manual-accordion-panel--code hidden">
+            <pre id="tailoringLlmJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
+          </div>
+        </section>
+
+        <section class="card tailoring-manual-accordion">
+          <button
+            type="button"
+            class="tailoring-manual-accordion-toggle"
+            data-tailoring-accordion-toggle="tailoringPacketJsonPanel"
+            aria-expanded="false"
+            aria-controls="tailoringPacketJsonPanel"
+          >
+            <span class="tailoring-manual-accordion-label">Packet JSON</span>
+          </button>
+
+          <div id="tailoringPacketJsonPanel" class="tailoring-manual-accordion-panel tailoring-manual-accordion-panel--code hidden">
+            <pre id="tailoringPacketJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
+          </div>
+        </section>
+        </details>
+        <details class="card tailoring-accordion tailoring-accordion--notes">
+          <summary><span class="tailoring-accordion-summary-label">Full notes</span></summary>
+
+          <div class="tailoring-accordion-body">
+            <div class="section-header tailoring-notes-header">
+              <div class="subtext">
+                Human-readable notes for deeper review.
+              </div>
+
+              <div class="section-header-actions">
+                <button
+                  type="button"
+                  class="ghost-btn tailoring-copy-btn"
+                  id="copyTailoringMarkdownBtn"
+                  title="Copy notes"
+                  aria-label="Copy notes"
+                  disabled
+                >
+                  <span class="tailoring-copy-btn-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
+                      <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                      <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
+                    </svg>
+                  </span>
+                  <span id="copyTailoringMarkdownLabel">Copy notes</span>
+                </button>
+              </div>
+            </div>
+
+            <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
+          </div>
+        </details>
+
+        <details class="card tailoring-accordion">
+          <summary><span class="tailoring-accordion-summary-label">Deterministic Tailoring JSON</span></summary>
           <pre id="tailoringJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
         </details>
 
         <details class="card tailoring-accordion">
-          <summary>LLM Tailoring JSON</summary>
+          <summary><span class="tailoring-accordion-summary-label">LLM Tailoring JSON</span></summary>
           <pre id="tailoringLlmJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
         </details>
 
         <details class="card tailoring-accordion">
-          <summary>Packet JSON</summary>
+          <summary><span class="tailoring-accordion-summary-label">Packet JSON</span></summary>
           <pre id="tailoringPacketJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
         </details>
-      </div>
-
-      <div class="modal-actions">
-        <button type="button" class="ghost-btn" id="closeTailoringFooterBtn">Close</button>
       </div>
     </div>
   </section>
@@ -486,7 +588,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js"></script>
+  <script src="/static/planning.js?v=tailoring_ui_20260328_1"></script>
 </body>
 </html>
     """.strip()

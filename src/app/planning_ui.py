@@ -629,7 +629,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_3" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_4" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -713,8 +713,8 @@ def tailoring_workspace(
           </div>
         </div>
 
-        <div class="tailoring-preview-shell">
-          <div class="tailoring-preview-canvas tailoring-preview-canvas--frame">
+                <div class="tailoring-preview-shell">
+          <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
             <div class="tailoring-workspace-preview-header">
               <div class="subtext">Current resume preview</div>
               <div class="tailoring-workspace-preview-name" id="tailoringWorkspacePreviewName">
@@ -722,16 +722,50 @@ def tailoring_workspace(
               </div>
             </div>
 
-            <div class="resume-choice-preview-frame-wrap tailoring-workspace-preview-frame-wrap">
-              <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
-                Resume preview is not available for this workspace row.
+            <div class="tailoring-workspace-preview-toolbar">
+              <div class="tailoring-workspace-preview-toolbar-left">
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm"
+                  id="tailoringWorkspaceZoomOutBtn"
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
+
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm tailoring-workspace-zoom-value"
+                  id="tailoringWorkspaceZoomResetBtn"
+                  aria-label="Reset zoom"
+                >
+                  110%
+                </button>
+
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm"
+                  id="tailoringWorkspaceZoomInBtn"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
               </div>
 
-              <iframe
-                id="tailoringWorkspacePreviewFrame"
-                class="resume-choice-preview-frame hidden"
-                title="Tailoring workspace resume preview"
-              ></iframe>
+              <div class="subtext" id="tailoringWorkspacePreviewMeta">
+                Loading PDF preview...
+              </div>
+            </div>
+
+            <div class="tailoring-workspace-pdf-scroller" id="tailoringWorkspacePdfScroller">
+              <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
+                Loading PDF preview...
+              </div>
+
+              <div
+                id="tailoringWorkspacePdfPages"
+                class="tailoring-workspace-pdf-pages hidden"
+              ></div>
             </div>
           </div>
         </div>
@@ -740,7 +774,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=tailoring_workspace_20260328_3"></script>
+  <script src="/static/planning.js?v=tailoring_workspace_20260328_4"></script>
 </body>
 </html>
     """.strip()

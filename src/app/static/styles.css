@@ -4571,3 +4571,131 @@ th.sortable-col {
 #tailoringWorkspaceInteractiveSummary .tailoring-section-block:first-child {
   margin-top: 0;
 }
+
+/* === tailoring workspace resume preview step === */
+
+.tailoring-preview-canvas--frame {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+}
+
+.tailoring-workspace-preview-header {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tailoring-workspace-preview-name {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.tailoring-workspace-preview-frame-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
+.tailoring-workspace-preview-frame-wrap .resume-choice-empty {
+  min-height: 100%;
+}
+
+@media (max-width: 1180px) {
+  .tailoring-workspace-preview-frame-wrap {
+    min-height: 420px;
+    height: 420px;
+  }
+}
+
+/* === tailoring workspace pdfjs preview === */
+
+.tailoring-preview-canvas--pdfjs {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 18px;
+}
+
+.tailoring-workspace-preview-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.tailoring-workspace-preview-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tailoring-workspace-zoom-value {
+  min-width: 72px;
+  justify-content: center;
+}
+
+.tailoring-workspace-pdf-scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(120, 166, 255, 0.12);
+  background: rgba(7, 11, 25, 0.52);
+}
+
+.tailoring-workspace-pdf-scroller::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.tailoring-workspace-pdf-scroller::-webkit-scrollbar-thumb {
+  background: rgba(120, 166, 255, 0.28);
+  border-radius: 999px;
+}
+
+.tailoring-workspace-pdf-scroller::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.tailoring-workspace-pdf-pages {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+}
+
+.tailoring-workspace-pdf-page {
+  width: fit-content;
+  max-width: 100%;
+  background: #ffffff;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.22);
+  overflow: hidden;
+}
+
+.tailoring-workspace-pdf-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 1180px) {
+  .tailoring-preview-canvas--pdfjs {
+    padding: 16px;
+  }
+
+  .tailoring-workspace-pdf-scroller {
+    min-height: 420px;
+    padding: 14px;
+  }
+}

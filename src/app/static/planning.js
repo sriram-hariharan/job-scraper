@@ -900,6 +900,29 @@ function buildResumePreviewUrl(resumeName) {
   return `/planning/resume-preview?${params.toString()}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
 }
 
+function setTailoringWorkspacePreview(resumeName) {
+  const frame = qs("tailoringWorkspacePreviewFrame");
+  const empty = qs("tailoringWorkspacePreviewEmpty");
+  const nameEl = qs("tailoringWorkspacePreviewName");
+
+  if (!frame || !empty || !nameEl) return;
+
+  const safeName = normalizeResumeName(resumeName);
+
+  if (!safeName) {
+    frame.src = "about:blank";
+    frame.classList.add("hidden");
+    empty.classList.remove("hidden");
+    nameEl.textContent = "No resume selected";
+    return;
+  }
+
+  frame.src = buildResumePreviewUrl(safeName);
+  frame.classList.remove("hidden");
+  empty.classList.add("hidden");
+  nameEl.textContent = humanizeResumeDisplayName(safeName);
+}
+
 function getResumeChoiceCandidates(row) {
   const candidates = [];
   const seen = new Set();
@@ -2571,10 +2594,13 @@ async function initTailoringWorkspacePage() {
   if (!page) return false;
 
   const tailoringJsonPath = String(page.dataset.tailoringJsonPath || "").trim();
+  const resumeName = String(page.dataset.resumeName || "").trim();
   const meta = qs("tailoringWorkspaceMeta");
   const root = qs("tailoringWorkspaceInteractiveSummary");
 
   if (!root) return true;
+  
+  setTailoringWorkspacePreview(resumeName);
 
   if (!tailoringJsonPath) {
     if (meta) {
@@ -2629,7 +2655,7 @@ function buildTailoringWorkspaceUrl(row) {
 
   params.set("company", row.job_company || "");
   params.set("title", row.job_title || "");
-  params.set("resume", humanizeResumeDisplayName(selectedResume || ""));
+  params.set("resume", selectedResume || "");
   params.set(
     "status",
     row.llm_tailoring_status

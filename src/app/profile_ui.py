@@ -26,11 +26,6 @@ def profile_page() -> str:
         <h1>My Profile</h1>
         <p class="subtext">Manage the resume files used by deterministic matching and application planning.</p>
       </div>
-
-      <div class="header-actions">
-        <a class="ghost-link-btn" href="/">Executive Dashboard</a>
-        <a class="ghost-link-btn" href="/applications">Applications</a>
-      </div>
     </header>
 
     <section class="card profile-section-card">

@@ -1337,9 +1337,12 @@ function attachApplicationHandlers() {
     closeApplicationModal();
   });
 
-  qs("runPipelineBtn").addEventListener("click", () => {
-    openPipelineConfigModal();
-  });
+  const runPipelineBtn = qs("runPipelineBtn");
+    if (runPipelineBtn) {
+      runPipelineBtn.addEventListener("click", () => {
+        openPipelineConfigModal();
+      });
+    }
 
   qs("closePipelineConfigModalBtn").addEventListener("click", closePipelineConfigModal);
   qs("cancelPipelineConfigBtn").addEventListener("click", closePipelineConfigModal);
@@ -1496,15 +1499,16 @@ function attachEventHandlers() {
     });
   });
 
-  qs("refreshStatusBtn").addEventListener("click", async () => {
-    try {
-      await loadStatus();
-      await loadPipelineStatus();
-      await reloadCurrentTable();
-    } catch (err) {
-      showAppError("Failed to refresh dashboard", err);
+  const refreshStatusBtn = qs("refreshStatusBtn");
+    if (refreshStatusBtn) {
+      refreshStatusBtn.addEventListener("click", async () => {
+        try {
+          await loadStatus();
+        } catch (err) {
+          showAppError("Failed to refresh dashboard status", err);
+        }
+      });
     }
-  });
 }
 
 async function init() {

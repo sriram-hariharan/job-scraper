@@ -629,7 +629,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_4" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_5" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -701,6 +701,56 @@ def tailoring_workspace(
             Loading suggested changes...
           </div>
         </div>
+
+        <section class="card tailoring-workspace-subcard hidden">
+          <div class="section-header section-header--compact">
+            <div>
+              <h3>Saved selection</h3>
+              <div class="subtext">
+                Last persisted suggestion choice for this job/resume pair.
+              </div>
+            </div>
+          </div>
+
+          <div id="tailoringWorkspaceSavedSelectionShell"></div>
+        </section>
+
+        <section class="card tailoring-workspace-subcard tailoring-workspace-selection-bar">
+          <div class="tailoring-workspace-selection-bar-copy">
+            <div class="tailoring-workspace-selection-title">Selection actions</div>
+            <div class="subtext" id="tailoringWorkspaceSelectionStatus">
+              No actionable suggestions selected yet.
+            </div>
+          </div>
+
+          <div class="tailoring-workspace-selection-actions">
+            <button
+              type="button"
+              class="ghost-btn btn-sm"
+              id="tailoringWorkspaceDiscardBtn"
+              disabled
+            >
+              Discard
+            </button>
+
+            <button
+              type="button"
+              class="ghost-btn btn-sm"
+              id="tailoringWorkspaceDownloadBtn"
+            >
+              Download
+            </button>
+
+            <button
+              type="button"
+              class="btn-sm"
+              id="tailoringWorkspaceSaveSelectionBtn"
+              disabled
+            >
+              Save changes
+            </button>
+          </div>
+        </section>
       </section>
 
       <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
@@ -713,7 +763,7 @@ def tailoring_workspace(
           </div>
         </div>
 
-                <div class="tailoring-preview-shell">
+        <div class="tailoring-preview-shell">
           <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
             <div class="tailoring-workspace-preview-header">
               <div class="subtext">Current resume preview</div>
@@ -739,7 +789,7 @@ def tailoring_workspace(
                   id="tailoringWorkspaceZoomResetBtn"
                   aria-label="Reset zoom"
                 >
-                  110%
+                  100%
                 </button>
 
                 <button
@@ -774,7 +824,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=tailoring_workspace_20260328_4"></script>
+  <script src="/static/planning.js?v=tailoring_workspace_20260328_5"></script>
 </body>
 </html>
     """.strip()

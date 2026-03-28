@@ -2552,11 +2552,35 @@ function renderTailoringInteractiveSummary(artifact) {
   `;
 }
 
+function buildTailoringWorkspaceUrl(row) {
+  const params = new URLSearchParams();
+
+  const selectedResume =
+    normalizeResumeName(row.operator_selected_resume) ||
+    normalizeResumeName(row.winner_resume);
+
+  params.set("company", row.job_company || "");
+  params.set("title", row.job_title || "");
+  params.set("resume", humanizeResumeDisplayName(selectedResume || ""));
+  params.set(
+    "status",
+    row.llm_tailoring_status
+      ? humanizeUnderscoreLabel(row.llm_tailoring_status)
+      : "Suggestions available"
+  );
+
+  if (row.job_doc_id) {
+    params.set("job_doc_id", row.job_doc_id);
+  }
+
+  return `/tailoring-workspace?${params.toString()}`;
+}
+
 function buildTailoringButtonHtml(row) {
   const hasArtifacts = Boolean(
     row.tailoring_json || row.tailoring_md || row.tailoring_llm_json || row.packet_json
-  );  
-  const label = hasArtifacts ? "Suggestions" : "Unavailable";
+  );
+  const label = hasArtifacts ? "Open Workspace" : "Unavailable";
   const disabledAttr = hasArtifacts ? "" : "disabled";
 
   return `
@@ -2565,10 +2589,12 @@ function buildTailoringButtonHtml(row) {
       class="ghost-btn"
       ${disabledAttr}
       data-view-tailoring="true"
+      data-job-doc-id="${escapeHtml(row.job_doc_id || "")}"
       data-job-company="${escapeHtml(row.job_company || "")}"
       data-job-title="${escapeHtml(row.job_title || "")}"
+      data-winner-resume="${escapeHtml(row.winner_resume || "")}"
+      data-operator-selected-resume="${escapeHtml(row.operator_selected_resume || "")}"
       data-llm-tailoring-status="${escapeHtml(row.llm_tailoring_status || "")}"
-      data-llm-error-type="${escapeHtml(row.llm_error_type || "")}"
       data-tailoring-json="${escapeHtml(row.tailoring_json || "")}"
       data-tailoring-md="${escapeHtml(row.tailoring_md || "")}"
       data-tailoring-llm-json="${escapeHtml(row.tailoring_llm_json || "")}"
@@ -2581,41 +2607,19 @@ function buildTailoringButtonHtml(row) {
 
 async function handleTailoringClick(button) {
   const row = {
+    job_doc_id: button.dataset.jobDocId || "",
     job_company: button.dataset.jobCompany || "",
     job_title: button.dataset.jobTitle || "",
+    winner_resume: button.dataset.winnerResume || "",
+    operator_selected_resume: button.dataset.operatorSelectedResume || "",
     llm_tailoring_status: button.dataset.llmTailoringStatus || "",
-    llm_error_type: button.dataset.llmErrorType || "",
     tailoring_json: button.dataset.tailoringJson || "",
     tailoring_md: button.dataset.tailoringMd || "",
     tailoring_llm_json: button.dataset.tailoringLlmJson || "",
     packet_json: button.dataset.packetJson || "",
   };
 
-  openTailoringModal(row);
-
-  const [tailoringJsonArtifact, markdownArtifact, llmJsonArtifact, packetArtifact] = await Promise.all([
-    loadArtifact(row.tailoring_json),
-    loadArtifact(row.tailoring_md),
-    loadArtifact(row.tailoring_llm_json),
-    loadArtifact(row.packet_json),
-  ]);
-
-  renderTailoringInteractiveSummary(tailoringJsonArtifact);
-  renderTailoringPatchPreviewSummary(tailoringJsonArtifact);
-  renderTailoringPatchSelectionSummary(tailoringJsonArtifact);
-  renderArtifactIntoElement("tailoringJsonContent", tailoringJsonArtifact);
-  renderArtifactIntoElement("tailoringMarkdownContent", markdownArtifact);
-  renderArtifactIntoElement("tailoringLlmJsonContent", llmJsonArtifact);
-  renderArtifactIntoElement("tailoringPacketJsonContent", packetArtifact);
-  updateTailoringProvenance(row, llmJsonArtifact);
-  updateTailoringOverview(row, llmJsonArtifact);
-
-  currentTailoringMarkdownRaw =
-    markdownArtifact && markdownArtifact.kind === "text"
-      ? String(markdownArtifact.text || "")
-      : "";
-
-  syncTailoringCopyButtonState();
+  window.location.href = buildTailoringWorkspaceUrl(row);
 }
 
 function openApplicationModal(job) {

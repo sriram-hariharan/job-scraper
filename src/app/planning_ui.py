@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
+from html import escape
 
 from src.app.ui_shell import render_top_shell
 
@@ -589,6 +590,135 @@ def planning_dashboard() -> str:
 
   <script src="/static/shell.js"></script>
   <script src="/static/planning.js?v=tailoring_ui_20260328_1"></script>
+</body>
+</html>
+    """.strip()
+
+@router.get("/tailoring-workspace", response_class=HTMLResponse)
+def tailoring_workspace(
+    company: str = "",
+    title: str = "",
+    resume: str = "",
+    status: str = "",
+    job_doc_id: str = "",
+) -> str:
+    company_safe = escape(company or "-")
+    title_safe = escape(title or "-")
+    resume_safe = escape(resume or "-")
+    status_safe = escape(status or "Workspace shell")
+    job_doc_id_safe = escape(job_doc_id or "")
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tailoring Workspace</title>
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_2" />
+</head>
+<body>
+{render_top_shell("/planning")}
+  <div
+    class="page tailoring-workspace-page"
+    data-job-doc-id="{job_doc_id_safe}"
+    data-job-company="{company_safe}"
+    data-job-title="{title_safe}"
+    data-resume-name="{resume_safe}"
+    data-tailoring-status="{status_safe}"
+  >
+    <header class="page-header tailoring-workspace-header">
+      <div>
+        <h1>Tailoring Workspace</h1>
+        <p class="subtext">
+          Review suggested bullet replacements on the left and resume preview on the right.
+        </p>
+      </div>
+
+      <div class="header-actions">
+        <a class="ghost-link-btn" href="/planning">Back to Planning</a>
+      </div>
+    </header>
+
+    <section class="card tailoring-workspace-hero">
+      <div class="tailoring-workspace-hero-grid">
+        <div class="info-pair">
+          <span class="label">Company</span>
+          <span>{company_safe}</span>
+        </div>
+
+        <div class="info-pair">
+          <span class="label">Role</span>
+          <span>{title_safe}</span>
+        </div>
+
+        <div class="info-pair">
+          <span class="label">Resume Variant</span>
+          <span>{resume_safe}</span>
+        </div>
+
+        <div class="info-pair">
+          <span class="label">Status</span>
+          <span>{status_safe}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="tailoring-workspace-layout">
+      <section class="card tailoring-workspace-pane tailoring-workspace-pane--left">
+        <div class="section-header">
+          <div>
+            <h2>Suggested changes</h2>
+            <div class="subtext">
+              This left pane will become the action-first replacement workflow.
+            </div>
+          </div>
+        </div>
+
+        <div class="tailoring-workspace-stack">
+          <section class="card tailoring-workspace-subcard">
+            <div class="tailoring-workspace-subtitle">Top suggestions</div>
+            <div class="tailoring-workspace-empty">
+              No suggestion set loaded yet. This shell is the first step of the workspace split.
+            </div>
+          </section>
+
+          <section class="card tailoring-workspace-subcard">
+            <div class="tailoring-workspace-subtitle">Selection controls</div>
+            <div class="tailoring-workspace-empty">
+              Replacement selection and apply actions will be added here next.
+            </div>
+          </section>
+
+          <section class="card tailoring-workspace-subcard tailoring-workspace-subcard--diagnostics">
+            <div class="tailoring-workspace-subtitle">Diagnostics</div>
+            <div class="tailoring-workspace-empty">
+              Diagnostics will move behind an explicit toggle instead of living in the default review flow.
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
+        <div class="section-header">
+          <div>
+            <h2>Resume preview</h2>
+            <div class="subtext">
+              This right pane will become the live resume preview/editor surface.
+            </div>
+          </div>
+        </div>
+
+        <div class="tailoring-preview-shell">
+          <div class="tailoring-preview-canvas">
+            <div class="tailoring-workspace-empty tailoring-workspace-empty--centered">
+              Resume preview workspace will render here.
+            </div>
+          </div>
+        </div>
+      </section>
+    </section>
+  </div>
 </body>
 </html>
     """.strip()

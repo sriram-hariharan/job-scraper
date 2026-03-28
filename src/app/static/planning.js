@@ -2478,8 +2478,12 @@ function renderTailoringEmptyState(payload) {
   `;
 }
 
-function renderTailoringInteractiveSummary(artifact) {
-  const root = qs("tailoringInteractiveSummary");
+function renderTailoringInteractiveSummaryInto(
+  rootId,
+  artifact,
+  { includeDiagnostics = true } = {}
+) {
+  const root = qs(rootId);
   if (!root) return;
 
   const payload = artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
@@ -2543,13 +2547,77 @@ function renderTailoringInteractiveSummary(artifact) {
       })
     : "";
 
+  const diagnosticsHtml = includeDiagnostics
+    ? renderLegacyDiagnosticDetails(payload)
+    : "";
+
   root.innerHTML = `
     ${renderReplacementPlanSummary(summary)}
     ${recommendedHtml}
     ${readyHtml}
     ${optionalHtml}
-    ${renderLegacyDiagnosticDetails(payload)}
+    ${diagnosticsHtml}
   `;
+}
+
+function renderTailoringInteractiveSummary(artifact) {
+  renderTailoringInteractiveSummaryInto("tailoringInteractiveSummary", artifact, {
+    includeDiagnostics: true,
+  });
+}
+
+async function initTailoringWorkspacePage() {
+  const page = document.querySelector(".tailoring-workspace-page");
+  if (!page) return false;
+
+  const tailoringJsonPath = String(page.dataset.tailoringJsonPath || "").trim();
+  const meta = qs("tailoringWorkspaceMeta");
+  const root = qs("tailoringWorkspaceInteractiveSummary");
+
+  if (!root) return true;
+
+  if (!tailoringJsonPath) {
+    if (meta) {
+      meta.textContent = "No tailoring JSON path was provided for this workspace row.";
+    }
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        Suggested changes are not available for this row yet.
+      </div>
+    `;
+    return true;
+  }
+
+  try {
+    if (meta) {
+      meta.textContent = "Loading action-first suggestion set...";
+    }
+
+    const tailoringJsonArtifact = await loadArtifact(tailoringJsonPath);
+    renderTailoringInteractiveSummaryInto(
+      "tailoringWorkspaceInteractiveSummary",
+      tailoringJsonArtifact,
+      { includeDiagnostics: false }
+    );
+
+    if (meta) {
+      meta.textContent = "Actionable suggestions loaded. Diagnostics stay hidden on this page for now.";
+    }
+  } catch (err) {
+    if (meta) {
+      meta.textContent = "Failed to load suggestion set.";
+    }
+
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        Failed to load suggested changes for this workspace row.
+      </div>
+    `;
+
+    console.error("Failed to initialize tailoring workspace", err);
+  }
+
+  return true;
 }
 
 function buildTailoringWorkspaceUrl(row) {
@@ -2569,9 +2637,11 @@ function buildTailoringWorkspaceUrl(row) {
       : "Suggestions available"
   );
 
-  if (row.job_doc_id) {
-    params.set("job_doc_id", row.job_doc_id);
-  }
+  if (row.job_doc_id) params.set("job_doc_id", row.job_doc_id);
+  if (row.tailoring_json) params.set("tailoring_json", row.tailoring_json);
+  if (row.tailoring_md) params.set("tailoring_md", row.tailoring_md);
+  if (row.tailoring_llm_json) params.set("tailoring_llm_json", row.tailoring_llm_json);
+  if (row.packet_json) params.set("packet_json", row.packet_json);
 
   return `/tailoring-workspace?${params.toString()}`;
 }
@@ -2908,15 +2978,25 @@ function attachPlanningHandlers() {
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
-  bindAppErrorModal();
-  attachPlanningHandlers();
-  bindTableSorting("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort, () => {
-    renderPlanningRows(planningTableState.rows, planningTableState.metaLabel);
-  });
-  
-  try {
-    await loadPlanningTable();
-  } catch (err) {
-    showAppError("Failed to initialize planning dashboard", err);
+  const isPlanningPage = Boolean(qs("planningTable"));
+  const isTailoringWorkspacePage = Boolean(document.querySelector(".tailoring-workspace-page"));
+
+  if (isPlanningPage) {
+    bindAppErrorModal();
+    attachPlanningHandlers();
+    bindTableSorting("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort, () => {
+      renderPlanningRows(planningTableState.rows, planningTableState.metaLabel);
+    });
+
+    try {
+      await loadPlanningTable();
+    } catch (err) {
+      showAppError("Failed to initialize planning dashboard", err);
+    }
+    return;
+  }
+
+  if (isTailoringWorkspacePage) {
+    await initTailoringWorkspacePage();
   }
 });

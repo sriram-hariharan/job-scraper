@@ -29,6 +29,14 @@ const planningTableState = {
   },
 };
 
+const tailoringWorkspacePdfState = {
+  pdfDoc: null,
+  resumeName: "",
+  scale: 1.1,
+  renderToken: 0,
+  pdfjsPromise: null,
+};
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -894,33 +902,232 @@ function normalizeResumeName(value) {
   return String(value || "").trim();
 }
 
-function buildResumePreviewUrl(resumeName) {
+function buildResumePdfFileUrl(resumeName) {
   const params = new URLSearchParams();
   params.set("resume_name", resumeName);
-  return `/planning/resume-preview?${params.toString()}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+  return `/planning/resume-preview?${params.toString()}`;
 }
 
-function setTailoringWorkspacePreview(resumeName) {
-  const frame = qs("tailoringWorkspacePreviewFrame");
+function buildResumePreviewUrl(resumeName) {
+  return `${buildResumePdfFileUrl(resumeName)}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+}
+
+function setTailoringWorkspacePreviewMeta(message) {
+  const meta = qs("tailoringWorkspacePreviewMeta");
+  if (meta) {
+    meta.textContent = message || "";
+  }
+}
+
+function updateTailoringWorkspaceZoomLabel() {
+  const label = qs("tailoringWorkspaceZoomResetBtn");
+  if (!label) return;
+  label.textContent = `${Math.round(tailoringWorkspacePdfState.scale * 100)}%`;
+}
+
+async function getTailoringWorkspacePdfJs() {
+  if (!tailoringWorkspacePdfState.pdfjsPromise) {
+    tailoringWorkspacePdfState.pdfjsPromise = import("/static/vendor/pdfjs/pdf.mjs").then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdfjs/pdf.worker.mjs";
+      return pdfjsLib;
+    });
+  }
+
+  return tailoringWorkspacePdfState.pdfjsPromise;
+}
+
+async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not available for this workspace row.") {
   const empty = qs("tailoringWorkspacePreviewEmpty");
+  const pages = qs("tailoringWorkspacePdfPages");
+
+  if (pages) {
+    pages.innerHTML = "";
+    pages.classList.add("hidden");
+  }
+
+  if (empty) {
+    empty.textContent = emptyText;
+    empty.classList.remove("hidden");
+  }
+
+  if (tailoringWorkspacePdfState.pdfDoc) {
+    try {
+      await tailoringWorkspacePdfState.pdfDoc.destroy();
+    } catch (err) {
+      console.warn("Failed to destroy previous PDF document", err);
+    }
+  }
+
+  tailoringWorkspacePdfState.pdfDoc = null;
+  tailoringWorkspacePdfState.resumeName = "";
+  setTailoringWorkspacePreviewMeta(emptyText);
+  updateTailoringWorkspaceZoomLabel();
+}
+
+async function renderTailoringWorkspacePdfPages() {
+  const pagesRoot = qs("tailoringWorkspacePdfPages");
+  const empty = qs("tailoringWorkspacePreviewEmpty");
+  const pdfDoc = tailoringWorkspacePdfState.pdfDoc;
+
+  if (!pagesRoot || !empty || !pdfDoc) return;
+
+  const token = ++tailoringWorkspacePdfState.renderToken;
+  const scale = tailoringWorkspacePdfState.scale;
+  const pageCount = pdfDoc.numPages;
+  const deviceScale = window.devicePixelRatio || 1;
+
+  pagesRoot.innerHTML = "";
+  pagesRoot.classList.add("hidden");
+  empty.classList.remove("hidden");
+  empty.textContent = `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}...`;
+  setTailoringWorkspacePreviewMeta(
+    `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"} at ${Math.round(scale * 100)}%...`
+  );
+  updateTailoringWorkspaceZoomLabel();
+
+  const fragment = document.createDocumentFragment();
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    if (token !== tailoringWorkspacePdfState.renderToken) return;
+
+    const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "tailoring-workspace-pdf-canvas";
+
+    const context = canvas.getContext("2d", { alpha: false });
+
+    canvas.width = Math.floor(viewport.width * deviceScale);
+    canvas.height = Math.floor(viewport.height * deviceScale);
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+
+    const renderContext =
+      deviceScale === 1
+        ? {
+            canvasContext: context,
+            viewport,
+          }
+        : {
+            canvasContext: context,
+            viewport,
+            transform: [deviceScale, 0, 0, deviceScale, 0, 0],
+          };
+
+    await page.render(renderContext).promise;
+
+    if (token !== tailoringWorkspacePdfState.renderToken) return;
+
+    const pageShell = document.createElement("div");
+    pageShell.className = "tailoring-workspace-pdf-page";
+    pageShell.appendChild(canvas);
+
+    fragment.appendChild(pageShell);
+  }
+
+  if (token !== tailoringWorkspacePdfState.renderToken) return;
+
+  pagesRoot.innerHTML = "";
+  pagesRoot.appendChild(fragment);
+  pagesRoot.classList.remove("hidden");
+  empty.classList.add("hidden");
+
+  setTailoringWorkspacePreviewMeta(
+    `${pageCount} page${pageCount === 1 ? "" : "s"} • ${Math.round(scale * 100)}%`
+  );
+}
+
+async function setTailoringWorkspacePreview(resumeName) {
+  const safeName = normalizeResumeName(resumeName);
   const nameEl = qs("tailoringWorkspacePreviewName");
 
-  if (!frame || !empty || !nameEl) return;
-
-  const safeName = normalizeResumeName(resumeName);
+  if (nameEl) {
+    nameEl.textContent = safeName ? humanizeResumeDisplayName(safeName) : "No resume selected";
+  }
 
   if (!safeName) {
-    frame.src = "about:blank";
-    frame.classList.add("hidden");
-    empty.classList.remove("hidden");
-    nameEl.textContent = "No resume selected";
+    await clearTailoringWorkspacePdfView("No resume selected for this workspace row.");
     return;
   }
 
-  frame.src = buildResumePreviewUrl(safeName);
-  frame.classList.remove("hidden");
-  empty.classList.add("hidden");
-  nameEl.textContent = humanizeResumeDisplayName(safeName);
+  try {
+    const pdfjsLib = await getTailoringWorkspacePdfJs();
+    const pdfUrl = buildResumePdfFileUrl(safeName);
+    const loadToken = ++tailoringWorkspacePdfState.renderToken;
+
+    const empty = qs("tailoringWorkspacePreviewEmpty");
+    const pages = qs("tailoringWorkspacePdfPages");
+
+    if (pages) {
+      pages.innerHTML = "";
+      pages.classList.add("hidden");
+    }
+
+    if (empty) {
+      empty.textContent = "Loading PDF preview...";
+      empty.classList.remove("hidden");
+    }
+
+    setTailoringWorkspacePreviewMeta("Loading PDF preview...");
+    updateTailoringWorkspaceZoomLabel();
+
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdfDoc = await loadingTask.promise;
+
+    if (loadToken !== tailoringWorkspacePdfState.renderToken) {
+      try {
+        await pdfDoc.destroy();
+      } catch {}
+      return;
+    }
+
+    if (tailoringWorkspacePdfState.pdfDoc && tailoringWorkspacePdfState.pdfDoc !== pdfDoc) {
+      try {
+        await tailoringWorkspacePdfState.pdfDoc.destroy();
+      } catch (err) {
+        console.warn("Failed to destroy stale PDF document", err);
+      }
+    }
+
+    tailoringWorkspacePdfState.pdfDoc = pdfDoc;
+    tailoringWorkspacePdfState.resumeName = safeName;
+
+    await renderTailoringWorkspacePdfPages();
+  } catch (err) {
+    console.error("Failed to load workspace PDF preview", err);
+    await clearTailoringWorkspacePdfView("Failed to load PDF preview.");
+  }
+}
+
+function bindTailoringWorkspacePreviewControls() {
+  const zoomOutBtn = qs("tailoringWorkspaceZoomOutBtn");
+  const zoomResetBtn = qs("tailoringWorkspaceZoomResetBtn");
+  const zoomInBtn = qs("tailoringWorkspaceZoomInBtn");
+
+  if (!zoomOutBtn || !zoomResetBtn || !zoomInBtn) return;
+  if (zoomOutBtn.dataset.bound === "true") return;
+
+  zoomOutBtn.dataset.bound = "true";
+  updateTailoringWorkspaceZoomLabel();
+
+  zoomOutBtn.addEventListener("click", async () => {
+    if (!tailoringWorkspacePdfState.pdfDoc) return;
+    tailoringWorkspacePdfState.scale = Math.max(0.8, tailoringWorkspacePdfState.scale - 0.1);
+    await renderTailoringWorkspacePdfPages();
+  });
+
+  zoomResetBtn.addEventListener("click", async () => {
+    if (!tailoringWorkspacePdfState.pdfDoc) return;
+    tailoringWorkspacePdfState.scale = 1.1;
+    await renderTailoringWorkspacePdfPages();
+  });
+
+  zoomInBtn.addEventListener("click", async () => {
+    if (!tailoringWorkspacePdfState.pdfDoc) return;
+    tailoringWorkspacePdfState.scale = Math.min(1.8, tailoringWorkspacePdfState.scale + 0.1);
+    await renderTailoringWorkspacePdfPages();
+  });
 }
 
 function getResumeChoiceCandidates(row) {
@@ -3023,6 +3230,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   if (isTailoringWorkspacePage) {
+    bindTailoringWorkspacePreviewControls();
     await initTailoringWorkspacePage();
   }
 });

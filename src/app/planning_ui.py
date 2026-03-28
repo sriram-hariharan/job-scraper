@@ -724,31 +724,49 @@ def tailoring_workspace(
           </div>
 
           <div class="tailoring-workspace-selection-actions">
-            <button
-              type="button"
-              class="ghost-btn btn-sm"
-              id="tailoringWorkspaceDiscardBtn"
-              disabled
-            >
-              Discard
-            </button>
+            <span class="tailoring-workspace-action-tooltip" data-tooltip="Discard selection">
+              <button
+                type="button"
+                class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                id="tailoringWorkspaceDiscardBtn"
+                aria-label="Discard selection"
+                disabled
+              >
+                <span
+                  class="tailoring-workspace-icon tailoring-workspace-icon--discard"
+                  aria-hidden="true"
+                ></span>
+              </button>
+            </span>
 
-            <button
-              type="button"
-              class="ghost-btn btn-sm"
-              id="tailoringWorkspaceDownloadBtn"
-            >
-              Download
-            </button>
+            <span class="tailoring-workspace-action-tooltip" data-tooltip="Download resume">
+              <button
+                type="button"
+                class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                id="tailoringWorkspaceDownloadBtn"
+                aria-label="Download resume"
+              >
+                <span
+                  class="tailoring-workspace-icon tailoring-workspace-icon--download"
+                  aria-hidden="true"
+                ></span>
+              </button>
+            </span>
 
-            <button
-              type="button"
-              class="btn-sm"
-              id="tailoringWorkspaceSaveSelectionBtn"
-              disabled
-            >
-              Save changes
-            </button>
+            <span class="tailoring-workspace-action-tooltip" data-tooltip="Save changes">
+              <button
+                type="button"
+                class="btn-sm tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
+                id="tailoringWorkspaceSaveSelectionBtn"
+                aria-label="Save changes"
+                disabled
+              >
+                <span
+                  class="tailoring-workspace-icon tailoring-workspace-icon--save"
+                  aria-hidden="true"
+                ></span>
+              </button>
+            </span>
           </div>
         </section>
       </section>

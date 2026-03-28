@@ -601,12 +601,21 @@ def tailoring_workspace(
     resume: str = "",
     status: str = "",
     job_doc_id: str = "",
+    tailoring_json: str = "",
+    tailoring_md: str = "",
+    tailoring_llm_json: str = "",
+    packet_json: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
     resume_safe = escape(resume or "-")
-    status_safe = escape(status or "Workspace shell")
+    status_safe = escape(status or "Suggestions available")
+
     job_doc_id_safe = escape(job_doc_id or "")
+    tailoring_json_safe = escape(tailoring_json or "")
+    tailoring_md_safe = escape(tailoring_md or "")
+    tailoring_llm_json_safe = escape(tailoring_llm_json or "")
+    packet_json_safe = escape(packet_json or "")
 
     return f"""
 <!DOCTYPE html>
@@ -615,7 +624,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_2" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260328_3" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -626,6 +635,10 @@ def tailoring_workspace(
     data-job-title="{title_safe}"
     data-resume-name="{resume_safe}"
     data-tailoring-status="{status_safe}"
+    data-tailoring-json-path="{tailoring_json_safe}"
+    data-tailoring-md-path="{tailoring_md_safe}"
+    data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
+    data-packet-json-path="{packet_json_safe}"
   >
     <header class="page-header tailoring-workspace-header">
       <div>
@@ -669,33 +682,19 @@ def tailoring_workspace(
         <div class="section-header">
           <div>
             <h2>Suggested changes</h2>
-            <div class="subtext">
-              This left pane will become the action-first replacement workflow.
+            <div class="subtext" id="tailoringWorkspaceMeta">
+              Loading suggestion set...
             </div>
           </div>
         </div>
 
-        <div class="tailoring-workspace-stack">
-          <section class="card tailoring-workspace-subcard">
-            <div class="tailoring-workspace-subtitle">Top suggestions</div>
-            <div class="tailoring-workspace-empty">
-              No suggestion set loaded yet. This shell is the first step of the workspace split.
-            </div>
-          </section>
-
-          <section class="card tailoring-workspace-subcard">
-            <div class="tailoring-workspace-subtitle">Selection controls</div>
-            <div class="tailoring-workspace-empty">
-              Replacement selection and apply actions will be added here next.
-            </div>
-          </section>
-
-          <section class="card tailoring-workspace-subcard tailoring-workspace-subcard--diagnostics">
-            <div class="tailoring-workspace-subtitle">Diagnostics</div>
-            <div class="tailoring-workspace-empty">
-              Diagnostics will move behind an explicit toggle instead of living in the default review flow.
-            </div>
-          </section>
+        <div
+          id="tailoringWorkspaceInteractiveSummary"
+          class="tailoring-interactive-shell tailoring-workspace-content"
+        >
+          <div class="tailoring-empty-state">
+            Loading suggested changes...
+          </div>
         </div>
       </section>
 
@@ -719,6 +718,9 @@ def tailoring_workspace(
       </section>
     </section>
   </div>
+
+  <script src="/static/shell.js"></script>
+  <script src="/static/planning.js?v=tailoring_workspace_20260328_3"></script>
 </body>
 </html>
     """.strip()

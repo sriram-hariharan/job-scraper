@@ -4399,6 +4399,14 @@ th.sortable-col {
 
 .tailoring-workspace-page {
   max-width: 1600px;
+  min-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+}
+
+.tailoring-workspace-header,
+.tailoring-workspace-hero {
+  flex: 0 0 auto;
 }
 
 .tailoring-workspace-header {
@@ -4420,15 +4428,18 @@ th.sortable-col {
   display: grid;
   grid-template-columns: minmax(420px, 0.95fr) minmax(520px, 1.25fr);
   gap: 20px;
-  align-items: start;
+  align-items: stretch;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 .tailoring-workspace-pane {
   padding: 18px;
   min-width: 0;
-  min-height: 720px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .tailoring-workspace-pane--left,
@@ -4475,15 +4486,40 @@ th.sortable-col {
   text-align: center;
 }
 
+.tailoring-workspace-content {
+  min-width: 0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 6px;
+  margin-right: -6px;
+}
+
+.tailoring-workspace-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tailoring-workspace-content::-webkit-scrollbar-thumb {
+  background: rgba(120, 166, 255, 0.28);
+  border-radius: 999px;
+}
+
+.tailoring-workspace-content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .tailoring-preview-shell {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
+  overflow: hidden;
 }
 
 .tailoring-preview-canvas {
   width: 100%;
-  min-height: 620px;
+  min-height: 0;
+  height: 100%;
   border-radius: 18px;
   border: 1px solid rgba(120, 166, 255, 0.14);
   background:
@@ -4498,16 +4534,29 @@ th.sortable-col {
 }
 
 @media (max-width: 1180px) {
+  .tailoring-workspace-page {
+    min-height: auto;
+    display: block;
+  }
+
   .tailoring-workspace-layout {
     grid-template-columns: 1fr;
+    flex: 0 0 auto;
   }
 
   .tailoring-workspace-pane {
-    min-height: 0;
+    overflow: visible;
+  }
+
+  .tailoring-workspace-content {
+    overflow: visible;
+    margin-right: 0;
+    padding-right: 0;
   }
 
   .tailoring-preview-canvas {
     min-height: 420px;
+    height: auto;
   }
 }
 
@@ -4515,4 +4564,10 @@ th.sortable-col {
   .tailoring-workspace-hero-grid {
     grid-template-columns: 1fr;
   }
+}
+
+/* === tailoring workspace content step === */
+
+#tailoringWorkspaceInteractiveSummary .tailoring-section-block:first-child {
+  margin-top: 0;
 }

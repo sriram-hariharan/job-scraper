@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from html import escape
+from pathlib import Path
 
 from src.app.ui_shell import render_top_shell
 
@@ -608,7 +609,11 @@ def tailoring_workspace(
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
-    resume_safe = escape(resume or "-")
+    raw_resume_name = resume or ""
+    resume_safe = escape(raw_resume_name)
+    resume_display_safe = escape(
+        Path(raw_resume_name).stem.replace("_", " ") if raw_resume_name else "-"
+    )
     status_safe = escape(status or "Suggestions available")
 
     job_doc_id_safe = escape(job_doc_id or "")
@@ -667,7 +672,7 @@ def tailoring_workspace(
 
         <div class="info-pair">
           <span class="label">Resume Variant</span>
-          <span>{resume_safe}</span>
+          <span>{resume_display_safe}</span>
         </div>
 
         <div class="info-pair">
@@ -709,9 +714,24 @@ def tailoring_workspace(
         </div>
 
         <div class="tailoring-preview-shell">
-          <div class="tailoring-preview-canvas">
-            <div class="tailoring-workspace-empty tailoring-workspace-empty--centered">
-              Resume preview workspace will render here.
+          <div class="tailoring-preview-canvas tailoring-preview-canvas--frame">
+            <div class="tailoring-workspace-preview-header">
+              <div class="subtext">Current resume preview</div>
+              <div class="tailoring-workspace-preview-name" id="tailoringWorkspacePreviewName">
+                {resume_display_safe}
+              </div>
+            </div>
+
+            <div class="resume-choice-preview-frame-wrap tailoring-workspace-preview-frame-wrap">
+              <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
+                Resume preview is not available for this workspace row.
+              </div>
+
+              <iframe
+                id="tailoringWorkspacePreviewFrame"
+                class="resume-choice-preview-frame hidden"
+                title="Tailoring workspace resume preview"
+              ></iframe>
             </div>
           </div>
         </div>

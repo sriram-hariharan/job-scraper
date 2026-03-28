@@ -2886,6 +2886,11 @@ function updateTailoringWorkspaceSelectionActionBar() {
   const context = getTailoringWorkspaceContext();
   const hasResume = Boolean(context && String(context.resumeName || "").trim());
 
+  const discardTooltip = discardBtn.closest(".tailoring-workspace-action-tooltip");
+  const downloadTooltip = downloadBtn.closest(".tailoring-workspace-action-tooltip");
+  const saveTooltip = saveBtn.closest(".tailoring-workspace-action-tooltip");
+  const discardIcon = discardBtn.querySelector(".tailoring-workspace-icon");
+
   if (tailoringWorkspaceState.isSaving) {
     statusEl.textContent = `Saving ${selectedIds.length} selected suggestion${selectedIds.length === 1 ? "" : "s"}...`;
   } else if (!hasSelection) {
@@ -2900,18 +2905,52 @@ function updateTailoringWorkspaceSelectionActionBar() {
     statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. Save or discard this selection.`;
   }
 
-  discardBtn.disabled = tailoringWorkspaceState.isSaving || !hasSelection;
+  const shouldShowRevert = hasSaved;
+  const canRevert = hasSaved && !tailoringWorkspaceState.isSaving && !matchesSaved;
+
+  if (shouldShowRevert) {
+    discardBtn.disabled = !canRevert;
+    discardBtn.setAttribute("aria-label", "Revert to saved selection");
+
+    if (discardTooltip) {
+      discardTooltip.dataset.tooltip = "Revert to saved selection";
+    }
+
+    if (discardIcon) {
+      discardIcon.classList.remove("tailoring-workspace-icon--discard");
+      discardIcon.classList.add("tailoring-workspace-icon--revert");
+    }
+  } else {
+    discardBtn.disabled = tailoringWorkspaceState.isSaving || !hasSelection;
+    discardBtn.setAttribute("aria-label", "Discard selection");
+
+    if (discardTooltip) {
+      discardTooltip.dataset.tooltip = "Discard selection";
+    }
+
+    if (discardIcon) {
+      discardIcon.classList.remove("tailoring-workspace-icon--revert");
+      discardIcon.classList.add("tailoring-workspace-icon--discard");
+    }
+  }
+
   saveBtn.disabled = tailoringWorkspaceState.isSaving || !hasSelection;
   downloadBtn.disabled = !hasResume;
 
-  discardBtn.setAttribute("aria-label", "Discard selection");
+  if (downloadTooltip) {
+    downloadTooltip.dataset.tooltip = hasResume ? "Download resume" : "Resume download unavailable";
+  }
   downloadBtn.setAttribute(
     "aria-label",
     hasResume ? "Download resume" : "Resume download unavailable"
   );
+
+  if (saveTooltip) {
+    saveTooltip.dataset.tooltip = tailoringWorkspaceState.isSaving ? "Saving changes..." : "Save changes";
+  }
   saveBtn.setAttribute(
     "aria-label",
-    tailoringWorkspaceState.isSaving ? "Saving changes" : "Save changes"
+    tailoringWorkspaceState.isSaving ? "Saving changes..." : "Save changes"
   );
 }
 
@@ -3240,6 +3279,25 @@ function clearTailoringWorkspaceSelection() {
   syncTailoringWorkspacePreviewHighlight();
 }
 
+function revertTailoringWorkspaceSelectionToSaved() {
+  const payload = getTailoringWorkspacePayload();
+  const savedIds = getTailoringWorkspaceSavedCandidateIds();
+
+  if (!savedIds.length) {
+    clearTailoringWorkspaceSelection();
+    return;
+  }
+
+  tailoringWorkspaceState.selectedCandidateIds = payload
+    ? normalizeTailoringWorkspaceSelectedCandidateIds(payload, savedIds)
+    : normalizeTailoringWorkspaceCandidateIdList(savedIds);
+
+  tailoringWorkspaceState.previewPayload = null;
+
+  rerenderTailoringWorkspaceSelectionView();
+  syncTailoringWorkspacePreviewHighlight();
+}
+
 function bindTailoringWorkspaceActionBar() {
   const discardBtn = qs("tailoringWorkspaceDiscardBtn");
   const downloadBtn = qs("tailoringWorkspaceDownloadBtn");
@@ -3251,7 +3309,13 @@ function bindTailoringWorkspaceActionBar() {
   discardBtn.dataset.bound = "true";
 
   discardBtn.addEventListener("click", () => {
-    clearTailoringWorkspaceSelection();
+    const savedIds = getTailoringWorkspaceSavedCandidateIds();
+
+    if (savedIds.length) {
+      revertTailoringWorkspaceSelectionToSaved();
+    } else {
+      clearTailoringWorkspaceSelection();
+    }
   });
 
   downloadBtn.addEventListener("click", async () => {

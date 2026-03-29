@@ -30,6 +30,10 @@ from src.storage.scheduler_store import (
     scheduler_seed_sql_payload,
 )
 
+from src.storage.read_scheduler_postgres import (
+    get_scheduler_postgres_status_payload,
+)
+
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 ).expanduser()
@@ -409,6 +413,35 @@ def scheduler_job_command_payload(
             "generate_llm_fallback": bool(generate_llm_fallback),
             "delete_seen_data": str(delete_seen_data or "no"),
         },
+    }
+
+def scheduler_postgres_status_payload(
+    *,
+    limit: int = 10,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    postgres_payload = get_scheduler_postgres_status_payload(
+        limit=limit,
+        database_url="",
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=False,
+    )
+
+    jsonl_rows = _load_scheduler_history_rows(DEFAULT_SCHEDULER_RUN_HISTORY_PATH)
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_history_row_count = int(postgres_block.get("run_history_count", 0) or 0)
+
+    return {
+        "ok": True,
+        "query_limit": int(limit),
+        "history_jsonl_path": str(DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
+        "history_jsonl_row_count": len(jsonl_rows),
+        "history_postgres_row_count": postgres_history_row_count,
+        "history_count_matches_jsonl": postgres_history_row_count == len(jsonl_rows),
+        "postgres_command_text": postgres_payload["command_text"],
+        "postgres": postgres_block,
     }
 
 def _normalize_scheduler_filter_text(value: Any) -> str:

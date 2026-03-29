@@ -592,3 +592,14 @@ replicant
 synthesia
 unlikelyai
 wynd-labs
+claimsorted
+handshake
+happyrobot.ai
+helm-ai
+krea
+middesk
+nooks
+percepta
+reducto
+troveo
+webai

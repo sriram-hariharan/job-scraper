@@ -351,6 +351,11 @@ def _parse_args():
         help="After appending the scheduler JSONL record, sync scheduler_run_history into Postgres.",
     )
     parser.add_argument(
+        "--require-postgres-run-history-sync",
+        action="store_true",
+        help="Fail the wrapper run if Postgres run-history sync fails. By default, Postgres sync is best-effort and JSONL remains the fallback audit trail.",
+    )
+    parser.add_argument(
         "--database-url",
         default="",
         help="For optional Postgres run-history sync: explicit Postgres connection URL.",
@@ -458,22 +463,33 @@ def main() -> int:
             insert_scheduler_run_history_row_to_postgres,
         )
 
-        sync_payload = insert_scheduler_run_history_row_to_postgres(
-            record=record,
-            history_path=Path(args.history_path).expanduser(),
-            database_url=args.database_url,
-            database_url_env=args.database_url_env,
-            psql_bin=args.psql_bin,
-            print_only=False,
-            allow_contract_drift=bool(args.allow_contract_drift),
-        )
+        try:
+            sync_payload = insert_scheduler_run_history_row_to_postgres(
+                record=record,
+                history_path=Path(args.history_path).expanduser(),
+                database_url=args.database_url,
+                database_url_env=args.database_url_env,
+                psql_bin=args.psql_bin,
+                print_only=False,
+                allow_contract_drift=bool(args.allow_contract_drift),
+            )
 
-        print(f"postgres_sync_history_path={sync_payload['history_path']}")
-        print(f"postgres_sync_row_count={sync_payload['history_row_count']}")
-        if sync_payload.get("skipped") == "no_rows":
-            print("postgres_sync_skipped=no_rows")
-        else:
-            print(f"postgres_sync_command={sync_payload['command_text']}")
+            print(f"postgres_sync_history_path={sync_payload['history_path']}")
+            print(f"postgres_sync_row_count={sync_payload['history_row_count']}")
+            if sync_payload.get("skipped") == "no_rows":
+                print("postgres_sync_skipped=no_rows")
+            else:
+                print(f"postgres_sync_command={sync_payload['command_text']}")
+        except SystemExit as exc:
+            if args.require_postgres_run_history_sync:
+                raise
+            print(f"postgres_sync_warning={exc}")
+            print("postgres_sync_status=non_fatal_failure")
+        except Exception as exc:
+            if args.require_postgres_run_history_sync:
+                raise
+            print(f"postgres_sync_warning={repr(exc)}")
+            print("postgres_sync_status=non_fatal_failure")
 
     return return_code
 

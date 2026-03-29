@@ -276,7 +276,34 @@ def scheduler_summary(
         )
     except (ValueError, SystemExit) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    
+
+@app.get("/notifications")
+def notifications(
+    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    job_name: str = "",
+    level: str = "",
+    delivery_status: str = "",
+    limit: int = 20,
+):
+    return services.notifications_payload(
+        notification_dir=Path(notification_dir),
+        job_name=job_name,
+        level=level,
+        delivery_status=delivery_status,
+        limit=limit,
+    )
+
+
+@app.get("/notifications/summary")
+def notifications_summary(
+    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    limit: int = 10,
+):
+    return services.notifications_summary_payload(
+        notification_dir=Path(notification_dir),
+        limit=limit,
+    )
+
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):
     try:

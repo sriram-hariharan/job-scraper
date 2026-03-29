@@ -16,14 +16,17 @@ from src.config.settings import (
     SCHEDULER_RUN_HISTORY_PATH,
 )
 from src.pipeline.scheduler import (
+    DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
     DEFAULT_LAUNCHD_LABEL_PREFIX,
     DEFAULT_LAUNCHD_LOG_DIR,
     DEFAULT_LAUNCHD_OUT_DIR,
+    DEFAULT_LAUNCHD_TARGET,
     build_scheduled_job_command,
     build_scheduler_launchd_plist_payload,
     get_scheduled_job_definition,
     get_scheduled_job_definitions,
+    get_scheduler_launchd_agent_status,
 )
 from src.storage.scheduler_store import (
     scheduler_init_sql_generation_payload,
@@ -514,6 +517,86 @@ def scheduler_launchd_config_payload(
         "items": items,
     }
 
+def scheduler_launchd_agent_status_payload(
+    *,
+    job_name: str = "",
+    planning_only: bool = False,
+    run_application_planning: bool = True,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    job_limit: int = 50,
+    job_packet_limit: int = 0,
+    llm_actions: Any = "APPLY,APPLY_REVIEW_VARIANTS",
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    delete_seen_data: str = "no",
+    sync_postgres_run_history: bool = False,
+    require_postgres_run_history_sync: bool = False,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    allow_contract_drift: bool = False,
+    launchd_interval_seconds: int = DEFAULT_LAUNCHD_INTERVAL_SECONDS,
+    launchd_out_dir: Path = DEFAULT_LAUNCHD_OUT_DIR,
+    launchd_log_dir: Path = DEFAULT_LAUNCHD_LOG_DIR,
+    launchd_label_prefix: str = DEFAULT_LAUNCHD_LABEL_PREFIX,
+    launchd_agent_dir: Path = DEFAULT_LAUNCHD_AGENT_DIR,
+    launchd_target: str = DEFAULT_LAUNCHD_TARGET,
+) -> Dict[str, Any]:
+    common_kwargs = {
+        "run_application_planning": bool(run_application_planning),
+        "output_dir": output_dir,
+        "job_limit": int(job_limit),
+        "job_packet_limit": int(job_packet_limit),
+        "llm_actions": llm_actions,
+        "generate_tailoring": bool(generate_tailoring),
+        "generate_llm_tailoring": bool(generate_llm_tailoring),
+        "refresh_llm_tailoring": bool(refresh_llm_tailoring),
+        "generate_llm_fallback": bool(generate_llm_fallback),
+        "delete_seen_data": str(delete_seen_data or "no"),
+        "history_path": DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+        "sync_postgres_run_history": bool(sync_postgres_run_history),
+        "require_postgres_run_history_sync": bool(require_postgres_run_history_sync),
+        "database_url_env": database_url_env,
+        "psql_bin": psql_bin,
+        "allow_contract_drift": bool(allow_contract_drift),
+        "launchd_interval_seconds": int(launchd_interval_seconds),
+        "launchd_out_dir": launchd_out_dir,
+        "launchd_log_dir": launchd_log_dir,
+        "launchd_label_prefix": launchd_label_prefix,
+        "launchd_agent_dir": launchd_agent_dir,
+        "launchd_target": launchd_target,
+    }
+
+    if str(job_name or "").strip():
+        return {
+            "ok": True,
+            "mode": "single",
+            "item": get_scheduler_launchd_agent_status(
+                job_name=job_name,
+                planning_only=bool(planning_only),
+                **common_kwargs,
+            ),
+        }
+
+    items = [
+        get_scheduler_launchd_agent_status(
+            job_name="agent_discovery",
+            planning_only=False,
+            **common_kwargs,
+        ),
+        get_scheduler_launchd_agent_status(
+            job_name="live_pipeline",
+            planning_only=True,
+            **common_kwargs,
+        ),
+    ]
+
+    return {
+        "ok": True,
+        "mode": "default_pair",
+        "items": items,
+    }
 
 def scheduler_postgres_status_payload(
     *,

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import plistlib
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -27,6 +29,8 @@ DEFAULT_LAUNCHD_OUT_DIR = Path("data/launchd")
 DEFAULT_LAUNCHD_LOG_DIR = Path("outputs/scheduler_logs")
 DEFAULT_LAUNCHD_LABEL_PREFIX = "com.jobstack.scheduler"
 DEFAULT_LAUNCHD_INTERVAL_SECONDS = 21600
+DEFAULT_LAUNCHD_AGENT_DIR = Path("~/Library/LaunchAgents").expanduser()
+DEFAULT_LAUNCHD_TARGET = f"gui/{os.getuid()}"
 
 @dataclass(frozen=True)
 class ScheduledJobDefinition:
@@ -116,6 +120,41 @@ def _normalize_launchd_label_piece(value: Any, fallback: str) -> str:
     text = str(value or "").strip().lower()
     text = re.sub(r"[^a-z0-9]+", ".", text).strip(".")
     return text or fallback
+
+def _normalize_launchd_agent_dir(value: Any) -> Path:
+    raw = str(value or DEFAULT_LAUNCHD_AGENT_DIR).strip()
+    if not raw:
+        raw = str(DEFAULT_LAUNCHD_AGENT_DIR)
+    return Path(raw).expanduser()
+
+
+def _normalize_launchd_target(value: Any) -> str:
+    raw = str(value or DEFAULT_LAUNCHD_TARGET).strip()
+    if not raw:
+        raw = DEFAULT_LAUNCHD_TARGET
+    return raw
+
+
+def _launchd_service_target(target: str, label: str) -> str:
+    return f"{target}/{label}"
+
+
+def _require_launchctl() -> None:
+    if shutil.which("launchctl") is None:
+        raise SystemExit("launchctl is not available on PATH.")
+
+
+def _run_launchctl(
+    cmd: List[str],
+    *,
+    check: bool,
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        check=check,
+        capture_output=True,
+        text=True,
+    )
 
 def _normalize_output_dir(value: Any) -> str:
     raw = str(value or DEFAULT_SCHEDULED_OUTPUT_DIR).strip()
@@ -462,6 +501,146 @@ def write_scheduler_launchd_plist(
     plist_path.write_text(payload["plist_xml"], encoding="utf-8")
     return payload
 
+def build_scheduler_launchd_agent_payload(
+    job_name: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    filtered_kwargs = dict(kwargs)
+
+    launchd_agent_dir = _normalize_launchd_agent_dir(
+        filtered_kwargs.pop("launchd_agent_dir", DEFAULT_LAUNCHD_AGENT_DIR)
+    )
+    launchd_target = _normalize_launchd_target(
+        filtered_kwargs.pop("launchd_target", DEFAULT_LAUNCHD_TARGET)
+    )
+
+    payload = build_scheduler_launchd_plist_payload(job_name, **filtered_kwargs)
+
+    label = str(payload["label"])
+    installed_plist_path = launchd_agent_dir / f"{label}.plist"
+    service_target = _launchd_service_target(launchd_target, label)
+
+    enriched = dict(payload)
+    enriched.update(
+        {
+            "launchd_agent_dir": str(launchd_agent_dir),
+            "launchd_target": launchd_target,
+            "installed_plist_path": str(installed_plist_path),
+            "service_target": service_target,
+            "bootstrap_command": [
+                "launchctl",
+                "bootstrap",
+                launchd_target,
+                str(installed_plist_path),
+            ],
+            "bootout_command": [
+                "launchctl",
+                "bootout",
+                service_target,
+            ],
+            "enable_command": [
+                "launchctl",
+                "enable",
+                service_target,
+            ],
+            "disable_command": [
+                "launchctl",
+                "disable",
+                service_target,
+            ],
+            "print_command": [
+                "launchctl",
+                "print",
+                service_target,
+            ],
+        }
+    )
+    return enriched
+
+
+def get_scheduler_launchd_agent_status(
+    job_name: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    payload = build_scheduler_launchd_agent_payload(job_name, **kwargs)
+
+    installed_plist_path = Path(payload["installed_plist_path"]).expanduser()
+    payload["installed_plist_exists"] = installed_plist_path.exists()
+
+    if shutil.which("launchctl") is None:
+        payload["launchctl_available"] = False
+        payload["loaded"] = False
+        payload["print_return_code"] = None
+        payload["print_stdout"] = ""
+        payload["print_stderr"] = ""
+        return payload
+
+    completed = _run_launchctl(payload["print_command"], check=False)
+
+    payload["launchctl_available"] = True
+    payload["loaded"] = completed.returncode == 0
+    payload["print_return_code"] = int(completed.returncode)
+    payload["print_stdout"] = completed.stdout or ""
+    payload["print_stderr"] = completed.stderr or ""
+    return payload
+
+
+def install_scheduler_launchd_agent(
+    job_name: Any,
+    *,
+    print_only: bool = False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    payload = build_scheduler_launchd_agent_payload(job_name, **kwargs)
+
+    if print_only:
+        payload["install_preview"] = True
+        return payload
+
+    _require_launchctl()
+
+    installed_plist_path = Path(payload["installed_plist_path"]).expanduser()
+    installed_plist_path.parent.mkdir(parents=True, exist_ok=True)
+    installed_plist_path.write_text(str(payload["plist_xml"]), encoding="utf-8")
+
+    _run_launchctl(payload["bootout_command"], check=False)
+    _run_launchctl(payload["bootstrap_command"], check=True)
+    _run_launchctl(payload["enable_command"], check=False)
+
+    payload["installed"] = True
+    payload["installed_plist_exists"] = installed_plist_path.exists()
+    return payload
+
+
+def uninstall_scheduler_launchd_agent(
+    job_name: Any,
+    *,
+    print_only: bool = False,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    payload = build_scheduler_launchd_agent_payload(job_name, **kwargs)
+
+    if print_only:
+        payload["uninstall_preview"] = True
+        return payload
+
+    _require_launchctl()
+
+    installed_plist_path = Path(payload["installed_plist_path"]).expanduser()
+
+    _run_launchctl(payload["disable_command"], check=False)
+    _run_launchctl(payload["bootout_command"], check=False)
+
+    removed = False
+    if installed_plist_path.exists():
+        installed_plist_path.unlink()
+        removed = True
+
+    payload["uninstalled"] = True
+    payload["removed_plist"] = removed
+    payload["installed_plist_exists"] = installed_plist_path.exists()
+    return payload
+
 
 def build_scheduler_run_record(
     *,
@@ -645,6 +824,31 @@ def _parse_args():
         default=DEFAULT_LAUNCHD_LABEL_PREFIX,
         help="Prefix used when constructing launchd labels.",
     )
+    parser.add_argument(
+        "--install-launchd-agent",
+        action="store_true",
+        help="Write the launchd plist into the LaunchAgents directory and load it with launchctl.",
+    )
+    parser.add_argument(
+        "--uninstall-launchd-agent",
+        action="store_true",
+        help="Unload the launchd agent and remove its plist from the LaunchAgents directory.",
+    )
+    parser.add_argument(
+        "--launchd-agent-status",
+        action="store_true",
+        help="Show launchd agent installation/load status for this scheduler job.",
+    )
+    parser.add_argument(
+        "--launchd-agent-dir",
+        default=str(DEFAULT_LAUNCHD_AGENT_DIR),
+        help="Directory used for installed launchd agent plist files.",
+    )
+    parser.add_argument(
+        "--launchd-target",
+        default=DEFAULT_LAUNCHD_TARGET,
+        help="launchctl target, usually gui/<uid> for user LaunchAgents.",
+    )
     return parser.parse_args()
 
 
@@ -669,6 +873,22 @@ def main() -> int:
     }
 
     definition = get_scheduled_job_definition(args.job)
+    lifecycle_mode_count = sum(
+        [
+            bool(args.emit_launchd_plist),
+            bool(args.write_launchd_plist),
+            bool(args.install_launchd_agent),
+            bool(args.uninstall_launchd_agent),
+            bool(args.launchd_agent_status),
+        ]
+    )
+    if lifecycle_mode_count > 1:
+        raise SystemExit(
+            "Choose only one launchd lifecycle mode at a time: "
+            "--emit-launchd-plist, --write-launchd-plist, "
+            "--install-launchd-agent, --uninstall-launchd-agent, or --launchd-agent-status."
+        )
+    
     cmd = build_scheduled_job_command(
         args.job,
         run_application_planning=options["run_application_planning"],
@@ -683,33 +903,81 @@ def main() -> int:
         generate_llm_fallback=options["generate_llm_fallback"],
         delete_seen_data=options["delete_seen_data"],
     )
-    
-    if args.emit_launchd_plist or args.write_launchd_plist:
-        launchd_kwargs = {
-            "run_application_planning": options["run_application_planning"],
-            "planning_only": options["planning_only"],
-            "output_dir": options["output_dir"],
-            "job_limit": options["job_limit"],
-            "job_packet_limit": options["job_packet_limit"],
-            "llm_actions": options["llm_actions"],
-            "generate_tailoring": options["generate_tailoring"],
-            "generate_llm_tailoring": options["generate_llm_tailoring"],
-            "refresh_llm_tailoring": options["refresh_llm_tailoring"],
-            "generate_llm_fallback": options["generate_llm_fallback"],
-            "delete_seen_data": options["delete_seen_data"],
-            "history_path": args.history_path,
-            "sync_postgres_run_history": bool(args.sync_postgres_run_history),
-            "require_postgres_run_history_sync": bool(args.require_postgres_run_history_sync),
-            "database_url": args.database_url,
-            "database_url_env": args.database_url_env,
-            "psql_bin": args.psql_bin,
-            "allow_contract_drift": bool(args.allow_contract_drift),
-            "launchd_interval_seconds": args.launchd_interval_seconds,
-            "launchd_out_dir": args.launchd_out_dir,
-            "launchd_log_dir": args.launchd_log_dir,
-            "launchd_label_prefix": args.launchd_label_prefix,
-        }
 
+    launchd_kwargs = {
+        "run_application_planning": options["run_application_planning"],
+        "planning_only": options["planning_only"],
+        "output_dir": options["output_dir"],
+        "job_limit": options["job_limit"],
+        "job_packet_limit": options["job_packet_limit"],
+        "llm_actions": options["llm_actions"],
+        "generate_tailoring": options["generate_tailoring"],
+        "generate_llm_tailoring": options["generate_llm_tailoring"],
+        "refresh_llm_tailoring": options["refresh_llm_tailoring"],
+        "generate_llm_fallback": options["generate_llm_fallback"],
+        "delete_seen_data": options["delete_seen_data"],
+        "history_path": args.history_path,
+        "sync_postgres_run_history": bool(args.sync_postgres_run_history),
+        "require_postgres_run_history_sync": bool(args.require_postgres_run_history_sync),
+        "database_url": args.database_url,
+        "database_url_env": args.database_url_env,
+        "psql_bin": args.psql_bin,
+        "allow_contract_drift": bool(args.allow_contract_drift),
+        "launchd_interval_seconds": args.launchd_interval_seconds,
+        "launchd_out_dir": args.launchd_out_dir,
+        "launchd_log_dir": args.launchd_log_dir,
+        "launchd_label_prefix": args.launchd_label_prefix,
+        "launchd_agent_dir": args.launchd_agent_dir,
+        "launchd_target": args.launchd_target,
+    }
+
+    if args.launchd_agent_status:
+        launchd_payload = get_scheduler_launchd_agent_status(args.job, **launchd_kwargs)
+        print(f"launchd_label={launchd_payload['label']}")
+        print(f"launchd_target={launchd_payload['launchd_target']}")
+        print(f"installed_plist_path={launchd_payload['installed_plist_path']}")
+        print(f"installed_plist_exists={launchd_payload['installed_plist_exists']}")
+        print(f"launchctl_available={launchd_payload['launchctl_available']}")
+        print(f"loaded={launchd_payload['loaded']}")
+        print(f"print_return_code={launchd_payload['print_return_code']}")
+        return 0
+
+    if args.install_launchd_agent:
+        launchd_payload = install_scheduler_launchd_agent(
+            args.job,
+            print_only=bool(args.print_only),
+            **launchd_kwargs,
+        )
+        if args.print_only:
+            print("launchd_install_preview=true")
+        else:
+            print("launchd_agent_installed=true")
+        print(f"launchd_label={launchd_payload['label']}")
+        print(f"launchd_target={launchd_payload['launchd_target']}")
+        print(f"installed_plist_path={launchd_payload['installed_plist_path']}")
+        print(f"bootstrap_command={_command_to_text(launchd_payload['bootstrap_command'])}")
+        print(f"bootout_command={_command_to_text(launchd_payload['bootout_command'])}")
+        print(f"enable_command={_command_to_text(launchd_payload['enable_command'])}")
+        return 0
+
+    if args.uninstall_launchd_agent:
+        launchd_payload = uninstall_scheduler_launchd_agent(
+            args.job,
+            print_only=bool(args.print_only),
+            **launchd_kwargs,
+        )
+        if args.print_only:
+            print("launchd_uninstall_preview=true")
+        else:
+            print("launchd_agent_uninstalled=true")
+        print(f"launchd_label={launchd_payload['label']}")
+        print(f"launchd_target={launchd_payload['launchd_target']}")
+        print(f"installed_plist_path={launchd_payload['installed_plist_path']}")
+        print(f"disable_command={_command_to_text(launchd_payload['disable_command'])}")
+        print(f"bootout_command={_command_to_text(launchd_payload['bootout_command'])}")
+        return 0
+
+    if args.emit_launchd_plist or args.write_launchd_plist:
         if args.write_launchd_plist:
             launchd_payload = write_scheduler_launchd_plist(args.job, **launchd_kwargs)
             print("launchd_plist_written=true")

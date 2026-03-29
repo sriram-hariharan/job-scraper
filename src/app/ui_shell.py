@@ -6,6 +6,7 @@ NAV_ITEMS = [
     ("Decisions", "/decisions-ui", "D"),
     ("Intelligence", "/intelligence", "I"),
     ("Applications", "/applications", "A"),
+    ("Scheduler", "/scheduler", "S"),
     ("Tailoring Workspace", "/tailoring-workspace", "T"),
 ]
 

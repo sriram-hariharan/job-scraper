@@ -49,7 +49,6 @@ def executive_dashboard() -> str:
           </div>
         </header>
     <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
-
     <section class="stats-grid">
       <section class="card stat-card">
         <div class="stat-label">Queue Rows</div>
@@ -544,8 +543,298 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/shell.js"></script>
   <script src="/static/app.js"></script>
-</body>
+  </body>
 </html>
     """.strip()
 
+@router.get("/scheduler", response_class=HTMLResponse)
+def scheduler_dashboard() -> str:
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Scheduler Ops Dashboard</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  {render_top_shell("/scheduler")}
+  <div class="page">
+    <header class="page-header">
+      <div class="page-header-main">
+        <h1>Scheduler Ops</h1>
+        <p class="subtext">Operational view for scheduler health, persistence status, and recent runs.</p>
+      </div>
 
+      <div class="header-actions">
+        <button class="ghost-btn" id="refreshSchedulerSummaryBtn" type="button">Refresh</button>
+      </div>
+    </header>
+
+    <div class="subtext pipeline-run-meta" id="schedulerOpsMeta">
+      Loading scheduler summary...
+    </div>
+
+    <section class="card table-card scheduler-table-card">
+      <div class="scheduler-table-tabs">
+        <div class="scheduler-tab-row" role="tablist" aria-label="Scheduler views">
+          <button type="button" class="ghost-btn scheduler-tab-btn active" data-tab="contract" role="tab" aria-selected="true">
+            Contract Health
+          </button>
+          <button type="button" class="ghost-btn scheduler-tab-btn" data-tab="jsonl" role="tab" aria-selected="false">
+            JSONL Rows
+          </button>
+          <button type="button" class="ghost-btn scheduler-tab-btn" data-tab="postgres" role="tab" aria-selected="false">
+            Postgres Rows
+          </button>
+          <button type="button" class="ghost-btn scheduler-tab-btn" data-tab="latest" role="tab" aria-selected="false">
+            Latest Runs by Job
+          </button>
+        </div>
+      </div>
+
+      <div class="scheduler-table-header">
+        <div class="scheduler-table-title-wrap">
+          <h2 id="schedulerTableTitle">Contract Health</h2>
+          <div class="subtext" id="schedulerTableSubtitle">Artifact drift and scheduler contract checks.</div>
+        </div>
+      </div>
+
+      <div class="table-wrap scheduler-attached-table-wrap">
+        <table id="schedulerTable">
+          <thead id="schedulerTableHead">
+            <tr>
+              <th>Check</th>
+              <th>Value</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="schedulerTableBody">
+            <tr><td colspan="3" class="empty-state">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/shell.js"></script>
+  <script>
+    (function () {{
+      const summaryUrl = "/scheduler/summary?limit=25";
+
+      const metaEl = document.getElementById("schedulerOpsMeta");
+      const refreshBtn = document.getElementById("refreshSchedulerSummaryBtn");
+      const tableTitleEl = document.getElementById("schedulerTableTitle");
+      const tableSubtitleEl = document.getElementById("schedulerTableSubtitle");
+      const tableHeadEl = document.getElementById("schedulerTableHead");
+      const tableBodyEl = document.getElementById("schedulerTableBody");
+
+      const tabButtons = Array.from(document.querySelectorAll(".scheduler-tab-btn"));
+
+      let currentPayload = null;
+      let activeTab = "contract";
+
+      if (!metaEl || !refreshBtn || !tableTitleEl || !tableSubtitleEl || !tableHeadEl || !tableBodyEl || !tabButtons.length) {{
+        return;
+      }}
+
+      function escapeHtml(value) {{
+        return String(value ?? "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#39;");
+      }}
+
+      function statusBadgeClass(status) {{
+        const normalized = String(status || "").toLowerCase();
+        if (normalized === "succeeded") return "scheduler-run-badge scheduler-run-badge--success";
+        if (normalized === "failed") return "scheduler-run-badge scheduler-run-badge--danger";
+        return "scheduler-run-badge scheduler-run-badge--muted";
+      }}
+
+      function yesNoBadgeClass(value) {{
+        return value
+          ? "scheduler-run-badge scheduler-run-badge--success"
+          : "scheduler-run-badge scheduler-run-badge--danger";
+      }}
+
+      function renderEmptyRow(colspan, message) {{
+        return `<tr><td colspan="${{colspan}}" class="empty-state">${{escapeHtml(message)}}</td></tr>`;
+      }}
+
+      function renderContractRows(contractHealth) {{
+        const checks = contractHealth?.checks || {{}};
+        const overall = Boolean(contractHealth?.all_checks_pass);
+
+        const rows = [
+          {{
+            label: "Overall Contract Health",
+            value: overall ? "Healthy" : "Drift",
+            ok: overall,
+          }},
+          {{
+            label: "Seed SQL matches artifact",
+            value: checks.seed_sql_matches_artifact ? "Yes" : "No",
+            ok: Boolean(checks.seed_sql_matches_artifact),
+          }},
+          {{
+            label: "Init SQL matches artifact",
+            value: checks.init_sql_matches_artifact ? "Yes" : "No",
+            ok: Boolean(checks.init_sql_matches_artifact),
+          }},
+        ];
+
+        return rows.map((row) => {{
+          return `
+            <tr>
+              <td>${{escapeHtml(row.label)}}</td>
+              <td>${{escapeHtml(row.value)}}</td>
+              <td><span class="${{yesNoBadgeClass(row.ok)}}">${{row.ok ? "OK" : "Issue"}}</span></td>
+            </tr>
+          `;
+        }}).join("");
+      }}
+
+      function renderRunRows(rows) {{
+        if (!Array.isArray(rows) || rows.length === 0) {{
+          return renderEmptyRow(6, "No rows found.");
+        }}
+
+        return rows.map((row) => {{
+          return `
+            <tr>
+              <td>${{escapeHtml(row.run_id || "-")}}</td>
+              <td>${{escapeHtml(row.job_name || "-")}}</td>
+              <td><span class="${{statusBadgeClass(row.status)}}">${{escapeHtml(row.status || "-")}}</span></td>
+              <td>${{escapeHtml(row.return_code ?? "-")}}</td>
+              <td>${{escapeHtml(row.started_at || "-")}}</td>
+              <td>${{escapeHtml(row.finished_at || "-")}}</td>
+            </tr>
+          `;
+        }}).join("");
+      }}
+
+      const tabConfig = {{
+        contract: {{
+          title: "Contract Health",
+          subtitle: "Artifact drift and scheduler contract checks.",
+          columns: ["Check", "Value", "Status"],
+          renderRows(payload) {{
+            return renderContractRows(payload?.contract_health || {{}});
+          }},
+        }},
+        jsonl: {{
+          title: "JSONL Rows",
+          subtitle: "Recent scheduler runs from the JSONL audit trail.",
+          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
+          renderRows(payload) {{
+            return renderRunRows(payload?.recent_jsonl_runs || []);
+          }},
+        }},
+        postgres: {{
+          title: "Postgres Rows",
+          subtitle: "Recent scheduler runs currently mirrored into Postgres.",
+          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
+          renderRows(payload) {{
+            return renderRunRows(payload?.recent_postgres_runs || []);
+          }},
+        }},
+        latest: {{
+          title: "Latest Runs by Job",
+          subtitle: "Most recent run per scheduler job.",
+          columns: ["Run ID", "Job", "Status", "Return Code", "Started", "Finished"],
+          renderRows(payload) {{
+            return renderRunRows(payload?.latest_runs_by_job || []);
+          }},
+        }},
+      }};
+
+      function activateTab(tabName) {{
+        if (!tabConfig[tabName]) {{
+          return;
+        }}
+
+        activeTab = tabName;
+
+        tabButtons.forEach((btn) => {{
+          const isActive = btn.dataset.tab === tabName;
+          btn.classList.toggle("active", isActive);
+          btn.setAttribute("aria-selected", isActive ? "true" : "false");
+        }});
+
+        renderActiveTable();
+      }}
+
+      function renderActiveTable() {{
+        const config = tabConfig[activeTab];
+        if (!config) {{
+          return;
+        }}
+
+        tableTitleEl.textContent = config.title;
+        tableSubtitleEl.textContent = config.subtitle;
+
+        tableHeadEl.innerHTML = `
+          <tr>
+            ${{config.columns.map((column) => `<th>${{escapeHtml(column)}}</th>`).join("")}}
+          </tr>
+        `;
+
+        if (!currentPayload) {{
+          tableBodyEl.innerHTML = renderEmptyRow(config.columns.length, "Loading...");
+          return;
+        }}
+
+        tableBodyEl.innerHTML = config.renderRows(currentPayload);
+      }}
+
+      async function loadSchedulerSummary() {{
+        metaEl.textContent = "Loading scheduler summary...";
+        refreshBtn.disabled = true;
+
+        try {{
+          const response = await fetch(summaryUrl, {{ cache: "no-store" }});
+          const payload = await response.json();
+
+          if (!response.ok) {{
+            throw new Error(payload.detail || "Failed to load scheduler summary.");
+          }}
+
+          currentPayload = payload;
+
+          const countsMatch = Boolean(payload?.history?.count_matches);
+          const countsMatchBadge = `<span class="${{yesNoBadgeClass(countsMatch)}}">${{countsMatch ? "Yes" : "No"}}</span>`;
+
+          metaEl.innerHTML =
+            `Job defs: ${{payload?.postgres_summary?.job_definition_count ?? 0}} · ` +
+            `Active jobs: ${{payload?.postgres_summary?.active_job_count ?? 0}} · ` +
+            `Success: ${{payload?.postgres_summary?.success_count ?? 0}} · ` +
+            `Failure: ${{payload?.postgres_summary?.failure_count ?? 0}} · ` +
+            `Counts Match: ${{countsMatchBadge}}`;
+
+          renderActiveTable();
+        }} catch (error) {{
+          currentPayload = null;
+          renderActiveTable();
+          metaEl.textContent = error?.message || "Failed to load scheduler summary.";
+        }} finally {{
+          refreshBtn.disabled = false;
+        }}
+      }}
+
+      tabButtons.forEach((btn) => {{
+        btn.addEventListener("click", () => activateTab(btn.dataset.tab));
+      }});
+
+      refreshBtn.addEventListener("click", loadSchedulerSummary);
+
+      activateTab("contract");
+      loadSchedulerSummary();
+    }})();
+  </script>
+</body>
+</html>
+    """.strip()

@@ -23,6 +23,7 @@ from src.pipeline.scheduler import (
 from src.storage.scheduler_store import (
     scheduler_job_definition_seed_rows,
     scheduler_postgres_table_specs,
+    scheduler_schema_sql_payload,
 )
 
 DEFAULT_OUTPUT_DIR = Path(
@@ -486,12 +487,16 @@ def scheduler_history_payload(
     }
 
 def scheduler_storage_contract_payload() -> Dict[str, Any]:
+    schema_payload = scheduler_schema_sql_payload()
+
     return {
         "ok": True,
         "tables": scheduler_postgres_table_specs(),
         "seed_rows": {
             "scheduler_job_definitions": scheduler_job_definition_seed_rows(),
         },
+        "schema_sql": schema_payload["sql"],
+        "schema_sql_path": schema_payload["path"],
     }
 
 def run_live_pipeline_payload(

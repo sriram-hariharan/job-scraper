@@ -257,59 +257,72 @@ def _parse_args():
     )
     return parser.parse_args()
 
-
-def main() -> int:
-    args = _parse_args()
-
+def sync_scheduler_run_history_to_postgres(
+    *,
+    history_path: Path = DEFAULT_HISTORY_PATH,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    allow_contract_drift: bool = False,
+) -> Dict[str, Any]:
     contract_health = scheduler_contract_health_payload()
-    if not contract_health.get("all_checks_pass", False) and not args.allow_contract_drift:
+    if not contract_health.get("all_checks_pass", False) and not allow_contract_drift:
         raise SystemExit(
             "Scheduler contract health check failed. Refusing to sync scheduler run history while artifacts are drifting. "
             "Fix the scheduler contract drift first, or pass --allow-contract-drift if you intentionally want to override."
         )
 
-    history_path = Path(args.history_path).expanduser()
-    rows = _load_history_rows(history_path)
+    resolved_history_path = Path(history_path).expanduser()
+    rows = _load_history_rows(resolved_history_path)
 
-    print(f"history_path={history_path}")
-    print(f"contract_health_ok={contract_health['all_checks_pass']}")
-    print(f"history_row_count={len(rows)}")
+    payload: Dict[str, Any] = {
+        "history_path": str(resolved_history_path),
+        "contract_health_ok": bool(contract_health["all_checks_pass"]),
+        "history_row_count": len(rows),
+        "staged_csv_path": "",
+        "sql_path": "",
+        "command": [],
+        "command_text": "",
+        "skipped": "",
+    }
 
     if not rows:
-        print("No scheduler history rows to sync.")
-        return 0
+        payload["skipped"] = "no_rows"
+        return payload
 
     csv_path = _write_rows_csv(rows)
     sql_path = _write_sync_sql(csv_path)
 
     try:
-        database_url = _resolve_database_url(
-            args.database_url,
-            args.database_url_env,
-            allow_placeholder=bool(args.print_only),
+        database_url_value = _resolve_database_url(
+            database_url,
+            database_url_env,
+            allow_placeholder=bool(print_only),
         )
 
         cmd = _build_psql_cmd(
-            psql_bin=str(args.psql_bin),
-            database_url=database_url,
+            psql_bin=str(psql_bin),
+            database_url=database_url_value,
             sql_path=sql_path,
         )
 
-        print(f"staged_csv_path={csv_path}")
-        print(f"sql_path={sql_path}")
-        print(f"command={shlex.join(cmd)}")
+        payload["staged_csv_path"] = str(csv_path)
+        payload["sql_path"] = str(sql_path)
+        payload["command"] = cmd
+        payload["command_text"] = shlex.join(cmd)
 
-        if args.print_only:
-            return 0
+        if print_only:
+            return payload
 
-        if shutil.which(str(args.psql_bin)) is None:
+        if shutil.which(str(psql_bin)) is None:
             raise SystemExit(
-                f"psql executable not found on PATH: {args.psql_bin!r}. "
+                f"psql executable not found on PATH: {psql_bin!r}. "
                 "Install psql or pass --psql-bin with the correct executable path."
             )
 
         subprocess.run(cmd, check=True)
-        return 0
+        return payload
     finally:
         try:
             csv_path.unlink(missing_ok=True)
@@ -320,6 +333,30 @@ def main() -> int:
         except Exception:
             pass
 
+def main() -> int:
+    args = _parse_args()
+
+    payload = sync_scheduler_run_history_to_postgres(
+        history_path=Path(args.history_path).expanduser(),
+        database_url=args.database_url,
+        database_url_env=args.database_url_env,
+        psql_bin=args.psql_bin,
+        print_only=bool(args.print_only),
+        allow_contract_drift=bool(args.allow_contract_drift),
+    )
+
+    print(f"history_path={payload['history_path']}")
+    print(f"contract_health_ok={payload['contract_health_ok']}")
+    print(f"history_row_count={payload['history_row_count']}")
+
+    if payload.get("skipped") == "no_rows":
+        print("No scheduler history rows to sync.")
+        return 0
+
+    print(f"staged_csv_path={payload['staged_csv_path']}")
+    print(f"sql_path={payload['sql_path']}")
+    print(f"command={payload['command_text']}")
+    return 0
 
 if __name__ == "__main__":
     raise SystemExit(main())

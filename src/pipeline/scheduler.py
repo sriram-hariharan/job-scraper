@@ -345,6 +345,31 @@ def _parse_args():
         default=str(DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
         help="JSONL file used to append scheduler run history records.",
     )
+    parser.add_argument(
+        "--sync-postgres-run-history",
+        action="store_true",
+        help="After appending the scheduler JSONL record, sync scheduler_run_history into Postgres.",
+    )
+    parser.add_argument(
+        "--database-url",
+        default="",
+        help="For optional Postgres run-history sync: explicit Postgres connection URL.",
+    )
+    parser.add_argument(
+        "--database-url-env",
+        default="DATABASE_URL",
+        help="For optional Postgres run-history sync: environment variable that holds the Postgres connection URL.",
+    )
+    parser.add_argument(
+        "--psql-bin",
+        default="psql",
+        help="For optional Postgres run-history sync: psql executable to use.",
+    )
+    parser.add_argument(
+        "--allow-contract-drift",
+        action="store_true",
+        help="For optional Postgres run-history sync: allow sync even if scheduler SQL artifact drift checks fail.",
+    )
     return parser.parse_args()
 
 
@@ -428,6 +453,27 @@ def main() -> int:
             file=sys.stderr,
         )
 
+    if args.sync_postgres_run_history:
+        from src.storage.sync_scheduler_run_history import (
+            sync_scheduler_run_history_to_postgres,
+        )
+
+        sync_payload = sync_scheduler_run_history_to_postgres(
+            history_path=Path(args.history_path).expanduser(),
+            database_url=args.database_url,
+            database_url_env=args.database_url_env,
+            psql_bin=args.psql_bin,
+            print_only=False,
+            allow_contract_drift=bool(args.allow_contract_drift),
+        )
+
+        print(f"postgres_sync_history_path={sync_payload['history_path']}")
+        print(f"postgres_sync_row_count={sync_payload['history_row_count']}")
+        if sync_payload.get("skipped") == "no_rows":
+            print("postgres_sync_skipped=no_rows")
+        else:
+            print(f"postgres_sync_command={sync_payload['command_text']}")
+            
     return return_code
 
 

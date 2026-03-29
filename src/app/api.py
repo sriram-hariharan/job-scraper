@@ -155,6 +155,21 @@ def scheduler_postgres_status(
         )
     except (ValueError, SystemExit) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.get("/scheduler/summary")
+def scheduler_summary(
+    limit: int = 5,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+):
+    try:
+        return services.scheduler_operator_summary_payload(
+            limit=limit,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+        )
+    except (ValueError, SystemExit) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):

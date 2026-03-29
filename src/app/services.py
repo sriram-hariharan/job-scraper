@@ -33,6 +33,9 @@ from src.storage.scheduler_store import (
 from src.storage.read_scheduler_postgres import (
     get_scheduler_postgres_status_payload,
 )
+from src.storage.scheduler_store import (
+    scheduler_contract_health_payload,
+)
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -442,6 +445,49 @@ def scheduler_postgres_status_payload(
         "history_count_matches_jsonl": postgres_history_row_count == len(jsonl_rows),
         "postgres_command_text": postgres_payload["command_text"],
         "postgres": postgres_block,
+    }
+
+def scheduler_operator_summary_payload(
+    *,
+    limit: int = 5,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    normalized_limit = max(int(limit), 1)
+
+    contract = scheduler_contract_health_payload()
+    postgres_payload = scheduler_postgres_status_payload(
+        limit=normalized_limit,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+    )
+
+    jsonl_rows = _load_scheduler_history_rows(DEFAULT_SCHEDULER_RUN_HISTORY_PATH)
+    latest_jsonl_rows = jsonl_rows[:normalized_limit]
+
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+
+    return {
+        "ok": True,
+        "limit": normalized_limit,
+        "contract_health": contract,
+        "history": {
+            "jsonl_path": str(DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
+            "jsonl_row_count": postgres_payload["history_jsonl_row_count"],
+            "postgres_row_count": postgres_payload["history_postgres_row_count"],
+            "count_matches": postgres_payload["history_count_matches_jsonl"],
+        },
+        "latest_runs_by_job": postgres_block.get("latest_runs_by_job", []),
+        "recent_postgres_runs": postgres_block.get("recent_runs", []),
+        "recent_jsonl_runs": latest_jsonl_rows,
+        "postgres_summary": {
+            "job_definition_count": postgres_block.get("job_definition_count", 0),
+            "active_job_count": postgres_block.get("active_job_count", 0),
+            "run_history_count": postgres_block.get("run_history_count", 0),
+            "success_count": postgres_block.get("success_count", 0),
+            "failure_count": postgres_block.get("failure_count", 0),
+        },
+        "postgres_command_text": postgres_payload["postgres_command_text"],
     }
 
 def _normalize_scheduler_filter_text(value: Any) -> str:

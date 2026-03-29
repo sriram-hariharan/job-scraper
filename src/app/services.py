@@ -20,7 +20,10 @@ from src.pipeline.scheduler import (
     get_scheduled_job_definition,
     get_scheduled_job_definitions,
 )
-
+from src.storage.scheduler_store import (
+    scheduler_job_definition_seed_rows,
+    scheduler_postgres_table_specs,
+)
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -480,6 +483,15 @@ def scheduler_history_payload(
         "total_matching_rows": len(rows),
         "rows": selected,
         "count": len(selected),
+    }
+
+def scheduler_storage_contract_payload() -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "tables": scheduler_postgres_table_specs(),
+        "seed_rows": {
+            "scheduler_job_definitions": scheduler_job_definition_seed_rows(),
+        },
     }
 
 def run_live_pipeline_payload(

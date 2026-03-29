@@ -129,6 +129,10 @@ def scheduler_history(
         limit=limit,
     )
 
+@app.get("/scheduler/storage-contract")
+def scheduler_storage_contract():
+    return services.scheduler_storage_contract_payload()
+
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):
     try:

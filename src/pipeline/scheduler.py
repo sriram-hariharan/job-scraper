@@ -169,6 +169,30 @@ def _resolve_history_path(value: Any = DEFAULT_SCHEDULER_RUN_HISTORY_PATH) -> Pa
         raw = str(DEFAULT_SCHEDULER_RUN_HISTORY_PATH)
     return Path(raw).expanduser()
 
+def _derive_live_pipeline_log_path(output_dir: Any) -> str:
+    return str(Path(_normalize_output_dir(output_dir)) / "live_pipeline_run.log")
+
+
+def _derive_live_pipeline_status_path(output_dir: Any) -> str:
+    return str(Path(_normalize_output_dir(output_dir)) / "live_pipeline_status.json")
+
+
+def _build_scheduled_child_env(
+    job_name: Any,
+    *,
+    run_id: str,
+    options: Dict[str, Any],
+) -> Dict[str, str]:
+    env = dict(os.environ)
+
+    if _normalize_job_name(job_name) != "live_pipeline":
+        return env
+
+    env["JOB_APP_PIPELINE_STATUS_PATH"] = _derive_live_pipeline_status_path(
+        options.get("output_dir", DEFAULT_SCHEDULED_OUTPUT_DIR)
+    )
+    env["JOB_APP_PIPELINE_RUN_ID"] = str(run_id)
+    return env
 
 def _supported_job_names() -> List[str]:
     return [item.name for item in _SUPPORTED_SCHEDULED_JOBS]
@@ -873,6 +897,10 @@ def main() -> int:
     }
 
     definition = get_scheduled_job_definition(args.job)
+    if definition["name"] == "live_pipeline":
+        options["log_path"] = _derive_live_pipeline_log_path(options["output_dir"])
+        options["status_path"] = _derive_live_pipeline_status_path(options["output_dir"])
+
     lifecycle_mode_count = sum(
         [
             bool(args.emit_launchd_plist),
@@ -1008,8 +1036,18 @@ def main() -> int:
     return_code = 1
     error = ""
 
+    child_env = _build_scheduled_child_env(
+        definition["name"],
+        run_id=run_id,
+        options=options,
+    )
+
     try:
-        completed = subprocess.run(cmd, check=False)
+        completed = subprocess.run(
+            cmd,
+            check=False,
+            env=child_env,
+        )
         return_code = int(completed.returncode)
     except Exception as exc:
         error = repr(exc)

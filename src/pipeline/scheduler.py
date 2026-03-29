@@ -1,17 +1,23 @@
 from __future__ import annotations
 
+import argparse
+import json
+import shlex
+import subprocess
+import sys
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
-import sys
-import argparse
-import shlex
-import subprocess
 
-from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.config.settings import (
+    ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
+    SCHEDULER_RUN_HISTORY_PATH,
+)
 
 DEFAULT_SCHEDULED_OUTPUT_DIR = Path(ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
+DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_LLM_ACTIONS = "APPLY,APPLY_REVIEW_VARIANTS"
 DEFAULT_DELETE_SEEN_DATA = "no"
 
@@ -37,6 +43,14 @@ _SUPPORTED_SCHEDULED_JOBS: Tuple[ScheduledJobDefinition, ...] = (
 def _job_app():
     import job_app
     return job_app
+
+
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _new_scheduler_run_id() -> str:
+    return datetime.now(timezone.utc).strftime("sched_%Y%m%dT%H%M%SZ")
 
 
 def _normalize_job_name(value: Any) -> str:
@@ -91,6 +105,21 @@ def _normalize_output_dir(value: Any) -> str:
     if not raw:
         raw = str(DEFAULT_SCHEDULED_OUTPUT_DIR)
     return str(Path(raw).expanduser())
+
+
+def _resolve_history_path(value: Any = DEFAULT_SCHEDULER_RUN_HISTORY_PATH) -> Path:
+    raw = str(value or DEFAULT_SCHEDULER_RUN_HISTORY_PATH).strip()
+    if not raw:
+        raw = str(DEFAULT_SCHEDULER_RUN_HISTORY_PATH)
+    return Path(raw).expanduser()
+
+
+def _supported_job_names() -> List[str]:
+    return [item.name for item in _SUPPORTED_SCHEDULED_JOBS]
+
+
+def _command_to_text(cmd: List[str]) -> str:
+    return shlex.join([str(part) for part in cmd])
 
 
 def get_scheduled_job_definitions() -> List[Dict[str, str]]:
@@ -195,13 +224,47 @@ def build_scheduled_job_command(
     raise ValueError(f"Unsupported scheduled job={job_name!r}. Allowed: {allowed}")
 
 
+def build_scheduler_run_record(
+    *,
+    run_id: str,
+    job_name: str,
+    job_description: str,
+    command: List[str],
+    status: str,
+    started_at: str,
+    finished_at: str,
+    return_code: int,
+    options: Dict[str, Any],
+    error: str = "",
+) -> Dict[str, Any]:
+    return {
+        "run_id": str(run_id),
+        "job_name": str(job_name),
+        "job_description": str(job_description),
+        "status": str(status),
+        "started_at": str(started_at),
+        "finished_at": str(finished_at),
+        "return_code": int(return_code),
+        "command": [str(part) for part in command],
+        "command_text": _command_to_text(command),
+        "options": dict(options),
+        "trigger_source": "external_scheduler_wrapper",
+        "error": str(error or ""),
+    }
 
-def _supported_job_names() -> List[str]:
-    return [item.name for item in _SUPPORTED_SCHEDULED_JOBS]
 
+def append_scheduler_run_record(
+    record: Dict[str, Any],
+    *,
+    history_path: Any = DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+) -> Path:
+    path = _resolve_history_path(history_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
 
-def _command_to_text(cmd: List[str]) -> str:
-    return shlex.join(cmd)
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(record, ensure_ascii=False, sort_keys=True) + "\n")
+
+    return path
 
 
 def _parse_args():
@@ -277,25 +340,48 @@ def _parse_args():
         default=DEFAULT_DELETE_SEEN_DATA,
         help="For live_pipeline only: seen-job reset behavior.",
     )
+    parser.add_argument(
+        "--history-path",
+        default=str(DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
+        help="JSONL file used to append scheduler run history records.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = _parse_args()
 
+    options = {
+        "planning_only": bool(args.planning_only),
+        "run_application_planning": not bool(args.skip_application_planning),
+        "output_dir": _normalize_output_dir(args.output_dir),
+        "job_limit": _normalize_non_negative_int(args.job_limit, "job_limit"),
+        "job_packet_limit": _normalize_non_negative_int(
+            args.job_packet_limit,
+            "job_packet_limit",
+        ),
+        "llm_actions": _normalize_llm_actions(args.llm_actions),
+        "generate_tailoring": bool(args.generate_tailoring),
+        "generate_llm_tailoring": bool(args.generate_llm_tailoring),
+        "refresh_llm_tailoring": bool(args.refresh_llm_tailoring),
+        "generate_llm_fallback": bool(args.generate_llm_fallback),
+        "delete_seen_data": _normalize_delete_seen_data(args.delete_seen_data),
+    }
+
+    definition = get_scheduled_job_definition(args.job)
     cmd = build_scheduled_job_command(
         args.job,
-        run_application_planning=not bool(args.skip_application_planning),
-        planning_only=bool(args.planning_only),
-        output_dir=args.output_dir,
-        job_limit=args.job_limit,
-        job_packet_limit=args.job_packet_limit,
-        llm_actions=args.llm_actions,
-        generate_tailoring=bool(args.generate_tailoring),
-        generate_llm_tailoring=bool(args.generate_llm_tailoring),
-        refresh_llm_tailoring=bool(args.refresh_llm_tailoring),
-        generate_llm_fallback=bool(args.generate_llm_fallback),
-        delete_seen_data=args.delete_seen_data,
+        run_application_planning=options["run_application_planning"],
+        planning_only=options["planning_only"],
+        output_dir=options["output_dir"],
+        job_limit=options["job_limit"],
+        job_packet_limit=options["job_packet_limit"],
+        llm_actions=options["llm_actions"],
+        generate_tailoring=options["generate_tailoring"],
+        generate_llm_tailoring=options["generate_llm_tailoring"],
+        refresh_llm_tailoring=options["refresh_llm_tailoring"],
+        generate_llm_fallback=options["generate_llm_fallback"],
+        delete_seen_data=options["delete_seen_data"],
     )
 
     print(_command_to_text(cmd))
@@ -303,8 +389,46 @@ def main() -> int:
     if args.print_only:
         return 0
 
-    subprocess.run(cmd, check=True)
-    return 0
+    run_id = _new_scheduler_run_id()
+    started_at = _utc_now()
+    finished_at = started_at
+    return_code = 1
+    error = ""
+
+    try:
+        completed = subprocess.run(cmd, check=False)
+        return_code = int(completed.returncode)
+    except Exception as exc:
+        error = repr(exc)
+
+    finished_at = _utc_now()
+    status = "succeeded" if return_code == 0 and not error else "failed"
+
+    record = build_scheduler_run_record(
+        run_id=run_id,
+        job_name=definition["name"],
+        job_description=definition["description"],
+        command=cmd,
+        status=status,
+        started_at=started_at,
+        finished_at=finished_at,
+        return_code=return_code,
+        options=options,
+        error=error,
+    )
+
+    try:
+        append_scheduler_run_record(
+            record,
+            history_path=args.history_path,
+        )
+    except Exception as exc:
+        print(
+            f"WARNING: failed to append scheduler run history: {exc!r}",
+            file=sys.stderr,
+        )
+
+    return return_code
 
 
 if __name__ == "__main__":

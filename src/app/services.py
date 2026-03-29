@@ -11,7 +11,10 @@ import re
 import subprocess
 import sys
 
-from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.config.settings import (
+    ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
+    SCHEDULER_RUN_HISTORY_PATH,
+)
 from src.pipeline.scheduler import (
     build_scheduled_job_command,
     get_scheduled_job_definition,
@@ -31,6 +34,7 @@ DEFAULT_PROFILE_RESUME_DIR = Path(
     os.environ.get("PROFILE_RESUME_DIR", "data/profile_resumes")
 ).expanduser()
 DEFAULT_PATCH_SELECTIONS_PATH = DEFAULT_OUTPUT_DIR / "patch_selections.csv"
+DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 
 PATCH_SELECTION_HEADERS = [
     "selection_timestamp",
@@ -397,6 +401,85 @@ def scheduler_job_command_payload(
             "generate_llm_fallback": bool(generate_llm_fallback),
             "delete_seen_data": str(delete_seen_data or "no"),
         },
+    }
+
+def _normalize_scheduler_filter_text(value: Any) -> str:
+    return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _load_scheduler_history_rows(
+    history_path: Path = DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+) -> List[Dict[str, Any]]:
+    if not history_path.exists():
+        return []
+
+    rows: List[Dict[str, Any]] = []
+
+    with history_path.open("r", encoding="utf-8") as f:
+        for line_number, raw_line in enumerate(f, start=1):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            try:
+                payload = json.loads(line)
+            except Exception:
+                continue
+
+            if not isinstance(payload, dict):
+                continue
+
+            row = dict(payload)
+            row["_line_number"] = line_number
+            rows.append(row)
+
+    rows.sort(
+        key=lambda row: (
+            str(row.get("started_at", "") or ""),
+            str(row.get("run_id", "") or ""),
+            int(row.get("_line_number", 0) or 0),
+        ),
+        reverse=True,
+    )
+    return rows
+
+
+def scheduler_history_payload(
+    history_path: Path = DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+    job_name: str = "",
+    status: str = "",
+    limit: int = 20,
+) -> Dict[str, Any]:
+    rows = _load_scheduler_history_rows(history_path)
+
+    normalized_job_name = _normalize_scheduler_filter_text(job_name)
+    normalized_status = _normalize_scheduler_filter_text(status)
+
+    if normalized_job_name:
+        rows = [
+            row for row in rows
+            if _normalize_scheduler_filter_text(row.get("job_name", "")) == normalized_job_name
+        ]
+
+    if normalized_status:
+        rows = [
+            row for row in rows
+            if _normalize_scheduler_filter_text(row.get("status", "")) == normalized_status
+        ]
+
+    selected = rows[: max(int(limit), 0)]
+
+    return {
+        "ok": True,
+        "history_path": str(history_path),
+        "filters": {
+            "job_name": job_name,
+            "status": status,
+            "limit": limit,
+        },
+        "total_matching_rows": len(rows),
+        "rows": selected,
+        "count": len(selected),
     }
 
 def run_live_pipeline_payload(

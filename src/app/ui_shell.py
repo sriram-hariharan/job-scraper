@@ -58,38 +58,107 @@ def render_top_shell(active_href: str) -> str:
   <nav class="app-shell-nav" aria-label="Dashboard navigation">
     {''.join(nav_links)}
   </nav>
+</aside>
 
-  </aside>
+<div class="app-shell-top-right">
+  <div class="notification-shell" id="notificationShell">
+    <button
+      type="button"
+      class="notification-btn"
+      id="notificationButton"
+      aria-expanded="false"
+      aria-haspopup="true"
+      aria-label="Notifications"
+      title="Notifications"
+    >
+      <img
+        class="notification-btn-icon"
+        src="/static/media/notif_icon.svg"
+        alt=""
+        aria-hidden="true"
+      />
+      <span class="notification-badge hidden" id="notificationBadge">0</span>
+    </button>
 
-  <div class="app-shell-top-right">
-    <div class="profile-menu-shell" id="profileMenuShell">
-      <button
-        type="button"
-        class="profile-avatar-btn"
-        id="profileMenuButton"
-        aria-expanded="false"
-        aria-haspopup="true"
-        title="{escape(USER_NAME)}"
-      >
-        {escape(USER_INITIAL)}
-      </button>
-
-      <div class="profile-dropdown hidden" id="profileDropdown">
-        <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
-        <div class="profile-dropdown-actions">
-          <a class="profile-dropdown-nav-btn" href="/profile">
-            <span class="profile-dropdown-nav-copy">
-              <span class="profile-dropdown-nav-title">My Profile</span>
-              <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
-            </span>
-            <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
-          </a>
-
-          <button type="button" class="profile-dropdown-danger-btn" disabled>
-            Log out
-          </button>
+    <div class="notification-dropdown hidden" id="notificationDropdown">
+      <div class="notification-dropdown-header">
+        <div>
+          <div class="notification-dropdown-title">Notifications</div>
+          <div class="subtext" id="notificationSubtitle">Recent scheduler activity</div>
         </div>
+        <button
+          type="button"
+          class="ghost-btn notification-refresh-btn"
+          id="notificationRefreshBtn"
+        >
+          Refresh
+        </button>
+      </div>
+
+      <div class="notification-toolbar">
+        <div
+          class="binary-toggle binary-toggle--compact notification-unread-toggle"
+          id="notificationUnreadToggle"
+          role="radiogroup"
+          aria-label="Notification filter"
+        >
+          <label class="binary-toggle-option">
+            <input
+              type="radio"
+              name="notificationUnreadFilter"
+              id="notificationShowAll"
+              value="all"
+              checked
+            />
+            <span>All</span>
+          </label>
+
+          <label class="binary-toggle-option">
+            <input
+              type="radio"
+              name="notificationUnreadFilter"
+              id="notificationUnreadOnly"
+              value="unread"
+            />
+            <span>Unread</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="notification-list" id="notificationList">
+        <div class="notification-empty">Loading notifications...</div>
       </div>
     </div>
   </div>
+
+  <div class="profile-menu-shell" id="profileMenuShell">
+    <button
+      type="button"
+      class="profile-avatar-btn"
+      id="profileMenuButton"
+      aria-expanded="false"
+      aria-haspopup="true"
+      title="{escape(USER_NAME)}"
+    >
+      {escape(USER_INITIAL)}
+    </button>
+
+    <div class="profile-dropdown hidden" id="profileDropdown">
+      <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
+      <div class="profile-dropdown-actions">
+        <a class="profile-dropdown-nav-btn" href="/profile">
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">My Profile</span>
+            <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <button type="button" class="profile-dropdown-danger-btn" disabled>
+          Log out
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
 """.strip()

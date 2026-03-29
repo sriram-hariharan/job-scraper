@@ -208,6 +208,27 @@ def scheduler_init_sql_generation_payload(
         "matches_artifact": generated_sql == artifact_sql,
     }
 
+def scheduler_contract_health_payload() -> Dict[str, Any]:
+    seed_generation = scheduler_seed_sql_generation_payload()
+    init_generation = scheduler_init_sql_generation_payload()
+
+    return {
+        "ok": True,
+        "artifacts": {
+            "schema_sql_path": str(DEFAULT_SCHEDULER_SCHEMA_SQL_PATH),
+            "seed_sql_path": str(DEFAULT_SCHEDULER_SEED_SQL_PATH),
+            "init_sql_path": str(DEFAULT_SCHEDULER_INIT_SQL_PATH),
+        },
+        "checks": {
+            "seed_sql_matches_artifact": bool(seed_generation["matches_artifact"]),
+            "init_sql_matches_artifact": bool(init_generation["matches_artifact"]),
+        },
+        "all_checks_pass": bool(
+            seed_generation["matches_artifact"]
+            and init_generation["matches_artifact"]
+        ),
+    }
+
 def _default_job_options(job_name: str) -> Dict[str, Any]:
     normalized = _clean_text(job_name).lower()
 

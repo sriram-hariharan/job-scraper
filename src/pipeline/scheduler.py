@@ -197,6 +197,12 @@ def _build_scheduled_child_env(
     env["JOB_APP_PIPELINE_RUN_ID"] = str(run_id)
     return env
 
+
+def _resolve_post_run_email_delivery_mode() -> str:
+    raw = str(os.getenv("JOB_STACK_POST_RUN_EMAIL_MODE", "") or "").strip().lower()
+    return raw or "outbox_only"
+
+
 def _supported_job_names() -> List[str]:
     return [item.name for item in _SUPPORTED_SCHEDULED_JOBS]
 
@@ -1100,11 +1106,14 @@ def main() -> int:
 
     if post_run_email_payload:
         try:
+            delivery_mode = _resolve_post_run_email_delivery_mode()
             post_run_email_delivery_payload = deliver_post_run_email_outbox(
                 post_run_email_payload["path"],
-                mode="outbox_only",
+                mode=delivery_mode,
             )
+            record.setdefault("options", {})["post_run_email_delivery_mode"] = delivery_mode
             record.setdefault("options", {})["post_run_email_delivery_path"] = post_run_email_delivery_payload["path"]
+            print(f"post_run_email_delivery_mode={delivery_mode}")
             print(f"post_run_email_delivery_path={post_run_email_delivery_payload['path']}")
         except Exception as exc:
             print(

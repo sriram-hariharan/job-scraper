@@ -61,6 +61,7 @@ DEFAULT_PROFILE_RESUME_DIR = Path(
 DEFAULT_PATCH_SELECTIONS_PATH = DEFAULT_OUTPUT_DIR / "patch_selections.csv"
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
+DEFAULT_NOTIFICATION_STATE_PATH = Path("outputs/scheduler_logs/notification_state.csv")
 
 PATCH_SELECTION_HEADERS = [
     "selection_timestamp",
@@ -73,6 +74,12 @@ PATCH_SELECTION_HEADERS = [
     "artifact_signature",
     "selected_candidate_ids_json",
     "note",
+]
+
+NOTIFICATION_STATE_HEADERS = [
+    "state_timestamp",
+    "notification_id",
+    "is_read",
 ]
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
@@ -786,18 +793,118 @@ def _load_notification_rows(
     return rows
 
 
+def _normalize_notification_read_flag(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    if value is None:
+        raw = ""
+    else:
+        raw = str(value).strip().lower()
+
+    if raw in {"1", "true", "yes", "y", "read"}:
+        return True
+
+    if raw in {"0", "false", "no", "n", "off", "unread"}:
+        return False
+
+    raise ValueError("is_read must be a boolean-like value.")
+
+
+def _normalize_optional_notification_read_filter(value: Any) -> Any:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    return _normalize_notification_read_flag(raw)
+
+
+def _append_notification_state_row(
+    state_path: Path,
+    row: Dict[str, Any],
+) -> None:
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    file_exists = state_path.exists()
+
+    with state_path.open("a", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=NOTIFICATION_STATE_HEADERS)
+
+        if not file_exists or state_path.stat().st_size == 0:
+            writer.writeheader()
+
+        writer.writerow({key: row.get(key, "") for key in NOTIFICATION_STATE_HEADERS})
+
+
+def _load_latest_notification_state_overlay(
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
+) -> Dict[str, Dict[str, Any]]:
+    if not state_path.exists() or not state_path.is_file():
+        return {}
+
+    latest_by_notification_id: Dict[str, Dict[str, Any]] = {}
+
+    with state_path.open("r", encoding="utf-8", newline="") as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            notification_id = str(row.get("notification_id", "") or "").strip()
+            if not notification_id:
+                continue
+
+            try:
+                is_read = _normalize_notification_read_flag(row.get("is_read", ""))
+            except ValueError:
+                continue
+
+            latest_by_notification_id[notification_id] = {
+                "is_read": is_read,
+                "state_timestamp": str(row.get("state_timestamp", "") or "").strip(),
+            }
+
+    return latest_by_notification_id
+
+
+def _apply_notification_state_overlay(
+    rows: List[Dict[str, Any]],
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
+) -> List[Dict[str, Any]]:
+    latest_by_notification_id = _load_latest_notification_state_overlay(state_path)
+    overlaid_rows: List[Dict[str, Any]] = []
+
+    for row in rows:
+        merged = dict(row)
+        merged["is_read"] = bool(merged.get("is_read", False))
+        merged["read_state_timestamp"] = ""
+
+        notification_id = str(merged.get("notification_id", "") or "").strip()
+        overlay = latest_by_notification_id.get(notification_id)
+
+        if overlay:
+            merged["is_read"] = bool(overlay.get("is_read", False))
+            merged["read_state_timestamp"] = str(overlay.get("state_timestamp", "") or "").strip()
+
+        overlaid_rows.append(merged)
+
+    return overlaid_rows
+
+
 def notifications_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
+    is_read: str = "",
     limit: int = 20,
 ) -> Dict[str, Any]:
-    rows = _load_notification_rows(notification_dir)
+    rows = _apply_notification_state_overlay(
+        _load_notification_rows(notification_dir),
+        state_path=state_path,
+    )
 
     normalized_job_name = _normalize_scheduler_filter_text(job_name)
     normalized_level = _normalize_scheduler_filter_text(level)
     normalized_delivery_status = _normalize_scheduler_filter_text(delivery_status)
+    normalized_is_read = _normalize_optional_notification_read_filter(is_read)
 
     if normalized_job_name:
         rows = [
@@ -817,15 +924,23 @@ def notifications_payload(
             if _normalize_scheduler_filter_text(row.get("delivery_status", "")) == normalized_delivery_status
         ]
 
+    if normalized_is_read is not None:
+        rows = [
+            row for row in rows
+            if bool(row.get("is_read", False)) == normalized_is_read
+        ]
+
     selected = rows[: max(int(limit), 0)]
 
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
+        "notification_state_path": str(state_path),
         "filters": {
             "job_name": job_name,
             "level": level,
             "delivery_status": delivery_status,
+            "is_read": is_read,
             "limit": limit,
         },
         "total_matching_rows": len(rows),
@@ -836,9 +951,13 @@ def notifications_payload(
 
 def notifications_summary_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
     limit: int = 10,
 ) -> Dict[str, Any]:
-    rows = _load_notification_rows(notification_dir)
+    rows = _apply_notification_state_overlay(
+        _load_notification_rows(notification_dir),
+        state_path=state_path,
+    )
     selected = rows[: max(int(limit), 0)]
 
     level_counts = Counter(
@@ -854,15 +973,90 @@ def notifications_summary_payload(
         for row in rows
     )
 
+    unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
+    read_count = len(rows) - unread_count
+
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
+        "notification_state_path": str(state_path),
         "total_rows": len(rows),
+        "read_count": read_count,
+        "unread_count": unread_count,
         "level_counts": dict(sorted(level_counts.items())),
         "delivery_status_counts": dict(sorted(delivery_status_counts.items())),
         "job_name_counts": dict(sorted(job_name_counts.items())),
         "recent_notifications": selected,
         "count": len(selected),
+    }
+
+
+def notifications_unread_count_payload(
+    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
+) -> Dict[str, Any]:
+    rows = _apply_notification_state_overlay(
+        _load_notification_rows(notification_dir),
+        state_path=state_path,
+    )
+
+    unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
+    read_count = len(rows) - unread_count
+
+    return {
+        "ok": True,
+        "notification_dir": str(notification_dir),
+        "notification_state_path": str(state_path),
+        "total_rows": len(rows),
+        "read_count": read_count,
+        "unread_count": unread_count,
+    }
+
+
+def record_notification_read_state_payload(
+    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
+    *,
+    notification_id: str = "",
+    is_read: Any = True,
+) -> Dict[str, Any]:
+    clean_notification_id = str(notification_id or "").strip()
+    if not clean_notification_id:
+        raise ValueError("notification_id is required.")
+
+    rows = _apply_notification_state_overlay(
+        _load_notification_rows(notification_dir),
+        state_path=state_path,
+    )
+
+    target_notification = None
+    for row in rows:
+        if str(row.get("notification_id", "") or "").strip() == clean_notification_id:
+            target_notification = dict(row)
+            break
+
+    if target_notification is None:
+        raise ValueError(f"Notification not found: {clean_notification_id}")
+
+    normalized_is_read = _normalize_notification_read_flag(is_read)
+
+    state_row = {
+        "state_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "notification_id": clean_notification_id,
+        "is_read": str(normalized_is_read),
+    }
+
+    _append_notification_state_row(state_path, state_row)
+
+    target_notification["is_read"] = normalized_is_read
+    target_notification["read_state_timestamp"] = state_row["state_timestamp"]
+
+    return {
+        "ok": True,
+        "notification_dir": str(notification_dir),
+        "notification_state_path": str(state_path),
+        "state_row": state_row,
+        "notification": target_notification,
     }
 
 def scheduler_storage_contract_payload(

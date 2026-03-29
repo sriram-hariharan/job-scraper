@@ -34,6 +34,35 @@ def _read_sql_artifact(path: Path, label: str) -> str:
 
     return sql
 
+def _sql_quote_text(value: Any) -> str:
+    text = str(value or "")
+    return "'" + text.replace("'", "''") + "'"
+
+
+def _sql_bool_literal(value: Any) -> str:
+    if isinstance(value, bool):
+        return "TRUE" if value else "FALSE"
+
+    raw = str(value or "").strip().lower()
+    if raw in {"true", "1", "yes", "y"}:
+        return "TRUE"
+    if raw in {"false", "0", "no", "n"}:
+        return "FALSE"
+
+    raise ValueError(f"Cannot coerce boolean SQL literal from value={value!r}")
+
+
+def _seed_jsonb_value(value: Any) -> Any:
+    if isinstance(value, str):
+        raw = value.strip()
+        if not raw:
+            return {}
+        return json.loads(raw)
+    return value
+
+
+def _sql_jsonb_literal(value: Any) -> str:
+    return f"{_sql_quote_text(_json_compact(_seed_jsonb_value(value)))}::jsonb"
 
 def scheduler_schema_sql_text(
     schema_path: Path = DEFAULT_SCHEDULER_SCHEMA_SQL_PATH,
@@ -66,6 +95,74 @@ def scheduler_seed_sql_payload(
     return {
         "path": str(Path(seed_path)),
         "sql": sql,
+    }
+
+def render_scheduler_seed_sql(rows: Any = None) -> str:
+    seed_rows = rows if rows is not None else scheduler_job_definition_seed_rows()
+
+    if not isinstance(seed_rows, list) or not seed_rows:
+        raise ValueError("Seed rows must be a non-empty list.")
+
+    value_blocks: List[str] = []
+
+    for row in seed_rows:
+        if not isinstance(row, dict):
+            raise ValueError("Each seed row must be a dictionary.")
+
+        value_blocks.append(
+            "\n".join(
+                [
+                    "    (",
+                    f"        {_sql_quote_text(row.get('job_name'))},",
+                    f"        {_sql_quote_text(row.get('job_description'))},",
+                    f"        {_sql_jsonb_literal(row.get('default_options_json'))},",
+                    f"        {_sql_bool_literal(row.get('supports_planning_only'))},",
+                    f"        {_sql_bool_literal(row.get('supports_application_planning'))},",
+                    f"        {_sql_quote_text(row.get('trigger_source'))},",
+                    f"        {_sql_bool_literal(row.get('is_active'))}",
+                    "    )",
+                ]
+            )
+        )
+
+    values_sql = ",\n".join(value_blocks)
+
+    return "\n".join(
+        [
+            "INSERT INTO scheduler_job_definitions (",
+            "    job_name,",
+            "    job_description,",
+            "    default_options_json,",
+            "    supports_planning_only,",
+            "    supports_application_planning,",
+            "    trigger_source,",
+            "    is_active",
+            ")",
+            "VALUES",
+            values_sql,
+            "ON CONFLICT (job_name) DO UPDATE",
+            "SET",
+            "    job_description = EXCLUDED.job_description,",
+            "    default_options_json = EXCLUDED.default_options_json,",
+            "    supports_planning_only = EXCLUDED.supports_planning_only,",
+            "    supports_application_planning = EXCLUDED.supports_application_planning,",
+            "    trigger_source = EXCLUDED.trigger_source,",
+            "    is_active = EXCLUDED.is_active;",
+        ]
+    )
+
+def scheduler_seed_sql_generation_payload(
+    seed_path: Path = DEFAULT_SCHEDULER_SEED_SQL_PATH,
+    rows: Any = None,
+) -> Dict[str, Any]:
+    generated_sql = render_scheduler_seed_sql(rows=rows)
+    artifact_sql = scheduler_seed_sql_text(seed_path)
+
+    return {
+        "artifact_path": str(Path(seed_path)),
+        "artifact_sql": artifact_sql,
+        "generated_sql": generated_sql,
+        "matches_artifact": generated_sql == artifact_sql,
     }
 
 def _default_job_options(job_name: str) -> Dict[str, Any]:

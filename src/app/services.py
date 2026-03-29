@@ -24,6 +24,7 @@ from src.storage.scheduler_store import (
     scheduler_job_definition_seed_rows,
     scheduler_postgres_table_specs,
     scheduler_schema_sql_payload,
+    scheduler_seed_sql_generation_payload,
     scheduler_seed_sql_payload,
 )
 
@@ -490,6 +491,7 @@ def scheduler_history_payload(
 def scheduler_storage_contract_payload() -> Dict[str, Any]:
     schema_payload = scheduler_schema_sql_payload()
     seed_payload = scheduler_seed_sql_payload()
+    seed_generation_payload = scheduler_seed_sql_generation_payload()
 
     return {
         "ok": True,
@@ -501,6 +503,8 @@ def scheduler_storage_contract_payload() -> Dict[str, Any]:
         "schema_sql_path": schema_payload["path"],
         "seed_sql": seed_payload["sql"],
         "seed_sql_path": seed_payload["path"],
+        "seed_sql_generated": seed_generation_payload["generated_sql"],
+        "seed_sql_matches_artifact": seed_generation_payload["matches_artifact"],
     }
 
 def run_live_pipeline_payload(

@@ -21,6 +21,7 @@ from src.config.settings import (
 )
 from src.pipeline.post_run_summary import write_post_run_summary_artifact
 from src.pipeline.post_run_email import write_post_run_email_outbox_artifact
+from src.pipeline.post_run_email_delivery import deliver_post_run_email_outbox
 
 DEFAULT_SCHEDULED_OUTPUT_DIR = Path(ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
@@ -1069,7 +1070,7 @@ def main() -> int:
         options=options,
         error=error,
     )
-    
+
     post_run_summary_payload = {}
     try:
         post_run_summary_payload = write_post_run_summary_artifact(record)
@@ -1080,6 +1081,8 @@ def main() -> int:
             f"WARNING: failed to write post-run summary artifact: {exc!r}",
             file=sys.stderr,
         )
+
+    post_run_email_payload = {}
 
     if post_run_summary_payload:
         try:
@@ -1092,6 +1095,20 @@ def main() -> int:
         except Exception as exc:
             print(
                 f"WARNING: failed to write post-run email outbox artifact: {exc!r}",
+                file=sys.stderr,
+            )
+
+    if post_run_email_payload:
+        try:
+            post_run_email_delivery_payload = deliver_post_run_email_outbox(
+                post_run_email_payload["path"],
+                mode="outbox_only",
+            )
+            record.setdefault("options", {})["post_run_email_delivery_path"] = post_run_email_delivery_payload["path"]
+            print(f"post_run_email_delivery_path={post_run_email_delivery_payload['path']}")
+        except Exception as exc:
+            print(
+                f"WARNING: failed to record post-run email delivery result: {exc!r}",
                 file=sys.stderr,
             )
 

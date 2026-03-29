@@ -12,6 +12,12 @@ import subprocess
 import sys
 
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.pipeline.scheduler import (
+    build_scheduled_job_command,
+    get_scheduled_job_definition,
+    get_scheduled_job_definitions,
+)
+
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -334,6 +340,64 @@ def pipeline_status_payload() -> Dict[str, Any]:
         "pipeline": merged,
     }
 
+def scheduler_jobs_payload() -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "jobs": get_scheduled_job_definitions(),
+    }
+
+
+def scheduler_job_command_payload(
+    *,
+    job_name: str,
+    planning_only: bool = False,
+    run_application_planning: bool = True,
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    job_limit: int = 50,
+    job_packet_limit: int = 0,
+    llm_actions: Any = "APPLY,APPLY_REVIEW_VARIANTS",
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    delete_seen_data: str = "no",
+) -> Dict[str, Any]:
+    definition = get_scheduled_job_definition(job_name)
+
+    command = build_scheduled_job_command(
+        job_name,
+        run_application_planning=bool(run_application_planning),
+        planning_only=bool(planning_only),
+        output_dir=output_dir,
+        job_limit=int(job_limit),
+        job_packet_limit=int(job_packet_limit),
+        llm_actions=llm_actions,
+        generate_tailoring=bool(generate_tailoring),
+        generate_llm_tailoring=bool(generate_llm_tailoring),
+        refresh_llm_tailoring=bool(refresh_llm_tailoring),
+        generate_llm_fallback=bool(generate_llm_fallback),
+        delete_seen_data=str(delete_seen_data or "no"),
+    )
+
+    return {
+        "ok": True,
+        "job": definition,
+        "command": command,
+        "command_text": " ".join(command),
+        "options": {
+            "planning_only": bool(planning_only),
+            "run_application_planning": bool(run_application_planning),
+            "output_dir": str(output_dir),
+            "job_limit": int(job_limit),
+            "job_packet_limit": int(job_packet_limit),
+            "llm_actions": llm_actions,
+            "generate_tailoring": bool(generate_tailoring),
+            "generate_llm_tailoring": bool(generate_llm_tailoring),
+            "refresh_llm_tailoring": bool(refresh_llm_tailoring),
+            "generate_llm_fallback": bool(generate_llm_fallback),
+            "delete_seen_data": str(delete_seen_data or "no"),
+        },
+    }
 
 def run_live_pipeline_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,

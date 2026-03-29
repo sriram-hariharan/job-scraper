@@ -77,7 +77,44 @@ def status(
 def pipeline_status():
     return services.pipeline_status_payload()
 
+@app.get("/scheduler/jobs")
+def scheduler_jobs():
+    return services.scheduler_jobs_payload()
 
+
+@app.get("/scheduler/command")
+def scheduler_command(
+    job_name: str = Query(..., min_length=1),
+    planning_only: bool = False,
+    run_application_planning: bool = True,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+    job_limit: int = 50,
+    job_packet_limit: int = 0,
+    llm_actions: str = "APPLY,APPLY_REVIEW_VARIANTS",
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    delete_seen_data: str = "no",
+):
+    try:
+        return services.scheduler_job_command_payload(
+            job_name=job_name,
+            planning_only=planning_only,
+            run_application_planning=run_application_planning,
+            output_dir=Path(output_dir),
+            job_limit=job_limit,
+            job_packet_limit=job_packet_limit,
+            llm_actions=llm_actions,
+            generate_tailoring=generate_tailoring,
+            generate_llm_tailoring=generate_llm_tailoring,
+            refresh_llm_tailoring=refresh_llm_tailoring,
+            generate_llm_fallback=generate_llm_fallback,
+            delete_seen_data=delete_seen_data,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):
     try:

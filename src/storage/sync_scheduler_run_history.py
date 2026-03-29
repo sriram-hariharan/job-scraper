@@ -220,6 +220,71 @@ def _build_psql_cmd(
         str(sql_path),
     ]
 
+def _sync_normalized_rows_to_postgres(
+    *,
+    rows: List[Dict[str, Any]],
+    history_path: Path,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        "history_path": str(history_path),
+        "contract_health_ok": True,
+        "history_row_count": len(rows),
+        "staged_csv_path": "",
+        "sql_path": "",
+        "command": [],
+        "command_text": "",
+        "skipped": "",
+    }
+
+    if not rows:
+        payload["skipped"] = "no_rows"
+        return payload
+
+    csv_path = _write_rows_csv(rows)
+    sql_path = _write_sync_sql(csv_path)
+
+    try:
+        database_url_value = _resolve_database_url(
+            database_url,
+            database_url_env,
+            allow_placeholder=bool(print_only),
+        )
+
+        cmd = _build_psql_cmd(
+            psql_bin=str(psql_bin),
+            database_url=database_url_value,
+            sql_path=sql_path,
+        )
+
+        payload["staged_csv_path"] = str(csv_path)
+        payload["sql_path"] = str(sql_path)
+        payload["command"] = cmd
+        payload["command_text"] = shlex.join(cmd)
+
+        if print_only:
+            return payload
+
+        if shutil.which(str(psql_bin)) is None:
+            raise SystemExit(
+                f"psql executable not found on PATH: {psql_bin!r}. "
+                "Install psql or pass --psql-bin with the correct executable path."
+            )
+
+        subprocess.run(cmd, check=True)
+        return payload
+    finally:
+        try:
+            csv_path.unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            sql_path.unlink(missing_ok=True)
+        except Exception:
+            pass
 
 def _parse_args():
     parser = argparse.ArgumentParser(
@@ -276,62 +341,47 @@ def sync_scheduler_run_history_to_postgres(
     resolved_history_path = Path(history_path).expanduser()
     rows = _load_history_rows(resolved_history_path)
 
-    payload: Dict[str, Any] = {
-        "history_path": str(resolved_history_path),
-        "contract_health_ok": bool(contract_health["all_checks_pass"]),
-        "history_row_count": len(rows),
-        "staged_csv_path": "",
-        "sql_path": "",
-        "command": [],
-        "command_text": "",
-        "skipped": "",
-    }
+    payload = _sync_normalized_rows_to_postgres(
+        rows=rows,
+        history_path=resolved_history_path,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    payload["contract_health_ok"] = bool(contract_health["all_checks_pass"])
+    return payload
 
-    if not rows:
-        payload["skipped"] = "no_rows"
-        return payload
-
-    csv_path = _write_rows_csv(rows)
-    sql_path = _write_sync_sql(csv_path)
-
-    try:
-        database_url_value = _resolve_database_url(
-            database_url,
-            database_url_env,
-            allow_placeholder=bool(print_only),
+def insert_scheduler_run_history_row_to_postgres(
+    *,
+    record: Dict[str, Any],
+    history_path: Path = DEFAULT_HISTORY_PATH,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    allow_contract_drift: bool = False,
+) -> Dict[str, Any]:
+    contract_health = scheduler_contract_health_payload()
+    if not contract_health.get("all_checks_pass", False) and not allow_contract_drift:
+        raise SystemExit(
+            "Scheduler contract health check failed. Refusing to insert scheduler run history row while artifacts are drifting. "
+            "Fix the scheduler contract drift first, or pass --allow-contract-drift if you intentionally want to override."
         )
 
-        cmd = _build_psql_cmd(
-            psql_bin=str(psql_bin),
-            database_url=database_url_value,
-            sql_path=sql_path,
-        )
+    normalized_row = scheduler_run_history_db_row(record)
+    resolved_history_path = Path(history_path).expanduser()
 
-        payload["staged_csv_path"] = str(csv_path)
-        payload["sql_path"] = str(sql_path)
-        payload["command"] = cmd
-        payload["command_text"] = shlex.join(cmd)
-
-        if print_only:
-            return payload
-
-        if shutil.which(str(psql_bin)) is None:
-            raise SystemExit(
-                f"psql executable not found on PATH: {psql_bin!r}. "
-                "Install psql or pass --psql-bin with the correct executable path."
-            )
-
-        subprocess.run(cmd, check=True)
-        return payload
-    finally:
-        try:
-            csv_path.unlink(missing_ok=True)
-        except Exception:
-            pass
-        try:
-            sql_path.unlink(missing_ok=True)
-        except Exception:
-            pass
+    payload = _sync_normalized_rows_to_postgres(
+        rows=[normalized_row],
+        history_path=resolved_history_path,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    payload["contract_health_ok"] = bool(contract_health["all_checks_pass"])
+    return payload
 
 def main() -> int:
     args = _parse_args()

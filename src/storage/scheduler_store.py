@@ -7,6 +7,7 @@ from pathlib import Path
 from src.pipeline.scheduler import get_scheduled_job_definitions
 
 DEFAULT_SCHEDULER_SCHEMA_SQL_PATH = Path("src/storage/scheduler_schema.sql")
+DEFAULT_SCHEDULER_SEED_SQL_PATH = Path("src/storage/scheduler_seed.sql")
 
 def _json_compact(value: Any) -> str:
     return json.dumps(
@@ -20,20 +21,24 @@ def _json_compact(value: Any) -> str:
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+def _read_sql_artifact(path: Path, label: str) -> str:
+    resolved = Path(path)
+
+    if not resolved.exists():
+        raise ValueError(f"Missing {label} SQL file: {resolved}")
+
+    sql = resolved.read_text(encoding="utf-8")
+
+    if not sql.strip():
+        raise ValueError(f"{label.capitalize()} SQL file is empty: {resolved}")
+
+    return sql
+
+
 def scheduler_schema_sql_text(
     schema_path: Path = DEFAULT_SCHEDULER_SCHEMA_SQL_PATH,
 ) -> str:
-    path = Path(schema_path)
-
-    if not path.exists():
-        raise ValueError(f"Missing scheduler schema SQL file: {path}")
-
-    sql = path.read_text(encoding="utf-8")
-
-    if not sql.strip():
-        raise ValueError(f"Scheduler schema SQL file is empty: {path}")
-
-    return sql
+    return _read_sql_artifact(schema_path, "scheduler schema")
 
 
 def scheduler_schema_sql_payload(
@@ -43,6 +48,23 @@ def scheduler_schema_sql_payload(
 
     return {
         "path": str(Path(schema_path)),
+        "sql": sql,
+    }
+
+
+def scheduler_seed_sql_text(
+    seed_path: Path = DEFAULT_SCHEDULER_SEED_SQL_PATH,
+) -> str:
+    return _read_sql_artifact(seed_path, "scheduler seed")
+
+
+def scheduler_seed_sql_payload(
+    seed_path: Path = DEFAULT_SCHEDULER_SEED_SQL_PATH,
+) -> Dict[str, Any]:
+    sql = scheduler_seed_sql_text(seed_path)
+
+    return {
+        "path": str(Path(seed_path)),
         "sql": sql,
     }
 

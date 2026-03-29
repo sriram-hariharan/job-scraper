@@ -488,24 +488,36 @@ def scheduler_history_payload(
         "count": len(selected),
     }
 
-def scheduler_storage_contract_payload() -> Dict[str, Any]:
+def scheduler_storage_contract_payload(
+    *,
+    include_sql: bool = False,
+    include_generated_seed_sql: bool = False,
+) -> Dict[str, Any]:
     schema_payload = scheduler_schema_sql_payload()
     seed_payload = scheduler_seed_sql_payload()
     seed_generation_payload = scheduler_seed_sql_generation_payload()
 
-    return {
+    payload = {
         "ok": True,
         "tables": scheduler_postgres_table_specs(),
         "seed_rows": {
             "scheduler_job_definitions": scheduler_job_definition_seed_rows(),
         },
-        "schema_sql": schema_payload["sql"],
         "schema_sql_path": schema_payload["path"],
-        "seed_sql": seed_payload["sql"],
         "seed_sql_path": seed_payload["path"],
-        "seed_sql_generated": seed_generation_payload["generated_sql"],
         "seed_sql_matches_artifact": seed_generation_payload["matches_artifact"],
+        "include_sql": bool(include_sql),
+        "include_generated_seed_sql": bool(include_generated_seed_sql),
     }
+
+    if include_sql:
+        payload["schema_sql"] = schema_payload["sql"]
+        payload["seed_sql"] = seed_payload["sql"]
+
+    if include_generated_seed_sql:
+        payload["seed_sql_generated"] = seed_generation_payload["generated_sql"]
+
+    return payload
 
 def run_live_pipeline_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,

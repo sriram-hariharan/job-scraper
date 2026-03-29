@@ -8,6 +8,7 @@ from src.pipeline.scheduler import get_scheduled_job_definitions
 
 DEFAULT_SCHEDULER_SCHEMA_SQL_PATH = Path("src/storage/scheduler_schema.sql")
 DEFAULT_SCHEDULER_SEED_SQL_PATH = Path("src/storage/scheduler_seed.sql")
+DEFAULT_SCHEDULER_INIT_SQL_PATH = Path("src/storage/scheduler_init.sql")
 
 def _json_compact(value: Any) -> str:
     return json.dumps(
@@ -160,6 +161,48 @@ def scheduler_seed_sql_generation_payload(
 
     return {
         "artifact_path": str(Path(seed_path)),
+        "artifact_sql": artifact_sql,
+        "generated_sql": generated_sql,
+        "matches_artifact": generated_sql == artifact_sql,
+    }
+
+def render_scheduler_init_sql() -> str:
+    schema_sql = scheduler_schema_sql_text().rstrip()
+    seed_sql = render_scheduler_seed_sql().rstrip()
+
+    if not schema_sql:
+        raise ValueError("Scheduler schema SQL is empty after rendering.")
+    if not seed_sql:
+        raise ValueError("Scheduler seed SQL is empty after rendering.")
+
+    return schema_sql + "\n\n" + seed_sql
+
+
+def scheduler_init_sql_text(
+    init_path: Path = DEFAULT_SCHEDULER_INIT_SQL_PATH,
+) -> str:
+    return _read_sql_artifact(init_path, "scheduler init")
+
+
+def scheduler_init_sql_payload(
+    init_path: Path = DEFAULT_SCHEDULER_INIT_SQL_PATH,
+) -> Dict[str, Any]:
+    sql = scheduler_init_sql_text(init_path)
+
+    return {
+        "path": str(Path(init_path)),
+        "sql": sql,
+    }
+
+
+def scheduler_init_sql_generation_payload(
+    init_path: Path = DEFAULT_SCHEDULER_INIT_SQL_PATH,
+) -> Dict[str, Any]:
+    generated_sql = render_scheduler_init_sql()
+    artifact_sql = scheduler_init_sql_text(init_path)
+
+    return {
+        "artifact_path": str(Path(init_path)),
         "artifact_sql": artifact_sql,
         "generated_sql": generated_sql,
         "matches_artifact": generated_sql == artifact_sql,

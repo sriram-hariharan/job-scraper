@@ -19,6 +19,7 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
+from src.pipeline.post_run_summary import write_post_run_summary_artifact
 
 DEFAULT_SCHEDULED_OUTPUT_DIR = Path(ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
@@ -1067,7 +1068,17 @@ def main() -> int:
         options=options,
         error=error,
     )
-
+    
+    try:
+        post_run_summary_payload = write_post_run_summary_artifact(record)
+        record.setdefault("options", {})["post_run_summary_path"] = post_run_summary_payload["path"]
+        print(f"post_run_summary_path={post_run_summary_payload['path']}")
+    except Exception as exc:
+        print(
+            f"WARNING: failed to write post-run summary artifact: {exc!r}",
+            file=sys.stderr,
+        )
+    
     try:
         append_scheduler_run_record(
             record,

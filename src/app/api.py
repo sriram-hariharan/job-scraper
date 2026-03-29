@@ -114,7 +114,21 @@ def scheduler_command(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    
+
+@app.get("/scheduler/history")
+def scheduler_history(
+    history_path: str = str(services.DEFAULT_SCHEDULER_RUN_HISTORY_PATH),
+    job_name: str = "",
+    status: str = "",
+    limit: int = 20,
+):
+    return services.scheduler_history_payload(
+        history_path=Path(history_path),
+        job_name=job_name,
+        status=status,
+        limit=limit,
+    )
+
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):
     try:

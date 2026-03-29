@@ -133,10 +133,12 @@ def scheduler_history(
 def scheduler_storage_contract(
     include_sql: bool = False,
     include_generated_seed_sql: bool = False,
+    include_generated_init_sql: bool = False,
 ):
     return services.scheduler_storage_contract_payload(
         include_sql=include_sql,
         include_generated_seed_sql=include_generated_seed_sql,
+        include_generated_init_sql=include_generated_init_sql,
     )
 
 @app.post("/pipeline/run")

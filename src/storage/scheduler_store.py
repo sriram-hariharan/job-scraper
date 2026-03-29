@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List
+from pathlib import Path
 
 from src.pipeline.scheduler import get_scheduled_job_definitions
 
+DEFAULT_SCHEDULER_SCHEMA_SQL_PATH = Path("src/storage/scheduler_schema.sql")
 
 def _json_compact(value: Any) -> str:
     return json.dumps(
@@ -18,6 +20,31 @@ def _json_compact(value: Any) -> str:
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+def scheduler_schema_sql_text(
+    schema_path: Path = DEFAULT_SCHEDULER_SCHEMA_SQL_PATH,
+) -> str:
+    path = Path(schema_path)
+
+    if not path.exists():
+        raise ValueError(f"Missing scheduler schema SQL file: {path}")
+
+    sql = path.read_text(encoding="utf-8")
+
+    if not sql.strip():
+        raise ValueError(f"Scheduler schema SQL file is empty: {path}")
+
+    return sql
+
+
+def scheduler_schema_sql_payload(
+    schema_path: Path = DEFAULT_SCHEDULER_SCHEMA_SQL_PATH,
+) -> Dict[str, Any]:
+    sql = scheduler_schema_sql_text(schema_path)
+
+    return {
+        "path": str(Path(schema_path)),
+        "sql": sql,
+    }
 
 def _default_job_options(job_name: str) -> Dict[str, Any]:
     normalized = _clean_text(job_name).lower()

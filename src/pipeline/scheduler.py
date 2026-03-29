@@ -22,6 +22,7 @@ from src.config.settings import (
 from src.pipeline.post_run_summary import write_post_run_summary_artifact
 from src.pipeline.post_run_email import write_post_run_email_outbox_artifact
 from src.pipeline.post_run_email_delivery import deliver_post_run_email_outbox
+from src.pipeline.post_run_notification import write_notification_record_artifact
 
 DEFAULT_SCHEDULED_OUTPUT_DIR = Path(ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
@@ -1104,6 +1105,8 @@ def main() -> int:
                 file=sys.stderr,
             )
 
+    post_run_email_delivery_payload = {}
+
     if post_run_email_payload:
         try:
             delivery_mode = _resolve_post_run_email_delivery_mode()
@@ -1118,6 +1121,19 @@ def main() -> int:
         except Exception as exc:
             print(
                 f"WARNING: failed to record post-run email delivery result: {exc!r}",
+                file=sys.stderr,
+            )
+
+    if post_run_email_delivery_payload:
+        try:
+            post_run_notification_payload = write_notification_record_artifact(
+                post_run_email_delivery_payload["path"],
+            )
+            record.setdefault("options", {})["post_run_notification_path"] = post_run_notification_payload["path"]
+            print(f"post_run_notification_path={post_run_notification_payload['path']}")
+        except Exception as exc:
+            print(
+                f"WARNING: failed to write notification record artifact: {exc!r}",
                 file=sys.stderr,
             )
 

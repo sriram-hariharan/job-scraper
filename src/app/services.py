@@ -11,6 +11,8 @@ import re
 import subprocess
 import sys
 
+from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
+
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -58,6 +60,7 @@ DEFAULT_PROFILE_RESUME_DIR = Path(
 ).expanduser()
 DEFAULT_PATCH_SELECTIONS_PATH = DEFAULT_OUTPUT_DIR / "patch_selections.csv"
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
+DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
 
 PATCH_SELECTION_HEADERS = [
     "selection_timestamp",
@@ -746,6 +749,119 @@ def scheduler_history_payload(
         },
         "total_matching_rows": len(rows),
         "rows": selected,
+        "count": len(selected),
+    }
+
+def _load_notification_rows(
+    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+) -> List[Dict[str, Any]]:
+    if not notification_dir.exists() or not notification_dir.is_dir():
+        return []
+
+    rows: List[Dict[str, Any]] = []
+
+    for path in notification_dir.glob("*.json"):
+        if not path.is_file():
+            continue
+
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        if not isinstance(payload, dict):
+            continue
+
+        row = dict(payload)
+        row["_path"] = str(path)
+        rows.append(row)
+
+    rows.sort(
+        key=lambda row: (
+            str(row.get("created_at", "") or ""),
+            str(row.get("notification_id", "") or ""),
+        ),
+        reverse=True,
+    )
+    return rows
+
+
+def notifications_payload(
+    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    job_name: str = "",
+    level: str = "",
+    delivery_status: str = "",
+    limit: int = 20,
+) -> Dict[str, Any]:
+    rows = _load_notification_rows(notification_dir)
+
+    normalized_job_name = _normalize_scheduler_filter_text(job_name)
+    normalized_level = _normalize_scheduler_filter_text(level)
+    normalized_delivery_status = _normalize_scheduler_filter_text(delivery_status)
+
+    if normalized_job_name:
+        rows = [
+            row for row in rows
+            if _normalize_scheduler_filter_text(row.get("job_name", "")) == normalized_job_name
+        ]
+
+    if normalized_level:
+        rows = [
+            row for row in rows
+            if _normalize_scheduler_filter_text(row.get("level", "")) == normalized_level
+        ]
+
+    if normalized_delivery_status:
+        rows = [
+            row for row in rows
+            if _normalize_scheduler_filter_text(row.get("delivery_status", "")) == normalized_delivery_status
+        ]
+
+    selected = rows[: max(int(limit), 0)]
+
+    return {
+        "ok": True,
+        "notification_dir": str(notification_dir),
+        "filters": {
+            "job_name": job_name,
+            "level": level,
+            "delivery_status": delivery_status,
+            "limit": limit,
+        },
+        "total_matching_rows": len(rows),
+        "rows": selected,
+        "count": len(selected),
+    }
+
+
+def notifications_summary_payload(
+    notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
+    limit: int = 10,
+) -> Dict[str, Any]:
+    rows = _load_notification_rows(notification_dir)
+    selected = rows[: max(int(limit), 0)]
+
+    level_counts = Counter(
+        str(row.get("level", "") or "<empty>")
+        for row in rows
+    )
+    delivery_status_counts = Counter(
+        str(row.get("delivery_status", "") or "<empty>")
+        for row in rows
+    )
+    job_name_counts = Counter(
+        str(row.get("job_name", "") or "<empty>")
+        for row in rows
+    )
+
+    return {
+        "ok": True,
+        "notification_dir": str(notification_dir),
+        "total_rows": len(rows),
+        "level_counts": dict(sorted(level_counts.items())),
+        "delivery_status_counts": dict(sorted(delivery_status_counts.items())),
+        "job_name_counts": dict(sorted(job_name_counts.items())),
+        "recent_notifications": selected,
         "count": len(selected),
     }
 

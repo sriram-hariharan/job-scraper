@@ -21,6 +21,8 @@ from src.pipeline.scheduler import (
     get_scheduled_job_definitions,
 )
 from src.storage.scheduler_store import (
+    scheduler_init_sql_generation_payload,
+    scheduler_init_sql_payload,
     scheduler_job_definition_seed_rows,
     scheduler_postgres_table_specs,
     scheduler_schema_sql_payload,
@@ -492,10 +494,13 @@ def scheduler_storage_contract_payload(
     *,
     include_sql: bool = False,
     include_generated_seed_sql: bool = False,
+    include_generated_init_sql: bool = False,
 ) -> Dict[str, Any]:
     schema_payload = scheduler_schema_sql_payload()
     seed_payload = scheduler_seed_sql_payload()
+    init_payload = scheduler_init_sql_payload()
     seed_generation_payload = scheduler_seed_sql_generation_payload()
+    init_generation_payload = scheduler_init_sql_generation_payload()
 
     payload = {
         "ok": True,
@@ -505,17 +510,24 @@ def scheduler_storage_contract_payload(
         },
         "schema_sql_path": schema_payload["path"],
         "seed_sql_path": seed_payload["path"],
+        "init_sql_path": init_payload["path"],
         "seed_sql_matches_artifact": seed_generation_payload["matches_artifact"],
+        "init_sql_matches_artifact": init_generation_payload["matches_artifact"],
         "include_sql": bool(include_sql),
         "include_generated_seed_sql": bool(include_generated_seed_sql),
+        "include_generated_init_sql": bool(include_generated_init_sql),
     }
 
     if include_sql:
         payload["schema_sql"] = schema_payload["sql"]
         payload["seed_sql"] = seed_payload["sql"]
+        payload["init_sql"] = init_payload["sql"]
 
     if include_generated_seed_sql:
         payload["seed_sql_generated"] = seed_generation_payload["generated_sql"]
+
+    if include_generated_init_sql:
+        payload["init_sql_generated"] = init_generation_payload["generated_sql"]
 
     return payload
 

@@ -115,6 +115,58 @@ def scheduler_command(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+@app.get("/scheduler/launchd-config")
+def scheduler_launchd_config(
+    job_name: str = "",
+    planning_only: bool = False,
+    run_application_planning: bool = True,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+    job_limit: int = 50,
+    job_packet_limit: int = 0,
+    llm_actions: str = "APPLY,APPLY_REVIEW_VARIANTS",
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    delete_seen_data: str = "no",
+    sync_postgres_run_history: bool = False,
+    require_postgres_run_history_sync: bool = False,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    allow_contract_drift: bool = False,
+    launchd_interval_seconds: int = services.DEFAULT_LAUNCHD_INTERVAL_SECONDS,
+    launchd_out_dir: str = str(services.DEFAULT_LAUNCHD_OUT_DIR),
+    launchd_log_dir: str = str(services.DEFAULT_LAUNCHD_LOG_DIR),
+    launchd_label_prefix: str = services.DEFAULT_LAUNCHD_LABEL_PREFIX,
+):
+    try:
+        return services.scheduler_launchd_config_payload(
+            job_name=job_name,
+            planning_only=planning_only,
+            run_application_planning=run_application_planning,
+            output_dir=Path(output_dir),
+            job_limit=job_limit,
+            job_packet_limit=job_packet_limit,
+            llm_actions=llm_actions,
+            generate_tailoring=generate_tailoring,
+            generate_llm_tailoring=generate_llm_tailoring,
+            refresh_llm_tailoring=refresh_llm_tailoring,
+            generate_llm_fallback=generate_llm_fallback,
+            delete_seen_data=delete_seen_data,
+            sync_postgres_run_history=sync_postgres_run_history,
+            require_postgres_run_history_sync=require_postgres_run_history_sync,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            allow_contract_drift=allow_contract_drift,
+            launchd_interval_seconds=launchd_interval_seconds,
+            launchd_out_dir=Path(launchd_out_dir),
+            launchd_log_dir=Path(launchd_log_dir),
+            launchd_label_prefix=launchd_label_prefix,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+    
 @app.get("/scheduler/history")
 def scheduler_history(
     history_path: str = str(services.DEFAULT_SCHEDULER_RUN_HISTORY_PATH),

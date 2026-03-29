@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import plistlib
+import re
 import shlex
 import subprocess
 import sys
@@ -20,7 +22,11 @@ DEFAULT_SCHEDULED_OUTPUT_DIR = Path(ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_LLM_ACTIONS = "APPLY,APPLY_REVIEW_VARIANTS"
 DEFAULT_DELETE_SEEN_DATA = "no"
-
+REPO_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_LAUNCHD_OUT_DIR = Path("data/launchd")
+DEFAULT_LAUNCHD_LOG_DIR = Path("outputs/scheduler_logs")
+DEFAULT_LAUNCHD_LABEL_PREFIX = "com.jobstack.scheduler"
+DEFAULT_LAUNCHD_INTERVAL_SECONDS = 21600
 
 @dataclass(frozen=True)
 class ScheduledJobDefinition:
@@ -99,6 +105,17 @@ def _normalize_non_negative_int(value: Any, field_name: str) -> int:
 
     return parsed
 
+def _normalize_positive_int(value: Any, field_name: str) -> int:
+    parsed = _normalize_non_negative_int(value, field_name)
+    if parsed <= 0:
+        raise ValueError(f"{field_name} must be > 0.")
+    return parsed
+
+
+def _normalize_launchd_label_piece(value: Any, fallback: str) -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", ".", text).strip(".")
+    return text or fallback
 
 def _normalize_output_dir(value: Any) -> str:
     raw = str(value or DEFAULT_SCHEDULED_OUTPUT_DIR).strip()
@@ -222,6 +239,228 @@ def build_scheduled_job_command(
 
     allowed = ", ".join(item.name for item in _SUPPORTED_SCHEDULED_JOBS)
     raise ValueError(f"Unsupported scheduled job={job_name!r}. Allowed: {allowed}")
+
+def build_scheduler_wrapper_command(
+    job_name: Any,
+    *,
+    run_application_planning: bool = True,
+    planning_only: bool = False,
+    output_dir: Any = DEFAULT_SCHEDULED_OUTPUT_DIR,
+    job_limit: Any = 50,
+    job_packet_limit: Any = 0,
+    llm_actions: Any = DEFAULT_LLM_ACTIONS,
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    delete_seen_data: Any = DEFAULT_DELETE_SEEN_DATA,
+    history_path: Any = DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+    sync_postgres_run_history: bool = False,
+    require_postgres_run_history_sync: bool = False,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    allow_contract_drift: bool = False,
+) -> List[str]:
+    definition = get_scheduled_job_definition(job_name)
+    normalized_job = definition["name"]
+
+    cmd: List[str] = [
+        sys.executable,
+        "-u",
+        "-m",
+        "src.pipeline.scheduler",
+        "--job",
+        normalized_job,
+        "--history-path",
+        str(_resolve_history_path(history_path)),
+    ]
+
+    if planning_only:
+        cmd.append("--planning-only")
+
+    if not run_application_planning:
+        cmd.append("--skip-application-planning")
+
+    if normalized_job == "live_pipeline":
+        cmd.extend(
+            [
+                "--output-dir",
+                _normalize_output_dir(output_dir),
+                "--job-limit",
+                str(_normalize_non_negative_int(job_limit, "job_limit")),
+                "--job-packet-limit",
+                str(_normalize_non_negative_int(job_packet_limit, "job_packet_limit")),
+                "--llm-actions",
+                _normalize_llm_actions(llm_actions),
+                "--delete-seen-data",
+                _normalize_delete_seen_data(delete_seen_data),
+            ]
+        )
+
+        if generate_tailoring:
+            cmd.append("--generate-tailoring")
+        if generate_llm_tailoring:
+            cmd.append("--generate-llm-tailoring")
+        if refresh_llm_tailoring:
+            cmd.append("--refresh-llm-tailoring")
+        if generate_llm_fallback:
+            cmd.append("--generate-llm-fallback")
+
+    if sync_postgres_run_history:
+        cmd.append("--sync-postgres-run-history")
+    if require_postgres_run_history_sync:
+        cmd.append("--require-postgres-run-history-sync")
+    if database_url:
+        cmd.extend(["--database-url", str(database_url)])
+    if database_url_env and str(database_url_env).strip() and str(database_url_env).strip() != "DATABASE_URL":
+        cmd.extend(["--database-url-env", str(database_url_env).strip()])
+    if psql_bin and str(psql_bin).strip() and str(psql_bin).strip() != "psql":
+        cmd.extend(["--psql-bin", str(psql_bin).strip()])
+    if allow_contract_drift:
+        cmd.append("--allow-contract-drift")
+
+    return cmd
+
+
+def build_scheduler_launchd_label(
+    job_name: Any,
+    *,
+    planning_only: bool = False,
+    label_prefix: str = DEFAULT_LAUNCHD_LABEL_PREFIX,
+) -> str:
+    definition = get_scheduled_job_definition(job_name)
+    prefix = _normalize_launchd_label_piece(label_prefix, "com.jobstack.scheduler")
+
+    suffix_parts = [definition["name"]]
+    if definition["name"] == "live_pipeline" and planning_only:
+        suffix_parts.append("planning_only")
+
+    suffix = ".".join(
+        _normalize_launchd_label_piece(part, "job")
+        for part in suffix_parts
+    )
+    return f"{prefix}.{suffix}"
+
+
+def build_scheduler_launchd_plist_payload(
+    job_name: Any,
+    *,
+    run_application_planning: bool = True,
+    planning_only: bool = False,
+    output_dir: Any = DEFAULT_SCHEDULED_OUTPUT_DIR,
+    job_limit: Any = 50,
+    job_packet_limit: Any = 0,
+    llm_actions: Any = DEFAULT_LLM_ACTIONS,
+    generate_tailoring: bool = False,
+    generate_llm_tailoring: bool = False,
+    refresh_llm_tailoring: bool = False,
+    generate_llm_fallback: bool = False,
+    delete_seen_data: Any = DEFAULT_DELETE_SEEN_DATA,
+    history_path: Any = DEFAULT_SCHEDULER_RUN_HISTORY_PATH,
+    sync_postgres_run_history: bool = False,
+    require_postgres_run_history_sync: bool = False,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    allow_contract_drift: bool = False,
+    launchd_interval_seconds: Any = DEFAULT_LAUNCHD_INTERVAL_SECONDS,
+    launchd_out_dir: Any = DEFAULT_LAUNCHD_OUT_DIR,
+    launchd_log_dir: Any = DEFAULT_LAUNCHD_LOG_DIR,
+    launchd_label_prefix: str = DEFAULT_LAUNCHD_LABEL_PREFIX,
+) -> Dict[str, Any]:
+    interval_seconds = _normalize_positive_int(
+        launchd_interval_seconds,
+        "launchd_interval_seconds",
+    )
+    label = build_scheduler_launchd_label(
+        job_name,
+        planning_only=planning_only,
+        label_prefix=launchd_label_prefix,
+    )
+
+    launchd_out_dir_path = Path(str(launchd_out_dir or DEFAULT_LAUNCHD_OUT_DIR)).expanduser()
+    launchd_log_dir_path = Path(str(launchd_log_dir or DEFAULT_LAUNCHD_LOG_DIR)).expanduser()
+
+    command = build_scheduler_wrapper_command(
+        job_name,
+        run_application_planning=run_application_planning,
+        planning_only=planning_only,
+        output_dir=output_dir,
+        job_limit=job_limit,
+        job_packet_limit=job_packet_limit,
+        llm_actions=llm_actions,
+        generate_tailoring=generate_tailoring,
+        generate_llm_tailoring=generate_llm_tailoring,
+        refresh_llm_tailoring=refresh_llm_tailoring,
+        generate_llm_fallback=generate_llm_fallback,
+        delete_seen_data=delete_seen_data,
+        history_path=history_path,
+        sync_postgres_run_history=sync_postgres_run_history,
+        require_postgres_run_history_sync=require_postgres_run_history_sync,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        allow_contract_drift=allow_contract_drift,
+    )
+
+    plist_path = launchd_out_dir_path / f"{label}.plist"
+    stdout_log_path = launchd_log_dir_path / f"{label}.out.log"
+    stderr_log_path = launchd_log_dir_path / f"{label}.err.log"
+
+    plist_data = {
+        "Label": label,
+        "ProgramArguments": command,
+        "WorkingDirectory": str(REPO_ROOT),
+        "RunAtLoad": False,
+        "StartInterval": interval_seconds,
+        "StandardOutPath": str(stdout_log_path),
+        "StandardErrorPath": str(stderr_log_path),
+        "ProcessType": "Background",
+        "AbandonProcessGroup": True,
+    }
+    plist_xml = plistlib.dumps(
+        plist_data,
+        fmt=plistlib.FMT_XML,
+        sort_keys=True,
+    ).decode("utf-8")
+
+    return {
+        "job_name": get_scheduled_job_definition(job_name)["name"],
+        "planning_only": bool(planning_only),
+        "run_application_planning": bool(run_application_planning),
+        "label": label,
+        "launchd_label_prefix": _normalize_launchd_label_piece(
+            launchd_label_prefix,
+            "com.jobstack.scheduler",
+        ),
+        "launchd_interval_seconds": interval_seconds,
+        "working_directory": str(REPO_ROOT),
+        "command": command,
+        "command_text": _command_to_text(command),
+        "plist_path": str(plist_path),
+        "stdout_log_path": str(stdout_log_path),
+        "stderr_log_path": str(stderr_log_path),
+        "plist_xml": plist_xml,
+    }
+
+
+def write_scheduler_launchd_plist(
+    job_name: Any,
+    **kwargs: Any,
+) -> Dict[str, Any]:
+    payload = build_scheduler_launchd_plist_payload(job_name, **kwargs)
+
+    plist_path = Path(payload["plist_path"]).expanduser()
+    stdout_log_path = Path(payload["stdout_log_path"]).expanduser()
+    stderr_log_path = Path(payload["stderr_log_path"]).expanduser()
+
+    plist_path.parent.mkdir(parents=True, exist_ok=True)
+    stdout_log_path.parent.mkdir(parents=True, exist_ok=True)
+    stderr_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+    plist_path.write_text(payload["plist_xml"], encoding="utf-8")
+    return payload
 
 
 def build_scheduler_run_record(
@@ -375,6 +614,37 @@ def _parse_args():
         action="store_true",
         help="For optional Postgres run-history sync: allow sync even if scheduler SQL artifact drift checks fail.",
     )
+    parser.add_argument(
+        "--emit-launchd-plist",
+        action="store_true",
+        help="Build and print a launchd plist preview for this scheduler job instead of running it.",
+    )
+    parser.add_argument(
+        "--write-launchd-plist",
+        action="store_true",
+        help="Write a launchd plist artifact for this scheduler job instead of running it.",
+    )
+    parser.add_argument(
+        "--launchd-interval-seconds",
+        type=int,
+        default=DEFAULT_LAUNCHD_INTERVAL_SECONDS,
+        help="launchd StartInterval value for plist generation.",
+    )
+    parser.add_argument(
+        "--launchd-out-dir",
+        default=str(DEFAULT_LAUNCHD_OUT_DIR),
+        help="Directory where generated launchd plist files are written.",
+    )
+    parser.add_argument(
+        "--launchd-log-dir",
+        default=str(DEFAULT_LAUNCHD_LOG_DIR),
+        help="Directory used for launchd stdout/stderr log files.",
+    )
+    parser.add_argument(
+        "--launchd-label-prefix",
+        default=DEFAULT_LAUNCHD_LABEL_PREFIX,
+        help="Prefix used when constructing launchd labels.",
+    )
     return parser.parse_args()
 
 
@@ -413,6 +683,51 @@ def main() -> int:
         generate_llm_fallback=options["generate_llm_fallback"],
         delete_seen_data=options["delete_seen_data"],
     )
+    
+    if args.emit_launchd_plist or args.write_launchd_plist:
+        launchd_kwargs = {
+            "run_application_planning": options["run_application_planning"],
+            "planning_only": options["planning_only"],
+            "output_dir": options["output_dir"],
+            "job_limit": options["job_limit"],
+            "job_packet_limit": options["job_packet_limit"],
+            "llm_actions": options["llm_actions"],
+            "generate_tailoring": options["generate_tailoring"],
+            "generate_llm_tailoring": options["generate_llm_tailoring"],
+            "refresh_llm_tailoring": options["refresh_llm_tailoring"],
+            "generate_llm_fallback": options["generate_llm_fallback"],
+            "delete_seen_data": options["delete_seen_data"],
+            "history_path": args.history_path,
+            "sync_postgres_run_history": bool(args.sync_postgres_run_history),
+            "require_postgres_run_history_sync": bool(args.require_postgres_run_history_sync),
+            "database_url": args.database_url,
+            "database_url_env": args.database_url_env,
+            "psql_bin": args.psql_bin,
+            "allow_contract_drift": bool(args.allow_contract_drift),
+            "launchd_interval_seconds": args.launchd_interval_seconds,
+            "launchd_out_dir": args.launchd_out_dir,
+            "launchd_log_dir": args.launchd_log_dir,
+            "launchd_label_prefix": args.launchd_label_prefix,
+        }
+
+        if args.write_launchd_plist:
+            launchd_payload = write_scheduler_launchd_plist(args.job, **launchd_kwargs)
+            print("launchd_plist_written=true")
+        else:
+            launchd_payload = build_scheduler_launchd_plist_payload(args.job, **launchd_kwargs)
+
+        print(f"launchd_label={launchd_payload['label']}")
+        print(f"launchd_interval_seconds={launchd_payload['launchd_interval_seconds']}")
+        print(f"working_directory={launchd_payload['working_directory']}")
+        print(f"plist_path={launchd_payload['plist_path']}")
+        print(f"stdout_log_path={launchd_payload['stdout_log_path']}")
+        print(f"stderr_log_path={launchd_payload['stderr_log_path']}")
+        print(f"command={launchd_payload['command_text']}")
+
+        if args.emit_launchd_plist:
+            print(launchd_payload["plist_xml"])
+
+        return 0
 
     print(_command_to_text(cmd))
 

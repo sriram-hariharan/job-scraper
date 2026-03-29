@@ -455,10 +455,11 @@ def main() -> int:
 
     if args.sync_postgres_run_history:
         from src.storage.sync_scheduler_run_history import (
-            sync_scheduler_run_history_to_postgres,
+            insert_scheduler_run_history_row_to_postgres,
         )
 
-        sync_payload = sync_scheduler_run_history_to_postgres(
+        sync_payload = insert_scheduler_run_history_row_to_postgres(
+            record=record,
             history_path=Path(args.history_path).expanduser(),
             database_url=args.database_url,
             database_url_env=args.database_url_env,
@@ -473,7 +474,7 @@ def main() -> int:
             print("postgres_sync_skipped=no_rows")
         else:
             print(f"postgres_sync_command={sync_payload['command_text']}")
-            
+
     return return_code
 
 

@@ -141,6 +141,21 @@ def scheduler_storage_contract(
         include_generated_init_sql=include_generated_init_sql,
     )
 
+@app.get("/scheduler/postgres-status")
+def scheduler_postgres_status(
+    limit: int = 10,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+):
+    try:
+        return services.scheduler_postgres_status_payload(
+            limit=limit,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+        )
+    except (ValueError, SystemExit) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):
     try:

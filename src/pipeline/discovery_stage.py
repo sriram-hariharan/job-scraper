@@ -24,6 +24,15 @@ from src.discovery.ats_network_discovery import (
 
 logger = get_logger(__name__)
 
+def _counts_by_ats(discovered):
+    counts = {}
+
+    for ats, companies in discovered.items():
+        count = len(companies or [])
+        if count > 0:
+            counts[ats] = count
+
+    return counts
 
 async def discover_from_existing_boards():
 
@@ -113,13 +122,21 @@ def run_discovery():
     domains = load_lines("data/company_domains.txt")
     learned = get_learned()
 
+    summary = {
+        "sources": {},
+        "run_unique_discovered_by_ats": {},
+    }
+    run_unique_discovered = {}
+
     # ---------------- DOMAIN ATS DISCOVERY ----------------
 
     logger.info("Domain-based ATS detection")
 
     domain_discovered = discover_from_domains(domains)
+    summary["sources"]["domain_discovered"] = _counts_by_ats(domain_discovered)
 
     for ats, companies in domain_discovered.items():
+        run_unique_discovered.setdefault(ats, set()).update(companies)
         learned[ats].update(companies)
         logger.info(f"{ats:15} {len(companies)} discovered via domains")
 
@@ -131,8 +148,10 @@ def run_discovery():
     career_discovered = asyncio.run(
         detect_ats_from_domains(domains)
     )
+    summary["sources"]["career_discovered"] = _counts_by_ats(career_discovered)
 
     for ats, companies in career_discovered.items():
+        run_unique_discovered.setdefault(ats, set()).update(companies)
         learned[ats].update(companies)
         logger.info(f"{ats:15} {len(companies)} discovered via career pages")
 
@@ -145,13 +164,18 @@ def run_discovery():
         discover_from_existing_boards()
     )
 
+    normalized_network_discovered = {}
     for ats, companies in network_discovered.items():
 
-        if ats == "greenhouse":
-            companies = validate_greenhouse_companies(companies)
+        normalized_companies = validate_greenhouse_companies(companies) if ats == "greenhouse" else companies
+        normalized_companies = set(normalized_companies)
 
-        learned[ats].update(companies)
-        logger.info(f"{ats:15} {len(companies)} discovered via ATS network")
+        normalized_network_discovered[ats] = normalized_companies
+        run_unique_discovered.setdefault(ats, set()).update(normalized_companies)
+        learned[ats].update(normalized_companies)
+        logger.info(f"{ats:15} {len(normalized_companies)} discovered via ATS network")
+
+    summary["sources"]["network_discovered"] = _counts_by_ats(normalized_network_discovered)
 
     # ---------------- GREENHOUSE EMBED GRAPH DISCOVERY ----------------
 
@@ -164,18 +188,29 @@ def run_discovery():
     logger.info(f"{'greenhouse':15} scanning {len(batch)} companies for embed discovery")
 
     embed_found = discover_greenhouse_embed(batch)
-    embed_found = validate_greenhouse_companies(embed_found)
+    embed_found = set(validate_greenhouse_companies(embed_found))
 
+    run_unique_discovered.setdefault("greenhouse", set()).update(embed_found)
     learned["greenhouse"].update(embed_found)
     logger.info(f"{'greenhouse':15} {len(embed_found)} discovered via embed graph")
 
+    summary["sources"]["greenhouse_embed_discovered"] = _counts_by_ats(
+        {"greenhouse": embed_found}
+    )
+
     # ---------------- SMARTRECRUITERS GLOBAL DISCOVERY ----------------
+
     logger.info("")
     logger.info("SmartRecruiters global discovery")
 
-    sr_found = discover_smartrecruiters_companies()
+    sr_found = set(discover_smartrecruiters_companies())
+    run_unique_discovered.setdefault("smartrecruiters", set()).update(sr_found)
     learned["smartrecruiters"].update(sr_found)
     logger.info(f"{'smartrecruiters':15} {len(sr_found)} companies discovered from global feed")
+
+    summary["sources"]["smartrecruiters_global_discovered"] = _counts_by_ats(
+        {"smartrecruiters": sr_found}
+    )
 
     # ---------------- GITHUB DISCOVERY ----------------
 
@@ -183,21 +218,29 @@ def run_discovery():
     logger.info("GitHub ATS discovery")
 
     github_found = run_github_discovery()
+    summary["sources"]["github_discovered"] = _counts_by_ats(github_found)
 
     for ats, companies in github_found.items():
+        run_unique_discovered.setdefault(ats, set()).update(companies)
         learned[ats].update(companies)
         logger.info(f"{ats:15} {len(companies)} discovered via github")
-        
+
     # ---------------- SITEMAP DISCOVERY ----------------
 
     logger.info("")
     logger.info("Sitemap discovery")
 
     sitemap_found = run_sitemap_discovery()
+    summary["sources"]["sitemap_discovered"] = _counts_by_ats(sitemap_found)
 
     for ats, companies in sitemap_found.items():
+        run_unique_discovered.setdefault(ats, set()).update(companies)
         learned[ats].update(companies)
         logger.info(f"{ats:15} {len(companies)} discovered via sitemap")
 
+    summary["run_unique_discovered_by_ats"] = _counts_by_ats(run_unique_discovered)
+
     # Final common persisting
     persist_discovered_companies()
+
+    return summary

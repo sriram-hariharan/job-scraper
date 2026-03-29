@@ -280,16 +280,20 @@ def scheduler_summary(
 @app.get("/notifications")
 def notifications(
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
+    is_read: str = "",
     limit: int = 20,
 ):
     return services.notifications_payload(
         notification_dir=Path(notification_dir),
+        state_path=Path(notification_state_path),
         job_name=job_name,
         level=level,
         delivery_status=delivery_status,
+        is_read=is_read,
         limit=limit,
     )
 
@@ -297,13 +301,42 @@ def notifications(
 @app.get("/notifications/summary")
 def notifications_summary(
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
     limit: int = 10,
 ):
     return services.notifications_summary_payload(
         notification_dir=Path(notification_dir),
+        state_path=Path(notification_state_path),
         limit=limit,
     )
 
+@app.get("/notifications/unread-count")
+def notifications_unread_count(
+    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
+):
+    return services.notifications_unread_count_payload(
+        notification_dir=Path(notification_dir),
+        state_path=Path(notification_state_path),
+    )
+
+
+@app.post("/notifications/read-state")
+def notifications_read_state(
+    payload: dict = Body(...),
+    notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
+    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
+):
+    try:
+        return services.record_notification_read_state_payload(
+            notification_dir=Path(notification_dir),
+            state_path=Path(notification_state_path),
+            notification_id=str(payload.get("notification_id", "") or ""),
+            is_read=payload.get("is_read", True),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.post("/pipeline/run")
 def run_live_pipeline(payload: dict = Body(...)):
     try:

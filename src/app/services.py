@@ -1032,37 +1032,28 @@ def _load_latest_notification_state_overlay(
     csv_latest_overlay = _load_latest_notification_state_overlay_from_csv(state_path)
     query_limit = max(len(csv_latest_overlay), 1)
 
-    try:
-        postgres_payload = get_notification_state_postgres_status_payload(
-            limit=query_limit,
-            database_url="",
-            database_url_env="DATABASE_URL",
-            psql_bin="psql",
-            print_only=False,
-        )
-        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+    postgres_payload = get_notification_state_postgres_status_payload(
+        limit=query_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
-        if not postgres_rows:
-            return csv_latest_overlay
+    latest_overlay: Dict[str, Dict[str, Any]] = {}
+    for row in postgres_rows:
+        notification_id = _clean_text(row.get("notification_id"))
+        if not notification_id:
+            continue
 
-        latest_overlay: Dict[str, Dict[str, Any]] = {}
-        for row in postgres_rows:
-            notification_id = _clean_text(row.get("notification_id"))
-            if not notification_id:
-                continue
+        latest_overlay[notification_id] = {
+            "is_read": bool(row.get("is_read", False)),
+            "state_timestamp": _clean_text(row.get("state_timestamp")),
+        }
 
-            latest_overlay[notification_id] = {
-                "is_read": bool(row.get("is_read", False)),
-                "state_timestamp": _clean_text(row.get("state_timestamp")),
-            }
-
-        if not latest_overlay:
-            return csv_latest_overlay
-
-        return latest_overlay
-    except Exception:
-        return csv_latest_overlay
+    return latest_overlay
 
 def notification_state_postgres_status_payload(
     state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
@@ -1738,45 +1729,36 @@ def _load_latest_patch_selection_overlay(
     csv_latest_by_path = _load_latest_patch_selection_overlay_from_csv(patch_selections_path)
     query_limit = max(len(csv_latest_by_path), 1)
 
-    try:
-        postgres_payload = get_patch_selections_postgres_status_payload(
-            limit=query_limit,
-            database_url="",
-            database_url_env="DATABASE_URL",
-            psql_bin="psql",
-            print_only=False,
-        )
-        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+    postgres_payload = get_patch_selections_postgres_status_payload(
+        limit=query_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
-        if not postgres_rows:
-            return csv_latest_by_path
+    latest_by_path: Dict[str, Dict[str, Any]] = {}
+    for row in postgres_rows:
+        artifact_path = _clean_text(row.get("tailoring_json_path"))
+        if not artifact_path:
+            continue
 
-        latest_by_path: Dict[str, Dict[str, Any]] = {}
-        for row in postgres_rows:
-            artifact_path = _clean_text(row.get("tailoring_json_path"))
-            if not artifact_path:
-                continue
+        latest_by_path[artifact_path] = {
+            "selection_timestamp": _clean_text(row.get("selection_timestamp")),
+            "job_doc_id": _clean_text(row.get("job_doc_id")),
+            "queue_rank": _clean_text(row.get("queue_rank")),
+            "job_company": _clean_text(row.get("job_company")),
+            "job_title": _clean_text(row.get("job_title")),
+            "selected_resume": _clean_text(row.get("selected_resume")),
+            "tailoring_json_path": artifact_path,
+            "artifact_signature": _clean_text(row.get("artifact_signature")),
+            "selected_candidate_ids_json": row.get("selected_candidate_ids_json", []),
+            "note": _clean_text(row.get("note")),
+        }
 
-            latest_by_path[artifact_path] = {
-                "selection_timestamp": _clean_text(row.get("selection_timestamp")),
-                "job_doc_id": _clean_text(row.get("job_doc_id")),
-                "queue_rank": _clean_text(row.get("queue_rank")),
-                "job_company": _clean_text(row.get("job_company")),
-                "job_title": _clean_text(row.get("job_title")),
-                "selected_resume": _clean_text(row.get("selected_resume")),
-                "tailoring_json_path": artifact_path,
-                "artifact_signature": _clean_text(row.get("artifact_signature")),
-                "selected_candidate_ids_json": row.get("selected_candidate_ids_json", []),
-                "note": _clean_text(row.get("note")),
-            }
-
-        if not latest_by_path:
-            return csv_latest_by_path
-
-        return latest_by_path
-    except Exception:
-        return csv_latest_by_path
+    return latest_by_path
 
 def patch_selections_postgres_status_payload(
     patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
@@ -2453,40 +2435,34 @@ def _load_latest_application_actions(
     csv_latest_rows = _load_latest_application_actions_from_csv(actions_path)
     query_limit = max(len(csv_latest_rows), 1)
 
-    try:
-        postgres_payload = get_application_actions_postgres_status_payload(
-            limit=query_limit,
-            database_url="",
-            database_url_env="DATABASE_URL",
-            psql_bin="psql",
-            print_only=False,
-        )
-        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+    postgres_payload = get_application_actions_postgres_status_payload(
+        limit=query_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
-        if not postgres_rows:
-            return csv_latest_rows
+    normalized_rows: List[Dict[str, str]] = []
+    for row in postgres_rows:
+        normalized_rows.append({
+            "action_timestamp": _clean_text(row.get("action_timestamp")),
+            "job_doc_id": _clean_text(row.get("job_doc_id")),
+            "job_url": _clean_text(row.get("job_url")),
+            "job_company": _clean_text(row.get("job_company")),
+            "job_title": _clean_text(row.get("job_title")),
+            "application_status": _clean_text(row.get("application_status")),
+            "source_view": _clean_text(row.get("source_view")),
+            "note": _clean_text(row.get("note")),
+        })
 
-        normalized_rows: List[Dict[str, str]] = []
-        for row in postgres_rows:
-            normalized_rows.append({
-                "action_timestamp": _clean_text(row.get("action_timestamp")),
-                "job_doc_id": _clean_text(row.get("job_doc_id")),
-                "job_url": _clean_text(row.get("job_url")),
-                "job_company": _clean_text(row.get("job_company")),
-                "job_title": _clean_text(row.get("job_title")),
-                "application_status": _clean_text(row.get("application_status")),
-                "source_view": _clean_text(row.get("source_view")),
-                "note": _clean_text(row.get("note")),
-            })
-
-        normalized_rows.sort(
-            key=lambda row: _application_action_latest_sort_key(row),
-            reverse=True,
-        )
-        return normalized_rows
-    except Exception:
-        return csv_latest_rows
+    normalized_rows.sort(
+        key=lambda row: _application_action_latest_sort_key(row),
+        reverse=True,
+    )
+    return normalized_rows
 
 def _application_row_key_candidates(row: Dict[str, Any]) -> List[str]:
     ja = _job_app()

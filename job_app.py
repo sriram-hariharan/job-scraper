@@ -915,56 +915,47 @@ def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, s
     csv_latest_by_key = _load_latest_decision_overlay_from_csv(decisions_path)
     query_limit = max(len(csv_latest_by_key), 1)
 
-    try:
-        postgres_payload = get_operator_decisions_postgres_status_payload(
-            limit=query_limit,
-            database_url="",
-            database_url_env="DATABASE_URL",
-            psql_bin="psql",
-            print_only=False,
-        )
-        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+    postgres_payload = get_operator_decisions_postgres_status_payload(
+        limit=query_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
-        if not postgres_rows:
-            return csv_latest_by_key
+    latest_by_key: Dict[str, Dict[str, str]] = {}
 
-        latest_by_key: Dict[str, Dict[str, str]] = {}
+    for row in postgres_rows:
+        normalized = operator_decision_db_row({
+            "decision_timestamp": row.get("decision_timestamp", ""),
+            "queue_rank": row.get("queue_rank", ""),
+            "job_doc_id": row.get("job_doc_id", ""),
+            "job_company": row.get("job_company", ""),
+            "job_title": row.get("job_title", ""),
+            "planning_action": row.get("planning_action", ""),
+            "winner_resume": row.get("winner_resume", ""),
+            "winner_score": row.get("winner_score", ""),
+            "runner_up_resume": row.get("runner_up_resume", ""),
+            "runner_up_score": row.get("runner_up_score", ""),
+            "selected_resume": row.get("selected_resume", ""),
+            "decision": row.get("decision", ""),
+            "note": row.get("note", ""),
+        })
 
-        for row in postgres_rows:
-            normalized = operator_decision_db_row({
-                "decision_timestamp": row.get("decision_timestamp", ""),
-                "queue_rank": row.get("queue_rank", ""),
-                "job_doc_id": row.get("job_doc_id", ""),
-                "job_company": row.get("job_company", ""),
-                "job_title": row.get("job_title", ""),
-                "planning_action": row.get("planning_action", ""),
-                "winner_resume": row.get("winner_resume", ""),
-                "winner_score": row.get("winner_score", ""),
-                "runner_up_resume": row.get("runner_up_resume", ""),
-                "runner_up_score": row.get("runner_up_score", ""),
-                "selected_resume": row.get("selected_resume", ""),
-                "decision": row.get("decision", ""),
-                "note": row.get("note", ""),
-            })
+        decision_key = str(normalized.get("decision_key", "") or "").strip()
+        if not decision_key:
+            continue
 
-            decision_key = str(normalized.get("decision_key", "") or "").strip()
-            if not decision_key:
-                continue
+        latest_by_key[decision_key] = {
+            "operator_decision_timestamp": str(normalized.get("decision_timestamp", "") or ""),
+            "operator_decision": str(normalized.get("decision", "") or ""),
+            "operator_selected_resume": str(normalized.get("selected_resume", "") or ""),
+            "operator_note": str(normalized.get("note", "") or ""),
+        }
 
-            latest_by_key[decision_key] = {
-                "operator_decision_timestamp": str(normalized.get("decision_timestamp", "") or ""),
-                "operator_decision": str(normalized.get("decision", "") or ""),
-                "operator_selected_resume": str(normalized.get("selected_resume", "") or ""),
-                "operator_note": str(normalized.get("note", "") or ""),
-            }
-
-        if not latest_by_key:
-            return csv_latest_by_key
-
-        return latest_by_key
-    except Exception:
-        return csv_latest_by_key
+    return latest_by_key
 
 
 def _overlay_operator_decisions(

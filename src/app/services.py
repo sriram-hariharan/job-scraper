@@ -39,6 +39,10 @@ from src.storage.read_operator_decisions_postgres import (
 )
 from src.storage.notification_state_store import (
     insert_notification_state_row_to_postgres,
+    notification_state_db_row,
+)
+from src.storage.read_notification_state_postgres import (
+    get_notification_state_postgres_status_payload,
 )
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
@@ -856,8 +860,14 @@ def _append_notification_state_row(
 
         writer.writerow({key: row.get(key, "") for key in NOTIFICATION_STATE_HEADERS})
 
+def _notification_state_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
+    normalized = notification_state_db_row(dict(row))
+    return (
+        str(normalized.get("state_timestamp", "") or ""),
+        str(normalized.get("state_id", "") or ""),
+    )
 
-def _load_latest_notification_state_overlay(
+def _load_latest_notification_state_overlay_from_csv(
     state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
 ) -> Dict[str, Dict[str, Any]]:
     if not state_path.exists() or not state_path.is_file():
@@ -874,17 +884,131 @@ def _load_latest_notification_state_overlay(
                 continue
 
             try:
-                is_read = _normalize_notification_read_flag(row.get("is_read", ""))
+                _normalize_notification_read_flag(row.get("is_read", ""))
             except ValueError:
                 continue
 
-            latest_by_notification_id[notification_id] = {
-                "is_read": is_read,
-                "state_timestamp": str(row.get("state_timestamp", "") or "").strip(),
+            existing = latest_by_notification_id.get(notification_id)
+            if existing is None:
+                latest_by_notification_id[notification_id] = dict(row)
+                continue
+
+            if _notification_state_latest_sort_key(row) >= _notification_state_latest_sort_key(existing):
+                latest_by_notification_id[notification_id] = dict(row)
+
+    overlaid: Dict[str, Dict[str, Any]] = {}
+    for notification_id, row in latest_by_notification_id.items():
+        overlaid[notification_id] = {
+            "is_read": _normalize_notification_read_flag(row.get("is_read", "")),
+            "state_timestamp": str(row.get("state_timestamp", "") or "").strip(),
+        }
+
+    return overlaid
+
+def _load_latest_notification_state_overlay(
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
+) -> Dict[str, Dict[str, Any]]:
+    csv_latest_overlay = _load_latest_notification_state_overlay_from_csv(state_path)
+    query_limit = max(len(csv_latest_overlay), 1)
+
+    try:
+        postgres_payload = get_notification_state_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+
+        if not postgres_rows:
+            return csv_latest_overlay
+
+        latest_overlay: Dict[str, Dict[str, Any]] = {}
+        for row in postgres_rows:
+            notification_id = _clean_text(row.get("notification_id"))
+            if not notification_id:
+                continue
+
+            latest_overlay[notification_id] = {
+                "is_read": bool(row.get("is_read", False)),
+                "state_timestamp": _clean_text(row.get("state_timestamp")),
             }
 
-    return latest_by_notification_id
+        if not latest_overlay:
+            return csv_latest_overlay
 
+        return latest_overlay
+    except Exception:
+        return csv_latest_overlay
+
+def notification_state_postgres_status_payload(
+    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
+    *,
+    limit: int = 10,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    normalized_limit = max(int(limit), 1)
+
+    csv_raw_rows: List[Dict[str, Any]] = []
+    if state_path.exists() and state_path.is_file():
+        with state_path.open("r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                csv_raw_rows.append(dict(row))
+
+    csv_latest_overlay = _load_latest_notification_state_overlay(state_path)
+
+    postgres_payload = get_notification_state_postgres_status_payload(
+        limit=normalized_limit,
+        database_url="",
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=False,
+    )
+
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+
+    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
+    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
+
+    csv_recent_rows = sorted(
+        csv_raw_rows,
+        key=lambda row: _notification_state_latest_sort_key(row),
+        reverse=True,
+    )[:normalized_limit]
+
+    csv_latest_rows = sorted(
+        [
+            {
+                "notification_id": notification_id,
+                "state_timestamp": overlay.get("state_timestamp", ""),
+                "is_read": overlay.get("is_read", False),
+            }
+            for notification_id, overlay in csv_latest_overlay.items()
+        ],
+        key=lambda row: (str(row.get("state_timestamp", "") or ""), str(row.get("notification_id", "") or "")),
+        reverse=True,
+    )[:normalized_limit]
+
+    return {
+        "ok": True,
+        "query_limit": normalized_limit,
+        "notification_state_csv_path": str(state_path),
+        "csv_total_row_count": len(csv_raw_rows),
+        "csv_latest_state_count": len(csv_latest_overlay),
+        "csv_recent_rows": csv_recent_rows,
+        "csv_latest_rows": csv_latest_rows,
+        "postgres_total_row_count": postgres_total_row_count,
+        "postgres_latest_state_count": postgres_latest_state_count,
+        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
+        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_overlay),
+        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
+        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
+        "postgres_command_text": postgres_payload.get("command_text", ""),
+    }
 
 def _apply_notification_state_overlay(
     rows: List[Dict[str, Any]],

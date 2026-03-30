@@ -13,7 +13,6 @@ from src.discovery.crawl_scheduler import (
     mark_scraped
 )
 from src.pipeline.job_filter import title_matches, us_location, posted_within_24h
-from src.config.settings import SCRAPER_DEV_MODE
 
 logger = get_logger("greenhouse")
 
@@ -79,12 +78,10 @@ async def scrape_all_greenhouse_async():
 
     schedule = load_schedule()
 
-    # scheduler filtering
-    if not SCRAPER_DEV_MODE:
-        companies = [
-            c for c in companies
-            if should_scrape(c, schedule)
-        ]
+    companies = [
+        c for c in companies
+        if should_scrape(c, schedule)
+    ]
     logger.info(f"Greenhouse companies after schedule filter: {len(companies)}")
 
     connector = aiohttp.TCPConnector(limit=50)

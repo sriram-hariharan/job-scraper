@@ -34,6 +34,33 @@ RUN_HISTORY_HEADERS = [
     "error_text",
 ]
 
+def _load_local_dotenv_if_present(dotenv_path: Path = Path(".env")) -> None:
+    path = dotenv_path.expanduser()
+    if not path.exists() or not path.is_file():
+        return
+
+    try:
+        for raw_line in path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+
+            key, value = line.split("=", 1)
+            key = key.strip()
+            if not key or key in os.environ:
+                continue
+
+            value = value.strip()
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
+                value = value[1:-1]
+
+            os.environ[key] = value
+    except Exception:
+        return
+
+
+_load_local_dotenv_if_present()
 
 def _resolve_database_url(
     explicit_value: str,

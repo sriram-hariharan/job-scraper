@@ -86,13 +86,24 @@ def render_top_shell(active_href: str) -> str:
           <div class="notification-dropdown-title">Notifications</div>
           <div class="subtext" id="notificationSubtitle">Recent scheduler activity</div>
         </div>
-        <button
-          type="button"
-          class="ghost-btn notification-refresh-btn"
-          id="notificationRefreshBtn"
-        >
-          Refresh
-        </button>
+
+        <div class="notification-header-actions">
+          <button
+            type="button"
+            class="ghost-btn notification-refresh-btn"
+            id="notificationRefreshBtn"
+          >
+            Refresh
+          </button>
+
+          <button
+            type="button"
+            class="ghost-btn notification-mark-all-btn"
+            id="notificationMarkAllReadBtn"
+          >
+            Mark all read
+          </button>
+        </div>
       </div>
 
       <div class="notification-toolbar">

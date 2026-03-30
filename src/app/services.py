@@ -27,6 +27,9 @@ from src.storage.read_application_actions_postgres import (
 from src.storage.patch_selections_store import (
     insert_patch_selection_row_to_postgres,
 )
+from src.storage.read_patch_selections_postgres import (
+    get_patch_selections_postgres_status_payload,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -1384,24 +1387,147 @@ def _tailoring_artifact_signature(payload: Dict[str, Any]) -> str:
     blob = json.dumps(signature_payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
+def _patch_selection_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
+    normalized = {
+        "selection_timestamp": _clean_text(row.get("selection_timestamp")),
+        "tailoring_json_path": _clean_text(row.get("tailoring_json_path")),
+        "artifact_signature": _clean_text(row.get("artifact_signature")),
+        "selected_resume": _clean_text(row.get("selected_resume")),
+        "selected_candidate_ids_json": _serialize_selected_patch_candidate_ids(
+            row.get("selected_candidate_ids_json", "")
+        ),
+        "note": _clean_text(row.get("note")),
+    }
 
-def _load_latest_patch_selection_overlay(
+    selection_id_seed = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
+    selection_id = hashlib.sha1(selection_id_seed.encode("utf-8")).hexdigest()
+
+    return (
+        normalized["selection_timestamp"],
+        selection_id,
+    )
+
+def _load_latest_patch_selection_overlay_from_csv(
     patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
-) -> Dict[str, Dict[str, str]]:
+) -> Dict[str, Dict[str, Any]]:
     if not patch_selections_path.exists():
         return {}
 
     ja = _job_app()
     rows = ja._load_csv_rows(patch_selections_path)
-    latest_by_path: Dict[str, Dict[str, str]] = {}
+    latest_by_path: Dict[str, Dict[str, Any]] = {}
 
     for row in rows:
         artifact_path = _clean_text(row.get("tailoring_json_path"))
         if not artifact_path:
             continue
-        latest_by_path[artifact_path] = dict(row)
+
+        existing = latest_by_path.get(artifact_path)
+        if existing is None:
+            latest_by_path[artifact_path] = dict(row)
+            continue
+
+        if _patch_selection_latest_sort_key(row) >= _patch_selection_latest_sort_key(existing):
+            latest_by_path[artifact_path] = dict(row)
 
     return latest_by_path
+
+def _load_latest_patch_selection_overlay(
+    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
+) -> Dict[str, Dict[str, Any]]:
+    csv_latest_by_path = _load_latest_patch_selection_overlay_from_csv(patch_selections_path)
+    query_limit = max(len(csv_latest_by_path), 1)
+
+    try:
+        postgres_payload = get_patch_selections_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+
+        if not postgres_rows:
+            return csv_latest_by_path
+
+        latest_by_path: Dict[str, Dict[str, Any]] = {}
+        for row in postgres_rows:
+            artifact_path = _clean_text(row.get("tailoring_json_path"))
+            if not artifact_path:
+                continue
+
+            latest_by_path[artifact_path] = {
+                "selection_timestamp": _clean_text(row.get("selection_timestamp")),
+                "job_doc_id": _clean_text(row.get("job_doc_id")),
+                "queue_rank": _clean_text(row.get("queue_rank")),
+                "job_company": _clean_text(row.get("job_company")),
+                "job_title": _clean_text(row.get("job_title")),
+                "selected_resume": _clean_text(row.get("selected_resume")),
+                "tailoring_json_path": artifact_path,
+                "artifact_signature": _clean_text(row.get("artifact_signature")),
+                "selected_candidate_ids_json": row.get("selected_candidate_ids_json", []),
+                "note": _clean_text(row.get("note")),
+            }
+
+        if not latest_by_path:
+            return csv_latest_by_path
+
+        return latest_by_path
+    except Exception:
+        return csv_latest_by_path
+
+def patch_selections_postgres_status_payload(
+    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
+    *,
+    limit: int = 10,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    normalized_limit = max(int(limit), 1)
+
+    csv_raw_rows = _job_app()._load_csv_rows(patch_selections_path)
+    csv_latest_by_path = _load_latest_patch_selection_overlay(patch_selections_path)
+    csv_latest_rows = list(csv_latest_by_path.values())
+    csv_latest_rows.sort(
+        key=lambda row: _patch_selection_latest_sort_key(row),
+        reverse=True,
+    )
+
+    postgres_payload = get_patch_selections_postgres_status_payload(
+        limit=normalized_limit,
+        database_url="",
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=False,
+    )
+
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+
+    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
+    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
+
+    return {
+        "ok": True,
+        "query_limit": normalized_limit,
+        "patch_selections_csv_path": str(patch_selections_path),
+        "csv_total_row_count": len(csv_raw_rows),
+        "csv_latest_state_count": len(csv_latest_rows),
+        "csv_recent_rows": sorted(
+            csv_raw_rows,
+            key=lambda row: _patch_selection_latest_sort_key(row),
+            reverse=True,
+        )[:normalized_limit],
+        "csv_latest_rows": csv_latest_rows[:normalized_limit],
+        "postgres_total_row_count": postgres_total_row_count,
+        "postgres_latest_state_count": postgres_latest_state_count,
+        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
+        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_rows),
+        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
+        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
+        "postgres_command_text": postgres_payload.get("command_text", ""),
+    }
 
 def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, Any]:
     from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview

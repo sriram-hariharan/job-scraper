@@ -696,3 +696,19 @@ def profile_delete_resume(resume_name: str):
         return services.profile_delete_resume_payload(resume_name=resume_name)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+
+@app.get("/ops/storage-burnin-status")
+def storage_burnin_status(
+    limit: int = 5,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+):
+    try:
+        return services.storage_burnin_status_payload(
+            limit=limit,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+        )
+    except (ValueError, SystemExit) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

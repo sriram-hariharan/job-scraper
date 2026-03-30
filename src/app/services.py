@@ -37,6 +37,9 @@ from src.storage.operator_decisions_store import (
 from src.storage.read_operator_decisions_postgres import (
     get_operator_decisions_postgres_status_payload,
 )
+from src.storage.notification_state_store import (
+    insert_notification_state_row_to_postgres,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -1032,7 +1035,50 @@ def notifications_unread_count_payload(
         "unread_count": unread_count,
     }
 
+def _dual_write_notification_state_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
+    database_url = str(os.environ.get("DATABASE_URL", "") or "").strip()
+    if not database_url:
+        return {
+            "attempted": False,
+            "ok": False,
+            "skipped": "missing_database_url",
+            "table_name": "notification_state_events",
+        }
 
+    try:
+        payload = insert_notification_state_row_to_postgres(
+            record=row,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            allow_contract_drift=False,
+        )
+        return {
+            "attempted": True,
+            "ok": True,
+            "table_name": payload.get("table_name", "notification_state_events"),
+            "state_id": str(payload.get("row", {}).get("state_id", "") or ""),
+            "contract_health_ok": bool(payload.get("contract_health_ok", False)),
+            "command_text": str(payload.get("command_text", "") or ""),
+        }
+    except SystemExit as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "notification_state_events",
+            "error_type": "SystemExit",
+            "error": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "notification_state_events",
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
+    
 def record_notification_read_state_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
     state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
@@ -1067,6 +1113,7 @@ def record_notification_read_state_payload(
     }
 
     _append_notification_state_row(state_path, state_row)
+    postgres_write = _dual_write_notification_state_postgres(state_row)
 
     target_notification["is_read"] = normalized_is_read
     target_notification["read_state_timestamp"] = state_row["state_timestamp"]
@@ -1076,6 +1123,7 @@ def record_notification_read_state_payload(
         "notification_dir": str(notification_dir),
         "notification_state_path": str(state_path),
         "state_row": state_row,
+        "postgres_write": postgres_write,
         "notification": target_notification,
     }
 

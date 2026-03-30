@@ -17,6 +17,9 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
+from src.storage.application_actions_store import (
+    insert_application_action_row_to_postgres,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -1932,7 +1935,51 @@ def _validate_application_identity(row: Dict[str, Any]) -> None:
             "Application action requires job_doc_id, job_url, or job_company + job_title."
         )
 
+def _dual_write_application_action_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
+    database_url = str(os.environ.get("DATABASE_URL", "") or "").strip()
+    if not database_url:
+        return {
+            "attempted": False,
+            "ok": False,
+            "skipped": "missing_database_url",
+            "table_name": "application_actions",
+        }
 
+    try:
+        payload = insert_application_action_row_to_postgres(
+            record=row,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            allow_contract_drift=False,
+        )
+        return {
+            "attempted": True,
+            "ok": True,
+            "table_name": payload.get("table_name", "application_actions"),
+            "action_id": str(payload.get("row", {}).get("action_id", "") or ""),
+            "action_key": str(payload.get("row", {}).get("action_key", "") or ""),
+            "contract_health_ok": bool(payload.get("contract_health_ok", False)),
+            "command_text": str(payload.get("command_text", "") or ""),
+        }
+    except SystemExit as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "application_actions",
+            "error_type": "SystemExit",
+            "error": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "application_actions",
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
+    
 def _load_latest_application_actions(
     actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
 ) -> List[Dict[str, str]]:
@@ -2634,11 +2681,13 @@ def record_application_action_payload(
 
     _validate_application_identity(row)
     ja._append_csv_row(actions_path, APPLICATION_ACTION_HEADERS, row)
+    postgres_write = _dual_write_application_action_postgres(row)
 
     return {
         "ok": True,
         "row": row,
         "actions_path": str(actions_path),
+        "postgres_write": postgres_write,
     }
 
 

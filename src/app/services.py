@@ -30,6 +30,13 @@ from src.storage.patch_selections_store import (
 from src.storage.read_patch_selections_postgres import (
     get_patch_selections_postgres_status_payload,
 )
+from src.storage.operator_decisions_store import (
+    insert_operator_decision_row_to_postgres,
+    operator_decision_db_row,
+)
+from src.storage.read_operator_decisions_postgres import (
+    get_operator_decisions_postgres_status_payload,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -2638,6 +2645,92 @@ def planning_artifact_payload(
 
     return payload
 
+def _operator_decision_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
+    normalized = operator_decision_db_row(dict(row))
+    return (
+        str(normalized.get("decision_timestamp", "") or ""),
+        str(normalized.get("decision_id", "") or ""),
+    )
+
+def _load_latest_operator_decision_rows_from_csv(
+    decisions_path: Path = DEFAULT_DECISIONS_PATH,
+) -> List[Dict[str, Any]]:
+    ja = _job_app()
+    rows = ja._load_csv_rows(decisions_path)
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        decision_value = str(row.get("decision", "") or "").strip().upper().replace(" ", "_")
+        if decision_value != "SELECT_RESUME":
+            continue
+
+        key_candidates = ja._decision_row_keys(row)
+        decision_key = key_candidates[0] if key_candidates else ""
+        if not decision_key:
+            continue
+
+        existing = latest_by_key.get(decision_key)
+        if existing is None:
+            latest_by_key[decision_key] = dict(row)
+            continue
+
+        if _operator_decision_latest_sort_key(row) >= _operator_decision_latest_sort_key(existing):
+            latest_by_key[decision_key] = dict(row)
+
+    latest_rows = list(latest_by_key.values())
+    latest_rows.sort(
+        key=lambda row: _operator_decision_latest_sort_key(row),
+        reverse=True,
+    )
+    return latest_rows
+
+def operator_decisions_postgres_status_payload(
+    decisions_path: Path = DEFAULT_DECISIONS_PATH,
+    *,
+    limit: int = 10,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    normalized_limit = max(int(limit), 1)
+
+    ja = _job_app()
+    csv_raw_rows = ja._load_csv_rows(decisions_path)
+    csv_latest_rows = _load_latest_operator_decision_rows_from_csv(decisions_path)
+
+    postgres_payload = get_operator_decisions_postgres_status_payload(
+        limit=normalized_limit,
+        database_url="",
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=False,
+    )
+
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+
+    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
+    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
+
+    return {
+        "ok": True,
+        "query_limit": normalized_limit,
+        "decisions_csv_path": str(decisions_path),
+        "csv_total_row_count": len(csv_raw_rows),
+        "csv_latest_state_count": len(csv_latest_rows),
+        "csv_recent_rows": sorted(
+            csv_raw_rows,
+            key=lambda row: _operator_decision_latest_sort_key(row),
+            reverse=True,
+        )[:normalized_limit],
+        "csv_latest_rows": csv_latest_rows[:normalized_limit],
+        "postgres_total_row_count": postgres_total_row_count,
+        "postgres_latest_state_count": postgres_latest_state_count,
+        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
+        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_rows),
+        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
+        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
+        "postgres_command_text": postgres_payload.get("command_text", ""),
+    }
+
 def decisions_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -2656,6 +2749,51 @@ def decisions_payload(
         "decisions_path": str(decisions_path),
     }
 
+def _dual_write_operator_decision_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
+    database_url = str(os.environ.get("DATABASE_URL", "") or "").strip()
+    if not database_url:
+        return {
+            "attempted": False,
+            "ok": False,
+            "skipped": "missing_database_url",
+            "table_name": "operator_decisions",
+        }
+
+    try:
+        payload = insert_operator_decision_row_to_postgres(
+            record=row,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            allow_contract_drift=False,
+        )
+        return {
+            "attempted": True,
+            "ok": True,
+            "table_name": payload.get("table_name", "operator_decisions"),
+            "decision_id": str(payload.get("row", {}).get("decision_id", "") or ""),
+            "decision_key": str(payload.get("row", {}).get("decision_key", "") or ""),
+            "contract_health_ok": bool(payload.get("contract_health_ok", False)),
+            "command_text": str(payload.get("command_text", "") or ""),
+        }
+    except SystemExit as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "operator_decisions",
+            "error_type": "SystemExit",
+            "error": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "operator_decisions",
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
+    
 def record_operator_resume_selection_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     *,
@@ -2706,11 +2844,13 @@ def record_operator_resume_selection_payload(
 
     _validate_operator_decision_identity(row)
     ja._append_csv_row(decisions_path, OPERATOR_DECISION_HEADERS, row)
+    postgres_write = _dual_write_operator_decision_postgres(row)
 
     return {
         "ok": True,
         "row": row,
         "decisions_path": str(decisions_path),
+        "postgres_write": postgres_write,
     }
 
 def preview_planning_patch_selection_payload(

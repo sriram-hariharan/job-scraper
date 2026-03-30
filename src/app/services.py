@@ -18,7 +18,11 @@ from src.config.settings import (
     SCHEDULER_RUN_HISTORY_PATH,
 )
 from src.storage.application_actions_store import (
+    application_action_db_row,
     insert_application_action_row_to_postgres,
+)
+from src.storage.read_application_actions_postgres import (
+    get_application_actions_postgres_status_payload,
 )
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
@@ -1979,8 +1983,15 @@ def _dual_write_application_action_postgres(row: Dict[str, Any]) -> Dict[str, An
             "error_type": exc.__class__.__name__,
             "error": str(exc),
         }
-    
-def _load_latest_application_actions(
+
+def _application_action_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
+    normalized = application_action_db_row(dict(row))
+    return (
+        str(normalized.get("action_timestamp", "") or ""),
+        str(normalized.get("action_id", "") or ""),
+    )
+
+def _load_latest_application_actions_from_csv(
     actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
 ) -> List[Dict[str, str]]:
     ja = _job_app()
@@ -1991,18 +2002,62 @@ def _load_latest_application_actions(
         key = _application_action_key(row)
         if not key:
             continue
-        latest_by_key[key] = dict(row)
+
+        existing = latest_by_key.get(key)
+        if existing is None:
+            latest_by_key[key] = dict(row)
+            continue
+
+        if _application_action_latest_sort_key(row) >= _application_action_latest_sort_key(existing):
+            latest_by_key[key] = dict(row)
 
     latest_rows = list(latest_by_key.values())
     latest_rows.sort(
-        key=lambda row: (
-            str(row.get("action_timestamp", "") or ""),
-            _clean_text(row.get("job_company")),
-            _clean_text(row.get("job_title")),
-        ),
+        key=lambda row: _application_action_latest_sort_key(row),
         reverse=True,
     )
     return latest_rows
+
+def _load_latest_application_actions(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+) -> List[Dict[str, str]]:
+    csv_latest_rows = _load_latest_application_actions_from_csv(actions_path)
+    query_limit = max(len(csv_latest_rows), 1)
+
+    try:
+        postgres_payload = get_application_actions_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+
+        if not postgres_rows:
+            return csv_latest_rows
+
+        normalized_rows: List[Dict[str, str]] = []
+        for row in postgres_rows:
+            normalized_rows.append({
+                "action_timestamp": _clean_text(row.get("action_timestamp")),
+                "job_doc_id": _clean_text(row.get("job_doc_id")),
+                "job_url": _clean_text(row.get("job_url")),
+                "job_company": _clean_text(row.get("job_company")),
+                "job_title": _clean_text(row.get("job_title")),
+                "application_status": _clean_text(row.get("application_status")),
+                "source_view": _clean_text(row.get("source_view")),
+                "note": _clean_text(row.get("note")),
+            })
+
+        normalized_rows.sort(
+            key=lambda row: _application_action_latest_sort_key(row),
+            reverse=True,
+        )
+        return normalized_rows
+    except Exception:
+        return csv_latest_rows
 
 def _application_row_key_candidates(row: Dict[str, Any]) -> List[str]:
     ja = _job_app()
@@ -2750,6 +2805,71 @@ def applied_jobs_payload(
         title_contains=title_contains,
         limit=limit,
     )
+
+def application_actions_postgres_status_payload(
+    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
+    *,
+    limit: int = 10,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    normalized_limit = max(int(limit), 1)
+
+    csv_raw_rows = _job_app()._load_csv_rows(actions_path)
+    csv_latest_rows = _load_latest_application_actions(actions_path)
+
+    csv_raw_status_counts = Counter(
+        _clean_text(row.get("application_status")) or "<empty>"
+        for row in csv_raw_rows
+    )
+    csv_latest_status_counts = Counter(
+        _clean_text(row.get("application_status")) or "<empty>"
+        for row in csv_latest_rows
+    )
+
+    csv_recent_rows = sorted(
+        csv_raw_rows,
+        key=lambda row: (
+            str(row.get("action_timestamp", "") or ""),
+            _clean_text(row.get("job_company")),
+            _clean_text(row.get("job_title")),
+        ),
+        reverse=True,
+    )[:normalized_limit]
+
+    postgres_payload = get_application_actions_postgres_status_payload(
+        limit=normalized_limit,
+        database_url="",
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=False,
+    )
+
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+
+    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
+    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
+
+    return {
+        "ok": True,
+        "query_limit": normalized_limit,
+        "actions_csv_path": str(actions_path),
+        "csv_total_row_count": len(csv_raw_rows),
+        "csv_latest_state_count": len(csv_latest_rows),
+        "csv_raw_status_counts": dict(sorted(csv_raw_status_counts.items())),
+        "csv_latest_status_counts": dict(sorted(csv_latest_status_counts.items())),
+        "csv_recent_rows": csv_recent_rows,
+        "csv_latest_rows": csv_latest_rows[:normalized_limit],
+        "postgres_total_row_count": postgres_total_row_count,
+        "postgres_latest_state_count": postgres_latest_state_count,
+        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
+        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_rows),
+        "postgres_raw_status_counts": dict(postgres_block.get("raw_status_counts", {}) or {}),
+        "postgres_latest_status_counts": dict(postgres_block.get("latest_status_counts", {}) or {}),
+        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
+        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
+        "postgres_command_text": postgres_payload.get("command_text", ""),
+    }
 
 def jobs_search_lite_payload(
     request: str,

@@ -707,6 +707,127 @@ def scheduler_operator_summary_payload(
         "postgres_command_text": postgres_payload["postgres_command_text"],
     }
 
+
+def storage_burnin_status_payload(
+    *,
+    limit: int = 5,
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+) -> Dict[str, Any]:
+    normalized_limit = max(int(limit), 1)
+
+    scheduler = scheduler_operator_summary_payload(
+        limit=normalized_limit,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+    )
+
+    application_actions = application_actions_postgres_status_payload(
+        limit=normalized_limit,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+    )
+
+    patch_selections = patch_selections_postgres_status_payload(
+        limit=normalized_limit,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+    )
+
+    operator_decisions = operator_decisions_postgres_status_payload(
+        limit=normalized_limit,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+    )
+
+    notification_state = notification_state_postgres_status_payload(
+        limit=normalized_limit,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+    )
+
+    checks = {
+        "scheduler_history_matches_jsonl": bool(
+            scheduler.get("history", {}).get("count_matches", False)
+        ),
+        "application_actions_total_rows_match": bool(
+            application_actions.get("total_row_count_matches", False)
+        ),
+        "application_actions_latest_state_match": bool(
+            application_actions.get("latest_state_count_matches", False)
+        ),
+        "patch_selections_total_rows_match": bool(
+            patch_selections.get("total_row_count_matches", False)
+        ),
+        "patch_selections_latest_state_match": bool(
+            patch_selections.get("latest_state_count_matches", False)
+        ),
+        "operator_decisions_total_rows_match": bool(
+            operator_decisions.get("total_row_count_matches", False)
+        ),
+        "operator_decisions_latest_state_match": bool(
+            operator_decisions.get("latest_state_count_matches", False)
+        ),
+        "notification_state_total_rows_match": bool(
+            notification_state.get("total_row_count_matches", False)
+        ),
+        "notification_state_latest_state_match": bool(
+            notification_state.get("latest_state_count_matches", False)
+        ),
+    }
+
+    all_checks_pass = all(checks.values())
+
+    return {
+        "ok": True,
+        "limit": normalized_limit,
+        "database_url_env": database_url_env,
+        "checks": checks,
+        "all_checks_pass": all_checks_pass,
+        "ready_for_csv_fallback_removal": all_checks_pass,
+        "surfaces": {
+            "scheduler": {
+                "history_jsonl_row_count": scheduler.get("history", {}).get("jsonl_row_count", 0),
+                "history_postgres_row_count": scheduler.get("history", {}).get("postgres_row_count", 0),
+                "count_matches": scheduler.get("history", {}).get("count_matches", False),
+                "contract_health": scheduler.get("contract_health", {}),
+            },
+            "application_actions": {
+                "csv_total_row_count": application_actions.get("csv_total_row_count", 0),
+                "postgres_total_row_count": application_actions.get("postgres_total_row_count", 0),
+                "csv_latest_state_count": application_actions.get("csv_latest_state_count", 0),
+                "postgres_latest_state_count": application_actions.get("postgres_latest_state_count", 0),
+                "total_row_count_matches": application_actions.get("total_row_count_matches", False),
+                "latest_state_count_matches": application_actions.get("latest_state_count_matches", False),
+            },
+            "patch_selections": {
+                "csv_total_row_count": patch_selections.get("csv_total_row_count", 0),
+                "postgres_total_row_count": patch_selections.get("postgres_total_row_count", 0),
+                "csv_latest_state_count": patch_selections.get("csv_latest_state_count", 0),
+                "postgres_latest_state_count": patch_selections.get("postgres_latest_state_count", 0),
+                "total_row_count_matches": patch_selections.get("total_row_count_matches", False),
+                "latest_state_count_matches": patch_selections.get("latest_state_count_matches", False),
+            },
+            "operator_decisions": {
+                "csv_total_row_count": operator_decisions.get("csv_total_row_count", 0),
+                "postgres_total_row_count": operator_decisions.get("postgres_total_row_count", 0),
+                "csv_latest_state_count": operator_decisions.get("csv_latest_state_count", 0),
+                "postgres_latest_state_count": operator_decisions.get("postgres_latest_state_count", 0),
+                "total_row_count_matches": operator_decisions.get("total_row_count_matches", False),
+                "latest_state_count_matches": operator_decisions.get("latest_state_count_matches", False),
+            },
+            "notification_state": {
+                "csv_total_row_count": notification_state.get("csv_total_row_count", 0),
+                "postgres_total_row_count": notification_state.get("postgres_total_row_count", 0),
+                "csv_latest_state_count": notification_state.get("csv_latest_state_count", 0),
+                "postgres_latest_state_count": notification_state.get("postgres_latest_state_count", 0),
+                "total_row_count_matches": notification_state.get("total_row_count_matches", False),
+                "latest_state_count_matches": notification_state.get("latest_state_count_matches", False),
+            },
+        },
+    }
+
+
 def _normalize_scheduler_filter_text(value: Any) -> str:
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 

@@ -746,7 +746,61 @@ def storage_burnin_status_payload(
         psql_bin=psql_bin,
     )
 
-    checks = {
+    scheduler_history_postgres_row_count = int(
+        scheduler.get("history", {}).get("postgres_row_count", 0) or 0
+    )
+    scheduler_history_jsonl_row_count = int(
+        scheduler.get("history", {}).get("jsonl_row_count", 0) or 0
+    )
+
+    application_actions_postgres_total = int(
+        application_actions.get("postgres_total_row_count", 0) or 0
+    )
+    application_actions_postgres_latest = int(
+        application_actions.get("postgres_latest_state_count", 0) or 0
+    )
+
+    patch_selections_postgres_total = int(
+        patch_selections.get("postgres_total_row_count", 0) or 0
+    )
+    patch_selections_postgres_latest = int(
+        patch_selections.get("postgres_latest_state_count", 0) or 0
+    )
+
+    operator_decisions_postgres_total = int(
+        operator_decisions.get("postgres_total_row_count", 0) or 0
+    )
+    operator_decisions_postgres_latest = int(
+        operator_decisions.get("postgres_latest_state_count", 0) or 0
+    )
+
+    notification_state_postgres_total = int(
+        notification_state.get("postgres_total_row_count", 0) or 0
+    )
+    notification_state_postgres_latest = int(
+        notification_state.get("postgres_latest_state_count", 0) or 0
+    )
+
+    runtime_checks = {
+        "scheduler_contract_healthy": bool(
+            scheduler.get("contract_health", {}).get("all_checks_pass", False)
+        ),
+        "scheduler_postgres_history_readable": scheduler_history_postgres_row_count >= 0,
+        "application_actions_postgres_readable": (
+            application_actions_postgres_total >= application_actions_postgres_latest >= 0
+        ),
+        "patch_selections_postgres_readable": (
+            patch_selections_postgres_total >= patch_selections_postgres_latest >= 0
+        ),
+        "operator_decisions_postgres_readable": (
+            operator_decisions_postgres_total >= operator_decisions_postgres_latest >= 0
+        ),
+        "notification_state_postgres_readable": (
+            notification_state_postgres_total >= notification_state_postgres_latest >= 0
+        ),
+    }
+
+    parity_checks = {
         "scheduler_history_matches_jsonl": bool(
             scheduler.get("history", {}).get("count_matches", False)
         ),
@@ -776,51 +830,58 @@ def storage_burnin_status_payload(
         ),
     }
 
-    all_checks_pass = all(checks.values())
+    runtime_all_checks_pass = all(runtime_checks.values())
+    parity_all_checks_pass = all(parity_checks.values())
 
     return {
         "ok": True,
         "limit": normalized_limit,
         "database_url_env": database_url_env,
-        "checks": checks,
-        "all_checks_pass": all_checks_pass,
-        "ready_for_csv_fallback_removal": all_checks_pass,
+        # backward-compatible top-level gate, now based on Postgres-primary runtime health
+        "all_checks_pass": runtime_all_checks_pass,
+        "ready_for_csv_fallback_removal": runtime_all_checks_pass,
+        # new explicit gates
+        "runtime_checks": runtime_checks,
+        "runtime_all_checks_pass": runtime_all_checks_pass,
+        "parity_checks": parity_checks,
+        "parity_all_checks_pass": parity_all_checks_pass,
+        "ready_to_disable_csv_writes": runtime_all_checks_pass,
         "surfaces": {
             "scheduler": {
-                "history_jsonl_row_count": scheduler.get("history", {}).get("jsonl_row_count", 0),
-                "history_postgres_row_count": scheduler.get("history", {}).get("postgres_row_count", 0),
+                "history_jsonl_row_count": scheduler_history_jsonl_row_count,
+                "history_postgres_row_count": scheduler_history_postgres_row_count,
                 "count_matches": scheduler.get("history", {}).get("count_matches", False),
                 "contract_health": scheduler.get("contract_health", {}),
             },
             "application_actions": {
                 "csv_total_row_count": application_actions.get("csv_total_row_count", 0),
-                "postgres_total_row_count": application_actions.get("postgres_total_row_count", 0),
+                "postgres_total_row_count": application_actions_postgres_total,
                 "csv_latest_state_count": application_actions.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": application_actions.get("postgres_latest_state_count", 0),
+                "postgres_latest_state_count": application_actions_postgres_latest,
                 "total_row_count_matches": application_actions.get("total_row_count_matches", False),
                 "latest_state_count_matches": application_actions.get("latest_state_count_matches", False),
             },
             "patch_selections": {
                 "csv_total_row_count": patch_selections.get("csv_total_row_count", 0),
-                "postgres_total_row_count": patch_selections.get("postgres_total_row_count", 0),
+                "postgres_total_row_count": patch_selections_postgres_total,
                 "csv_latest_state_count": patch_selections.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": patch_selections.get("postgres_latest_state_count", 0),
+                "postgres_latest_state_count": patch_selections_postgres_latest,
                 "total_row_count_matches": patch_selections.get("total_row_count_matches", False),
                 "latest_state_count_matches": patch_selections.get("latest_state_count_matches", False),
             },
             "operator_decisions": {
                 "csv_total_row_count": operator_decisions.get("csv_total_row_count", 0),
-                "postgres_total_row_count": operator_decisions.get("postgres_total_row_count", 0),
+                "postgres_total_row_count": operator_decisions_postgres_total,
                 "csv_latest_state_count": operator_decisions.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": operator_decisions.get("postgres_latest_state_count", 0),
+                "postgres_latest_state_count": operator_decisions_postgres_latest,
                 "total_row_count_matches": operator_decisions.get("total_row_count_matches", False),
                 "latest_state_count_matches": operator_decisions.get("latest_state_count_matches", False),
             },
             "notification_state": {
                 "csv_total_row_count": notification_state.get("csv_total_row_count", 0),
-                "postgres_total_row_count": notification_state.get("postgres_total_row_count", 0),
+                "postgres_total_row_count": notification_state_postgres_total,
                 "csv_latest_state_count": notification_state.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": notification_state.get("postgres_latest_state_count", 0),
+                "postgres_latest_state_count": notification_state_postgres_latest,
                 "total_row_count_matches": notification_state.get("total_row_count_matches", False),
                 "latest_state_count_matches": notification_state.get("latest_state_count_matches", False),
             },
@@ -1348,7 +1409,6 @@ def record_notification_read_state_payload(
         "is_read": str(normalized_is_read),
     }
 
-    _append_notification_state_row(state_path, state_row)
     postgres_write = _dual_write_notification_state_postgres(state_row)
 
     target_notification["is_read"] = normalized_is_read
@@ -1358,6 +1418,7 @@ def record_notification_read_state_payload(
         "ok": True,
         "notification_dir": str(notification_dir),
         "notification_state_path": str(state_path),
+        "csv_write_disabled": True,
         "state_row": state_row,
         "postgres_write": postgres_write,
         "notification": target_notification,
@@ -3112,13 +3173,13 @@ def record_operator_resume_selection_payload(
     }
 
     _validate_operator_decision_identity(row)
-    ja._append_csv_row(decisions_path, OPERATOR_DECISION_HEADERS, row)
     postgres_write = _dual_write_operator_decision_postgres(row)
 
     return {
         "ok": True,
         "row": row,
         "decisions_path": str(decisions_path),
+        "csv_write_disabled": True,
         "postgres_write": postgres_write,
     }
 
@@ -3274,11 +3335,6 @@ def record_planning_patch_selection_payload(
     }
 
     ja = _job_app()
-    ja._append_csv_row(
-        patch_selections_path,
-        PATCH_SELECTION_HEADERS,
-        row,
-    )
     postgres_write = _dual_write_patch_selection_postgres(row)
 
     preview = build_selected_patch_set_counterfactual_preview(
@@ -3289,6 +3345,7 @@ def record_planning_patch_selection_payload(
     return {
         "ok": True,
         "patch_selections_path": str(patch_selections_path),
+        "csv_write_disabled": True,
         "selected_patch_candidate_ids": normalized_ids,
         "selection": row,
         "postgres_write": postgres_write,
@@ -3319,13 +3376,13 @@ def record_application_action_payload(
     }
 
     _validate_application_identity(row)
-    ja._append_csv_row(actions_path, APPLICATION_ACTION_HEADERS, row)
     postgres_write = _dual_write_application_action_postgres(row)
 
     return {
         "ok": True,
         "row": row,
         "actions_path": str(actions_path),
+        "csv_write_disabled": True,
         "postgres_write": postgres_write,
     }
 

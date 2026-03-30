@@ -1206,8 +1206,6 @@ def notifications_summary_payload(
 
     return {
         "ok": True,
-        "notification_dir": str(notification_dir),
-        "legacy_notification_state_path": str(state_path),
         "total_rows": len(rows),
         "read_count": read_count,
         "unread_count": unread_count,
@@ -1233,8 +1231,6 @@ def notifications_unread_count_payload(
 
     return {
         "ok": True,
-        "notification_dir": str(notification_dir),
-        "legacy_notification_state_path": str(state_path),
         "total_rows": len(rows),
         "read_count": read_count,
         "unread_count": unread_count,
@@ -1324,11 +1320,7 @@ def record_notification_read_state_payload(
 
     return {
         "ok": True,
-        "notification_dir": str(notification_dir),
-        "legacy_notification_state_path": str(state_path),
-        "csv_write_disabled": True,
         "state_row": state_row,
-        "postgres_write": postgres_write,
         "notification": target_notification,
     }
 
@@ -2719,12 +2711,27 @@ def browse_payload(
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = ja._build_job_index(output_dir, decisions_path)
-    args = _make_args(**filters)
+
+    resolved_filters = {
+        "action": "",
+        "needs_review": "",
+        "is_tie": "",
+        "fallback_status": "",
+        "winner_bucket": "",
+        "company_contains": "",
+        "title_contains": "",
+        "limit": 20,
+        "undecided_only": "",
+    }
+    resolved_filters.update(filters)
+
+    args = _make_args(**resolved_filters)
     selected = ja._select_browse_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
+
     return {
-        "filters": filters,
+        "filters": resolved_filters,
         "rows": selected,
         "count": len(selected),
     }
@@ -2737,12 +2744,26 @@ def review_payload(
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = ja._build_job_index(output_dir, decisions_path)
-    args = _make_args(**filters)
+
+    resolved_filters = {
+        "queue_rank": None,
+        "job_doc_id": "",
+        "company_contains": "",
+        "title_contains": "",
+        "include_non_review": False,
+        "limit": 5,
+        "action": "",
+        "undecided_only": "",
+    }
+    resolved_filters.update(filters)
+
+    args = _make_args(**resolved_filters)
     selected = ja._select_review_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
+
     return {
-        "filters": filters,
+        "filters": resolved_filters,
         "rows": selected,
         "count": len(selected),
     }
@@ -2939,15 +2960,26 @@ def decisions_payload(
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = ja._load_csv_rows(decisions_path)
-    args = _make_args(**filters)
+
+    resolved_filters = {
+        "queue_rank": None,
+        "decision": "",
+        "selected_resume": "",
+        "company_contains": "",
+        "title_contains": "",
+        "limit": 20,
+    }
+    resolved_filters.update(filters)
+
+    args = _make_args(**resolved_filters)
     selected = ja._select_decision_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
+
     return {
-        "filters": filters,
+        "filters": resolved_filters,
         "rows": selected,
         "count": len(selected),
-        "legacy_operator_decisions_path": str(decisions_path),
     }
 
 def _dual_write_operator_decision_postgres(row: Dict[str, Any]) -> Dict[str, Any]:

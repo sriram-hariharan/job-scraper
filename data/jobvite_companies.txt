@@ -37,3 +37,4 @@ the-climate-corporation
 visiongroup-fr
 windriver
 zynga
+visiongroup

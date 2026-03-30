@@ -56,7 +56,7 @@ DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv
 DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
 DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
 DEFAULT_PROFILE_RESUME_DIR = Path(
-    os.environ.get("PROFILE_RESUME_DIR", "data/profile_resumes")
+    os.environ.get("RESUME_DIR", "data/profile_resumes")
 ).expanduser()
 DEFAULT_PATCH_SELECTIONS_PATH = DEFAULT_OUTPUT_DIR / "patch_selections.csv"
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)

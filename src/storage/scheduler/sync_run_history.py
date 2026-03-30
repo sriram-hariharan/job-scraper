@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from src.config.settings import SCHEDULER_RUN_HISTORY_PATH
-from src.storage.scheduler_store import (
+from src.storage.scheduler.contract import (
     scheduler_contract_health_payload,
     scheduler_run_history_db_row,
 )

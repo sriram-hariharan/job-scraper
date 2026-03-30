@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 
 DEFAULT_DECISIONS_PATH = Path("outputs/application_planning/operator_decisions.csv")
 
-from src.storage.operator_decisions_store import (
+from src.storage.operator_decisions.store import (
     operator_decision_db_row,
     operator_decisions_contract_health_payload,
 )

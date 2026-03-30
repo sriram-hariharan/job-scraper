@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.app.services import DEFAULT_APPLICATION_ACTIONS_PATH
-from src.storage.application_actions_store import (
+from src.storage.application_actions.store import (
     application_action_db_row,
     application_actions_contract_health_payload,
 )

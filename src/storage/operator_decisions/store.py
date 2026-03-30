@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
-DEFAULT_OPERATOR_DECISIONS_SCHEMA_SQL_PATH = Path("src/storage/operator_decisions_schema.sql")
+DEFAULT_OPERATOR_DECISIONS_SCHEMA_SQL_PATH = Path("src/storage/operator_decisions/schema.sql")
 
 
 def _json_compact(value: Any) -> str:

@@ -8,10 +8,27 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from src.storage.application_actions_store import (
-    application_actions_contract_health_payload,
-    application_actions_schema_sql_payload,
+from src.storage.scheduler.contract import (
+    scheduler_contract_health_payload,
+    scheduler_init_sql_payload,
+    scheduler_schema_sql_payload,
+    scheduler_seed_sql_payload,
 )
+
+
+def _resolve_sql_payload(sql_kind: str) -> Dict[str, str]:
+    normalized = str(sql_kind or "").strip().lower()
+
+    if normalized == "schema":
+        return scheduler_schema_sql_payload()
+
+    if normalized == "seed":
+        return scheduler_seed_sql_payload()
+
+    if normalized == "init":
+        return scheduler_init_sql_payload()
+
+    raise ValueError(f"Unsupported sql_kind={sql_kind!r}. Allowed: schema, seed, init")
 
 
 def _resolve_database_url(
@@ -57,7 +74,13 @@ def _build_psql_apply_cmd(
 
 def _parse_args():
     parser = argparse.ArgumentParser(
-        description="Apply application-actions storage SQL artifact to Postgres through psql."
+        description="Apply scheduler storage SQL artifacts to Postgres through psql."
+    )
+    parser.add_argument(
+        "--sql-kind",
+        choices=["schema", "seed", "init"],
+        default="init",
+        help="Which scheduler SQL artifact to apply.",
     )
     parser.add_argument(
         "--database-url",
@@ -82,7 +105,7 @@ def _parse_args():
     parser.add_argument(
         "--allow-contract-drift",
         action="store_true",
-        help="Allow execution even if the generated schema does not match the checked-in artifact.",
+        help="Allow execution even if generated scheduler SQL does not match the checked-in artifacts.",
     )
     return parser.parse_args()
 
@@ -90,14 +113,15 @@ def _parse_args():
 def main() -> int:
     args = _parse_args()
 
-    contract_health = application_actions_contract_health_payload()
+    contract_health = scheduler_contract_health_payload()
     if not contract_health.get("all_checks_pass", False) and not args.allow_contract_drift:
         raise SystemExit(
-            "Application-actions contract health check failed. Refusing to apply SQL while artifacts are drifting. "
-            "Re-run after fixing the schema artifact mismatch, or pass --allow-contract-drift if you intentionally want to override."
+            "Scheduler contract health check failed. Refusing to apply SQL while artifacts are drifting. "
+            "Re-run after fixing scheduler schema/seed/init artifact mismatches, or pass "
+            "--allow-contract-drift if you intentionally want to override."
         )
 
-    sql_payload: Dict[str, str] = application_actions_schema_sql_payload()
+    sql_payload = _resolve_sql_payload(args.sql_kind)
     sql_path = Path(sql_payload["path"]).expanduser()
 
     if not sql_path.exists() or not sql_path.is_file():
@@ -115,6 +139,7 @@ def main() -> int:
         sql_path=sql_path,
     )
 
+    print(f"sql_kind={args.sql_kind}")
     print(f"sql_path={sql_path}")
     print(f"contract_health_ok={contract_health['all_checks_pass']}")
     print(f"command={shlex.join(cmd)}")

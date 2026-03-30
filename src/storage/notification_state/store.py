@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
-DEFAULT_NOTIFICATION_STATE_SCHEMA_SQL_PATH = Path("src/storage/notification_state_schema.sql")
+DEFAULT_NOTIFICATION_STATE_SCHEMA_SQL_PATH = Path("src/storage/notification_state/schema.sql")
 
 
 def _json_compact(value: Any) -> str:

@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from src.storage.operator_decisions_store import (
+from src.storage.operator_decisions.store import (
     operator_decisions_contract_health_payload,
     operator_decisions_schema_sql_payload,
 )

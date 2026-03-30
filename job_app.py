@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
 
+from src.storage.operator_decisions_store import operator_decision_db_row
+from src.storage.read_operator_decisions_postgres import (
+    get_operator_decisions_postgres_status_payload,
+)
+
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 WRAP_WIDTH = 100
@@ -547,16 +552,6 @@ def _workflow_view_rows(rows: List[Dict[str, str]], view: str) -> List[Dict[str,
             and _matches_bool_filter(row.get("needs_variant_review", ""), True)
             and not has_decision(row)
         ]
-    elif normalized_view == "decided_apply":
-        filtered = [
-            row for row in rows
-            if _normalize_text(row.get("operator_decision", "")) == "apply"
-        ]
-    elif normalized_view == "decided_tailor":
-        filtered = [
-            row for row in rows
-            if _normalize_text(row.get("operator_decision", "")) == "tailor"
-        ]
     elif normalized_view == "runner_up_selected":
         filtered = [
             row for row in rows
@@ -571,8 +566,8 @@ def _workflow_view_rows(rows: List[Dict[str, str]], view: str) -> List[Dict[str,
     else:
         raise SystemExit(
             "Unsupported workflow view. Use one of: "
-            "undecided_apply_review, undecided_maybe_tailor, decided_apply, "
-            "decided_tailor, runner_up_selected, direct_apply_pending"
+            "undecided_apply_review, undecided_maybe_tailor, "
+            "runner_up_selected, direct_apply_pending"
         )
 
     filtered.sort(
@@ -604,21 +599,10 @@ def _infer_planner_view(request: str) -> str:
     if "direct apply" in text and ("pending" in text or "still pending" in text):
         return "direct_apply_pending"
 
-    if "undecided" not in text and (
-        "decide apply" in text or "decided apply" in text or "already decide apply" in text
-    ):
-        return "decided_apply"
-
-    if "undecided" not in text and (
-        "decide tailor" in text or "decided tailor" in text or "already decide tailor" in text
-    ):
-        return "decided_tailor"
-
     raise SystemExit(
         "Could not map planner request to a workflow view. Try one of: "
         "'show undecided apply review jobs', "
         "'show undecided maybe tailor jobs', "
-        "'which jobs did i already decide apply', "
         "'show jobs where i picked the runner up', "
         "'show direct apply jobs still pending'."
     )
@@ -898,8 +882,7 @@ def _decision_row_key(row: Dict[str, str]) -> str:
     keys = _decision_row_keys(row)
     return keys[0] if keys else ""
 
-
-def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, str]]:
+def _load_latest_decision_overlay_from_csv(decisions_path: Path) -> Dict[str, Dict[str, str]]:
     rows = _load_csv_rows(decisions_path)
     latest_by_key: Dict[str, Dict[str, str]] = {}
 
@@ -912,6 +895,10 @@ def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, s
     )
 
     for row in sorted_rows:
+        decision_value = str(row.get("decision", "") or "").strip().upper().replace(" ", "_")
+        if decision_value != "SELECT_RESUME":
+            continue
+
         overlay = {
             "operator_decision_timestamp": str(row.get("decision_timestamp", "") or ""),
             "operator_decision": str(row.get("decision", "") or ""),
@@ -923,6 +910,61 @@ def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, s
             latest_by_key[key] = overlay
 
     return latest_by_key
+
+def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, str]]:
+    csv_latest_by_key = _load_latest_decision_overlay_from_csv(decisions_path)
+    query_limit = max(len(csv_latest_by_key), 1)
+
+    try:
+        postgres_payload = get_operator_decisions_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+        postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+        postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+
+        if not postgres_rows:
+            return csv_latest_by_key
+
+        latest_by_key: Dict[str, Dict[str, str]] = {}
+
+        for row in postgres_rows:
+            normalized = operator_decision_db_row({
+                "decision_timestamp": row.get("decision_timestamp", ""),
+                "queue_rank": row.get("queue_rank", ""),
+                "job_doc_id": row.get("job_doc_id", ""),
+                "job_company": row.get("job_company", ""),
+                "job_title": row.get("job_title", ""),
+                "planning_action": row.get("planning_action", ""),
+                "winner_resume": row.get("winner_resume", ""),
+                "winner_score": row.get("winner_score", ""),
+                "runner_up_resume": row.get("runner_up_resume", ""),
+                "runner_up_score": row.get("runner_up_score", ""),
+                "selected_resume": row.get("selected_resume", ""),
+                "decision": row.get("decision", ""),
+                "note": row.get("note", ""),
+            })
+
+            decision_key = str(normalized.get("decision_key", "") or "").strip()
+            if not decision_key:
+                continue
+
+            latest_by_key[decision_key] = {
+                "operator_decision_timestamp": str(normalized.get("decision_timestamp", "") or ""),
+                "operator_decision": str(normalized.get("decision", "") or ""),
+                "operator_selected_resume": str(normalized.get("selected_resume", "") or ""),
+                "operator_note": str(normalized.get("note", "") or ""),
+            }
+
+        if not latest_by_key:
+            return csv_latest_by_key
+
+        return latest_by_key
+    except Exception:
+        return csv_latest_by_key
 
 
 def _overlay_operator_decisions(
@@ -1301,7 +1343,7 @@ def _decide(args) -> None:
         "runner_up_resume": str(row.get("runner_up_resume", "") or ""),
         "runner_up_score": str(row.get("runner_up_score", "") or ""),
         "selected_resume": selected_resume,
-        "decision": str(args.decision or "").strip(),
+        "decision": "SELECT_RESUME",
         "note": str(args.note or "").strip(),
     }
 
@@ -1645,8 +1687,8 @@ def _parse_args():
     review_parser.add_argument("--undecided-only", default="")
 
     decide_parser = subparsers.add_parser(
-        "decide",
-        help="Append a human decision for one reviewed queue row.",
+    "decide",
+    help="Record the selected resume variant for one reviewed queue row.",
     )
     decide_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     decide_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
@@ -1661,8 +1703,8 @@ def _parse_args():
     )
     decide_parser.add_argument(
         "--decision",
-        required=True,
-        choices=["APPLY", "SKIP", "TAILOR", "HOLD"],
+        default="SELECT_RESUME",
+        choices=["SELECT_RESUME"],
     )
     decide_parser.add_argument("--note", default="")
 
@@ -1722,8 +1764,6 @@ def _parse_args():
         choices=[
             "undecided_apply_review",
             "undecided_maybe_tailor",
-            "decided_apply",
-            "decided_tailor",
             "runner_up_selected",
             "direct_apply_pending",
         ],

@@ -6,9 +6,9 @@ from pathlib import Path
 
 from src.pipeline.scheduler import get_scheduled_job_definitions
 
-DEFAULT_SCHEDULER_SCHEMA_SQL_PATH = Path("src/storage/scheduler_schema.sql")
-DEFAULT_SCHEDULER_SEED_SQL_PATH = Path("src/storage/scheduler_seed.sql")
-DEFAULT_SCHEDULER_INIT_SQL_PATH = Path("src/storage/scheduler_init.sql")
+DEFAULT_SCHEDULER_SCHEMA_SQL_PATH = Path("src/storage/scheduler/schema.sql")
+DEFAULT_SCHEDULER_SEED_SQL_PATH = Path("src/storage/scheduler/seed.sql")
+DEFAULT_SCHEDULER_INIT_SQL_PATH = Path("src/storage/scheduler/init.sql")
 
 def _json_compact(value: Any) -> str:
     return json.dumps(

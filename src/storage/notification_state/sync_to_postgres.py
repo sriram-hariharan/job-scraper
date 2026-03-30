@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 
 DEFAULT_NOTIFICATION_STATE_PATH = Path("outputs/scheduler_logs/notification_state.csv")
 
-from src.storage.notification_state_store import (
+from src.storage.notification_state.store import (
     notification_state_db_row,
     notification_state_contract_health_payload,
 )

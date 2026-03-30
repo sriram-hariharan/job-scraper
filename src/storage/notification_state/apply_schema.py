@@ -8,9 +8,9 @@ import subprocess
 from pathlib import Path
 from typing import Dict, List
 
-from src.storage.patch_selections_store import (
-    patch_selections_contract_health_payload,
-    patch_selections_schema_sql_payload,
+from src.storage.notification_state.store import (
+    notification_state_contract_health_payload,
+    notification_state_schema_sql_payload,
 )
 
 
@@ -57,7 +57,7 @@ def _build_psql_apply_cmd(
 
 def _parse_args():
     parser = argparse.ArgumentParser(
-        description="Apply patch-selections storage SQL artifact to Postgres through psql."
+        description="Apply notification-state storage SQL artifact to Postgres through psql."
     )
     parser.add_argument(
         "--database-url",
@@ -90,14 +90,14 @@ def _parse_args():
 def main() -> int:
     args = _parse_args()
 
-    contract_health = patch_selections_contract_health_payload()
+    contract_health = notification_state_contract_health_payload()
     if not contract_health.get("all_checks_pass", False) and not args.allow_contract_drift:
         raise SystemExit(
-            "Patch-selections contract health check failed. Refusing to apply SQL while artifacts are drifting. "
+            "Notification-state contract health check failed. Refusing to apply SQL while artifacts are drifting. "
             "Re-run after fixing the schema artifact mismatch, or pass --allow-contract-drift if you intentionally want to override."
         )
 
-    sql_payload: Dict[str, str] = patch_selections_schema_sql_payload()
+    sql_payload: Dict[str, str] = notification_state_schema_sql_payload()
     sql_path = Path(sql_payload["path"]).expanduser()
 
     if not sql_path.exists() or not sql_path.is_file():

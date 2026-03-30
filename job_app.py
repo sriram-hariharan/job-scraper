@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Dict, List, Any
 from datetime import datetime
 
-from src.storage.operator_decisions_store import operator_decision_db_row
-from src.storage.read_operator_decisions_postgres import (
+from src.storage.operator_decisions.store import operator_decision_db_row
+from src.storage.operator_decisions.read_postgres import (
     get_operator_decisions_postgres_status_payload,
 )
 

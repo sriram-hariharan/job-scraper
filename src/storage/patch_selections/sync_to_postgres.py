@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.app.services import DEFAULT_PATCH_SELECTIONS_PATH
-from src.storage.patch_selections_store import (
+from src.storage.patch_selections.store import (
     patch_selection_db_row,
     patch_selections_contract_health_payload,
 )

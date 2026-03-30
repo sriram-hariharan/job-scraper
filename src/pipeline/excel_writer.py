@@ -1,6 +1,9 @@
-import gspread
-from google.oauth2.service_account import Credentials
+import time
 from datetime import datetime
+
+import gspread
+from gspread.exceptions import APIError
+from google.oauth2.service_account import Credentials
 
 from src.utils.location_cleaner import normalize_location
 from src.utils.time_utils import time_ago
@@ -8,6 +11,51 @@ from src.utils.logging import get_logger
 
 logger = get_logger("excel_writer")
 
+def _is_retryable_sheet_error(exc: Exception) -> bool:
+    if not isinstance(exc, APIError):
+        return False
+
+    status_code = None
+    response = getattr(exc, "response", None)
+    if response is not None:
+        status_code = getattr(response, "status_code", None)
+
+    text = str(exc).lower()
+
+    if status_code in {429, 500, 502, 503, 504}:
+        return True
+
+    if status_code == 403 and (
+        "rate limit" in text
+        or "user rate limit exceeded" in text
+        or "quota" in text
+    ):
+        return True
+
+    return False
+
+
+def _call_sheet_api(operation_name: str, fn, *args, **kwargs):
+    max_attempts = 5
+    base_sleep_seconds = 2.0
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as exc:
+            if not _is_retryable_sheet_error(exc) or attempt == max_attempts:
+                raise
+
+            sleep_seconds = base_sleep_seconds * (2 ** (attempt - 1))
+            logger.warning(
+                "Google Sheets %s failed with retryable error on attempt %s/%s. Sleeping %.1fs. Error=%s",
+                operation_name,
+                attempt,
+                max_attempts,
+                sleep_seconds,
+                exc,
+            )
+            time.sleep(sleep_seconds)
 
 def _column_letter(index: int) -> str:
     result = ""
@@ -36,7 +84,7 @@ def _scale_score_100(value):
 
 
 def format_sheet(sheet, headers):
-    sheet.freeze(rows=1)
+    _call_sheet_api("freeze", sheet.freeze, rows=1)
 
     numeric_formats = {
         "Planning Winner Score": "0.00",
@@ -53,14 +101,16 @@ def format_sheet(sheet, headers):
 
     for header, pattern in numeric_formats.items():
         col = _header_letter(headers, header)
-        sheet.format(
+        _call_sheet_api(
+            f"format numeric column {header}",
+            sheet.format,
             f"{col}:{col}",
             {
                 "numberFormat": {
                     "type": "NUMBER",
                     "pattern": pattern
                 }
-            }
+            },
         )
 
     wrap_columns = [
@@ -79,26 +129,32 @@ def format_sheet(sheet, headers):
 
     for header in wrap_columns:
         col = _header_letter(headers, header)
-        sheet.format(
+        _call_sheet_api(
+            f"format wrap column {header}",
+            sheet.format,
             f"{col}:{col}",
             {
                 "wrapStrategy": "WRAP"
-            }
+            },
         )
 
     for header in clip_columns:
         col = _header_letter(headers, header)
-        sheet.format(
+        _call_sheet_api(
+            f"format clip column {header}",
+            sheet.format,
             f"{col}:{col}",
             {
                 "wrapStrategy": "CLIP"
-            }
+            },
         )
 
     planning_score_col = _header_index(headers, "Planning Winner Score")
     posted_at_col = _header_index(headers, "Posted At")
 
-    sheet.sort(
+    _call_sheet_api(
+        "sort sheet",
+        sheet.sort,
         (planning_score_col, "des"),
         (posted_at_col, "des"),
     )
@@ -117,7 +173,10 @@ def write_jobs_to_sheet(jobs):
 
     client = gspread.authorize(creds)
 
-    sheet = client.open("AI Job Scraper").sheet1
+    sheet = _call_sheet_api(
+        "open spreadsheet",
+        lambda: client.open("AI Job Scraper").sheet1,
+    )
 
     headers = [
         "Company",
@@ -161,15 +220,17 @@ def write_jobs_to_sheet(jobs):
         "Run Timestamp",
     ]
 
-    existing_data = sheet.get_all_values()
+    existing_data = _call_sheet_api("get existing sheet values", sheet.get_all_values)
     link_index = headers.index("Link")
     last_col_letter = _column_letter(len(headers))
 
     if not existing_data or existing_data[0] != headers:
-        sheet.clear()
-        sheet.append_row(headers)
+        _call_sheet_api("clear sheet", sheet.clear)
+        _call_sheet_api("append header row", sheet.append_row, headers)
 
-        sheet.format(
+        _call_sheet_api(
+            "format header row",
+            sheet.format,
             f"A1:{_column_letter(len(headers))}1",
             {
                 "backgroundColor": {
@@ -180,7 +241,7 @@ def write_jobs_to_sheet(jobs):
                 "textFormat": {
                     "bold": True
                 }
-            }
+            },
         )
 
         existing_data = [headers]
@@ -287,10 +348,12 @@ def write_jobs_to_sheet(jobs):
         return
 
     if row_updates:
-        sheet.batch_update(row_updates)
+        _call_sheet_api("batch update rows", sheet.batch_update, row_updates)
 
     if rows_to_add:
-        sheet.append_rows(
+        _call_sheet_api(
+            "append new rows",
+            sheet.append_rows,
             rows_to_add,
             value_input_option="RAW"
         )

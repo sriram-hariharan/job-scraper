@@ -62,6 +62,16 @@ function normalizeNotificationMessage(row) {
   return String(row?.message || "").trim();
 }
 
+function notificationDestination(row) {
+  const kind = String(row?.notification_kind || "").trim().toLowerCase();
+
+  if (kind === "scheduled_run_email_delivery") {
+    return "/scheduler";
+  }
+
+  return "";
+}
+
 function formatNotificationTime(value) {
   const raw = String(value || "").trim();
   if (!raw) return "";
@@ -117,10 +127,15 @@ function renderNotificationRows(listEl, rows, unreadOnly) {
     const isRead = Boolean(row.is_read);
     const badgeClass = notificationLevelClass(level);
     const toggleLabel = isRead ? "Mark unread" : "Mark read";
+    const destination = notificationDestination(row);
     
 
     return `
-      <article class="notification-item ${isRead ? "is-read" : "is-unread"}" data-notification-id="${notificationId}">
+      <article
+        class="notification-item ${isRead ? "is-read" : "is-unread"} ${destination ? "is-clickable" : ""}"
+        data-notification-id="${notificationId}"
+        data-notification-destination="${destination}"
+      >
         <div class="notification-item-topline">
           <span class="${badgeClass}">${level}</span>
           <span class="notification-item-time">${createdAt}</span>
@@ -181,6 +196,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const notificationShowAll = qs("notificationShowAll");
   const notificationUnreadOnly = qs("notificationUnreadOnly");
   const notificationRefreshBtn = qs("notificationRefreshBtn");
+  const notificationMarkAllReadBtn = qs("notificationMarkAllReadBtn");
 
   const menuShell = qs("profileMenuShell");
   const menuButton = qs("profileMenuButton");
@@ -266,6 +282,20 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  async function markAllNotificationsRead() {
+  const payload = await fetchJson("/notifications?is_read=false&limit=100");
+  const unreadRows = Array.isArray(payload.rows) ? payload.rows : [];
+
+  for (const row of unreadRows) {
+    const notificationId = String(row.notification_id || "").trim();
+    if (!notificationId) continue;
+
+    await updateNotificationReadState(notificationId, true);
+  }
+
+  return unreadRows.length;
+}
+
   if (notificationButton && notificationDropdown) {
     notificationButton.addEventListener("click", async (event) => {
       event.stopPropagation();
@@ -283,13 +313,33 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  if (notificationRefreshBtn) {
+  if (notificationRefreshBtn) { 
     notificationRefreshBtn.addEventListener("click", async (event) => {
       event.preventDefault();
       await loadNotifications();
       await loadUnreadCount();
     });
   }
+
+  if (notificationMarkAllReadBtn) {
+  notificationMarkAllReadBtn.addEventListener("click", async (event) => {
+    event.preventDefault();
+
+    notificationMarkAllReadBtn.setAttribute("disabled", "disabled");
+
+    try {
+      await markAllNotificationsRead();
+      await loadNotifications();
+      await loadUnreadCount();
+    } catch (error) {
+      window.alert(
+        `Could not mark all notifications read. ${error instanceof Error ? error.message : ""}`.trim()
+      );
+    } finally {
+      notificationMarkAllReadBtn.removeAttribute("disabled");
+    }
+  });
+}
 
   [notificationShowAll, notificationUnreadOnly]
   .filter(Boolean)
@@ -303,6 +353,15 @@ window.addEventListener("DOMContentLoaded", () => {
     notificationList.addEventListener("click", async (event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return;
+
+      const clickableCard = target.closest(".notification-item[data-notification-destination]");
+      if (clickableCard && !target.closest("[data-notification-toggle]")) {
+        const destination = String(clickableCard.getAttribute("data-notification-destination") || "").trim();
+        if (destination) {
+          window.location.href = destination;
+          return;
+        }
+      }
 
       const toggleBtn = target.closest("[data-notification-toggle]");
       if (!toggleBtn) return;

@@ -409,3 +409,5 @@ techstartup
 valkyrietrading
 veeva
 voxy
+angel
+gopuff

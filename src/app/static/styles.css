@@ -6535,3 +6535,45 @@ body.app-shell-collapsed .app-shell-menu-btn {
 .notification-unread-toggle {
   margin-top: 2px;
 }
+
+.notification-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.notification-mark-all-btn {
+  padding: 9px 12px;
+  border-radius: 12px;
+}
+
+@media (max-width: 720px) {
+  .notification-dropdown-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .notification-header-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+.notification-item.is-clickable {
+  cursor: pointer;
+}
+
+.notification-item.is-clickable:hover {
+  border-color: rgba(120, 166, 255, 0.34);
+  background: rgba(120, 166, 255, 0.1);
+}
+
+.notification-item.is-clickable .notification-item-title {
+  transition: color 0.14s ease;
+}
+
+.notification-item.is-clickable:hover .notification-item-title {
+  color: #ffffff;
+}

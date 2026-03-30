@@ -446,6 +446,18 @@ async function postJson(url, payload) {
   });
 }
 
+const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+});
+
+const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZoneName: "short",
+});
+
 const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   month: "short",
   day: "numeric",
@@ -454,6 +466,22 @@ const DATE_TIME_FORMATTER = new Intl.DateTimeFormat(undefined, {
   minute: "2-digit",
   timeZoneName: "short",
 });
+
+function buildDateTimeCellHtml(value) {
+  if (!value) return "-";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return escapeHtml(String(value));
+  }
+
+  return `
+    <div class="datetime-cell">
+      <div class="datetime-cell-date">${escapeHtml(DATE_ONLY_FORMATTER.format(date))}</div>
+      <div class="datetime-cell-time">${escapeHtml(TIME_ONLY_FORMATTER.format(date))}</div>
+    </div>
+  `;
+}
 
 function formatDateTime(value) {
   if (!value) return "";
@@ -1112,7 +1140,7 @@ function buildQueueRowDetailedHtml(row) {
       <td><span class="pill">${action || "-"}</span></td>
       <td>${company}</td>
       <td class="title-cell">${titleHtml}</td>
-      <td>${escapeHtml(formatDateTime(row.posted_at) || "-")}</td>
+      <td>${buildDateTimeCellHtml(row.posted_at)}</td>
       <td>${escapeHtml(row.winner_resume || "")}</td>
       <td>${escapeHtml(formatScore100(row.winner_score))}</td>
       <td>${escapeHtml(row.runner_up_resume || "")}</td>
@@ -1131,7 +1159,7 @@ function buildQueueRowSimpleHtml(row) {
   const action = escapeHtml(row.action || "");
   const company = escapeHtml(row.job_company || "");
   const title = escapeHtml(row.job_title || "");
-  const postedAt = escapeHtml(formatDateTime(row.posted_at) || "-");
+  const postedAt = buildDateTimeCellHtml(row.posted_at);
   const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
   const titleHtml = jobUrl
     ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`

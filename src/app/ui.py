@@ -648,6 +648,36 @@ def scheduler_dashboard() -> str:
           .replace(/'/g, "&#39;");
       }}
 
+      const DATE_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {{
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }});
+
+      const TIME_ONLY_FORMATTER = new Intl.DateTimeFormat(undefined, {{
+        hour: "numeric",
+        minute: "2-digit",
+        timeZoneName: "short",
+      }});
+
+      function buildDateTimeCellHtml(value) {{
+        if (!value) {{
+          return "-";
+        }}
+
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) {{
+          return escapeHtml(String(value));
+        }}
+
+        return `
+          <div class="datetime-cell">
+            <div class="datetime-cell-date">${{escapeHtml(DATE_ONLY_FORMATTER.format(date))}}</div>
+            <div class="datetime-cell-time">${{escapeHtml(TIME_ONLY_FORMATTER.format(date))}}</div>
+          </div>
+        `;
+      }}
+
       function statusBadgeClass(status) {{
         const normalized = String(status || "").toLowerCase();
         if (normalized === "succeeded") return "scheduler-run-badge scheduler-run-badge--success";
@@ -710,8 +740,8 @@ def scheduler_dashboard() -> str:
               <td>${{escapeHtml(row.job_name || "-")}}</td>
               <td><span class="${{statusBadgeClass(row.status)}}">${{escapeHtml(row.status || "-")}}</span></td>
               <td>${{escapeHtml(row.return_code ?? "-")}}</td>
-              <td>${{escapeHtml(row.started_at || "-")}}</td>
-              <td>${{escapeHtml(row.finished_at || "-")}}</td>
+              <td>${{buildDateTimeCellHtml(row.started_at)}}</td>
+              <td>${{buildDateTimeCellHtml(row.finished_at)}}</td>
             </tr>
           `;
         }}).join("");

@@ -23,17 +23,15 @@ function normalizeNotificationTitle(row) {
 
   const finalJobsMatch = raw.match(/^Scheduled job\s+([A-Z_]+)\s+\|\s+([^|]+?)\s+\|\s+final_jobs=(\d+)$/i);
   if (finalJobsMatch) {
-    const status = finalJobsMatch[1].toLowerCase();
     const jobName = finalJobsMatch[2].trim().replace(/_/g, " ");
     const count = finalJobsMatch[3];
-    return `${jobName} · ${status} · jobs=${count}`;
+    return `${jobName} · jobs=${count}`;
   }
 
   const genericMatch = raw.match(/^Scheduled job\s+([A-Z_]+)\s+\|\s+(.+)$/i);
   if (genericMatch) {
-    const status = genericMatch[1].toLowerCase();
     const rest = genericMatch[2].trim().replace(/_/g, " ");
-    return `${rest} · ${status}`;
+    return rest;
   }
 
   return raw.replace(/_/g, " ");
@@ -94,11 +92,41 @@ function formatNotificationTime(value) {
   }
 }
 
-function notificationLevelClass(level) {
-  const normalized = String(level || "").trim().toLowerCase();
-  if (normalized === "success") return "notification-item-badge notification-item-badge--success";
-  if (normalized === "error") return "notification-item-badge notification-item-badge--error";
-  return "notification-item-badge notification-item-badge--info";
+function notificationBadgeMeta(row) {
+  const runStatus = String(row?.run_status || "").trim().toLowerCase();
+
+  if (runStatus === "success" || runStatus === "succeeded") {
+    return {
+      label: "SUCCESS",
+      className: "notification-item-badge notification-item-badge--success",
+    };
+  }
+
+  if (runStatus === "failed" || runStatus === "error") {
+    return {
+      label: "FAILED",
+      className: "notification-item-badge notification-item-badge--error",
+    };
+  }
+
+  const level = String(row?.level || "").trim().toLowerCase();
+  if (level === "success") {
+    return {
+      label: "SUCCESS",
+      className: "notification-item-badge notification-item-badge--success",
+    };
+  }
+  if (level === "error") {
+    return {
+      label: "FAILED",
+      className: "notification-item-badge notification-item-badge--error",
+    };
+  }
+
+  return {
+    label: "INFO",
+    className: "notification-item-badge notification-item-badge--info",
+  };
 }
 
 function setNotificationLoading(listEl, message) {
@@ -123,9 +151,8 @@ function renderNotificationRows(listEl, rows, unreadOnly) {
     const title = normalizeNotificationTitle(row);
     const message = normalizeNotificationMessage(row);
     const createdAt = formatNotificationTime(row.created_at || "");
-    const level = String(row.level || "info");
     const isRead = Boolean(row.is_read);
-    const badgeClass = notificationLevelClass(level);
+    const badgeMeta = notificationBadgeMeta(row);
     const toggleLabel = isRead ? "Mark unread" : "Mark read";
     const destination = notificationDestination(row);
     
@@ -137,7 +164,7 @@ function renderNotificationRows(listEl, rows, unreadOnly) {
         data-notification-destination="${destination}"
       >
         <div class="notification-item-topline">
-          <span class="${badgeClass}">${level}</span>
+          <span class="${badgeMeta.className}">${badgeMeta.label}</span>
           <span class="notification-item-time">${createdAt}</span>
         </div>
 

@@ -416,7 +416,7 @@ def review(
 def workflow(
     view: str = Query(
         ...,
-        pattern="^(undecided_apply_review|undecided_maybe_tailor|decided_apply|decided_tailor|runner_up_selected|direct_apply_pending)$",
+        pattern="^(undecided_apply_review|undecided_maybe_tailor|runner_up_selected|direct_apply_pending)$",
     ),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),

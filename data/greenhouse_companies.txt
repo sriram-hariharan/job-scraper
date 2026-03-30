@@ -855,3 +855,6 @@ zupinnovation
 123456789101010
 refinedscience
 syndio
+instacart
+scopely
+machinifyinc

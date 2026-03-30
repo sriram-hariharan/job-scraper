@@ -1,8 +1,8 @@
 {
-  "greenhouse": 400,
-  "lever": 100,
-  "ashby": 400,
-  "workable": 100,
+  "greenhouse": 500,
+  "lever": 200,
+  "ashby": 500,
+  "workable": 200,
   "jobvite": 0,
-  "greenhouse_embed": 150
+  "greenhouse_embed": 200
 }

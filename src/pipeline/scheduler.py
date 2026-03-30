@@ -1149,7 +1149,7 @@ def main() -> int:
         )
 
     if args.sync_postgres_run_history:
-        from src.storage.scheduler.sync_run_history import (
+        from src.storage.admin_tools.scheduler.sync_run_history import (
             insert_scheduler_run_history_row_to_postgres,
         )
 

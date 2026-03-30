@@ -1163,7 +1163,7 @@ def notifications_payload(
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
-        "notification_state_path": str(state_path),
+        "legacy_notification_state_path": str(state_path),
         "filters": {
             "job_name": job_name,
             "level": level,
@@ -1207,7 +1207,7 @@ def notifications_summary_payload(
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
-        "notification_state_path": str(state_path),
+        "legacy_notification_state_path": str(state_path),
         "total_rows": len(rows),
         "read_count": read_count,
         "unread_count": unread_count,
@@ -1234,7 +1234,7 @@ def notifications_unread_count_payload(
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
-        "notification_state_path": str(state_path),
+        "legacy_notification_state_path": str(state_path),
         "total_rows": len(rows),
         "read_count": read_count,
         "unread_count": unread_count,
@@ -1325,7 +1325,7 @@ def record_notification_read_state_payload(
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
-        "notification_state_path": str(state_path),
+        "legacy_notification_state_path": str(state_path),
         "csv_write_disabled": True,
         "state_row": state_row,
         "postgres_write": postgres_write,
@@ -2947,7 +2947,7 @@ def decisions_payload(
         "filters": filters,
         "rows": selected,
         "count": len(selected),
-        "decisions_path": str(decisions_path),
+        "legacy_operator_decisions_path": str(decisions_path),
     }
 
 def _dual_write_operator_decision_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
@@ -3049,7 +3049,7 @@ def record_operator_resume_selection_payload(
     return {
         "ok": True,
         "row": row,
-        "decisions_path": str(decisions_path),
+        "legacy_operator_decisions_path": str(decisions_path),
         "csv_write_disabled": True,
         "postgres_write": postgres_write,
     }
@@ -3215,7 +3215,7 @@ def record_planning_patch_selection_payload(
 
     return {
         "ok": True,
-        "patch_selections_path": str(patch_selections_path),
+        "legacy_patch_selections_path": str(patch_selections_path),
         "csv_write_disabled": True,
         "selected_patch_candidate_ids": normalized_ids,
         "selection": row,
@@ -3252,7 +3252,7 @@ def record_application_action_payload(
     return {
         "ok": True,
         "row": row,
-        "actions_path": str(actions_path),
+        "legacy_application_actions_path": str(actions_path),
         "csv_write_disabled": True,
         "postgres_write": postgres_write,
     }
@@ -3300,7 +3300,7 @@ def application_actions_payload(
         },
         "rows": selected,
         "count": len(selected),
-        "actions_path": str(actions_path),
+        "legacy_application_actions_path": str(actions_path),
     }
 
 

@@ -90,25 +90,6 @@ DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
 DEFAULT_NOTIFICATION_STATE_PATH = Path("outputs/scheduler_logs/notification_state.csv")
 
-PATCH_SELECTION_HEADERS = [
-    "selection_timestamp",
-    "job_doc_id",
-    "queue_rank",
-    "job_company",
-    "job_title",
-    "selected_resume",
-    "tailoring_json_path",
-    "artifact_signature",
-    "selected_candidate_ids_json",
-    "note",
-]
-
-NOTIFICATION_STATE_HEADERS = [
-    "state_timestamp",
-    "notification_id",
-    "is_read",
-]
-
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
     "log_handle": None,
@@ -124,17 +105,6 @@ _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "error": "",
 }
 
-APPLICATION_ACTION_HEADERS = [
-    "action_timestamp",
-    "job_doc_id",
-    "job_url",
-    "job_company",
-    "job_title",
-    "application_status",
-    "source_view",
-    "note",
-]
-
 ALLOWED_APPLICATION_STATUSES = {
     "OPENED",
     "APPLIED",
@@ -147,22 +117,6 @@ APPLICATION_ACTION_OVERLAY_FIELDS = [
     "application_status",
     "application_label",
     "is_applied",
-]
-
-OPERATOR_DECISION_HEADERS = [
-    "decision_timestamp",
-    "queue_rank",
-    "job_doc_id",
-    "job_company",
-    "job_title",
-    "planning_action",
-    "winner_resume",
-    "winner_score",
-    "runner_up_resume",
-    "runner_up_score",
-    "selected_resume",
-    "decision",
-    "note",
 ]
 
 ALLOWED_OPERATOR_DECISIONS = {
@@ -1027,21 +981,6 @@ def _normalize_optional_notification_read_filter(value: Any) -> Any:
     return _normalize_notification_read_flag(raw)
 
 
-def _append_notification_state_row(
-    state_path: Path,
-    row: Dict[str, Any],
-) -> None:
-    state_path.parent.mkdir(parents=True, exist_ok=True)
-    file_exists = state_path.exists()
-
-    with state_path.open("a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=NOTIFICATION_STATE_HEADERS)
-
-        if not file_exists or state_path.stat().st_size == 0:
-            writer.writeheader()
-
-        writer.writerow({key: row.get(key, "") for key in NOTIFICATION_STATE_HEADERS})
-
 def _notification_state_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
     normalized = notification_state_db_row(dict(row))
     return (
@@ -1049,49 +988,18 @@ def _notification_state_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         str(normalized.get("state_id", "") or ""),
     )
 
-def _load_latest_notification_state_overlay_from_csv(
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
-) -> Dict[str, Dict[str, Any]]:
-    if not state_path.exists() or not state_path.is_file():
-        return {}
-
-    latest_by_notification_id: Dict[str, Dict[str, Any]] = {}
-
-    with state_path.open("r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-
-        for row in reader:
-            notification_id = str(row.get("notification_id", "") or "").strip()
-            if not notification_id:
-                continue
-
-            try:
-                _normalize_notification_read_flag(row.get("is_read", ""))
-            except ValueError:
-                continue
-
-            existing = latest_by_notification_id.get(notification_id)
-            if existing is None:
-                latest_by_notification_id[notification_id] = dict(row)
-                continue
-
-            if _notification_state_latest_sort_key(row) >= _notification_state_latest_sort_key(existing):
-                latest_by_notification_id[notification_id] = dict(row)
-
-    overlaid: Dict[str, Dict[str, Any]] = {}
-    for notification_id, row in latest_by_notification_id.items():
-        overlaid[notification_id] = {
-            "is_read": _normalize_notification_read_flag(row.get("is_read", "")),
-            "state_timestamp": str(row.get("state_timestamp", "") or "").strip(),
-        }
-
-    return overlaid
-
 def _load_latest_notification_state_overlay(
     state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
 ) -> Dict[str, Dict[str, Any]]:
-    csv_latest_overlay = _load_latest_notification_state_overlay_from_csv(state_path)
-    query_limit = max(len(csv_latest_overlay), 1)
+    meta_payload = get_notification_state_postgres_status_payload(
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    meta_block = dict(meta_payload.get("postgres", {}) or {})
+    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
     postgres_payload = get_notification_state_postgres_status_payload(
         limit=query_limit,
@@ -1759,36 +1667,18 @@ def _patch_selection_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         selection_id,
     )
 
-def _load_latest_patch_selection_overlay_from_csv(
-    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
-) -> Dict[str, Dict[str, Any]]:
-    if not patch_selections_path.exists():
-        return {}
-
-    ja = _job_app()
-    rows = ja._load_csv_rows(patch_selections_path)
-    latest_by_path: Dict[str, Dict[str, Any]] = {}
-
-    for row in rows:
-        artifact_path = _clean_text(row.get("tailoring_json_path"))
-        if not artifact_path:
-            continue
-
-        existing = latest_by_path.get(artifact_path)
-        if existing is None:
-            latest_by_path[artifact_path] = dict(row)
-            continue
-
-        if _patch_selection_latest_sort_key(row) >= _patch_selection_latest_sort_key(existing):
-            latest_by_path[artifact_path] = dict(row)
-
-    return latest_by_path
-
 def _load_latest_patch_selection_overlay(
     patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
 ) -> Dict[str, Dict[str, Any]]:
-    csv_latest_by_path = _load_latest_patch_selection_overlay_from_csv(patch_selections_path)
-    query_limit = max(len(csv_latest_by_path), 1)
+    meta_payload = get_patch_selections_postgres_status_payload(
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    meta_block = dict(meta_payload.get("postgres", {}) or {})
+    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
     postgres_payload = get_patch_selections_postgres_status_payload(
         limit=query_limit,
@@ -2463,38 +2353,19 @@ def _application_action_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         str(normalized.get("action_id", "") or ""),
     )
 
-def _load_latest_application_actions_from_csv(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
-) -> List[Dict[str, str]]:
-    ja = _job_app()
-    rows = ja._load_csv_rows(actions_path)
-    latest_by_key: Dict[str, Dict[str, str]] = {}
-
-    for row in rows:
-        key = _application_action_key(row)
-        if not key:
-            continue
-
-        existing = latest_by_key.get(key)
-        if existing is None:
-            latest_by_key[key] = dict(row)
-            continue
-
-        if _application_action_latest_sort_key(row) >= _application_action_latest_sort_key(existing):
-            latest_by_key[key] = dict(row)
-
-    latest_rows = list(latest_by_key.values())
-    latest_rows.sort(
-        key=lambda row: _application_action_latest_sort_key(row),
-        reverse=True,
-    )
-    return latest_rows
 
 def _load_latest_application_actions(
     actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
 ) -> List[Dict[str, str]]:
-    csv_latest_rows = _load_latest_application_actions_from_csv(actions_path)
-    query_limit = max(len(csv_latest_rows), 1)
+    meta_payload = get_application_actions_postgres_status_payload(
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    meta_block = dict(meta_payload.get("postgres", {}) or {})
+    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
     postgres_payload = get_application_actions_postgres_status_payload(
         limit=query_limit,

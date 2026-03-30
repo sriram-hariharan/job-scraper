@@ -882,38 +882,16 @@ def _decision_row_key(row: Dict[str, str]) -> str:
     keys = _decision_row_keys(row)
     return keys[0] if keys else ""
 
-def _load_latest_decision_overlay_from_csv(decisions_path: Path) -> Dict[str, Dict[str, str]]:
-    rows = _load_csv_rows(decisions_path)
-    latest_by_key: Dict[str, Dict[str, str]] = {}
-
-    sorted_rows = sorted(
-        rows,
-        key=lambda row: (
-            str(row.get("decision_timestamp", "") or ""),
-            str(row.get("queue_rank", "") or ""),
-        ),
-    )
-
-    for row in sorted_rows:
-        decision_value = str(row.get("decision", "") or "").strip().upper().replace(" ", "_")
-        if decision_value != "SELECT_RESUME":
-            continue
-
-        overlay = {
-            "operator_decision_timestamp": str(row.get("decision_timestamp", "") or ""),
-            "operator_decision": str(row.get("decision", "") or ""),
-            "operator_selected_resume": str(row.get("selected_resume", "") or ""),
-            "operator_note": str(row.get("note", "") or ""),
-        }
-
-        for key in _decision_row_keys(row):
-            latest_by_key[key] = overlay
-
-    return latest_by_key
-
 def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, str]]:
-    csv_latest_by_key = _load_latest_decision_overlay_from_csv(decisions_path)
-    query_limit = max(len(csv_latest_by_key), 1)
+    meta_payload = get_operator_decisions_postgres_status_payload(
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    meta_block = dict(meta_payload.get("postgres", {}) or {})
+    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
     postgres_payload = get_operator_decisions_postgres_status_payload(
         limit=query_limit,

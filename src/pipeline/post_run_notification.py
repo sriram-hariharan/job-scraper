@@ -39,16 +39,19 @@ def _load_delivery_payload(payload_or_path: Any) -> Tuple[Dict[str, Any], Option
     return payload, path
 
 
-def _notification_level_from_delivery_status(delivery_status: str) -> str:
-    normalized = _clean_text(delivery_status).lower()
-
-    if normalized == "sent_smtp":
+def _notification_level(run_status: str, delivery_status: str) -> str:
+    normalized_run_status = _clean_text(run_status).lower()
+    if normalized_run_status in {"success", "succeeded"}:
         return "success"
-
-    if normalized in {"failed_smtp", "failed_delivery"}:
+    if normalized_run_status in {"failed", "error"}:
         return "error"
 
-    if normalized in {"recorded_outbox_only", "dry_run_only"}:
+    normalized_delivery_status = _clean_text(delivery_status).lower()
+    if normalized_delivery_status == "sent_smtp":
+        return "success"
+    if normalized_delivery_status in {"failed_smtp", "failed_delivery"}:
+        return "error"
+    if normalized_delivery_status in {"recorded_outbox_only", "dry_run_only"}:
         return "info"
 
     return "info"
@@ -88,6 +91,7 @@ def build_notification_record_payload(
 
     run_id = _clean_text(delivery_payload.get("run_id")) or "unknown_run"
     job_name = _normalize_job_name(delivery_payload.get("job_name")) or "scheduled_job"
+    run_status = _clean_text(delivery_payload.get("status"))
     delivery_status = _clean_text(delivery_payload.get("delivery_status"))
     notification_id = f"scheduled_run_email::{run_id}::{job_name}"
 
@@ -98,11 +102,11 @@ def build_notification_record_payload(
         "title": _clean_text(delivery_payload.get("subject"))
         or f"Scheduled run notification | {job_name}",
         "message": _notification_message(delivery_payload),
-        "level": _notification_level_from_delivery_status(delivery_status),
+        "level": _notification_level(run_status, delivery_status),
         "is_read": False,
         "job_name": job_name,
         "run_id": run_id,
-        "run_status": _clean_text(delivery_payload.get("status")),
+        "run_status": run_status,
         "delivery_mode": _clean_text(delivery_payload.get("delivery_mode")),
         "delivery_status": delivery_status,
         "delivery_provider": _clean_text(delivery_payload.get("delivery_provider")),

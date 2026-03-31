@@ -2108,6 +2108,14 @@ def _overlay_application_actions(
 
     return overlaid_rows
 
+def _exclude_applied_rows(
+    rows: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    return [
+        row for row in rows
+        if not bool(row.get("is_applied", False))
+    ]
+
 def _load_job_metadata_overlay_from_corpus(
     job_corpus: Path = DEFAULT_CORPUS_PATH,
 ) -> Dict[str, Dict[str, Any]]:
@@ -2360,6 +2368,7 @@ def browse_payload(
     selected = ja._select_browse_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
+    selected = _exclude_applied_rows(selected)
 
     return {
         "filters": resolved_filters,
@@ -2391,6 +2400,7 @@ def review_payload(
     selected = ja._select_review_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
+    selected = _exclude_applied_rows(selected)
 
     return {
         "filters": resolved_filters,
@@ -2409,6 +2419,7 @@ def workflow_payload(
     selected = ja._workflow_view_rows(rows, view)[:limit]
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
+    selected = _exclude_applied_rows(selected)
     return {
         "view": view,
         "rows": selected,

@@ -7,7 +7,6 @@ NAV_ITEMS = [
     ("Intelligence", "/intelligence", "I"),
     ("Applications", "/applications", "A"),
     ("Scheduler", "/scheduler", "S"),
-    ("Tailoring Workspace", "/tailoring-workspace", "T"),
 ]
 
 USER_NAME = "Sriram"

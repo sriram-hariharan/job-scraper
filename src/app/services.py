@@ -2596,7 +2596,7 @@ def status_payload(
     shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
     queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
     manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
-    decision_rows = ja._load_csv_rows(decisions_path)
+    decision_rows = _load_latest_operator_decision_rows(decisions_path)
 
     merged_rows = ja._build_job_index(output_dir, decisions_path)
     undecided_review_counts = ja._count_undecided_review_rows(merged_rows)
@@ -2691,7 +2691,7 @@ def status_payload(
             "shortlist_rows": len(shortlist_rows),
             "execution_queue_rows": len(queue_rows),
             "packet_manifest_rows": len(manifest_rows),
-            "operator_decisions_file": str(decisions_path),
+            "operator_decisions_storage": "postgres",
             "operator_decisions_rows": len(decision_rows),
         },
         "winner_bucket_counts": dict(sorted(winner_bucket_counts.items())),
@@ -2906,6 +2906,54 @@ def _load_latest_operator_decision_rows_from_csv(
     )
     return latest_rows
 
+def _load_latest_operator_decision_rows(
+    decisions_path: Path = DEFAULT_DECISIONS_PATH,
+) -> List[Dict[str, Any]]:
+    meta_payload = get_operator_decisions_postgres_status_payload(
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    meta_block = dict(meta_payload.get("postgres", {}) or {})
+    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
+
+    postgres_payload = get_operator_decisions_postgres_status_payload(
+        limit=query_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+
+    normalized_rows: List[Dict[str, Any]] = []
+    for row in postgres_rows:
+        normalized = operator_decision_db_row({
+            "decision_timestamp": row.get("decision_timestamp", ""),
+            "queue_rank": row.get("queue_rank", ""),
+            "job_doc_id": row.get("job_doc_id", ""),
+            "job_company": row.get("job_company", ""),
+            "job_title": row.get("job_title", ""),
+            "planning_action": row.get("planning_action", ""),
+            "winner_resume": row.get("winner_resume", ""),
+            "winner_score": row.get("winner_score", ""),
+            "runner_up_resume": row.get("runner_up_resume", ""),
+            "runner_up_score": row.get("runner_up_score", ""),
+            "selected_resume": row.get("selected_resume", ""),
+            "decision": row.get("decision", ""),
+            "note": row.get("note", ""),
+        })
+        normalized_rows.append(normalized)
+
+    normalized_rows.sort(
+        key=lambda row: _operator_decision_latest_sort_key(row),
+        reverse=True,
+    )
+    return normalized_rows
+
 def operator_decisions_postgres_status_payload(
     decisions_path: Path = DEFAULT_DECISIONS_PATH,
     *,
@@ -2959,7 +3007,7 @@ def decisions_payload(
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._load_csv_rows(decisions_path)
+    rows = _load_latest_operator_decision_rows(decisions_path)  
 
     resolved_filters = {
         "queue_rank": None,
@@ -3081,7 +3129,6 @@ def record_operator_resume_selection_payload(
     return {
         "ok": True,
         "row": row,
-        "legacy_operator_decisions_path": str(decisions_path),
         "csv_write_disabled": True,
         "postgres_write": postgres_write,
     }

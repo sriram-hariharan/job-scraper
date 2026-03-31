@@ -39,7 +39,6 @@ from src.storage.operator_decisions.read_postgres import (
 )
 from src.storage.notification_state.store import (
     insert_notification_state_row_to_postgres,
-    notification_state_db_row,
 )
 from src.storage.notification_state.read_postgres import (
     get_notification_state_postgres_status_payload,
@@ -78,17 +77,13 @@ DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
 ).expanduser()
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
-DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
-DEFAULT_APPLICATION_ACTIONS_PATH = DEFAULT_OUTPUT_DIR / "application_actions.csv"
 DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
 DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
 DEFAULT_PROFILE_RESUME_DIR = Path(
     os.environ.get("RESUME_DIR", "data/profile_resumes")
 ).expanduser()
-DEFAULT_PATCH_SELECTIONS_PATH = DEFAULT_OUTPUT_DIR / "patch_selections.csv"
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
-DEFAULT_NOTIFICATION_STATE_PATH = Path("outputs/scheduler_logs/notification_state.csv")
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -662,187 +657,6 @@ def scheduler_operator_summary_payload(
     }
 
 
-def storage_burnin_status_payload(
-    *,
-    limit: int = 5,
-    database_url_env: str = "DATABASE_URL",
-    psql_bin: str = "psql",
-) -> Dict[str, Any]:
-    normalized_limit = max(int(limit), 1)
-
-    scheduler = scheduler_operator_summary_payload(
-        limit=normalized_limit,
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-    )
-
-    application_actions = application_actions_postgres_status_payload(
-        limit=normalized_limit,
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-    )
-
-    patch_selections = patch_selections_postgres_status_payload(
-        limit=normalized_limit,
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-    )
-
-    operator_decisions = operator_decisions_postgres_status_payload(
-        limit=normalized_limit,
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-    )
-
-    notification_state = notification_state_postgres_status_payload(
-        limit=normalized_limit,
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-    )
-
-    scheduler_history_postgres_row_count = int(
-        scheduler.get("history", {}).get("postgres_row_count", 0) or 0
-    )
-    scheduler_history_jsonl_row_count = int(
-        scheduler.get("history", {}).get("jsonl_row_count", 0) or 0
-    )
-
-    application_actions_postgres_total = int(
-        application_actions.get("postgres_total_row_count", 0) or 0
-    )
-    application_actions_postgres_latest = int(
-        application_actions.get("postgres_latest_state_count", 0) or 0
-    )
-
-    patch_selections_postgres_total = int(
-        patch_selections.get("postgres_total_row_count", 0) or 0
-    )
-    patch_selections_postgres_latest = int(
-        patch_selections.get("postgres_latest_state_count", 0) or 0
-    )
-
-    operator_decisions_postgres_total = int(
-        operator_decisions.get("postgres_total_row_count", 0) or 0
-    )
-    operator_decisions_postgres_latest = int(
-        operator_decisions.get("postgres_latest_state_count", 0) or 0
-    )
-
-    notification_state_postgres_total = int(
-        notification_state.get("postgres_total_row_count", 0) or 0
-    )
-    notification_state_postgres_latest = int(
-        notification_state.get("postgres_latest_state_count", 0) or 0
-    )
-
-    runtime_checks = {
-        "scheduler_contract_healthy": bool(
-            scheduler.get("contract_health", {}).get("all_checks_pass", False)
-        ),
-        "scheduler_postgres_history_readable": scheduler_history_postgres_row_count >= 0,
-        "application_actions_postgres_readable": (
-            application_actions_postgres_total >= application_actions_postgres_latest >= 0
-        ),
-        "patch_selections_postgres_readable": (
-            patch_selections_postgres_total >= patch_selections_postgres_latest >= 0
-        ),
-        "operator_decisions_postgres_readable": (
-            operator_decisions_postgres_total >= operator_decisions_postgres_latest >= 0
-        ),
-        "notification_state_postgres_readable": (
-            notification_state_postgres_total >= notification_state_postgres_latest >= 0
-        ),
-    }
-
-    parity_checks = {
-        "scheduler_history_matches_jsonl": bool(
-            scheduler.get("history", {}).get("count_matches", False)
-        ),
-        "application_actions_total_rows_match": bool(
-            application_actions.get("total_row_count_matches", False)
-        ),
-        "application_actions_latest_state_match": bool(
-            application_actions.get("latest_state_count_matches", False)
-        ),
-        "patch_selections_total_rows_match": bool(
-            patch_selections.get("total_row_count_matches", False)
-        ),
-        "patch_selections_latest_state_match": bool(
-            patch_selections.get("latest_state_count_matches", False)
-        ),
-        "operator_decisions_total_rows_match": bool(
-            operator_decisions.get("total_row_count_matches", False)
-        ),
-        "operator_decisions_latest_state_match": bool(
-            operator_decisions.get("latest_state_count_matches", False)
-        ),
-        "notification_state_total_rows_match": bool(
-            notification_state.get("total_row_count_matches", False)
-        ),
-        "notification_state_latest_state_match": bool(
-            notification_state.get("latest_state_count_matches", False)
-        ),
-    }
-
-    runtime_all_checks_pass = all(runtime_checks.values())
-    parity_all_checks_pass = all(parity_checks.values())
-
-    return {
-        "ok": True,
-        "limit": normalized_limit,
-        "database_url_env": database_url_env,
-        # backward-compatible top-level gate, now based on Postgres-primary runtime health
-        "all_checks_pass": runtime_all_checks_pass,
-        "ready_for_csv_fallback_removal": runtime_all_checks_pass,
-        # new explicit gates
-        "runtime_checks": runtime_checks,
-        "runtime_all_checks_pass": runtime_all_checks_pass,
-        "parity_checks": parity_checks,
-        "parity_all_checks_pass": parity_all_checks_pass,
-        "ready_to_disable_csv_writes": runtime_all_checks_pass,
-        "surfaces": {
-            "scheduler": {
-                "history_jsonl_row_count": scheduler_history_jsonl_row_count,
-                "history_postgres_row_count": scheduler_history_postgres_row_count,
-                "count_matches": scheduler.get("history", {}).get("count_matches", False),
-                "contract_health": scheduler.get("contract_health", {}),
-            },
-            "application_actions": {
-                "csv_total_row_count": application_actions.get("csv_total_row_count", 0),
-                "postgres_total_row_count": application_actions_postgres_total,
-                "csv_latest_state_count": application_actions.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": application_actions_postgres_latest,
-                "total_row_count_matches": application_actions.get("total_row_count_matches", False),
-                "latest_state_count_matches": application_actions.get("latest_state_count_matches", False),
-            },
-            "patch_selections": {
-                "csv_total_row_count": patch_selections.get("csv_total_row_count", 0),
-                "postgres_total_row_count": patch_selections_postgres_total,
-                "csv_latest_state_count": patch_selections.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": patch_selections_postgres_latest,
-                "total_row_count_matches": patch_selections.get("total_row_count_matches", False),
-                "latest_state_count_matches": patch_selections.get("latest_state_count_matches", False),
-            },
-            "operator_decisions": {
-                "csv_total_row_count": operator_decisions.get("csv_total_row_count", 0),
-                "postgres_total_row_count": operator_decisions_postgres_total,
-                "csv_latest_state_count": operator_decisions.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": operator_decisions_postgres_latest,
-                "total_row_count_matches": operator_decisions.get("total_row_count_matches", False),
-                "latest_state_count_matches": operator_decisions.get("latest_state_count_matches", False),
-            },
-            "notification_state": {
-                "csv_total_row_count": notification_state.get("csv_total_row_count", 0),
-                "postgres_total_row_count": notification_state_postgres_total,
-                "csv_latest_state_count": notification_state.get("csv_latest_state_count", 0),
-                "postgres_latest_state_count": notification_state_postgres_latest,
-                "total_row_count_matches": notification_state.get("total_row_count_matches", False),
-                "latest_state_count_matches": notification_state.get("latest_state_count_matches", False),
-            },
-        },
-    }
-
-
 def _normalize_scheduler_filter_text(value: Any) -> str:
     return str(value or "").strip().lower().replace("-", "_").replace(" ", "_")
 
@@ -980,14 +794,6 @@ def _normalize_optional_notification_read_filter(value: Any) -> Any:
         return None
     return _normalize_notification_read_flag(raw)
 
-
-def _notification_state_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
-    normalized = notification_state_db_row(dict(row))
-    return (
-        str(normalized.get("state_timestamp", "") or ""),
-        str(normalized.get("state_id", "") or ""),
-    )
-
 def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
     meta_payload = get_notification_state_postgres_status_payload(
         limit=1,
@@ -1021,73 +827,6 @@ def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
         }
 
     return latest_overlay
-
-def notification_state_postgres_status_payload(
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
-    *,
-    limit: int = 10,
-    database_url_env: str = "DATABASE_URL",
-    psql_bin: str = "psql",
-) -> Dict[str, Any]:
-    normalized_limit = max(int(limit), 1)
-
-    csv_raw_rows: List[Dict[str, Any]] = []
-    if state_path.exists() and state_path.is_file():
-        with state_path.open("r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                csv_raw_rows.append(dict(row))
-
-    csv_latest_overlay = _load_latest_notification_state_overlay()
-
-    postgres_payload = get_notification_state_postgres_status_payload(
-        limit=normalized_limit,
-        database_url="",
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-        print_only=False,
-    )
-
-    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-
-    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
-    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
-
-    csv_recent_rows = sorted(
-        csv_raw_rows,
-        key=lambda row: _notification_state_latest_sort_key(row),
-        reverse=True,
-    )[:normalized_limit]
-
-    csv_latest_rows = sorted(
-        [
-            {
-                "notification_id": notification_id,
-                "state_timestamp": overlay.get("state_timestamp", ""),
-                "is_read": overlay.get("is_read", False),
-            }
-            for notification_id, overlay in csv_latest_overlay.items()
-        ],
-        key=lambda row: (str(row.get("state_timestamp", "") or ""), str(row.get("notification_id", "") or "")),
-        reverse=True,
-    )[:normalized_limit]
-
-    return {
-        "ok": True,
-        "query_limit": normalized_limit,
-        "notification_state_csv_path": str(state_path),
-        "csv_total_row_count": len(csv_raw_rows),
-        "csv_latest_state_count": len(csv_latest_overlay),
-        "csv_recent_rows": csv_recent_rows,
-        "csv_latest_rows": csv_latest_rows,
-        "postgres_total_row_count": postgres_total_row_count,
-        "postgres_latest_state_count": postgres_latest_state_count,
-        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
-        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_overlay),
-        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
-        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
-        "postgres_command_text": postgres_payload.get("command_text", ""),
-    }
 
 def _apply_notification_state_overlay(
     rows: List[Dict[str, Any]],
@@ -1627,26 +1366,6 @@ def _tailoring_artifact_signature(payload: Dict[str, Any]) -> str:
     blob = json.dumps(signature_payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
-def _patch_selection_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
-    normalized = {
-        "selection_timestamp": _clean_text(row.get("selection_timestamp")),
-        "tailoring_json_path": _clean_text(row.get("tailoring_json_path")),
-        "artifact_signature": _clean_text(row.get("artifact_signature")),
-        "selected_resume": _clean_text(row.get("selected_resume")),
-        "selected_candidate_ids_json": _serialize_selected_patch_candidate_ids(
-            row.get("selected_candidate_ids_json", "")
-        ),
-        "note": _clean_text(row.get("note")),
-    }
-
-    selection_id_seed = json.dumps(normalized, sort_keys=True, ensure_ascii=False)
-    selection_id = hashlib.sha1(selection_id_seed.encode("utf-8")).hexdigest()
-
-    return (
-        normalized["selection_timestamp"],
-        selection_id,
-    )
-
 def _load_latest_patch_selection_overlay() -> Dict[str, Dict[str, Any]]:
     meta_payload = get_patch_selections_postgres_status_payload(
         limit=1,
@@ -1688,57 +1407,6 @@ def _load_latest_patch_selection_overlay() -> Dict[str, Dict[str, Any]]:
         }
 
     return latest_by_path
-
-def patch_selections_postgres_status_payload(
-    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
-    *,
-    limit: int = 10,
-    database_url_env: str = "DATABASE_URL",
-    psql_bin: str = "psql",
-) -> Dict[str, Any]:
-    normalized_limit = max(int(limit), 1)
-
-    csv_raw_rows = _job_app()._load_csv_rows(patch_selections_path)
-    csv_latest_by_path = _load_latest_patch_selection_overlay()
-    csv_latest_rows = list(csv_latest_by_path.values())
-    csv_latest_rows.sort(
-        key=lambda row: _patch_selection_latest_sort_key(row),
-        reverse=True,
-    )
-
-    postgres_payload = get_patch_selections_postgres_status_payload(
-        limit=normalized_limit,
-        database_url="",
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-        print_only=False,
-    )
-
-    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-
-    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
-    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
-
-    return {
-        "ok": True,
-        "query_limit": normalized_limit,
-        "patch_selections_csv_path": str(patch_selections_path),
-        "csv_total_row_count": len(csv_raw_rows),
-        "csv_latest_state_count": len(csv_latest_rows),
-        "csv_recent_rows": sorted(
-            csv_raw_rows,
-            key=lambda row: _patch_selection_latest_sort_key(row),
-            reverse=True,
-        )[:normalized_limit],
-        "csv_latest_rows": csv_latest_rows[:normalized_limit],
-        "postgres_total_row_count": postgres_total_row_count,
-        "postgres_latest_state_count": postgres_latest_state_count,
-        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
-        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_rows),
-        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
-        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
-        "postgres_command_text": postgres_payload.get("command_text", ""),
-    }
 
 def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, Any]:
     from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
@@ -2844,38 +2512,6 @@ def _operator_decision_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         str(normalized.get("decision_id", "") or ""),
     )
 
-def _load_latest_operator_decision_rows_from_csv(
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
-) -> List[Dict[str, Any]]:
-    ja = _job_app()
-    rows = ja._load_csv_rows(decisions_path)
-    latest_by_key: Dict[str, Dict[str, Any]] = {}
-
-    for row in rows:
-        decision_value = str(row.get("decision", "") or "").strip().upper().replace(" ", "_")
-        if decision_value != "SELECT_RESUME":
-            continue
-
-        key_candidates = ja._decision_row_keys(row)
-        decision_key = key_candidates[0] if key_candidates else ""
-        if not decision_key:
-            continue
-
-        existing = latest_by_key.get(decision_key)
-        if existing is None:
-            latest_by_key[decision_key] = dict(row)
-            continue
-
-        if _operator_decision_latest_sort_key(row) >= _operator_decision_latest_sort_key(existing):
-            latest_by_key[decision_key] = dict(row)
-
-    latest_rows = list(latest_by_key.values())
-    latest_rows.sort(
-        key=lambda row: _operator_decision_latest_sort_key(row),
-        reverse=True,
-    )
-    return latest_rows
-
 def _load_latest_operator_decision_rows() -> List[Dict[str, Any]]:
     meta_payload = get_operator_decisions_postgres_status_payload(
         limit=1,
@@ -2922,68 +2558,26 @@ def _load_latest_operator_decision_rows() -> List[Dict[str, Any]]:
     )
     return normalized_rows
 
-def operator_decisions_postgres_status_payload(
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
-    *,
-    limit: int = 10,
-    database_url_env: str = "DATABASE_URL",
-    psql_bin: str = "psql",
-) -> Dict[str, Any]:
-    normalized_limit = max(int(limit), 1)
-
-    ja = _job_app()
-    csv_raw_rows = ja._load_csv_rows(decisions_path)
-    csv_latest_rows = _load_latest_operator_decision_rows_from_csv(decisions_path)
-
-    postgres_payload = get_operator_decisions_postgres_status_payload(
-        limit=normalized_limit,
-        database_url="",
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-        print_only=False,
-    )
-
-    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-
-    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
-    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
-
-    return {
-        "ok": True,
-        "query_limit": normalized_limit,
-        "decisions_csv_path": str(decisions_path),
-        "csv_total_row_count": len(csv_raw_rows),
-        "csv_latest_state_count": len(csv_latest_rows),
-        "csv_recent_rows": sorted(
-            csv_raw_rows,
-            key=lambda row: _operator_decision_latest_sort_key(row),
-            reverse=True,
-        )[:normalized_limit],
-        "csv_latest_rows": csv_latest_rows[:normalized_limit],
-        "postgres_total_row_count": postgres_total_row_count,
-        "postgres_latest_state_count": postgres_latest_state_count,
-        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
-        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_rows),
-        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
-        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
-        "postgres_command_text": postgres_payload.get("command_text", ""),
-    }
 
 def decisions_payload(
-    **filters: Any,
+    queue_rank: int | None = None,
+    decision: Any = "",
+    selected_resume: str = "",
+    company_contains: str = "",
+    title_contains: str = "",
+    limit: int = 20,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = _load_latest_operator_decision_rows()      
+    rows = _load_latest_operator_decision_rows()
 
     resolved_filters = {
-        "queue_rank": None,
-        "decision": "",
-        "selected_resume": "",
-        "company_contains": "",
-        "title_contains": "",
-        "limit": 20,
+        "queue_rank": queue_rank,
+        "decision": decision,
+        "selected_resume": selected_resume,
+        "company_contains": company_contains,
+        "title_contains": title_contains,
+        "limit": limit,
     }
-    resolved_filters.update(filters)
 
     args = _make_args(**resolved_filters)
     selected = ja._select_decision_rows(rows, args)
@@ -3353,71 +2947,6 @@ def applied_jobs_payload(
         title_contains=title_contains,
         limit=limit,
     )
-
-def application_actions_postgres_status_payload(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
-    *,
-    limit: int = 10,
-    database_url_env: str = "DATABASE_URL",
-    psql_bin: str = "psql",
-) -> Dict[str, Any]:
-    normalized_limit = max(int(limit), 1)
-
-    csv_raw_rows = _job_app()._load_csv_rows(actions_path)
-    csv_latest_rows = _load_latest_application_actions()
-
-    csv_raw_status_counts = Counter(
-        _clean_text(row.get("application_status")) or "<empty>"
-        for row in csv_raw_rows
-    )
-    csv_latest_status_counts = Counter(
-        _clean_text(row.get("application_status")) or "<empty>"
-        for row in csv_latest_rows
-    )
-
-    csv_recent_rows = sorted(
-        csv_raw_rows,
-        key=lambda row: (
-            str(row.get("action_timestamp", "") or ""),
-            _clean_text(row.get("job_company")),
-            _clean_text(row.get("job_title")),
-        ),
-        reverse=True,
-    )[:normalized_limit]
-
-    postgres_payload = get_application_actions_postgres_status_payload(
-        limit=normalized_limit,
-        database_url="",
-        database_url_env=database_url_env,
-        psql_bin=psql_bin,
-        print_only=False,
-    )
-
-    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-
-    postgres_total_row_count = int(postgres_block.get("total_row_count", 0) or 0)
-    postgres_latest_state_count = int(postgres_block.get("latest_state_count", 0) or 0)
-
-    return {
-        "ok": True,
-        "query_limit": normalized_limit,
-        "actions_csv_path": str(actions_path),
-        "csv_total_row_count": len(csv_raw_rows),
-        "csv_latest_state_count": len(csv_latest_rows),
-        "csv_raw_status_counts": dict(sorted(csv_raw_status_counts.items())),
-        "csv_latest_status_counts": dict(sorted(csv_latest_status_counts.items())),
-        "csv_recent_rows": csv_recent_rows,
-        "csv_latest_rows": csv_latest_rows[:normalized_limit],
-        "postgres_total_row_count": postgres_total_row_count,
-        "postgres_latest_state_count": postgres_latest_state_count,
-        "total_row_count_matches": postgres_total_row_count == len(csv_raw_rows),
-        "latest_state_count_matches": postgres_latest_state_count == len(csv_latest_rows),
-        "postgres_raw_status_counts": dict(postgres_block.get("raw_status_counts", {}) or {}),
-        "postgres_latest_status_counts": dict(postgres_block.get("latest_status_counts", {}) or {}),
-        "postgres_recent_rows": list(postgres_block.get("recent_rows", []) or []),
-        "postgres_latest_rows": list(postgres_block.get("latest_rows", []) or []),
-        "postgres_command_text": postgres_payload.get("command_text", ""),
-    }
 
 def jobs_search_lite_payload(
     request: str,

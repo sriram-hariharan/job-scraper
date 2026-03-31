@@ -22,7 +22,7 @@ from src.storage.application_actions.store import (
     insert_application_action_row_to_postgres,
 )
 from src.storage.application_actions.read_postgres import (
-    get_application_actions_postgres_status_payload,
+    get_latest_application_actions_rows,
 )
 from src.storage.patch_selections.store import (
     insert_patch_selection_row_to_postgres,
@@ -1999,25 +1999,13 @@ def _application_action_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
 
 
 def _load_latest_application_actions() -> List[Dict[str, str]]:
-    meta_payload = get_application_actions_postgres_status_payload(
-        limit=1,
+    postgres_payload = get_latest_application_actions_rows(
         database_url="",
         database_url_env="DATABASE_URL",
         psql_bin="psql",
         print_only=False,
     )
-    meta_block = dict(meta_payload.get("postgres", {}) or {})
-    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
-
-    postgres_payload = get_application_actions_postgres_status_payload(
-        limit=query_limit,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
-    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
-    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+    postgres_rows = list(postgres_payload.get("rows", []) or [])
 
     normalized_rows: List[Dict[str, str]] = []
     for row in postgres_rows:

@@ -7,11 +7,14 @@ import textwrap
 from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Any
-from datetime import datetime
 
 from src.storage.operator_decisions.store import operator_decision_db_row
 from src.storage.operator_decisions.read_postgres import (
     get_operator_decisions_postgres_status_payload,
+)
+from src.app.services import (
+    decisions_payload,
+    record_operator_resume_selection_payload,
 )
 
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
@@ -1300,43 +1303,55 @@ def _decide(args) -> None:
     row = _find_single_job_row(rows, args)
     selected_resume = _validate_selected_resume(row, args.selected_resume)
 
-    decision_row = {
-        "decision_timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "queue_rank": str(row.get("queue_rank", "") or ""),
-        "job_doc_id": str(row.get("job_doc_id", "") or ""),
-        "job_company": str(row.get("job_company", "") or ""),
-        "job_title": str(row.get("job_title", "") or ""),
-        "planning_action": str(row.get("action", "") or ""),
-        "winner_resume": str(row.get("winner_resume", "") or ""),
-        "winner_score": str(row.get("winner_score", "") or ""),
-        "runner_up_resume": str(row.get("runner_up_resume", "") or ""),
-        "runner_up_score": str(row.get("runner_up_score", "") or ""),
-        "selected_resume": selected_resume,
-        "decision": "SELECT_RESUME",
-        "note": str(args.note or "").strip(),
-    }
+    result = record_operator_resume_selection_payload(
+        decisions_path=Path(args.decisions_path),
+        queue_rank=str(row.get("queue_rank", "") or ""),
+        job_doc_id=str(row.get("job_doc_id", "") or ""),
+        job_company=str(row.get("job_company", "") or ""),
+        job_title=str(row.get("job_title", "") or ""),
+        planning_action=str(row.get("action", "") or ""),
+        decision=str(getattr(args, "decision", "SELECT_RESUME") or "SELECT_RESUME"),
+        selected_resume=selected_resume,
+        winner_resume=str(row.get("winner_resume", "") or ""),
+        winner_score=str(row.get("winner_score", "") or ""),
+        runner_up_resume=str(row.get("runner_up_resume", "") or ""),
+        runner_up_score=str(row.get("runner_up_score", "") or ""),
+        note=str(args.note or "").strip(),
+    )
 
-    decisions_path = Path(args.decisions_path)
-    _append_csv_row(decisions_path, DECISION_HEADERS, decision_row)
+    decision_row = dict(result.get("row", {}) or {})
+    postgres_write = dict(result.get("postgres_write", {}) or {})
 
     print("=" * 100)
     print("JOB APP DECIDE")
     print("=" * 100)
-    _print_wrapped_field("Decisions file", decisions_path)
-    _print_wrapped_field("Queue rank", decision_row["queue_rank"])
-    _print_wrapped_field("Company", decision_row["job_company"])
-    _print_wrapped_field("Title", decision_row["job_title"])
-    _print_wrapped_field("Planning action", decision_row["planning_action"])
-    _print_wrapped_field("Winner resume", decision_row["winner_resume"])
-    _print_wrapped_field("Runner up resume", decision_row["runner_up_resume"])
-    _print_wrapped_field("Selected resume", decision_row["selected_resume"])
-    _print_wrapped_field("Decision", decision_row["decision"])
-    _print_wrapped_field("Note", decision_row["note"] or "<empty>")
+    _print_wrapped_field("Storage", "postgres")
+    _print_wrapped_field("CSV write disabled", result.get("csv_write_disabled", False))
+    _print_wrapped_field("Queue rank", decision_row.get("queue_rank", ""))
+    _print_wrapped_field("Company", decision_row.get("job_company", ""))
+    _print_wrapped_field("Title", decision_row.get("job_title", ""))
+    _print_wrapped_field("Planning action", decision_row.get("planning_action", ""))
+    _print_wrapped_field("Winner resume", decision_row.get("winner_resume", ""))
+    _print_wrapped_field("Runner up resume", decision_row.get("runner_up_resume", ""))
+    _print_wrapped_field("Selected resume", decision_row.get("selected_resume", ""))
+    _print_wrapped_field("Decision", decision_row.get("decision", ""))
+    _print_wrapped_field("Note", decision_row.get("note", "") or "<empty>")
+    _print_wrapped_field("Postgres write attempted", postgres_write.get("attempted", False))
+    _print_wrapped_field("Postgres write ok", postgres_write.get("ok", False))
+    _print_wrapped_field("Decision key", postgres_write.get("decision_key", "") or "<empty>")
 
 def _decisions(args) -> None:
-    decisions_path = Path(args.decisions_path)
-    rows = _load_csv_rows(decisions_path)
-    selected = _select_decision_rows(rows, args)
+    payload = decisions_payload(
+        decisions_path=Path(args.decisions_path),
+        queue_rank=args.queue_rank,
+        decision=args.decision,
+        selected_resume=args.selected_resume,
+        company_contains=args.company_contains,
+        title_contains=args.title_contains,
+        limit=args.limit,
+    )
+    selected = list(payload.get("rows", []) or [])
+    resolved_filters = dict(payload.get("filters", {}) or {})
 
     if not selected:
         raise SystemExit("No matching operator decisions found.")
@@ -1344,13 +1359,16 @@ def _decisions(args) -> None:
     print("=" * 100)
     print("JOB APP DECISIONS")
     print("=" * 100)
-    _print_wrapped_field("Decisions file", decisions_path)
+    _print_wrapped_field("Storage", "postgres")
     _print_wrapped_field("Rows returned", len(selected))
-    _print_wrapped_field("Decision filter", args.decision or "<any>")
-    _print_wrapped_field("Selected resume filter", args.selected_resume or "<any>")
-    _print_wrapped_field("Company contains", args.company_contains or "<any>")
-    _print_wrapped_field("Title contains", args.title_contains or "<any>")
-    _print_wrapped_field("Queue rank filter", args.queue_rank if args.queue_rank is not None else "<any>")
+    _print_wrapped_field("Decision filter", resolved_filters.get("decision", "") or "<any>")
+    _print_wrapped_field("Selected resume filter", resolved_filters.get("selected_resume", "") or "<any>")
+    _print_wrapped_field("Company contains", resolved_filters.get("company_contains", "") or "<any>")
+    _print_wrapped_field("Title contains", resolved_filters.get("title_contains", "") or "<any>")
+    _print_wrapped_field(
+        "Queue rank filter",
+        resolved_filters.get("queue_rank") if resolved_filters.get("queue_rank") is not None else "<any>",
+    )
     print()
 
     for row in selected:

@@ -988,9 +988,7 @@ def _notification_state_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         str(normalized.get("state_id", "") or ""),
     )
 
-def _load_latest_notification_state_overlay(
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
-) -> Dict[str, Dict[str, Any]]:
+def _load_latest_notification_state_overlay() -> Dict[str, Dict[str, Any]]:
     meta_payload = get_notification_state_postgres_status_payload(
         limit=1,
         database_url="",
@@ -1040,7 +1038,7 @@ def notification_state_postgres_status_payload(
             for row in reader:
                 csv_raw_rows.append(dict(row))
 
-    csv_latest_overlay = _load_latest_notification_state_overlay(state_path)
+    csv_latest_overlay = _load_latest_notification_state_overlay()
 
     postgres_payload = get_notification_state_postgres_status_payload(
         limit=normalized_limit,
@@ -1093,9 +1091,8 @@ def notification_state_postgres_status_payload(
 
 def _apply_notification_state_overlay(
     rows: List[Dict[str, Any]],
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
 ) -> List[Dict[str, Any]]:
-    latest_by_notification_id = _load_latest_notification_state_overlay(state_path)
+    latest_by_notification_id = _load_latest_notification_state_overlay()
     overlaid_rows: List[Dict[str, Any]] = []
 
     for row in rows:
@@ -1117,7 +1114,6 @@ def _apply_notification_state_overlay(
 
 def notifications_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
@@ -1126,7 +1122,6 @@ def notifications_payload(
 ) -> Dict[str, Any]:
     rows = _apply_notification_state_overlay(
         _load_notification_rows(notification_dir),
-        state_path=state_path,
     )
 
     normalized_job_name = _normalize_scheduler_filter_text(job_name)
@@ -1163,7 +1158,6 @@ def notifications_payload(
     return {
         "ok": True,
         "notification_dir": str(notification_dir),
-        "legacy_notification_state_path": str(state_path),
         "filters": {
             "job_name": job_name,
             "level": level,
@@ -1179,12 +1173,10 @@ def notifications_payload(
 
 def notifications_summary_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
     limit: int = 10,
 ) -> Dict[str, Any]:
     rows = _apply_notification_state_overlay(
         _load_notification_rows(notification_dir),
-        state_path=state_path,
     )
     selected = rows[: max(int(limit), 0)]
 
@@ -1219,11 +1211,9 @@ def notifications_summary_payload(
 
 def notifications_unread_count_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
 ) -> Dict[str, Any]:
     rows = _apply_notification_state_overlay(
         _load_notification_rows(notification_dir),
-        state_path=state_path,
     )
 
     unread_count = sum(1 for row in rows if not bool(row.get("is_read", False)))
@@ -1282,7 +1272,6 @@ def _dual_write_notification_state_postgres(row: Dict[str, Any]) -> Dict[str, An
     
 def record_notification_read_state_payload(
     notification_dir: Path = DEFAULT_NOTIFICATION_RECORDS_DIR,
-    state_path: Path = DEFAULT_NOTIFICATION_STATE_PATH,
     *,
     notification_id: str = "",
     is_read: Any = True,
@@ -1293,7 +1282,6 @@ def record_notification_read_state_payload(
 
     rows = _apply_notification_state_overlay(
         _load_notification_rows(notification_dir),
-        state_path=state_path,
     )
 
     target_notification = None
@@ -1659,9 +1647,7 @@ def _patch_selection_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         selection_id,
     )
 
-def _load_latest_patch_selection_overlay(
-    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
-) -> Dict[str, Dict[str, Any]]:
+def _load_latest_patch_selection_overlay() -> Dict[str, Dict[str, Any]]:
     meta_payload = get_patch_selections_postgres_status_payload(
         limit=1,
         database_url="",
@@ -1713,7 +1699,7 @@ def patch_selections_postgres_status_payload(
     normalized_limit = max(int(limit), 1)
 
     csv_raw_rows = _job_app()._load_csv_rows(patch_selections_path)
-    csv_latest_by_path = _load_latest_patch_selection_overlay(patch_selections_path)
+    csv_latest_by_path = _load_latest_patch_selection_overlay()
     csv_latest_rows = list(csv_latest_by_path.values())
     csv_latest_rows.sort(
         key=lambda row: _patch_selection_latest_sort_key(row),
@@ -1774,7 +1760,6 @@ def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, 
 def _apply_saved_patch_selection_overlay(
     artifact_path: Path,
     payload_data: Dict[str, Any],
-    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
 ) -> Dict[str, Any]:
     from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
 
@@ -1784,7 +1769,7 @@ def _apply_saved_patch_selection_overlay(
     data.setdefault("selected_patch_selection_note", "")
     data.setdefault("selected_patch_selection_timestamp", "")
 
-    latest_by_path = _load_latest_patch_selection_overlay(patch_selections_path)
+    latest_by_path = _load_latest_patch_selection_overlay()
     selection_row = latest_by_path.get(str(artifact_path))
 
     if not selection_row:
@@ -2345,9 +2330,7 @@ def _application_action_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
     )
 
 
-def _load_latest_application_actions(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
-) -> List[Dict[str, str]]:
+def _load_latest_application_actions() -> List[Dict[str, str]]:
     meta_payload = get_application_actions_postgres_status_payload(
         limit=1,
         database_url="",
@@ -2427,10 +2410,8 @@ def _application_overlay_from_row(action_row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _load_latest_application_action_overlay(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
-) -> Dict[str, Dict[str, Any]]:
-    latest_rows = _load_latest_application_actions(actions_path)
+def _load_latest_application_action_overlay() -> Dict[str, Dict[str, Any]]:
+    latest_rows = _load_latest_application_actions()
     latest_by_key: Dict[str, Dict[str, Any]] = {}
 
     for row in latest_rows:
@@ -2443,9 +2424,8 @@ def _load_latest_application_action_overlay(
 
 def _overlay_application_actions(
     rows: List[Dict[str, Any]],
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
 ) -> List[Dict[str, Any]]:
-    latest_by_key = _load_latest_application_action_overlay(actions_path)
+    latest_by_key = _load_latest_application_action_overlay()
 
     overlaid_rows: List[Dict[str, Any]] = []
     for row in rows:
@@ -2621,9 +2601,7 @@ def status_payload(
     )
 
     latest_by_key = ja._load_latest_decision_overlay()
-    application_overlay_by_key = _load_latest_application_action_overlay(
-        DEFAULT_APPLICATION_ACTIONS_PATH
-    )
+    application_overlay_by_key = _load_latest_application_action_overlay()
     job_metadata_by_key = _load_job_metadata_overlay_from_corpus(job_corpus)
 
     top_rows = sorted(
@@ -2828,7 +2806,6 @@ def _resolve_planning_artifact_path(
 def planning_artifact_payload(
     path: str,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
-    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(path, output_dir=output_dir)
     suffix = artifact_path.suffix.lower()
@@ -2853,7 +2830,6 @@ def planning_artifact_payload(
                 data = _apply_saved_patch_selection_overlay(
                     artifact_path,
                     data,
-                    patch_selections_path=patch_selections_path,
                 )
         payload["data"] = data
     else:
@@ -3211,7 +3187,6 @@ def _dual_write_patch_selection_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
         }
     
 def record_planning_patch_selection_payload(
-    patch_selections_path: Path = DEFAULT_PATCH_SELECTIONS_PATH,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
     tailoring_json_path: str = "",
@@ -3283,7 +3258,6 @@ def record_planning_patch_selection_payload(
 
     return {
         "ok": True,
-        "legacy_patch_selections_path": str(patch_selections_path),
         "csv_write_disabled": True,
         "selected_patch_candidate_ids": normalized_ids,
         "selection": row,
@@ -3292,7 +3266,6 @@ def record_planning_patch_selection_payload(
     }
 
 def record_application_action_payload(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
     job_doc_id: str = "",
     job_url: str = "",
     job_company: str = "",
@@ -3320,21 +3293,19 @@ def record_application_action_payload(
     return {
         "ok": True,
         "row": row,
-        "legacy_application_actions_path": str(actions_path),
         "csv_write_disabled": True,
         "postgres_write": postgres_write,
     }
 
 
 def application_actions_payload(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
     application_status: str = "",
     company_contains: str = "",
     title_contains: str = "",
     limit: int = 100,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = _load_latest_application_actions(actions_path)
+    rows = _load_latest_application_actions()
 
     if application_status:
         status_target = _normalize_application_status(application_status)
@@ -3368,18 +3339,15 @@ def application_actions_payload(
         },
         "rows": selected,
         "count": len(selected),
-        "legacy_application_actions_path": str(actions_path),
     }
 
 
 def applied_jobs_payload(
-    actions_path: Path = DEFAULT_APPLICATION_ACTIONS_PATH,
     company_contains: str = "",
     title_contains: str = "",
     limit: int = 100,
 ) -> Dict[str, Any]:
     return application_actions_payload(
-        actions_path=actions_path,
         application_status="APPLIED",
         company_contains=company_contains,
         title_contains=title_contains,
@@ -3396,7 +3364,7 @@ def application_actions_postgres_status_payload(
     normalized_limit = max(int(limit), 1)
 
     csv_raw_rows = _job_app()._load_csv_rows(actions_path)
-    csv_latest_rows = _load_latest_application_actions(actions_path)
+    csv_latest_rows = _load_latest_application_actions()
 
     csv_raw_status_counts = Counter(
         _clean_text(row.get("application_status")) or "<empty>"

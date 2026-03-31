@@ -260,6 +260,79 @@ def _run_psql_json_query(
     payload["data"] = data
     return payload
 
+def _build_latest_application_actions_rows_sql() -> str:
+    return """
+WITH latest_rows AS (
+    SELECT DISTINCT ON (action_key)
+        action_id,
+        action_key,
+        action_timestamp,
+        job_doc_id,
+        job_url,
+        job_company,
+        job_title,
+        application_status,
+        source_view,
+        note
+    FROM application_actions
+    ORDER BY action_key, action_timestamp DESC, action_id DESC
+),
+latest_rows_ordered AS (
+    SELECT
+        action_id,
+        action_key,
+        action_timestamp,
+        job_doc_id,
+        job_url,
+        job_company,
+        job_title,
+        application_status,
+        source_view,
+        note
+    FROM latest_rows
+    ORDER BY action_timestamp DESC, action_id DESC
+)
+SELECT json_build_object(
+    'rows',
+    COALESCE(
+        (
+            SELECT json_agg(
+                row_to_json(latest_rows_ordered)
+                ORDER BY latest_rows_ordered.action_timestamp DESC, latest_rows_ordered.action_id DESC
+            )
+            FROM latest_rows_ordered
+        ),
+        '[]'::json
+    )
+);
+""".strip()
+
+def get_latest_application_actions_rows(
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    sql = _build_latest_application_actions_rows_sql()
+
+    query_payload = _run_psql_json_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    rows = list(query_payload["data"].get("rows", []) or [])
+
+    return {
+        "ok": True,
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+        "rows": rows,
+        "count": len(rows),
+    }
 
 def get_application_actions_postgres_status_payload(
     *,

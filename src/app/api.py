@@ -457,7 +457,6 @@ def planning_resume_preview(
     
 @app.get("/decisions")
 def decisions(
-    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     queue_rank: int | None = None,
     decision: list[str] | None = Query(default=None),
     selected_resume: str = "",
@@ -466,7 +465,6 @@ def decisions(
     limit: int = 20,
 ):
     return services.decisions_payload(
-        output_dir=Path(output_dir),
         queue_rank=queue_rank,
         decision=decision or [],
         selected_resume=selected_resume,
@@ -647,18 +645,3 @@ def profile_delete_resume(resume_name: str):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
-
-@app.get("/ops/storage-burnin-status")
-def storage_burnin_status(
-    limit: int = 5,
-    database_url_env: str = "DATABASE_URL",
-    psql_bin: str = "psql",
-):
-    try:
-        return services.storage_burnin_status_payload(
-            limit=limit,
-            database_url_env=database_url_env,
-            psql_bin=psql_bin,
-        )
-    except (ValueError, SystemExit) as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc

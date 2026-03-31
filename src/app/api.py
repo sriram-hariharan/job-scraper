@@ -278,7 +278,6 @@ def scheduler_summary(
 @app.get("/notifications")
 def notifications(
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
-    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
     job_name: str = "",
     level: str = "",
     delivery_status: str = "",
@@ -287,7 +286,6 @@ def notifications(
 ):
     return services.notifications_payload(
         notification_dir=Path(notification_dir),
-        state_path=Path(notification_state_path),
         job_name=job_name,
         level=level,
         delivery_status=delivery_status,
@@ -295,27 +293,22 @@ def notifications(
         limit=limit,
     )
 
-
 @app.get("/notifications/summary")
 def notifications_summary(
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
-    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
     limit: int = 10,
 ):
     return services.notifications_summary_payload(
         notification_dir=Path(notification_dir),
-        state_path=Path(notification_state_path),
         limit=limit,
     )
 
 @app.get("/notifications/unread-count")
 def notifications_unread_count(
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
-    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
 ):
     return services.notifications_unread_count_payload(
         notification_dir=Path(notification_dir),
-        state_path=Path(notification_state_path),
     )
 
 
@@ -323,12 +316,10 @@ def notifications_unread_count(
 def notifications_read_state(
     payload: dict = Body(...),
     notification_dir: str = str(services.DEFAULT_NOTIFICATION_RECORDS_DIR),
-    notification_state_path: str = str(services.DEFAULT_NOTIFICATION_STATE_PATH),
 ):
     try:
         return services.record_notification_read_state_payload(
             notification_dir=Path(notification_dir),
-            state_path=Path(notification_state_path),
             notification_id=str(payload.get("notification_id", "") or ""),
             is_read=payload.get("is_read", True),
         )
@@ -441,13 +432,11 @@ def planner(
 def planning_artifact(
     path: str,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
-    patch_selections_path: str = str(services.DEFAULT_PATCH_SELECTIONS_PATH),
 ):
     try:
         return services.planning_artifact_payload(
             path=path,
             output_dir=Path(output_dir),
-            patch_selections_path=Path(patch_selections_path),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -545,11 +534,9 @@ def planning_preview_selected_patches(
 def planning_select_patches(
     payload: dict = Body(...),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
-    patch_selections_path: str = str(services.DEFAULT_PATCH_SELECTIONS_PATH),
 ):
     try:
         return services.record_planning_patch_selection_payload(
-            patch_selections_path=Path(patch_selections_path),
             output_dir=Path(output_dir),
             tailoring_json_path=str(payload.get("tailoring_json_path", "") or ""),
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
@@ -561,31 +548,12 @@ def planning_select_patches(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
-@app.get("/application-actions")
-def application_actions(
-    actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),
-    application_status: str = "",
-    company_contains: str = "",
-    title_contains: str = "",
-    limit: int = 100,
-):
-    return services.application_actions_payload(
-        actions_path=Path(actions_path),
-        application_status=application_status,
-        company_contains=company_contains,
-        title_contains=title_contains,
-        limit=limit,
-    )
-
-
 @app.post("/application-actions")
 def record_application_action(
     payload: dict = Body(...),
-    actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),
 ):
     try:
         return services.record_application_action_payload(
-            actions_path=Path(actions_path),
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
             job_url=str(payload.get("job_url", "") or ""),
             job_company=str(payload.get("job_company", "") or ""),
@@ -600,13 +568,11 @@ def record_application_action(
 
 @app.get("/applied-jobs")
 def applied_jobs(
-    actions_path: str = str(services.DEFAULT_APPLICATION_ACTIONS_PATH),
     company_contains: str = "",
     title_contains: str = "",
     limit: int = 100,
 ):
     return services.applied_jobs_payload(
-        actions_path=Path(actions_path),
         company_contains=company_contains,
         title_contains=title_contains,
         limit=limit,

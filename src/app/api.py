@@ -63,13 +63,11 @@ def health():
 def status(
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     job_corpus: str = str(services.DEFAULT_CORPUS_PATH),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
     top_k: int = 10,
 ):
     return services.status_payload(
         output_dir=Path(output_dir),
         job_corpus=Path(job_corpus),
-        decisions_path=Path(decisions_path),
         top_k=top_k,
     )
 
@@ -359,7 +357,6 @@ def run_live_pipeline(payload: dict = Body(...)):
 @app.get("/browse")
 def browse(
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
     action: list[str] | None = Query(default=None),
     needs_review: str = "",
     is_tie: str = "",
@@ -372,7 +369,6 @@ def browse(
 ):
     return services.browse_payload(
         output_dir=Path(output_dir),
-        decisions_path=Path(decisions_path),
         action=action or [],
         needs_review=needs_review,
         is_tie=is_tie,
@@ -388,7 +384,6 @@ def browse(
 @app.get("/review")
 def review(
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
     action: str = "",
     queue_rank: int | None = None,
     job_doc_id: str = "",
@@ -400,7 +395,6 @@ def review(
 ):
     return services.review_payload(
         output_dir=Path(output_dir),
-        decisions_path=Path(decisions_path),
         action=action,
         queue_rank=queue_rank,
         job_doc_id=job_doc_id,
@@ -419,14 +413,12 @@ def workflow(
         pattern="^(undecided_apply_review|undecided_maybe_tailor|runner_up_selected|direct_apply_pending)$",
     ),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
     limit: int = 20,
 ):
     return services.workflow_payload(
         view=view,
         limit=limit,
         output_dir=Path(output_dir),
-        decisions_path=Path(decisions_path),
     )
 
 
@@ -434,7 +426,6 @@ def workflow(
 def planner(
     request: str,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
     limit: int = 20,
 ):
     try:
@@ -442,7 +433,6 @@ def planner(
             request=request,
             limit=limit,
             output_dir=Path(output_dir),
-            decisions_path=Path(decisions_path),
         )
     except SystemExit as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -478,7 +468,6 @@ def planning_resume_preview(
     
 @app.get("/decisions")
 def decisions(
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     queue_rank: int | None = None,
     decision: list[str] | None = Query(default=None),
@@ -488,7 +477,6 @@ def decisions(
     limit: int = 20,
 ):
     return services.decisions_payload(
-        decisions_path=Path(decisions_path),
         output_dir=Path(output_dir),
         queue_rank=queue_rank,
         decision=decision or [],
@@ -501,11 +489,9 @@ def decisions(
 @app.post("/planning/select-resume")
 def planning_select_resume(
     payload: dict = Body(...),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
 ):
     try:
         return services.record_operator_resume_selection_payload(
-            decisions_path=Path(decisions_path),
             queue_rank=str(payload.get("queue_rank", "") or ""),
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
             job_company=str(payload.get("job_company", "") or ""),
@@ -527,13 +513,11 @@ def planning_regenerate_selected_resume(
     payload: dict = Body(...),
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     job_corpus: str = str(services.DEFAULT_CORPUS_PATH),
-    decisions_path: str = str(services.DEFAULT_DECISIONS_PATH),
 ):
     try:
         return services.regenerate_selected_resume_tailoring_payload(
             output_dir=Path(output_dir),
             job_corpus=Path(job_corpus),
-            decisions_path=Path(decisions_path),
             job_doc_id=str(payload.get("job_doc_id", "") or ""),
             queue_rank=str(payload.get("queue_rank", "") or ""),
             selected_resume=str(payload.get("selected_resume", "") or ""),

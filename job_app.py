@@ -20,24 +20,7 @@ from src.app.services import (
 DEFAULT_OUTPUT_DIR = Path("outputs/application_planning")
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 WRAP_WIDTH = 100
-DEFAULT_DECISIONS_PATH = DEFAULT_OUTPUT_DIR / "operator_decisions.csv"
 DEFAULT_REVIEW_EXPORT_PATH = DEFAULT_OUTPUT_DIR / "operator_review_queue.csv"
-
-DECISION_HEADERS = [
-    "decision_timestamp",
-    "queue_rank",
-    "job_doc_id",
-    "job_company",
-    "job_title",
-    "planning_action",
-    "winner_resume",
-    "winner_score",
-    "runner_up_resume",
-    "runner_up_score",
-    "selected_resume",
-    "decision",
-    "note",
-]
 
 OPERATOR_DECISION_OVERLAY_FIELDS = [
     "operator_decision_timestamp",
@@ -66,17 +49,6 @@ def _load_csv_rows(path: Path) -> List[dict]:
 
 def _ensure_parent_dir(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-
-
-def _append_csv_row(path: Path, headers: List[str], row: Dict[str, str]) -> None:
-    _ensure_parent_dir(path)
-    needs_header = (not path.exists()) or path.stat().st_size == 0
-
-    with path.open("a", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=headers)
-        if needs_header:
-            writer.writeheader()
-        writer.writerow({header: row.get(header, "") for header in headers})
 
 def _count_jsonl_rows(path: Path) -> int:
     if not path.exists():
@@ -151,15 +123,14 @@ def _build_main_cmd(args, planning_only: bool) -> List[str]:
 def _status(args) -> None:
     output_dir = Path(args.output_dir)
     corpus_path = Path(args.job_corpus)
-    decisions_path = Path(args.decisions_path)
 
     best_rows = _load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
     shortlist_rows = _load_csv_rows(output_dir / "application_shortlist_by_job.csv")
     queue_rows = _load_csv_rows(output_dir / "application_execution_queue.csv")
     manifest_rows = _load_csv_rows(output_dir / "job_packet_manifest.csv")
-    decision_rows = _load_csv_rows(decisions_path)
+    decision_rows = _load_latest_operator_decision_rows()
 
-    merged_rows = _build_job_index(output_dir, decisions_path)
+    merged_rows = _build_job_index(output_dir)
     undecided_review_counts = _count_undecided_review_rows(merged_rows)
 
     print("=" * 100)
@@ -172,7 +143,7 @@ def _status(args) -> None:
     print(f"Shortlist rows             : {len(shortlist_rows)}")
     print(f"Execution queue rows       : {len(queue_rows)}")
     print(f"Packet manifest rows       : {len(manifest_rows)}")
-    print(f"Operator decisions file    : {decisions_path}")
+    print("Operator decisions storage : postgres")
     print(f"Operator decisions rows    : {len(decision_rows)}")
     print()
 
@@ -218,7 +189,7 @@ def _status(args) -> None:
             ),
         )[: args.top_k]
 
-        latest_by_key = _load_latest_decision_overlay(decisions_path)
+        latest_by_key = _load_latest_decision_overlay()
 
         for row in top_rows:
             overlay_row = dict(row)
@@ -296,7 +267,6 @@ def _status(args) -> None:
 
 def _build_job_index(
     output_dir: Path,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
 ) -> List[Dict[str, str]]:
     best_rows = _load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
     queue_rows = _load_csv_rows(output_dir / "application_execution_queue.csv")
@@ -319,7 +289,7 @@ def _build_job_index(
             merged[key].update(row)
 
     merged_rows = list(merged.values())
-    return _overlay_operator_decisions(merged_rows, Path(decisions_path))
+    return _overlay_operator_decisions(merged_rows)
 
 
 def _select_inspect_rows(rows: List[Dict[str, str]], args) -> List[Dict[str, str]]:
@@ -885,7 +855,56 @@ def _decision_row_key(row: Dict[str, str]) -> str:
     keys = _decision_row_keys(row)
     return keys[0] if keys else ""
 
-def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, str]]:
+def _load_latest_operator_decision_rows() -> List[Dict[str, str]]:
+    meta_payload = get_operator_decisions_postgres_status_payload(
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    meta_block = dict(meta_payload.get("postgres", {}) or {})
+    query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
+
+    postgres_payload = get_operator_decisions_postgres_status_payload(
+        limit=query_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    postgres_block = dict(postgres_payload.get("postgres", {}) or {})
+    postgres_rows = list(postgres_block.get("latest_rows", []) or [])
+
+    normalized_rows: List[Dict[str, str]] = []
+    for row in postgres_rows:
+        normalized = operator_decision_db_row({
+            "decision_timestamp": row.get("decision_timestamp", ""),
+            "queue_rank": row.get("queue_rank", ""),
+            "job_doc_id": row.get("job_doc_id", ""),
+            "job_company": row.get("job_company", ""),
+            "job_title": row.get("job_title", ""),
+            "planning_action": row.get("planning_action", ""),
+            "winner_resume": row.get("winner_resume", ""),
+            "winner_score": row.get("winner_score", ""),
+            "runner_up_resume": row.get("runner_up_resume", ""),
+            "runner_up_score": row.get("runner_up_score", ""),
+            "selected_resume": row.get("selected_resume", ""),
+            "decision": row.get("decision", ""),
+            "note": row.get("note", ""),
+        })
+        normalized_rows.append(normalized)
+
+    normalized_rows.sort(
+        key=lambda row: (
+            str(row.get("decision_timestamp", "") or ""),
+            str(row.get("decision_id", "") or ""),
+        ),
+        reverse=True,
+    )
+    return normalized_rows
+
+def _load_latest_decision_overlay() -> Dict[str, Dict[str, str]]:
     meta_payload = get_operator_decisions_postgres_status_payload(
         limit=1,
         database_url="",
@@ -941,9 +960,8 @@ def _load_latest_decision_overlay(decisions_path: Path) -> Dict[str, Dict[str, s
 
 def _overlay_operator_decisions(
     rows: List[Dict[str, str]],
-    decisions_path: Path,
 ) -> List[Dict[str, str]]:
-    latest_by_key = _load_latest_decision_overlay(decisions_path)
+    latest_by_key = _load_latest_decision_overlay()
     if not latest_by_key:
         return rows
 
@@ -1108,7 +1126,7 @@ def _validate_selected_resume(row: Dict[str, str], selected_resume: str) -> str:
     return selected
 
 def _inspect(args) -> None:
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     selected = _select_inspect_rows(rows, args)
 
     if not selected:
@@ -1148,7 +1166,7 @@ def _inspect(args) -> None:
         print("-" * 100)
 
 def _browse(args) -> None:
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     selected = _select_browse_rows(rows, args)
 
     if not selected:
@@ -1210,7 +1228,7 @@ def _browse(args) -> None:
         print()
 
 def _review(args) -> None:
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     selected = _select_review_rows(rows, args)
 
     if not selected:
@@ -1299,12 +1317,11 @@ def _review(args) -> None:
         print("-" * 100)
 
 def _decide(args) -> None:
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     row = _find_single_job_row(rows, args)
     selected_resume = _validate_selected_resume(row, args.selected_resume)
 
     result = record_operator_resume_selection_payload(
-        decisions_path=Path(args.decisions_path),
         queue_rank=str(row.get("queue_rank", "") or ""),
         job_doc_id=str(row.get("job_doc_id", "") or ""),
         job_company=str(row.get("job_company", "") or ""),
@@ -1342,7 +1359,6 @@ def _decide(args) -> None:
 
 def _decisions(args) -> None:
     payload = decisions_payload(
-        decisions_path=Path(args.decisions_path),
         queue_rank=args.queue_rank,
         decision=args.decision,
         selected_resume=args.selected_resume,
@@ -1393,7 +1409,7 @@ def _decisions(args) -> None:
         print()
 
 def _export_review_queue(args) -> None:
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     selected = _select_review_rows(rows, args)
 
     if not selected:
@@ -1438,7 +1454,7 @@ def _export_review_queue(args) -> None:
     _print_wrapped_field("Title contains", args.title_contains or "<any>")
 
 def _workflow(args) -> None:
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     selected = _workflow_view_rows(rows, args.view)[: args.limit]
 
     if not selected:
@@ -1476,7 +1492,7 @@ def _workflow(args) -> None:
 
 def _planner(args) -> None:
     inferred_view = _infer_planner_view(args.request)
-    rows = _build_job_index(Path(args.output_dir), Path(args.decisions_path))
+    rows = _build_job_index(Path(args.output_dir))
     selected = _workflow_view_rows(rows, inferred_view)[: args.limit]
 
     if not selected:
@@ -1628,7 +1644,6 @@ def _parse_args():
     status_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     status_parser.add_argument("--job-corpus", default=str(DEFAULT_CORPUS_PATH))
     status_parser.add_argument("--top-k", type=int, default=10)
-    status_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
 
     inspect_parser = subparsers.add_parser(
         "inspect",
@@ -1640,7 +1655,6 @@ def _parse_args():
     inspect_parser.add_argument("--company-contains", default="")
     inspect_parser.add_argument("--title-contains", default="")
     inspect_parser.add_argument("--limit", type=int, default=5)
-    inspect_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
 
     browse_parser = subparsers.add_parser(
         "browse",
@@ -1655,7 +1669,6 @@ def _parse_args():
     browse_parser.add_argument("--company-contains", default="")
     browse_parser.add_argument("--title-contains", default="")
     browse_parser.add_argument("--limit", type=int, default=20)
-    browse_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     browse_parser.add_argument("--undecided-only", default="")
 
     review_parser = subparsers.add_parser(
@@ -1670,7 +1683,6 @@ def _parse_args():
     review_parser.add_argument("--include-non-review", action="store_true")
     review_parser.add_argument("--limit", type=int, default=5)
     review_parser.add_argument("--action", default="")
-    review_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     review_parser.add_argument("--undecided-only", default="")
 
     decide_parser = subparsers.add_parser(
@@ -1678,7 +1690,6 @@ def _parse_args():
     help="Record the selected resume variant for one reviewed queue row.",
     )
     decide_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    decide_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     decide_parser.add_argument("--queue-rank", type=int)
     decide_parser.add_argument("--job-doc-id", default="")
     decide_parser.add_argument("--company-contains", default="")
@@ -1699,7 +1710,6 @@ def _parse_args():
         "decisions",
         help="Browse previously recorded operator decisions.",
     )
-    decisions_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     decisions_parser.add_argument("--queue-rank", type=int)
     decisions_parser.add_argument("--decision", default="")
     decisions_parser.add_argument("--selected-resume", default="")
@@ -1712,7 +1722,6 @@ def _parse_args():
         help="Export the current decision-aware human review queue to CSV.",
     )
     export_review_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    export_review_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     export_review_parser.add_argument("--export-path", default=str(DEFAULT_REVIEW_EXPORT_PATH))
     export_review_parser.add_argument("--queue-rank", type=int)
     export_review_parser.add_argument("--job-doc-id", default="")
@@ -1744,7 +1753,6 @@ def _parse_args():
         help="Query planning and decision workflow views from merged operator data.",
     )
     workflow_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    workflow_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     workflow_parser.add_argument(
         "--view",
         required=True,
@@ -1763,7 +1771,6 @@ def _parse_args():
     )
     planner_parser.add_argument("request")
     planner_parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    planner_parser.add_argument("--decisions-path", default=str(DEFAULT_DECISIONS_PATH))
     planner_parser.add_argument("--limit", type=int, default=20)
 
     return parser.parse_args()

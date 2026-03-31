@@ -2042,7 +2042,6 @@ def _find_planning_row_for_regeneration(
 def regenerate_selected_resume_tailoring_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     job_corpus: Path = DEFAULT_CORPUS_PATH,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
     *,
     job_doc_id: str = "",
     queue_rank: str = "",
@@ -2051,7 +2050,7 @@ def regenerate_selected_resume_tailoring_payload(
     refresh_llm_tailoring: bool = False,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    merged_rows = ja._build_job_index(output_dir, decisions_path)
+    merged_rows = ja._build_job_index(output_dir)
     target_row = _find_planning_row_for_regeneration(
         merged_rows,
         job_doc_id=job_doc_id,
@@ -2588,7 +2587,6 @@ def health_payload() -> Dict[str, Any]:
 def status_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     job_corpus: Path = DEFAULT_CORPUS_PATH,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
     top_k: int = 10,
 ) -> Dict[str, Any]:
     ja = _job_app()
@@ -2596,9 +2594,9 @@ def status_payload(
     shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
     queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
     manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
-    decision_rows = _load_latest_operator_decision_rows(decisions_path)
+    decision_rows = _load_latest_operator_decision_rows()
 
-    merged_rows = ja._build_job_index(output_dir, decisions_path)
+    merged_rows = ja._build_job_index(output_dir)
     undecided_review_counts = ja._count_undecided_review_rows(merged_rows)
 
     winner_bucket_counts = Counter(
@@ -2622,7 +2620,7 @@ def status_payload(
         for row in decision_rows
     )
 
-    latest_by_key = ja._load_latest_decision_overlay(decisions_path)
+    latest_by_key = ja._load_latest_decision_overlay()
     application_overlay_by_key = _load_latest_application_action_overlay(
         DEFAULT_APPLICATION_ACTIONS_PATH
     )
@@ -2706,11 +2704,10 @@ def status_payload(
 
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._build_job_index(output_dir, decisions_path)
+    rows = ja._build_job_index(output_dir)
 
     resolved_filters = {
         "action": "",
@@ -2739,11 +2736,10 @@ def browse_payload(
 
 def review_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._build_job_index(output_dir, decisions_path)
+    rows = ja._build_job_index(output_dir)
 
     resolved_filters = {
         "queue_rank": None,
@@ -2773,10 +2769,9 @@ def workflow_payload(
     view: str,
     limit: int = 20,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._build_job_index(output_dir, decisions_path)
+    rows = ja._build_job_index(output_dir)
     selected = ja._workflow_view_rows(rows, view)[:limit]
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
@@ -2791,11 +2786,10 @@ def planner_payload(
     request: str,
     limit: int = 20,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
 ) -> Dict[str, Any]:
     ja = _job_app()
     view = ja._infer_planner_view(request)
-    rows = ja._build_job_index(output_dir, decisions_path)
+    rows = ja._build_job_index(output_dir)
     selected = ja._workflow_view_rows(rows, view)[:limit]
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
@@ -2906,9 +2900,7 @@ def _load_latest_operator_decision_rows_from_csv(
     )
     return latest_rows
 
-def _load_latest_operator_decision_rows(
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
-) -> List[Dict[str, Any]]:
+def _load_latest_operator_decision_rows() -> List[Dict[str, Any]]:
     meta_payload = get_operator_decisions_postgres_status_payload(
         limit=1,
         database_url="",
@@ -3002,12 +2994,10 @@ def operator_decisions_postgres_status_payload(
     }
 
 def decisions_payload(
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
-    output_dir: Path = DEFAULT_OUTPUT_DIR,
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = _load_latest_operator_decision_rows(decisions_path)  
+    rows = _load_latest_operator_decision_rows()      
 
     resolved_filters = {
         "queue_rank": None,
@@ -3076,7 +3066,6 @@ def _dual_write_operator_decision_postgres(row: Dict[str, Any]) -> Dict[str, Any
         }
     
 def record_operator_resume_selection_payload(
-    decisions_path: Path = DEFAULT_DECISIONS_PATH,
     *,
     queue_rank: str = "",
     job_doc_id: str = "",

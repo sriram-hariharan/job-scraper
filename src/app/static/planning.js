@@ -40,6 +40,8 @@ const planningTableState = {
 
 const tailoringWorkspaceState = {
   artifact: null,
+  draftPayload: null,
+  manualBulletEdits: {},
   selectedCandidateIds: [],
   candidateLookup: new Map(),
   previewPayload: null,
@@ -3050,6 +3052,16 @@ function getTailoringWorkspaceContext() {
   };
 }
 
+async function loadTailoringWorkspaceDraft() {
+  const context = getTailoringWorkspaceContext();
+  if (!context || !context.tailoringJsonPath) return null;
+
+  return postJson("/planning/load-workspace-draft", {
+    tailoring_json_path: context.tailoringJsonPath,
+    selected_resume: context.resumeName,
+  });
+}
+
 function getTailoringWorkspaceSavedCandidateIds() {
   const payload = tailoringWorkspaceState.savedSelectionPayload;
   return normalizeTailoringWorkspaceCandidateIdList(
@@ -3093,6 +3105,204 @@ function buildTailoringWorkspaceSavedSelectionPayloadFromArtifact(payload) {
   };
 }
 
+function buildTailoringWorkspaceSavedSelectionPayloadFromDraft(draft) {
+  const safeDraft = draft && typeof draft === "object" ? draft : null;
+  if (!safeDraft) return null;
+
+  const selectedIds = normalizeTailoringWorkspaceCandidateIdList(
+    safeDraft.selected_patch_candidate_ids || []
+  );
+  if (!selectedIds.length) return null;
+
+  return {
+    selected_patch_candidate_ids: selectedIds,
+    selected_patch_selection_status: "applied",
+    selected_patch_selection_note:
+      String(safeDraft.note || "").trim() || "Saved from tailoring workspace draft.",
+    selected_patch_set_counterfactual_preview: null,
+  };
+}
+
+function getTailoringWorkspaceSavedManualBulletEdits() {
+  const draft = tailoringWorkspaceState.draftPayload;
+  if (!draft || typeof draft !== "object") return {};
+
+  const raw = draft.manual_bullet_edits;
+  if (!raw || typeof raw !== "object") return {};
+
+  const normalized = {};
+  Object.entries(raw).forEach(([key, value]) => {
+    const safeKey = String(key || "").trim();
+    if (!safeKey) return;
+    normalized[safeKey] = String(value || "");
+  });
+  return normalized;
+}
+
+function buildTailoringWorkspaceEditableBulletKey(item) {
+  const candidateId = getTailoringReplacementCandidateId(item);
+  if (candidateId) {
+    return `candidate:${candidateId}`;
+  }
+
+  const originalText = String(item?.original_text || "").trim();
+  if (!originalText) return "";
+
+  return `text:${normalizeTailoringWorkspaceText(originalText)}`;
+}
+
+function collectTailoringWorkspaceEditableBullets(payload) {
+  const buckets = [
+    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
+    ...(Array.isArray(payload?.direct_apply_optional_replacements)
+      ? payload.direct_apply_optional_replacements
+      : []),
+    ...(Array.isArray(payload?.direction_only_replacements)
+      ? payload.direction_only_replacements
+      : []),
+  ];
+
+  const rows = [];
+  const seen = new Set();
+
+  buckets.forEach((item) => {
+    const originalText = String(item?.original_text || "").trim();
+    if (!originalText) return;
+
+    const bulletKey = buildTailoringWorkspaceEditableBulletKey(item);
+    if (!bulletKey || seen.has(bulletKey)) return;
+    seen.add(bulletKey);
+
+    const replacementStatus = String(item?.replacement_status || "").trim().toLowerCase();
+    const bucketLabel =
+      replacementStatus === "direct_apply_ready"
+        ? "Ready"
+        : replacementStatus === "direct_apply_optional"
+          ? "Optional"
+          : "Review";
+
+    rows.push({
+      bulletKey,
+      candidateId: getTailoringReplacementCandidateId(item),
+      originalText,
+      currentText: originalText,
+      bucketLabel,
+    });
+  });
+
+  return rows;
+}
+
+function buildTailoringWorkspaceEditableBulletRows(payload) {
+  const manualEdits = tailoringWorkspaceState.manualBulletEdits || {};
+  const rows = collectTailoringWorkspaceEditableBullets(payload);
+
+  return rows.map((row) => ({
+    ...row,
+    currentText:
+      Object.prototype.hasOwnProperty.call(manualEdits, row.bulletKey)
+        ? String(manualEdits[row.bulletKey] || "")
+        : row.originalText,
+  }));
+}
+
+function getTailoringWorkspaceEditableBulletBaseMap(payload) {
+  const baseMap = {};
+
+  collectTailoringWorkspaceEditableBullets(payload).forEach((row) => {
+    if (!row.bulletKey) return;
+    baseMap[row.bulletKey] = String(row.originalText || "");
+  });
+
+  return baseMap;
+}
+
+function normalizeTailoringWorkspaceManualBulletEdits(editMap, payload) {
+  const baseMap = getTailoringWorkspaceEditableBulletBaseMap(payload);
+  const normalized = {};
+
+  Object.entries(editMap || {}).forEach(([rawKey, rawValue]) => {
+    const bulletKey = String(rawKey || "").trim();
+    if (!bulletKey || !Object.prototype.hasOwnProperty.call(baseMap, bulletKey)) return;
+
+    const nextValue = String(rawValue || "");
+    const originalValue = String(baseMap[bulletKey] || "");
+
+    if (nextValue !== originalValue) {
+      normalized[bulletKey] = nextValue;
+    }
+  });
+
+  return normalized;
+}
+
+function haveSameTailoringWorkspaceManualBulletEdits(left, right, payload) {
+  const a = normalizeTailoringWorkspaceManualBulletEdits(left, payload);
+  const b = normalizeTailoringWorkspaceManualBulletEdits(right, payload);
+
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+
+  if (aKeys.length !== bKeys.length) return false;
+
+  return aKeys.every((key, index) => {
+    const otherKey = bKeys[index];
+    return key === otherKey && a[key] === b[otherKey];
+  });
+}
+
+function renderTailoringWorkspaceFreeEditSection(payload) {
+  const rows = buildTailoringWorkspaceEditableBulletRows(payload);
+
+  if (!rows.length) {
+    return `
+      <section class="tailoring-section-block">
+        <div class="tailoring-section-title">Free edit</div>
+        <div class="tailoring-empty-inline">
+          No surfaced bullets are available for manual editing on this row yet.
+        </div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Free edit</div>
+      <div class="tailoring-card-copy">
+        Edit the surfaced bullets directly. These edits save into the workspace draft for this job/resume row.
+      </div>
+
+      <div class="tailoring-edit-card-list">
+        ${rows.map((row, index) => `
+          <article class="tailoring-edit-card tailoring-edit-card--compact">
+            <div class="tailoring-card-topline tailoring-card-topline--compact">
+              <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
+
+              <div class="tailoring-chip-group tailoring-chip-group--compact">
+                ${buildTailoringTonePill(row.bucketLabel, row.bucketLabel === "Ready" ? "safe" : row.bucketLabel === "Optional" ? "caution" : "muted")}
+              </div>
+            </div>
+
+            <div class="tailoring-info-block tailoring-info-block--compact">
+              <div class="tailoring-info-label">Original bullet</div>
+              <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
+            </div>
+
+            <div class="tailoring-info-block tailoring-info-block--compact">
+              <div class="tailoring-info-label">Editable draft text</div>
+              <textarea
+                class="tailoring-free-edit-textarea"
+                data-tailoring-free-edit-key="${escapeHtml(row.bulletKey)}"
+                rows="5"
+              >${escapeHtml(row.currentText)}</textarea>
+            </div>
+          </article>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function updateTailoringWorkspaceSelectionActionBar() {
   const statusEl = qs("tailoringWorkspaceSelectionStatus");
   const discardBtn = qs("tailoringWorkspaceDiscardBtn");
@@ -3102,11 +3312,39 @@ function updateTailoringWorkspaceSelectionActionBar() {
 
   if (!statusEl || !discardBtn || !downloadBtn || !previewBtn || !saveBtn) return;
 
+  const payload = getTailoringWorkspacePayload();
   const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
   const savedIds = getTailoringWorkspaceSavedCandidateIds();
   const hasSelection = selectedIds.length > 0;
-  const matchesSaved = haveSameTailoringWorkspaceCandidateIds(selectedIds, savedIds);
-  const hasSaved = savedIds.length > 0;
+  const matchesSavedSelection = haveSameTailoringWorkspaceCandidateIds(selectedIds, savedIds);
+  const hasSavedSelection = savedIds.length > 0;
+
+  const currentManualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    payload
+  );
+  const savedManualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    getTailoringWorkspaceSavedManualBulletEdits(),
+    payload
+  );
+  const manualMatchesSaved = haveSameTailoringWorkspaceManualBulletEdits(
+    currentManualEdits,
+    savedManualEdits,
+    payload
+  );
+
+  const hasManualEdits = Object.keys(currentManualEdits).length > 0;
+  const hasSavedManualEdits = Object.keys(savedManualEdits).length > 0;
+  const manualDraftChanged = !manualMatchesSaved;
+
+  const hasAnySavedState = hasSavedSelection || hasSavedManualEdits;
+  const hasUnsavedSelectionChange =
+    hasSavedSelection ? !matchesSavedSelection : hasSelection;
+  const hasUnsavedManualChange =
+    hasAnySavedState ? manualDraftChanged : hasManualEdits;
+
+  const hasUnsavedWorkspaceChanges = hasUnsavedSelectionChange || hasUnsavedManualChange;
+
   const context = getTailoringWorkspaceContext();
   const hasResume = Boolean(context && String(context.resumeName || "").trim());
 
@@ -3117,30 +3355,34 @@ function updateTailoringWorkspaceSelectionActionBar() {
   const discardIcon = discardBtn.querySelector(".tailoring-workspace-icon");
 
   if (tailoringWorkspaceState.isSaving) {
-    statusEl.textContent = `Saving ${selectedIds.length} selected suggestion${selectedIds.length === 1 ? "" : "s"}...`;
+    statusEl.textContent = "Saving workspace draft...";
   } else if (tailoringWorkspaceState.isPreviewing) {
     statusEl.textContent = `Previewing impact for ${selectedIds.length} selected suggestion${selectedIds.length === 1 ? "" : "s"}...`;
-  } else if (!hasSelection) {
-    statusEl.textContent = hasSaved
-      ? "No active selection. A saved selection still exists for this row."
+  } else if (hasUnsavedManualChange && !hasUnsavedSelectionChange) {
+    statusEl.textContent = hasManualEdits
+      ? `Free Edit has unsaved changes across ${Object.keys(currentManualEdits).length} bullet${Object.keys(currentManualEdits).length === 1 ? "" : "s"}.`
+      : "Free Edit reverted to the original text. Save to clear the previously saved manual edits.";
+  } else if (hasSelection && hasUnsavedSelectionChange) {
+    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. Save to update the workspace draft.`;
+  } else if (!hasSelection && !hasManualEdits) {
+    statusEl.textContent = hasAnySavedState
+      ? "No active unsaved changes. A saved workspace draft exists for this row."
       : "No actionable suggestions selected yet.";
-  } else if (hasSaved && matchesSaved) {
+  } else if (hasSavedSelection && matchesSavedSelection && !hasUnsavedManualChange) {
     statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. This matches the current saved selection.`;
-  } else if (hasSaved) {
-    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. You have unsaved changes compared with the saved selection. Preview or save this selection.`;
   } else {
-    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. Preview or save this selection.`;
+    statusEl.textContent = "Workspace draft loaded.";
   }
 
-  const shouldShowRevert = hasSaved;
-  const canRevert = hasSaved && !tailoringWorkspaceState.isSaving && !matchesSaved;
+  const shouldShowRevert = hasAnySavedState;
+  const canRevert = hasAnySavedState && !tailoringWorkspaceState.isSaving && hasUnsavedWorkspaceChanges;
 
   if (shouldShowRevert) {
     discardBtn.disabled = !canRevert;
-    discardBtn.setAttribute("aria-label", "Revert to saved selection");
+    discardBtn.setAttribute("aria-label", "Revert to saved draft");
 
     if (discardTooltip) {
-      discardTooltip.dataset.tooltip = "Revert to saved selection";
+      discardTooltip.dataset.tooltip = "Revert to saved draft";
     }
 
     if (discardIcon) {
@@ -3148,11 +3390,11 @@ function updateTailoringWorkspaceSelectionActionBar() {
       discardIcon.classList.add("tailoring-workspace-icon--revert");
     }
   } else {
-    discardBtn.disabled = tailoringWorkspaceState.isSaving || !hasSelection;
-    discardBtn.setAttribute("aria-label", "Discard selection");
+    discardBtn.disabled = tailoringWorkspaceState.isSaving || (!hasSelection && !hasManualEdits);
+    discardBtn.setAttribute("aria-label", "Discard changes");
 
     if (discardTooltip) {
-      discardTooltip.dataset.tooltip = "Discard selection";
+      discardTooltip.dataset.tooltip = "Discard changes";
     }
 
     if (discardIcon) {
@@ -3174,7 +3416,7 @@ function updateTailoringWorkspaceSelectionActionBar() {
     tailoringWorkspaceState.isPreviewing ? "Previewing impact..." : "Preview impact"
   );
 
-  saveBtn.disabled = tailoringWorkspaceState.isSaving || tailoringWorkspaceState.isPreviewing || !hasSelection;
+  saveBtn.disabled = tailoringWorkspaceState.isSaving || tailoringWorkspaceState.isPreviewing || !hasUnsavedWorkspaceChanges;
   downloadBtn.disabled = !hasResume;
 
   if (downloadTooltip) {
@@ -3327,31 +3569,32 @@ function renderTailoringWorkspaceSelectedTabsSection() {
   const shell = qs("tailoringWorkspaceSelectedTabsShell");
   const readyTab = qs("tailoringWorkspaceSelectedReadyTab");
   const reviewTab = qs("tailoringWorkspaceSelectedReviewTab");
+  const freeEditTab = qs("tailoringWorkspaceSelectedFreeEditTab");
 
-  if (!shell || !readyTab || !reviewTab) return;
+  if (!shell || !readyTab || !reviewTab || !freeEditTab) return;
 
+  const payload = getTailoringWorkspacePayload();
   const grouped = getTailoringWorkspaceSuggestionBuckets();
   const readyItems = grouped.ready;
   const reviewItems = grouped.review;
+  const freeEditRows = payload ? buildTailoringWorkspaceEditableBulletRows(payload) : [];
 
-  if (!readyItems.length && !reviewItems.length) {
+  if (!readyItems.length && !reviewItems.length && !freeEditRows.length) {
     clearTailoringWorkspaceSelectedTabsSection();
     return;
   }
 
-  if (!readyItems.length && reviewItems.length) {
-    tailoringWorkspaceState.selectedTab = "review";
-  } else if (!reviewItems.length && readyItems.length) {
-    tailoringWorkspaceState.selectedTab = "ready";
-  } else if (!["ready", "review"].includes(tailoringWorkspaceState.selectedTab)) {
-    tailoringWorkspaceState.selectedTab = "ready";
+  if (!["ready", "review", "free_edit"].includes(tailoringWorkspaceState.selectedTab)) {
+    tailoringWorkspaceState.selectedTab = reviewItems.length ? "review" : freeEditRows.length ? "free_edit" : "ready";
   }
 
   readyTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "ready");
   reviewTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "review");
+  freeEditTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "free_edit");
 
   readyTab.innerHTML = `Ready <span class="tailoring-selected-tab-count">${readyItems.length}</span>`;
   reviewTab.innerHTML = `Review <span class="tailoring-selected-tab-count">${reviewItems.length}</span>`;
+  freeEditTab.innerHTML = `Free Edit <span class="tailoring-selected-tab-count">${freeEditRows.length}</span>`;
 
   shell.classList.remove("hidden");
 }
@@ -3390,16 +3633,19 @@ function updateTailoringWorkspaceMetaSummary(payload) {
   const directionOnly = Array.isArray(payload.direction_only_replacements)
     ? payload.direction_only_replacements
     : [];
-  const decisions = Array.isArray(payload.final_replacement_decisions)
-    ? payload.final_replacement_decisions
-    : [];
 
   const actionableCount = appReady.length + directApplyOptional.length;
   const reviewCount = directionOnly.length;
+  const editableCount = buildTailoringWorkspaceEditableBulletRows(payload).length;
   const selectedCount = getTailoringWorkspaceSelectedCandidateIds().length;
-  const hasReplacementPlan = Boolean(
-    decisions.length || actionableCount || reviewCount
-  );
+  const activeTab = String(tailoringWorkspaceState.selectedTab || "").trim();
+
+  if (activeTab === "free_edit") {
+    meta.textContent = editableCount
+      ? `${editableCount} surfaced bullet${editableCount === 1 ? "" : "s"} loaded for free editing. Save stores manual edits in the workspace draft.`
+      : "No surfaced bullets are available for free editing on this row yet.";
+    return;
+  }
 
   if (actionableCount > 0) {
     if (selectedCount > 0) {
@@ -3410,7 +3656,7 @@ function updateTailoringWorkspaceMetaSummary(payload) {
     return;
   }
 
-  if (reviewCount > 0 || hasReplacementPlan) {
+  if (reviewCount > 0) {
     meta.textContent = "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet.";
     return;
   }
@@ -3424,22 +3670,26 @@ function rerenderTailoringWorkspaceSelectionView() {
   const payload = getTailoringWorkspacePayload();
   renderTailoringWorkspaceSelectedTabsSection();
 
-  renderTailoringInteractiveSummaryInto(
-    "tailoringWorkspaceInteractiveSummary",
-    tailoringWorkspaceState.artifact,
-    {
-      includeDiagnostics: false,
-      selectionEnabled: true,
-      selectedCandidateIds: getTailoringWorkspaceSelectedCandidateIds(),
-      bucketFilter: tailoringWorkspaceState.selectedTab,
-    }
-  );
+  if (tailoringWorkspaceState.selectedTab === "free_edit") {
+    qs("tailoringWorkspaceInteractiveSummary").innerHTML = renderTailoringWorkspaceFreeEditSection(payload);
+  } else {
+    renderTailoringInteractiveSummaryInto(
+      "tailoringWorkspaceInteractiveSummary",
+      tailoringWorkspaceState.artifact,
+      {
+        includeDiagnostics: false,
+        selectionEnabled: true,
+        selectedCandidateIds: getTailoringWorkspaceSelectedCandidateIds(),
+        bucketFilter: tailoringWorkspaceState.selectedTab,
+      }
+    );
+  }
 
   updateTailoringWorkspaceMetaSummary(payload);
   refreshTailoringWorkspaceSelectionPanels();
 }
 
-function initializeTailoringWorkspaceSelectionState(artifact) {
+function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = null) {
   tailoringWorkspaceState.artifact = artifact;
   tailoringWorkspaceState.previewPayload = null;
 
@@ -3447,6 +3697,17 @@ function initializeTailoringWorkspaceSelectionState(artifact) {
     artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
       ? artifact.data
       : null;
+
+  const loadedDraft =
+    draftResponse && draftResponse.draft && typeof draftResponse.draft === "object"
+      ? draftResponse.draft
+      : null;
+
+  tailoringWorkspaceState.draftPayload = loadedDraft;
+  tailoringWorkspaceState.manualBulletEdits =
+    loadedDraft && loadedDraft.manual_bullet_edits && typeof loadedDraft.manual_bullet_edits === "object"
+      ? { ...loadedDraft.manual_bullet_edits }
+      : {};
 
   if (!payload) {
     tailoringWorkspaceState.selectedCandidateIds = [];
@@ -3456,14 +3717,26 @@ function initializeTailoringWorkspaceSelectionState(artifact) {
   }
 
   tailoringWorkspaceState.candidateLookup = buildTailoringWorkspaceCandidateLookup(payload);
-  tailoringWorkspaceState.savedSelectionPayload = buildTailoringWorkspaceSavedSelectionPayloadFromArtifact(payload);
 
-  const selectionStatus = String(payload.selected_patch_selection_status || "").trim().toLowerCase();
+  const artifactSavedSelection = buildTailoringWorkspaceSavedSelectionPayloadFromArtifact(payload);
+  const draftSavedSelection =
+    draftResponse && draftResponse.has_saved_draft
+      ? buildTailoringWorkspaceSavedSelectionPayloadFromDraft(loadedDraft)
+      : null;
 
-  const initialSelectedIds =
-    selectionStatus === "applied"
+  tailoringWorkspaceState.savedSelectionPayload = draftSavedSelection || artifactSavedSelection;
+
+  const artifactSelectionStatus = String(payload.selected_patch_selection_status || "").trim().toLowerCase();
+  const artifactSelectedIds =
+    artifactSelectionStatus === "applied"
       ? (Array.isArray(payload.selected_patch_candidate_ids) ? payload.selected_patch_candidate_ids : [])
       : [];
+
+  const draftSelectedIds = loadedDraft
+    ? normalizeTailoringWorkspaceCandidateIdList(loadedDraft.selected_patch_candidate_ids || [])
+    : [];
+
+  const initialSelectedIds = draftSelectedIds.length ? draftSelectedIds : artifactSelectedIds;
 
   tailoringWorkspaceState.selectedCandidateIds = normalizeTailoringWorkspaceSelectedCandidateIds(
     payload,
@@ -3518,6 +3791,17 @@ function bindTailoringWorkspaceSelectionHandlers() {
       focusTailoringWorkspaceCandidateInPreview(
         focusCard.dataset.tailoringFocusCandidate || ""
       );
+    });
+
+    root.addEventListener("input", (event) => {
+      const textarea = event.target.closest("[data-tailoring-free-edit-key]");
+      if (!textarea) return;
+
+      const bulletKey = String(textarea.dataset.tailoringFreeEditKey || "").trim();
+      if (!bulletKey) return;
+
+      tailoringWorkspaceState.manualBulletEdits[bulletKey] = textarea.value;
+      updateTailoringWorkspaceSelectionActionBar();
     });
   }
 
@@ -3602,35 +3886,47 @@ async function saveTailoringWorkspaceSelection() {
   const context = getTailoringWorkspaceContext();
   const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
 
-  if (!context || !context.tailoringJsonPath || !selectedIds.length) return;
+  if (!context || !context.tailoringJsonPath) return;
 
   tailoringWorkspaceState.isSaving = true;
   updateTailoringWorkspaceSelectionActionBar();
 
   try {
-    const response = await postJson("/planning/select-patches", {
+    const response = await postJson("/planning/save-workspace-draft", {
       tailoring_json_path: context.tailoringJsonPath,
-      job_doc_id: context.jobDocId,
       selected_resume: context.resumeName,
-      selected_candidate_ids: selectedIds,
-      note: "Saved from tailoring workspace.",
+      selected_patch_candidate_ids: selectedIds,
+      manual_bullet_edits: normalizeTailoringWorkspaceManualBulletEdits(
+        tailoringWorkspaceState.manualBulletEdits || {},
+        getTailoringWorkspacePayload()
+      ),
+      note: "Saved from tailoring workspace draft.",
     });
 
-    tailoringWorkspaceState.savedSelectionPayload = {
-      selected_patch_candidate_ids: Array.isArray(response.selected_patch_candidate_ids)
-        ? response.selected_patch_candidate_ids
-        : selectedIds,
-      selected_patch_selection_status: "applied",
-      selected_patch_selection_note:
-        String(response?.selection?.note || "").trim() || "Saved from tailoring workspace.",
-      selected_patch_set_counterfactual_preview: response.selected_patch_set_counterfactual_preview || null,
-    };
+    const savedDraft =
+      response && response.draft && typeof response.draft === "object"
+        ? response.draft
+        : null;
+
+    tailoringWorkspaceState.draftPayload = savedDraft;
+    tailoringWorkspaceState.savedSelectionPayload =
+      buildTailoringWorkspaceSavedSelectionPayloadFromDraft(savedDraft);
 
     tailoringWorkspaceState.previewPayload = null;
-    syncTailoringWorkspaceSavedSelectionIntoArtifact(tailoringWorkspaceState.savedSelectionPayload);
+
+    if (savedDraft && savedDraft.manual_bullet_edits && typeof savedDraft.manual_bullet_edits === "object") {
+      tailoringWorkspaceState.manualBulletEdits = { ...savedDraft.manual_bullet_edits };
+    }
+
+    if (tailoringWorkspaceState.savedSelectionPayload) {
+      syncTailoringWorkspaceSavedSelectionIntoArtifact(
+        tailoringWorkspaceState.savedSelectionPayload
+      );
+    }
+
     rerenderTailoringWorkspaceSelectionView();
   } catch (err) {
-    showAppError("Failed to save selected suggestions", err);
+    showAppError("Failed to save workspace draft", err);
   } finally {
     tailoringWorkspaceState.isSaving = false;
     updateTailoringWorkspaceSelectionActionBar();
@@ -3639,6 +3935,7 @@ async function saveTailoringWorkspaceSelection() {
 
 function clearTailoringWorkspaceSelection() {
   tailoringWorkspaceState.selectedCandidateIds = [];
+  tailoringWorkspaceState.manualBulletEdits = {};
   tailoringWorkspaceState.previewPayload = null;
 
   rerenderTailoringWorkspaceSelectionView();
@@ -3649,8 +3946,13 @@ function revertTailoringWorkspaceSelectionToSaved() {
   const payload = getTailoringWorkspacePayload();
   const savedIds = getTailoringWorkspaceSavedCandidateIds();
 
+  tailoringWorkspaceState.manualBulletEdits = getTailoringWorkspaceSavedManualBulletEdits();
+
   if (!savedIds.length) {
-    clearTailoringWorkspaceSelection();
+    tailoringWorkspaceState.selectedCandidateIds = [];
+    tailoringWorkspaceState.previewPayload = null;
+    rerenderTailoringWorkspaceSelectionView();
+    syncTailoringWorkspacePreviewHighlight();
     return;
   }
 
@@ -4252,6 +4554,7 @@ async function initTailoringWorkspacePage() {
     `;
 
     tailoringWorkspaceState.artifact = null;
+    tailoringWorkspaceState.draftPayload = null;
     tailoringWorkspaceState.selectedCandidateIds = [];
     tailoringWorkspaceState.candidateLookup = new Map();
     tailoringWorkspaceState.previewPayload = null;
@@ -4272,7 +4575,14 @@ async function initTailoringWorkspacePage() {
 
     const tailoringJsonArtifact = await loadArtifact(tailoringJsonPath);
 
-    initializeTailoringWorkspaceSelectionState(tailoringJsonArtifact);
+    let draftResponse = null;
+    try {
+      draftResponse = await loadTailoringWorkspaceDraft();
+    } catch (draftErr) {
+      console.warn("Failed to load saved workspace draft; falling back to artifact state.", draftErr);
+    }
+
+    initializeTailoringWorkspaceSelectionState(tailoringJsonArtifact, draftResponse);
     rerenderTailoringWorkspaceSelectionView();
 
     await previewPromise;
@@ -4289,6 +4599,7 @@ async function initTailoringWorkspacePage() {
     `;
 
     tailoringWorkspaceState.artifact = null;
+    tailoringWorkspaceState.draftPayload = null;
     tailoringWorkspaceState.selectedCandidateIds = [];
     tailoringWorkspaceState.candidateLookup = new Map();
     tailoringWorkspaceState.previewPayload = null;

@@ -670,6 +670,15 @@ def tailoring_workspace(
               >
                 Review
               </button>
+              
+              <button
+                type="button"
+                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--free-edit"
+                id="tailoringWorkspaceSelectedFreeEditTab"
+                data-tailoring-selected-tab="free_edit"
+              >
+                Free Edit
+              </button>
             </div>
           </div>
         </section>

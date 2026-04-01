@@ -2,6 +2,7 @@ from pathlib import Path
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from src.app import services
+from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
@@ -33,6 +34,19 @@ def _start_semantic_warmup_thread() -> None:
         daemon=True,
         name="rag-semantic-warmup",
     ).start()
+
+
+class PlanningWorkspaceDraftLoadRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+
+
+class PlanningWorkspaceDraftSaveRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+    selected_patch_candidate_ids: list[str] = Field(default_factory=list)
+    manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
+    note: str = ""
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -546,6 +560,30 @@ def planning_select_patches(
             selected_resume=str(payload.get("selected_resume", "") or ""),
             selected_candidate_ids=payload.get("selected_candidate_ids", []),
             note=str(payload.get("note", "") or ""),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
+@app.post("/planning/load-workspace-draft")
+def load_workspace_draft(request: PlanningWorkspaceDraftLoadRequest):
+    try:
+        return services.load_tailoring_workspace_draft_payload(
+            tailoring_json_path=request.tailoring_json_path,
+            selected_resume=request.selected_resume,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/planning/save-workspace-draft")
+def save_workspace_draft(request: PlanningWorkspaceDraftSaveRequest):
+    try:
+        return services.save_tailoring_workspace_draft_payload(
+            tailoring_json_path=request.tailoring_json_path,
+            selected_resume=request.selected_resume,
+            selected_patch_candidate_ids=request.selected_patch_candidate_ids,
+            manual_bullet_edits=request.manual_bullet_edits,
+            note=request.note,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

@@ -3005,6 +3005,266 @@ def record_planning_patch_selection_payload(
         "selected_patch_set_counterfactual_preview": preview,
     }
 
+def _tailoring_workspace_draft_artifact_path(artifact_path: Path) -> Path:
+    name = artifact_path.name
+    suffix = "__tailoring.json"
+
+    if name.endswith(suffix):
+        prefix = name[:-len(suffix)]
+        return artifact_path.with_name(f"{prefix}__tailoring_workspace_draft.json")
+
+    return artifact_path.with_name(f"{artifact_path.stem}__tailoring_workspace_draft.json")
+
+
+def _normalize_workspace_manual_bullet_edits(value: Any) -> Dict[str, str]:
+    if isinstance(value, dict):
+        raw_items = value
+    else:
+        raw_text = _clean_text(value)
+        if not raw_text:
+            return {}
+
+        try:
+            parsed = json.loads(raw_text)
+        except Exception as exc:
+            raise ValueError("manual_bullet_edits must be a JSON object.") from exc
+
+        if not isinstance(parsed, dict):
+            raise ValueError("manual_bullet_edits must be a JSON object.")
+
+        raw_items = parsed
+
+    normalized: Dict[str, str] = {}
+    for raw_key, raw_value in raw_items.items():
+        key = _clean_text(raw_key)
+        if not key:
+            continue
+        normalized[key] = str(raw_value or "")
+
+    return normalized
+
+
+def _build_tailoring_workspace_default_draft_payload(
+    artifact_path: Path,
+    payload_data: Dict[str, Any],
+    *,
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    job = payload_data.get("job", {}) or {}
+    selection = payload_data.get("selection", {}) or {}
+
+    selected_candidate_ids = _normalize_selected_patch_candidate_ids(
+        payload_data.get("selected_patch_candidate_ids", [])
+    )
+    if not selected_candidate_ids:
+        selected_candidate_ids = _default_selected_candidate_ids_from_replacement_plan(
+            payload_data
+        )
+
+    safe_selected_resume = (
+        _sanitize_optional_resume_filename(selected_resume)
+        or _sanitize_optional_resume_filename(selection.get("selected_resume"))
+    )
+
+    draft_path = _tailoring_workspace_draft_artifact_path(artifact_path)
+
+    return {
+        "draft_version": 1,
+        "draft_status": "default",
+        "saved_at": "",
+        "tailoring_json_path": str(artifact_path),
+        "draft_json_path": str(draft_path),
+        "artifact_signature": _tailoring_artifact_signature(payload_data),
+        "job_doc_id": _clean_text(job.get("job_doc_id")),
+        "job_company": _clean_text(job.get("company")),
+        "job_title": _clean_text(job.get("title")),
+        "selected_resume": safe_selected_resume,
+        "selected_patch_candidate_ids": selected_candidate_ids,
+        "manual_bullet_edits": {},
+        "note": "",
+        "source_selected_patch_selection_status": _clean_text(
+            payload_data.get("selected_patch_selection_status")
+        ),
+        "source_selected_patch_selection_note": _clean_text(
+            payload_data.get("selected_patch_selection_note")
+        ),
+    }
+
+
+def load_tailoring_workspace_draft_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Workspace draft loading requires a tailoring JSON artifact.")
+
+    payload_data = _load_tailoring_json_artifact(artifact_path)
+
+    if artifact_path.name.endswith("__tailoring.json"):
+        payload_data = _rehydrate_legacy_tailoring_operator_payload(
+            artifact_path,
+            payload_data,
+        )
+
+    if payload_data.get("replacement_candidates") is not None:
+        payload_data = _apply_saved_patch_selection_overlay(
+            artifact_path,
+            payload_data,
+        )
+
+    default_draft = _build_tailoring_workspace_default_draft_payload(
+        artifact_path,
+        payload_data,
+        selected_resume=selected_resume,
+    )
+
+    draft_path = Path(default_draft["draft_json_path"])
+    if not draft_path.exists():
+        return {
+            "ok": True,
+            "draft_status": "default",
+            "has_saved_draft": False,
+            "draft": default_draft,
+        }
+
+    saved_data = _load_tailoring_json_artifact(draft_path)
+    saved_signature = _clean_text(saved_data.get("artifact_signature"))
+    current_signature = _clean_text(default_draft.get("artifact_signature"))
+
+    if saved_signature and saved_signature != current_signature:
+        stale_draft = dict(default_draft)
+        stale_draft["draft_status"] = "stale_signature"
+        stale_draft["note"] = (
+            "Saved workspace draft was ignored because the tailoring artifact changed."
+        )
+        return {
+            "ok": True,
+            "draft_status": "stale_signature",
+            "has_saved_draft": False,
+            "draft": stale_draft,
+        }
+
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
+    saved_selected_ids = _normalize_selected_patch_candidate_ids(
+        saved_data.get("selected_patch_candidate_ids", [])
+    )
+    saved_selected_ids = [
+        candidate_id
+        for candidate_id in saved_selected_ids
+        if candidate_id in valid_candidate_ids
+    ]
+
+    merged = dict(default_draft)
+    merged.update({
+        "draft_status": "saved",
+        "saved_at": _clean_text(saved_data.get("saved_at")),
+        "selected_resume": (
+            _sanitize_optional_resume_filename(saved_data.get("selected_resume"))
+            or merged["selected_resume"]
+        ),
+        "selected_patch_candidate_ids": saved_selected_ids,
+        "manual_bullet_edits": _normalize_workspace_manual_bullet_edits(
+            saved_data.get("manual_bullet_edits", {})
+        ),
+        "note": _clean_text(saved_data.get("note")),
+    })
+
+    return {
+        "ok": True,
+        "draft_status": "saved",
+        "has_saved_draft": True,
+        "draft": merged,
+    }
+
+
+def save_tailoring_workspace_draft_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    selected_patch_candidate_ids: Any = None,
+    manual_bullet_edits: Any = None,
+    note: str = "",
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Workspace draft saving requires a tailoring JSON artifact.")
+
+    payload_data = _load_tailoring_json_artifact(artifact_path)
+
+    if artifact_path.name.endswith("__tailoring.json"):
+        payload_data = _rehydrate_legacy_tailoring_operator_payload(
+            artifact_path,
+            payload_data,
+        )
+
+    if payload_data.get("replacement_candidates") is not None:
+        payload_data = _apply_saved_patch_selection_overlay(
+            artifact_path,
+            payload_data,
+        )
+
+    draft_payload = _build_tailoring_workspace_default_draft_payload(
+        artifact_path,
+        payload_data,
+        selected_resume=selected_resume,
+    )
+
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
+    requested_candidate_ids = _normalize_selected_patch_candidate_ids(
+        selected_patch_candidate_ids
+    )
+    if not requested_candidate_ids:
+        requested_candidate_ids = list(draft_payload["selected_patch_candidate_ids"])
+
+    unknown_candidate_ids = [
+        candidate_id
+        for candidate_id in requested_candidate_ids
+        if candidate_id not in valid_candidate_ids
+    ]
+    if unknown_candidate_ids:
+        raise ValueError(
+            f"Unknown candidate IDs for this artifact: {', '.join(sorted(unknown_candidate_ids))}"
+        )
+
+    manual_edit_map = _normalize_workspace_manual_bullet_edits(manual_bullet_edits)
+
+    saved_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    draft_payload.update({
+        "draft_status": "saved",
+        "saved_at": saved_at,
+        "selected_patch_candidate_ids": requested_candidate_ids,
+        "manual_bullet_edits": manual_edit_map,
+        "note": _clean_text(note),
+    })
+
+    draft_path = Path(draft_payload["draft_json_path"])
+    draft_path.parent.mkdir(parents=True, exist_ok=True)
+    draft_path.write_text(
+        json.dumps(draft_payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+
+    return {
+        "ok": True,
+        "draft_status": "saved",
+        "has_saved_draft": True,
+        "draft_json_path": str(draft_path),
+        "draft": draft_payload,
+    }
+
+
 def application_actions_payload(
     application_status: str = "",
     company_contains: str = "",

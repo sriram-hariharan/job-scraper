@@ -165,6 +165,7 @@ def main() -> None:
         "job_doc_id",
         "job_company",
         "job_title",
+        "posted_at",
         "action",
         "action_rationale",
         "winner_resume",

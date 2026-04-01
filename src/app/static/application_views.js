@@ -294,6 +294,14 @@ const applicationTableState = {
     key: "",
     direction: "asc",
   },
+  pagination: {
+    page: 1,
+    pageSize: 15,
+    totalCount: 0,
+    totalPages: 1,
+    hasPrevPage: false,
+    hasNextPage: false,
+  },
 };
 
 function getCurrentApplicationConfig() {
@@ -304,13 +312,15 @@ function buildApplicationListUrl() {
   const config = getCurrentApplicationConfig();
   const companyContains = qs("applicationCompanyFilter").value.trim();
   const titleContains = qs("applicationTitleFilter").value.trim();
-  const limit = qs("applicationLimitInput").value || "50";
+  const limit = qs("applicationLimitInput").value || "15";
+  const page = applicationTableState.pagination.page || 1;
 
   const params = new URLSearchParams();
   if (config.applicationStatus) params.set("application_status", config.applicationStatus);
   if (companyContains) params.set("company_contains", companyContains);
   if (titleContains) params.set("title_contains", titleContains);
   params.set("limit", limit);
+  params.set("page", String(page));
 
   return `${config.endpoint}?${params.toString()}`;
 }
@@ -322,8 +332,104 @@ function updateApplicationViewStats(rowCount) {
   qs("applicationTableTitle").textContent = config.pageLabel;
 }
 
+function setApplicationRequestedPage(page) {
+  const parsed = Number(page);
+  applicationTableState.pagination.page = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+}
+
+function buildApplicationPaginationSequence(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const windowStart = Math.max(2, currentPage - 1);
+  const windowEnd = Math.min(totalPages - 1, currentPage + 1);
+
+  if (windowStart > 2) {
+    pages.push("ellipsis-left");
+  }
+
+  for (let page = windowStart; page <= windowEnd; page += 1) {
+    pages.push(page);
+  }
+
+  if (windowEnd < totalPages - 1) {
+    pages.push("ellipsis-right");
+  }
+
+  pages.push(totalPages);
+  return pages;
+}
+
+function renderApplicationPagination() {
+  const metaEl = qs("applicationPaginationMeta");
+  const actionsEl = qs("applicationPaginationActions");
+  if (!metaEl || !actionsEl) return;
+
+  const {
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    hasPrevPage,
+    hasNextPage,
+  } = applicationTableState.pagination;
+
+  if (!totalCount) {
+    metaEl.textContent = "Page 1 of 1 · 0 rows";
+    actionsEl.innerHTML = "";
+    return;
+  }
+
+  const startRow = (page - 1) * pageSize + 1;
+  const endRow = Math.min(page * pageSize, totalCount);
+
+  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount}`;
+
+  const sequence = buildApplicationPaginationSequence(page, totalPages);
+
+  actionsEl.innerHTML = `
+    <button
+      type="button"
+      class="ghost-btn application-pagination-btn"
+      data-application-page="${page - 1}"
+      ${hasPrevPage ? "" : "disabled"}
+    >
+      Prev
+    </button>
+
+    ${sequence.map((item) => {
+      if (typeof item !== "number") {
+        return `<span class="application-pagination-ellipsis">…</span>`;
+      }
+
+      return `
+        <button
+          type="button"
+          class="ghost-btn application-pagination-btn ${item === page ? "is-active" : ""}"
+          data-application-page="${item}"
+          ${item === page ? "disabled" : ""}
+        >
+          ${item}
+        </button>
+      `;
+    }).join("")}
+
+    <button
+      type="button"
+      class="ghost-btn application-pagination-btn"
+      data-application-page="${page + 1}"
+      ${hasNextPage ? "" : "disabled"}
+    >
+      Next
+    </button>
+  `;
+}
+
 function setActiveApplicationTab(tabKey) {
   currentApplicationTab = tabKey;
+  setApplicationRequestedPage(1);
 
   document.querySelectorAll("[data-app-tab]").forEach((btn) => {
     const isActive = btn.dataset.appTab === tabKey;
@@ -350,6 +456,7 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
     `;
     qs("applicationTableMeta").textContent = applicationTableState.metaLabel;
     updateApplicationViewStats(0);
+    renderApplicationPagination();
     if (table) {
       renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
     }
@@ -378,6 +485,7 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
 
   qs("applicationTableMeta").textContent = applicationTableState.metaLabel;
   updateApplicationViewStats(displayRows.length);
+  renderApplicationPagination();
   if (table) {
     renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
   }
@@ -393,11 +501,27 @@ async function loadApplicationView() {
 
   const url = buildApplicationListUrl();
   const data = await fetchJson(url);
-  const count = data.count ?? 0;
+
+  const rawPageSize = data.page_size ?? qs("applicationLimitInput").value ?? 15;
+  const parsedPageSize = Number(rawPageSize);
+  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
+
+  const totalCount = Number(data.total_count ?? data.count ?? 0);
+  const totalPages = Number(data.total_pages ?? 1);
+  const currentPage = Number(data.page ?? applicationTableState.pagination.page ?? 1);
+
+  applicationTableState.pagination = {
+    page: currentPage,
+    pageSize,
+    totalCount: Number.isFinite(totalCount) ? totalCount : 0,
+    totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+    hasPrevPage: Boolean(data.has_prev_page),
+    hasNextPage: Boolean(data.has_next_page),
+  };
 
   renderApplicationRows(
     data.rows || [],
-    `${config.pageLabel} · ${count} row${count === 1 ? "" : "s"}`,
+    `${config.pageLabel} · ${totalCount} row${totalCount === 1 ? "" : "s"}`,
     config.emptyLabel
   );
 }
@@ -405,7 +529,8 @@ async function loadApplicationView() {
 function clearApplicationFilters() {
   qs("applicationCompanyFilter").value = "";
   qs("applicationTitleFilter").value = "";
-  qs("applicationLimitInput").value = "50";
+  qs("applicationLimitInput").value = "15";
+  setApplicationRequestedPage(1);
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -437,7 +562,24 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
   });
 
+  qs("applicationPaginationActions").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-application-page]");
+    if (!button || button.disabled) return;
+
+    const nextPage = Number(button.dataset.applicationPage || "");
+    if (!Number.isFinite(nextPage) || nextPage < 1) return;
+
+    setApplicationRequestedPage(nextPage);
+
+    try {
+      await loadApplicationView();
+    } catch (err) {
+      showAppError("Failed to change application page", err);
+    }
+  });
+
   qs("applicationApplyFiltersBtn").addEventListener("click", async () => {
+    setApplicationRequestedPage(1);
     try {
       await loadApplicationView();
     } catch (err) {

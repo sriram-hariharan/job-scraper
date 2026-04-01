@@ -2879,44 +2879,12 @@ def record_planning_patch_selection_payload(
         "selected_patch_set_counterfactual_preview": preview,
     }
 
-def record_application_action_payload(
-    job_doc_id: str = "",
-    job_url: str = "",
-    job_company: str = "",
-    job_title: str = "",
-    application_status: str = "",
-    source_view: str = "",
-    note: str = "",
-) -> Dict[str, Any]:
-    ja = _job_app()
-
-    row = {
-        "action_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
-        "job_doc_id": _clean_text(job_doc_id),
-        "job_url": _clean_text(job_url),
-        "job_company": _clean_text(job_company),
-        "job_title": _clean_text(job_title),
-        "application_status": _normalize_application_status(application_status),
-        "source_view": _clean_text(source_view),
-        "note": _clean_text(note),
-    }
-
-    _validate_application_identity(row)
-    postgres_write = _dual_write_application_action_postgres(row)
-
-    return {
-        "ok": True,
-        "row": row,
-        "csv_write_disabled": True,
-        "postgres_write": postgres_write,
-    }
-
-
 def application_actions_payload(
     application_status: str = "",
     company_contains: str = "",
     title_contains: str = "",
     limit: int = 100,
+    page: int = 1,
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = _load_latest_application_actions()
@@ -2942,7 +2910,16 @@ def application_actions_payload(
             if needle in ja._normalize_text(row.get("job_title", ""))
         ]
 
-    selected = rows[:limit]
+    page_size = max(int(limit or 100), 1)
+    current_page = max(int(page or 1), 1)
+
+    total_count = len(rows)
+    total_pages = max((total_count + page_size - 1) // page_size, 1)
+    current_page = min(current_page, total_pages)
+
+    start_idx = (current_page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_rows = rows[start_idx:end_idx]
 
     return {
         "filters": {
@@ -2950,22 +2927,30 @@ def application_actions_payload(
             "company_contains": company_contains,
             "title_contains": title_contains,
             "limit": limit,
+            "page": current_page,
         },
-        "rows": selected,
-        "count": len(selected),
+        "rows": page_rows,
+        "count": len(page_rows),
+        "total_count": total_count,
+        "page": current_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev_page": current_page > 1,
+        "has_next_page": current_page < total_pages,
     }
-
 
 def applied_jobs_payload(
     company_contains: str = "",
     title_contains: str = "",
     limit: int = 100,
+    page: int = 1,
 ) -> Dict[str, Any]:
     return application_actions_payload(
         application_status="APPLIED",
         company_contains=company_contains,
         title_contains=title_contains,
         limit=limit,
+        page=page,
     )
 
 def jobs_search_lite_payload(

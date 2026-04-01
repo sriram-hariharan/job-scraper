@@ -1908,6 +1908,101 @@ thead .sticky-apply-col {
   border-color: rgba(120, 166, 255, 0.28);
 }
 
+.application-table-header {
+  align-items: center;
+}
+
+.application-table-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 18px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.application-pagination-inline {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.application-pagination-meta {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.application-pagination-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.application-pagination-btn {
+  min-width: 40px;
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(42, 53, 99, 0.8);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.application-pagination-btn:hover:not(:disabled) {
+  opacity: 1;
+  border-color: rgba(120, 166, 255, 0.34);
+  background: rgba(120, 166, 255, 0.08);
+}
+
+.application-pagination-btn.is-active {
+  background: rgba(120, 166, 255, 0.16);
+  border-color: rgba(120, 166, 255, 0.32);
+  color: #e7f0ff;
+}
+
+.application-pagination-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.application-pagination-ellipsis {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 1100px) {
+  .application-table-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .application-table-header-right {
+    width: 100%;
+    justify-content: flex-start;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .application-pagination-inline,
+  .application-pagination-actions {
+    justify-content: flex-start;
+  }
+}
+
 .pipeline-modal-card {
   width: min(760px, 100%);
 }

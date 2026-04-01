@@ -2586,6 +2586,7 @@ def decisions_payload(
     company_contains: str = "",
     title_contains: str = "",
     limit: int = 20,
+    page: int = 1,
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = _load_latest_operator_decision_rows()
@@ -2597,17 +2598,47 @@ def decisions_payload(
         "company_contains": company_contains,
         "title_contains": title_contains,
         "limit": limit,
+        "page": page,
     }
 
-    args = _make_args(**resolved_filters)
+    selection_filters = dict(resolved_filters)
+    selection_filters["limit"] = max(len(rows), 1)
+    selection_filters.pop("page", None)
+
+    args = _make_args(**selection_filters)
     selected = ja._select_decision_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
 
+    page_size = max(int(limit or 20), 1)
+    current_page = max(int(page or 1), 1)
+
+    total_count = len(selected)
+    total_pages = max((total_count + page_size - 1) // page_size, 1)
+    current_page = min(current_page, total_pages)
+
+    start_idx = (current_page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_rows = selected[start_idx:end_idx]
+
     return {
-        "filters": resolved_filters,
-        "rows": selected,
-        "count": len(selected),
+        "filters": {
+            "queue_rank": queue_rank,
+            "decision": decision,
+            "selected_resume": selected_resume,
+            "company_contains": company_contains,
+            "title_contains": title_contains,
+            "limit": limit,
+            "page": current_page,
+        },
+        "rows": page_rows,
+        "count": len(page_rows),
+        "total_count": total_count,
+        "page": current_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev_page": current_page > 1,
+        "has_next_page": current_page < total_pages,
     }
 
 def _dual_write_operator_decision_postgres(row: Dict[str, Any]) -> Dict[str, Any]:

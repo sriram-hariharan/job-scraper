@@ -464,6 +464,7 @@ def decisions(
     selected_resume: str = "",
     company_contains: str = "",
     title_contains: str = "",
+    page: int = 1,
     limit: int = 20,
 ):
     return services.decisions_payload(
@@ -473,6 +474,7 @@ def decisions(
         company_contains=company_contains,
         title_contains=title_contains,
         limit=limit,
+        page=page,
     )
 
 @app.post("/planning/select-resume")

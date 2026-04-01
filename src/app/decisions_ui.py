@@ -65,7 +65,7 @@ def decisions_dashboard() -> str:
 
         <div class="control-group">
           <label for="decisionLimitInput">Limit</label>
-          <input type="number" id="decisionLimitInput" value="50" min="1" max="300" />
+          <input type="number" id="decisionLimitInput" value="15" min="1" max="300" />
         </div>
 
         <div class="control-group button-group">
@@ -87,9 +87,15 @@ def decisions_dashboard() -> str:
     </section>
 
     <section class="card table-card">
-      <div class="section-header">
+      <div class="section-header application-table-header">
         <h2>Operator Decisions</h2>
-        <div class="subtext" id="decisionsTableMeta">Loading...</div>
+        <div class="application-table-header-right">
+          <div class="subtext" id="decisionsTableMeta">Loading...</div>
+          <div class="application-pagination-inline" id="decisionsPaginationInline">
+            <div class="application-pagination-meta" id="decisionsPaginationMeta">Loading...</div>
+            <div class="application-pagination-actions" id="decisionsPaginationActions"></div>
+          </div>
+        </div>
       </div>
 
       <div class="table-wrap">

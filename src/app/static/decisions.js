@@ -3,6 +3,12 @@ const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const decisionsTableState = {
   rows: [],
   metaLabel: "Loading...",
+  page: 1,
+  pageSize: 15,
+  totalCount: 0,
+  totalPages: 1,
+  hasPrevPage: false,
+  hasNextPage: false,
   sort: {
     key: "",
     direction: "asc",
@@ -409,6 +415,106 @@ function updateDecisionStats(rows) {
   setTextIfPresent("decisionsJobsTouched", distinctDecisionJobCount(safeRows));
 }
 
+function buildPaginationSequence(currentPage, totalPages) {
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let page = 1; page <= totalPages; page += 1) {
+      pages.push(page);
+    }
+    return pages;
+  }
+
+  pages.push(1);
+
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) pages.push("ellipsis-left");
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+  if (end < totalPages - 1) pages.push("ellipsis-right");
+
+  pages.push(totalPages);
+  return pages;
+}
+
+function renderDecisionsPagination() {
+  const metaEl = qs("decisionsPaginationMeta");
+  const actionsEl = qs("decisionsPaginationActions");
+  if (!metaEl || !actionsEl) return;
+
+  const totalCount = decisionsTableState.totalCount || 0;
+  const totalPages = Math.max(decisionsTableState.totalPages || 1, 1);
+  const currentPage = Math.min(Math.max(decisionsTableState.page || 1, 1), totalPages);
+  const pageSize = Math.max(decisionsTableState.pageSize || 15, 1);
+
+  if (totalCount === 0) {
+    metaEl.textContent = "No pages";
+    actionsEl.innerHTML = "";
+    return;
+  }
+
+  const startRow = (currentPage - 1) * pageSize + 1;
+  const endRow = Math.min(startRow + (decisionsTableState.rows?.length || 0) - 1, totalCount);
+
+  metaEl.textContent = `Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}`;
+
+  const sequence = buildPaginationSequence(currentPage, totalPages);
+
+  const buttons = [];
+
+  buttons.push(`
+    <button
+      type="button"
+      class="application-pagination-btn"
+      data-page-target="${currentPage - 1}"
+      ${decisionsTableState.hasPrevPage ? "" : "disabled"}
+    >
+      Prev
+    </button>
+  `);
+
+  sequence.forEach((item) => {
+    if (typeof item === "string" && item.startsWith("ellipsis")) {
+      buttons.push(`<span class="application-pagination-ellipsis">…</span>`);
+      return;
+    }
+
+    buttons.push(`
+      <button
+        type="button"
+        class="application-pagination-btn ${item === currentPage ? "is-active" : ""}"
+        data-page-target="${item}"
+      >
+        ${item}
+      </button>
+    `);
+  });
+
+  buttons.push(`
+    <button
+      type="button"
+      class="application-pagination-btn"
+      data-page-target="${currentPage + 1}"
+      ${decisionsTableState.hasNextPage ? "" : "disabled"}
+    >
+      Next
+    </button>
+  `);
+
+  actionsEl.innerHTML = buttons.join("");
+}
+
+function applyDecisionsPaginationPayload(data) {
+  decisionsTableState.page = Number(data.page || 1);
+  decisionsTableState.pageSize = Number(data.page_size || data.limit || 15);
+  decisionsTableState.totalCount = Number(data.total_count || 0);
+  decisionsTableState.totalPages = Number(data.total_pages || 1);
+  decisionsTableState.hasPrevPage = Boolean(data.has_prev_page);
+  decisionsTableState.hasNextPage = Boolean(data.has_next_page);
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -428,15 +534,17 @@ async function postJson(url, payload) {
   });
 }
 
-function buildDecisionsUrl() {
+function buildDecisionsUrl(pageOverride = null) {
   const params = new URLSearchParams();
   const decisions = getMultiSelectValues("decisionFilter");
   const companyContains = qs("decisionCompanyFilter").value.trim();
-  const limit = qs("decisionLimitInput").value || "50";
+  const limit = qs("decisionLimitInput").value || "15";
+  const page = pageOverride ?? decisionsTableState.page ?? 1;
 
   appendMultiValueParams(params, "decision", decisions);
   if (companyContains) params.set("company_contains", companyContains);
   params.set("limit", limit);
+  params.set("page", String(page));
 
   return `/decisions?${params.toString()}`;
 }
@@ -549,6 +657,7 @@ function renderDecisionRows(rows, metaLabel) {
     `;
     qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
     updateDecisionStats([]);
+    renderDecisionsPagination();
     renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
     return;
   }
@@ -580,36 +689,49 @@ function renderDecisionRows(rows, metaLabel) {
 
   qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
   updateDecisionStats(displayRows);
+  renderDecisionsPagination();
   renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
 }
 
-async function loadDecisionsTable() {
+async function loadDecisionsTable(pageOverride = null) {
   const tbody = qs("decisionsTableBody");
   tbody.innerHTML = renderTableLoading(12, "Loading decisions...");
   qs("decisionsTableMeta").textContent = "Loading...";
+  const paginationMeta = qs("decisionsPaginationMeta");
+  const paginationActions = qs("decisionsPaginationActions");
+  if (paginationMeta) paginationMeta.textContent = "Loading...";
+  if (paginationActions) paginationActions.innerHTML = "";
 
-  const url = buildDecisionsUrl();
+  const targetPage = pageOverride ?? decisionsTableState.page ?? 1;
+  const url = buildDecisionsUrl(targetPage);
   const data = await fetchJson(url);
-  const count = data.count ?? 0;
 
-  renderDecisionRows(
-    data.rows || [],
-    `Decisions view · ${count} row${count === 1 ? "" : "s"}`
-  );
+  applyDecisionsPaginationPayload(data);
+
+  const pageCount = data.count ?? 0;
+  const totalCount = data.total_count ?? pageCount;
+
+  const metaLabel = totalCount === pageCount
+    ? `Decisions view · ${pageCount} row${pageCount === 1 ? "" : "s"}`
+    : `Decisions view · ${pageCount} row${pageCount === 1 ? "" : "s"} on this page · ${totalCount} total`;
+
+  renderDecisionRows(data.rows || [], metaLabel);
 }
 
 function clearDecisionFilters() {
   clearMultiSelect("decisionFilter");
   qs("decisionCompanyFilter").value = "";
-  qs("decisionLimitInput").value = "50";
+  qs("decisionLimitInput").value = "15";
+  decisionsTableState.page = 1;
   updateDecisionStats([]);
 }
 
 function attachDecisionHandlers() {
   initMultiSelect("decisionFilter");
   qs("decisionApplyFiltersBtn").addEventListener("click", async () => {
+    decisionsTableState.page = 1;
     try {
-      await loadDecisionsTable();
+      await loadDecisionsTable(1);
     } catch (err) {
       showAppError("Failed to load decisions table", err);
     }
@@ -618,9 +740,25 @@ function attachDecisionHandlers() {
   qs("decisionClearFiltersBtn").addEventListener("click", async () => {
     clearDecisionFilters();
     try {
-      await loadDecisionsTable();
+      await loadDecisionsTable(1);
     } catch (err) {
       showAppError("Failed to reload decisions table", err);
+    }
+  });
+
+  qs("decisionsPaginationActions").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-page-target]");
+    if (!button || button.disabled) return;
+
+    const nextPage = Number(button.dataset.pageTarget || "");
+    if (!Number.isFinite(nextPage) || nextPage < 1 || nextPage === decisionsTableState.page) {
+      return;
+    }
+
+    try {
+      await loadDecisionsTable(nextPage);
+    } catch (err) {
+      showAppError("Failed to change decisions page", err);
     }
   });
 

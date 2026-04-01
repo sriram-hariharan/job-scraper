@@ -1429,14 +1429,18 @@ def _tailoring_workspace_button_state(
     row: Dict[str, Any],
     output_dir: Path = DEFAULT_OUTPUT_DIR,
 ) -> Dict[str, Any]:
-    ready_count = 0
+    result = {
+        "tailoring_ready_replacement_count": 0,
+        "tailoring_actionable_replacement_count": 0,
+        "tailoring_review_replacement_count": 0,
+        "tailoring_has_ready_replacements": False,
+        "tailoring_has_review_guidance": False,
+        "tailoring_workspace_state": "empty",
+    }
 
     raw_path = _clean_text(row.get("tailoring_json"))
     if not raw_path:
-        return {
-            "tailoring_ready_replacement_count": 0,
-            "tailoring_has_ready_replacements": False,
-        }
+        return result
 
     try:
         artifact_path = _resolve_planning_artifact_path(raw_path, output_dir=output_dir)
@@ -1454,14 +1458,40 @@ def _tailoring_workspace_button_state(
                 payload_data,
             )
 
-        ready_count = len(list(payload_data.get("app_ready_replacements", []) or []))
-    except Exception:
-        ready_count = 0
+        app_ready = list(payload_data.get("app_ready_replacements", []) or [])
+        direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
+        direction_only = list(payload_data.get("direction_only_replacements", []) or [])
+        decisions = list(payload_data.get("final_replacement_decisions", []) or [])
 
-    return {
-        "tailoring_ready_replacement_count": ready_count,
-        "tailoring_has_ready_replacements": ready_count > 0,
-    }
+        ready_count = len(app_ready)
+        actionable_count = len(app_ready) + len(direct_apply_optional)
+        review_count = len(direction_only)
+
+        has_replacement_plan = bool(
+            decisions or app_ready or direct_apply_optional or direction_only
+        )
+
+        if actionable_count > 0:
+            workspace_state = "ready"
+        elif review_count > 0:
+            workspace_state = "review"
+        elif has_replacement_plan:
+            workspace_state = "review"
+        else:
+            workspace_state = "empty"
+
+        result.update({
+            "tailoring_ready_replacement_count": ready_count,
+            "tailoring_actionable_replacement_count": actionable_count,
+            "tailoring_review_replacement_count": review_count,
+            "tailoring_has_ready_replacements": actionable_count > 0,
+            "tailoring_has_review_guidance": review_count > 0,
+            "tailoring_workspace_state": workspace_state,
+        })
+    except Exception:
+        return result
+
+    return result
 
 def _apply_saved_patch_selection_overlay(
     artifact_path: Path,

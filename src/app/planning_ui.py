@@ -723,7 +723,7 @@ def tailoring_workspace(
           <div>
             <h2>Resume preview</h2>
             <div class="subtext">
-              This right pane will become the live resume preview/editor surface.
+              Review the selected resume variant here while checking suggestion coverage on the left.
             </div>
           </div>
         </div>

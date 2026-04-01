@@ -3701,6 +3701,9 @@ function renderReplacementDecisionSection({
           const likelyImpactedDimensions = Array.isArray(item.likely_impacted_dimensions)
             ? item.likely_impacted_dimensions.filter(Boolean)
             : [];
+          const impactLabels = likelyImpactedDimensions.map((value) =>
+            humanizeUnderscoreLabel(value)
+          );
 
           const candidateId = getTailoringReplacementCandidateId(item);
           const isFocusable = Boolean(candidateId);
@@ -3717,6 +3720,98 @@ function renderReplacementDecisionSection({
           const focusAttrs = isFocusable
             ? `data-tailoring-focus-candidate="${escapeHtml(candidateId)}"`
             : "";
+
+          const reasonText = String(item.why_selected || "").trim();
+          const compactReasonHtml = reasonText
+            ? `
+              <div
+                class="tailoring-edit-inline-reason"
+                title="${escapeHtml(reasonText)}"
+              >
+                ${escapeHtml(reasonText)}
+              </div>
+            `
+            : "";
+
+          const compactImpactHtml = impactLabels.length
+            ? `
+              <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
+                ${impactLabels
+                  .slice(0, 3)
+                  .map((label) => buildTailoringTonePill(label, "neutral"))
+                  .join("")}
+              </div>
+            `
+            : "";
+
+          if (selectionEnabled) {
+            return `
+              <article
+                class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
+                ${focusAttrs}
+              >
+                <div class="tailoring-card-topline tailoring-card-topline--compact">
+                  <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
+
+                  <div class="tailoring-chip-group tailoring-chip-group--compact">
+                    ${buildTailoringTonePill(statusLabel, tone)}
+                    ${buildTailoringTonePill(
+                      priority === "high"
+                        ? "High priority"
+                        : priority === "medium"
+                          ? "Medium priority"
+                          : "Low priority",
+                      priority === "high"
+                        ? "safe"
+                        : priority === "medium"
+                          ? "caution"
+                          : "muted"
+                    )}
+                  </div>
+                </div>
+
+                ${item.original_text ? `
+                  <div class="tailoring-info-block tailoring-info-block--compact">
+                    <div class="tailoring-info-label">Current bullet</div>
+                    <div class="tailoring-quote-block">${escapeHtml(item.original_text)}</div>
+                  </div>
+                ` : ""}
+
+                ${mode !== "direction_only" && item.final_replacement_text ? `
+                  <div class="tailoring-info-block tailoring-info-block--compact">
+                    <div class="tailoring-info-label">Suggested edit</div>
+                    <div class="tailoring-rewrite-callout">${escapeHtml(item.final_replacement_text)}</div>
+                  </div>
+                ` : ""}
+
+                ${mode === "direction_only" && item.rewrite_direction ? `
+                  <div class="tailoring-info-block tailoring-info-block--compact">
+                    <div class="tailoring-info-label">Suggested change</div>
+                    <div class="tailoring-rewrite-callout">${escapeHtml(item.rewrite_direction)}</div>
+                  </div>
+                ` : ""}
+
+                ${(compactReasonHtml || compactImpactHtml) ? `
+                  <div class="tailoring-edit-inline-summary">
+                    ${compactReasonHtml}
+                    ${compactImpactHtml}
+                  </div>
+                ` : ""}
+
+                ${isSelectable ? `
+                  <div class="tailoring-card-actions tailoring-card-actions--compact">
+                    <button
+                      type="button"
+                      class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
+                      data-tailoring-select-candidate="${escapeHtml(candidateId)}"
+                    >
+                      ${isSelected ? "Selected" : "Select"}
+                    </button>
+                  </div>
+                ` : ""}
+              </article>
+            `;
+          }
 
           return `
             <article
@@ -3762,12 +3857,10 @@ function renderReplacementDecisionSection({
                 </div>
               ` : ""}
 
-              ${likelyImpactedDimensions.length ? `
+              ${impactLabels.length ? `
                 <div class="tailoring-info-row">
                   <span class="tailoring-info-label">What this improves</span>
-                  <span class="tailoring-info-value">${escapeHtml(
-                    likelyImpactedDimensions.map((value) => humanizeUnderscoreLabel(value)).join(", ")
-                  )}</span>
+                  <span class="tailoring-info-value">${escapeHtml(impactLabels.join(", "))}</span>
                 </div>
               ` : ""}
 

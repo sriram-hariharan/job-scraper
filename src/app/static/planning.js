@@ -1180,15 +1180,24 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
   return best && best.score >= 50 ? best : null;
 }
 
+function getTailoringWorkspaceDisplayZoomPercent() {
+  const scale = Number(tailoringWorkspacePdfState.scale || 1);
+  const fitScale = Number(tailoringWorkspacePdfState.fitScale || 0);
+
+  if (Number.isFinite(fitScale) && fitScale > 0) {
+    return Math.max(1, Math.round((scale / fitScale) * 100));
+  }
+
+  return Math.max(1, Math.round(scale * 100));
+}
+
 function buildTailoringWorkspaceDefaultPreviewMeta() {
   if (!tailoringWorkspacePdfState.pdfDoc) {
     return "Resume preview is not available for this workspace row.";
   }
 
   const pageCount = tailoringWorkspacePdfState.pdfDoc.numPages;
-  return `${pageCount} page${pageCount === 1 ? "" : "s"} • ${Math.round(
-    tailoringWorkspacePdfState.scale * 100
-  )}%`;
+  return `${pageCount} page${pageCount === 1 ? "" : "s"} • ${getTailoringWorkspaceDisplayZoomPercent()}%`;
 }
 
 function clearTailoringWorkspacePdfHighlight({ restoreMeta = true } = {}) {
@@ -1233,7 +1242,7 @@ function applyTailoringWorkspacePdfHighlight(match, candidateId = "") {
   });
 
   setTailoringWorkspacePreviewMeta(
-    `Matched bullet on page ${match.pageNumber} • ${Math.round(tailoringWorkspacePdfState.scale * 100)}%`
+    `Matched bullet on page ${match.pageNumber} • ${getTailoringWorkspaceDisplayZoomPercent()}%`
   );
 }
 
@@ -1281,7 +1290,7 @@ function setTailoringWorkspacePreviewMeta(message) {
 function updateTailoringWorkspaceZoomLabel() {
   const label = qs("tailoringWorkspaceZoomResetBtn");
   if (!label) return;
-  label.textContent = `${Math.round(tailoringWorkspacePdfState.scale * 100)}%`;
+  label.textContent = `${getTailoringWorkspaceDisplayZoomPercent()}%`;
 }
 
 function getTailoringWorkspaceScrollerMetrics() {
@@ -1301,6 +1310,51 @@ function getTailoringWorkspaceScrollerMetrics() {
   };
 }
 
+function clearTailoringWorkspacePinnedLayoutHeight() {
+  const layout = document.querySelector(".tailoring-workspace-layout");
+  if (!layout) return;
+
+  layout.style.height = "";
+  layout.style.minHeight = "";
+}
+
+function syncTailoringWorkspaceLayoutToFirstPage() {
+  const layout = document.querySelector(".tailoring-workspace-layout");
+  const rightPane = document.querySelector(".tailoring-workspace-pane--right");
+  const scroller = qs("tailoringWorkspacePdfScroller");
+  const firstPage = scroller?.querySelector(".tailoring-workspace-pdf-page");
+
+  if (!layout || !rightPane || !scroller || !firstPage) return;
+
+  if (window.innerWidth <= 1280) {
+    clearTailoringWorkspacePinnedLayoutHeight();
+    scroller.scrollTop = 0;
+    scroller.scrollLeft = 0;
+    return;
+  }
+
+  const scrollerStyles = window.getComputedStyle(scroller);
+  const paddingY =
+    parseFloat(scrollerStyles.paddingTop || "0") +
+    parseFloat(scrollerStyles.paddingBottom || "0");
+  const borderY =
+    parseFloat(scrollerStyles.borderTopWidth || "0") +
+    parseFloat(scrollerStyles.borderBottomWidth || "0");
+
+  const currentScrollerOuterHeight = scroller.offsetHeight;
+  const currentRightPaneHeight = rightPane.offsetHeight;
+  const rightPaneChromeHeight = Math.max(0, currentRightPaneHeight - currentScrollerOuterHeight);
+
+  const targetScrollerOuterHeight = Math.ceil(firstPage.offsetHeight + paddingY + borderY);
+  const targetLayoutHeight = Math.ceil(rightPaneChromeHeight + targetScrollerOuterHeight);
+
+  layout.style.height = `${targetLayoutHeight}px`;
+  layout.style.minHeight = `${targetLayoutHeight}px`;
+
+  scroller.scrollTop = 0;
+  scroller.scrollLeft = 0;
+}
+
 async function computeTailoringWorkspaceFitPageScale() {
   const pdfDoc = tailoringWorkspacePdfState.pdfDoc;
   const metrics = getTailoringWorkspaceScrollerMetrics();
@@ -1313,14 +1367,12 @@ async function computeTailoringWorkspaceFitPageScale() {
   const baseViewport = firstPage.getViewport({ scale: 1 });
 
   const fitWidthScale = metrics.availableWidth / baseViewport.width;
-  const fitHeightScale = metrics.availableHeight / baseViewport.height;
-  const nextScale = Math.min(fitWidthScale, fitHeightScale);
 
-  if (!Number.isFinite(nextScale) || nextScale <= 0) {
+  if (!Number.isFinite(fitWidthScale) || fitWidthScale <= 0) {
     return 1;
   }
 
-  return Math.max(0.45, Math.min(1.6, nextScale));
+  return Math.max(0.45, Math.min(2.5, fitWidthScale));
 }
 
 async function applyTailoringWorkspaceFitPageScale({ rerender = true } = {}) {
@@ -1371,6 +1423,7 @@ async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not
   const pages = qs("tailoringWorkspacePdfPages");
 
   clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
+  clearTailoringWorkspacePinnedLayoutHeight();
 
   if (tailoringWorkspacePdfState.resizeTimer) {
     window.clearTimeout(tailoringWorkspacePdfState.resizeTimer);
@@ -1424,7 +1477,7 @@ async function renderTailoringWorkspacePdfPages() {
   empty.classList.remove("hidden");
   empty.textContent = `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}...`;
   setTailoringWorkspacePreviewMeta(
-    `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"} at ${Math.round(scale * 100)}%...`
+    `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"} at ${getTailoringWorkspaceDisplayZoomPercent()}%...`
   );
   updateTailoringWorkspaceZoomLabel();
 
@@ -1493,6 +1546,8 @@ async function renderTailoringWorkspacePdfPages() {
   pagesRoot.appendChild(fragment);
   pagesRoot.classList.remove("hidden");
   empty.classList.add("hidden");
+  
+  syncTailoringWorkspaceLayoutToFirstPage();
 
   setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
   syncTailoringWorkspacePreviewHighlight();
@@ -1554,10 +1609,10 @@ async function setTailoringWorkspacePreview(resumeName) {
     tailoringWorkspacePdfState.resumeName = safeName;
     tailoringWorkspacePdfState.scale = 1;
     tailoringWorkspacePdfState.fitScale = 1;
-    tailoringWorkspacePdfState.isFitPage = false;
+    tailoringWorkspacePdfState.isFitPage = true;
 
     updateTailoringWorkspaceZoomLabel();
-    await renderTailoringWorkspacePdfPages();
+    await applyTailoringWorkspaceFitPageScale();
   } catch (err) {
     console.error("Failed to load workspace PDF preview", err);
     await clearTailoringWorkspacePdfView("Failed to load PDF preview.");
@@ -1585,11 +1640,7 @@ function bindTailoringWorkspacePreviewControls() {
 
   zoomResetBtn.addEventListener("click", async () => {
     if (!tailoringWorkspacePdfState.pdfDoc) return;
-    tailoringWorkspacePdfState.scale = 1;
-    tailoringWorkspacePdfState.fitScale = 1;
-    tailoringWorkspacePdfState.isFitPage = false;
-    updateTailoringWorkspaceZoomLabel();
-    await renderTailoringWorkspacePdfPages();
+    await applyTailoringWorkspaceFitPageScale();
   });
 
   zoomInBtn.addEventListener("click", async () => {
@@ -2979,9 +3030,10 @@ function updateTailoringWorkspaceSelectionActionBar() {
   const statusEl = qs("tailoringWorkspaceSelectionStatus");
   const discardBtn = qs("tailoringWorkspaceDiscardBtn");
   const downloadBtn = qs("tailoringWorkspaceDownloadBtn");
+  const previewBtn = qs("tailoringWorkspacePreviewBtn");
   const saveBtn = qs("tailoringWorkspaceSaveSelectionBtn");
 
-  if (!statusEl || !discardBtn || !downloadBtn || !saveBtn) return;
+  if (!statusEl || !discardBtn || !downloadBtn || !previewBtn || !saveBtn) return;
 
   const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
   const savedIds = getTailoringWorkspaceSavedCandidateIds();
@@ -2993,11 +3045,14 @@ function updateTailoringWorkspaceSelectionActionBar() {
 
   const discardTooltip = discardBtn.closest(".tailoring-workspace-action-tooltip");
   const downloadTooltip = downloadBtn.closest(".tailoring-workspace-action-tooltip");
+  const previewTooltip = previewBtn.closest(".tailoring-workspace-action-tooltip");
   const saveTooltip = saveBtn.closest(".tailoring-workspace-action-tooltip");
   const discardIcon = discardBtn.querySelector(".tailoring-workspace-icon");
 
   if (tailoringWorkspaceState.isSaving) {
     statusEl.textContent = `Saving ${selectedIds.length} selected suggestion${selectedIds.length === 1 ? "" : "s"}...`;
+  } else if (tailoringWorkspaceState.isPreviewing) {
+    statusEl.textContent = `Previewing impact for ${selectedIds.length} selected suggestion${selectedIds.length === 1 ? "" : "s"}...`;
   } else if (!hasSelection) {
     statusEl.textContent = hasSaved
       ? "No active selection. A saved selection still exists for this row."
@@ -3005,9 +3060,9 @@ function updateTailoringWorkspaceSelectionActionBar() {
   } else if (hasSaved && matchesSaved) {
     statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. This matches the current saved selection.`;
   } else if (hasSaved) {
-    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. You have unsaved changes compared with the saved selection.`;
+    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. You have unsaved changes compared with the saved selection. Preview or save this selection.`;
   } else {
-    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. Save or discard this selection.`;
+    statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. Preview or save this selection.`;
   }
 
   const shouldShowRevert = hasSaved;
@@ -3039,7 +3094,20 @@ function updateTailoringWorkspaceSelectionActionBar() {
     }
   }
 
-  saveBtn.disabled = tailoringWorkspaceState.isSaving || !hasSelection;
+  previewBtn.disabled = tailoringWorkspaceState.isSaving || tailoringWorkspaceState.isPreviewing || !hasSelection;
+
+  if (previewTooltip) {
+    previewTooltip.dataset.tooltip = tailoringWorkspaceState.isPreviewing
+      ? "Previewing impact..."
+      : "Preview impact";
+  }
+
+  previewBtn.setAttribute(
+    "aria-label",
+    tailoringWorkspaceState.isPreviewing ? "Previewing impact..." : "Preview impact"
+  );
+
+  saveBtn.disabled = tailoringWorkspaceState.isSaving || tailoringWorkspaceState.isPreviewing || !hasSelection;
   downloadBtn.disabled = !hasResume;
 
   if (downloadTooltip) {
@@ -3406,9 +3474,10 @@ function revertTailoringWorkspaceSelectionToSaved() {
 function bindTailoringWorkspaceActionBar() {
   const discardBtn = qs("tailoringWorkspaceDiscardBtn");
   const downloadBtn = qs("tailoringWorkspaceDownloadBtn");
+  const previewBtn = qs("tailoringWorkspacePreviewBtn");
   const saveBtn = qs("tailoringWorkspaceSaveSelectionBtn");
 
-  if (!discardBtn || !downloadBtn || !saveBtn) return;
+  if (!discardBtn || !downloadBtn || !previewBtn || !saveBtn) return;
   if (discardBtn.dataset.bound === "true") return;
 
   discardBtn.dataset.bound = "true";
@@ -3425,6 +3494,10 @@ function bindTailoringWorkspaceActionBar() {
 
   downloadBtn.addEventListener("click", async () => {
     await downloadCurrentTailoringWorkspaceResume();
+  });
+
+  previewBtn.addEventListener("click", async () => {
+    await previewTailoringWorkspaceSelection();
   });
 
   saveBtn.addEventListener("click", async () => {

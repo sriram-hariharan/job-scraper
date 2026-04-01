@@ -4880,6 +4880,43 @@ th.sortable-col {
   border-color: rgba(255, 143, 143, 0.2);
 }
 
+.tailoring-priority-card,
+.tailoring-edit-card,
+.tailoring-gap-card,
+.tailoring-keep-card,
+.tailoring-safety-card {
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(120, 166, 255, 0.14);
+  background: linear-gradient(180deg, rgba(9, 14, 31, 0.76) 0%, rgba(18, 25, 51, 0.88) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 8px 24px rgba(0, 0, 0, 0.14);
+}
+
+.tailoring-edit-card--clickable {
+  cursor: pointer;
+  transition:
+    border-color 0.14s ease,
+    background 0.14s ease,
+    transform 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.tailoring-edit-card--clickable:hover {
+  border-color: rgba(120, 166, 255, 0.32);
+  background: linear-gradient(180deg, rgba(12, 18, 38, 0.82) 0%, rgba(20, 29, 58, 0.92) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.16),
+    inset 0 0 0 1px rgba(120, 166, 255, 0.08);
+}
+
+.tailoring-edit-card--clickable:focus-visible {
+  outline: 2px solid rgba(120, 166, 255, 0.42);
+  outline-offset: 3px;
+}
+
 .tailoring-safety-title {
   font-size: 15px;
   font-weight: 800;

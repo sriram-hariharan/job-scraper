@@ -1060,6 +1060,9 @@ function getTailoringWorkspaceSelectableItems(payload) {
     ...(Array.isArray(payload?.direct_apply_optional_replacements)
       ? payload.direct_apply_optional_replacements
       : []),
+    ...(Array.isArray(payload?.direction_only_replacements)
+      ? payload.direction_only_replacements
+      : []),
   ];
 }
 
@@ -3462,11 +3465,22 @@ function bindTailoringWorkspaceSelectionHandlers() {
     root.dataset.selectionBound = "true";
 
     root.addEventListener("click", (event) => {
-      const button = event.target.closest("[data-tailoring-select-candidate]");
-      if (!button) return;
+      const selectButton = event.target.closest("[data-tailoring-select-candidate]");
+      if (selectButton) {
+        event.preventDefault();
+        const candidateId = selectButton.dataset.tailoringSelectCandidate || "";
+        toggleTailoringWorkspaceCandidateSelection(candidateId);
+        focusTailoringWorkspaceCandidateInPreview(candidateId);
+        return;
+      }
+
+      const focusCard = event.target.closest("[data-tailoring-focus-candidate]");
+      if (!focusCard) return;
 
       event.preventDefault();
-      toggleTailoringWorkspaceCandidateSelection(button.dataset.tailoringSelectCandidate || "");
+      focusTailoringWorkspaceCandidateInPreview(
+        focusCard.dataset.tailoringFocusCandidate || ""
+      );
     });
   }
 
@@ -3688,7 +3702,8 @@ function renderReplacementDecisionSection({
             ? item.likely_impacted_dimensions.filter(Boolean)
             : [];
 
-          const candidateId = mode === "replacement" ? getTailoringReplacementCandidateId(item) : "";
+          const candidateId = getTailoringReplacementCandidateId(item);
+          const isFocusable = Boolean(candidateId);
           const isSelectable = Boolean(selectionEnabled && mode === "replacement" && candidateId);
           const isSelected = Boolean(isSelectable && selectedSet.has(candidateId));
 
@@ -3699,8 +3714,15 @@ function renderReplacementDecisionSection({
                 ? "Nice to improve"
                 : "Review only";
 
+          const focusAttrs = isFocusable
+            ? `data-tailoring-focus-candidate="${escapeHtml(candidateId)}"`
+            : "";
+
           return `
-            <article class="tailoring-edit-card ${isSelected ? "tailoring-edit-card--selected" : ""}">
+            <article
+              class="tailoring-edit-card ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
+              ${focusAttrs}
+            >
               <div class="tailoring-card-topline">
                 <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
                 <div class="tailoring-chip-group">

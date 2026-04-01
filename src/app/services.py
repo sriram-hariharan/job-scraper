@@ -2364,16 +2364,37 @@ def browse_payload(
     }
     resolved_filters.update(filters)
 
-    args = _make_args(**resolved_filters)
+    page_size = max(int(resolved_filters.get("limit", 20) or 20), 1)
+    current_page = max(int(resolved_filters.get("page", 1) or 1), 1)
+
+    selection_filters = dict(resolved_filters)
+    selection_filters["limit"] = max(len(rows), 1)
+    selection_filters.pop("page", None)
+
+    args = _make_args(**selection_filters)
     selected = ja._select_browse_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
     selected = _exclude_applied_rows(selected)
 
+    total_count = len(selected)
+    total_pages = max((total_count + page_size - 1) // page_size, 1)
+    current_page = min(current_page, total_pages)
+
+    start = (current_page - 1) * page_size
+    end = start + page_size
+    page_rows = selected[start:end]
+
     return {
         "filters": resolved_filters,
-        "rows": selected,
-        "count": len(selected),
+        "rows": page_rows,
+        "count": len(page_rows),
+        "total_count": total_count,
+        "page": current_page,
+        "page_size": page_size,
+        "total_pages": total_pages,
+        "has_prev_page": current_page > 1,
+        "has_next_page": current_page < total_pages,
     }
 
 

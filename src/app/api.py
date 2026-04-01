@@ -356,6 +356,7 @@ def browse(
     company_contains: str = "",
     title_contains: str = "",
     undecided_only: str = "",
+    page: int = 1,
     limit: int = 20,
 ):
     return services.browse_payload(
@@ -369,6 +370,7 @@ def browse(
         title_contains=title_contains,
         undecided_only=undecided_only,
         limit=limit,
+        page=page,
     )
 
 

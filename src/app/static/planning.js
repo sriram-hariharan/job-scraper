@@ -27,6 +27,14 @@ const planningTableState = {
     key: "",
     direction: "asc",
   },
+  pagination: {
+    page: 1,
+    pageSize: 50,
+    totalCount: 0,
+    totalPages: 1,
+    hasPrevPage: false,
+    hasNextPage: false,
+  },
 };
 
 const tailoringWorkspaceState = {
@@ -815,6 +823,101 @@ function updatePlanningStats(rowCount) {
   setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
 }
 
+function setPlanningRequestedPage(page) {
+  const parsed = Number(page);
+  planningTableState.pagination.page = Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 1;
+}
+
+function buildPlanningPaginationSequence(currentPage, totalPages) {
+  if (totalPages <= 7) {
+    return Array.from({ length: totalPages }, (_, index) => index + 1);
+  }
+
+  const pages = [1];
+  const windowStart = Math.max(2, currentPage - 1);
+  const windowEnd = Math.min(totalPages - 1, currentPage + 1);
+
+  if (windowStart > 2) {
+    pages.push("ellipsis-left");
+  }
+
+  for (let page = windowStart; page <= windowEnd; page += 1) {
+    pages.push(page);
+  }
+
+  if (windowEnd < totalPages - 1) {
+    pages.push("ellipsis-right");
+  }
+
+  pages.push(totalPages);
+  return pages;
+}
+
+function renderPlanningPagination() {
+  const metaEl = qs("planningPaginationMeta");
+  const actionsEl = qs("planningPaginationActions");
+  if (!metaEl || !actionsEl) return;
+
+  const {
+    page,
+    pageSize,
+    totalCount,
+    totalPages,
+    hasPrevPage,
+    hasNextPage,
+  } = planningTableState.pagination;
+
+  if (!totalCount) {
+    metaEl.textContent = "Page 1 of 1 · 0 rows";
+    actionsEl.innerHTML = "";
+    return;
+  }
+
+  const startRow = (page - 1) * pageSize + 1;
+  const endRow = Math.min(page * pageSize, totalCount);
+
+  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount}`;
+
+  const sequence = buildPlanningPaginationSequence(page, totalPages);
+
+  actionsEl.innerHTML = `
+    <button
+      type="button"
+      class="ghost-btn planning-pagination-btn"
+      data-planning-page="${page - 1}"
+      ${hasPrevPage ? "" : "disabled"}
+    >
+      Prev
+    </button>
+
+    ${sequence.map((item) => {
+      if (typeof item !== "number") {
+        return `<span class="planning-pagination-ellipsis">…</span>`;
+      }
+
+      return `
+        <button
+          type="button"
+          class="ghost-btn planning-pagination-btn ${item === page ? "is-active" : ""}"
+          data-planning-page="${item}"
+          ${item === page ? "disabled" : ""}
+        >
+          ${item}
+        </button>
+      `;
+    }).join("")}
+
+    <button
+      type="button"
+      class="ghost-btn planning-pagination-btn"
+      data-planning-page="${page + 1}"
+      ${hasNextPage ? "" : "disabled"}
+    >
+      Next
+    </button>
+  `;
+}
+
 async function fetchJson(url, options = {}) {
   const response = await fetch(url, options);
   if (!response.ok) {
@@ -840,11 +943,13 @@ function buildPlanningUrl() {
   const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
   const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
   const limit = qs("planningLimitInput").value || "50";
+  const page = planningTableState.pagination.page || 1;
 
   appendMultiValueParams(params, "action", actions);
   appendMultiValueParams(params, "winner_bucket", winnerBuckets);
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
+  params.set("page", String(page));
 
   return `/browse?${params.toString()}`;
 }
@@ -4003,6 +4108,7 @@ function renderPlanningRows(rows, metaLabel) {
     qs("planningTableMeta").textContent = planningTableState.metaLabel;
     updatePlanningStats(0);
     renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
+    renderPlanningPagination();
     return;
   }
 
@@ -4018,7 +4124,7 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(row.queue_rank || "")}</td>
         <td><span class="pill">${escapeHtml(row.action || "")}</span></td>
         <td>${escapeHtml(row.job_company || "")}</td>
-              <td class="title-cell">
+        <td class="title-cell">
           <div>${titleHtml}</div>
         </td>
         <td>${buildDateTimeCellHtml(row.posted_at)}</td>
@@ -4044,6 +4150,7 @@ function renderPlanningRows(rows, metaLabel) {
   qs("planningTableMeta").textContent = planningTableState.metaLabel;
   updatePlanningStats(displayRows.length);
   renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
+  renderPlanningPagination();
 }
 
 async function loadPlanningTable() {
@@ -4053,11 +4160,26 @@ async function loadPlanningTable() {
 
   const url = buildPlanningUrl();
   const data = await fetchJson(url);
-  const count = data.count ?? 0;
+
+  const rawPageSize = data.page_size ?? qs("planningLimitInput").value ?? 15;
+  const parsedPageSize = Number(rawPageSize);
+  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 50;
+  const totalCount = Number(data.total_count ?? data.count ?? 0);
+  const totalPages = Number(data.total_pages ?? 1);
+  const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
+
+  planningTableState.pagination = {
+    page: currentPage,
+    pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 50,
+    totalCount: Number.isFinite(totalCount) ? totalCount : 0,
+    totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+    hasPrevPage: Boolean(data.has_prev_page),
+    hasNextPage: Boolean(data.has_next_page),
+  };
 
   renderPlanningRows(
     data.rows || [],
-    `Planning detail view · ${count} row${count === 1 ? "" : "s"}`
+    `Planning detail view · ${totalCount} matching row${totalCount === 1 ? "" : "s"}`
   );
 }
 
@@ -4071,13 +4193,16 @@ function clearPlanningFilters() {
   }
 
   qs("planningLimitInput").value = "50";
+  setPlanningRequestedPage(1);
   updatePlanningStats(0);
 }
 
 function attachPlanningHandlers() {
   initMultiSelect("planningActionFilter");
   initMultiSelect("planningWinnerBucket");
+
   qs("planningApplyFiltersBtn").addEventListener("click", async () => {
+    setPlanningRequestedPage(1);
     try {
       await loadPlanningTable();
     } catch (err) {
@@ -4091,6 +4216,22 @@ function attachPlanningHandlers() {
       await loadPlanningTable();
     } catch (err) {
       showAppError("Failed to reload planning table", err);
+    }
+  });
+
+  qs("planningPaginationActions").addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-planning-page]");
+    if (!button || button.disabled) return;
+
+    const nextPage = Number(button.dataset.planningPage || "");
+    if (!Number.isFinite(nextPage) || nextPage < 1) return;
+
+    setPlanningRequestedPage(nextPage);
+
+    try {
+      await loadPlanningTable();
+    } catch (err) {
+      showAppError("Failed to change planning page", err);
     }
   });
 
@@ -4173,7 +4314,7 @@ function attachPlanningHandlers() {
       closeResumeChoiceModal();
     }
   });
-  
+
   qs("copyTailoringMarkdownBtn").addEventListener("click", handleCopyTailoringMarkdown);
 
   getApplicationModal().addEventListener("click", (event) => {

@@ -114,7 +114,7 @@ def planning_dashboard() -> str:
           </div>
 
           <div class="control-group dashboard-field dashboard-field--limit">
-            <label for="planningLimitInput">Rows per page</label>
+            <label for="planningLimitInput">Limit</label>
             <input type="number" id="planningLimitInput" value="15" min="1" max="100" />
           </div>
         </div>

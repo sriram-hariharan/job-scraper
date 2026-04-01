@@ -13,6 +13,12 @@ const state = {
 const queueTableState = {
   rows: [],
   metaLabel: "Loading...",
+  page: 1,
+  pageSize: 15,
+  totalCount: 0,
+  totalPages: 1,
+  hasPrevPage: false,
+  hasNextPage: false,
   sort: {
     key: "",
     direction: "asc",
@@ -1185,6 +1191,105 @@ function buildQueueRowSimpleHtml(row) {
   `;
 }
 
+function buildPaginationSequence(currentPage, totalPages) {
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let page = 1; page <= totalPages; page += 1) {
+      pages.push(page);
+    }
+    return pages;
+  }
+
+  pages.push(1);
+
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) pages.push("ellipsis-left");
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+  if (end < totalPages - 1) pages.push("ellipsis-right");
+
+  pages.push(totalPages);
+  return pages;
+}
+
+function applyQueuePaginationPayload(data) {
+  queueTableState.page = Number(data.page || 1);
+  queueTableState.pageSize = Number(data.page_size || 15);
+  queueTableState.totalCount = Number(data.total_count ?? data.count ?? 0);
+  queueTableState.totalPages = Number(data.total_pages || 1);
+  queueTableState.hasPrevPage = Boolean(data.has_prev_page);
+  queueTableState.hasNextPage = Boolean(data.has_next_page);
+}
+
+function renderQueuePagination() {
+  const metaEl = qs("queuePaginationMeta");
+  const actionsEl = qs("queuePaginationActions");
+  if (!metaEl || !actionsEl) return;
+
+  const totalCount = queueTableState.totalCount || 0;
+  const totalPages = Math.max(queueTableState.totalPages || 1, 1);
+  const currentPage = Math.min(Math.max(queueTableState.page || 1, 1), totalPages);
+  const pageSize = Math.max(queueTableState.pageSize || 15, 1);
+
+  if (totalCount === 0) {
+    metaEl.textContent = "Page 1 of 1 · 0 jobs";
+    actionsEl.innerHTML = "";
+    return;
+  }
+
+  const startRow = (currentPage - 1) * pageSize + 1;
+  const endRow = Math.min(startRow + (queueTableState.rows?.length || 0) - 1, totalCount);
+
+  metaEl.textContent = `Page ${currentPage} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount} jobs`;
+
+  const sequence = buildPaginationSequence(currentPage, totalPages);
+  const buttons = [];
+
+  buttons.push(`
+    <button
+      type="button"
+      class="application-pagination-btn"
+      data-page-target="${currentPage - 1}"
+      ${queueTableState.hasPrevPage ? "" : "disabled"}
+    >
+      Prev
+    </button>
+  `);
+
+  sequence.forEach((item) => {
+    if (typeof item === "string" && item.startsWith("ellipsis")) {
+      buttons.push(`<span class="application-pagination-ellipsis">…</span>`);
+      return;
+    }
+
+    buttons.push(`
+      <button
+        type="button"
+        class="application-pagination-btn ${item === currentPage ? "is-active" : ""}"
+        data-page-target="${item}"
+      >
+        ${item}
+      </button>
+    `);
+  });
+
+  buttons.push(`
+    <button
+      type="button"
+      class="application-pagination-btn"
+      data-page-target="${currentPage + 1}"
+      ${queueTableState.hasNextPage ? "" : "disabled"}
+    >
+      Next
+    </button>
+  `);
+
+  actionsEl.innerHTML = buttons.join("");
+}
+
 function renderQueueRows(rows, metaLabel) {
   queueTableState.rows = Array.isArray(rows) ? rows.slice() : [];
   queueTableState.metaLabel = metaLabel;
@@ -1209,17 +1314,20 @@ function renderQueueRows(rows, metaLabel) {
   }
 
   qs("tableMeta").textContent = `${queueTableState.metaLabel} · ${modeLabel}`;
+  renderQueuePagination();
 }
 
-function buildBrowseUrl() {
+function buildBrowseUrl(pageOverride = null) {
   const actions = getMultiSelectValues("actionFilter");
   const undecidedOnly = getBinaryToggleBool("executiveUndecidedOnly") ? "true" : "";
-  const limit = qs("limitInput").value || "25";
+  const limit = qs("limitInput").value || "15";
+  const page = pageOverride ?? queueTableState.page ?? 1;
 
   const params = new URLSearchParams();
   appendMultiValueParams(params, "action", actions);
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
+  params.set("page", String(page));
 
   return `/browse?${params.toString()}`;
 }
@@ -1229,17 +1337,21 @@ async function loadStatus() {
   renderStats(data);
 }
 
-async function loadBrowse() {
+async function loadBrowse(pageOverride = null) {
   state.currentMode = "browse";
   state.workflowView = null;
 
-  const url = buildBrowseUrl();
+  const targetPage = pageOverride ?? queueTableState.page ?? 1;
+  const url = buildBrowseUrl(targetPage);
   const data = await fetchJson(url);
-  const count = data.count ?? 0;
+
+  applyQueuePaginationPayload(data);
+
+  const totalCount = data.total_count ?? data.count ?? 0;
 
   renderQueueRows(
     data.rows || [],
-    `Browse view · ${count} row${count === 1 ? "" : "s"}`
+    `Browse view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
   );
 }
 
@@ -1254,6 +1366,8 @@ async function loadWorkflow(view) {
   });
 
   const data = await fetchJson(`/workflow?${params.toString()}`);
+  applyQueuePaginationPayload(data);
+
   const count = data.count ?? 0;
 
   renderQueueRows(
@@ -1262,34 +1376,41 @@ async function loadWorkflow(view) {
   );
 }
 
-  async function loadAppliedJobs() {
+async function loadAppliedJobs(pageOverride = null) {
   state.currentMode = "applied_jobs";
   state.workflowView = null;
 
-  const limit = qs("limitInput").value || "25";
-  const data = await fetchJson(`/applied-jobs?limit=${encodeURIComponent(limit)}`);
-  const count = data.count ?? 0;
+  const targetPage = pageOverride ?? queueTableState.page ?? 1;
+  const limit = qs("limitInput").value || "15";
+  const data = await fetchJson(
+    `/applied-jobs?limit=${encodeURIComponent(limit)}&page=${encodeURIComponent(targetPage)}`
+  );
+
+  applyQueuePaginationPayload(data);
+
+  const totalCount = data.total_count ?? data.count ?? 0;
 
   renderQueueRows(
     data.rows || [],
-    `Applied jobs · ${count} row${count === 1 ? "" : "s"}`
+    `Applied jobs · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
   );
 }
 
-async function reloadCurrentTable() {
+async function reloadCurrentTable(pageOverride = null) {
   if (state.currentMode === "applied_jobs") {
-    await loadAppliedJobs();
+    await loadAppliedJobs(pageOverride);
   } else if (state.currentMode === "workflow" && state.workflowView) {
     await loadWorkflow(state.workflowView);
   } else {
-    await loadBrowse();
+    await loadBrowse(pageOverride);
   }
 }
 
 function clearFilters() {
   clearMultiSelect("actionFilter");
   setBinaryToggleValue("executiveUndecidedOnly", false);
-  qs("limitInput").value = "25";
+  qs("limitInput").value = "15";
+  queueTableState.page = 1;
 }
 
 function getApplicationModal() {
@@ -1497,8 +1618,9 @@ function attachPipelineConfigHandlers() {
 function attachEventHandlers() {
   initMultiSelect("actionFilter");
   qs("applyFiltersBtn").addEventListener("click", async () => {
+    queueTableState.page = 1;
     try {
-      await loadBrowse();
+      await loadBrowse(1);
     } catch (err) {
       showAppError("Failed to load browse data", err);
     }
@@ -1507,11 +1629,30 @@ function attachEventHandlers() {
   qs("clearFiltersBtn").addEventListener("click", async () => {
     clearFilters();
     try {
-      await loadBrowse();
+      await loadBrowse(1);
     } catch (err) {
       showAppError("Failed to reload browse data", err);
     }
   });
+
+  const queuePaginationActions = qs("queuePaginationActions");
+  if (queuePaginationActions) {
+    queuePaginationActions.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-page-target]");
+      if (!button || button.disabled) return;
+
+      const nextPage = Number(button.dataset.pageTarget || "");
+      if (!Number.isFinite(nextPage) || nextPage < 1 || nextPage === queueTableState.page) {
+        return;
+      }
+
+      try {
+        await reloadCurrentTable(nextPage);
+      } catch (err) {
+        showAppError("Failed to change queue page", err);
+      }
+    });
+  }
 
   document.querySelectorAll("input[name='executiveViewMode']").forEach((input) => {
     input.addEventListener("change", () => {

@@ -2359,13 +2359,15 @@ def browse_payload(
         "winner_bucket": "",
         "company_contains": "",
         "title_contains": "",
-        "limit": 20,
+        "limit": 15,
         "undecided_only": "",
+        "page": 1,
     }
     resolved_filters.update(filters)
 
-    page_size = max(int(resolved_filters.get("limit", 20) or 20), 1)
+    requested_limit = max(int(resolved_filters.get("limit", 15) or 15), 1)
     current_page = max(int(resolved_filters.get("page", 1) or 1), 1)
+    page_size = 15
 
     selection_filters = dict(resolved_filters)
     selection_filters["limit"] = max(len(rows), 1)
@@ -2377,6 +2379,8 @@ def browse_payload(
     selected = _overlay_application_actions(selected)
     selected = _exclude_applied_rows(selected)
 
+    selected = selected[:requested_limit]
+
     total_count = len(selected)
     total_pages = max((total_count + page_size - 1) // page_size, 1)
     current_page = min(current_page, total_pages)
@@ -2386,7 +2390,18 @@ def browse_payload(
     page_rows = selected[start:end]
 
     return {
-        "filters": resolved_filters,
+        "filters": {
+            "action": resolved_filters.get("action", ""),
+            "needs_review": resolved_filters.get("needs_review", ""),
+            "is_tie": resolved_filters.get("is_tie", ""),
+            "fallback_status": resolved_filters.get("fallback_status", ""),
+            "winner_bucket": resolved_filters.get("winner_bucket", ""),
+            "company_contains": resolved_filters.get("company_contains", ""),
+            "title_contains": resolved_filters.get("title_contains", ""),
+            "limit": requested_limit,
+            "undecided_only": resolved_filters.get("undecided_only", ""),
+            "page": current_page,
+        },
         "rows": page_rows,
         "count": len(page_rows),
         "total_count": total_count,
@@ -2396,7 +2411,6 @@ def browse_payload(
         "has_prev_page": current_page > 1,
         "has_next_page": current_page < total_pages,
     }
-
 
 def review_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -2585,7 +2599,7 @@ def decisions_payload(
     selected_resume: str = "",
     company_contains: str = "",
     title_contains: str = "",
-    limit: int = 20,
+    limit: int = 15,
     page: int = 1,
 ) -> Dict[str, Any]:
     ja = _job_app()
@@ -2601,6 +2615,10 @@ def decisions_payload(
         "page": page,
     }
 
+    requested_limit = max(int(limit or 15), 1)
+    current_page = max(int(page or 1), 1)
+    page_size = 15
+
     selection_filters = dict(resolved_filters)
     selection_filters["limit"] = max(len(rows), 1)
     selection_filters.pop("page", None)
@@ -2610,8 +2628,7 @@ def decisions_payload(
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
     selected = _overlay_application_actions(selected)
 
-    page_size = max(int(limit or 20), 1)
-    current_page = max(int(page or 1), 1)
+    selected = selected[:requested_limit]
 
     total_count = len(selected)
     total_pages = max((total_count + page_size - 1) // page_size, 1)
@@ -2628,7 +2645,7 @@ def decisions_payload(
             "selected_resume": selected_resume,
             "company_contains": company_contains,
             "title_contains": title_contains,
-            "limit": limit,
+            "limit": requested_limit,
             "page": current_page,
         },
         "rows": page_rows,
@@ -2914,7 +2931,7 @@ def application_actions_payload(
     application_status: str = "",
     company_contains: str = "",
     title_contains: str = "",
-    limit: int = 100,
+    limit: int = 15,
     page: int = 1,
 ) -> Dict[str, Any]:
     ja = _job_app()
@@ -2941,8 +2958,11 @@ def application_actions_payload(
             if needle in ja._normalize_text(row.get("job_title", ""))
         ]
 
-    page_size = max(int(limit or 100), 1)
+    requested_limit = max(int(limit or 15), 1)
     current_page = max(int(page or 1), 1)
+    page_size = 15
+
+    rows = rows[:requested_limit]
 
     total_count = len(rows)
     total_pages = max((total_count + page_size - 1) // page_size, 1)
@@ -2957,7 +2977,7 @@ def application_actions_payload(
             "application_status": application_status,
             "company_contains": company_contains,
             "title_contains": title_contains,
-            "limit": limit,
+            "limit": requested_limit,
             "page": current_page,
         },
         "rows": page_rows,
@@ -2973,7 +2993,7 @@ def application_actions_payload(
 def applied_jobs_payload(
     company_contains: str = "",
     title_contains: str = "",
-    limit: int = 100,
+    limit: int = 15,
     page: int = 1,
 ) -> Dict[str, Any]:
     return application_actions_payload(

@@ -45,7 +45,7 @@ def applied_jobs_dashboard() -> str:
 
         <div class="control-group">
           <label for="applicationLimitInput">Limit</label>
-          <input type="number" id="applicationLimitInput" value="50" min="1" max="300" />
+          <input type="number" id="applicationLimitInput" value="15" min="1" max="300" />
         </div>
 
         <div class="control-group button-group">
@@ -67,9 +67,19 @@ def applied_jobs_dashboard() -> str:
     </section>
 
     <section class="card table-card">
-      <div class="section-header">
+      <div class="section-header application-table-header">
         <h2 id="applicationTableTitle">Applied Jobs</h2>
-        <div class="subtext" id="applicationTableMeta">Loading...</div>
+
+        <div class="application-table-header-right">
+          <div class="application-pagination-inline" id="applicationPaginationBar">
+            <div class="subtext application-pagination-meta" id="applicationPaginationMeta">
+              Page 1 of 1
+            </div>
+            <div class="application-pagination-actions" id="applicationPaginationActions"></div>
+          </div>
+
+          <div class="subtext" id="applicationTableMeta">Loading...</div>
+        </div>
       </div>
 
       <div class="table-wrap">

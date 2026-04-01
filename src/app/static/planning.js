@@ -29,7 +29,7 @@ const planningTableState = {
   },
   pagination: {
     page: 1,
-    pageSize: 50,
+    pageSize: 15,
     totalCount: 0,
     totalPages: 1,
     hasPrevPage: false,
@@ -868,7 +868,7 @@ function renderPlanningPagination() {
   } = planningTableState.pagination;
 
   if (!totalCount) {
-    metaEl.textContent = "Page 1 of 1 · 0 rows";
+    metaEl.textContent = "Page 1 of 1 · 0 jobs";
     actionsEl.innerHTML = "";
     return;
   }
@@ -876,7 +876,7 @@ function renderPlanningPagination() {
   const startRow = (page - 1) * pageSize + 1;
   const endRow = Math.min(page * pageSize, totalCount);
 
-  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount}`;
+  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount} jobs`;
 
   const sequence = buildPlanningPaginationSequence(page, totalPages);
 
@@ -942,7 +942,7 @@ function buildPlanningUrl() {
   const actions = getMultiSelectValues("planningActionFilter");
   const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
   const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
-  const limit = qs("planningLimitInput").value || "50";
+  const limit = qs("planningLimitInput").value || "15";
   const page = planningTableState.pagination.page || 1;
 
   appendMultiValueParams(params, "action", actions);
@@ -4161,16 +4161,16 @@ async function loadPlanningTable() {
   const url = buildPlanningUrl();
   const data = await fetchJson(url);
 
-  const rawPageSize = data.page_size ?? qs("planningLimitInput").value ?? 15;
+  const rawPageSize = data.page_size ?? 15;
   const parsedPageSize = Number(rawPageSize);
-  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 50;
+  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
   const totalCount = Number(data.total_count ?? data.count ?? 0);
   const totalPages = Number(data.total_pages ?? 1);
   const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
 
   planningTableState.pagination = {
     page: currentPage,
-    pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 50,
+    pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 15,
     totalCount: Number.isFinite(totalCount) ? totalCount : 0,
     totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
     hasPrevPage: Boolean(data.has_prev_page),
@@ -4179,7 +4179,7 @@ async function loadPlanningTable() {
 
   renderPlanningRows(
     data.rows || [],
-    `Planning detail view · ${totalCount} matching row${totalCount === 1 ? "" : "s"}`
+    `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
   );
 }
 
@@ -4192,7 +4192,7 @@ function clearPlanningFilters() {
     defaultUndecided.checked = true;
   }
 
-  qs("planningLimitInput").value = "50";
+  qs("planningLimitInput").value = "15";
   setPlanningRequestedPage(1);
   updatePlanningStats(0);
 }

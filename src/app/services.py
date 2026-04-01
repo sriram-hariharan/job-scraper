@@ -2178,6 +2178,7 @@ def _load_job_metadata_overlay_from_corpus(
             job_doc_id = _clean_text(
                 record.get("job_doc_id")
                 or record.get("doc_id")
+                or metadata.get("job_doc_id")
                 or metadata.get("doc_id")
                 or record.get("job_url")
                 or metadata.get("job_url")
@@ -2190,11 +2191,13 @@ def _load_job_metadata_overlay_from_corpus(
             job_company = _clean_text(
                 record.get("job_company")
                 or record.get("company")
+                or metadata.get("job_company")
                 or metadata.get("company")
             )
             job_title = _clean_text(
                 record.get("job_title")
                 or record.get("title")
+                or metadata.get("job_title")
                 or metadata.get("title")
             )
             posted_at = _clean_text(
@@ -2202,7 +2205,7 @@ def _load_job_metadata_overlay_from_corpus(
                 or metadata.get("posted_at")
             )
 
-            if not posted_at and not job_url:
+            if not any([job_doc_id, job_url, job_company, job_title]):
                 continue
 
             key_row = {
@@ -2222,32 +2225,30 @@ def _load_job_metadata_overlay_from_corpus(
 
     return latest_by_key
 
-
 def _overlay_job_metadata(
     rows: List[Dict[str, Any]],
     job_corpus: Path = DEFAULT_CORPUS_PATH,
 ) -> List[Dict[str, Any]]:
     latest_by_key = _load_job_metadata_overlay_from_corpus(job_corpus)
-    if not latest_by_key:
-        return rows
 
     overlaid_rows: List[Dict[str, Any]] = []
 
     for row in rows:
         merged = dict(row)
-        merged.setdefault("posted_at", "")
-        merged.setdefault("job_url", _clean_text(merged.get("job_doc_id")))
+        merged["posted_at"] = _clean_text(merged.get("posted_at"))
+        merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
 
-        for key in _application_row_key_candidates(merged):
-            overlay = latest_by_key.get(key)
-            if not overlay:
-                continue
+        if latest_by_key:
+            for key in _application_row_key_candidates(merged):
+                overlay = latest_by_key.get(key)
+                if not overlay:
+                    continue
 
-            if overlay.get("posted_at"):
-                merged["posted_at"] = overlay["posted_at"]
-            if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
-                merged["job_url"] = overlay["job_url"]
-            break
+                if overlay.get("posted_at"):
+                    merged["posted_at"] = overlay["posted_at"]
+                if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
+                    merged["job_url"] = overlay["job_url"]
+                break
 
         overlaid_rows.append(merged)
 
@@ -2317,6 +2318,8 @@ def status_payload(
     top_queue = []
     for row in top_rows:
         overlay_row = dict(row)
+        overlay_row["posted_at"] = _clean_text(overlay_row.get("posted_at"))
+        overlay_row["job_url"] = _clean_text(overlay_row.get("job_url")) or _clean_text(overlay_row.get("job_doc_id"))
         for field in ja.OPERATOR_DECISION_OVERLAY_FIELDS:
             overlay_row.setdefault(field, "")
 

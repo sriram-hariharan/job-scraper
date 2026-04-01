@@ -513,53 +513,6 @@ def planning_dashboard() -> str:
           </div>
         </section>
         </details>
-        <details class="card tailoring-accordion tailoring-accordion--notes">
-          <summary><span class="tailoring-accordion-summary-label">Full notes</span></summary>
-
-          <div class="tailoring-accordion-body">
-            <div class="section-header tailoring-notes-header">
-              <div class="subtext">
-                Human-readable notes for deeper review.
-              </div>
-
-              <div class="section-header-actions">
-                <button
-                  type="button"
-                  class="ghost-btn tailoring-copy-btn"
-                  id="copyTailoringMarkdownBtn"
-                  title="Copy notes"
-                  aria-label="Copy notes"
-                  disabled
-                >
-                  <span class="tailoring-copy-btn-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
-                      <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                      <path d="M15 9V7a2 2 0 0 0-2-2H7a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"></path>
-                    </svg>
-                  </span>
-                  <span id="copyTailoringMarkdownLabel">Copy notes</span>
-                </button>
-              </div>
-            </div>
-
-            <div id="tailoringMarkdownContent" class="tailoring-artifact tailoring-artifact--markdown">No artifact loaded.</div>
-          </div>
-        </details>
-
-        <details class="card tailoring-accordion">
-          <summary><span class="tailoring-accordion-summary-label">Deterministic Tailoring JSON</span></summary>
-          <pre id="tailoringJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
-        </details>
-
-        <details class="card tailoring-accordion">
-          <summary><span class="tailoring-accordion-summary-label">LLM Tailoring JSON</span></summary>
-          <pre id="tailoringLlmJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
-        </details>
-
-        <details class="card tailoring-accordion">
-          <summary><span class="tailoring-accordion-summary-label">Packet JSON</span></summary>
-          <pre id="tailoringPacketJsonContent" class="tailoring-artifact tailoring-artifact--code">No artifact loaded.</pre>
-        </details>
       </div>
     </div>
   </section>
@@ -702,7 +655,18 @@ def tailoring_workspace(
             Loading suggested changes...
           </div>
         </div>
+        <section class="card tailoring-workspace-subcard hidden">
+        <div class="section-header section-header--compact">
+          <div>
+            <h3>Impact preview</h3>
+            <div class="subtext">
+              Preview the scorer-visible impact of the current unsaved selection.
+            </div>
+          </div>
+        </div>
 
+        <div id="tailoringWorkspacePatchPreviewSummary"></div>
+      </section>
         <section class="card tailoring-workspace-subcard hidden">
           <div class="section-header section-header--compact">
             <div>
@@ -726,66 +690,83 @@ def tailoring_workspace(
             </div>
           </div>
         </div>
-        <section class="card tailoring-workspace-subcard tailoring-workspace-selection-bar">
-          <div class="tailoring-workspace-selection-bar-copy">
-            <div class="tailoring-workspace-selection-title">Selection actions</div>
-            <div class="subtext" id="tailoringWorkspaceSelectionStatus">
-              No actionable suggestions selected yet.
-            </div>
-          </div>
-
-          <div class="tailoring-workspace-selection-actions">
-            <span class="tailoring-workspace-action-tooltip" data-tooltip="Discard selection">
-              <button
-                type="button"
-                class="ghost-btn btn-sm tailoring-workspace-icon-btn"
-                id="tailoringWorkspaceDiscardBtn"
-                aria-label="Discard selection"
-                disabled
-              >
-                <span
-                  class="tailoring-workspace-icon tailoring-workspace-icon--discard"
-                  aria-hidden="true"
-                ></span>
-              </button>
-            </span>
-
-            <span class="tailoring-workspace-action-tooltip" data-tooltip="Download resume">
-              <button
-                type="button"
-                class="ghost-btn btn-sm tailoring-workspace-icon-btn"
-                id="tailoringWorkspaceDownloadBtn"
-                aria-label="Download resume"
-              >
-                <span
-                  class="tailoring-workspace-icon tailoring-workspace-icon--download"
-                  aria-hidden="true"
-                ></span>
-              </button>
-            </span>
-
-            <span class="tailoring-workspace-action-tooltip" data-tooltip="Save changes">
-              <button
-                type="button"
-                class="btn-sm tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
-                id="tailoringWorkspaceSaveSelectionBtn"
-                aria-label="Save changes"
-                disabled
-              >
-                <span
-                  class="tailoring-workspace-icon tailoring-workspace-icon--save"
-                  aria-hidden="true"
-                ></span>
-              </button>
-            </span>
-          </div>
-        </section>
+        
         <div class="tailoring-preview-shell">
           <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
             <div class="tailoring-workspace-preview-header">
-              <div class="subtext">Current resume preview</div>
-              <div class="tailoring-workspace-preview-name" id="tailoringWorkspacePreviewName">
-                {resume_display_safe}
+              <div class="tailoring-workspace-preview-header-main">
+                <div class="subtext">Current resume preview</div>
+                <div class="tailoring-workspace-preview-name" id="tailoringWorkspacePreviewName">
+                  {resume_display_safe}
+                </div>
+                <div
+                  class="subtext tailoring-workspace-selection-status-hidden"
+                  id="tailoringWorkspaceSelectionStatus"
+                  aria-live="polite"
+                >
+                  No actionable suggestions selected yet.
+                </div>
+              </div>
+
+              <div class="tailoring-workspace-preview-header-actions">
+                <span class="tailoring-workspace-action-tooltip" data-tooltip="Discard selection">
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    id="tailoringWorkspaceDiscardBtn"
+                    aria-label="Discard selection"
+                    disabled
+                  >
+                    <span
+                      class="tailoring-workspace-icon tailoring-workspace-icon--discard"
+                      aria-hidden="true"
+                    ></span>
+                  </button>
+                </span>
+
+                <span class="tailoring-workspace-action-tooltip" data-tooltip="Download resume">
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    id="tailoringWorkspaceDownloadBtn"
+                    aria-label="Download resume"
+                  >
+                    <span
+                      class="tailoring-workspace-icon tailoring-workspace-icon--download"
+                      aria-hidden="true"
+                    ></span>
+                  </button>
+                </span>
+
+                <span class="tailoring-workspace-action-tooltip" data-tooltip="Preview impact">
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
+                    id="tailoringWorkspacePreviewBtn"
+                    aria-label="Preview impact"
+                    disabled
+                  >
+                    <span
+                      class="tailoring-workspace-icon tailoring-workspace-icon--preview"
+                      aria-hidden="true"
+                    ></span>
+                  </button>
+                </span>
+
+                <span class="tailoring-workspace-action-tooltip" data-tooltip="Save changes">
+                  <button
+                    type="button"
+                    class="btn-sm tailoring-workspace-icon-btn tailoring-workspace-icon-btn--save"
+                    id="tailoringWorkspaceSaveSelectionBtn"
+                    aria-label="Save changes"
+                    disabled
+                  >
+                    <span
+                      class="tailoring-workspace-icon tailoring-workspace-icon--save"
+                      aria-hidden="true"
+                    ></span>
+                  </button>
+                </span>
               </div>
             </div>
 

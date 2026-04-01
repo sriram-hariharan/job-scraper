@@ -4917,6 +4917,78 @@ th.sortable-col {
   outline-offset: 3px;
 }
 
+.tailoring-edit-card--compact {
+  padding: 14px 15px;
+}
+
+.tailoring-card-topline--compact {
+  margin-bottom: 8px;
+}
+
+.tailoring-chip-group--compact {
+  gap: 6px;
+}
+
+.tailoring-chip-group--compact .tailoring-tone-pill {
+  padding: 5px 8px;
+  font-size: 10px;
+}
+
+.tailoring-info-block--compact {
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tailoring-info-block--compact .tailoring-info-label {
+  font-size: 11px;
+}
+
+.tailoring-edit-card--compact .tailoring-quote-block,
+.tailoring-edit-card--compact .tailoring-rewrite-callout {
+  margin-top: 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tailoring-edit-inline-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 8px;
+}
+
+.tailoring-edit-inline-reason {
+  min-width: 0;
+  flex: 1 1 260px;
+  color: #dce6ff;
+  font-size: 13px;
+  line-height: 1.45;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tailoring-edit-impact-chips {
+  flex: 0 1 auto;
+}
+
+.tailoring-card-actions--compact {
+  margin-top: 10px;
+}
+
+.tailoring-card-actions--compact .tailoring-select-btn {
+  min-width: 88px;
+  padding: 7px 12px;
+}
+
+@media (max-width: 900px) {
+  .tailoring-edit-inline-reason {
+    white-space: normal;
+  }
+}
+
 .tailoring-safety-title {
   font-size: 15px;
   font-weight: 800;

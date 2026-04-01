@@ -1425,6 +1425,44 @@ def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, 
 
     return data
 
+def _tailoring_workspace_button_state(
+    row: Dict[str, Any],
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+) -> Dict[str, Any]:
+    ready_count = 0
+
+    raw_path = _clean_text(row.get("tailoring_json"))
+    if not raw_path:
+        return {
+            "tailoring_ready_replacement_count": 0,
+            "tailoring_has_ready_replacements": False,
+        }
+
+    try:
+        artifact_path = _resolve_planning_artifact_path(raw_path, output_dir=output_dir)
+        payload_data = _load_tailoring_json_artifact(artifact_path)
+
+        if artifact_path.name.endswith("__tailoring.json"):
+            payload_data = _rehydrate_legacy_tailoring_operator_payload(
+                artifact_path,
+                payload_data,
+            )
+
+        if payload_data.get("replacement_candidates") is not None:
+            payload_data = _apply_saved_patch_selection_overlay(
+                artifact_path,
+                payload_data,
+            )
+
+        ready_count = len(list(payload_data.get("app_ready_replacements", []) or []))
+    except Exception:
+        ready_count = 0
+
+    return {
+        "tailoring_ready_replacement_count": ready_count,
+        "tailoring_has_ready_replacements": ready_count > 0,
+    }
+
 def _apply_saved_patch_selection_overlay(
     artifact_path: Path,
     payload_data: Dict[str, Any],
@@ -2388,6 +2426,13 @@ def browse_payload(
     start = (current_page - 1) * page_size
     end = start + page_size
     page_rows = selected[start:end]
+    page_rows = [
+        {
+            **dict(row),
+            **_tailoring_workspace_button_state(row, output_dir=output_dir),
+        }
+        for row in page_rows
+    ]
 
     return {
         "filters": {

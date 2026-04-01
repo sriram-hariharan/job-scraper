@@ -655,6 +655,20 @@ def tailoring_workspace(
             Loading suggested changes...
           </div>
         </div>
+
+        <section class="card tailoring-workspace-subcard hidden">
+          <div class="section-header section-header--compact">
+            <div>
+              <h3>Selected edits draft</h3>
+              <div class="subtext">
+                This is the current working draft built from your active selection.
+              </div>
+            </div>
+          </div>
+
+          <div id="tailoringWorkspaceSelectedDraftShell"></div>
+        </section>
+
         <section class="card tailoring-workspace-subcard hidden">
         <div class="section-header section-header--compact">
           <div>

@@ -708,14 +708,12 @@ async function loadDecisionsTable(pageOverride = null) {
 
   applyDecisionsPaginationPayload(data);
 
-  const pageCount = data.count ?? 0;
-  const totalCount = data.total_count ?? pageCount;
+  const totalCount = data.total_count ?? data.count ?? 0;
 
-  const metaLabel = totalCount === pageCount
-    ? `Decisions view · ${pageCount} row${pageCount === 1 ? "" : "s"}`
-    : `Decisions view · ${pageCount} row${pageCount === 1 ? "" : "s"} on this page · ${totalCount} total`;
-
-  renderDecisionRows(data.rows || [], metaLabel);
+  renderDecisionRows(
+    data.rows || [],
+    `Decisions view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
+  );
 }
 
 function clearDecisionFilters() {

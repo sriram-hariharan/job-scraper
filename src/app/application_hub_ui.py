@@ -46,7 +46,7 @@ def applications_dashboard() -> str:
         </div>
 
         <div class="control-group">
-          <label for="applicationLimitInput">Rows per page</label>
+          <label for="applicationLimitInput">Limit</label>
           <input type="number" id="applicationLimitInput" value="15" min="1" max="100" />
         </div>
 

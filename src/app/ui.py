@@ -102,7 +102,7 @@ def executive_dashboard() -> str:
 
           <div class="control-group dashboard-field dashboard-field--limit">
             <label for="limitInput">Limit</label>
-            <input type="number" id="limitInput" value="25" min="1" max="200" />
+            <input type="number" id="limitInput" value="15" min="1" max="200" />
           </div>
 
           <div class="control-group dashboard-toggle-group executive-toolbar-toggle">
@@ -135,9 +135,15 @@ def executive_dashboard() -> str:
     </section>
 
     <section class="card table-card">
-      <div class="section-header">
+      <div class="section-header application-table-header">
         <h2>Queue Table</h2>
-        <div class="subtext" id="tableMeta">Loading...</div>
+        <div class="application-table-header-right">
+          <div class="subtext" id="tableMeta">Loading...</div>
+          <div class="application-pagination-inline" id="queuePaginationInline">
+            <div class="application-pagination-meta" id="queuePaginationMeta">Loading...</div>
+            <div class="application-pagination-actions" id="queuePaginationActions"></div>
+          </div>
+        </div>
       </div>
 
       <div class="table-wrap">

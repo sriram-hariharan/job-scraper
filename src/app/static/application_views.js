@@ -377,7 +377,7 @@ function renderApplicationPagination() {
   } = applicationTableState.pagination;
 
   if (!totalCount) {
-    metaEl.textContent = "Page 1 of 1 · 0 rows";
+    metaEl.textContent = "Page 1 of 1 · 0 jobs";
     actionsEl.innerHTML = "";
     return;
   }
@@ -385,7 +385,7 @@ function renderApplicationPagination() {
   const startRow = (page - 1) * pageSize + 1;
   const endRow = Math.min(page * pageSize, totalCount);
 
-  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount}`;
+  metaEl.textContent = `Page ${page} of ${totalPages} · Showing ${startRow}-${endRow} of ${totalCount} jobs`;
 
   const sequence = buildApplicationPaginationSequence(page, totalPages);
 
@@ -502,7 +502,7 @@ async function loadApplicationView() {
   const url = buildApplicationListUrl();
   const data = await fetchJson(url);
 
-  const rawPageSize = data.page_size ?? qs("applicationLimitInput").value ?? 15;
+  const rawPageSize = data.page_size ?? 15;
   const parsedPageSize = Number(rawPageSize);
   const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
 
@@ -521,7 +521,7 @@ async function loadApplicationView() {
 
   renderApplicationRows(
     data.rows || [],
-    `${config.pageLabel} · ${totalCount} row${totalCount === 1 ? "" : "s"}`,
+    `${config.pageLabel} · ${totalCount} total job${totalCount === 1 ? "" : "s"}`,
     config.emptyLabel
   );
 }

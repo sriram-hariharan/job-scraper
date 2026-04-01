@@ -357,7 +357,7 @@ def browse(
     title_contains: str = "",
     undecided_only: str = "",
     page: int = 1,
-    limit: int = 20,
+    limit: int = 15,
 ):
     return services.browse_payload(
         output_dir=Path(output_dir),
@@ -465,7 +465,7 @@ def decisions(
     company_contains: str = "",
     title_contains: str = "",
     page: int = 1,
-    limit: int = 20,
+    limit: int = 15,
 ):
     return services.decisions_payload(
         queue_rank=queue_rank,
@@ -556,7 +556,7 @@ def application_actions(
     company_contains: str = "",
     title_contains: str = "",
     page: int = 1,
-    limit: int = 100,
+    limit: int = 15,
 ):
     return services.application_actions_payload(
         application_status=application_status,
@@ -589,7 +589,7 @@ def applied_jobs(
     company_contains: str = "",
     title_contains: str = "",
     page: int = 1,
-    limit: int = 100,
+    limit: int = 15,
 ):
     return services.applied_jobs_payload(
         company_contains=company_contains,

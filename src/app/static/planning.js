@@ -1546,7 +1546,7 @@ async function renderTailoringWorkspacePdfPages() {
   pagesRoot.appendChild(fragment);
   pagesRoot.classList.remove("hidden");
   empty.classList.add("hidden");
-  
+
   syncTailoringWorkspaceLayoutToFirstPage();
 
   setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
@@ -3000,6 +3000,137 @@ function clearTailoringWorkspacePatchPreviewSection() {
   setTailoringSectionVisible("tailoringWorkspacePatchPreviewSummary", false);
 }
 
+function clearTailoringWorkspaceSelectedDraftSection() {
+  const root = qs("tailoringWorkspaceSelectedDraftShell");
+  if (root) {
+    root.innerHTML = "";
+  }
+  setTailoringSectionVisible("tailoringWorkspaceSelectedDraftShell", false);
+}
+
+function getTailoringWorkspaceDraftOriginalText(item) {
+  return String(
+    item?.original_text ||
+    item?.source_text ||
+    item?.source_bullet_text ||
+    ""
+  ).trim();
+}
+
+function getTailoringWorkspaceDraftReplacementText(item) {
+  return String(
+    item?.final_replacement_text ||
+    item?.patch_text ||
+    item?.replacement_text ||
+    item?.rewrite_text ||
+    ""
+  ).trim();
+}
+
+function renderTailoringWorkspaceSelectedDraftSection() {
+  const root = qs("tailoringWorkspaceSelectedDraftShell");
+  if (!root) return;
+
+  const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
+  if (!selectedIds.length) {
+    clearTailoringWorkspaceSelectedDraftSection();
+    return;
+  }
+
+  const cards = selectedIds.map((candidateId, index) => {
+    const item = getTailoringWorkspaceCandidateItem(candidateId);
+    if (!item) return "";
+
+    const originalText = getTailoringWorkspaceDraftOriginalText(item) || "Original bullet text unavailable.";
+    const replacementText = getTailoringWorkspaceDraftReplacementText(item) || "Replacement text unavailable.";
+    const priority = String(item?.apply_priority || "low").trim().toLowerCase();
+    const status = String(item?.replacement_status || "").trim().toLowerCase();
+    const likelyImpactedDimensions = Array.isArray(item?.likely_impacted_dimensions)
+      ? item.likely_impacted_dimensions.filter(Boolean)
+      : [];
+
+    const priorityTone =
+      priority === "high" ? "safe" :
+      priority === "medium" ? "caution" :
+      "neutral";
+
+    const statusLabel =
+      status === "direct_apply_ready"
+        ? "Ready to use"
+        : status === "direct_apply_optional"
+          ? "Nice to improve"
+          : "Review only";
+
+    return `
+      <article
+        class="tailoring-edit-card tailoring-workspace-draft-card"
+        data-tailoring-draft-candidate="${escapeHtml(candidateId)}"
+      >
+        <div class="tailoring-card-topline">
+          <span class="tailoring-edit-card-label">Edit ${index + 1}</span>
+          ${buildTailoringTonePill(statusLabel, status === "direct_apply_ready" ? "safe" : "neutral")}
+          ${buildTailoringTonePill(priority || "low", priorityTone)}
+
+          <button
+            type="button"
+            class="ghost-btn btn-sm tailoring-workspace-draft-remove-btn"
+            data-tailoring-draft-remove-candidate="${escapeHtml(candidateId)}"
+          >
+            Remove
+          </button>
+        </div>
+
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Original bullet</div>
+          <div class="tailoring-quote-block">${escapeHtml(originalText)}</div>
+        </div>
+
+        <div class="tailoring-info-block">
+          <div class="tailoring-info-label">Selected replacement</div>
+          <div class="tailoring-card-rewrite">${escapeHtml(replacementText)}</div>
+        </div>
+
+        ${likelyImpactedDimensions.length ? `
+          <div class="tailoring-info-block">
+            <div class="tailoring-info-label">Likely impacted dimensions</div>
+            <div class="tailoring-chip-group">
+              ${likelyImpactedDimensions.map((dimension) => buildTailoringTonePill(humanizeUnderscoreLabel(dimension), "neutral")).join("")}
+            </div>
+          </div>
+        ` : ""}
+      </article>
+    `;
+  }).filter(Boolean).join("");
+
+  if (!cards) {
+    clearTailoringWorkspaceSelectedDraftSection();
+    return;
+  }
+
+  root.innerHTML = `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Current selected draft</div>
+
+      <div class="tailoring-card-topline">
+        <div class="tailoring-chip-group">
+          ${buildTailoringTonePill(`${selectedIds.length} selected`, "neutral")}
+          ${buildTailoringTonePill("Unsaved working set", "caution")}
+        </div>
+      </div>
+
+      <div class="tailoring-card-copy">
+        These are the selected rewrites that would form the current working draft. Remove any item here, or add more from the suggested changes list above.
+      </div>
+
+      <div class="tailoring-workspace-draft-grid">
+        ${cards}
+      </div>
+    </section>
+  `;
+
+  setTailoringSectionVisible("tailoringWorkspaceSelectedDraftShell", true);
+}
+
 function clearTailoringWorkspaceSavedSelectionSection() {
   const root = qs("tailoringWorkspaceSavedSelectionShell");
   if (root) {
@@ -3221,6 +3352,8 @@ function syncTailoringWorkspaceSavedSelectionIntoArtifact(payload) {
 }
 
 function refreshTailoringWorkspaceSelectionPanels() {
+  renderTailoringWorkspaceSelectedDraftSection();
+
   if (tailoringWorkspaceState.previewPayload) {
     renderTailoringWorkspacePatchPreviewSection(tailoringWorkspaceState.previewPayload);
   } else {
@@ -3332,17 +3465,42 @@ function toggleTailoringWorkspaceCandidateSelection(candidateId) {
 
 function bindTailoringWorkspaceSelectionHandlers() {
   const root = qs("tailoringWorkspaceInteractiveSummary");
-  if (!root || root.dataset.selectionBound === "true") return;
+  if (root && root.dataset.selectionBound !== "true") {
+    root.dataset.selectionBound = "true";
 
-  root.dataset.selectionBound = "true";
+    root.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-tailoring-select-candidate]");
+      if (!button) return;
 
-  root.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-tailoring-select-candidate]");
-    if (!button) return;
+      event.preventDefault();
+      toggleTailoringWorkspaceCandidateSelection(button.dataset.tailoringSelectCandidate || "");
+    });
+  }
 
-    event.preventDefault();
-    toggleTailoringWorkspaceCandidateSelection(button.dataset.tailoringSelectCandidate || "");
-  });
+  const draftRoot = qs("tailoringWorkspaceSelectedDraftShell");
+  if (draftRoot && draftRoot.dataset.draftBound !== "true") {
+    draftRoot.dataset.draftBound = "true";
+
+    draftRoot.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("[data-tailoring-draft-remove-candidate]");
+      if (removeButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleTailoringWorkspaceCandidateSelection(
+          removeButton.dataset.tailoringDraftRemoveCandidate || ""
+        );
+        return;
+      }
+
+      const card = event.target.closest("[data-tailoring-draft-candidate]");
+      if (!card) return;
+
+      event.preventDefault();
+      focusTailoringWorkspaceCandidateInPreview(
+        card.dataset.tailoringDraftCandidate || ""
+      );
+    });
+  }
 }
 
 async function downloadCurrentTailoringWorkspaceResume() {
@@ -4076,14 +4234,28 @@ function buildTailoringButtonHtml(row) {
   const hasArtifacts = Boolean(
     row.tailoring_json || row.tailoring_md || row.tailoring_llm_json || row.packet_json
   );
+
+  const readyCount = Number(row.tailoring_ready_replacement_count || 0);
+  const hasReadyReplacements =
+    readyCount > 0 || normalizeBool(row.tailoring_has_ready_replacements);
+
   const label = hasArtifacts ? "Open Workspace" : "Unavailable";
   const disabledAttr = hasArtifacts ? "" : "disabled";
+
+  const buttonClass = hasArtifacts
+    ? `ghost-btn planning-tailoring-btn ${hasReadyReplacements ? "planning-tailoring-btn--ready" : ""}`.trim()
+    : "ghost-btn planning-tailoring-btn";
+
+  const titleAttr = hasArtifacts && hasReadyReplacements
+    ? `title="${escapeHtml(`${readyCount} ready replacement${readyCount === 1 ? "" : "s"}`)}"`
+    : "";
 
   return `
     <button
       type="button"
-      class="ghost-btn"
+      class="${buttonClass}"
       ${disabledAttr}
+      ${titleAttr}
       data-view-tailoring="true"
       data-job-doc-id="${escapeHtml(row.job_doc_id || "")}"
       data-job-company="${escapeHtml(row.job_company || "")}"

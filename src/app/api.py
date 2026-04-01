@@ -48,6 +48,13 @@ class PlanningWorkspaceDraftSaveRequest(BaseModel):
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
     note: str = ""
 
+class PlanningWorkspaceDraftPreviewRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+    selected_patch_candidate_ids: list[str] | None = None
+    manual_bullet_edits: dict[str, str] | None = None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -588,6 +595,22 @@ def save_workspace_draft(request: PlanningWorkspaceDraftSaveRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+@app.post("/planning/preview-workspace-draft")
+def preview_workspace_draft(
+    request: PlanningWorkspaceDraftPreviewRequest,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
+    try:
+        return services.preview_tailoring_workspace_draft_payload(
+            output_dir=Path(output_dir),
+            tailoring_json_path=request.tailoring_json_path,
+            selected_resume=request.selected_resume,
+            selected_patch_candidate_ids=request.selected_patch_candidate_ids,
+            manual_bullet_edits=request.manual_bullet_edits,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.get("/application-actions")
 def application_actions(
     application_status: str = "",

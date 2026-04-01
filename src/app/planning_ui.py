@@ -670,7 +670,7 @@ def tailoring_workspace(
               >
                 Review
               </button>
-              
+
               <button
                 type="button"
                 class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--free-edit"
@@ -815,6 +815,23 @@ def tailoring_workspace(
                 </span>
               </div>
             </div>
+
+            <section class="card tailoring-workspace-subcard">
+              <div class="section-header section-header--compact">
+                <div>
+                  <h3>Live draft preview</h3>
+                  <div class="subtext">
+                    This mirrors the current working draft for surfaced bullets. The PDF below remains the original resume reference for now.
+                  </div>
+                </div>
+              </div>
+
+              <div id="tailoringWorkspaceLiveDraftPreview" class="tailoring-interactive-shell">
+                <div class="tailoring-empty-state">
+                  Loading live draft preview...
+                </div>
+              </div>
+            </section>
 
             <div class="tailoring-workspace-preview-toolbar">
               <div class="tailoring-workspace-preview-toolbar-left">

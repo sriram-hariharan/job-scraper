@@ -114,8 +114,8 @@ def planning_dashboard() -> str:
           </div>
 
           <div class="control-group dashboard-field dashboard-field--limit">
-            <label for="planningLimitInput">Limit</label>
-            <input type="number" id="planningLimitInput" value="50" min="1" max="300" />
+            <label for="planningLimitInput">Rows per page</label>
+            <input type="number" id="planningLimitInput" value="15" min="1" max="100" />
           </div>
         </div>
 
@@ -140,9 +140,19 @@ def planning_dashboard() -> str:
     </section>
 
     <section class="card table-card">
-      <div class="section-header">
+      <div class="section-header planning-table-header">
         <h2>Planning Detail Table</h2>
-        <div class="subtext" id="planningTableMeta">Loading...</div>
+
+        <div class="planning-table-header-right">
+          <div class="planning-pagination-inline" id="planningPaginationBar">
+            <div class="subtext planning-pagination-meta" id="planningPaginationMeta">
+              Page 1 of 1
+            </div>
+            <div class="planning-pagination-actions" id="planningPaginationActions"></div>
+          </div>
+
+          <div class="subtext" id="planningTableMeta">Loading...</div>
+        </div>
       </div>
 
       <div class="table-wrap">
@@ -705,7 +715,17 @@ def tailoring_workspace(
 
           <div id="tailoringWorkspaceSavedSelectionShell"></div>
         </section>
+      </section>
 
+      <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
+        <div class="section-header">
+          <div>
+            <h2>Resume preview</h2>
+            <div class="subtext">
+              This right pane will become the live resume preview/editor surface.
+            </div>
+          </div>
+        </div>
         <section class="card tailoring-workspace-subcard tailoring-workspace-selection-bar">
           <div class="tailoring-workspace-selection-bar-copy">
             <div class="tailoring-workspace-selection-title">Selection actions</div>
@@ -760,18 +780,6 @@ def tailoring_workspace(
             </span>
           </div>
         </section>
-      </section>
-
-      <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
-        <div class="section-header">
-          <div>
-            <h2>Resume preview</h2>
-            <div class="subtext">
-              This right pane will become the live resume preview/editor surface.
-            </div>
-          </div>
-        </div>
-
         <div class="tailoring-preview-shell">
           <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
             <div class="tailoring-workspace-preview-header">

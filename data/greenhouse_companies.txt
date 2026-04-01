@@ -858,3 +858,7 @@ syndio
 instacart
 scopely
 machinifyinc
+akunacapital
+tourlanegmbh
+fossa
+handshake

@@ -5067,47 +5067,6 @@ th.sortable-col {
   margin-top: 0;
 }
 
-.tailoring-workspace-selection-bar {
-  flex: 0 0 auto;
-  position: static;
-  margin: 0 0 14px 0;
-  z-index: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  padding: 16px 18px;
-  border-color: rgba(120, 166, 255, 0.22);
-  background: linear-gradient(180deg, rgba(9, 14, 31, 0.9) 0%, rgba(18, 25, 51, 0.94) 100%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.03),
-    0 8px 22px rgba(0, 0, 0, 0.14);
-  backdrop-filter: blur(8px);
-  flex-shrink: 0;
-}
-
-.tailoring-workspace-selection-bar-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.tailoring-workspace-selection-title {
-  color: #f3f7ff;
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.tailoring-workspace-selection-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 14px;
-  flex: 0 0 auto;
-  margin-top: 4px;
-}
 
 .tailoring-workspace-action-tooltip {
   position: relative;
@@ -5518,14 +5477,6 @@ th.sortable-col {
   color: #d7f8ea;
 }
 
-@media (max-width: 1280px) {
-  .tailoring-workspace-layout {
-    grid-template-columns: minmax(380px, 0.95fr) minmax(640px, 1.15fr);
-    height: calc(100vh - 260px);
-    min-height: 680px;
-  }
-}
-
 @media (max-width: 980px) {
   .tailoring-workspace-page {
     min-height: auto;
@@ -5560,11 +5511,6 @@ th.sortable-col {
     top: auto;
   }
 
-  .tailoring-workspace-selection-bar {
-    position: static;
-    bottom: auto;
-  }
-
   .tailoring-workspace-pane--right .tailoring-preview-canvas--pdfjs {
     min-height: 640px;
   }
@@ -5577,16 +5523,6 @@ th.sortable-col {
 @media (max-width: 900px) {
   .tailoring-workspace-hero-grid {
     grid-template-columns: 1fr;
-  }
-
-  .tailoring-workspace-selection-bar {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .tailoring-workspace-selection-actions {
-    width: 100%;
-    justify-content: flex-start;
   }
 }
 
@@ -5872,11 +5808,49 @@ body.app-shell-collapsed .app-shell-nav-link:focus-visible::after {
 }
 
 .tailoring-workspace-layout {
-  grid-template-columns: minmax(340px, 0.82fr) minmax(0, 1.18fr);
+  --tailoring-workspace-left-width: 42%;
+  display: grid;
+  grid-template-columns: minmax(340px, var(--tailoring-workspace-left-width)) 12px minmax(0, 1fr);
   gap: 18px;
   align-items: stretch;
   height: calc(100vh - 250px);
   min-height: 700px;
+}
+
+.tailoring-workspace-divider {
+  position: relative;
+  width: 12px;
+  min-width: 12px;
+  align-self: stretch;
+  cursor: col-resize;
+  border-radius: 999px;
+  background: transparent;
+}
+
+.tailoring-workspace-divider::before {
+  content: "";
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 50%;
+  width: 4px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(120, 166, 255, 0.18);
+  border: 1px solid rgba(120, 166, 255, 0.14);
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+
+.tailoring-workspace-divider:hover::before,
+body.tailoring-workspace-resizing .tailoring-workspace-divider::before {
+  background: rgba(120, 166, 255, 0.28);
+  border-color: rgba(120, 166, 255, 0.24);
+}
+
+body.tailoring-workspace-resizing,
+body.tailoring-workspace-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .tailoring-workspace-pane--right,
@@ -5901,7 +5875,7 @@ body.app-shell-collapsed .app-shell-nav-link:focus-visible::after {
   }
 
   .tailoring-workspace-layout {
-    grid-template-columns: minmax(300px, 0.9fr) minmax(0, 1.1fr);
+    grid-template-columns: minmax(300px, var(--tailoring-workspace-left-width)) 12px minmax(0, 1fr);
   }
 }
 
@@ -5910,6 +5884,10 @@ body.app-shell-collapsed .app-shell-nav-link:focus-visible::after {
     grid-template-columns: 1fr;
     height: auto;
     min-height: 0;
+  }
+
+  .tailoring-workspace-divider {
+    display: none;
   }
 
   .tailoring-workspace-pane--right {
@@ -6874,4 +6852,64 @@ body.app-shell-collapsed .app-shell-menu-btn {
 
 .notification-item.is-clickable:hover .notification-item-title {
   color: #ffffff;
+}
+
+.tailoring-workspace-selected-tabs {
+  padding: 0;
+  overflow: hidden;
+}
+
+.tailoring-selected-tabs-shell {
+  padding: 0 16px;
+  border-bottom: 1px solid rgba(42, 53, 99, 0.7);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tailoring-selected-tab-row {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0;
+  overflow-x: auto;
+}
+
+.tailoring-selected-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tailoring-selected-tab-btn--ready.active {
+  color: #d7f8ea;
+}
+
+.tailoring-selected-tab-btn--ready.active::after {
+  background: rgba(145, 242, 195, 0.9);
+}
+
+.tailoring-selected-tab-btn--review.active {
+  color: #ffe7b8;
+}
+
+.tailoring-selected-tab-btn--review.active::after {
+  background: rgba(255, 204, 120, 0.92);
+}
+
+.tailoring-selected-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+}
+
+@media (max-width: 900px) {
+  .tailoring-selected-tabs-shell {
+    padding: 0 12px;
+  }
 }

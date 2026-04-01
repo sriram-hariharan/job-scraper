@@ -629,3 +629,6 @@ southgeeks
 wealthsimple
 yourcompany
 neurophos
+arcade
+netic
+sentra

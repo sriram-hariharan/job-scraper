@@ -647,6 +647,33 @@ def tailoring_workspace(
           </div>
         </div>
 
+        <section
+          class="card tailoring-workspace-subcard tailoring-workspace-selected-tabs hidden"
+          id="tailoringWorkspaceSelectedTabsShell"
+        >
+          <div class="scheduler-table-tabs tailoring-selected-tabs-shell">
+            <div class="scheduler-tab-row tailoring-selected-tab-row" id="tailoringWorkspaceSelectedTabRow">
+              <button
+                type="button"
+                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--ready active"
+                id="tailoringWorkspaceSelectedReadyTab"
+                data-tailoring-selected-tab="ready"
+              >
+                Ready
+              </button>
+
+              <button
+                type="button"
+                class="scheduler-tab-btn tailoring-selected-tab-btn tailoring-selected-tab-btn--review"
+                id="tailoringWorkspaceSelectedReviewTab"
+                data-tailoring-selected-tab="review"
+              >
+                Review
+              </button>
+            </div>
+          </div>
+        </section>
+
         <div
           id="tailoringWorkspaceInteractiveSummary"
           class="tailoring-interactive-shell tailoring-workspace-content"
@@ -659,28 +686,16 @@ def tailoring_workspace(
         <section class="card tailoring-workspace-subcard hidden">
           <div class="section-header section-header--compact">
             <div>
-              <h3>Selected edits draft</h3>
+              <h3>Impact preview</h3>
               <div class="subtext">
-                This is the current working draft built from your active selection.
+                Preview the scorer-visible impact of the current unsaved selection.
               </div>
             </div>
           </div>
 
-          <div id="tailoringWorkspaceSelectedDraftShell"></div>
+          <div id="tailoringWorkspacePatchPreviewSummary"></div>
         </section>
 
-        <section class="card tailoring-workspace-subcard hidden">
-        <div class="section-header section-header--compact">
-          <div>
-            <h3>Impact preview</h3>
-            <div class="subtext">
-              Preview the scorer-visible impact of the current unsaved selection.
-            </div>
-          </div>
-        </div>
-
-        <div id="tailoringWorkspacePatchPreviewSummary"></div>
-      </section>
         <section class="card tailoring-workspace-subcard hidden">
           <div class="section-header section-header--compact">
             <div>
@@ -694,6 +709,14 @@ def tailoring_workspace(
           <div id="tailoringWorkspaceSavedSelectionShell"></div>
         </section>
       </section>
+      <div
+        class="tailoring-workspace-divider"
+        id="tailoringWorkspaceDivider"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Resize workspace panes"
+        tabindex="0"
+      ></div>
 
       <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
         <div class="section-header">

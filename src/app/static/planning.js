@@ -1,4 +1,5 @@
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
+const TAILORING_WORKSPACE_SPLIT_STORAGE_KEY = "tailoring_workspace_left_width_pct";
 
 let currentTailoringMarkdownRaw = "";
 let tailoringCopyResetTimer = null;
@@ -43,6 +44,7 @@ const tailoringWorkspaceState = {
   candidateLookup: new Map(),
   previewPayload: null,
   savedSelectionPayload: null,
+  selectedTab: "ready",
   isPreviewing: false,
   isSaving: false,
 };
@@ -68,6 +70,10 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function clampToRange(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function normalizeSortValue(value, type = "text") {
@@ -1405,6 +1411,85 @@ function scheduleTailoringWorkspaceFitPageRerender() {
     tailoringWorkspacePdfState.resizeTimer = null;
     await applyTailoringWorkspaceFitPageScale();
   }, 80);
+}
+
+function applyTailoringWorkspaceSplitPercent(percent, { persist = true } = {}) {
+  const layout = document.querySelector(".tailoring-workspace-layout");
+  if (!layout || window.innerWidth <= 1280) return;
+
+  const safePercent = clampToRange(Number(percent) || 42, 30, 68);
+  layout.style.setProperty("--tailoring-workspace-left-width", `${safePercent}%`);
+
+  if (persist) {
+    localStorage.setItem(TAILORING_WORKSPACE_SPLIT_STORAGE_KEY, String(safePercent));
+  }
+}
+
+function bindTailoringWorkspaceDivider() {
+  const divider = qs("tailoringWorkspaceDivider");
+  const layout = document.querySelector(".tailoring-workspace-layout");
+
+  if (!divider || !layout || divider.dataset.bound === "true") return;
+  divider.dataset.bound = "true";
+
+  const restoreSavedSplit = () => {
+    if (window.innerWidth <= 1280) {
+      layout.style.removeProperty("--tailoring-workspace-left-width");
+      return;
+    }
+
+    const saved = Number(localStorage.getItem(TAILORING_WORKSPACE_SPLIT_STORAGE_KEY));
+    applyTailoringWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 42, { persist: false });
+  };
+
+  const rerenderAfterResize = async () => {
+    if (!tailoringWorkspacePdfState.pdfDoc) return;
+
+    if (tailoringWorkspacePdfState.isFitPage) {
+      await applyTailoringWorkspaceFitPageScale();
+    } else {
+      await renderTailoringWorkspacePdfPages();
+    }
+  };
+
+  divider.addEventListener("pointerdown", (event) => {
+    if (window.innerWidth <= 1280) return;
+
+    event.preventDefault();
+    document.body.classList.add("tailoring-workspace-resizing");
+
+    const move = (moveEvent) => {
+      const rect = layout.getBoundingClientRect();
+      const rawPercent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+      applyTailoringWorkspaceSplitPercent(rawPercent);
+    };
+
+    const stop = async () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      document.body.classList.remove("tailoring-workspace-resizing");
+      await rerenderAfterResize();
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  });
+
+  divider.addEventListener("keydown", async (event) => {
+    if (window.innerWidth <= 1280) return;
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+
+    event.preventDefault();
+
+    const current = Number(localStorage.getItem(TAILORING_WORKSPACE_SPLIT_STORAGE_KEY) || "42");
+    const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
+
+    applyTailoringWorkspaceSplitPercent(next);
+    await rerenderAfterResize();
+  });
+
+  window.addEventListener("resize", restoreSavedSplit);
+  restoreSavedSplit();
 }
 
 async function getTailoringWorkspacePdfJs() {
@@ -2853,42 +2938,8 @@ function renderKeepAsIs(items) {
   `;
 }
 
-function renderReplacementPlanSummary(summary) {
-  const data = summary && typeof summary === "object" ? summary : {};
-  const total = Number(data.total_rewrite_bullets || 0);
-  const ready = Number(data.direct_apply_ready_count || 0) + Number(data.direct_apply_optional_count || 0);
-  const reviewOnly = Number(data.direction_only_count || 0);
-
-  return `
-    <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Quick summary</div>
-      <div class="tailoring-priority-grid">
-        <article class="tailoring-priority-card">
-          <div class="tailoring-card-topline">
-            ${buildTailoringTonePill("TOTAL", "neutral")}
-          </div>
-          <div class="tailoring-card-title">${escapeHtml(String(total))}</div>
-          <div class="tailoring-card-copy">Suggestions found</div>
-        </article>
-
-        <article class="tailoring-priority-card">
-          <div class="tailoring-card-topline">
-            ${buildTailoringTonePill("READY", "safe")}
-          </div>
-          <div class="tailoring-card-title">${escapeHtml(String(ready))}</div>
-          <div class="tailoring-card-copy">Ready to use or lightly polish</div>
-        </article>
-
-        <article class="tailoring-priority-card">
-          <div class="tailoring-card-topline">
-            ${buildTailoringTonePill("REVIEW", "muted")}
-          </div>
-          <div class="tailoring-card-title">${escapeHtml(String(reviewOnly))}</div>
-          <div class="tailoring-card-copy">Needs manual judgment</div>
-        </article>
-      </div>
-    </section>
-  `;
+function renderReplacementPlanSummary() {
+  return "";
 }
 
 function getTailoringReplacementCandidateId(item) {
@@ -2998,137 +3049,6 @@ function clearTailoringWorkspacePatchPreviewSection() {
     root.innerHTML = "";
   }
   setTailoringSectionVisible("tailoringWorkspacePatchPreviewSummary", false);
-}
-
-function clearTailoringWorkspaceSelectedDraftSection() {
-  const root = qs("tailoringWorkspaceSelectedDraftShell");
-  if (root) {
-    root.innerHTML = "";
-  }
-  setTailoringSectionVisible("tailoringWorkspaceSelectedDraftShell", false);
-}
-
-function getTailoringWorkspaceDraftOriginalText(item) {
-  return String(
-    item?.original_text ||
-    item?.source_text ||
-    item?.source_bullet_text ||
-    ""
-  ).trim();
-}
-
-function getTailoringWorkspaceDraftReplacementText(item) {
-  return String(
-    item?.final_replacement_text ||
-    item?.patch_text ||
-    item?.replacement_text ||
-    item?.rewrite_text ||
-    ""
-  ).trim();
-}
-
-function renderTailoringWorkspaceSelectedDraftSection() {
-  const root = qs("tailoringWorkspaceSelectedDraftShell");
-  if (!root) return;
-
-  const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
-  if (!selectedIds.length) {
-    clearTailoringWorkspaceSelectedDraftSection();
-    return;
-  }
-
-  const cards = selectedIds.map((candidateId, index) => {
-    const item = getTailoringWorkspaceCandidateItem(candidateId);
-    if (!item) return "";
-
-    const originalText = getTailoringWorkspaceDraftOriginalText(item) || "Original bullet text unavailable.";
-    const replacementText = getTailoringWorkspaceDraftReplacementText(item) || "Replacement text unavailable.";
-    const priority = String(item?.apply_priority || "low").trim().toLowerCase();
-    const status = String(item?.replacement_status || "").trim().toLowerCase();
-    const likelyImpactedDimensions = Array.isArray(item?.likely_impacted_dimensions)
-      ? item.likely_impacted_dimensions.filter(Boolean)
-      : [];
-
-    const priorityTone =
-      priority === "high" ? "safe" :
-      priority === "medium" ? "caution" :
-      "neutral";
-
-    const statusLabel =
-      status === "direct_apply_ready"
-        ? "Ready to use"
-        : status === "direct_apply_optional"
-          ? "Nice to improve"
-          : "Review only";
-
-    return `
-      <article
-        class="tailoring-edit-card tailoring-workspace-draft-card"
-        data-tailoring-draft-candidate="${escapeHtml(candidateId)}"
-      >
-        <div class="tailoring-card-topline">
-          <span class="tailoring-edit-card-label">Edit ${index + 1}</span>
-          ${buildTailoringTonePill(statusLabel, status === "direct_apply_ready" ? "safe" : "neutral")}
-          ${buildTailoringTonePill(priority || "low", priorityTone)}
-
-          <button
-            type="button"
-            class="ghost-btn btn-sm tailoring-workspace-draft-remove-btn"
-            data-tailoring-draft-remove-candidate="${escapeHtml(candidateId)}"
-          >
-            Remove
-          </button>
-        </div>
-
-        <div class="tailoring-info-block">
-          <div class="tailoring-info-label">Original bullet</div>
-          <div class="tailoring-quote-block">${escapeHtml(originalText)}</div>
-        </div>
-
-        <div class="tailoring-info-block">
-          <div class="tailoring-info-label">Selected replacement</div>
-          <div class="tailoring-card-rewrite">${escapeHtml(replacementText)}</div>
-        </div>
-
-        ${likelyImpactedDimensions.length ? `
-          <div class="tailoring-info-block">
-            <div class="tailoring-info-label">Likely impacted dimensions</div>
-            <div class="tailoring-chip-group">
-              ${likelyImpactedDimensions.map((dimension) => buildTailoringTonePill(humanizeUnderscoreLabel(dimension), "neutral")).join("")}
-            </div>
-          </div>
-        ` : ""}
-      </article>
-    `;
-  }).filter(Boolean).join("");
-
-  if (!cards) {
-    clearTailoringWorkspaceSelectedDraftSection();
-    return;
-  }
-
-  root.innerHTML = `
-    <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Current selected draft</div>
-
-      <div class="tailoring-card-topline">
-        <div class="tailoring-chip-group">
-          ${buildTailoringTonePill(`${selectedIds.length} selected`, "neutral")}
-          ${buildTailoringTonePill("Unsaved working set", "caution")}
-        </div>
-      </div>
-
-      <div class="tailoring-card-copy">
-        These are the selected rewrites that would form the current working draft. Remove any item here, or add more from the suggested changes list above.
-      </div>
-
-      <div class="tailoring-workspace-draft-grid">
-        ${cards}
-      </div>
-    </section>
-  `;
-
-  setTailoringSectionVisible("tailoringWorkspaceSelectedDraftShell", true);
 }
 
 function clearTailoringWorkspaceSavedSelectionSection() {
@@ -3351,8 +3271,77 @@ function syncTailoringWorkspaceSavedSelectionIntoArtifact(payload) {
     payload.selected_patch_set_counterfactual_preview || null;
 }
 
+function getTailoringWorkspaceSuggestionBuckets() {
+  const payload = getTailoringWorkspacePayload();
+
+  return {
+    ready: [
+      ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
+      ...(Array.isArray(payload?.direct_apply_optional_replacements)
+        ? payload.direct_apply_optional_replacements
+        : []),
+    ],
+    review: Array.isArray(payload?.direction_only_replacements)
+      ? payload.direction_only_replacements
+      : [],
+  };
+}
+
+function clearTailoringWorkspaceSelectedTabsSection() {
+  const shell = qs("tailoringWorkspaceSelectedTabsShell");
+  const readyTab = qs("tailoringWorkspaceSelectedReadyTab");
+  const reviewTab = qs("tailoringWorkspaceSelectedReviewTab");
+
+  if (readyTab) {
+    readyTab.classList.remove("active");
+    readyTab.innerHTML = `Ready <span class="tailoring-selected-tab-count">0</span>`;
+  }
+
+  if (reviewTab) {
+    reviewTab.classList.remove("active");
+    reviewTab.innerHTML = `Review <span class="tailoring-selected-tab-count">0</span>`;
+  }
+
+  if (shell) {
+    shell.classList.add("hidden");
+  }
+}
+
+function renderTailoringWorkspaceSelectedTabsSection() {
+  const shell = qs("tailoringWorkspaceSelectedTabsShell");
+  const readyTab = qs("tailoringWorkspaceSelectedReadyTab");
+  const reviewTab = qs("tailoringWorkspaceSelectedReviewTab");
+
+  if (!shell || !readyTab || !reviewTab) return;
+
+  const grouped = getTailoringWorkspaceSuggestionBuckets();
+  const readyItems = grouped.ready;
+  const reviewItems = grouped.review;
+
+  if (!readyItems.length && !reviewItems.length) {
+    clearTailoringWorkspaceSelectedTabsSection();
+    return;
+  }
+
+  if (!readyItems.length && reviewItems.length) {
+    tailoringWorkspaceState.selectedTab = "review";
+  } else if (!reviewItems.length && readyItems.length) {
+    tailoringWorkspaceState.selectedTab = "ready";
+  } else if (!["ready", "review"].includes(tailoringWorkspaceState.selectedTab)) {
+    tailoringWorkspaceState.selectedTab = "ready";
+  }
+
+  readyTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "ready");
+  reviewTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "review");
+
+  readyTab.innerHTML = `Ready <span class="tailoring-selected-tab-count">${readyItems.length}</span>`;
+  reviewTab.innerHTML = `Review <span class="tailoring-selected-tab-count">${reviewItems.length}</span>`;
+
+  shell.classList.remove("hidden");
+}
+
 function refreshTailoringWorkspaceSelectionPanels() {
-  renderTailoringWorkspaceSelectedDraftSection();
+  renderTailoringWorkspaceSelectedTabsSection();
 
   if (tailoringWorkspaceState.previewPayload) {
     renderTailoringWorkspacePatchPreviewSection(tailoringWorkspaceState.previewPayload);
@@ -3392,6 +3381,9 @@ function updateTailoringWorkspaceMetaSummary(payload) {
 function rerenderTailoringWorkspaceSelectionView() {
   if (!tailoringWorkspaceState.artifact) return;
 
+  const payload = getTailoringWorkspacePayload();
+  renderTailoringWorkspaceSelectedTabsSection();
+
   renderTailoringInteractiveSummaryInto(
     "tailoringWorkspaceInteractiveSummary",
     tailoringWorkspaceState.artifact,
@@ -3399,10 +3391,11 @@ function rerenderTailoringWorkspaceSelectionView() {
       includeDiagnostics: false,
       selectionEnabled: true,
       selectedCandidateIds: getTailoringWorkspaceSelectedCandidateIds(),
+      bucketFilter: tailoringWorkspaceState.selectedTab,
     }
   );
 
-  updateTailoringWorkspaceMetaSummary(getTailoringWorkspacePayload());
+  updateTailoringWorkspaceMetaSummary(payload);
   refreshTailoringWorkspaceSelectionPanels();
 }
 
@@ -3477,28 +3470,19 @@ function bindTailoringWorkspaceSelectionHandlers() {
     });
   }
 
-  const draftRoot = qs("tailoringWorkspaceSelectedDraftShell");
-  if (draftRoot && draftRoot.dataset.draftBound !== "true") {
-    draftRoot.dataset.draftBound = "true";
+  const tabRow = qs("tailoringWorkspaceSelectedTabRow");
+  if (tabRow && tabRow.dataset.bound !== "true") {
+    tabRow.dataset.bound = "true";
 
-    draftRoot.addEventListener("click", (event) => {
-      const removeButton = event.target.closest("[data-tailoring-draft-remove-candidate]");
-      if (removeButton) {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleTailoringWorkspaceCandidateSelection(
-          removeButton.dataset.tailoringDraftRemoveCandidate || ""
-        );
-        return;
-      }
+    tabRow.addEventListener("click", (event) => {
+      const tabButton = event.target.closest("[data-tailoring-selected-tab]");
+      if (!tabButton) return;
 
-      const card = event.target.closest("[data-tailoring-draft-candidate]");
-      if (!card) return;
+      const nextTab = String(tabButton.dataset.tailoringSelectedTab || "").trim();
+      if (!nextTab || nextTab === tailoringWorkspaceState.selectedTab) return;
 
-      event.preventDefault();
-      focusTailoringWorkspaceCandidateInPreview(
-        card.dataset.tailoringDraftCandidate || ""
-      );
+      tailoringWorkspaceState.selectedTab = nextTab;
+      rerenderTailoringWorkspaceSelectionView();
     });
   }
 }
@@ -4038,7 +4022,12 @@ function renderTailoringEmptyState(payload) {
 function renderTailoringInteractiveSummaryInto(
   rootId,
   artifact,
-  { includeDiagnostics = true, selectionEnabled = false, selectedCandidateIds = [] } = {}
+  {
+    includeDiagnostics = true,
+    selectionEnabled = false,
+    selectedCandidateIds = [],
+    bucketFilter = "",
+  } = {}
 ) {
   const root = qs(rootId);
   if (!root) return;
@@ -4108,15 +4097,41 @@ function renderTailoringInteractiveSummaryInto(
       })
     : "";
 
-  const diagnosticsHtml = includeDiagnostics
-    ? renderLegacyDiagnosticDetails(payload)
-    : "";
+  const normalizedBucket = String(bucketFilter || "").trim().toLowerCase();
+
+  let bucketHtml = "";
+  if (normalizedBucket === "ready") {
+    bucketHtml = `${readyHtml}${optionalHtml}`;
+    if (!bucketHtml.trim()) {
+      bucketHtml = `
+        <section class="tailoring-section-block">
+          <div class="tailoring-section-title">Ready to use</div>
+          <div class="tailoring-empty-inline">No ready suggestions for this row.</div>
+        </section>
+      `;
+    }
+  } else if (normalizedBucket === "review") {
+    bucketHtml = recommendedHtml;
+    if (!bucketHtml.trim()) {
+      bucketHtml = `
+        <section class="tailoring-section-block">
+          <div class="tailoring-section-title">Recommended changes</div>
+          <div class="tailoring-empty-inline">No review suggestions for this row.</div>
+        </section>
+      `;
+    }
+  } else {
+    bucketHtml = `${recommendedHtml}${readyHtml}${optionalHtml}`;
+  }
+
+  const diagnosticsHtml =
+    includeDiagnostics && !normalizedBucket
+      ? renderLegacyDiagnosticDetails(payload)
+      : "";
 
   root.innerHTML = `
     ${renderReplacementPlanSummary(summary)}
-    ${recommendedHtml}
-    ${readyHtml}
-    ${optionalHtml}
+    ${bucketHtml}
     ${diagnosticsHtml}
   `;
 }
@@ -4634,6 +4649,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     bindTailoringWorkspacePreviewControls();
     bindTailoringWorkspaceSelectionHandlers();
     bindTailoringWorkspaceActionBar();
+    bindTailoringWorkspaceDivider();
     await initTailoringWorkspacePage();
   }
 });

@@ -547,7 +547,23 @@ def planning_select_patches(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    
+
+@app.get("/application-actions")
+def application_actions(
+    application_status: str = "",
+    company_contains: str = "",
+    title_contains: str = "",
+    page: int = 1,
+    limit: int = 100,
+):
+    return services.application_actions_payload(
+        application_status=application_status,
+        company_contains=company_contains,
+        title_contains=title_contains,
+        limit=limit,
+        page=page,
+    )
+
 @app.post("/application-actions")
 def record_application_action(
     payload: dict = Body(...),
@@ -570,12 +586,14 @@ def record_application_action(
 def applied_jobs(
     company_contains: str = "",
     title_contains: str = "",
+    page: int = 1,
     limit: int = 100,
 ):
     return services.applied_jobs_payload(
         company_contains=company_contains,
         title_contains=title_contains,
         limit=limit,
+        page=page,
     )
 
 @app.get("/rag/search")

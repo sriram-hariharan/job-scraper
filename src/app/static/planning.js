@@ -3194,24 +3194,150 @@ function collectTailoringWorkspaceEditableBullets(payload) {
 }
 
 function buildTailoringWorkspaceEditableBulletRows(payload) {
-  const manualEdits = tailoringWorkspaceState.manualBulletEdits || {};
-  const rows = collectTailoringWorkspaceEditableBullets(payload);
-
-  return rows.map((row) => ({
+  return buildTailoringWorkspaceWorkingDraftRows(payload).map((row) => ({
     ...row,
-    currentText:
-      Object.prototype.hasOwnProperty.call(manualEdits, row.bulletKey)
-        ? String(manualEdits[row.bulletKey] || "")
-        : row.originalText,
+    currentText: row.currentText,
   }));
+}
+
+function buildTailoringWorkspaceEffectiveBaseRows(payload) {
+  const selectedIds = new Set(getTailoringWorkspaceSelectedCandidateIds());
+
+  return collectTailoringWorkspaceEditableBullets(payload).map((row) => {
+    const item = row.candidateId
+      ? getTailoringWorkspaceCandidateItem(row.candidateId)
+      : null;
+
+    const selectedPatchText =
+      row.candidateId &&
+      selectedIds.has(row.candidateId) &&
+      item &&
+      String(item.final_replacement_text || "").trim()
+        ? String(item.final_replacement_text || "").trim()
+        : "";
+
+    const baseText = selectedPatchText || row.originalText;
+    const baseSource = selectedPatchText ? "selected_patch" : "original";
+
+    return {
+      ...row,
+      baseText,
+      baseSource,
+    };
+  });
+}
+
+function buildTailoringWorkspaceWorkingDraftRows(payload) {
+  const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    payload
+  );
+
+  return buildTailoringWorkspaceEffectiveBaseRows(payload).map((row) => {
+    let currentText = row.baseText;
+    let changeSource = row.baseSource;
+
+    if (Object.prototype.hasOwnProperty.call(manualEdits, row.bulletKey)) {
+      currentText = String(manualEdits[row.bulletKey] || "");
+      changeSource = "manual_edit";
+    }
+
+    return {
+      ...row,
+      currentText,
+      changeSource,
+      hasSelectedPatch: row.baseSource === "selected_patch",
+      hasManualEdit: Object.prototype.hasOwnProperty.call(manualEdits, row.bulletKey),
+    };
+  });
+}
+
+function renderTailoringWorkspaceLiveDraftPreview(payload) {
+  const rows = buildTailoringWorkspaceWorkingDraftRows(payload);
+
+  if (!rows.length) {
+    return `
+      <div class="tailoring-empty-state">
+        No surfaced bullets are available for live draft preview on this row yet.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="tailoring-edit-card-list">
+      ${rows.map((row, index) => {
+        const bucketTone =
+          row.bucketLabel === "Ready"
+            ? "safe"
+            : row.bucketLabel === "Optional"
+              ? "caution"
+              : "muted";
+
+        const sourceLabel =
+          row.changeSource === "manual_edit"
+            ? "Manual edit"
+            : row.changeSource === "selected_patch"
+              ? "Selected rewrite"
+              : "Original";
+
+        const sourceTone =
+          row.changeSource === "manual_edit"
+            ? "safe"
+            : row.changeSource === "selected_patch"
+              ? "caution"
+              : "muted";
+
+        return `
+          <article class="tailoring-edit-card tailoring-edit-card--compact">
+            <div class="tailoring-card-topline tailoring-card-topline--compact">
+              <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
+
+              <div class="tailoring-chip-group tailoring-chip-group--compact">
+                ${buildTailoringTonePill(row.bucketLabel, bucketTone)}
+                ${buildTailoringTonePill(sourceLabel, sourceTone)}
+              </div>
+            </div>
+
+            ${row.currentText !== row.originalText ? `
+              <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-label">Original bullet</div>
+                <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
+              </div>
+            ` : ""}
+
+            <div class="tailoring-info-block tailoring-info-block--compact">
+              <div class="tailoring-info-label">Current draft bullet</div>
+              <div class="tailoring-rewrite-callout">${escapeHtml(row.currentText)}</div>
+            </div>
+          </article>
+        `;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderTailoringWorkspaceLiveDraftPreviewInto(payload) {
+  const root = qs("tailoringWorkspaceLiveDraftPreview");
+  if (!root) return;
+
+  if (!payload || typeof payload !== "object") {
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        Live draft preview is not available for this row.
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = renderTailoringWorkspaceLiveDraftPreview(payload);
 }
 
 function getTailoringWorkspaceEditableBulletBaseMap(payload) {
   const baseMap = {};
 
-  collectTailoringWorkspaceEditableBullets(payload).forEach((row) => {
+  buildTailoringWorkspaceEffectiveBaseRows(payload).forEach((row) => {
     if (!row.bulletKey) return;
-    baseMap[row.bulletKey] = String(row.originalText || "");
+    baseMap[row.bulletKey] = String(row.baseText || "");
   });
 
   return baseMap;
@@ -3273,31 +3399,58 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
       </div>
 
       <div class="tailoring-edit-card-list">
-        ${rows.map((row, index) => `
-          <article class="tailoring-edit-card tailoring-edit-card--compact">
-            <div class="tailoring-card-topline tailoring-card-topline--compact">
-              <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
+        ${rows.map((row, index) => {
+          const bucketTone =
+            row.bucketLabel === "Ready"
+              ? "safe"
+              : row.bucketLabel === "Optional"
+                ? "caution"
+                : "muted";
 
-              <div class="tailoring-chip-group tailoring-chip-group--compact">
-                ${buildTailoringTonePill(row.bucketLabel, row.bucketLabel === "Ready" ? "safe" : row.bucketLabel === "Optional" ? "caution" : "muted")}
+          const sourceLabel =
+            row.baseSource === "selected_patch"
+              ? "Selected rewrite base"
+              : "Original base";
+
+          const sourceTone =
+            row.baseSource === "selected_patch"
+              ? "caution"
+              : "muted";
+
+          return `
+            <article class="tailoring-edit-card tailoring-edit-card--compact">
+              <div class="tailoring-card-topline tailoring-card-topline--compact">
+                <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
+
+                <div class="tailoring-chip-group tailoring-chip-group--compact">
+                  ${buildTailoringTonePill(row.bucketLabel, bucketTone)}
+                  ${buildTailoringTonePill(sourceLabel, sourceTone)}
+                </div>
               </div>
-            </div>
 
-            <div class="tailoring-info-block tailoring-info-block--compact">
-              <div class="tailoring-info-label">Original bullet</div>
-              <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
-            </div>
+              <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-label">Original bullet</div>
+                <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
+              </div>
 
-            <div class="tailoring-info-block tailoring-info-block--compact">
-              <div class="tailoring-info-label">Editable draft text</div>
-              <textarea
-                class="tailoring-free-edit-textarea"
-                data-tailoring-free-edit-key="${escapeHtml(row.bulletKey)}"
-                rows="5"
-              >${escapeHtml(row.currentText)}</textarea>
-            </div>
-          </article>
-        `).join("")}
+              ${row.baseSource === "selected_patch" ? `
+                <div class="tailoring-info-block tailoring-info-block--compact">
+                  <div class="tailoring-info-label">Current selected rewrite base</div>
+                  <div class="tailoring-rewrite-callout">${escapeHtml(row.baseText)}</div>
+                </div>
+              ` : ""}
+
+              <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-label">Editable draft text</div>
+                <textarea
+                  class="tailoring-free-edit-textarea"
+                  data-tailoring-free-edit-key="${escapeHtml(row.bulletKey)}"
+                  rows="5"
+                >${escapeHtml(row.currentText)}</textarea>
+              </div>
+            </article>
+          `;
+        }).join("")}
       </div>
     </section>
   `;
@@ -3344,6 +3497,7 @@ function updateTailoringWorkspaceSelectionActionBar() {
     hasAnySavedState ? manualDraftChanged : hasManualEdits;
 
   const hasUnsavedWorkspaceChanges = hasUnsavedSelectionChange || hasUnsavedManualChange;
+  const hasPreviewableWorkspaceChanges = hasSelection || hasManualEdits;
 
   const context = getTailoringWorkspaceContext();
   const hasResume = Boolean(context && String(context.resumeName || "").trim());
@@ -3357,7 +3511,7 @@ function updateTailoringWorkspaceSelectionActionBar() {
   if (tailoringWorkspaceState.isSaving) {
     statusEl.textContent = "Saving workspace draft...";
   } else if (tailoringWorkspaceState.isPreviewing) {
-    statusEl.textContent = `Previewing impact for ${selectedIds.length} selected suggestion${selectedIds.length === 1 ? "" : "s"}...`;
+    statusEl.textContent = "Previewing score impact for the current workspace draft...";
   } else if (hasUnsavedManualChange && !hasUnsavedSelectionChange) {
     statusEl.textContent = hasManualEdits
       ? `Free Edit has unsaved changes across ${Object.keys(currentManualEdits).length} bullet${Object.keys(currentManualEdits).length === 1 ? "" : "s"}.`
@@ -3403,17 +3557,20 @@ function updateTailoringWorkspaceSelectionActionBar() {
     }
   }
 
-  previewBtn.disabled = tailoringWorkspaceState.isSaving || tailoringWorkspaceState.isPreviewing || !hasSelection;
+  previewBtn.disabled =
+    tailoringWorkspaceState.isSaving ||
+    tailoringWorkspaceState.isPreviewing ||
+    !hasPreviewableWorkspaceChanges;
 
   if (previewTooltip) {
     previewTooltip.dataset.tooltip = tailoringWorkspaceState.isPreviewing
-      ? "Previewing impact..."
-      : "Preview impact";
+      ? "Previewing score impact..."
+      : "Preview score impact";
   }
 
   previewBtn.setAttribute(
     "aria-label",
-    tailoringWorkspaceState.isPreviewing ? "Previewing impact..." : "Preview impact"
+    tailoringWorkspaceState.isPreviewing ? "Previewing score impact..." : "Preview score impact"
   );
 
   saveBtn.disabled = tailoringWorkspaceState.isSaving || tailoringWorkspaceState.isPreviewing || !hasUnsavedWorkspaceChanges;
@@ -3444,19 +3601,60 @@ function renderTailoringWorkspacePatchPreviewSection(payload) {
     ? payload.selected_patch_set_counterfactual_preview
     : null;
 
-  if (!preview) {
+  const previewStatus = String(payload?.preview_status || "").trim();
+  const previewNote = String(payload?.preview_note || "").trim();
+  const explicitSelectedIds = Array.isArray(payload?.selected_patch_candidate_ids)
+    ? payload.selected_patch_candidate_ids
+    : [];
+  const manualEditCount = Number(payload?.manual_edit_count || 0);
+  const originalScore = payload?.original_score;
+  const projectedScore = payload?.projected_score;
+  const projectedDelta = payload?.projected_delta;
+
+  const hasRenderedPreview = Boolean(
+    preview ||
+    previewStatus ||
+    manualEditCount > 0
+  );
+
+  if (!hasRenderedPreview) {
     clearTailoringWorkspacePatchPreviewSection();
     return;
   }
 
+  const synthesizedPreview = preview || (
+    originalScore !== undefined ||
+    projectedScore !== undefined ||
+    projectedDelta !== undefined
+      ? {
+          status: previewStatus || "preview_only",
+          note: previewNote || "Workspace draft preview loaded.",
+          original_final_score: originalScore,
+          projected_final_score: projectedScore,
+          projected_overall_delta: projectedDelta,
+          projected_dimension_deltas: {},
+          scorer_visible_evidence_changed: false,
+          selected_patch_count: explicitSelectedIds.length,
+          selected_candidate_ids: explicitSelectedIds,
+          selection_mode: "selected_candidate_ids",
+        }
+      : null
+  );
+
   root.innerHTML = renderPatchPreviewCard({
-    title: "Selected-set impact preview",
-    preview,
-    selectionStatus: "preview_only",
-    selectionNote: "Preview for the current unsaved workspace selection.",
-    explicitSelectedIds: Array.isArray(payload.selected_patch_candidate_ids)
-      ? payload.selected_patch_candidate_ids
-      : [],
+    title: "Workspace score preview",
+    preview: synthesizedPreview,
+    selectionStatus: previewStatus || "preview_only",
+    selectionNote: previewNote || (
+      manualEditCount > 0
+        ? "Manual edits are present. Full draft rescoring is not wired yet."
+        : "Preview for the current unsaved workspace draft."
+    ),
+    explicitSelectedIds,
+    emptyLabel:
+      manualEditCount > 0
+        ? "Manual edits are present, but full draft rescoring is not wired yet."
+        : "Workspace score preview is not available yet.",
   });
 
   setTailoringSectionVisible("tailoringWorkspacePatchPreviewSummary", true);
@@ -3685,6 +3883,7 @@ function rerenderTailoringWorkspaceSelectionView() {
     );
   }
 
+  renderTailoringWorkspaceLiveDraftPreviewInto(payload);
   updateTailoringWorkspaceMetaSummary(payload);
   refreshTailoringWorkspaceSelectionPanels();
 }
@@ -3801,6 +4000,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
       if (!bulletKey) return;
 
       tailoringWorkspaceState.manualBulletEdits[bulletKey] = textarea.value;
+      renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
       updateTailoringWorkspaceSelectionActionBar();
     });
   }
@@ -3854,28 +4054,50 @@ async function downloadCurrentTailoringWorkspaceResume() {
 async function previewTailoringWorkspaceSelection() {
   const context = getTailoringWorkspaceContext();
   const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
+  const payload = getTailoringWorkspacePayload();
 
-  if (!context || !context.tailoringJsonPath || !selectedIds.length) return;
+  const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    payload
+  );
+  const hasManualEdits = Object.keys(manualEdits).length > 0;
+
+  if (!context || !context.tailoringJsonPath) return;
+  if (!selectedIds.length && !hasManualEdits) return;
 
   tailoringWorkspaceState.isPreviewing = true;
   updateTailoringWorkspaceSelectionActionBar();
 
   try {
-    const response = await postJson("/planning/preview-selected-patches", {
+    const response = await postJson("/planning/preview-workspace-draft", {
       tailoring_json_path: context.tailoringJsonPath,
-      selected_candidate_ids: selectedIds,
+      selected_resume: context.resumeName,
+      selected_patch_candidate_ids: selectedIds,
+      manual_bullet_edits: manualEdits,
     });
 
     tailoringWorkspaceState.previewPayload = {
+      preview_status: String(response.preview_status || "").trim(),
+      preview_note: String(response.preview_note || "").trim(),
       selected_patch_candidate_ids: Array.isArray(response.selected_patch_candidate_ids)
         ? response.selected_patch_candidate_ids
         : selectedIds,
+      manual_bullet_edits:
+        response && response.manual_bullet_edits && typeof response.manual_bullet_edits === "object"
+          ? response.manual_bullet_edits
+          : manualEdits,
+      manual_edit_count: Number(response.manual_edit_count || 0),
+      manual_edit_rescore_supported: Boolean(response.manual_edit_rescore_supported),
+      needs_full_draft_rescore: Boolean(response.needs_full_draft_rescore),
+      original_score: response.original_score,
+      projected_score: response.projected_score,
+      projected_delta: response.projected_delta,
       selected_patch_set_counterfactual_preview: response.selected_patch_set_counterfactual_preview || null,
     };
 
     refreshTailoringWorkspaceSelectionPanels();
   } catch (err) {
-    showAppError("Failed to preview selected suggestions", err);
+    showAppError("Failed to preview workspace draft", err);
   } finally {
     tailoringWorkspaceState.isPreviewing = false;
     updateTailoringWorkspaceSelectionActionBar();

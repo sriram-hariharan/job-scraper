@@ -3264,6 +3264,129 @@ def save_tailoring_workspace_draft_payload(
         "draft": draft_payload,
     }
 
+def preview_tailoring_workspace_draft_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    selected_patch_candidate_ids: Any = None,
+    manual_bullet_edits: Any = None,
+) -> Dict[str, Any]:
+    from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+
+    draft_response = load_tailoring_workspace_draft_payload(
+        output_dir=output_dir,
+        tailoring_json_path=tailoring_json_path,
+        selected_resume=selected_resume,
+    )
+    draft = dict(draft_response.get("draft", {}) or {})
+
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Workspace draft preview requires a tailoring JSON artifact.")
+
+    payload_data = _load_tailoring_json_artifact(artifact_path)
+
+    if artifact_path.name.endswith("__tailoring.json"):
+        payload_data = _rehydrate_legacy_tailoring_operator_payload(
+            artifact_path,
+            payload_data,
+        )
+
+    if payload_data.get("replacement_candidates") is not None:
+        payload_data = _apply_saved_patch_selection_overlay(
+            artifact_path,
+            payload_data,
+        )
+
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
+
+    if selected_patch_candidate_ids is None:
+        effective_selected_ids = _normalize_selected_patch_candidate_ids(
+            draft.get("selected_patch_candidate_ids", [])
+        )
+    else:
+        effective_selected_ids = _normalize_selected_patch_candidate_ids(
+            selected_patch_candidate_ids
+        )
+
+    unknown_candidate_ids = [
+        candidate_id
+        for candidate_id in effective_selected_ids
+        if candidate_id not in valid_candidate_ids
+    ]
+    if unknown_candidate_ids:
+        raise ValueError(
+            f"Unknown candidate IDs for this artifact: {', '.join(sorted(unknown_candidate_ids))}"
+        )
+
+    if manual_bullet_edits is None:
+        effective_manual_edits = _normalize_workspace_manual_bullet_edits(
+            draft.get("manual_bullet_edits", {})
+        )
+    else:
+        effective_manual_edits = _normalize_workspace_manual_bullet_edits(
+            manual_bullet_edits
+        )
+
+    selected_preview = None
+    if effective_selected_ids:
+        selected_preview = build_selected_patch_set_counterfactual_preview(
+            payload_data,
+            selected_candidate_ids=effective_selected_ids,
+        )
+
+    manual_edit_count = len(effective_manual_edits)
+    has_selected_preview = isinstance(selected_preview, dict) and bool(selected_preview)
+
+    if manual_edit_count and has_selected_preview:
+        preview_status = "manual_edits_plus_selection_preview_only"
+        preview_note = (
+            "Selected rewrites have scorer preview support. Manual free-edit changes are present, "
+            "but full draft rescoring is not wired yet."
+        )
+    elif manual_edit_count:
+        preview_status = "manual_edits_pending_backend_rescore"
+        preview_note = (
+            "Manual free-edit changes are present, but full draft rescoring is not wired yet."
+        )
+    elif has_selected_preview:
+        preview_status = "selection_preview_available"
+        preview_note = "Selected rewrite preview is available for the current workspace draft."
+    else:
+        preview_status = "no_previewable_changes"
+        preview_note = "No previewable workspace draft changes were found."
+
+    original_score = None
+    projected_score = None
+    projected_delta = None
+
+    if isinstance(selected_preview, dict):
+        original_score = selected_preview.get("original_final_score")
+        projected_score = selected_preview.get("projected_final_score")
+        projected_delta = selected_preview.get("projected_overall_delta")
+
+    return {
+        "ok": True,
+        "preview_status": preview_status,
+        "preview_note": preview_note,
+        "tailoring_json_path": str(artifact_path),
+        "draft_status": _clean_text(draft_response.get("draft_status")),
+        "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+        "selected_patch_candidate_ids": effective_selected_ids,
+        "manual_bullet_edits": effective_manual_edits,
+        "manual_edit_count": manual_edit_count,
+        "manual_edit_rescore_supported": False,
+        "needs_full_draft_rescore": manual_edit_count > 0,
+        "original_score": original_score,
+        "projected_score": projected_score,
+        "projected_delta": projected_delta,
+        "selected_patch_set_counterfactual_preview": selected_preview,
+    }
 
 def application_actions_payload(
     application_status: str = "",

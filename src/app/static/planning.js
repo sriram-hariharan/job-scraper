@@ -2360,6 +2360,19 @@ function buildReasonHtml(value) {
   return `<span title="${escapeHtml(full)}">${escapeHtml(visible)}</span>`;
 }
 
+function buildPlanningPriorityReason(row) {
+  const operatorDecision = String(row.operator_decision || "").trim().toUpperCase();
+  const selectedResume = normalizeResumeName(row.operator_selected_resume);
+  const action = String(row.action || "").trim();
+
+  if (operatorDecision === "SELECT_RESUME" && selectedResume) {
+    const displayName = humanizeResumeDisplayName(selectedResume);
+    return `Resume variant selected: ${displayName}. Tailoring workspace and follow-on actions now use this chosen variant for the row.`;
+  }
+
+  return String(row.queue_priority_reason || "").trim();
+}
+
 function uniqueNonEmpty(values) {
   const out = [];
   const seen = new Set();
@@ -3365,20 +3378,44 @@ function updateTailoringWorkspaceMetaSummary(payload) {
   const meta = qs("tailoringWorkspaceMeta");
   if (!meta) return;
 
-  const selectableCount = collectTailoringWorkspaceSelectableCandidateIds(payload).length;
+  if (!payload || typeof payload !== "object") {
+    meta.textContent = "Suggested changes are not available for this row.";
+    return;
+  }
+
+  const appReady = Array.isArray(payload.app_ready_replacements) ? payload.app_ready_replacements : [];
+  const directApplyOptional = Array.isArray(payload.direct_apply_optional_replacements)
+    ? payload.direct_apply_optional_replacements
+    : [];
+  const directionOnly = Array.isArray(payload.direction_only_replacements)
+    ? payload.direction_only_replacements
+    : [];
+  const decisions = Array.isArray(payload.final_replacement_decisions)
+    ? payload.final_replacement_decisions
+    : [];
+
+  const actionableCount = appReady.length + directApplyOptional.length;
+  const reviewCount = directionOnly.length;
   const selectedCount = getTailoringWorkspaceSelectedCandidateIds().length;
+  const hasReplacementPlan = Boolean(
+    decisions.length || actionableCount || reviewCount
+  );
 
-  if (!payload) {
-    meta.textContent = "Actionable suggestions are not available for this row.";
+  if (actionableCount > 0) {
+    if (selectedCount > 0) {
+      meta.textContent = `${selectedCount} of ${actionableCount} actionable suggestion${actionableCount === 1 ? "" : "s"} selected. Review-only guidance stays read-only.`;
+    } else {
+      meta.textContent = `Actionable suggestions loaded. ${actionableCount} selectable suggestion${actionableCount === 1 ? "" : "s"} available. Review-only guidance stays read-only.`;
+    }
     return;
   }
 
-  if (!selectableCount) {
-    meta.textContent = "Suggestions loaded. This row has review guidance, but no selectable rewrite candidates.";
+  if (reviewCount > 0 || hasReplacementPlan) {
+    meta.textContent = "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet.";
     return;
   }
 
-  meta.textContent = `${selectedCount} of ${selectableCount} actionable suggestions selected. Direction-only guidance stays read-only.`;
+  meta.textContent = "No safe bullet-level rewrites were found for this row.";
 }
 
 function rerenderTailoringWorkspaceSelectionView() {
@@ -3744,128 +3781,61 @@ function renderReplacementDecisionSection({
             `
             : "";
 
-          if (selectionEnabled) {
-            return `
-              <article
-                class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
-                ${focusAttrs}
-              >
-                <div class="tailoring-card-topline tailoring-card-topline--compact">
-                  <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
-
-                  <div class="tailoring-chip-group tailoring-chip-group--compact">
-                    ${buildTailoringTonePill(statusLabel, tone)}
-                    ${buildTailoringTonePill(
-                      priority === "high"
-                        ? "High priority"
-                        : priority === "medium"
-                          ? "Medium priority"
-                          : "Low priority",
-                      priority === "high"
-                        ? "safe"
-                        : priority === "medium"
-                          ? "caution"
-                          : "muted"
-                    )}
-                  </div>
-                </div>
-
-                ${item.original_text ? `
-                  <div class="tailoring-info-block tailoring-info-block--compact">
-                    <div class="tailoring-info-label">Current bullet</div>
-                    <div class="tailoring-quote-block">${escapeHtml(item.original_text)}</div>
-                  </div>
-                ` : ""}
-
-                ${mode !== "direction_only" && item.final_replacement_text ? `
-                  <div class="tailoring-info-block tailoring-info-block--compact">
-                    <div class="tailoring-info-label">Suggested edit</div>
-                    <div class="tailoring-rewrite-callout">${escapeHtml(item.final_replacement_text)}</div>
-                  </div>
-                ` : ""}
-
-                ${mode === "direction_only" && item.rewrite_direction ? `
-                  <div class="tailoring-info-block tailoring-info-block--compact">
-                    <div class="tailoring-info-label">Suggested change</div>
-                    <div class="tailoring-rewrite-callout">${escapeHtml(item.rewrite_direction)}</div>
-                  </div>
-                ` : ""}
-
-                ${(compactReasonHtml || compactImpactHtml) ? `
-                  <div class="tailoring-edit-inline-summary">
-                    ${compactReasonHtml}
-                    ${compactImpactHtml}
-                  </div>
-                ` : ""}
-
-                ${isSelectable ? `
-                  <div class="tailoring-card-actions tailoring-card-actions--compact">
-                    <button
-                      type="button"
-                      class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
-                      data-tailoring-select-candidate="${escapeHtml(candidateId)}"
-                    >
-                      ${isSelected ? "Selected" : "Select"}
-                    </button>
-                  </div>
-                ` : ""}
-              </article>
-            `;
-          }
-
           return `
             <article
-              class="tailoring-edit-card ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
+              class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
               ${focusAttrs}
             >
-              <div class="tailoring-card-topline">
+              <div class="tailoring-card-topline tailoring-card-topline--compact">
                 <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
-                <div class="tailoring-chip-group">
+
+                <div class="tailoring-chip-group tailoring-chip-group--compact">
                   ${buildTailoringTonePill(statusLabel, tone)}
                   ${buildTailoringTonePill(
-                    priority === "high" ? "High priority" : priority === "medium" ? "Medium priority" : "Low priority",
-                    priority === "high" ? "safe" : priority === "medium" ? "caution" : "muted"
+                    priority === "high"
+                      ? "High priority"
+                      : priority === "medium"
+                        ? "Medium priority"
+                        : "Low priority",
+                    priority === "high"
+                      ? "safe"
+                      : priority === "medium"
+                        ? "caution"
+                        : "muted"
                   )}
                 </div>
               </div>
 
               ${item.original_text ? `
-                <div class="tailoring-info-block">
+                <div class="tailoring-info-block tailoring-info-block--compact">
                   <div class="tailoring-info-label">Current bullet</div>
                   <div class="tailoring-quote-block">${escapeHtml(item.original_text)}</div>
                 </div>
               ` : ""}
 
               ${mode !== "direction_only" && item.final_replacement_text ? `
-                <div class="tailoring-info-block">
+                <div class="tailoring-info-block tailoring-info-block--compact">
                   <div class="tailoring-info-label">Suggested edit</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.final_replacement_text)}</div>
                 </div>
               ` : ""}
 
               ${mode === "direction_only" && item.rewrite_direction ? `
-                <div class="tailoring-info-block">
+                <div class="tailoring-info-block tailoring-info-block--compact">
                   <div class="tailoring-info-label">Suggested change</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.rewrite_direction)}</div>
                 </div>
               ` : ""}
 
-              ${item.why_selected ? `
-                <div class="tailoring-info-row">
-                  <span class="tailoring-info-label">Why this helps</span>
-                  <span class="tailoring-info-value">${escapeHtml(item.why_selected)}</span>
-                </div>
-              ` : ""}
-
-              ${impactLabels.length ? `
-                <div class="tailoring-info-row">
-                  <span class="tailoring-info-label">What this improves</span>
-                  <span class="tailoring-info-value">${escapeHtml(impactLabels.join(", "))}</span>
+              ${(compactReasonHtml || compactImpactHtml) ? `
+                <div class="tailoring-edit-inline-summary">
+                  ${compactReasonHtml}
+                  ${compactImpactHtml}
                 </div>
               ` : ""}
 
               ${isSelectable ? `
-                <div class="tailoring-card-actions">
+                <div class="tailoring-card-actions tailoring-card-actions--compact">
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
@@ -4365,20 +4335,31 @@ function buildTailoringButtonHtml(row) {
     row.tailoring_json || row.tailoring_md || row.tailoring_llm_json || row.packet_json
   );
 
-  const readyCount = Number(row.tailoring_ready_replacement_count || 0);
-  const hasReadyReplacements =
-    readyCount > 0 || normalizeBool(row.tailoring_has_ready_replacements);
+  const workspaceState = String(row.tailoring_workspace_state || "empty").trim().toLowerCase();
+  const actionableCount = Number(row.tailoring_actionable_replacement_count || 0);
+  const reviewCount = Number(row.tailoring_review_replacement_count || 0);
 
   const label = hasArtifacts ? "Open Workspace" : "Unavailable";
   const disabledAttr = hasArtifacts ? "" : "disabled";
 
-  const buttonClass = hasArtifacts
-    ? `ghost-btn planning-tailoring-btn ${hasReadyReplacements ? "planning-tailoring-btn--ready" : ""}`.trim()
-    : "ghost-btn planning-tailoring-btn";
+  let stateClass = "planning-tailoring-btn--empty";
+  let titleText = "No tailoring artifacts available for this row.";
 
-  const titleAttr = hasArtifacts && hasReadyReplacements
-    ? `title="${escapeHtml(`${readyCount} ready replacement${readyCount === 1 ? "" : "s"}`)}"`
-    : "";
+  if (hasArtifacts && workspaceState === "ready") {
+    stateClass = "planning-tailoring-btn--ready";
+    titleText = `${actionableCount} actionable suggestion${actionableCount === 1 ? "" : "s"} available.`;
+  } else if (hasArtifacts && workspaceState === "review") {
+    stateClass = "planning-tailoring-btn--review";
+    titleText = reviewCount > 0
+      ? `${reviewCount} review-only suggestion${reviewCount === 1 ? "" : "s"} available. No ready replacements yet.`
+      : "Review guidance is available, but there are no ready replacements yet.";
+  } else if (hasArtifacts) {
+    stateClass = "planning-tailoring-btn--empty";
+    titleText = "Suggestions loaded, but no safe bullet-level rewrites were found.";
+  }
+
+  const buttonClass = `ghost-btn planning-tailoring-btn ${stateClass}`.trim();
+  const titleAttr = `title="${escapeHtml(titleText)}"`;
 
   return `
     <button
@@ -4515,7 +4496,7 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(humanizeFallbackStatus(row.llm_fallback_status || ""))}</td>
         <td>${buildOperatorDecisionCellHtml(row)}</td>
         <td>${buildCompactTextHtml(row.operator_selected_resume, { maxLength: 28, emptyLabel: "-" })}</td>
-        <td class="reason-cell">${buildReasonHtml(row.queue_priority_reason)}</td>
+        <td class="reason-cell">${buildReasonHtml(buildPlanningPriorityReason(row))}</td>
         <td>${buildTailoringButtonHtml(row)}</td>
         <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
       </tr>

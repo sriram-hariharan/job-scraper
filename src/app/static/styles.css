@@ -4565,6 +4565,32 @@ thead .sticky-apply-col {
   color: #e8fff3;
 }
 
+.planning-tailoring-btn--review {
+  background: rgba(255, 204, 120, 0.12);
+  border-color: rgba(255, 204, 120, 0.3);
+  color: #ffe7b8;
+  box-shadow: inset 0 0 0 1px rgba(255, 204, 120, 0.08);
+}
+
+.planning-tailoring-btn--review:hover:not(:disabled) {
+  opacity: 1;
+  background: rgba(255, 204, 120, 0.18);
+  border-color: rgba(255, 204, 120, 0.38);
+  color: #fff0cc;
+}
+
+.planning-tailoring-btn--empty {
+  background: rgba(255, 143, 143, 0.1);
+  border-color: rgba(255, 143, 143, 0.24);
+  color: #ffd7d7;
+  box-shadow: inset 0 0 0 1px rgba(255, 143, 143, 0.06);
+}
+
+.planning-tailoring-btn--empty:disabled {
+  opacity: 1;
+  cursor: not-allowed;
+}
+
 /* === sortable table headers === */
 
 th.sortable-col {

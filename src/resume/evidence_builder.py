@@ -22,6 +22,13 @@ from src.config.consts import (
     SECTION_ALIASES,
     ROLE_WORD_HINTS,
     ACTION_VERB_HINTS,
+    RESUME_METHOD_SIGNAL_PATTERNS,
+    RESUME_WORKFLOW_SIGNAL_PATTERNS,
+    RESUME_BUSINESS_CONTEXT_SIGNAL_PATTERNS,
+    RESUME_STAKEHOLDER_CONTEXT_SIGNAL_PATTERNS,
+    RESUME_ARTIFACT_TYPE_SIGNAL_PATTERNS,
+    RESUME_KPI_METRIC_SIGNAL_PATTERNS,
+    RESUME_OWNERSHIP_SIGNAL_PATTERNS,
     _SKILL_ALIASES,
 )
 
@@ -68,6 +75,20 @@ def _extract_pattern_hits(text: str, patterns: List[str]) -> List[str]:
 
         if any(_pattern_present(text_norm, candidate) for candidate in candidates):
             hits.append(canonical)
+
+    return _unique_preserve_order(hits)
+
+def _extract_phrase_hits(text: str, patterns: List[str]) -> List[str]:
+    text_norm = _normalize(text)
+    hits: List[str] = []
+
+    for pattern in patterns:
+        normalized = _normalize(pattern)
+        if not normalized:
+            continue
+
+        if _pattern_present(text_norm, normalized):
+            hits.append(normalized)
 
     return _unique_preserve_order(hits)
 
@@ -555,20 +576,18 @@ def _build_experience_entries(text: str) -> List[ResumeExperienceEntry]:
             " ".join(header_lines),
         )
 
-        entries.append(
-            ResumeExperienceEntry(
-                entry_id=entry_id,
-                entry_index=block_index,
-                company=company,
-                title=title,
-                start_date=date_line,
-                end_date="",
-                bullets=trimmed_bullets,
-                bullet_ids=_make_bullet_ids(entry_id, trimmed_bullets),
-                normalized_titles=_extract_pattern_hits(" ".join(header_lines + bullet_lines), TITLE_PATTERNS),
-                normalized_skills=_extract_pattern_hits(" ".join(header_lines + bullet_lines), COMMON_SKILL_PATTERNS),
-            )
+        entry = ResumeExperienceEntry(
+            entry_id=entry_id,
+            entry_index=block_index,
+            company=company,
+            title=title,
+            start_date=date_line,
+            end_date="",
+            bullets=trimmed_bullets,
+            bullet_ids=_make_bullet_ids(entry_id, trimmed_bullets),
         )
+        _refresh_experience_entry_structured_fields(entry)
+        entries.append(entry)
 
     if entries:
         return entries
@@ -580,16 +599,15 @@ def _build_experience_entries(text: str) -> List[ResumeExperienceEntry]:
     fallback_clean_bullets = [_strip_bullet_marker(line) for line in fallback_bullets]
     fallback_entry_id = _make_entry_id("experience", 0, "fallback")
 
-    return [
-        ResumeExperienceEntry(
-            entry_id=fallback_entry_id,
-            entry_index=0,
-            bullets=fallback_clean_bullets,
-            bullet_ids=_make_bullet_ids(fallback_entry_id, fallback_clean_bullets),
-            normalized_titles=_extract_pattern_hits(" ".join(fallback_bullets), TITLE_PATTERNS),
-            normalized_skills=_extract_pattern_hits(" ".join(fallback_bullets), COMMON_SKILL_PATTERNS),
-        )
-    ]
+    fallback_entry = ResumeExperienceEntry(
+        entry_id=fallback_entry_id,
+        entry_index=0,
+        bullets=fallback_clean_bullets,
+        bullet_ids=_make_bullet_ids(fallback_entry_id, fallback_clean_bullets),
+    )
+    _refresh_experience_entry_structured_fields(fallback_entry)
+
+    return [fallback_entry]
 
 
 def _build_project_entries(text: str) -> List[ResumeProjectEntry]:
@@ -609,16 +627,16 @@ def _build_project_entries(text: str) -> List[ResumeProjectEntry]:
     trimmed_bullets = bullets[:12]
     entry_id = _make_entry_id("project", 0, "Projects")
 
-    return [
-        ResumeProjectEntry(
-            entry_id=entry_id,
-            entry_index=0,
-            name="Projects",
-            bullets=trimmed_bullets,
-            bullet_ids=_make_bullet_ids(entry_id, trimmed_bullets),
-            normalized_skills=_extract_pattern_hits(" ".join(bullets), COMMON_SKILL_PATTERNS),
-        )
-    ]
+    entry = ResumeProjectEntry(
+        entry_id=entry_id,
+        entry_index=0,
+        name="Projects",
+        bullets=trimmed_bullets,
+        bullet_ids=_make_bullet_ids(entry_id, trimmed_bullets),
+    )
+    _refresh_project_entry_structured_fields(entry)
+
+    return [entry]
 
 
 def _build_education_entries(text: str) -> List[ResumeEducationEntry]:
@@ -665,6 +683,30 @@ def _merge_orphan_experience_entries(
             prev.normalized_skills = _unique_preserve_order(
                 prev.normalized_skills + entry.normalized_skills
             )
+            prev.normalized_methods = _unique_preserve_order(
+                prev.normalized_methods + entry.normalized_methods
+            )
+            prev.normalized_tools = _unique_preserve_order(
+                prev.normalized_tools + entry.normalized_tools
+            )
+            prev.normalized_workflows = _unique_preserve_order(
+                prev.normalized_workflows + entry.normalized_workflows
+            )
+            prev.business_contexts = _unique_preserve_order(
+                prev.business_contexts + entry.business_contexts
+            )
+            prev.stakeholder_contexts = _unique_preserve_order(
+                prev.stakeholder_contexts + entry.stakeholder_contexts
+            )
+            prev.artifact_types = _unique_preserve_order(
+                prev.artifact_types + entry.artifact_types
+            )
+            prev.kpi_metrics = _unique_preserve_order(
+                prev.kpi_metrics + entry.kpi_metrics
+            )
+            prev.ownership_signals = _unique_preserve_order(
+                prev.ownership_signals + entry.ownership_signals
+            )
             continue
 
         merged.append(entry)
@@ -698,6 +740,89 @@ def _project_entry_counterfactual_text(entry: ResumeProjectEntry) -> str:
     parts.extend(list(entry.bullets or []))
     return " ".join(part for part in parts if str(part or "").strip()).strip()
 
+def _refresh_experience_entry_structured_fields(entry: ResumeExperienceEntry) -> None:
+    entry_text = _experience_entry_counterfactual_text(entry)
+
+    entry.normalized_titles = _extract_pattern_hits(entry_text, TITLE_PATTERNS)
+    entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+    entry.normalized_methods = _extract_phrase_hits(entry_text, RESUME_METHOD_SIGNAL_PATTERNS)
+    entry.normalized_tools = _extract_phrase_hits(entry_text, TOOLING_SIGNAL_PATTERNS)
+    entry.normalized_workflows = _extract_phrase_hits(entry_text, RESUME_WORKFLOW_SIGNAL_PATTERNS)
+    entry.business_contexts = _extract_phrase_hits(entry_text, RESUME_BUSINESS_CONTEXT_SIGNAL_PATTERNS)
+    entry.stakeholder_contexts = _extract_phrase_hits(entry_text, RESUME_STAKEHOLDER_CONTEXT_SIGNAL_PATTERNS)
+    entry.artifact_types = _extract_phrase_hits(entry_text, RESUME_ARTIFACT_TYPE_SIGNAL_PATTERNS)
+    entry.kpi_metrics = _extract_phrase_hits(entry_text, RESUME_KPI_METRIC_SIGNAL_PATTERNS)
+    entry.ownership_signals = _extract_phrase_hits(entry_text, RESUME_OWNERSHIP_SIGNAL_PATTERNS)
+
+
+def _refresh_project_entry_structured_fields(entry: ResumeProjectEntry) -> None:
+    entry_text = _project_entry_counterfactual_text(entry)
+
+    entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+    entry.normalized_methods = _extract_phrase_hits(entry_text, RESUME_METHOD_SIGNAL_PATTERNS)
+    entry.normalized_tools = _extract_phrase_hits(entry_text, TOOLING_SIGNAL_PATTERNS)
+    entry.normalized_workflows = _extract_phrase_hits(entry_text, RESUME_WORKFLOW_SIGNAL_PATTERNS)
+    entry.business_contexts = _extract_phrase_hits(entry_text, RESUME_BUSINESS_CONTEXT_SIGNAL_PATTERNS)
+    entry.stakeholder_contexts = _extract_phrase_hits(entry_text, RESUME_STAKEHOLDER_CONTEXT_SIGNAL_PATTERNS)
+    entry.artifact_types = _extract_phrase_hits(entry_text, RESUME_ARTIFACT_TYPE_SIGNAL_PATTERNS)
+    entry.kpi_metrics = _extract_phrase_hits(entry_text, RESUME_KPI_METRIC_SIGNAL_PATTERNS)
+    entry.ownership_signals = _extract_phrase_hits(entry_text, RESUME_OWNERSHIP_SIGNAL_PATTERNS)
+
+
+def _aggregate_resume_structured_fields(
+    experience_entries: List[ResumeExperienceEntry],
+    project_entries: List[ResumeProjectEntry],
+) -> tuple[List[str], List[str], List[str], List[str], List[str], List[str], List[str], List[str]]:
+    methods = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.normalized_methods or [])]
+        + [value for entry in project_entries for value in list(entry.normalized_methods or [])]
+    )
+
+    tools = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.normalized_tools or [])]
+        + [value for entry in project_entries for value in list(entry.normalized_tools or [])]
+    )
+
+    workflows = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.normalized_workflows or [])]
+        + [value for entry in project_entries for value in list(entry.normalized_workflows or [])]
+    )
+
+    business_contexts = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.business_contexts or [])]
+        + [value for entry in project_entries for value in list(entry.business_contexts or [])]
+    )
+
+    stakeholder_contexts = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.stakeholder_contexts or [])]
+        + [value for entry in project_entries for value in list(entry.stakeholder_contexts or [])]
+    )
+
+    artifact_types = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.artifact_types or [])]
+        + [value for entry in project_entries for value in list(entry.artifact_types or [])]
+    )
+
+    kpi_metrics = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.kpi_metrics or [])]
+        + [value for entry in project_entries for value in list(entry.kpi_metrics or [])]
+    )
+
+    ownership_signals = _unique_preserve_order(
+        [value for entry in experience_entries for value in list(entry.ownership_signals or [])]
+        + [value for entry in project_entries for value in list(entry.ownership_signals or [])]
+    )
+
+    return (
+        methods,
+        tools,
+        workflows,
+        business_contexts,
+        stakeholder_contexts,
+        artifact_types,
+        kpi_metrics,
+        ownership_signals,
+    )
 
 def rebuild_resume_evidence_from_structured_entries(
     document: ResumeDocument,
@@ -717,8 +842,7 @@ def rebuild_resume_evidence_from_structured_entries(
 
     for entry in refreshed_experience_entries:
         entry_text = _experience_entry_counterfactual_text(entry)
-        entry.normalized_titles = _extract_pattern_hits(entry_text, TITLE_PATTERNS)
-        entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+        _refresh_experience_entry_structured_fields(entry)
 
         if entry_text:
             structured_text_parts.append(entry_text)
@@ -731,7 +855,7 @@ def rebuild_resume_evidence_from_structured_entries(
 
     for entry in refreshed_project_entries:
         entry_text = _project_entry_counterfactual_text(entry)
-        entry.normalized_skills = _extract_pattern_hits(entry_text, COMMON_SKILL_PATTERNS)
+        _refresh_project_entry_structured_fields(entry)
 
         if entry_text:
             structured_text_parts.append(entry_text)
@@ -785,6 +909,20 @@ def rebuild_resume_evidence_from_structured_entries(
         ]
     )
 
+    (
+        methods,
+        tools,
+        workflows,
+        business_contexts,
+        stakeholder_contexts,
+        artifact_types,
+        kpi_metrics,
+        ownership_signals,
+    ) = _aggregate_resume_structured_fields(
+        refreshed_experience_entries,
+        refreshed_project_entries,
+    )
+
     return ResumeEvidence(
         document=document,
         titles=titles,
@@ -804,6 +942,14 @@ def rebuild_resume_evidence_from_structured_entries(
             "builder_version": "v2_counterfactual_structured_refresh",
             "dimension_names": [dimension.name for dimension in get_match_dimensions()],
         },
+        methods=methods,
+        tools=tools,
+        workflows=workflows,
+        business_contexts=business_contexts,
+        stakeholder_contexts=stakeholder_contexts,
+        artifact_types=artifact_types,
+        kpi_metrics=kpi_metrics,
+        ownership_signals=ownership_signals,
     )
 
 
@@ -1092,6 +1238,20 @@ def build_resume_evidence(document: ResumeDocument) -> ResumeEvidence:
         )
         skills = _unique_preserve_order(experience_skills + skills)
 
+    (
+        methods,
+        tools,
+        workflows,
+        business_contexts,
+        stakeholder_contexts,
+        artifact_types,
+        kpi_metrics,
+        ownership_signals,
+    ) = _aggregate_resume_structured_fields(
+        experience_entries,
+        project_entries,
+    )
+
     return ResumeEvidence(
         document=document,
         titles=titles,
@@ -1111,4 +1271,12 @@ def build_resume_evidence(document: ResumeDocument) -> ResumeEvidence:
             "builder_version": "v2_experience_first",
             "dimension_names": [dimension.name for dimension in get_match_dimensions()],
         },
+        methods=methods,
+        tools=tools,
+        workflows=workflows,
+        business_contexts=business_contexts,
+        stakeholder_contexts=stakeholder_contexts,
+        artifact_types=artifact_types,
+        kpi_metrics=kpi_metrics,
+        ownership_signals=ownership_signals,
     )

@@ -53,8 +53,19 @@ class ResumeExperienceEntry:
     duration_months: Optional[int] = None
     bullets: List[str] = field(default_factory=list)
     bullet_ids: List[str] = field(default_factory=list)
+
     normalized_titles: List[str] = field(default_factory=list)
     normalized_skills: List[str] = field(default_factory=list)
+
+    # V2 structured experience-entry fields
+    normalized_methods: List[str] = field(default_factory=list)
+    normalized_tools: List[str] = field(default_factory=list)
+    normalized_workflows: List[str] = field(default_factory=list)
+    business_contexts: List[str] = field(default_factory=list)
+    stakeholder_contexts: List[str] = field(default_factory=list)
+    artifact_types: List[str] = field(default_factory=list)
+    kpi_metrics: List[str] = field(default_factory=list)
+    ownership_signals: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -65,6 +76,16 @@ class ResumeProjectEntry:
     bullets: List[str] = field(default_factory=list)
     bullet_ids: List[str] = field(default_factory=list)
     normalized_skills: List[str] = field(default_factory=list)
+
+    # V2 structured project fields
+    normalized_methods: List[str] = field(default_factory=list)
+    normalized_tools: List[str] = field(default_factory=list)
+    normalized_workflows: List[str] = field(default_factory=list)
+    business_contexts: List[str] = field(default_factory=list)
+    stakeholder_contexts: List[str] = field(default_factory=list)
+    artifact_types: List[str] = field(default_factory=list)
+    kpi_metrics: List[str] = field(default_factory=list)
+    ownership_signals: List[str] = field(default_factory=list)
 
 
 @dataclass
@@ -86,9 +107,21 @@ class ResumeEvidence:
     education_entries: List[ResumeEducationEntry] = field(default_factory=list)
     experience_entries: List[ResumeExperienceEntry] = field(default_factory=list)
     project_entries: List[ResumeProjectEntry] = field(default_factory=list)
+
     domain_signals: List[str] = field(default_factory=list)
     analytics_ml_signals: List[str] = field(default_factory=list)
     experimentation_signals: List[str] = field(default_factory=list)
     tooling_signals: List[str] = field(default_factory=list)
     quantified_bullets: List[str] = field(default_factory=list)
+
+    # V2 structured aggregate fields
+    methods: List[str] = field(default_factory=list)
+    tools: List[str] = field(default_factory=list)
+    workflows: List[str] = field(default_factory=list)
+    business_contexts: List[str] = field(default_factory=list)
+    stakeholder_contexts: List[str] = field(default_factory=list)
+    artifact_types: List[str] = field(default_factory=list)
+    kpi_metrics: List[str] = field(default_factory=list)
+    ownership_signals: List[str] = field(default_factory=list)
+
     notes: Dict[str, Any] = field(default_factory=dict)

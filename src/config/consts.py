@@ -1082,6 +1082,8 @@ REQUIRED_CONTEXT_PATTERNS = [
     r"\bbecause you have\b",
     r"\bwe['’]d love to chat if you have\b",
     r"\bwe would love to chat if you have\b",
+    r"\byou should bring\b",
+    r"\bwhat you['’]ll do\b",
 ]
 
 PREFERRED_CONTEXT_PATTERNS = [
@@ -1437,3 +1439,224 @@ _DIRECT_APPLY_READY_MATERIALITY_STATUSES = {
 _DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES = {
     "export_safe_no_score_lift",
 }
+
+
+# ============================================================
+# SCORING V2
+# ============================================================
+
+RESUME_METHOD_SIGNAL_PATTERNS = list(dict.fromkeys(
+    ANALYTICS_ML_SIGNAL_PATTERNS + EXPERIMENTATION_SIGNAL_PATTERNS
+))
+
+RESUME_WORKFLOW_SIGNAL_PATTERNS = list(dict.fromkeys([
+    "a/b test",
+    "a/b testing",
+    "experiment",
+    "experimentation",
+    "automation",
+    "forecasting",
+    "segmentation",
+    "cohort analysis",
+    "customer lifecycle analysis",
+    "lifecycle analysis",
+    "revenue analysis",
+    "reporting",
+    "reporting framework",
+    "reporting frameworks",
+    "dashboard",
+    "dashboards",
+    "visualization",
+    "data quality",
+    "etl",
+    "elt",
+    "pipeline",
+    "pipelines",
+    "lead flow",
+    "handoff",
+    "eda",
+]))
+
+RESUME_BUSINESS_CONTEXT_SIGNAL_PATTERNS = list(dict.fromkeys(
+    TAILORING_FACET_PATTERNS["domain_context"]
+    + [
+        "growth",
+        "product-led growth",
+        "plg",
+        "revenue",
+        "retention",
+        "expansion",
+        "contraction",
+        "sales intelligence",
+        "customer success",
+        "marketing",
+        "finance",
+        "public safety",
+        "customer lifecycle",
+    ]
+))
+
+RESUME_STAKEHOLDER_CONTEXT_SIGNAL_PATTERNS = list(dict.fromkeys([
+    "stakeholder",
+    "stakeholders",
+    "executive",
+    "executives",
+    "non-technical",
+    "customers",
+    "agencies",
+    "product",
+    "marketing",
+    "finance",
+    "sales",
+    "customer success",
+    "engineering",
+    "leadership",
+    "leaders",
+]))
+
+RESUME_ARTIFACT_TYPE_SIGNAL_PATTERNS = list(dict.fromkeys([
+    "dashboard",
+    "dashboards",
+    "visualization",
+    "visualizations",
+    "report",
+    "reports",
+    "analysis",
+    "analyses",
+    "model",
+    "models",
+    "summary",
+    "summaries",
+    "presentation",
+    "presentations",
+    "framework",
+    "frameworks",
+    "query",
+    "queries",
+    "script",
+    "scripts",
+]))
+
+RESUME_KPI_METRIC_SIGNAL_PATTERNS = list(dict.fromkeys([
+    "kpi",
+    "kpis",
+    "conversion",
+    "retention",
+    "revenue",
+    "margin",
+    "profitability",
+    "pipeline",
+    "roi",
+    "attribution",
+    "engagement",
+    "adoption",
+    "quality",
+    "efficiency",
+    "churn",
+]))
+
+RESUME_OWNERSHIP_SIGNAL_PATTERNS = list(dict.fromkeys(
+    ACTION_VERB_HINTS
+    + [
+        "owned",
+        "partnered",
+        "collaborated",
+        "presented",
+        "translated",
+        "advised",
+        "mentored",
+    ]
+))
+
+_WORKFLOW_CANDIDATES = [
+    "a/b testing",
+    "experimentation",
+    "automation",
+    "reporting",
+    "reporting frameworks",
+    "dashboard",
+    "dashboards",
+    "visualization",
+    "forecasting",
+    "attribution",
+    "customer lifecycle analysis",
+    "lifecycle analysis",
+    "cohort analysis",
+    "data quality",
+    "etl",
+    "elt",
+    "pipeline",
+    "pipelines",
+    "revenue analysis",
+    "lead flow",
+    "handoff",
+    "segmentation",
+    "eda",
+]
+
+_BUSINESS_CONTEXT_CANDIDATES = [
+    "growth",
+    "product-led growth",
+    "plg",
+    "revenue",
+    "retention",
+    "expansion",
+    "contraction",
+    "sales intelligence",
+    "customer success",
+    "marketing",
+    "finance",
+    "public safety",
+    "healthcare",
+    "fraud",
+    "risk",
+    "operations",
+    "supply chain",
+    "customer lifecycle",
+]
+
+_STAKEHOLDER_CONTEXT_CANDIDATES = [
+    "stakeholders",
+    "executive",
+    "non-technical",
+    "product",
+    "marketing",
+    "finance",
+    "sales",
+    "customer success",
+    "engineering",
+    "customers",
+    "agencies",
+    "leaders",
+]
+
+_KPI_METRIC_CANDIDATES = [
+    "kpi",
+    "kpis",
+    "conversion",
+    "retention",
+    "revenue",
+    "margin",
+    "profitability",
+    "roi",
+    "attribution",
+    "engagement",
+    "adoption",
+    "quality",
+    "efficiency",
+    "churn",
+]
+
+_OWNERSHIP_SIGNAL_CANDIDATES = [
+    "own",
+    "ownership",
+    "lead",
+    "leader",
+    "trusted advisor",
+    "thought leader",
+    "drive",
+    "mentor",
+    "highly visible",
+    "independent",
+    "autonomy",
+]

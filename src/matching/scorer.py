@@ -238,6 +238,14 @@ def _resume_experience_business_context_set(resume: ResumeEvidence) -> Set[str]:
 
     return {_normalize_text(value) for value in values if _normalize_text(value)}
 
+def _resume_experience_stakeholder_context_set(resume: ResumeEvidence) -> Set[str]:
+    values: List[str] = []
+
+    for entry in resume.experience_entries:
+        values.extend(entry.stakeholder_contexts)
+
+    return {_normalize_text(value) for value in values if _normalize_text(value)}
+
 def _title_tokens(value: str) -> Set[str]:
     return {
         token
@@ -418,6 +426,22 @@ def _dynamic_job_body_text(job: JobEvidence) -> str:
 
     return _normalize_text(body)
 
+def _domain_relevance_job_text(job: JobEvidence, job_domain_signals: List[str]) -> str:
+    business_contexts = _normalized_skill_list(getattr(job, "business_contexts", []))
+    role_archetype = _normalize_text(getattr(job, "role_archetype", ""))
+
+    parts = [
+        job.title,
+        job.role_family,
+        role_archetype,
+        " ".join(job_domain_signals),
+        " ".join(business_contexts),
+    ]
+
+    return " ".join(
+        part for part in parts
+        if str(part or "").strip()
+    )
 
 def _dynamic_overlap_phrases(text: str) -> List[str]:
     tokens = _dynamic_overlap_terms(text)
@@ -457,23 +481,8 @@ def _dynamic_segment_overlap(
 
 def _dynamic_job_resume_overlap(
     resume: ResumeEvidence,
-    job: JobEvidence,
+    job_text: str,
 ) -> Tuple[float, List[str], int, int]:
-    job_body_text = _dynamic_job_body_text(job)
-
-    job_text = " ".join(
-        part
-        for part in [
-            job.title,
-            job.role_family,
-            " ".join(job.required_skills),
-            " ".join(job.preferred_skills),
-            " ".join(job.all_skills),
-            job_body_text,
-        ]
-        if str(part or "").strip()
-    )
-
     job_terms = _dynamic_overlap_terms(job_text)
     job_phrases = _dynamic_overlap_phrases(job_text)
     targets = _unique_preserve_order(job_terms + job_phrases)
@@ -549,16 +558,19 @@ def _score_domain_relevance(
     static_matches = [signal for signal in normalized_job if signal in normalized_resume]
     static_coverage = len(static_matches) / len(normalized_job) if normalized_job else 0.0
 
+    dynamic_job_text = _domain_relevance_job_text(job, normalized_job)
     dynamic_coverage, dynamic_evidence, dynamic_match_units, dynamic_target_count = _dynamic_job_resume_overlap(
         resume,
-        job,
+        dynamic_job_text,
     )
 
-    if not normalized_job and dynamic_target_count < 4:
+    normalized_business_contexts = _normalized_skill_list(getattr(job, "business_contexts", []))
+
+    if not normalized_job and not normalized_business_contexts and dynamic_target_count < 4:
         return _weighted_dimension(
             definition,
             0.5,
-            "Job has no explicit domain signals and no sufficiently specific dynamic JD context targets, so domain relevance is neutral in v1.",
+            "Job has no explicit domain or business-context targets and no sufficiently specific dynamic domain targets, so domain relevance is neutral in v1.",
             [],
         )
 
@@ -1152,6 +1164,32 @@ def _score_business_context_alignment(
         matches,
     )
 
+def _score_stakeholder_translation_alignment(
+    definition: MatchDimensionDefinition,
+    resume: ResumeEvidence,
+    job: JobEvidence,
+) -> MatchDimensionScore:
+    resume_stakeholder_context_set = _resume_experience_stakeholder_context_set(resume)
+    job_targets = _normalized_skill_list(job.stakeholder_contexts)
+
+    if not job_targets:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job has no explicit stakeholder-context targets, so stakeholder translation alignment is neutral in v1.",
+            [],
+        )
+
+    matches = [context for context in job_targets if context in resume_stakeholder_context_set]
+    coverage = len(matches) / len(job_targets)
+
+    return _weighted_dimension(
+        definition,
+        coverage,
+        f"Matched {len(matches)}/{len(job_targets)} explicit JD stakeholder-context targets from experience bullets.",
+        matches,
+    )
+
 def _score_tooling_alignment(
     definition: MatchDimensionDefinition,
     resume_explicit_skill_set: Set[str],
@@ -1412,7 +1450,7 @@ def score_resume_job_match(
         job_title=job.title,
     )
 
-    dimensions = get_match_dimensions()
+    dimensions = get_match_dimensions(getattr(job, "role_archetype", ""))
     if not prefilter_result.passed:
         skipped = [
             _skipped_dimension(dimension, "Scoring skipped because deterministic prefilter failed.")
@@ -1468,6 +1506,11 @@ def score_resume_job_match(
             job,
         ),
         "business_context_alignment": lambda definition: _score_business_context_alignment(
+            definition,
+            resume,
+            job,
+        ),
+        "stakeholder_translation_alignment": lambda definition: _score_stakeholder_translation_alignment(
             definition,
             resume,
             job,

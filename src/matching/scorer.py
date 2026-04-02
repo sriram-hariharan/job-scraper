@@ -574,6 +574,182 @@ def _score_domain_relevance(
         dynamic_evidence,
     )
 
+def _matched_experimentation_surfacing_bonus(
+    resume: ResumeEvidence,
+    job: JobEvidence,
+    matched_signals: List[str],
+) -> Tuple[float, List[str], str]:
+    matched_signals = _normalized_skill_list(matched_signals)
+    if not matched_signals:
+        return 0.0, [], "No matched experimentation signals were eligible for surfacing bonus."
+
+    job_text = " ".join(
+        part
+        for part in [
+            job.title,
+            job.role_family,
+            " ".join(job.required_skills),
+            " ".join(job.preferred_skills),
+            " ".join(job.all_skills),
+            _dynamic_job_body_text(job),
+        ]
+        if str(part or "").strip()
+    )
+
+    job_terms = _dynamic_overlap_terms(job_text)
+    job_phrases = _dynamic_overlap_phrases(job_text)
+    targets = _unique_preserve_order(job_terms + job_phrases)
+
+    if len(targets) < 4:
+        return 0.0, [], "JD context was too weak to evaluate experimentation surfacing bonus."
+
+    best_coverage = 0.0
+    best_match_units = 0
+    best_segment_signals: List[str] = []
+    best_evidence: List[str] = []
+
+    for segment in _resume_experience_segments(resume):
+        segment_norm = _normalize_text(segment)
+        surfaced_signals = [
+            signal for signal in matched_signals
+            if _contains_signal(segment_norm, signal)
+        ]
+        if not surfaced_signals:
+            continue
+
+        coverage, evidence, match_units = _dynamic_segment_overlap(
+            segment,
+            job_terms,
+            job_phrases,
+            target_count=len(targets),
+        )
+
+        if coverage > best_coverage or (
+            coverage == best_coverage and match_units > best_match_units
+        ):
+            best_coverage = coverage
+            best_match_units = match_units
+            best_segment_signals = surfaced_signals
+            best_evidence = evidence
+
+    if best_coverage <= 0.0 or not best_segment_signals:
+        return 0.0, [], "Matched experimentation signals were not found inside a JD-aligned experience segment."
+
+    bonus = min(0.02, best_coverage * 0.05)
+    evidence = _unique_preserve_order(best_segment_signals + best_evidence)
+    reason = (
+        f"Added experimentation surfacing bonus {bonus:.4f} because {len(best_segment_signals)} "
+        f"already-matched experimentation signal(s) appear inside a JD-aligned experience segment "
+        f"(coverage={best_coverage:.4f}, match_units={best_match_units})."
+    )
+    return bonus, evidence, reason
+
+def _score_experimentation_alignment(
+    definition: MatchDimensionDefinition,
+    resume: ResumeEvidence,
+    job: JobEvidence,
+    job_experimentation_signals: List[str],
+    empty_reason: str,
+) -> MatchDimensionScore:
+    normalized_resume = {
+        _normalize_text(signal)
+        for signal in resume.experimentation_signals
+        if _normalize_text(signal)
+    }
+    normalized_job = _normalized_skill_list(job_experimentation_signals)
+
+    if not normalized_job:
+        return _weighted_dimension(definition, 0.5, empty_reason, [])
+
+    matches = [signal for signal in normalized_job if signal in normalized_resume]
+    coverage = len(matches) / len(normalized_job)
+
+    surfacing_bonus, surfacing_evidence, surfacing_reason = _matched_experimentation_surfacing_bonus(
+        resume,
+        job,
+        matches,
+    )
+
+    final_score = min(1.0, coverage + surfacing_bonus)
+    evidence = _unique_preserve_order(matches + surfacing_evidence)
+
+    reason = f"Matched {len(matches)}/{len(normalized_job)} explicit job signals."
+    if surfacing_bonus > 0.0:
+        reason += f" {surfacing_reason}"
+
+    return _weighted_dimension(definition, final_score, reason, evidence)
+
+
+def _matched_skill_surfacing_bonus(
+    resume: ResumeEvidence,
+    job: JobEvidence,
+    matched_targets: List[str],
+) -> Tuple[float, List[str], str]:
+    matched_targets = _normalized_skill_list(matched_targets)
+    if not matched_targets:
+        return 0.0, [], "No explicit matched target skills were eligible for surfacing bonus."
+
+    job_text = " ".join(
+        part
+        for part in [
+            job.title,
+            job.role_family,
+            " ".join(job.required_skills),
+            " ".join(job.preferred_skills),
+            " ".join(job.all_skills),
+            _dynamic_job_body_text(job),
+        ]
+        if str(part or "").strip()
+    )
+
+    job_terms = _dynamic_overlap_terms(job_text)
+    job_phrases = _dynamic_overlap_phrases(job_text)
+    targets = _unique_preserve_order(job_terms + job_phrases)
+
+    if len(targets) < 4:
+        return 0.0, [], "JD context was too weak to evaluate surfacing bonus."
+
+    best_coverage = 0.0
+    best_match_units = 0
+    best_segment_targets: List[str] = []
+    best_evidence: List[str] = []
+
+    for segment in _resume_experience_segments(resume):
+        segment_norm = _normalize_text(segment)
+        surfaced_targets = [
+            target for target in matched_targets
+            if _contains_signal(segment_norm, target)
+        ]
+        if not surfaced_targets:
+            continue
+
+        coverage, evidence, match_units = _dynamic_segment_overlap(
+            segment,
+            job_terms,
+            job_phrases,
+            target_count=len(targets),
+        )
+
+        if coverage > best_coverage or (
+            coverage == best_coverage and match_units > best_match_units
+        ):
+            best_coverage = coverage
+            best_match_units = match_units
+            best_segment_targets = surfaced_targets
+            best_evidence = evidence
+
+    if best_coverage <= 0.0 or not best_segment_targets:
+        return 0.0, [], "Matched explicit target skills were not found inside a JD-aligned experience segment."
+
+    bonus = min(0.02, best_coverage * 0.05)
+    evidence = _unique_preserve_order(best_segment_targets + best_evidence)
+    reason = (
+        f"Added surfacing bonus {bonus:.4f} because {len(best_segment_targets)} already-matched "
+        f"explicit target skill(s) appear inside a JD-aligned experience segment "
+        f"(coverage={best_coverage:.4f}, match_units={best_match_units})."
+    )
+    return bonus, evidence, reason
+
 def _job_baseline_family_targets(job: JobEvidence) -> Dict[str, List[str]]:
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
     family_targets: Dict[str, List[str]] = {}
@@ -847,6 +1023,8 @@ def _score_skill_alignment(
     definition: MatchDimensionDefinition,
     targets: List[str],
     resume_explicit_skill_set: Set[str],
+    resume: ResumeEvidence,
+    job: JobEvidence,
     empty_reason: str,
 ) -> MatchDimensionScore:
     normalized_targets = _normalized_skill_list(targets)
@@ -856,13 +1034,25 @@ def _score_skill_alignment(
     matches = [skill for skill in normalized_targets if skill in resume_explicit_skill_set]
     coverage = len(matches) / len(normalized_targets)
 
+    surfacing_bonus, surfacing_evidence, surfacing_reason = _matched_skill_surfacing_bonus(
+        resume,
+        job,
+        matches,
+    )
+
+    final_score = min(1.0, coverage + surfacing_bonus)
+    evidence = _unique_preserve_order(matches + surfacing_evidence)
+
     reason = (
         f"Matched {len(matches)}/{len(normalized_targets)} explicit target skills."
         if matches
         else f"Matched 0/{len(normalized_targets)} explicit target skills."
     )
 
-    return _weighted_dimension(definition, coverage, reason, matches)
+    if surfacing_bonus > 0.0:
+        reason += f" {surfacing_reason}"
+
+    return _weighted_dimension(definition, final_score, reason, evidence)
 
 def _score_tooling_alignment(
     definition: MatchDimensionDefinition,
@@ -1162,12 +1352,16 @@ def score_resume_job_match(
             definition,
             job.required_skills,
             resume_explicit_skill_set,
+            resume,
+            job,
             "Job has no explicit required-skill list, so required-skills alignment is neutral in v1.",
         ),
         "preferred_skills_alignment": lambda definition: _score_skill_alignment(
             definition,
             job.preferred_skills,
             resume_explicit_skill_set,
+            resume,
+            job,
             "Job has no explicit preferred-skill list, so preferred-skills alignment is neutral in v1.",
         ),
         "analytics_ml_depth": lambda definition: _score_analytics_ml_depth(
@@ -1187,9 +1381,10 @@ def score_resume_job_match(
             resume_explicit_skill_set,
             job,
         ),
-        "experimentation_depth": lambda definition: _score_signal_alignment(
+        "experimentation_depth": lambda definition: _score_experimentation_alignment(
             definition,
-            resume.experimentation_signals,
+            resume,
+            job,
             job_experimentation_signals,
             "Job has no explicit experimentation signals, so experimentation depth is neutral in v1.",
         ),

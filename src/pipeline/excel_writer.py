@@ -94,7 +94,7 @@ def format_sheet(sheet, headers):
         "LLM Fallback Backup Score": "0.00",
         "Queue Rank": "0",
         "Missing Requirement Count": "0",
-        "Resume Match": "0.00",
+        "Embedding Prior Score": "0.00",
         "Priority Score": "0.00",
         "AI Signal Score": "0.00",
     }
@@ -204,8 +204,8 @@ def write_jobs_to_sheet(jobs):
         "LLM Fallback Status",
         "LLM Fallback Cache Hit",
         "LLM Fallback Reason",
-        "Embedding Best Resume",
-        "Resume Match",
+        "Embedding Resume Prior",
+        "Embedding Prior Score",
         "Priority Score",
         "AI Signal Score",
         "LLM Job Triage",
@@ -270,7 +270,7 @@ def write_jobs_to_sheet(jobs):
 
         priority = job.get("priority_score", 0)
         ai_score = job.get("ai_signal_score", 0)
-        resume_match = job.get("resume_match_score", 0)
+        embedding_resume_prior_score = job.get("embedding_resume_prior_score", 0)
 
         try:
             priority = float(priority)
@@ -283,9 +283,9 @@ def write_jobs_to_sheet(jobs):
             ai_score = 0.0
 
         try:
-            resume_match = float(resume_match)
+            embedding_resume_prior_score = float(embedding_resume_prior_score)
         except Exception:
-            resume_match = 0.0
+            embedding_resume_prior_score = 0.0
 
         intelligence = job.get("intelligence", {})
         planning = job.get("application_planning", {}) or {}
@@ -316,8 +316,8 @@ def write_jobs_to_sheet(jobs):
             planning.get("llm_fallback_status", ""),
             planning.get("llm_fallback_cache_hit", ""),
             planning.get("llm_fallback_reason", ""),
-            job.get("best_resume"),
-            _scale_score_100(resume_match),
+            job.get("embedding_resume_prior"),
+            _scale_score_100(embedding_resume_prior_score),
             priority,
             ai_score,
             job.get("ai_fit"),

@@ -48,9 +48,9 @@ def score_job(job):
         job.get("learning_opportunity", 0) * 0.20
     )
 
-    # Resume similarity
-    resume_match = job.get("resume_match_score", 0)
-    resume_score = resume_match * 10
+    # Embedding resume prior
+    embedding_resume_prior_score = job.get("embedding_resume_prior_score", 0)
+    resume_score = embedding_resume_prior_score * 10
 
     # Visa signal
     visa_signal = job.get("intelligence", {}).get("visa_sponsorship", "unknown")

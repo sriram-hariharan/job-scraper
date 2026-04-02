@@ -33,10 +33,16 @@ def match_resume_for_job(job, job_embedding, resume_matrix, resume_names):
     candidate_resume_names = get_candidate_resumes(role_family)
 
     if not candidate_resume_names:
-        return {"best_resume": None, "resume_match_score": None}
+        return {
+            "embedding_resume_prior": None,
+            "embedding_resume_prior_score": None,
+        }
 
     if resume_matrix is None:
-        return {"best_resume": None, "resume_match_score": None}
+        return {
+            "embedding_resume_prior": None,
+            "embedding_resume_prior_score": None,
+        }
 
     candidate_indices = [
         resume_names.index(name)
@@ -46,8 +52,8 @@ def match_resume_for_job(job, job_embedding, resume_matrix, resume_names):
 
     if not candidate_indices:
         return {
-            "best_resume": None,
-            "resume_match_score": None
+            "embedding_resume_prior": None,
+            "embedding_resume_prior_score": None,
         }
 
     candidate_matrix = resume_matrix[candidate_indices]
@@ -59,12 +65,11 @@ def match_resume_for_job(job, job_embedding, resume_matrix, resume_names):
     best_idx = candidate_indices[best_local_idx]
 
     best_resume = resume_names[best_idx]
-
-    best_score = similarities[best_local_idx]
+    best_score = round(float(similarities[best_local_idx]), 4)
 
     return {
-        "best_resume": best_resume,
-        "resume_match_score": round(float(best_score), 4)
+        "embedding_resume_prior": best_resume,
+        "embedding_resume_prior_score": best_score,
     }
 
 

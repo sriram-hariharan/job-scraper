@@ -317,11 +317,11 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         eval_cache_summary["eval_live_failures"],
     )
 
-    section("RESUME MATCHING", logger)
-    start_stage("resume_matching", f"Matching resumes for {len(ai_jobs)} AI-evaluated jobs")
+    section("EMBEDDING RESUME PRIOR", logger)
+    start_stage("resume_matching", f"Computing embedding resume prior for {len(ai_jobs)} AI-evaluated jobs")
 
     ai_jobs = match_resumes(ai_jobs)
-    logger.info("Resume matching completed")
+    logger.info("Embedding resume prior completed")
     complete_stage("resume_matching", counts={"resume_matched_jobs": len(ai_jobs)})
 
     section("APPLICATION PRIORITY", logger)

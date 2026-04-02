@@ -1018,6 +1018,11 @@ def _patched_resume_document(
             if hasattr(patched_document, "raw_text") and str(getattr(patched_document, "raw_text", "") or "").strip():
                 patched_document.raw_text = patched_value
 
+        normalized_source = str(
+            getattr(patched_document, "raw_text", "") or getattr(patched_document, "text", "") or ""
+        )
+        patched_document.normalized_text = re.sub(r"\s+", " ", normalized_source).strip()
+
         return patched_document, "ok"
 
     return None, "raw_text_bullet_not_found"

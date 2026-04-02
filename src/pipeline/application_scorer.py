@@ -1,6 +1,6 @@
 from datetime import datetime
 from src.storage.metrics_store import get_hiring_momentum
-
+from src.config.settings import APPLICATION_PRIORITY_POLICY
 
 def score_job(job):
 
@@ -52,31 +52,12 @@ def score_job(job):
     embedding_resume_prior_score = job.get("embedding_resume_prior_score", 0)
     resume_score = embedding_resume_prior_score * 10
 
-    # Visa signal
-    visa_signal = job.get("intelligence", {}).get("visa_sponsorship", "unknown")
+    weights = APPLICATION_PRIORITY_POLICY["weights"]
 
-    visa_score = 0
-    if visa_signal == "possible":
-        visa_score = 3
-    elif visa_signal == "no":
-        visa_score = -5
-
-    # Role family
-    role_family = job.get("intelligence", {}).get("role_family")
-
-    role_score = 0
-    if role_family in ["data scientist", "machine learning engineer", "ai engineer"]:
-        role_score = 3
-    elif role_family == "data analyst":
-        role_score = 1
-
-    # Final score
     priority_score = (
-        0.40 * ai_signal_score +
-        0.30 * resume_score +
-        0.20 * base_score +
-        0.10 * role_score +
-        visa_score
+        weights["ai_signal_score"] * ai_signal_score +
+        weights["embedding_resume_prior_score"] * resume_score +
+        weights["base_score"] * base_score
     )
 
     job["ai_signal_score"] = round(ai_signal_score, 2)

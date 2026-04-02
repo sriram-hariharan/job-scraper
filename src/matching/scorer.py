@@ -222,6 +222,22 @@ def _resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
 
     return {_normalize_text(value) for value in values if _normalize_text(value)}
 
+def _resume_experience_workflow_set(resume: ResumeEvidence) -> Set[str]:
+    values: List[str] = []
+
+    for entry in resume.experience_entries:
+        values.extend(entry.normalized_workflows)
+
+    return {_normalize_text(value) for value in values if _normalize_text(value)}
+
+def _resume_experience_business_context_set(resume: ResumeEvidence) -> Set[str]:
+    values: List[str] = []
+
+    for entry in resume.experience_entries:
+        values.extend(entry.business_contexts)
+
+    return {_normalize_text(value) for value in values if _normalize_text(value)}
+
 def _title_tokens(value: str) -> Set[str]:
     return {
         token
@@ -742,7 +758,7 @@ def _matched_skill_surfacing_bonus(
         return 0.0, [], "Matched explicit target skills were not found inside a JD-aligned experience segment."
 
     bonus = min(0.02, best_coverage * 0.05)
-    evidence = _unique_preserve_order(best_segment_targets + best_evidence)
+    evidence = _unique_preserve_order(best_segment_targets)
     reason = (
         f"Added surfacing bonus {bonus:.4f} because {len(best_segment_targets)} already-matched "
         f"explicit target skill(s) appear inside a JD-aligned experience segment "
@@ -1054,6 +1070,88 @@ def _score_skill_alignment(
 
     return _weighted_dimension(definition, final_score, reason, evidence)
 
+def _score_workflow_alignment(
+    definition: MatchDimensionDefinition,
+    resume: ResumeEvidence,
+    job: JobEvidence,
+) -> MatchDimensionScore:
+    resume_workflow_set = _resume_experience_workflow_set(resume)
+    required_targets = _normalized_skill_list(job.required_workflows)
+    preferred_targets = _normalized_skill_list(job.preferred_workflows)
+
+    if not required_targets and not preferred_targets:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job has no explicit workflow targets, so workflow alignment is neutral in v1.",
+            [],
+        )
+
+    required_matches = [workflow for workflow in required_targets if workflow in resume_workflow_set]
+    preferred_matches = [workflow for workflow in preferred_targets if workflow in resume_workflow_set]
+
+    required_coverage = (
+        len(required_matches) / len(required_targets)
+        if required_targets else 0.0
+    )
+    preferred_coverage = (
+        len(preferred_matches) / len(preferred_targets)
+        if preferred_targets else 0.0
+    )
+
+    if required_targets and preferred_targets:
+        score = (0.70 * required_coverage) + (0.30 * preferred_coverage)
+    elif required_targets:
+        score = required_coverage
+    else:
+        score = preferred_coverage
+
+    evidence = _unique_preserve_order(required_matches + preferred_matches)
+
+    reason_parts: List[str] = []
+    if required_targets:
+        reason_parts.append(
+            f"matched {len(required_matches)}/{len(required_targets)} required workflows"
+        )
+    if preferred_targets:
+        reason_parts.append(
+            f"matched {len(preferred_matches)}/{len(preferred_targets)} preferred workflows"
+        )
+
+    reason = (
+        "Workflow alignment " + ", ".join(reason_parts) + "."
+        if reason_parts
+        else "Workflow alignment could not be established."
+    )
+
+    return _weighted_dimension(definition, score, reason, evidence)
+
+def _score_business_context_alignment(
+    definition: MatchDimensionDefinition,
+    resume: ResumeEvidence,
+    job: JobEvidence,
+) -> MatchDimensionScore:
+    resume_business_context_set = _resume_experience_business_context_set(resume)
+    job_targets = _normalized_skill_list(job.business_contexts)
+
+    if not job_targets:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job has no explicit business-context targets, so business-context alignment is neutral in v1.",
+            [],
+        )
+
+    matches = [context for context in job_targets if context in resume_business_context_set]
+    coverage = len(matches) / len(job_targets)
+
+    return _weighted_dimension(
+        definition,
+        coverage,
+        f"Matched {len(matches)}/{len(job_targets)} explicit JD business-context targets from experience bullets.",
+        matches,
+    )
+
 def _score_tooling_alignment(
     definition: MatchDimensionDefinition,
     resume_explicit_skill_set: Set[str],
@@ -1363,6 +1461,16 @@ def score_resume_job_match(
             resume,
             job,
             "Job has no explicit preferred-skill list, so preferred-skills alignment is neutral in v1.",
+        ),
+        "workflow_alignment": lambda definition: _score_workflow_alignment(
+            definition,
+            resume,
+            job,
+        ),
+        "business_context_alignment": lambda definition: _score_business_context_alignment(
+            definition,
+            resume,
+            job,
         ),
         "analytics_ml_depth": lambda definition: _score_analytics_ml_depth(
             definition,

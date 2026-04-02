@@ -20,8 +20,18 @@ MATCH_DIMENSIONS: List[MatchDimensionDefinition] = [
         description="Coverage of preferred or bonus skills in the resume evidence.",
     ),
     MatchDimensionDefinition(
+        name="workflow_alignment",
+        weight=0.076513,
+        description="Alignment between JD workflows and the candidate's experience-bullet workflows such as experimentation, reporting, dashboards, data quality, automation, and pipelines.",
+    ),
+    MatchDimensionDefinition(
+        name="business_context_alignment",
+        weight=0.046511,
+        description="Alignment between the JD's business problem space and the candidate's experience-bullet business contexts such as growth, revenue, customer success, public safety, healthcare, or risk.",
+    ),
+    MatchDimensionDefinition(
         name="domain_relevance",
-        weight=0.093023,
+        weight=0.046512,
         description="Relevance of past domain experience to the target job's business or problem space.",
     ),
     MatchDimensionDefinition(
@@ -38,16 +48,6 @@ MATCH_DIMENSIONS: List[MatchDimensionDefinition] = [
         name="tooling_alignment",
         weight=0.078023,
         description="Overlap between the resume's tools/stack and the job's required tooling.",
-    ),
-    MatchDimensionDefinition(
-        name="baseline_familiarity",
-        weight=0.030000,
-        description="Low-weight scoring-only inferred familiarity for common baseline methods/tools when the resume profile strongly supports them.",
-    ),
-    MatchDimensionDefinition(
-        name="project_relevance",
-        weight=0.046513,
-        description="Relevance of resume projects or side work to the target role.",
     ),
 ]
 

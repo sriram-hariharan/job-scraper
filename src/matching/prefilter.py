@@ -5,22 +5,20 @@ from src.matching.job_models import JobEvidence
 from src.matching.models import MatchPrefilterResult
 from src.resume.models import ResumeEvidence
 
+from src.config.settings import SCORER_V2_POLICY
+
 from src.config.consts import (
     ROLE_WORD_HINTS,
     TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
     _SKILL_ALIASES,
+    _VARIANT_TITLE_ABBREVIATIONS
 )
 
-_VARIANT_TITLE_ABBREVIATIONS = {
-    "ai": "ai engineer",
-    "mle": "machine learning engineer",
-    "ml": "machine learning engineer",
-    "ds": "data scientist",
-    "da": "data analyst",
-    "ae": "analytics engineer",
-}
-
+PREFILTER_POLICY = SCORER_V2_POLICY["prefilter"]
+MATCHED_TERMS_TITLE_MIN_SCORE = PREFILTER_POLICY["matched_terms_title_min_score"]
+MINIMUM_OVERLAP_POLICY = PREFILTER_POLICY["minimum_overlap"]
+REQUIRED_SKILL_FLOOR_POLICY = PREFILTER_POLICY["required_skill_floor"]
 
 def _normalize_text(value: str) -> str:
     text = str(value or "").lower().strip()
@@ -237,7 +235,7 @@ def run_prefilter(
     matched_any = [skill for skill in all_skills if skill in resume_explicit_skill_set]
 
     matched_terms: List[str] = []
-    if best_title and best_title_score >= 0.45:
+    if best_title and best_title_score >= MATCHED_TERMS_TITLE_MIN_SCORE:
         matched_terms.append(best_title)
     matched_terms.extend(matched_required)
     matched_terms.extend(matched_preferred)
@@ -251,22 +249,37 @@ def run_prefilter(
     failed_reasons: List[str] = []
 
     minimum_overlap_passed = False
-    if best_title_score >= 0.80 and len(matched_any) >= 2:
-        minimum_overlap_passed = True
-    elif best_title_score >= 0.80 and _is_data_science_like_job(job) and len(matched_any) >= 1:
-        minimum_overlap_passed = True
-    elif best_title_score >= 0.45 and len(matched_any) >= 3:
-        minimum_overlap_passed = True
-    elif (
-        best_title_score >= 0.40
-        and required_skills
-        and len(matched_required) >= 2
-        and (len(matched_required) / len(required_skills)) >= 0.25
+    if (
+        best_title_score >= MINIMUM_OVERLAP_POLICY["high_title_min_score"]
+        and len(matched_any) >= MINIMUM_OVERLAP_POLICY["high_title_min_matched_any"]
     ):
         minimum_overlap_passed = True
-    elif len(required_skills) <= 2 and required_skills and len(matched_required) == len(required_skills) and len(matched_any) >= 3:
+    elif (
+        best_title_score >= MINIMUM_OVERLAP_POLICY["high_title_min_score"]
+        and _is_data_science_like_job(job)
+        and len(matched_any) >= MINIMUM_OVERLAP_POLICY["high_title_ds_like_min_matched_any"]
+    ):
         minimum_overlap_passed = True
-    elif len(matched_required) >= 3:
+    elif (
+        best_title_score >= MINIMUM_OVERLAP_POLICY["mid_title_min_score"]
+        and len(matched_any) >= MINIMUM_OVERLAP_POLICY["mid_title_min_matched_any"]
+    ):
+        minimum_overlap_passed = True
+    elif (
+        best_title_score >= MINIMUM_OVERLAP_POLICY["coverage_title_min_score"]
+        and required_skills
+        and len(matched_required) >= MINIMUM_OVERLAP_POLICY["coverage_min_matched_required"]
+        and (len(matched_required) / len(required_skills)) >= MINIMUM_OVERLAP_POLICY["coverage_min_ratio"]
+    ):
+        minimum_overlap_passed = True
+    elif (
+        len(required_skills) <= MINIMUM_OVERLAP_POLICY["small_required_exact_max_count"]
+        and required_skills
+        and len(matched_required) == len(required_skills)
+        and len(matched_any) >= MINIMUM_OVERLAP_POLICY["small_required_exact_min_matched_any"]
+    ):
+        minimum_overlap_passed = True
+    elif len(matched_required) >= MINIMUM_OVERLAP_POLICY["absolute_required_min_matched"]:
         minimum_overlap_passed = True
 
     if minimum_overlap_passed:
@@ -284,15 +297,29 @@ def run_prefilter(
         if required_skills
         else 0.0
     )
-    if len(required_skills) >= 10 and required_coverage < 0.30 and len(matched_required) < 4:
+    if (
+        len(required_skills) >= REQUIRED_SKILL_FLOOR_POLICY["large_required_min_count"]
+        and required_coverage < REQUIRED_SKILL_FLOOR_POLICY["large_required_min_ratio"]
+        and len(matched_required) < REQUIRED_SKILL_FLOOR_POLICY["large_required_min_matched"]
+    ):
         failed_reasons.append(
             f"Failed required-skill floor: matched {len(matched_required)}/{len(required_skills)} required skills."
         )
-    elif 6 <= len(required_skills) < 10 and required_coverage < 0.25:
+    elif (
+        REQUIRED_SKILL_FLOOR_POLICY["medium_required_min_count"]
+        <= len(required_skills)
+        < REQUIRED_SKILL_FLOOR_POLICY["large_required_min_count"]
+        and required_coverage < REQUIRED_SKILL_FLOOR_POLICY["medium_required_min_ratio"]
+    ):
         failed_reasons.append(
             f"Failed required-skill floor: matched {len(matched_required)}/{len(required_skills)} required skills."
         )
-    elif 3 <= len(required_skills) < 6 and len(matched_required) < 2:
+    elif (
+        REQUIRED_SKILL_FLOOR_POLICY["small_required_min_count"]
+        <= len(required_skills)
+        < REQUIRED_SKILL_FLOOR_POLICY["medium_required_min_count"]
+        and len(matched_required) < REQUIRED_SKILL_FLOOR_POLICY["small_required_min_matched"]
+    ):
         failed_reasons.append(
             f"Failed required-skill floor: matched {len(matched_required)}/{len(required_skills)} required skills."
         )

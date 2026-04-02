@@ -12,10 +12,14 @@ from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
 
-TIE_EPSILON = 0.010
-TITLE_ONLY_TIE_EPSILON = 0.015
-NON_TITLE_DELTA_EPSILON = 0.002
-CLOSE_CALL_REVIEW_EPSILON = 0.020
+from src.config.settings import SCORER_V2_POLICY
+
+SELECTOR_POLICY = SCORER_V2_POLICY["selector"]
+
+TIE_EPSILON = SELECTOR_POLICY["tie_epsilon"]
+TITLE_ONLY_TIE_EPSILON = SELECTOR_POLICY["title_only_tie_epsilon"]
+NON_TITLE_DELTA_EPSILON = SELECTOR_POLICY["non_title_delta_epsilon"]
+CLOSE_CALL_REVIEW_EPSILON = SELECTOR_POLICY["close_call_review_epsilon"]
 
 LLM_FALLBACK_PROVIDER = os.getenv("LLM_FALLBACK_PROVIDER", "groq").strip().lower()
 LLM_FALLBACK_MODEL = os.getenv(

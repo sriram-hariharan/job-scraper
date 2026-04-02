@@ -3,6 +3,17 @@ import csv
 from pathlib import Path
 from typing import List
 
+from src.config.settings import SCORER_V2_POLICY
+
+SHORTLIST_POLICY = SCORER_V2_POLICY["shortlist"]
+
+HIGH_CONFIDENCE_APPLY_SCORE = SHORTLIST_POLICY["high_confidence_apply_score"]
+STRONG_TIE_REVIEW_SCORE = SHORTLIST_POLICY["strong_tie_review_score"]
+GOOD_MATCH_SCORE = SHORTLIST_POLICY["good_match_score"]
+MAX_DIRECT_APPLY_MISSING_REQUIREMENTS = SHORTLIST_POLICY["max_direct_apply_missing_requirements"]
+MAX_STRONG_TIE_MISSING_REQUIREMENTS = SHORTLIST_POLICY["max_strong_tie_missing_requirements"]
+BORDERLINE_SCORE = SHORTLIST_POLICY["borderline_score"]
+BORDERLINE_LOW_PASS_RATE = SHORTLIST_POLICY["borderline_low_pass_rate"]
 
 def _parse_bool(value: str) -> bool:
     return str(value).strip().lower() == "true"
@@ -33,12 +44,6 @@ def _requires_manual_review(row: dict) -> bool:
     if _parse_bool(row.get("requires_manual_review", "false")):
         return True
     return _selection_signal(row) == "manual_review_close_call"
-
-HIGH_CONFIDENCE_APPLY_SCORE = 0.70
-STRONG_TIE_REVIEW_SCORE = 0.64
-GOOD_MATCH_SCORE = 0.58
-MAX_DIRECT_APPLY_MISSING_REQUIREMENTS = 4
-MAX_STRONG_TIE_MISSING_REQUIREMENTS = 4
 
 def _classify_action(row: dict) -> tuple[str, str]:
     winner_score = _parse_float(row.get("winner_score", "0"))
@@ -108,7 +113,7 @@ def _classify_action(row: dict) -> tuple[str, str]:
             f"Good deterministic match ({winner_score:.3f}) but not decisive enough for a straight apply; tailor around the missing requirements ({missing_count}).",
         )
 
-    if winner_score >= 0.50 and pass_rate < 0.50:
+    if winner_score >= BORDERLINE_SCORE and pass_rate < BORDERLINE_LOW_PASS_RATE:
         if requires_manual_review:
             return (
                 "MAYBE_TAILOR",

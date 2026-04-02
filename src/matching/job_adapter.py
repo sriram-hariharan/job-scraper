@@ -207,6 +207,22 @@ def _extract_contextual_phrase_hits(
 
     return _extract_text_phrase_hits(" ".join(gathered_chunks), candidates)
 
+def _prune_method_targets(
+    values: List[str],
+    workflow_targets: List[str],
+) -> List[str]:
+    normalized_values = _normalize_skill_list(values)
+    workflow_set = set(_normalize_skill_list(workflow_targets))
+
+    filtered = [
+        value for value in normalized_values
+        if value not in workflow_set
+    ]
+
+    return [
+        value for value in filtered
+        if value not in GENERIC_REQUIRED_SKILL_TARGETS
+    ]
 
 def _infer_role_archetype(
     title: str,
@@ -317,7 +333,9 @@ def build_job_evidence(job: Dict[str, Any]) -> JobEvidence:
         required_context_text,
         PREFERRED_CONTEXT_PATTERNS,
     )
-    fallback_all = _extract_text_skill_hits(combined_text)
+    fallback_all = _filter_specific_required_skill_targets(
+        _extract_text_skill_hits(combined_text)
+    )
 
     required_methods = _normalize_skill_list(_extract_contextual_phrase_hits(
         required_context_text,
@@ -362,6 +380,19 @@ def build_job_evidence(job: Dict[str, Any]) -> JobEvidence:
         ))
         if value not in required_workflows
     ]
+    
+    required_methods = _prune_method_targets(
+        required_methods,
+        required_workflows + preferred_workflows,
+    )
+    preferred_methods = [
+        value for value in _prune_method_targets(
+            preferred_methods,
+            required_workflows + preferred_workflows,
+        )
+        if value not in required_methods
+    ]
+
     required_skills = _filter_company_self_match(
         _merge_structured_skill_targets(
             raw_required_skills,
@@ -406,12 +437,19 @@ def build_job_evidence(job: Dict[str, Any]) -> JobEvidence:
     ))
 
     all_skills = _filter_company_self_match(
-        list(dict.fromkeys(
-            raw_all_skills
-            + required_skills
-            + preferred_skills
-            + fallback_all
-        )),
+        [
+            skill
+            for skill in list(dict.fromkeys(
+                raw_all_skills
+                + required_skills
+                + preferred_skills
+                + [
+                    skill for skill in fallback_all
+                    if skill not in required_skills and skill not in preferred_skills
+                ]
+            ))
+            if skill not in GENERIC_REQUIRED_SKILL_TARGETS
+        ],
         raw_company,
     )
 

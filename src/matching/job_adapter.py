@@ -370,20 +370,28 @@ def build_job_evidence(job: Dict[str, Any]) -> JobEvidence:
         ),
         raw_company,
     )
-    preferred_skills = _filter_company_self_match(
-        _merge_structured_skill_targets(
-            raw_preferred_skills,
-            fallback_preferred,
-            preferred_tools,
-        ),
-        raw_company,
-    )
+    preferred_skills = [
+        skill
+        for skill in _filter_company_self_match(
+            _merge_structured_skill_targets(
+                raw_preferred_skills,
+                fallback_preferred,
+                preferred_tools,
+            ),
+            raw_company,
+        )
+        if skill not in required_skills
+    ]
 
     if not required_skills and not required_tools and preferred_tools:
         required_skills = _filter_company_self_match(
             _normalize_skill_list(preferred_tools),
             raw_company,
         )
+        preferred_skills = [
+            skill for skill in preferred_skills
+            if skill not in required_skills
+        ]
 
     required_tools = list(dict.fromkeys(
         required_tools

@@ -57,3 +57,20 @@ APPLICATION_PRIORITY_POLICY = {
         "base_score": 0.30,
     },
 }
+
+APPLICATION_EXECUTION_QUEUE_POLICY_VERSION = "v1"
+
+APPLICATION_EXECUTION_QUEUE_POLICY = {
+    "action_rank": {
+        "APPLY": 0,
+        "APPLY_REVIEW_VARIANTS": 1,
+        "MAYBE_TAILOR": 2,
+        "SKIP_FOR_NOW": 3,
+        "__default__": 99,
+    },
+    "tie_review_rank": {
+        "apply_review_variants": 0,
+        "maybe_tailor_variant_review": 1,
+        "default": 2,
+    },
+}

@@ -3,6 +3,10 @@ import csv
 from pathlib import Path
 from typing import List
 
+from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
+
+ACTION_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["action_rank"]
+TIE_REVIEW_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["tie_review_rank"]
 
 def _parse_bool(value: str) -> bool:
     return str(value).strip().lower() == "true"
@@ -31,13 +35,7 @@ def _requires_manual_review(row: dict) -> bool:
     return str(row.get("selection_signal", "")).strip() == "manual_review_close_call"
 
 def _action_rank(action: str) -> int:
-    order = {
-        "APPLY": 0,
-        "APPLY_REVIEW_VARIANTS": 1,
-        "MAYBE_TAILOR": 2,
-        "SKIP_FOR_NOW": 3,
-    }
-    return order.get(action, 99)
+    return int(ACTION_RANK_POLICY.get(action, ACTION_RANK_POLICY["__default__"]))
 
 
 def _tie_review_rank(row: dict) -> int:
@@ -46,10 +44,10 @@ def _tie_review_rank(row: dict) -> int:
     requires_manual_review = _requires_manual_review(row)
 
     if action == "APPLY_REVIEW_VARIANTS":
-        return 0
+        return int(TIE_REVIEW_RANK_POLICY["apply_review_variants"])
     if action == "MAYBE_TAILOR" and (is_tie or requires_manual_review):
-        return 1
-    return 2
+        return int(TIE_REVIEW_RANK_POLICY["maybe_tailor_variant_review"])
+    return int(TIE_REVIEW_RANK_POLICY["default"])
 
 def _needs_variant_review(row: dict) -> str:
     action = row.get("action", "")

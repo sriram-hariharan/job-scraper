@@ -306,6 +306,85 @@ def _job_signal_hits(
     job_text_norm = _normalize_text(" ".join(parts))
     return [pattern for pattern in patterns if _contains_signal(job_text_norm, pattern)]
 
+def _job_structured_signal_hits(
+    job: JobEvidence,
+    patterns: List[str],
+    *,
+    field_names: List[str],
+    fallback_include_retrieval_text: bool,
+) -> List[str]:
+    structured_values: List[str] = []
+
+    for field_name in field_names:
+        values = getattr(job, field_name, []) or []
+        if isinstance(values, list):
+            structured_values.extend(values)
+
+    structured_values = _normalized_skill_list(structured_values)
+
+    if structured_values:
+        structured_text = _normalize_text(" ".join(structured_values))
+        return [pattern for pattern in patterns if _contains_signal(structured_text, pattern)]
+
+    return _job_signal_hits(
+        job,
+        patterns,
+        include_retrieval_text=fallback_include_retrieval_text,
+    )
+
+def _structured_signal_hits_from_values(
+    values: List[str],
+    patterns: List[str],
+) -> List[str]:
+    structured_values = _normalized_skill_list(values)
+    if not structured_values:
+        return []
+
+    structured_text = _normalize_text(" ".join(structured_values))
+    return [pattern for pattern in patterns if _contains_signal(structured_text, pattern)]
+
+
+def _resume_experimentation_signal_targets(resume: ResumeEvidence) -> List[str]:
+    structured_hits = _structured_signal_hits_from_values(
+        list(getattr(resume, "methods", []) or [])
+        + list(getattr(resume, "workflows", []) or []),
+        EXPERIMENTATION_SIGNAL_PATTERNS,
+    )
+
+    if structured_hits:
+        return _normalized_skill_list(structured_hits)
+
+    return _normalized_skill_list(list(getattr(resume, "experimentation_signals", []) or []))
+
+
+def _job_experimentation_signal_targets(job: JobEvidence) -> List[str]:
+    required_hits = _structured_signal_hits_from_values(
+        list(getattr(job, "required_methods", []) or [])
+        + list(getattr(job, "required_workflows", []) or [])
+        + list(getattr(job, "required_skills", []) or []),
+        EXPERIMENTATION_SIGNAL_PATTERNS,
+    )
+    preferred_hits = _structured_signal_hits_from_values(
+        list(getattr(job, "preferred_methods", []) or [])
+        + list(getattr(job, "preferred_workflows", []) or [])
+        + list(getattr(job, "preferred_skills", []) or []),
+        EXPERIMENTATION_SIGNAL_PATTERNS,
+    )
+
+    if required_hits or preferred_hits:
+        required_hits = _normalized_skill_list(required_hits)
+        preferred_hits = _prune_generic_experimentation_signals(preferred_hits)
+        return _unique_preserve_order(
+            required_hits + [signal for signal in preferred_hits if signal not in required_hits]
+        )
+
+    return _prune_generic_experimentation_signals(
+        _job_signal_hits(
+            job,
+            EXPERIMENTATION_SIGNAL_PATTERNS,
+            include_retrieval_text=True,
+        )
+    )
 
 def _project_signal_hits(project_text: str, patterns: List[str]) -> List[str]:
     project_text_norm = _normalize_text(project_text)
@@ -327,6 +406,12 @@ def _prune_generic_analytics_signals(signals: List[str]) -> List[str]:
     ordered = _unique_preserve_order(signals)
     specific = [signal for signal in ordered if signal not in _ANALYTICS_ML_GENERIC_SIGNALS]
     return specific if specific else ordered
+
+def _prune_generic_experimentation_signals(signals: List[str]) -> List[str]:
+    ordered = _unique_preserve_order(_normalized_skill_list(signals))
+    if "experimentation" in ordered and len(ordered) > 1:
+        return [signal for signal in ordered if signal != "experimentation"]
+    return ordered
 
 def _phrase_fingerprint(value: str) -> str:
     normalized = _normalize_text(value).replace("-", " ").replace("/", " ")
@@ -566,11 +651,11 @@ def _score_domain_relevance(
 
     normalized_business_contexts = _normalized_skill_list(getattr(job, "business_contexts", []))
 
-    if not normalized_job and not normalized_business_contexts and dynamic_target_count < 4:
+    if not normalized_job:
         return _weighted_dimension(
             definition,
             0.5,
-            "Job has no explicit domain or business-context targets and no sufficiently specific dynamic domain targets, so domain relevance is neutral in v1.",
+            "Job has no explicit domain signals, so domain relevance is neutral in v1. Business-context alignment is handled separately.",
             [],
         )
 
@@ -679,11 +764,7 @@ def _score_experimentation_alignment(
     job_experimentation_signals: List[str],
     empty_reason: str,
 ) -> MatchDimensionScore:
-    normalized_resume = {
-        _normalize_text(signal)
-        for signal in resume.experimentation_signals
-        if _normalize_text(signal)
-    }
+    normalized_resume = set(_resume_experimentation_signal_targets(resume))
     normalized_job = _normalized_skill_list(job_experimentation_signals)
 
     if not normalized_job:
@@ -1487,20 +1568,27 @@ def score_resume_job_match(
 
     resume_explicit_skill_set = _resume_explicit_skill_set(resume)
 
-    job_analytics_ml_signals = _job_signal_hits(
+    job_analytics_ml_signals = _job_structured_signal_hits(
         job,
         ANALYTICS_ML_SIGNAL_PATTERNS,
-        include_retrieval_text=False,
+        field_names=[
+            "required_methods",
+            "preferred_methods",
+            "required_skills",
+            "preferred_skills",
+        ],
+        fallback_include_retrieval_text=False,
     )
-    job_experimentation_signals = _job_signal_hits(
-        job,
-        EXPERIMENTATION_SIGNAL_PATTERNS,
-        include_retrieval_text=True,
-    )
-    job_domain_signals = _job_signal_hits(
+    job_experimentation_signals = _job_experimentation_signal_targets(job)
+    job_domain_signals = _job_structured_signal_hits(
         job,
         DOMAIN_SIGNAL_PATTERNS,
-        include_retrieval_text=False,
+        field_names=[
+            "business_contexts",
+            "required_skills",
+            "preferred_skills",
+        ],
+        fallback_include_retrieval_text=False,
     )
 
     scorers: Dict[str, Callable[[MatchDimensionDefinition], MatchDimensionScore]] = {

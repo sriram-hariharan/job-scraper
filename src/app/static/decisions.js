@@ -409,10 +409,12 @@ function renderTableLoading(colspan, label) {
   `;
 }
 
-function updateDecisionStats(rows) {
-  const safeRows = Array.isArray(rows) ? rows : [];
-  setTextIfPresent("decisionsShownCount", safeRows.length);
-  setTextIfPresent("decisionsJobsTouched", distinctDecisionJobCount(safeRows));
+function updateDecisionStats(shownCount, jobsTouched = null) {
+  const safeShown = Number.isFinite(Number(shownCount)) ? Number(shownCount) : 0;
+  const safeTouched = Number.isFinite(Number(jobsTouched)) ? Number(jobsTouched) : safeShown;
+
+  setTextIfPresent("decisionsShownCount", safeShown);
+  setTextIfPresent("decisionsJobsTouched", safeTouched);
 }
 
 function buildPaginationSequence(currentPage, totalPages) {
@@ -656,7 +658,7 @@ function renderDecisionRows(rows, metaLabel) {
       </tr>
     `;
     qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
-    updateDecisionStats([]);
+    updateDecisionStats(0, 0);
     renderDecisionsPagination();
     renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
     return;
@@ -688,7 +690,6 @@ function renderDecisionRows(rows, metaLabel) {
   }).join("");
 
   qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
-  updateDecisionStats(displayRows);
   renderDecisionsPagination();
   renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
 }
@@ -709,6 +710,7 @@ async function loadDecisionsTable(pageOverride = null) {
   applyDecisionsPaginationPayload(data);
 
   const totalCount = data.total_count ?? data.count ?? 0;
+  updateDecisionStats(totalCount, totalCount);
 
   renderDecisionRows(
     data.rows || [],

@@ -827,8 +827,8 @@ function renderTableLoading(colspan, label) {
   `;
 }
 
-function updatePlanningStats(rowCount) {
-  setTextIfPresent("planningJobsShown", rowCount ?? 0);
+function updatePlanningStats(totalCount) {
+  setTextIfPresent("planningJobsShown", totalCount ?? 0);
   setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
 }
 
@@ -5184,7 +5184,6 @@ function renderPlanningRows(rows, metaLabel) {
   }).join("");
 
   qs("planningTableMeta").textContent = planningTableState.metaLabel;
-  updatePlanningStats(displayRows.length);
   renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
   renderPlanningPagination();
 }
@@ -5201,6 +5200,7 @@ async function loadPlanningTable() {
   const parsedPageSize = Number(rawPageSize);
   const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
   const totalCount = Number(data.total_count ?? data.count ?? 0);
+  updatePlanningStats(totalCount);
   const totalPages = Number(data.total_pages ?? 1);
   const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
 

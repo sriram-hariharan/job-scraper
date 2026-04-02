@@ -325,9 +325,9 @@ function buildApplicationListUrl() {
   return `${config.endpoint}?${params.toString()}`;
 }
 
-function updateApplicationViewStats(rowCount) {
+function updateApplicationViewStats(totalCount) {
   const config = getCurrentApplicationConfig();
-  qs("applicationJobsShown").textContent = String(rowCount ?? 0);
+  qs("applicationJobsShown").textContent = String(totalCount ?? 0);
   qs("applicationViewLabel").textContent = config.statLabel;
   qs("applicationTableTitle").textContent = config.pageLabel;
 }
@@ -484,7 +484,6 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
   }).join("");
 
   qs("applicationTableMeta").textContent = applicationTableState.metaLabel;
-  updateApplicationViewStats(displayRows.length);
   renderApplicationPagination();
   if (table) {
     renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
@@ -507,6 +506,7 @@ async function loadApplicationView() {
   const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
 
   const totalCount = Number(data.total_count ?? data.count ?? 0);
+  updateApplicationViewStats(totalCount);
   const totalPages = Number(data.total_pages ?? 1);
   const currentPage = Number(data.page ?? applicationTableState.pagination.page ?? 1);
 

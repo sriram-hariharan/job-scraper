@@ -3264,6 +3264,202 @@ def save_tailoring_workspace_draft_payload(
         "draft": draft_payload,
     }
 
+def _normalize_tailoring_workspace_text_key(value: Any) -> str:
+    text = str(value or "").lower()
+    text = re.sub(r"[•▪◦·]", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    text = re.sub(r"[^a-z0-9%$&.,+/\- ]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
+
+
+def _tailoring_workspace_candidate_id(item: Dict[str, Any]) -> str:
+    return _clean_text(item.get("replacement_candidate_id") or item.get("candidate_id"))
+
+
+def _tailoring_workspace_bullet_key(item: Dict[str, Any]) -> str:
+    candidate_id = _tailoring_workspace_candidate_id(item)
+    if candidate_id:
+        return f"candidate:{candidate_id}"
+
+    original_text = _clean_text(item.get("original_text"))
+    if not original_text:
+        return ""
+
+    return f"text:{_normalize_tailoring_workspace_text_key(original_text)}"
+
+
+def _tailoring_workspace_surfaced_items(payload_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [
+        *list(payload_data.get("app_ready_replacements", []) or []),
+        *list(payload_data.get("direct_apply_optional_replacements", []) or []),
+        *list(payload_data.get("direction_only_replacements", []) or []),
+    ]
+
+
+def _build_tailoring_workspace_effective_patch_specs(
+    payload_data: Dict[str, Any],
+    *,
+    selected_candidate_ids: List[str],
+    manual_bullet_edits: Dict[str, str],
+) -> Tuple[List[Dict[str, Any]], List[str]]:
+    selected_set = set(_normalize_selected_patch_candidate_ids(selected_candidate_ids))
+    manual_map = {
+        _clean_text(key): str(value or "")
+        for key, value in dict(manual_bullet_edits or {}).items()
+        if _clean_text(key)
+    }
+
+    unresolved_manual_keys = set(manual_map.keys())
+    patch_specs: List[Dict[str, Any]] = []
+    seen_bullet_keys = set()
+
+    for item in _tailoring_workspace_surfaced_items(payload_data):
+        original_text = _clean_text(item.get("original_text"))
+        if not original_text:
+            continue
+
+        bullet_key = _tailoring_workspace_bullet_key(item)
+        if not bullet_key or bullet_key in seen_bullet_keys:
+            continue
+        seen_bullet_keys.add(bullet_key)
+
+        candidate_id = _tailoring_workspace_candidate_id(item)
+
+        selected_patch_text = ""
+        if candidate_id and candidate_id in selected_set:
+            selected_patch_text = _clean_text(item.get("final_replacement_text"))
+
+        has_manual_override = bullet_key in manual_map
+        if has_manual_override:
+            unresolved_manual_keys.discard(bullet_key)
+
+        effective_patch_text = (
+            manual_map.get(bullet_key)
+            if has_manual_override
+            else selected_patch_text
+        )
+
+        if not effective_patch_text or effective_patch_text == original_text:
+            continue
+
+        patch_specs.append({
+            "bullet_key": bullet_key,
+            "candidate_id": candidate_id,
+            "source_bullet_id": _clean_text(item.get("source_bullet_id")),
+            "source_raw_text": original_text,
+            "patch_text": effective_patch_text,
+            "patch_source": "manual_edit" if has_manual_override else "selected_patch",
+        })
+
+    return patch_specs, sorted(unresolved_manual_keys)
+
+
+def _load_job_record_for_workspace_preview(
+    job_doc_id: str,
+    job_corpus_path: Path = DEFAULT_CORPUS_PATH,
+) -> Dict[str, Any]:
+    from src.matching.job_adapter import build_job_evidence
+
+    clean_job_doc_id = _clean_text(job_doc_id)
+    if not clean_job_doc_id:
+        raise ValueError("Workspace draft preview requires job_doc_id.")
+
+    if not job_corpus_path.exists():
+        raise ValueError(f"Missing job corpus: {job_corpus_path}")
+
+    with job_corpus_path.open("r", encoding="utf-8") as f:
+        for raw_line in f:
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+            record_job_doc_id = _clean_text(getattr(build_job_evidence(record), "job_doc_id", ""))
+            if record_job_doc_id == clean_job_doc_id:
+                return record
+
+    raise ValueError(f"Could not find job_doc_id in corpus: {clean_job_doc_id}")
+
+
+def _load_resume_evidence_for_workspace_preview(resume_name: str):
+    from src.resume.document_store import load_resume_documents_by_name
+    from src.resume.evidence_builder import build_resume_evidence
+
+    safe_resume_name = _sanitize_resume_filename(resume_name)
+    documents = load_resume_documents_by_name([safe_resume_name])
+
+    if not documents:
+        raise ValueError(f"Could not load resume document: {safe_resume_name}")
+
+    return build_resume_evidence(documents[0])
+
+
+def _workspace_preview_dimension_deltas(
+    original_result: Any,
+    projected_result: Any,
+) -> Dict[str, float]:
+    original_map = {
+        str(dim.name): float(dim.weighted_score)
+        for dim in list(getattr(original_result, "dimension_scores", []) or [])
+    }
+    projected_map = {
+        str(dim.name): float(dim.weighted_score)
+        for dim in list(getattr(projected_result, "dimension_scores", []) or [])
+    }
+
+    deltas: Dict[str, float] = {}
+    for name in sorted(set(original_map) | set(projected_map)):
+        delta = projected_map.get(name, 0.0) - original_map.get(name, 0.0)
+        if abs(delta) > 1e-12:
+            deltas[name] = round(delta, 6)
+
+    return deltas
+
+
+def _build_workspace_counterfactual_preview(
+    original_result: Any,
+    projected_result: Any,
+    *,
+    selected_candidate_ids: List[str],
+    patch_specs: List[Dict[str, Any]],
+    preview_note: str,
+) -> Dict[str, Any]:
+    dimension_deltas = _workspace_preview_dimension_deltas(
+        original_result,
+        projected_result,
+    )
+
+    original_missing = list(getattr(original_result.prefilter, "missing_requirements", []) or [])
+    projected_missing = list(getattr(projected_result.prefilter, "missing_requirements", []) or [])
+    original_matched = list(getattr(original_result.prefilter, "matched_terms", []) or [])
+    projected_matched = list(getattr(projected_result.prefilter, "matched_terms", []) or [])
+
+    overall_delta = float(projected_result.final_score) - float(original_result.final_score)
+
+    return {
+        "status": "scored",
+        "note": preview_note,
+        "original_final_score": round(float(original_result.final_score), 6),
+        "projected_final_score": round(float(projected_result.final_score), 6),
+        "projected_overall_delta": round(overall_delta, 6),
+        "projected_dimension_deltas": dimension_deltas,
+        "scorer_visible_evidence_changed": bool(
+            dimension_deltas
+            or original_missing != projected_missing
+            or original_matched != projected_matched
+            or abs(overall_delta) > 1e-12
+        ),
+        "selected_patch_count": len(selected_candidate_ids),
+        "selected_candidate_ids": list(selected_candidate_ids),
+        "requested_candidate_ids": list(selected_candidate_ids),
+        "missing_candidate_ids": [],
+        "ineligible_candidate_ids": [],
+        "duplicate_source_bullet_ids": [],
+        "selection_mode": "workspace_draft",
+        "workspace_patch_count": len(patch_specs),
+    }
+
 def preview_tailoring_workspace_draft_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
@@ -3272,7 +3468,9 @@ def preview_tailoring_workspace_draft_payload(
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
 ) -> Dict[str, Any]:
-    from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
+    from src.matching.job_adapter import build_job_evidence
+    from src.matching.scorer import score_resume_job_match
+    from src.resume.evidence_builder import build_counterfactual_resume_evidence
 
     draft_response = load_tailoring_workspace_draft_payload(
         output_dir=output_dir,
@@ -3333,46 +3531,130 @@ def preview_tailoring_workspace_draft_payload(
             manual_bullet_edits
         )
 
-    selected_preview = None
-    if effective_selected_ids:
-        selected_preview = build_selected_patch_set_counterfactual_preview(
-            payload_data,
-            selected_candidate_ids=effective_selected_ids,
-        )
+    selection = payload_data.get("selection", {}) or {}
+    job = payload_data.get("job", {}) or {}
+
+    effective_selected_resume = (
+        _sanitize_optional_resume_filename(selected_resume)
+        or _sanitize_optional_resume_filename(draft.get("selected_resume"))
+        or _sanitize_optional_resume_filename(selection.get("selected_resume"))
+    )
+    if not effective_selected_resume:
+        raise ValueError("Workspace draft preview requires a selected resume.")
+
+    original_resume = _load_resume_evidence_for_workspace_preview(effective_selected_resume)
+    job_record = _load_job_record_for_workspace_preview(
+        _clean_text(job.get("job_doc_id"))
+    )
+    job_evidence = build_job_evidence(job_record)
+
+    original_result = score_resume_job_match(original_resume, job_evidence)
+    original_score = round(float(original_result.final_score), 6)
+
+    patch_specs, unresolved_manual_keys = _build_tailoring_workspace_effective_patch_specs(
+        payload_data,
+        selected_candidate_ids=effective_selected_ids,
+        manual_bullet_edits=effective_manual_edits,
+    )
 
     manual_edit_count = len(effective_manual_edits)
-    has_selected_preview = isinstance(selected_preview, dict) and bool(selected_preview)
 
-    if manual_edit_count and has_selected_preview:
-        preview_status = "manual_edits_plus_selection_preview_only"
-        preview_note = (
-            "Selected rewrites have scorer preview support. Manual free-edit changes are present, "
-            "but full draft rescoring is not wired yet."
+    if not patch_specs:
+        if unresolved_manual_keys:
+            preview_status = "workspace_draft_rescore_failed"
+            preview_note = (
+                "Workspace draft edits could not be mapped back to surfaced bullets for rescoring."
+            )
+        else:
+            preview_status = "no_previewable_changes"
+            preview_note = "No previewable workspace draft changes were found."
+
+        return {
+            "ok": True,
+            "preview_status": preview_status,
+            "preview_note": preview_note,
+            "tailoring_json_path": str(artifact_path),
+            "draft_status": _clean_text(draft_response.get("draft_status")),
+            "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+            "selected_patch_candidate_ids": effective_selected_ids,
+            "manual_bullet_edits": effective_manual_edits,
+            "manual_edit_count": manual_edit_count,
+            "manual_edit_rescore_supported": True,
+            "needs_full_draft_rescore": False,
+            "original_score": original_score,
+            "projected_score": None,
+            "projected_delta": None,
+            "selected_patch_set_counterfactual_preview": None,
+            "unresolved_manual_edit_keys": unresolved_manual_keys,
+        }
+
+    counterfactual_resume = original_resume
+    patch_status = "ok"
+
+    for patch in patch_specs:
+        counterfactual_resume, patch_status = build_counterfactual_resume_evidence(
+            counterfactual_resume,
+            source_bullet_id=str(patch.get("source_bullet_id", "") or ""),
+            patch_text=str(patch.get("patch_text", "") or ""),
+            source_raw_text=str(patch.get("source_raw_text", "") or ""),
         )
-    elif manual_edit_count:
-        preview_status = "manual_edits_pending_backend_rescore"
-        preview_note = (
-            "Manual free-edit changes are present, but full draft rescoring is not wired yet."
-        )
-    elif has_selected_preview:
-        preview_status = "selection_preview_available"
-        preview_note = "Selected rewrite preview is available for the current workspace draft."
+        if counterfactual_resume is None:
+            break
+
+    if counterfactual_resume is None:
+        preview_note = f"Workspace draft rescoring failed: {patch_status}."
+        if unresolved_manual_keys:
+            preview_note += f" Ignored {len(unresolved_manual_keys)} unmapped manual edit key(s)."
+
+        return {
+            "ok": True,
+            "preview_status": "workspace_draft_rescore_failed",
+            "preview_note": preview_note,
+            "tailoring_json_path": str(artifact_path),
+            "draft_status": _clean_text(draft_response.get("draft_status")),
+            "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+            "selected_patch_candidate_ids": effective_selected_ids,
+            "manual_bullet_edits": effective_manual_edits,
+            "manual_edit_count": manual_edit_count,
+            "manual_edit_rescore_supported": True,
+            "needs_full_draft_rescore": False,
+            "original_score": original_score,
+            "projected_score": None,
+            "projected_delta": None,
+            "selected_patch_set_counterfactual_preview": None,
+            "patch_status": patch_status,
+            "unresolved_manual_edit_keys": unresolved_manual_keys,
+        }
+
+    projected_result = score_resume_job_match(counterfactual_resume, job_evidence)
+    projected_score = round(float(projected_result.final_score), 6)
+    projected_delta = round(projected_score - original_score, 6)
+
+    note_parts: List[str] = []
+    if effective_selected_ids:
+        note_parts.append(f"{len(effective_selected_ids)} selected rewrite(s)")
+    if manual_edit_count:
+        note_parts.append(f"{manual_edit_count} manual edit(s)")
+
+    if note_parts:
+        preview_note = "Workspace draft rescored using " + " and ".join(note_parts) + "."
     else:
-        preview_status = "no_previewable_changes"
-        preview_note = "No previewable workspace draft changes were found."
+        preview_note = "Workspace draft rescored."
 
-    original_score = None
-    projected_score = None
-    projected_delta = None
+    if unresolved_manual_keys:
+        preview_note += f" Ignored {len(unresolved_manual_keys)} unmapped manual edit key(s)."
 
-    if isinstance(selected_preview, dict):
-        original_score = selected_preview.get("original_final_score")
-        projected_score = selected_preview.get("projected_final_score")
-        projected_delta = selected_preview.get("projected_overall_delta")
+    preview = _build_workspace_counterfactual_preview(
+        original_result,
+        projected_result,
+        selected_candidate_ids=effective_selected_ids,
+        patch_specs=patch_specs,
+        preview_note=preview_note,
+    )
 
     return {
         "ok": True,
-        "preview_status": preview_status,
+        "preview_status": "workspace_draft_rescored",
         "preview_note": preview_note,
         "tailoring_json_path": str(artifact_path),
         "draft_status": _clean_text(draft_response.get("draft_status")),
@@ -3380,12 +3662,13 @@ def preview_tailoring_workspace_draft_payload(
         "selected_patch_candidate_ids": effective_selected_ids,
         "manual_bullet_edits": effective_manual_edits,
         "manual_edit_count": manual_edit_count,
-        "manual_edit_rescore_supported": False,
-        "needs_full_draft_rescore": manual_edit_count > 0,
+        "manual_edit_rescore_supported": True,
+        "needs_full_draft_rescore": False,
         "original_score": original_score,
         "projected_score": projected_score,
         "projected_delta": projected_delta,
-        "selected_patch_set_counterfactual_preview": selected_preview,
+        "selected_patch_set_counterfactual_preview": preview,
+        "unresolved_manual_edit_keys": unresolved_manual_keys,
     }
 
 def application_actions_payload(

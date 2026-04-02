@@ -695,19 +695,6 @@ def tailoring_workspace(
         <section class="card tailoring-workspace-subcard hidden">
           <div class="section-header section-header--compact">
             <div>
-              <h3>Impact preview</h3>
-              <div class="subtext">
-                Preview the scorer-visible impact of the current unsaved selection.
-              </div>
-            </div>
-          </div>
-
-          <div id="tailoringWorkspacePatchPreviewSummary"></div>
-        </section>
-
-        <section class="card tailoring-workspace-subcard hidden">
-          <div class="section-header section-header--compact">
-            <div>
               <h3>Saved selection</h3>
               <div class="subtext">
                 Last persisted suggestion choice for this job/resume pair.

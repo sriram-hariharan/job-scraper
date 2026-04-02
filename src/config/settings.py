@@ -47,3 +47,13 @@ SCORER_V2_POLICY = {
         "borderline_low_pass_rate": 0.50,
     },
 }
+
+APPLICATION_PRIORITY_POLICY_VERSION = "v1"
+
+APPLICATION_PRIORITY_POLICY = {
+    "weights": {
+        "ai_signal_score": 0.50,
+        "embedding_resume_prior_score": 0.20,
+        "base_score": 0.30,
+    },
+}

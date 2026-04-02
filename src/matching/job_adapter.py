@@ -6,8 +6,10 @@ from src.config.consts import (
     ANALYTICS_ML_SIGNAL_PATTERNS,
     COMMON_SKILL_PATTERNS,
     EXPERIMENTATION_SIGNAL_PATTERNS,
+    GENERIC_REQUIRED_SKILL_TARGETS,
     PREFERRED_CONTEXT_PATTERNS,
     REQUIRED_CONTEXT_PATTERNS,
+    RESPONSIBILITY_CONTEXT_PATTERNS,
     SENIORITY_HINTS,
     TOOLING_SIGNAL_PATTERNS,
     _SKILL_ALIASES,
@@ -33,11 +35,68 @@ def _normalize_skill_list(values: Any) -> List[str]:
         skill = _normalize_text(value).lower()
         if not skill:
             continue
+
+        skill = _normalize_text(_SKILL_ALIASES.get(skill, skill)).lower()
+        if not skill:
+            continue
+
         if skill not in seen:
             seen.add(skill)
             normalized.append(skill)
 
     return normalized
+
+def _filter_known_skill_targets(values: Any) -> List[str]:
+    allowed = {_normalize_text(value).lower() for value in COMMON_SKILL_PATTERNS}
+    normalized = _normalize_skill_list(values)
+    return [value for value in normalized if value in allowed]
+
+def _filter_specific_required_skill_targets(values: Any) -> List[str]:
+    generic = {_normalize_text(value).lower() for value in GENERIC_REQUIRED_SKILL_TARGETS}
+    normalized = _normalize_skill_list(values)
+    return [value for value in normalized if value not in generic]
+
+def _merge_structured_skill_targets(
+    raw_skills: Any,
+    contextual_skill_hits: List[str],
+    tools: List[str],
+) -> List[str]:
+    filtered_raw = _filter_specific_required_skill_targets(
+        _filter_known_skill_targets(raw_skills)
+    )
+    filtered_contextual = _filter_specific_required_skill_targets(contextual_skill_hits)
+
+    return list(dict.fromkeys(
+        filtered_raw
+        + filtered_contextual
+        + _normalize_skill_list(tools)
+    ))
+
+def _strip_company_self_mentions(text: Any, company: Any) -> str:
+    value = _normalize_text(text)
+    company_norm = _normalize_text(company).lower()
+
+    if not value or not company_norm:
+        return value
+
+    escaped = re.escape(company_norm).replace(r"\ ", r"\s+")
+    stripped = re.sub(
+        rf"(?<![a-z0-9]){escaped}(?![a-z0-9])",
+        " ",
+        value,
+        flags=re.I,
+    )
+    return _normalize_text(stripped)
+
+
+def _filter_company_self_match(values: Any, company: Any) -> List[str]:
+    company_norm = _normalize_text(company).lower()
+    normalized = _normalize_skill_list(values)
+
+    if not company_norm:
+        return normalized
+
+    return [value for value in normalized if value != company_norm]
 
 def _skill_present(text_norm: str, candidate: str) -> bool:
     normalized = _normalize_text(candidate).lower()
@@ -84,7 +143,7 @@ def _is_heading_like_chunk(chunk: str) -> bool:
 
     return re.search(r"^[A-Za-z][A-Za-z0-9& /'’\-\+]{0,60}:", raw) is not None
 
-def _extract_contextual_skill_hits(
+def _collect_context_chunks(
     text: Any,
     context_patterns: List[str],
 ) -> List[str]:
@@ -106,11 +165,17 @@ def _extract_contextual_skill_hits(
         else:
             gathered_chunks.append(chunk)
 
+    return list(dict.fromkeys(gathered_chunks))
+
+def _extract_contextual_skill_hits(
+    text: Any,
+    context_patterns: List[str],
+) -> List[str]:
+    gathered_chunks = _collect_context_chunks(text, context_patterns)
     if not gathered_chunks:
         return []
 
-    deduped_chunks = list(dict.fromkeys(gathered_chunks))
-    return _extract_text_skill_hits(" ".join(deduped_chunks))
+    return _extract_text_skill_hits(" ".join(gathered_chunks))
 
 def _extract_text_phrase_hits(text: Any, candidates: List[str]) -> List[str]:
     text_norm = _normalize_text(text).lower()
@@ -136,29 +201,11 @@ def _extract_contextual_phrase_hits(
     context_patterns: List[str],
     candidates: List[str],
 ) -> List[str]:
-    chunks = _split_context_chunks(text)
-    if not chunks:
-        return []
-
-    gathered_chunks: List[str] = []
-
-    for idx, chunk in enumerate(chunks):
-        if not any(re.search(pattern, chunk, re.I) for pattern in context_patterns):
-            continue
-
-        if _is_heading_like_chunk(chunk):
-            for follow_chunk in chunks[idx + 1:]:
-                if _is_heading_like_chunk(follow_chunk):
-                    break
-                gathered_chunks.append(follow_chunk)
-        else:
-            gathered_chunks.append(chunk)
-
+    gathered_chunks = _collect_context_chunks(text, context_patterns)
     if not gathered_chunks:
         return []
 
-    deduped_chunks = list(dict.fromkeys(gathered_chunks))
-    return _extract_text_phrase_hits(" ".join(deduped_chunks), candidates)
+    return _extract_text_phrase_hits(" ".join(gathered_chunks), candidates)
 
 
 def _infer_role_archetype(
@@ -238,13 +285,29 @@ def build_job_evidence(job: Dict[str, Any]) -> JobEvidence:
     raw_preview = job.get("preview", "")
     raw_retrieval_text = job.get("retrieval_text", "")
     raw_role_family = job.get("role_family", "")
+    raw_company = job.get("company", "")
 
-    combined_text = " ".join([str(raw_title or ""), str(raw_preview or ""), str(raw_retrieval_text or "")]).strip()
-    required_context_text = " ".join([str(raw_preview or ""), str(raw_retrieval_text or "")])
+    sanitized_preview = _strip_company_self_mentions(raw_preview, raw_company)
+    sanitized_retrieval_text = _strip_company_self_mentions(raw_retrieval_text, raw_company)
 
-    required_skills = _normalize_skill_list(job.get("required_skills", []))
-    preferred_skills = _normalize_skill_list(job.get("preferred_skills", []))
-    all_skills = _normalize_skill_list(job.get("all_skills", []))
+    combined_text = " ".join([str(raw_title or ""), sanitized_preview, sanitized_retrieval_text]).strip()
+    required_context_text = " ".join([sanitized_preview, sanitized_retrieval_text]).strip()
+    required_work_context_patterns = list(dict.fromkeys(
+        REQUIRED_CONTEXT_PATTERNS + RESPONSIBILITY_CONTEXT_PATTERNS
+    ))
+    structured_context_patterns = list(dict.fromkeys(
+        required_work_context_patterns + PREFERRED_CONTEXT_PATTERNS
+    ))
+    structured_context_chunks = _collect_context_chunks(
+        required_context_text,
+        structured_context_patterns,
+    )
+
+    structured_context_text = " ".join(structured_context_chunks).strip() or combined_text
+
+    raw_required_skills = job.get("required_skills", [])
+    raw_preferred_skills = job.get("preferred_skills", [])
+    raw_all_skills = _filter_known_skill_targets(job.get("all_skills", []))
 
     fallback_required = _extract_contextual_skill_hits(
         required_context_text,
@@ -256,51 +319,98 @@ def build_job_evidence(job: Dict[str, Any]) -> JobEvidence:
     )
     fallback_all = _extract_text_skill_hits(combined_text)
 
-    required_skills = list(dict.fromkeys(required_skills + fallback_required))
-    preferred_skills = list(dict.fromkeys(preferred_skills + fallback_preferred))
-
-    if not all_skills:
-        all_skills = list(dict.fromkeys(required_skills + preferred_skills + fallback_all))
-    else:
-        all_skills = list(dict.fromkeys(all_skills + required_skills + preferred_skills + fallback_all))
-
-    required_methods = _extract_contextual_phrase_hits(
+    required_methods = _normalize_skill_list(_extract_contextual_phrase_hits(
         required_context_text,
-        REQUIRED_CONTEXT_PATTERNS,
+        required_work_context_patterns,
         ANALYTICS_ML_SIGNAL_PATTERNS + EXPERIMENTATION_SIGNAL_PATTERNS,
-    )
-    preferred_methods = _extract_contextual_phrase_hits(
-        required_context_text,
-        PREFERRED_CONTEXT_PATTERNS,
-        ANALYTICS_ML_SIGNAL_PATTERNS + EXPERIMENTATION_SIGNAL_PATTERNS,
-    )
+    ))
+    preferred_methods = [
+        value for value in _normalize_skill_list(_extract_contextual_phrase_hits(
+            required_context_text,
+            PREFERRED_CONTEXT_PATTERNS,
+            ANALYTICS_ML_SIGNAL_PATTERNS + EXPERIMENTATION_SIGNAL_PATTERNS,
+        ))
+        if value not in required_methods
+    ]
 
-    required_tools = _extract_contextual_phrase_hits(
+    required_tools = _normalize_skill_list(_extract_contextual_phrase_hits(
         required_context_text,
-        REQUIRED_CONTEXT_PATTERNS,
+        required_work_context_patterns,
         TOOLING_SIGNAL_PATTERNS,
-    )
-    preferred_tools = _extract_contextual_phrase_hits(
+    ))
+    preferred_tools = [
+        value for value in _normalize_skill_list(_extract_contextual_phrase_hits(
+            required_context_text,
+            PREFERRED_CONTEXT_PATTERNS,
+            TOOLING_SIGNAL_PATTERNS,
+        ))
+        if value not in required_tools
+    ]
+    required_tools = _filter_company_self_match(required_tools, raw_company)
+    preferred_tools = _filter_company_self_match(preferred_tools, raw_company)
+
+    required_workflows = _normalize_skill_list(_extract_contextual_phrase_hits(
         required_context_text,
-        PREFERRED_CONTEXT_PATTERNS,
-        TOOLING_SIGNAL_PATTERNS,
+        required_work_context_patterns,
+        _WORKFLOW_CANDIDATES,
+    ))
+    preferred_workflows = [
+        value for value in _normalize_skill_list(_extract_contextual_phrase_hits(
+            required_context_text,
+            PREFERRED_CONTEXT_PATTERNS,
+            _WORKFLOW_CANDIDATES,
+        ))
+        if value not in required_workflows
+    ]
+    required_skills = _filter_company_self_match(
+        _merge_structured_skill_targets(
+            raw_required_skills,
+            fallback_required,
+            required_tools,
+        ),
+        raw_company,
+    )
+    preferred_skills = _filter_company_self_match(
+        _merge_structured_skill_targets(
+            raw_preferred_skills,
+            fallback_preferred,
+            preferred_tools,
+        ),
+        raw_company,
     )
 
-    required_workflows = _extract_contextual_phrase_hits(
-        required_context_text,
-        REQUIRED_CONTEXT_PATTERNS,
-        _WORKFLOW_CANDIDATES,
-    )
-    preferred_workflows = _extract_contextual_phrase_hits(
-        required_context_text,
-        PREFERRED_CONTEXT_PATTERNS,
-        _WORKFLOW_CANDIDATES,
+    if not required_skills and not required_tools and preferred_tools:
+        required_skills = _filter_company_self_match(
+            _normalize_skill_list(preferred_tools),
+            raw_company,
+        )
+
+    required_tools = list(dict.fromkeys(
+        required_tools
+        + [skill for skill in required_skills if skill in TOOLING_SIGNAL_PATTERNS]
+    ))
+    preferred_tools = list(dict.fromkeys(
+        [skill for skill in preferred_tools if skill not in required_tools]
+        + [
+            skill for skill in preferred_skills
+            if skill in TOOLING_SIGNAL_PATTERNS and skill not in required_tools
+        ]
+    ))
+
+    all_skills = _filter_company_self_match(
+        list(dict.fromkeys(
+            raw_all_skills
+            + required_skills
+            + preferred_skills
+            + fallback_all
+        )),
+        raw_company,
     )
 
-    business_contexts = _extract_text_phrase_hits(combined_text, _BUSINESS_CONTEXT_CANDIDATES)
-    stakeholder_contexts = _extract_text_phrase_hits(combined_text, _STAKEHOLDER_CONTEXT_CANDIDATES)
-    kpi_metrics = _extract_text_phrase_hits(combined_text, _KPI_METRIC_CANDIDATES)
-    ownership_signals = _extract_text_phrase_hits(combined_text, _OWNERSHIP_SIGNAL_CANDIDATES)
+    business_contexts = _extract_text_phrase_hits(structured_context_text, _BUSINESS_CONTEXT_CANDIDATES)
+    stakeholder_contexts = _extract_text_phrase_hits(structured_context_text, _STAKEHOLDER_CONTEXT_CANDIDATES)
+    kpi_metrics = _extract_text_phrase_hits(structured_context_text, _KPI_METRIC_CANDIDATES)
+    ownership_signals = _extract_text_phrase_hits(structured_context_text, _OWNERSHIP_SIGNAL_CANDIDATES)
 
     title = _normalize_text(raw_title)
     role_family = _normalize_text(raw_role_family)

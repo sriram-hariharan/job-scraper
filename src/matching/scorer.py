@@ -1195,11 +1195,31 @@ def _score_tooling_alignment(
     resume_explicit_skill_set: Set[str],
     job: JobEvidence,
 ) -> MatchDimensionScore:
-    tooling_targets = [
+    structured_required_targets = [
         skill
-        for skill in _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
+        for skill in _normalized_skill_list(getattr(job, "required_tools", []))
         if skill in TOOLING_SIGNAL_PATTERNS
     ]
+    structured_preferred_targets = [
+        skill
+        for skill in _normalized_skill_list(getattr(job, "preferred_tools", []))
+        if skill in TOOLING_SIGNAL_PATTERNS
+    ]
+
+    if structured_required_targets or structured_preferred_targets:
+        tooling_targets = _unique_preserve_order(
+            structured_required_targets + structured_preferred_targets
+        )
+        target_source = "structured required_tools/preferred_tools"
+    else:
+        tooling_targets = [
+            skill
+            for skill in _normalized_skill_list(
+                job.required_skills + job.preferred_skills + job.all_skills
+            )
+            if skill in TOOLING_SIGNAL_PATTERNS
+        ]
+        target_source = "fallback derived skill targets"
 
     if not tooling_targets:
         return _weighted_dimension(
@@ -1211,10 +1231,11 @@ def _score_tooling_alignment(
 
     matches = [skill for skill in tooling_targets if skill in resume_explicit_skill_set]
     coverage = len(matches) / len(tooling_targets)
+
     return _weighted_dimension(
         definition,
         coverage,
-        f"Matched {len(matches)}/{len(tooling_targets)} explicit job tooling targets.",
+        f"Matched {len(matches)}/{len(tooling_targets)} explicit job tooling targets from {target_source}.",
         matches,
     )
 

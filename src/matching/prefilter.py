@@ -248,10 +248,10 @@ def run_prefilter(
     elif best_title_score >= 0.45 and len(matched_any) >= 3:
         minimum_overlap_passed = True
     elif (
-        best_title_score >= 0.45
+        best_title_score >= 0.40
         and required_skills
         and len(matched_required) >= 2
-        and (len(matched_required) / len(required_skills)) >= 0.30
+        and (len(matched_required) / len(required_skills)) >= 0.25
     ):
         minimum_overlap_passed = True
     elif len(required_skills) <= 2 and required_skills and len(matched_required) == len(required_skills) and len(matched_any) >= 3:

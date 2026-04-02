@@ -512,21 +512,8 @@ def _dynamic_job_body_text(job: JobEvidence) -> str:
     return _normalize_text(body)
 
 def _domain_relevance_job_text(job: JobEvidence, job_domain_signals: List[str]) -> str:
-    business_contexts = _normalized_skill_list(getattr(job, "business_contexts", []))
-    role_archetype = _normalize_text(getattr(job, "role_archetype", ""))
-
-    parts = [
-        job.title,
-        job.role_family,
-        role_archetype,
-        " ".join(job_domain_signals),
-        " ".join(business_contexts),
-    ]
-
-    return " ".join(
-        part for part in parts
-        if str(part or "").strip()
-    )
+    normalized_job = _normalized_skill_list(job_domain_signals)
+    return " ".join(normalized_job)
 
 def _dynamic_overlap_phrases(text: str) -> List[str]:
     tokens = _dynamic_overlap_terms(text)
@@ -1354,6 +1341,13 @@ def _score_analytics_ml_depth(
             _ANALYTICS_ML_SIGNAL_CANONICAL,
         )
     )
+    if canonical_job == ["analytics"]:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job exposes only generic analytics depth signals, so analytics_ml_depth is neutral in v1.",
+            [],
+        )
 
     if not canonical_job:
         return _weighted_dimension(
@@ -1580,7 +1574,7 @@ def score_resume_job_match(
         fallback_include_retrieval_text=False,
     )
     job_experimentation_signals = _job_experimentation_signal_targets(job)
-    job_domain_signals = _job_structured_signal_hits(
+    structured_domain_signals = _job_structured_signal_hits(
         job,
         DOMAIN_SIGNAL_PATTERNS,
         field_names=[
@@ -1589,6 +1583,19 @@ def score_resume_job_match(
             "preferred_skills",
         ],
         fallback_include_retrieval_text=False,
+    )
+
+    title_role_domain_signals = [
+        pattern
+        for pattern in DOMAIN_SIGNAL_PATTERNS
+        if _contains_signal(
+            _normalize_text(" ".join([job.title, job.role_family])),
+            pattern,
+        )
+    ]
+
+    job_domain_signals = _unique_preserve_order(
+        structured_domain_signals + title_role_domain_signals
     )
 
     scorers: Dict[str, Callable[[MatchDimensionDefinition], MatchDimensionScore]] = {

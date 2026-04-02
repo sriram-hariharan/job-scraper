@@ -528,7 +528,6 @@ TITLE_PATTERNS = [
     "data analyst ii",
     "data analyst i",
     "machine learning intern",
-    "machine learning",
 ]
 
 DOMAIN_SIGNAL_PATTERNS = [

@@ -8,9 +8,13 @@ from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
 
-TIE_EPSILON = 0.010
-TITLE_ONLY_TIE_EPSILON = 0.015
-NON_TITLE_DELTA_EPSILON = 0.002
+from src.config.settings import SCORER_V2_POLICY
+
+SELECTOR_POLICY = SCORER_V2_POLICY["selector"]
+
+TIE_EPSILON = SELECTOR_POLICY["tie_epsilon"]
+TITLE_ONLY_TIE_EPSILON = SELECTOR_POLICY["title_only_tie_epsilon"]
+NON_TITLE_DELTA_EPSILON = SELECTOR_POLICY["non_title_delta_epsilon"]
 
 
 def _load_job_records(job_corpus_path: Path) -> List[dict]:

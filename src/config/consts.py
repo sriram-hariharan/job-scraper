@@ -1681,3 +1681,12 @@ _OWNERSHIP_SIGNAL_CANDIDATES = [
     "independent",
     "autonomy",
 ]
+
+_VARIANT_TITLE_ABBREVIATIONS = {
+    "ai": "ai engineer",
+    "mle": "machine learning engineer",
+    "ml": "machine learning engineer",
+    "ds": "data scientist",
+    "da": "data analyst",
+    "ae": "analytics engineer",
+}

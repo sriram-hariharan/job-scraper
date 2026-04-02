@@ -607,3 +607,5 @@ generixgroup
 pivotageconsulting
 silvaco
 tridentconsultinginc
+netzschgroup
+synava

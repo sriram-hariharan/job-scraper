@@ -193,12 +193,8 @@ def _best_resume_title_match(resume: ResumeEvidence, job: JobEvidence) -> Tuple[
 
 def _build_resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
     skill_values: List[str] = []
-    skill_values.extend(resume.skills)
 
     for entry in resume.experience_entries:
-        skill_values.extend(entry.normalized_skills)
-
-    for entry in resume.project_entries:
         skill_values.extend(entry.normalized_skills)
 
     return {
@@ -250,6 +246,13 @@ def run_prefilter(
     elif best_title_score >= 0.80 and _is_data_science_like_job(job) and len(matched_any) >= 1:
         minimum_overlap_passed = True
     elif best_title_score >= 0.45 and len(matched_any) >= 3:
+        minimum_overlap_passed = True
+    elif (
+        best_title_score >= 0.45
+        and required_skills
+        and len(matched_required) >= 2
+        and (len(matched_required) / len(required_skills)) >= 0.30
+    ):
         minimum_overlap_passed = True
     elif len(required_skills) <= 2 and required_skills and len(matched_required) == len(required_skills) and len(matched_any) >= 3:
         minimum_overlap_passed = True

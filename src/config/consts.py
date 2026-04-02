@@ -1080,6 +1080,8 @@ REQUIRED_CONTEXT_PATTERNS = [
     r"\bwhat you need\b",
     r"\bwhat you'll need\b",
     r"\bbecause you have\b",
+    r"\bwe['’]d love to chat if you have\b",
+    r"\bwe would love to chat if you have\b",
 ]
 
 PREFERRED_CONTEXT_PATTERNS = [

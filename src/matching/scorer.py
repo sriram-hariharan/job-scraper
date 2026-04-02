@@ -4,8 +4,10 @@ from typing import Callable, Dict, List, Set, Tuple
 from src.config.consts import (
     ANALYTICS_ML_SIGNAL_PATTERNS,
     BASELINE_FAMILIARITY_FAMILIES,
+    CONTEXT_TOKEN_STOPWORDS,
     DOMAIN_SIGNAL_PATTERNS,
     EXPERIMENTATION_SIGNAL_PATTERNS,
+    QUERY_STOPWORDS,
     ROLE_WORD_HINTS,
     TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
@@ -214,12 +216,8 @@ def _canonicalize_signals(values: List[str], canonical_map: Dict[str, str]) -> L
 
 def _resume_explicit_skill_set(resume: ResumeEvidence) -> Set[str]:
     values: List[str] = []
-    values.extend(resume.skills)
 
     for entry in resume.experience_entries:
-        values.extend(entry.normalized_skills)
-
-    for entry in resume.project_entries:
         values.extend(entry.normalized_skills)
 
     return {_normalize_text(value) for value in values if _normalize_text(value)}
@@ -305,6 +303,276 @@ def _prune_generic_analytics_signals(signals: List[str]) -> List[str]:
     ordered = _unique_preserve_order(signals)
     specific = [signal for signal in ordered if signal not in _ANALYTICS_ML_GENERIC_SIGNALS]
     return specific if specific else ordered
+
+def _phrase_fingerprint(value: str) -> str:
+    normalized = _normalize_text(value).replace("-", " ").replace("/", " ")
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _resume_experience_segments(resume: ResumeEvidence) -> List[str]:
+    segments: List[str] = []
+
+    for entry in list(resume.experience_entries or []):
+        context = " ".join(
+            part for part in [entry.title, entry.company]
+            if str(part or "").strip()
+        ).strip()
+
+        for bullet in list(entry.bullets or []):
+            bullet_text = str(bullet or "").strip()
+            if not bullet_text:
+                continue
+
+            segment = " ".join(part for part in [context, bullet_text] if part).strip()
+            if segment:
+                segments.append(segment)
+
+    return segments
+
+def _dynamic_overlap_terms(text: str) -> List[str]:
+    stopwords = set(QUERY_STOPWORDS) | set(CONTEXT_TOKEN_STOPWORDS) | set(TITLE_NOISE_TOKENS)
+    tokens = [token for token in _phrase_fingerprint(text).split() if token]
+
+    kept: List[str] = []
+    for token in tokens:
+        if len(token) < 4:
+            continue
+        if token.isdigit():
+            continue
+        if token in stopwords:
+            continue
+        kept.append(token)
+
+    return _unique_preserve_order(kept)
+
+def _dynamic_job_body_text(job: JobEvidence) -> str:
+    source_text = str(getattr(job, "retrieval_text", "") or "")
+    if not source_text:
+        source_text = str(getattr(job, "preview", "") or "")
+
+    if not source_text.strip():
+        return ""
+
+    body = source_text
+
+    match = re.search(r"job description:\s*", body, re.I)
+    if match:
+        body = body[match.end():]
+
+    stop_patterns = [
+        r"\bvisa sponsorship:\b",
+        r"\bwhat['’]s in it for you\?\b",
+        r"\bestimated salary\b",
+        r"\bpay range\b",
+        r"\bcandidate integrity policy\b",
+        r"\bapplicant privacy notice\b",
+    ]
+
+    cut_index = len(body)
+    for pattern in stop_patterns:
+        stop_match = re.search(pattern, body, re.I)
+        if stop_match:
+            cut_index = min(cut_index, stop_match.start())
+
+    body = body[:cut_index]
+
+    responsibilities_match = re.search(r"\bresponsibilities\s*:", body, re.I)
+    qualifications_match = re.search(
+        r"\bwe['’]d love to chat if you have\s*:|\bwe would love to chat if you have\s*:",
+        body,
+        re.I,
+    )
+
+    extracted_sections: List[str] = []
+
+    if responsibilities_match:
+        start = responsibilities_match.end()
+        end = qualifications_match.start() if qualifications_match else len(body)
+        responsibilities_text = body[start:end].strip()
+        if responsibilities_text:
+            extracted_sections.append(responsibilities_text)
+
+    if qualifications_match:
+        qualifications_text = body[qualifications_match.end():].strip()
+        if qualifications_text:
+            extracted_sections.append(qualifications_text)
+
+    if extracted_sections:
+        body = " ".join(extracted_sections)
+
+    return _normalize_text(body)
+
+
+def _dynamic_overlap_phrases(text: str) -> List[str]:
+    tokens = _dynamic_overlap_terms(text)
+    phrases: List[str] = []
+
+    for size in (2, 3):
+        for idx in range(len(tokens) - size + 1):
+            phrase_tokens = tokens[idx: idx + size]
+            if len(set(phrase_tokens)) < size:
+                continue
+            phrases.append(" ".join(phrase_tokens))
+
+    return _unique_preserve_order(phrases)
+
+
+def _dynamic_segment_overlap(
+    segment_text: str,
+    job_terms: List[str],
+    job_phrases: List[str],
+    *,
+    target_count: int,
+) -> Tuple[float, List[str], int]:
+    if not str(segment_text or "").strip() or target_count <= 0:
+        return 0.0, [], 0
+
+    segment_terms = set(_dynamic_overlap_terms(segment_text))
+    segment_phrases = set(_dynamic_overlap_phrases(segment_text))
+
+    term_matches = [term for term in job_terms if term in segment_terms]
+    phrase_matches = [phrase for phrase in job_phrases if phrase in segment_phrases]
+
+    match_units = len(term_matches) + (2 * len(phrase_matches))
+    coverage = min(1.0, match_units / target_count)
+    evidence = _unique_preserve_order(phrase_matches + term_matches)
+
+    return coverage, evidence, match_units
+
+def _dynamic_job_resume_overlap(
+    resume: ResumeEvidence,
+    job: JobEvidence,
+) -> Tuple[float, List[str], int, int]:
+    job_body_text = _dynamic_job_body_text(job)
+
+    job_text = " ".join(
+        part
+        for part in [
+            job.title,
+            job.role_family,
+            " ".join(job.required_skills),
+            " ".join(job.preferred_skills),
+            " ".join(job.all_skills),
+            job_body_text,
+        ]
+        if str(part or "").strip()
+    )
+
+    job_terms = _dynamic_overlap_terms(job_text)
+    job_phrases = _dynamic_overlap_phrases(job_text)
+    targets = _unique_preserve_order(job_terms + job_phrases)
+
+    if len(targets) < 4:
+        return 0.0, [], 0, len(targets)
+
+    segments = _resume_experience_segments(resume)
+    if not segments:
+        return 0.0, [], 0, len(targets)
+
+    segment_results: List[Tuple[float, int, List[str]]] = []
+
+    for segment in segments:
+        coverage, evidence, match_units = _dynamic_segment_overlap(
+            segment,
+            job_terms,
+            job_phrases,
+            target_count=len(targets),
+        )
+        if coverage <= 0.0 and match_units <= 0:
+            continue
+        segment_results.append((coverage, match_units, evidence))
+
+    if not segment_results:
+        return 0.0, [], 0, len(targets)
+
+    segment_results.sort(
+        key=lambda item: (item[0], item[1]),
+        reverse=True,
+    )
+
+    segment_weights = [0.40, 0.25, 0.15, 0.12, 0.08]
+    weighted_coverage_sum = 0.0
+    weight_used = 0.0
+    combined_evidence: List[str] = []
+    total_match_units = 0
+
+    for idx, (coverage, match_units, evidence) in enumerate(segment_results[: len(segment_weights)]):
+        weight = segment_weights[idx]
+        weighted_coverage_sum += weight * coverage
+        weight_used += weight
+        total_match_units += match_units
+        combined_evidence.extend(evidence)
+
+    aggregated_coverage = (
+        min(1.0, weighted_coverage_sum / weight_used)
+        if weight_used > 0.0
+        else 0.0
+    )
+
+    return (
+        aggregated_coverage,
+        _unique_preserve_order(combined_evidence),
+        total_match_units,
+        len(targets),
+    )
+
+
+def _score_domain_relevance(
+    definition: MatchDimensionDefinition,
+    resume: ResumeEvidence,
+    job: JobEvidence,
+    job_domain_signals: List[str],
+) -> MatchDimensionScore:
+    normalized_resume = {
+        _normalize_text(signal)
+        for signal in resume.domain_signals
+        if _normalize_text(signal)
+    }
+    normalized_job = _normalized_skill_list(job_domain_signals)
+
+    static_matches = [signal for signal in normalized_job if signal in normalized_resume]
+    static_coverage = len(static_matches) / len(normalized_job) if normalized_job else 0.0
+
+    dynamic_coverage, dynamic_evidence, dynamic_match_units, dynamic_target_count = _dynamic_job_resume_overlap(
+        resume,
+        job,
+    )
+
+    if not normalized_job and dynamic_target_count < 4:
+        return _weighted_dimension(
+            definition,
+            0.5,
+            "Job has no explicit domain signals and no sufficiently specific dynamic JD context targets, so domain relevance is neutral in v1.",
+            [],
+        )
+
+    if normalized_job and dynamic_target_count >= 4:
+        final_score = min(1.0, (0.35 * static_coverage) + (0.65 * dynamic_coverage))
+        reason = (
+            f"Matched {len(static_matches)}/{len(normalized_job)} explicit domain signals, plus "
+            f"{dynamic_match_units} dynamic JD-context overlap units across {dynamic_target_count} runtime-extracted targets "
+            f"from the JD body and resume experience bullets."
+        )
+        evidence = _unique_preserve_order(static_matches + dynamic_evidence)
+        return _weighted_dimension(definition, final_score, reason, evidence)
+
+    if normalized_job:
+        return _weighted_dimension(
+            definition,
+            static_coverage,
+            f"Matched {len(static_matches)}/{len(normalized_job)} explicit domain signals.",
+            static_matches,
+        )
+
+    return _weighted_dimension(
+        definition,
+        dynamic_coverage,
+        (
+            f"Matched {dynamic_match_units} dynamic JD-context overlap units across "
+            f"{dynamic_target_count} runtime-extracted targets from the JD body and resume experience bullets."
+        ),
+        dynamic_evidence,
+    )
 
 def _job_baseline_family_targets(job: JobEvidence) -> Dict[str, List[str]]:
     job_targets = _normalized_skill_list(job.required_skills + job.preferred_skills + job.all_skills)
@@ -925,11 +1193,11 @@ def score_resume_job_match(
             job_experimentation_signals,
             "Job has no explicit experimentation signals, so experimentation depth is neutral in v1.",
         ),
-        "domain_relevance": lambda definition: _score_signal_alignment(
+        "domain_relevance": lambda definition: _score_domain_relevance(
             definition,
-            resume.domain_signals,
+            resume,
+            job,
             job_domain_signals,
-            "Job has no explicit domain signals, so domain relevance is neutral in v1.",
         ),
         "project_relevance": lambda definition: _score_project_relevance(
             definition,

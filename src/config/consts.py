@@ -991,6 +991,10 @@ _SKILL_ALIASES = {
     "ml": "machine learning",
     "nlp": "natural language processing",
     "powerbi": "power bi",
+    "dashboard": "dashboard",
+    "dashboards": "dashboard",
+    "pipeline": "pipeline",
+    "pipelines": "pipeline",
 }
 
 _ANALYTICS_ML_SIGNAL_CANONICAL = {
@@ -1003,6 +1007,13 @@ _ANALYTICS_ML_SIGNAL_CANONICAL = {
 _ANALYTICS_ML_GENERIC_SIGNALS = {
     "analytics",
     "data science",
+}
+
+GENERIC_REQUIRED_SKILL_TARGETS = {
+    *_ANALYTICS_ML_GENERIC_SIGNALS,
+    "analysis",
+    "experiment",
+    "experimentation",
 }
 
 _SENIORITY_RANKS = {
@@ -1082,8 +1093,19 @@ REQUIRED_CONTEXT_PATTERNS = [
     r"\bbecause you have\b",
     r"\bwe['’]d love to chat if you have\b",
     r"\bwe would love to chat if you have\b",
+    r"\bskills\s*&\s*attributes\b",
+    r"\bskills and attributes\b",
+    r"\bwhat you bring\b",
+    r"\bwhat you'll bring\b",
+    r"\bwhat you will bring\b",
     r"\byou should bring\b",
+]
+
+RESPONSIBILITY_CONTEXT_PATTERNS = [
+    r"\bresponsibilities\b",
+    r"\bcore responsibilities\b",
     r"\bwhat you['’]ll do\b",
+    r"\bwhat you will do\b",
 ]
 
 PREFERRED_CONTEXT_PATTERNS = [

@@ -70,6 +70,18 @@ _ARCHETYPE_WEIGHT_OVERRIDES: Dict[str, Dict[str, float]] = {
         "experimentation_depth": 0.090000,
         "tooling_alignment": 0.070000,
     },
+    "growth_product_analytics": {
+        "title_alignment": 0.100000,
+        "required_skills_alignment": 0.230000,
+        "preferred_skills_alignment": 0.060000,
+        "workflow_alignment": 0.160000,
+        "business_context_alignment": 0.110000,
+        "stakeholder_translation_alignment": 0.060000,
+        "domain_relevance": 0.050000,
+        "analytics_ml_depth": 0.100000,
+        "experimentation_depth": 0.080000,
+        "tooling_alignment": 0.050000,
+    },
 }
 
 PREFILTER_CHECKS: List[str] = [

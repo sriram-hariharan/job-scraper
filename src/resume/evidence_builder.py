@@ -21,7 +21,8 @@ from src.config.consts import (
     ANALYTICS_ML_SIGNAL_PATTERNS,
     SECTION_ALIASES,
     ROLE_WORD_HINTS,
-    ACTION_VERB_HINTS
+    ACTION_VERB_HINTS,
+    _SKILL_ALIASES,
 )
 
 def _normalize(text: str) -> str:
@@ -42,10 +43,32 @@ def _unique_preserve_order(values: List[str]) -> List[str]:
 
     return ordered
 
+def _pattern_present(text_norm: str, candidate: str) -> bool:
+    normalized = _normalize(candidate)
+    if not normalized:
+        return False
+
+    escaped = re.escape(normalized).replace(r"\ ", r"\s+")
+    prefix = r"(?<![a-z0-9])" if normalized[:1].isalnum() else ""
+    suffix = r"(?![a-z0-9])" if normalized[-1:].isalnum() else ""
+
+    return re.search(prefix + escaped + suffix, text_norm) is not None
 
 def _extract_pattern_hits(text: str, patterns: List[str]) -> List[str]:
     text_norm = _normalize(text)
-    hits = [pattern for pattern in patterns if pattern in text_norm]
+    hits: List[str] = []
+
+    for pattern in patterns:
+        canonical = _normalize(pattern)
+        candidates = {canonical}
+
+        for alias, alias_target in _SKILL_ALIASES.items():
+            if _normalize(alias_target) == canonical:
+                candidates.add(_normalize(alias))
+
+        if any(_pattern_present(text_norm, candidate) for candidate in candidates):
+            hits.append(canonical)
+
     return _unique_preserve_order(hits)
 
 

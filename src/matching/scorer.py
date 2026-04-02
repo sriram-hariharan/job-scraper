@@ -82,13 +82,23 @@ def _resume_name_title_candidates(resume_name: str) -> List[str]:
         )
         candidate_tokens = tokens[start:]
 
-    if not candidate_tokens:
+    if len(candidate_tokens) < 2:
         return []
 
-    phrase_tokens = [_VARIANT_TITLE_ABBREVIATIONS.get(token, token) for token in candidate_tokens]
-    phrase = " ".join(phrase_tokens).strip()
+    phrase = " ".join(
+        _VARIANT_TITLE_ABBREVIATIONS.get(token, token)
+        for token in candidate_tokens
+    ).strip()
 
     if not phrase or not _looks_roleish(phrase):
+        return []
+
+    title_tokens = [
+        token
+        for token in _normalize_text(phrase).split()
+        if token and token not in TITLE_NOISE_TOKENS
+    ]
+    if len(title_tokens) < 2:
         return []
 
     return [phrase]

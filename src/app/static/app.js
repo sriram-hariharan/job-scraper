@@ -991,11 +991,17 @@ function renderPipelineStatus(payload) {
   if (status === "running") {
     runBtn.disabled = true;
     runBtn.textContent = "Pipeline Running...";
-    showPageLoadingOverlay(
-      `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
-      pipeline.stage_message || "Pipeline is running.",
-      pipeline
-    );
+
+    const overlayIsVisible = !qs("pageLoadingOverlay").classList.contains("hidden");
+
+    if (overlayIsVisible) {
+      showPageLoadingOverlay(
+        `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
+        pipeline.stage_message || "Pipeline is running.",
+        pipeline
+      );
+    }
+
     return;
   }
 

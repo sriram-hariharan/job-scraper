@@ -97,6 +97,7 @@ _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "log_path": str(DEFAULT_PIPELINE_LOG_PATH),
     "status_path": str(DEFAULT_PIPELINE_STATUS_PATH),
     "run_id": "",
+    "child_pid": None,
     "error": "",
 }
 
@@ -288,6 +289,7 @@ def _pipeline_status_snapshot() -> Dict[str, Any]:
             )
             _PIPELINE_RUN_STATE["return_code"] = return_code
             _PIPELINE_RUN_STATE["process"] = None
+            _PIPELINE_RUN_STATE["child_pid"] = None
 
             if log_handle is not None:
                 try:
@@ -307,9 +309,159 @@ def _pipeline_status_snapshot() -> Dict[str, Any]:
         "log_path": _PIPELINE_RUN_STATE.get("log_path", str(DEFAULT_PIPELINE_LOG_PATH)),
         "status_path": _PIPELINE_RUN_STATE.get("status_path", str(DEFAULT_PIPELINE_STATUS_PATH)),
         "run_id": _PIPELINE_RUN_STATE.get("run_id", ""),
+        "child_pid": _PIPELINE_RUN_STATE.get("child_pid"),
         "error": _PIPELINE_RUN_STATE.get("error", ""),
         "is_running": status == "running",
     }
+
+def _write_runtime_status_file(path: Path, payload: Dict[str, Any]) -> None:
+    resolved = Path(path).expanduser()
+    resolved.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = resolved.with_suffix(resolved.suffix + ".tmp")
+    tmp_path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+    )
+    tmp_path.replace(resolved)
+
+def _pid_exists(pid: Any) -> bool:
+    try:
+        normalized = int(pid)
+    except (TypeError, ValueError):
+        return False
+
+    if normalized <= 0:
+        return False
+
+    try:
+        os.kill(normalized, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+    return True
+
+
+def _heal_stale_running_runtime_status(
+    snapshot: Dict[str, Any],
+    runtime_status: Dict[str, Any],
+) -> Dict[str, Any]:
+    if snapshot.get("is_running"):
+        return runtime_status
+
+    if str(runtime_status.get("status", "") or "").strip().lower() != "running":
+        return runtime_status
+
+    child_pid = runtime_status.get("child_pid")
+    if child_pid and _pid_exists(child_pid):
+        return runtime_status
+
+    healed = dict(runtime_status)
+    healed["status"] = "failed"
+    healed["finished_at"] = healed.get("finished_at") or _utc_now()
+    healed["return_code"] = 1
+
+    reason = (
+        "Live pipeline is no longer running. "
+        "The API server likely restarted or the child process exited unexpectedly."
+    )
+    healed["error"] = healed.get("error") or reason
+    healed["summary_message"] = healed.get("summary_message") or reason
+    healed["stage_message"] = reason
+
+    status_path_raw = str(
+        snapshot.get("status_path")
+        or healed.get("status_path")
+        or ""
+    ).strip()
+    if status_path_raw:
+        _write_runtime_status_file(Path(status_path_raw), healed)
+
+    return healed
+
+def stop_live_pipeline_for_server_shutdown(
+    reason: str = "Live pipeline stopped because the API server shut down.",
+) -> Dict[str, Any]:
+    process = _PIPELINE_RUN_STATE.get("process")
+    log_handle = _PIPELINE_RUN_STATE.get("log_handle")
+    status_path_raw = str(_PIPELINE_RUN_STATE.get("status_path", "") or "").strip()
+    status_path = Path(status_path_raw).expanduser() if status_path_raw else None
+    finished_at = _utc_now()
+
+    if process is None:
+        if log_handle is not None:
+            try:
+                log_handle.close()
+            except Exception:
+                pass
+            _PIPELINE_RUN_STATE["log_handle"] = None
+
+        return {
+            "ok": True,
+            "stopped": False,
+            "reason": "no_active_process",
+        }
+
+    return_code = process.poll()
+    was_running = return_code is None
+
+    if was_running:
+        process.terminate()
+        try:
+            return_code = process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            return_code = process.wait(timeout=5)
+
+    if log_handle is not None:
+        try:
+            log_handle.close()
+        except Exception:
+            pass
+
+    _PIPELINE_RUN_STATE["process"] = None
+    _PIPELINE_RUN_STATE["child_pid"] = None
+    _PIPELINE_RUN_STATE["log_handle"] = None
+    _PIPELINE_RUN_STATE["finished_at"] = finished_at
+    _PIPELINE_RUN_STATE["return_code"] = return_code if return_code is not None else 1
+
+    if was_running:
+        _PIPELINE_RUN_STATE["status"] = "failed"
+        _PIPELINE_RUN_STATE["error"] = reason
+    else:
+        _PIPELINE_RUN_STATE["status"] = "succeeded" if return_code == 0 else "failed"
+        _PIPELINE_RUN_STATE["error"] = "" if return_code == 0 else reason
+
+    if status_path and status_path.exists():
+        runtime_payload = _load_runtime_status_file(str(status_path))
+        if runtime_payload:
+            runtime_payload["finished_at"] = finished_at
+            runtime_payload["return_code"] = return_code if return_code is not None else 1
+
+            if was_running:
+                runtime_payload["status"] = "failed"
+                runtime_payload["error"] = reason
+                runtime_payload["summary_message"] = reason
+                runtime_payload["stage_message"] = reason
+            else:
+                runtime_payload["status"] = "succeeded" if return_code == 0 else "failed"
+                if return_code != 0:
+                    runtime_payload["error"] = reason
+                    runtime_payload["summary_message"] = runtime_payload.get("summary_message") or reason
+                    runtime_payload["stage_message"] = runtime_payload.get("stage_message") or reason
+
+            _write_runtime_status_file(status_path, runtime_payload)
+
+    return {
+        "ok": True,
+        "stopped": was_running,
+        "return_code": return_code,
+        "status_path": str(status_path) if status_path else "",
+    }
+
 
 def _runtime_status_is_stale_startup(
     snapshot: Dict[str, Any],
@@ -344,6 +496,9 @@ def pipeline_status_payload() -> Dict[str, Any]:
 
     if runtime_status and _runtime_status_is_stale_startup(snapshot, runtime_status):
         runtime_status = {}
+
+    if runtime_status:
+        runtime_status = _heal_stale_running_runtime_status(snapshot, runtime_status)
 
     merged = dict(snapshot)
     if runtime_status:
@@ -1179,6 +1334,7 @@ def run_live_pipeline_payload(
 
     runtime_payload = {
         "run_id": run_id,
+        "child_pid": None,
         "status": "running",
         "started_at": _utc_now(),
         "finished_at": "",
@@ -1256,7 +1412,9 @@ def run_live_pipeline_payload(
             encoding="utf-8",
         )
         raise
-
+    
+    runtime_payload["child_pid"] = process.pid
+    _write_runtime_status_file(canonical_status_path, runtime_payload)
     _PIPELINE_RUN_STATE["process"] = process
     _PIPELINE_RUN_STATE["log_handle"] = log_handle
     _PIPELINE_RUN_STATE["status"] = "running"
@@ -1268,6 +1426,7 @@ def run_live_pipeline_payload(
     _PIPELINE_RUN_STATE["log_path"] = str(canonical_log_path)
     _PIPELINE_RUN_STATE["status_path"] = str(canonical_status_path)
     _PIPELINE_RUN_STATE["run_id"] = run_id
+    _PIPELINE_RUN_STATE["child_pid"] = process.pid
     _PIPELINE_RUN_STATE["error"] = ""
 
     return {

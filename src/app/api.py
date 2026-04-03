@@ -57,7 +57,13 @@ class PlanningWorkspaceDraftPreviewRequest(BaseModel):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
+    try:
+        yield
+    finally:
+        try:
+            services.stop_live_pipeline_for_server_shutdown()
+        except Exception:
+            logger.exception("Failed to stop live pipeline during API shutdown")
 
 app = FastAPI(
     title="Job Operator API",

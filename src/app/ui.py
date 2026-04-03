@@ -494,12 +494,12 @@ def executive_dashboard() -> str:
       <div class="pipeline-overlay-success hidden" id="pipelineOverlaySuccess">
         <div class="pipeline-success-visual">
           <img
-              id="pipelineSuccessGif"
-              class="pipeline-success-gif"
-              src="/static/media/success_check.gif"
-              data-src="/static/media/success_check.gif"
-              alt="Pipeline completed successfully"
-            />
+            id="pipelineSuccessGif"
+            class="pipeline-success-gif"
+            src="/static/media/success_check.gif"
+            data-src="/static/media/success_check.gif"
+            alt="Pipeline completed successfully"
+          />
           <div class="pipeline-success-static-check hidden" id="pipelineSuccessStaticCheck">✓</div>
         </div>
 
@@ -516,37 +516,37 @@ def executive_dashboard() -> str:
           <button type="button" id="pipelineSuccessOkBtn">OK</button>
         </div>
       </div>
-    </div>
-    <div class="pipeline-overlay-failure hidden" id="pipelineOverlayFailure">
-      <div class="pipeline-success-visual">
-        <img
-          id="pipelineFailureGif"
-          class="pipeline-success-gif"
-          src="/static/media/failed.gif"
-          data-src="/static/media/failed.gif"
-          alt="Pipeline failed"
-        />
-        <div
-          class="pipeline-success-static-check hidden"
-          id="pipelineFailureStaticCross"
-          style="color:#dc2626;"
-        >
-          ✕
+
+      <div class="pipeline-overlay-failure hidden" id="pipelineOverlayFailure">
+        <div class="pipeline-success-visual">
+          <img
+            id="pipelineFailureGif"
+            class="pipeline-success-gif"
+            src="/static/media/failed.gif"
+            data-src="/static/media/failed.gif"
+            alt="Pipeline failed"
+          />
+          <div
+            class="pipeline-success-static-check hidden"
+            id="pipelineFailureStaticCross"
+          >
+            ✕
+          </div>
         </div>
-      </div>
 
-      <div class="page-loading-title pipeline-success-title" id="pipelineFailureTitle">
-        Pipeline failed
-      </div>
-      <div class="page-loading-text pipeline-success-text" id="pipelineFailureText">
-        Run failed.
-      </div>
+        <div class="page-loading-title pipeline-success-title" id="pipelineFailureTitle">
+          Pipeline failed
+        </div>
+        <div class="page-loading-text pipeline-success-text" id="pipelineFailureText">
+          Run failed.
+        </div>
 
-      <div class="pipeline-success-summary" id="pipelineFailureSummary"></div>
-      <div class="pipeline-success-summary" id="pipelineFailureReason"></div>
+        <div class="pipeline-success-summary" id="pipelineFailureSummary"></div>
+        <div class="pipeline-success-summary" id="pipelineFailureReason"></div>
 
-      <div class="modal-actions pipeline-success-actions">
-        <button type="button" id="pipelineFailureOkBtn">OK</button>
+        <div class="modal-actions pipeline-success-actions">
+          <button type="button" id="pipelineFailureOkBtn">OK</button>
+        </div>
       </div>
     </div>
   </section>

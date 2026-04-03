@@ -121,6 +121,7 @@ const PIPELINE_PRESETS = {
     generate_llm_tailoring: false,
     refresh_llm_tailoring: false,
     generate_llm_fallback: false,
+    generate_llm_adjudication: true,
     delete_seen_data: false,
   },
   planning_only: {
@@ -638,6 +639,7 @@ function applyPipelinePreset(name) {
   setBinaryToggleValue("pipelineGenerateLlmTailoring", preset.generate_llm_tailoring);
   setBinaryToggleValue("pipelineRefreshLlmTailoring", preset.refresh_llm_tailoring);
   setBinaryToggleValue("pipelineGenerateLlmFallback", preset.generate_llm_fallback);
+  setBinaryToggleValue("pipelineGenerateLlmAdjudication", preset.generate_llm_adjudication);
   setPipelineDeleteSeenDataValue(preset.delete_seen_data);
   setPipelineLlmActions(preset.llm_actions || []);
   syncPipelinePathPreview();
@@ -1144,6 +1146,7 @@ function collectPipelineConfig() {
     generate_llm_tailoring: getBinaryToggleBool("pipelineGenerateLlmTailoring"),
     refresh_llm_tailoring: getBinaryToggleBool("pipelineRefreshLlmTailoring"),
     generate_llm_fallback: getBinaryToggleBool("pipelineGenerateLlmFallback"),
+    generate_llm_adjudication: getBinaryToggleBool("pipelineGenerateLlmAdjudication"),
     delete_seen_data: getPipelineDeleteSeenDataValue(),
   };
 }
@@ -1160,6 +1163,7 @@ function renderPipelineConfirmSummary(config) {
     `Generate LLM tailoring: ${config.generate_llm_tailoring ? "Yes" : "No"}`,
     `Refresh LLM tailoring: ${config.refresh_llm_tailoring ? "Yes" : "No"}`,
     `Generate LLM fallback: ${config.generate_llm_fallback ? "Yes" : "No"}`,
+    `Generate LLM adjudication: ${config.generate_llm_adjudication ? "Yes" : "No"}`,
     `Delete seen data: ${config.delete_seen_data === "yes" ? "Yes" : "No"}`,
   ];
 

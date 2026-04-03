@@ -1102,6 +1102,7 @@ def run_live_pipeline_payload(
     generate_llm_tailoring: bool = False,
     refresh_llm_tailoring: bool = False,
     generate_llm_fallback: bool = False,
+    generate_llm_adjudication: bool = False,
     planning_only: bool = False,
     delete_seen_data: str = "no",
 ) -> Dict[str, Any]:
@@ -1119,7 +1120,19 @@ def run_live_pipeline_payload(
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
 
+    # Temporary UI bridge:
+    # until the live-run UI exposes a dedicated adjudication toggle,
+    # enabling LLM fallback from the UI should also enable adjudication.
+    effective_generate_llm_adjudication = bool(
+        generate_llm_adjudication or generate_llm_fallback
+    )
+
     ja = _job_app()
+    
+    effective_generate_llm_adjudication = bool(
+        generate_llm_adjudication or generate_llm_fallback
+    )
+
     args = _make_args(
         run_application_planning=True,
         job_limit=int(job_limit),
@@ -1130,6 +1143,7 @@ def run_live_pipeline_payload(
         generate_llm_tailoring=bool(generate_llm_tailoring),
         refresh_llm_tailoring=bool(refresh_llm_tailoring),
         generate_llm_fallback=bool(generate_llm_fallback),
+        generate_llm_adjudication=effective_generate_llm_adjudication,
         delete_seen_data=normalized_delete_seen_data,
     )
     cmd = ja._build_main_cmd(args, planning_only=bool(planning_only))
@@ -1179,6 +1193,7 @@ def run_live_pipeline_payload(
             "generate_llm_tailoring": bool(generate_llm_tailoring),
             "refresh_llm_tailoring": bool(refresh_llm_tailoring),
             "generate_llm_fallback": bool(generate_llm_fallback),
+            "generate_llm_adjudication": effective_generate_llm_adjudication,
             "delete_seen_data": normalized_delete_seen_data,
         },
     }

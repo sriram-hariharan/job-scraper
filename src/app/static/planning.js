@@ -732,6 +732,12 @@ const PLANNING_SORT_COLUMNS = [
     type: "text",
     getValue: (row) => humanizeFallbackStatus(row.llm_fallback_status),
   },
+  {
+    key: "llm_adjudication_resume",
+    label: "LLM Review Hint",
+    type: "text",
+    getValue: (row) => String(row.llm_adjudication_resume || "").trim(),
+  },
   { key: "operator_decision", label: "Decision", type: "text" },
   { key: "operator_selected_resume", label: "Selected", type: "text" },
   { key: "queue_priority_reason", label: "Why", type: "text" },
@@ -2354,6 +2360,27 @@ function buildFallbackResumeHtml(row) {
     return "-";
   }
   return buildCompactTextHtml(row.llm_fallback_best_resume, { maxLength: 28 });
+}
+
+function buildAdjudicationHintHtml(row) {
+  const adjudicatedResume = String(row.llm_adjudication_resume || "").trim();
+  if (!adjudicatedResume) return "-";
+
+  const confidence = humanizeUnderscoreLabel(row.llm_adjudication_confidence || "", "");
+  const differs = normalizeBool(row.llm_adjudication_differs_from_deterministic);
+  const reason = String(row.llm_adjudication_reason || "").trim();
+
+  const badgeLabel = differs ? "LLM differs" : "LLM agrees";
+  const metaBits = [confidence].filter(Boolean);
+  const metaText = metaBits.length ? metaBits.join(" · ") : "";
+
+  return `
+    <div class="planning-decision-cell" title="${escapeHtml(reason || adjudicatedResume)}">
+      <div class="planning-decision-label">${buildPlanningPill(badgeLabel)}</div>
+      <div>${buildCompactTextHtml(adjudicatedResume, { maxLength: 28 })}</div>
+      ${metaText ? `<div class="subtext">${escapeHtml(metaText)}</div>` : ""}
+    </div>
+  `;
 }
 
 function buildReasonHtml(value) {
@@ -5138,7 +5165,7 @@ function renderPlanningRows(rows, metaLabel) {
   if (!displayRows.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="20" class="empty-state">No rows found.</td>
+        <td colspan="21" class="empty-state">No rows found.</td>
       </tr>
     `;
     qs("planningTableMeta").textContent = planningTableState.metaLabel;
@@ -5174,6 +5201,7 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(row.missing_requirement_count || "")}</td>
         <td>${buildFallbackResumeHtml(row)}</td>
         <td>${escapeHtml(humanizeFallbackStatus(row.llm_fallback_status || ""))}</td>
+        <td>${buildAdjudicationHintHtml(row)}</td>
         <td>${buildOperatorDecisionCellHtml(row)}</td>
         <td>${buildCompactTextHtml(row.operator_selected_resume, { maxLength: 28, emptyLabel: "-" })}</td>
         <td class="reason-cell">${buildReasonHtml(buildPlanningPriorityReason(row))}</td>
@@ -5190,7 +5218,7 @@ function renderPlanningRows(rows, metaLabel) {
 
 async function loadPlanningTable() {
   const tbody = qs("planningTableBody");
-  tbody.innerHTML = renderTableLoading(20, "Loading planning rows...");
+  tbody.innerHTML = renderTableLoading(21, "Loading planning rows...");
   qs("planningTableMeta").textContent = "Loading...";
 
   const url = buildPlanningUrl();

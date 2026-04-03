@@ -38,6 +38,21 @@ def _run_cmd(cmd: List[str]) -> None:
     print()
     subprocess.run(cmd, check=True)
 
+def _run_optional_cmd(cmd: List[str], step_name: str) -> int:
+    print()
+    print("RUNNING OPTIONAL:", " ".join(cmd))
+    print()
+    result = subprocess.run(cmd, check=False)
+
+    if result.returncode == 0:
+        print(f"{step_name}: completed")
+    else:
+        print(
+            f"{step_name}: skipped/failed but continuing "
+            f"(return_code={result.returncode})"
+        )
+
+    return result.returncode
 
 def _load_job_doc_id_to_index(job_corpus_path: Path) -> Dict[str, int]:
     if not job_corpus_path.exists():
@@ -356,6 +371,17 @@ def main() -> None:
         batch_selector_cmd.append("--generate-llm-adjudication")
 
     _run_cmd(batch_selector_cmd)
+
+    archive_selector_runtime_fixture_cmd = [
+        sys.executable,
+        "archive_batch_selector_runtime_fixture.py",
+        "--input-csv",
+        str(best_variant_csv),
+    ]
+    _run_optional_cmd(
+        archive_selector_runtime_fixture_cmd,
+        "selector runtime fixture archiver",
+    )
 
     shortlist_cmd = [
         sys.executable,

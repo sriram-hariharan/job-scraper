@@ -81,6 +81,11 @@ def _parse_args():
         default="ask",
         help="Control whether seen-job state should be deleted before the run.",
     )
+    parser.add_argument(
+        "--application-planning-generate-llm-adjudication",
+        action="store_true",
+        help="Pass --generate-llm-adjudication to run_application_planning.py for bounded LLM review on effective ties and close calls.",
+    )
     return parser.parse_args()
 
 
@@ -112,6 +117,9 @@ def _run_application_planning(args):
 
     if args.application_planning_generate_llm_fallback:
         cmd.append("--generate-llm-fallback")
+    
+    if args.application_planning_generate_llm_adjudication:
+        cmd.append("--generate-llm-adjudication")
 
     if args.application_planning_generate_llm_tailoring:
         cmd.append("--generate-llm-tailoring")
@@ -382,6 +390,7 @@ async def main_async(args):
         generate_llm_tailoring=bool(args.application_planning_generate_llm_tailoring),
         refresh_llm_tailoring=bool(args.application_planning_refresh_llm_tailoring),
         generate_llm_fallback=bool(args.application_planning_generate_llm_fallback),
+        generate_llm_adjudication=bool(args.application_planning_generate_llm_adjudication),
         delete_seen_data=delete_seen_data,
     )
 

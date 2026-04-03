@@ -1304,18 +1304,8 @@ def run_live_pipeline_payload(
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
 
-    # Temporary UI bridge:
-    # until the live-run UI exposes a dedicated adjudication toggle,
-    # enabling LLM fallback from the UI should also enable adjudication.
-    effective_generate_llm_adjudication = bool(
-        generate_llm_adjudication or generate_llm_fallback
-    )
-
     ja = _job_app()
-
-    effective_generate_llm_adjudication = bool(
-        generate_llm_adjudication or generate_llm_fallback
-    )
+    effective_generate_llm_adjudication = bool(generate_llm_adjudication)
 
     args = _make_args(
         run_application_planning=True,

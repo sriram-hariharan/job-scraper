@@ -48,15 +48,10 @@ def score_job(job):
         job.get("learning_opportunity", 0) * 0.20
     )
 
-    # Embedding resume prior
-    embedding_resume_prior_score = job.get("embedding_resume_prior_score", 0)
-    resume_score = embedding_resume_prior_score * 10
-
     weights = APPLICATION_PRIORITY_POLICY["weights"]
 
     priority_score = (
         weights["ai_signal_score"] * ai_signal_score +
-        weights["embedding_resume_prior_score"] * resume_score +
         weights["base_score"] * base_score
     )
 

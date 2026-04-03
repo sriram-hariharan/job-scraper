@@ -56,6 +56,37 @@ LLM_FALLBACK_RESPONSE_SCHEMA = {
     ],
 }
 
+LLM_ADJUDICATION_PROVIDER = os.getenv(
+    "LLM_ADJUDICATION_PROVIDER",
+    LLM_FALLBACK_PROVIDER,
+).strip().lower()
+LLM_ADJUDICATION_MODEL = os.getenv(
+    "LLM_ADJUDICATION_MODEL",
+    LLM_FALLBACK_MODEL,
+).strip()
+LLM_ADJUDICATION_MAX_TOKENS = int(os.getenv("LLM_ADJUDICATION_MAX_TOKENS", "700"))
+LLM_ADJUDICATION_TEMPERATURE = float(os.getenv("LLM_ADJUDICATION_TEMPERATURE", "0"))
+LLM_ADJUDICATION_PROMPT_VERSION = "v1"
+LLM_ADJUDICATION_CACHE_DIR = Path(
+    os.getenv(
+        "LLM_ADJUDICATION_CACHE_DIR",
+        "outputs/application_planning/llm_adjudication_cache",
+    )
+)
+
+LLM_ADJUDICATION_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "adjudicated_resume": {"type": "STRING"},
+        "confidence": {"type": "STRING"},
+        "reason": {"type": "STRING"},
+    },
+    "required": [
+        "adjudicated_resume",
+        "confidence",
+        "reason",
+    ],
+}
 
 def _load_job_records(job_corpus_path: Path, limit: int) -> List[dict]:
     if not job_corpus_path.exists():
@@ -602,6 +633,258 @@ Rules:
             "cache_hit": False,
         }
 
+def _should_run_llm_adjudication(
+    has_credible_match: bool,
+    winner,
+    runner_up: Optional[object],
+    manual_review_gap_epsilon: float = CLOSE_CALL_REVIEW_EPSILON,
+) -> bool:
+    if not has_credible_match or runner_up is None:
+        return False
+
+    return (
+        _is_effective_tie(winner, runner_up)
+        or _is_close_call_manual_review(
+            winner,
+            runner_up,
+            gap_epsilon=manual_review_gap_epsilon,
+        )
+    )
+
+
+def _build_llm_adjudication_prompt(
+    record: dict,
+    winner,
+    runner_up,
+    resume_evidence_list: List[object],
+) -> str:
+    evidence_by_resume_id = {
+        evidence.document.resume_id: evidence
+        for evidence in resume_evidence_list
+    }
+
+    candidates = [winner, runner_up]
+    allowed_resume_names = [result.pair.resume_name for result in candidates]
+
+    lines: List[str] = []
+    lines.append("You are adjudicating between two ambiguous resume variants for one job.")
+    lines.append("The deterministic selector has already narrowed the choice to these two finalists.")
+    lines.append("Do not invent skills, tools, projects, outcomes, or domain exposure.")
+    lines.append("Use ONLY the evidence provided.")
+    lines.append("Choose exactly one resume filename from the finalist list.")
+    lines.append("")
+    lines.append(f"Job company: {record.get('company', '')}")
+    lines.append(f"Job title: {record.get('title', '')}")
+    lines.append(f"Role family: {record.get('role_family', '')}")
+    lines.append(f"Required skills: {record.get('required_skills', [])}")
+    lines.append(f"Preferred skills: {record.get('preferred_skills', [])}")
+    lines.append(f"All skills: {record.get('all_skills', [])}")
+    lines.append(f"Job description preview: {_truncate_text(record.get('description', ''), 2500)}")
+    lines.append("")
+    lines.append(f"Allowed finalist resumes: {allowed_resume_names}")
+    lines.append("")
+
+    for idx, strict_result in enumerate(candidates, start=1):
+        resume_evidence = evidence_by_resume_id[strict_result.pair.resume_id]
+        lines.append(f"{idx}. Resume: {strict_result.pair.resume_name}")
+        lines.append(f"   Deterministic score: {strict_result.final_score:.6f}")
+        lines.append(f"   Top dimensions: {_dimension_snapshot(strict_result)}")
+        lines.append(f"   Prefilter matched terms: {list(strict_result.prefilter.matched_terms)}")
+        lines.append(f"   Missing required: {list(strict_result.prefilter.missing_requirements)}")
+        lines.append(f"   Extracted titles: {_resume_titles_preview(resume_evidence)}")
+        lines.append("   Resume bullets:")
+        for bullet in _resume_bullet_preview(resume_evidence):
+            lines.append(f"   - {bullet}")
+        lines.append("")
+
+    lines.append("Return JSON with:")
+    lines.append("1. adjudicated_resume: exact resume filename from the finalist list")
+    lines.append("2. confidence: one of low, medium, high")
+    lines.append("3. reason: short grounded explanation")
+    return "\n".join(lines)
+
+
+def _llm_adjudication_cache_key(
+    provider: str,
+    model: str,
+    system_prompt: str,
+    prompt: str,
+) -> str:
+    payload = {
+        "prompt_version": LLM_ADJUDICATION_PROMPT_VERSION,
+        "provider": provider,
+        "model": model,
+        "system_prompt": system_prompt,
+        "prompt": prompt,
+    }
+    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _llm_adjudication_cache_path(cache_key: str) -> Path:
+    return LLM_ADJUDICATION_CACHE_DIR / f"{cache_key}.json"
+
+
+def _load_llm_adjudication_cache(cache_key: str) -> Optional[Dict[str, Any]]:
+    path = _llm_adjudication_cache_path(cache_key)
+    if not path.exists():
+        return None
+
+    with path.open("r", encoding="utf-8") as f:
+        payload = json.load(f)
+
+    if not isinstance(payload, dict):
+        return None
+
+    payload["status"] = "cached"
+    payload["cache_hit"] = True
+    return payload
+
+
+def _write_llm_adjudication_cache(cache_key: str, payload: Dict[str, Any]) -> None:
+    LLM_ADJUDICATION_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    path = _llm_adjudication_cache_path(cache_key)
+
+    cached_payload = dict(payload)
+    cached_payload["cache_hit"] = False
+
+    with path.open("w", encoding="utf-8") as f:
+        json.dump(cached_payload, f, indent=2, ensure_ascii=False)
+
+
+def _normalize_llm_adjudication_parsed(
+    parsed: Dict[str, Any],
+    allowed_resume_names: List[str],
+) -> Dict[str, Any]:
+    allowed = {name.strip() for name in allowed_resume_names if name.strip()}
+    adjudicated_resume = str(parsed.get("adjudicated_resume", "")).strip()
+
+    if adjudicated_resume not in allowed:
+        raise ValueError(f"LLM adjudication returned invalid adjudicated_resume: {adjudicated_resume!r}")
+
+    confidence = str(parsed.get("confidence", "")).strip().lower()
+    if confidence not in {"low", "medium", "high"}:
+        confidence = "low"
+
+    reason = str(parsed.get("reason", "")).strip()
+
+    return {
+        "adjudicated_resume": adjudicated_resume,
+        "confidence": confidence,
+        "reason": reason,
+    }
+
+
+def _run_llm_adjudication(
+    record: dict,
+    winner,
+    runner_up,
+    resume_evidence_list: List[object],
+) -> Dict[str, Any]:
+    prompt = _build_llm_adjudication_prompt(
+        record=record,
+        winner=winner,
+        runner_up=runner_up,
+        resume_evidence_list=resume_evidence_list,
+    )
+
+    allowed_resume_names = [
+        winner.pair.resume_name,
+        runner_up.pair.resume_name,
+    ]
+    provider = str(LLM_ADJUDICATION_PROVIDER or "").strip().lower()
+    model = str(LLM_ADJUDICATION_MODEL or "").strip()
+
+    system_prompt = """
+You adjudicate between two finalist resume variants after deterministic scoring found an ambiguous result.
+
+Rules:
+1. Use ONLY the evidence provided.
+2. Do NOT invent skills, tools, experience, metrics, or domain exposure.
+3. Choose exactly one resume filename from the finalist list.
+4. Return ONLY valid JSON.
+""".strip()
+
+    cache_key = _llm_adjudication_cache_key(
+        provider=provider,
+        model=model,
+        system_prompt=system_prompt,
+        prompt=prompt,
+    )
+
+    cached = _load_llm_adjudication_cache(cache_key)
+    if cached is not None:
+        return cached
+
+    try:
+        if provider == "groq":
+            response = run_chat_completion(
+                provider=provider,
+                model=model,
+                temperature=LLM_ADJUDICATION_TEMPERATURE,
+                max_tokens=LLM_ADJUDICATION_MAX_TOKENS,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            parsed = _parse_llm_fallback_response(response)
+        else:
+            response = run_chat_completion(
+                provider=provider,
+                model=model,
+                temperature=LLM_ADJUDICATION_TEMPERATURE,
+                max_tokens=LLM_ADJUDICATION_MAX_TOKENS,
+                response_mime_type="application/json",
+                response_schema=LLM_ADJUDICATION_RESPONSE_SCHEMA,
+                return_parsed=True,
+                thinking_budget=0,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            parsed = _parse_llm_fallback_response(response)
+
+        normalized = _normalize_llm_adjudication_parsed(parsed, allowed_resume_names)
+
+        result = {
+            "status": "generated",
+            "parse_ok": True,
+            "provider": provider,
+            "model": model,
+            "adjudicated_resume": normalized["adjudicated_resume"],
+            "confidence": normalized["confidence"],
+            "reason": normalized["reason"],
+            "error_type": "",
+            "cache_hit": False,
+        }
+        _write_llm_adjudication_cache(cache_key, result)
+        return result
+
+    except Exception as exc:
+        error_text = str(exc)
+        error_lower = error_text.lower()
+
+        if "resource_exhausted" in error_lower or "quota" in error_lower or "429" in error_lower:
+            status = "rate_limited"
+        elif "parse" in error_lower or "json" in error_lower:
+            status = "parse_failed"
+        else:
+            status = "error"
+
+        return {
+            "status": status,
+            "parse_ok": False,
+            "provider": provider,
+            "model": model,
+            "adjudicated_resume": "",
+            "confidence": "",
+            "reason": "",
+            "error_type": f"call_failed: {exc}",
+            "cache_hit": False,
+        }
+    
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Batch-select the best resume variant for multiple jobs."
@@ -656,6 +939,11 @@ def main() -> None:
         "--generate-llm-fallback",
         action="store_true",
         help="For jobs with no credible deterministic winner, run LLM fallback ranking across all resume variants.",
+    )
+    parser.add_argument(
+        "--generate-llm-adjudication",
+        action="store_true",
+        help="For effective ties and manual-review close calls, run bounded LLM adjudication across the top two deterministic finalists.",
     )
     args = parser.parse_args()
 
@@ -728,6 +1016,18 @@ def main() -> None:
             "error_type": "",
             "cache_hit": "",
         }
+        llm_adjudication = {
+            "status": "disabled",
+            "parse_ok": "",
+            "provider": "",
+            "model": "",
+            "adjudicated_resume": "",
+            "confidence": "",
+            "reason": "",
+            "error_type": "",
+            "cache_hit": "",
+            "differs_from_deterministic": "",
+        }
 
         if not has_credible_match and args.generate_llm_fallback:
             llm_fallback = _run_llm_fallback_ranking(
@@ -752,7 +1052,26 @@ def main() -> None:
             runner_up=runner_up,
             manual_review_gap_epsilon=args.manual_review_gap_epsilon,
         )
-
+        if (
+            args.generate_llm_adjudication
+            and _should_run_llm_adjudication(
+                has_credible_match=has_credible_match,
+                winner=winner,
+                runner_up=runner_up,
+                manual_review_gap_epsilon=args.manual_review_gap_epsilon,
+            )
+        ):
+            llm_adjudication = _run_llm_adjudication(
+                record=record,
+                winner=winner,
+                runner_up=runner_up,
+                resume_evidence_list=resume_evidence_list,
+            )
+            adjudicated_resume = str(llm_adjudication.get("adjudicated_resume", "")).strip()
+            llm_adjudication["differs_from_deterministic"] = str(
+                bool(adjudicated_resume and adjudicated_resume != winner.pair.resume_name)
+            )
+        
         output_rows.append(
             {
                 "job_doc_id": winner.pair.job_doc_id,
@@ -877,6 +1196,16 @@ def main() -> None:
                 "llm_fallback_model": llm_fallback["model"],
                 "llm_fallback_cache_hit": llm_fallback["cache_hit"],
                 "llm_fallback_error_type": llm_fallback["error_type"],
+                "llm_adjudication_resume": llm_adjudication["adjudicated_resume"],
+                "llm_adjudication_confidence": llm_adjudication["confidence"],
+                "llm_adjudication_reason": llm_adjudication["reason"],
+                "llm_adjudication_status": llm_adjudication["status"],
+                "llm_adjudication_parse_ok": llm_adjudication["parse_ok"],
+                "llm_adjudication_provider": llm_adjudication["provider"],
+                "llm_adjudication_model": llm_adjudication["model"],
+                "llm_adjudication_cache_hit": llm_adjudication["cache_hit"],
+                "llm_adjudication_differs_from_deterministic": llm_adjudication["differs_from_deterministic"],
+                "llm_adjudication_error_type": llm_adjudication["error_type"],
             }
         )
 
@@ -947,6 +1276,16 @@ def main() -> None:
         "llm_fallback_model",
         "llm_fallback_cache_hit",
         "llm_fallback_error_type",
+        "llm_adjudication_resume",
+        "llm_adjudication_confidence",
+        "llm_adjudication_reason",
+        "llm_adjudication_status",
+        "llm_adjudication_parse_ok",
+        "llm_adjudication_provider",
+        "llm_adjudication_model",
+        "llm_adjudication_cache_hit",
+        "llm_adjudication_differs_from_deterministic",
+        "llm_adjudication_error_type",
     ]
 
     output_csv_path = Path(args.output_csv)
@@ -1012,6 +1351,15 @@ def main() -> None:
                     f"score={float(row['runner_up_score']):.3f} | "
                     f"gap={float(row['score_gap']):.3f}"
                 )
+            
+        if row["llm_adjudication_resume"]:
+            print(
+                f"LLM adjudication: {row['llm_adjudication_resume']} | "
+                f"confidence={row['llm_adjudication_confidence']} | "
+                f"differs_from_deterministic={row['llm_adjudication_differs_from_deterministic']}"
+            )
+            if row["llm_adjudication_reason"]:
+                print(f"LLM adjudication reason: {row['llm_adjudication_reason']}")
 
         print(f"Top dims: {row['winner_top_dims']}")
         print(

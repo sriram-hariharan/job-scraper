@@ -448,6 +448,22 @@ def executive_dashboard() -> str:
                   </label>
                 </div>
               </div>
+              <div class="pipeline-toggle-item">
+                <div class="pipeline-toggle-copy">
+                  <div class="pipeline-toggle-name">Generate LLM adjudication</div>
+                  <div class="pipeline-toggle-help">Run LLM adjudication in application planning when enabled.</div>
+                </div>
+                <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM adjudication">
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmAdjudication" value="no" />
+                    <span>No</span>
+                  </label>
+                  <label class="binary-toggle-option">
+                    <input type="radio" name="pipelineGenerateLlmAdjudication" value="yes" checked />
+                    <span>Yes</span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
         </div>

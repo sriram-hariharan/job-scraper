@@ -7,6 +7,8 @@ const state = {
   pendingPipelineConfig: null,
   pipelineSuccessVisible: false,
   currentPipelineSuccessKey: null,
+  pipelineFailureVisible: false,
+  currentPipelineFailureKey: null,
   acknowledgedPipelineSuccessKey: null,
 };
 
@@ -31,6 +33,7 @@ const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 let pipelinePollTimer = null;
 let pipelineSuccessGifTimer = null;
+let pipelineFailureGifTimer = null;
 
 const DEFAULT_OUTPUT_DIR = "outputs/application_planning";
 const DEFAULT_STAGE_ORDER = [
@@ -819,6 +822,93 @@ function restartPipelineSuccessGif() {
   });
 }
 
+function stopPipelineFailureGifTimer() {
+  if (pipelineFailureGifTimer) {
+    clearTimeout(pipelineFailureGifTimer);
+    pipelineFailureGifTimer = null;
+  }
+}
+
+function restartPipelineFailureGif() {
+  const gif = qs("pipelineFailureGif");
+  const staticCross = qs("pipelineFailureStaticCross");
+  if (!gif || !staticCross) return;
+
+  stopPipelineFailureGifTimer();
+
+  staticCross.classList.add("hidden");
+  gif.classList.remove("hidden");
+
+  const src = gif.dataset.src || gif.getAttribute("src");
+  if (!src) return;
+
+  gif.removeAttribute("src");
+  void gif.offsetWidth;
+
+  requestAnimationFrame(() => {
+    gif.setAttribute("src", src);
+
+    pipelineFailureGifTimer = setTimeout(() => {
+      gif.classList.add("hidden");
+      staticCross.classList.remove("hidden");
+    }, 1800);
+  });
+}
+
+function renderPipelineFailureSummary(pipeline = {}) {
+  const reason = pipeline.error || pipeline.stage_message || "Run failed.";
+  const currentStage = pipeline.current_stage ? titleCaseStage(pipeline.current_stage) : "";
+  const summaryMessage = pipeline.summary_message || "";
+  const metaBits = [
+    pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
+    pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
+    currentStage ? `Stage: ${currentStage}` : "",
+    pipeline.return_code !== undefined && pipeline.return_code !== null
+      ? `Return code: ${pipeline.return_code}`
+      : "",
+  ].filter(Boolean);
+
+  const metaLine = metaBits.length
+    ? `<div class="pipeline-success-summary-text">${escapeHtml(metaBits.join(" · "))}</div>`
+    : "";
+
+  qs("pipelineFailureTitle").textContent = "Pipeline failed";
+  qs("pipelineFailureText").textContent = summaryMessage || "Run failed before completion.";
+  qs("pipelineFailureSummary").innerHTML = metaLine;
+  qs("pipelineFailureReason").innerHTML = `
+    <div class="pipeline-success-summary-text">
+      <strong>Reason:</strong> ${escapeHtml(reason)}
+    </div>
+  `;
+}
+
+function showPipelineFailureOverlay(pipeline = {}) {
+  const overlay = qs("pageLoadingOverlay");
+  const loadingPane = qs("pipelineOverlayLoading");
+  const successPane = qs("pipelineOverlaySuccess");
+  const failurePane = qs("pipelineOverlayFailure");
+  const failureKey = getPipelineSuccessKey(pipeline);
+
+  if (state.pipelineFailureVisible && state.currentPipelineFailureKey === failureKey) {
+    overlay.classList.remove("hidden");
+    return;
+  }
+
+  loadingPane.classList.add("hidden");
+  successPane.classList.add("hidden");
+  failurePane.classList.remove("hidden");
+
+  state.pipelineSuccessVisible = false;
+  state.currentPipelineSuccessKey = null;
+  state.pipelineFailureVisible = true;
+  state.currentPipelineFailureKey = failureKey;
+
+  renderPipelineFailureSummary(pipeline);
+  restartPipelineFailureGif();
+
+  overlay.classList.remove("hidden");
+}
+
 function showPipelineSuccessOverlay(pipeline = {}) {
   const overlay = qs("pageLoadingOverlay");
   const loadingPane = qs("pipelineOverlayLoading");
@@ -846,19 +936,28 @@ function showPageLoadingOverlay(title, text, pipeline = {}) {
   const overlay = qs("pageLoadingOverlay");
   const loadingPane = qs("pipelineOverlayLoading");
   const successPane = qs("pipelineOverlaySuccess");
+  const failurePane = qs("pipelineOverlayFailure");
   const successGif = qs("pipelineSuccessGif");
   const staticCheck = qs("pipelineSuccessStaticCheck");
+  const failureGif = qs("pipelineFailureGif");
+  const staticCross = qs("pipelineFailureStaticCross");
 
   stopPipelineSuccessGifTimer();
+  stopPipelineFailureGifTimer();
 
   state.pipelineSuccessVisible = false;
   state.currentPipelineSuccessKey = null;
+  state.pipelineFailureVisible = false;
+  state.currentPipelineFailureKey = null;
 
   loadingPane.classList.remove("hidden");
   successPane.classList.add("hidden");
+  failurePane.classList.add("hidden");
 
   if (successGif) successGif.classList.remove("hidden");
   if (staticCheck) staticCheck.classList.add("hidden");
+  if (failureGif) failureGif.classList.remove("hidden");
+  if (staticCross) staticCross.classList.add("hidden");
 
   qs("pageLoadingTitle").textContent = title || "Running live pipeline...";
   qs("pageLoadingText").textContent = text || "Preparing pipeline run.";
@@ -871,7 +970,11 @@ function showPageLoadingOverlay(title, text, pipeline = {}) {
 
 function hidePageLoadingOverlay() {
   stopPipelineSuccessGifTimer();
+  stopPipelineFailureGifTimer();
   state.pipelineSuccessVisible = false;
+  state.currentPipelineSuccessKey = null;
+  state.pipelineFailureVisible = false;
+  state.currentPipelineFailureKey = null;
   qs("pageLoadingOverlay").classList.add("hidden");
 }
 
@@ -918,8 +1021,18 @@ function renderPipelineStatus(payload) {
   if (status === "failed") {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
-    clearPipelinePendingSuccess();
-    hidePageLoadingOverlay();
+
+    const overlayIsVisible = !qs("pageLoadingOverlay").classList.contains("hidden");
+    const shouldShowFailure =
+      hasPipelinePendingSuccess() || overlayIsVisible || state.pipelineFailureVisible;
+
+    if (shouldShowFailure) {
+      clearPipelinePendingSuccess();
+      showPipelineFailureOverlay(pipeline);
+    } else if (!state.pipelineFailureVisible) {
+      hidePageLoadingOverlay();
+    }
+
     return;
   }
 
@@ -1542,6 +1655,9 @@ function attachApplicationHandlers() {
     state.acknowledgedPipelineSuccessKey = state.currentPipelineSuccessKey;
     hidePageLoadingOverlay();
   }); 
+  qs("pipelineFailureOkBtn").addEventListener("click", () => {
+    hidePageLoadingOverlay();
+  });
 
   qs("closeAppErrorModalBtn").addEventListener("click", closeAppErrorModal);
   qs("appErrorOkBtn").addEventListener("click", closeAppErrorModal);

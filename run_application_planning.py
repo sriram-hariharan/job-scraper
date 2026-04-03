@@ -290,6 +290,11 @@ def main() -> None:
         default="",
         help="Optional JSONL path to append structured tailoring training-log rows. Defaults to <output-dir>/training_logs/tailoring_runs.jsonl.",
     )
+    parser.add_argument(
+        "--generate-llm-adjudication",
+        action="store_true",
+        help="When batch selecting resume variants, run bounded LLM adjudication for effective ties and manual-review close calls.",
+    )
     args = parser.parse_args()
 
     job_corpus_path = Path(args.job_corpus)
@@ -347,6 +352,8 @@ def main() -> None:
         batch_selector_cmd.extend(["--resume-name-contains", args.resume_name_contains])
     if args.generate_llm_fallback:
         batch_selector_cmd.append("--generate-llm-fallback")
+    if args.generate_llm_adjudication:
+        batch_selector_cmd.append("--generate-llm-adjudication")
 
     _run_cmd(batch_selector_cmd)
 

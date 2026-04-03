@@ -174,6 +174,7 @@ def planning_dashboard() -> str:
               <th>Missing Req Count</th>
               <th>Fallback Best Resume</th>
               <th>Fallback Status</th>
+              <th>LLM Review Hint</th>
               <th>Operator Decision</th>
               <th>Operator Selected Resume</th>
               <th>Priority Reason</th>

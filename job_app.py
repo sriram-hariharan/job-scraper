@@ -111,8 +111,10 @@ def _build_main_cmd(args, planning_only: bool) -> List[str]:
             cmd.append("--application-planning-generate-llm-tailoring")
         if args.refresh_llm_tailoring:
             cmd.append("--application-planning-refresh-llm-tailoring")
-        if args.generate_llm_fallback:
+        if getattr(args, "generate_llm_fallback", False):
             cmd.append("--application-planning-generate-llm-fallback")
+        if getattr(args, "generate_llm_adjudication", False):
+            cmd.append("--application-planning-generate-llm-adjudication")
 
     if planning_only:
         cmd.append("--application-planning-only")
@@ -1612,6 +1614,7 @@ def _parse_args():
     run_parser.add_argument("--generate-llm-tailoring", action="store_true")
     run_parser.add_argument("--refresh-llm-tailoring", action="store_true")
     run_parser.add_argument("--generate-llm-fallback", action="store_true")
+    run_parser.add_argument("--generate-llm-adjudication", action="store_true")
     run_parser.add_argument(
         "--delete-seen-data",
         choices=["ask", "yes", "no"],
@@ -1631,6 +1634,7 @@ def _parse_args():
     planning_parser.add_argument("--generate-llm-tailoring", action="store_true")
     planning_parser.add_argument("--refresh-llm-tailoring", action="store_true")
     planning_parser.add_argument("--generate-llm-fallback", action="store_true")
+    planning_parser.add_argument("--generate-llm-adjudication", action="store_true")
     planning_parser.add_argument(
         "--delete-seen-data",
         choices=["ask", "yes", "no"],

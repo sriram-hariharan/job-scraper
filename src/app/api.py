@@ -360,6 +360,7 @@ def run_live_pipeline(payload: dict = Body(...)):
         generate_llm_tailoring=bool(payload.get("generate_llm_tailoring", False)),
         refresh_llm_tailoring=bool(payload.get("refresh_llm_tailoring", False)),
         generate_llm_fallback=bool(payload.get("generate_llm_fallback", False)),
+        generate_llm_adjudication=bool(payload.get("generate_llm_adjudication", False)),
         planning_only=bool(payload.get("planning_only", False)),
         delete_seen_data=str(payload.get("delete_seen_data", "no") or "no"),
     )

@@ -1628,7 +1628,7 @@ def main() -> None:
             print(
                 f"Backup variant: {runner_up_result.pair.resume_name} | "
                 f"score={runner_up_result.final_score:.3f} | "
-                f"gap={round(selected_result.final_score - runner_up_result.final_score):.3f}"
+                f"gap={round(selected_result.final_score - runner_up_result.final_score, 6):.3f}"
             )
             for item in _top_dimension_deltas(selected_result, runner_up_result):
                 print(item)

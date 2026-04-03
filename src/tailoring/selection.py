@@ -2,6 +2,13 @@ from typing import List, Dict, Any, Optional
 
 from src.config.consts import REWRITE_DIRECTION_PREFIXES
 
+from src.tailoring.family_matcher import (
+    canonical_guardrail_targets,
+    guardrail_coverage_targets,
+    supported_family_hits,
+    supported_term_hits,
+)
+
 from src.tailoring.packet_support import (
     _rewrite_source_rows,
     _source_label,
@@ -340,9 +347,18 @@ def _direction_plan_unit_match_score(direction: str, row: Dict[str, Any]) -> int
     if source and _direction_mentions_any(text, [source]):
         score += 3
 
-    supported_terms = [str(term).strip() for term in (row.get("supported_terms", []) or []) if str(term).strip()]
-    matched_terms = [term for term in supported_terms if _direction_mentions_any(text, [term])]
-    score += len(matched_terms)
+    supported_terms = [
+        str(term).strip()
+        for term in (row.get("supported_terms", []) or [])
+        if str(term).strip()
+    ]
+
+    raw_hits = supported_term_hits(text, supported_terms)
+    family_hits = supported_family_hits(text, supported_terms)
+
+    score += len(raw_hits)
+    if not raw_hits:
+        score += len(family_hits)
 
     evidence_unit = str(row.get("evidence_unit", "") or "").strip()
     evidence_markers: List[str] = []
@@ -412,20 +428,20 @@ def _rewrite_directions_cover_plan(
 
     adjacent_terms = plan.get("adjacent_terms_to_keep_explicit", []) or []
     adjacent_facets = plan.get("adjacent_facets", []) or []
-    if adjacent_terms or adjacent_facets:
-        targets = adjacent_terms if adjacent_terms else adjacent_facets
+    adjacent_targets = guardrail_coverage_targets(adjacent_terms, adjacent_facets)
+    if adjacent_targets:
         if not any(
-            item.startswith("Do not add") and _direction_mentions_any(item, targets)
+            item.startswith("Do not add") and _direction_mentions_any(item, adjacent_targets)
             for item in actionable
         ):
             return False
 
     true_gap_terms = plan.get("true_unsupported_terms", []) or []
     true_gap_facets = plan.get("true_gap_facets", []) or []
-    if true_gap_terms or true_gap_facets:
-        targets = true_gap_terms if true_gap_terms else true_gap_facets
+    true_gap_targets = guardrail_coverage_targets(true_gap_terms, true_gap_facets)
+    if true_gap_targets:
         if not any(
-            item.startswith("Keep gap explicit") and _direction_mentions_any(item, targets)
+            item.startswith("Keep gap explicit") and _direction_mentions_any(item, true_gap_targets)
             for item in actionable
         ):
             return False
@@ -664,8 +680,8 @@ def _normalize_live_rewrite_directions(
     true_gap_terms = list(plan.get("true_unsupported_terms", []) or [])
     true_gap_facets = list(plan.get("true_gap_facets", []) or [])
 
-    adjacent_targets = adjacent_terms if adjacent_terms else adjacent_facets
-    true_gap_targets = true_gap_terms if true_gap_terms else true_gap_facets
+    adjacent_targets = canonical_guardrail_targets(adjacent_terms, adjacent_facets)
+    true_gap_targets = canonical_guardrail_targets(true_gap_terms, true_gap_facets)
 
     actionable = [
         _strip_wrapped_clause_quotes(str(item).strip())
@@ -794,7 +810,12 @@ def _direction_supported_term_hits(direction: str, unit: Dict[str, Any]) -> List
         for term in (unit.get("supported_terms", []) or [])
         if str(term).strip()
     ]
-    return [term for term in supported_terms if _direction_mentions_any(text, [term])]
+
+    raw_hits = supported_term_hits(text, supported_terms)
+    if raw_hits:
+        return raw_hits
+
+    return supported_family_hits(text, supported_terms)
 
 
 def _direction_mentions_unit_source(direction: str, unit: Dict[str, Any]) -> bool:

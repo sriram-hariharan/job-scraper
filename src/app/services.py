@@ -311,10 +311,39 @@ def _pipeline_status_snapshot() -> Dict[str, Any]:
         "is_running": status == "running",
     }
 
+def _runtime_status_is_stale_startup(
+    snapshot: Dict[str, Any],
+    runtime_status: Dict[str, Any],
+) -> bool:
+    if snapshot.get("is_running"):
+        return False
+
+    if str(runtime_status.get("status", "") or "").strip().lower() != "running":
+        return False
+
+    if str(runtime_status.get("current_stage", "") or "").strip().lower() != "startup":
+        return False
+
+    if str(runtime_status.get("stage_message", "") or "").strip() != "Launching pipeline subprocess":
+        return False
+
+    if list(runtime_status.get("completed_stages", []) or []):
+        return False
+
+    if dict(runtime_status.get("counts", {}) or {}):
+        return False
+
+    if runtime_status.get("final_job_count") not in (None, "", 0):
+        return False
+
+    return True
 
 def pipeline_status_payload() -> Dict[str, Any]:
     snapshot = _pipeline_status_snapshot()
     runtime_status = _load_runtime_status_file(snapshot.get("status_path", ""))
+
+    if runtime_status and _runtime_status_is_stale_startup(snapshot, runtime_status):
+        runtime_status = {}
 
     merged = dict(snapshot)
     if runtime_status:
@@ -1128,7 +1157,7 @@ def run_live_pipeline_payload(
     )
 
     ja = _job_app()
-    
+
     effective_generate_llm_adjudication = bool(
         generate_llm_adjudication or generate_llm_fallback
     )

@@ -86,6 +86,7 @@ def initialize_run(
     generate_llm_tailoring: bool,
     refresh_llm_tailoring: bool,
     generate_llm_fallback: bool,
+    generate_llm_adjudication: bool,
     delete_seen_data: str,
 ) -> None:
     if not is_enabled():
@@ -118,6 +119,7 @@ def initialize_run(
             "generate_llm_tailoring": generate_llm_tailoring,
             "refresh_llm_tailoring": refresh_llm_tailoring,
             "generate_llm_fallback": generate_llm_fallback,
+            "generate_llm_adjudication": generate_llm_adjudication,
             "delete_seen_data": delete_seen_data,
         },
     }

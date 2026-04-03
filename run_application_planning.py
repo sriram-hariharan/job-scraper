@@ -500,6 +500,8 @@ def main() -> None:
             f"llm_status={llm_status['llm_tailoring_status']}",
             f"llm_cache_hit={llm_status['llm_cache_hit'] or '-'}",
             f"llm_error_type={llm_status['llm_error_type'] or '-'}",
+            f"llm_adjudication_status={row.get('llm_adjudication_status', '-')}",
+            f"llm_adjudication_differs={row.get('llm_adjudication_differs_from_deterministic', '-')}",
         )
 
         manifest_rows.append(
@@ -537,6 +539,16 @@ def main() -> None:
                 "llm_error_type": llm_status["llm_error_type"],
                 "llm_retryable": llm_status["llm_retryable"],
                 "llm_retry_used": llm_status["llm_retry_used"],
+                "llm_adjudication_resume": row.get("llm_adjudication_resume", ""),
+                "llm_adjudication_confidence": row.get("llm_adjudication_confidence", ""),
+                "llm_adjudication_reason": row.get("llm_adjudication_reason", ""),
+                "llm_adjudication_status": row.get("llm_adjudication_status", ""),
+                "llm_adjudication_parse_ok": row.get("llm_adjudication_parse_ok", ""),
+                "llm_adjudication_provider": row.get("llm_adjudication_provider", ""),
+                "llm_adjudication_model": row.get("llm_adjudication_model", ""),
+                "llm_adjudication_cache_hit": row.get("llm_adjudication_cache_hit", ""),
+                "llm_adjudication_differs_from_deterministic": row.get("llm_adjudication_differs_from_deterministic", ""),
+                "llm_adjudication_error_type": row.get("llm_adjudication_error_type", ""),
             }
         )
 
@@ -573,6 +585,16 @@ def main() -> None:
         "llm_error_type",
         "llm_retryable",
         "llm_retry_used",
+        "llm_adjudication_resume",
+        "llm_adjudication_confidence",
+        "llm_adjudication_reason",
+        "llm_adjudication_status",
+        "llm_adjudication_parse_ok",
+        "llm_adjudication_provider",
+        "llm_adjudication_model",
+        "llm_adjudication_cache_hit",
+        "llm_adjudication_differs_from_deterministic",
+        "llm_adjudication_error_type",
     ]
     with manifest_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)

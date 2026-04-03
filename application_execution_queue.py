@@ -183,6 +183,16 @@ def main() -> None:
         "winner_missing_requirements",
         "winner_matched_terms",
         "recommendation_summary",
+        "llm_adjudication_resume",
+        "llm_adjudication_confidence",
+        "llm_adjudication_reason",
+        "llm_adjudication_status",
+        "llm_adjudication_parse_ok",
+        "llm_adjudication_provider",
+        "llm_adjudication_model",
+        "llm_adjudication_cache_hit",
+        "llm_adjudication_differs_from_deterministic",
+        "llm_adjudication_error_type",
     ]
 
     with output_csv_path.open("w", newline="", encoding="utf-8") as f:
@@ -218,6 +228,15 @@ def main() -> None:
         )
         print(f"Priority reason: {row['queue_priority_reason']}")
         print()
+    
+        if row.get("llm_adjudication_resume", ""):
+            print(
+                f"LLM adjudication: {row['llm_adjudication_resume']} | "
+                f"confidence={row.get('llm_adjudication_confidence', '')} | "
+                f"differs_from_deterministic={row.get('llm_adjudication_differs_from_deterministic', '')}"
+            )
+            if row.get("llm_adjudication_reason", ""):
+                print(f"LLM adjudication reason: {row['llm_adjudication_reason']}")
         
 
 if __name__ == "__main__":

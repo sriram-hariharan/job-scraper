@@ -239,6 +239,16 @@ def main() -> None:
                 "winner_missing_requirements": row["winner_missing_requirements"],
                 "winner_matched_terms": row["winner_matched_terms"],
                 "recommendation_summary": row["recommendation_summary"],
+                "llm_adjudication_resume": row.get("llm_adjudication_resume", ""),
+                "llm_adjudication_confidence": row.get("llm_adjudication_confidence", ""),
+                "llm_adjudication_reason": row.get("llm_adjudication_reason", ""),
+                "llm_adjudication_status": row.get("llm_adjudication_status", ""),
+                "llm_adjudication_parse_ok": row.get("llm_adjudication_parse_ok", ""),
+                "llm_adjudication_provider": row.get("llm_adjudication_provider", ""),
+                "llm_adjudication_model": row.get("llm_adjudication_model", ""),
+                "llm_adjudication_cache_hit": row.get("llm_adjudication_cache_hit", ""),
+                "llm_adjudication_differs_from_deterministic": row.get("llm_adjudication_differs_from_deterministic", ""),
+                "llm_adjudication_error_type": row.get("llm_adjudication_error_type", ""),
             }
         )
 
@@ -276,6 +286,16 @@ def main() -> None:
         "winner_missing_requirements",
         "winner_matched_terms",
         "recommendation_summary",
+        "llm_adjudication_resume",
+        "llm_adjudication_confidence",
+        "llm_adjudication_reason",
+        "llm_adjudication_status",
+        "llm_adjudication_parse_ok",
+        "llm_adjudication_provider",
+        "llm_adjudication_model",
+        "llm_adjudication_cache_hit",
+        "llm_adjudication_differs_from_deterministic",
+        "llm_adjudication_error_type",
     ]
 
     with output_csv_path.open("w", newline="", encoding="utf-8") as f:

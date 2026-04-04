@@ -69,10 +69,29 @@ TAILOR_LLM_FALLBACK_MODEL = os.getenv(
 
 LIVE_REWRITE_RESPONSE_SCHEMA = {
     "type": "object",
+    "additionalProperties": False,
     "properties": {
         "rewrite_directions": {
             "type": "array",
-            "items": {"type": "string"},
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "prefix": {
+                        "type": "string",
+                        "enum": [
+                            "Lead with",
+                            "Support with",
+                            "Keep gap explicit",
+                            "Do not add",
+                        ],
+                    },
+                    "source": {"type": "string"},
+                    "direction": {"type": "string"},
+                },
+                "required": ["prefix", "direction"],
+            },
         }
     },
     "required": ["rewrite_directions"],
@@ -523,10 +542,19 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append("Output requirements:")
     lines.append("- Return JSON only.")
     lines.append("- Output key: rewrite_directions")
-    lines.append("- Allowed prefixes only: Lead with, Support with, Keep gap explicit, Do not add")
+    lines.append('- Each rewrite_directions item must be an object with exactly these keys: {"prefix": "...", "source": "...", "direction": "..."}')
+    lines.append('- Allowed prefix values only: "Lead with", "Support with", "Keep gap explicit", "Do not add"')
+    lines.append('- For "Lead with" and "Support with", source is REQUIRED and must be the exact source label copied from the evidence.')
+    lines.append('- For "Keep gap explicit" and "Do not add", source may be an empty string.')
+    lines.append('- Never return free-form string items inside rewrite_directions.')
     lines.append('- When using Lead with or Support with, copy the exact source label only, for example: "Data Analyst II @ Accenture".')
     lines.append('- Never use section labels like "Primary anchor evidence units 1", "Secondary supporting evidence units", or wrappers like "[experience] ... | type=same_source_context" as the source.')
     lines.append("- Prefer anchor-led rewrite directions first, then support if needed.")
+    lines.append('- direction must be a short edit-instruction fragment, not a full rewritten bullet.')
+    lines.append('- For "Lead with" and "Support with", direction must be 20 words or fewer.')
+    lines.append('- Do NOT paste or closely paraphrase the evidence bullet text into direction.')
+    lines.append('- Good direction example: "sql and python in opening clause; preserve risk-reduction outcome"')
+    lines.append('- Bad direction example: "Drove lapse and retention risk assessments using Python and customer segmentation with SQL..."')
 
     return "\n".join(lines)
 
@@ -884,6 +912,45 @@ def _cleanup_live_source_label(source: str) -> str:
     cleaned = re.sub(r"\s*\|\s*type=.*$", "", cleaned).strip()
     return cleaned.rstrip(".")
 
+def _live_rewrite_similarity_ratio(a: str, b: str) -> float:
+    from difflib import SequenceMatcher
+
+    a_norm = re.sub(r"\s+", " ", str(a or "").strip().lower())
+    b_norm = re.sub(r"\s+", " ", str(b or "").strip().lower())
+
+    if not a_norm or not b_norm:
+        return 0.0
+
+    return SequenceMatcher(None, a_norm, b_norm).ratio()
+
+
+def _live_rewrite_source_texts_for_label(
+    payload: Dict[str, Any],
+    source_label: str,
+) -> List[str]:
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    alias_map = _build_live_source_alias_map(payload)
+
+    source_key = str(source_label or "").strip().rstrip(".")
+    canonical = (
+        alias_map.get(source_key)
+        or alias_map.get(_cleanup_live_source_label(source_key))
+        or _cleanup_live_source_label(source_key)
+    )
+
+    texts: List[str] = []
+
+    for bucket in ("anchors", "supports", "context"):
+        for row in list(evidence_layers.get(bucket, []) or [])[:4]:
+            if _display_row_source(row) != canonical:
+                continue
+
+            for value in (row.get("text"), row.get("parent_bullet")):
+                text = re.sub(r"\s+", " ", str(value or "").strip())
+                if text:
+                    texts.append(text)
+
+    return _unique_preserve_order(texts)
 
 def _canonicalize_live_direction_sources(
     directions: List[str],
@@ -925,6 +992,56 @@ def _canonicalize_live_direction_sources(
 
     return _unique_preserve_order([item for item in normalized if item])
 
+def _canonicalize_live_direction_objects(
+    directions: List[Dict[str, Any]],
+    payload: Dict[str, Any],
+) -> List[Dict[str, str]]:
+    alias_map = _build_live_source_alias_map(payload)
+    normalized: List[Dict[str, str]] = []
+    seen = set()
+
+    for item in directions or []:
+        if not isinstance(item, dict):
+            continue
+
+        prefix = str(item.get("prefix", "") or "").strip()
+        source = str(item.get("source", "") or "").strip()
+        direction = str(item.get("direction", "") or "").strip()
+
+        if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
+            continue
+        if not direction:
+            continue
+
+        canonical_source = source
+        if prefix in {"Lead with", "Support with"}:
+            source_clean = source.rstrip(".").strip()
+            canonical_source = alias_map.get(source_clean)
+            if canonical_source is None:
+                canonical_source = alias_map.get(_cleanup_live_source_label(source_clean))
+            if canonical_source is None:
+                canonical_source = _cleanup_live_source_label(source_clean) or source_clean
+        else:
+            canonical_source = ""
+
+        normalized_item = {
+            "prefix": prefix,
+            "source": canonical_source,
+            "direction": direction,
+        }
+
+        dedupe_key = (
+            normalized_item["prefix"],
+            normalized_item["source"],
+            normalized_item["direction"],
+        )
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        normalized.append(normalized_item)
+
+    return normalized
+
 def _normalize_string_list(value: Any) -> List[str]:
     if not isinstance(value, list):
         return []
@@ -962,12 +1079,118 @@ def _coerce_live_rewrite_direction(item: Any) -> str:
     text = f"Do not add {text}".strip()
     return text if text.endswith(".") else f"{text}."
 
+def _validate_live_llm_parsed_contract(
+    parsed: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    if not isinstance(parsed, dict):
+        raise ValueError("live_llm_contract_not_object")
+
+    directions = parsed.get("rewrite_directions", [])
+    if not isinstance(directions, list):
+        raise ValueError("live_llm_contract_rewrite_directions_not_list")
+    if not directions:
+        raise ValueError("live_llm_contract_empty_rewrite_directions")
+
+    anchors = list(((payload.get("evidence_layers", {}) or {}).get("anchors", []) or []))[:4]
+    alias_map = _build_live_source_alias_map(payload)
+
+    validated: List[Dict[str, str]] = []
+
+    for idx, item in enumerate(directions, start=1):
+        if not isinstance(item, dict):
+            raise ValueError(f"live_llm_contract_direction_{idx}_not_object")
+
+        prefix = str(item.get("prefix", "") or "").strip()
+        source = str(item.get("source", "") or "").strip()
+        direction = str(item.get("direction", "") or "").strip()
+
+        if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
+            raise ValueError(f"live_llm_contract_direction_{idx}_bad_prefix:{prefix}")
+
+        if not direction:
+            raise ValueError(f"live_llm_contract_direction_{idx}_missing_direction")
+
+        if prefix in {"Lead with", "Support with"}:
+            if not source:
+                raise ValueError(f"live_llm_contract_direction_{idx}_missing_source")
+
+            source_key = source.rstrip(".").strip()
+            if (
+                source_key not in alias_map
+                and _cleanup_live_source_label(source_key) not in alias_map
+            ):
+                raise ValueError(
+                    f"live_llm_contract_direction_{idx}_unknown_source:{source_key}"
+                )
+            
+            direction_word_count = len(re.findall(r"\b[\w.+/\-]+\b", direction))
+            if direction_word_count > 20:
+                raise ValueError(
+                    f"live_llm_contract_direction_{idx}_too_long:{direction_word_count}"
+                )
+
+            source_texts = _live_rewrite_source_texts_for_label(payload, source_key)
+            if any(
+                _live_rewrite_similarity_ratio(direction, source_text) >= 0.82
+                for source_text in source_texts
+            ):
+                raise ValueError(
+                    f"live_llm_contract_direction_{idx}_copies_source_text"
+                )
+
+        validated.append(
+            {
+                "prefix": prefix,
+                "source": source,
+                "direction": direction,
+            }
+        )
+
+    if anchors:
+        if len(validated) < 3:
+            raise ValueError("live_llm_contract_anchor_case_requires_3_directions")
+
+        if not any(item["prefix"] in {"Lead with", "Support with"} for item in validated):
+            raise ValueError("live_llm_contract_anchor_case_requires_anchor_direction")
+
+        if all(item["prefix"] == "Keep gap explicit" for item in validated):
+            raise ValueError("live_llm_contract_anchor_case_gap_only")
+
+    return {
+        "rewrite_directions": validated,
+    }
+
 def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
     raw_rewrite_directions = parsed.get("rewrite_directions", []) or []
+
+    structured_rewrite_directions: List[Dict[str, str]] = []
+    if isinstance(raw_rewrite_directions, list):
+        for item in raw_rewrite_directions:
+            if not isinstance(item, dict):
+                continue
+
+            prefix = str(item.get("prefix", "") or "").strip()
+            source = str(item.get("source", "") or "").strip()
+            direction = str(item.get("direction", "") or "").strip()
+
+            if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
+                continue
+            if not direction:
+                continue
+
+            structured_rewrite_directions.append(
+                {
+                    "prefix": prefix,
+                    "source": source,
+                    "direction": direction,
+                }
+            )
+
     normalized_rewrite_directions = _unique_preserve_order(
         [
             _coerce_live_rewrite_direction(item)
-            for item in raw_rewrite_directions
+            for item in structured_rewrite_directions
         ]
     )
     normalized_rewrite_directions = [
@@ -981,6 +1204,7 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
         "tailoring_actions": _normalize_string_list(parsed.get("tailoring_actions", [])),
         "do_not_claim": _normalize_string_list(parsed.get("do_not_claim", [])),
         "rewrite_directions": normalized_rewrite_directions,
+        "rewrite_directions_structured": structured_rewrite_directions,
     }
 
 def _stamp_patch_refinement_baseline(candidate: Dict[str, Any]) -> Dict[str, Any]:
@@ -2503,7 +2727,12 @@ You MUST obey these rules:
         value = llm_result.get("content")
 
         if isinstance(value, dict):
-            normalized = _normalize_live_llm_parsed(value)
+            parsed = _validate_live_llm_parsed_contract(value, payload)
+            parsed["rewrite_directions"] = _canonicalize_live_direction_objects(
+                parsed.get("rewrite_directions", []),
+                payload,
+            )
+            normalized = _normalize_live_llm_parsed(parsed)
             normalized["rewrite_directions"] = _canonicalize_live_direction_sources(
                 normalized.get("rewrite_directions", []),
                 payload,
@@ -2524,6 +2753,11 @@ You MUST obey these rules:
 
         raw = _raw_text(value)
         parsed = _extract_json_from_llm_response(raw)
+        parsed = _validate_live_llm_parsed_contract(parsed, payload)
+        parsed["rewrite_directions"] = _canonicalize_live_direction_objects(
+            parsed.get("rewrite_directions", []),
+            payload,
+        )
         normalized = _normalize_live_llm_parsed(parsed)
         normalized["rewrite_directions"] = _canonicalize_live_direction_sources(
             normalized.get("rewrite_directions", []),

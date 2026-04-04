@@ -7,6 +7,8 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
+from src.tailoring.replacement_selector import build_final_replacement_plan
+
 from src.ai.llm_client import (
     FALLBACK_ENABLED as LLM_FALLBACK_ENABLED,
     run_chat_completion_with_metadata,
@@ -43,6 +45,9 @@ from src.matching.signal_family_matcher import (
     equivalent_signal_terms,
     normalize_signal_text,
 )
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
 
 _PATCH_REFINEMENT_LEAD_VERB_STOPWORDS = set(ACTION_VERB_HINTS)
 LLM_TAILOR_PROVIDER = os.getenv("LLM_TAILOR_PROVIDER", "groq").strip().lower()
@@ -991,6 +996,144 @@ def _canonicalize_live_direction_sources(
         normalized.append(rebuilt)
 
     return _unique_preserve_order([item for item in normalized if item])
+
+
+def _build_live_shadow_source_rows(
+    payload: Dict[str, Any],
+) -> Dict[str, List[Dict[str, Any]]]:
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    rows_by_source: Dict[str, List[Dict[str, Any]]] = {}
+
+    for bucket in ("anchors", "supports", "context"):
+        for row in list(evidence_layers.get(bucket, []) or [])[:4]:
+            source_label = _display_row_source(row)
+            if not source_label:
+                continue
+
+            rows_by_source.setdefault(source_label, []).append(
+                {
+                    "bucket": bucket,
+                    "row": row,
+                }
+            )
+
+    return rows_by_source
+
+
+def _select_live_shadow_source_row(
+    direction: Dict[str, Any],
+    payload: Dict[str, Any],
+) -> Optional[Dict[str, Any]]:
+    prefix = str(direction.get("prefix", "") or "").strip()
+    source = str(direction.get("source", "") or "").strip()
+
+    if prefix not in {"Lead with", "Support with"} or not source:
+        return None
+
+    rows_by_source = _build_live_shadow_source_rows(payload)
+    matches = list(rows_by_source.get(source, []) or [])
+    if not matches:
+        return None
+
+    if prefix == "Lead with":
+        bucket_order = {"anchors": 3, "supports": 2, "context": 1}
+    else:
+        bucket_order = {"supports": 3, "context": 2, "anchors": 1}
+
+    ordered = sorted(
+        matches,
+        key=lambda item: bucket_order.get(str(item.get("bucket", "") or "").strip(), 0),
+        reverse=True,
+    )
+    return dict(ordered[0].get("row", {}) or {}) if ordered else None
+
+
+def _build_live_shadow_replacement_candidates(
+    structured_directions: List[Dict[str, Any]],
+    payload: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    candidates: List[Dict[str, Any]] = []
+
+    for idx, direction in enumerate(structured_directions or [], start=1):
+        prefix = str(direction.get("prefix", "") or "").strip()
+        source = str(direction.get("source", "") or "").strip()
+        direction_text = str(direction.get("direction", "") or "").strip()
+
+        if prefix not in {"Lead with", "Support with"}:
+            continue
+        if not source or not direction_text:
+            continue
+
+        row = _select_live_shadow_source_row(direction, payload)
+        if not row:
+            continue
+
+        source_entry_id = (
+            _text(row.get("source_entry_id", ""))
+            or _text(row.get("entry_id", ""))
+        )
+        source_bullet_id = (
+            _text(row.get("source_bullet_id", ""))
+            or _text(row.get("bullet_id", ""))
+            or source_entry_id
+            or f"live_shadow:{idx}"
+        )
+        original_text = (
+            _text(row.get("parent_bullet", ""))
+            or _text(row.get("text", ""))
+        )
+
+        flattened_direction = _coerce_live_rewrite_direction(
+            {
+                "prefix": prefix,
+                "source": source,
+                "direction": direction_text,
+            }
+        )
+
+        candidates.append(
+            {
+                "candidate_id": f"live_shadow_candidate:{source_bullet_id}:{idx}",
+                "operation_type": "rewrite",
+                "proposal_status": "direction_only",
+                "source_bullet_id": source_bullet_id,
+                "source_entry_id": source_entry_id,
+                "section": _text(row.get("section", "")),
+                "source": source,
+                "original_text": original_text,
+                "rewrite_instruction": flattened_direction,
+                "why_this_improves_match": (
+                    f"Structured live LLM shadow direction: {direction_text}"
+                ),
+                "patch_generation_method": "live_llm_structured_direction",
+                "materiality_validation_status": "scorer_neutral_no_evidence_change",
+                "projected_overall_delta": None,
+                "confidence": "high" if prefix == "Lead with" else "medium",
+                "adjacent_risk_signals": [],
+                "unsupported_risk_signals": [],
+                "likely_impacted_dimensions": [],
+                "llm_refinement_used": True,
+            }
+        )
+
+    return candidates
+
+
+def _build_live_shadow_replacement_plan(
+    structured_directions: List[Dict[str, Any]],
+    payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    shadow_candidates = _build_live_shadow_replacement_candidates(
+        structured_directions,
+        payload,
+    )
+    edit_cards = list(payload.get("edit_cards", []) or [])
+    shadow_plan = build_final_replacement_plan(shadow_candidates, edit_cards)
+    return {
+        "shadow_replacement_candidates": shadow_candidates,
+        "shadow_final_replacement_plan": shadow_plan,
+    }
+
 
 def _canonicalize_live_direction_objects(
     directions: List[Dict[str, Any]],
@@ -2737,6 +2880,11 @@ You MUST obey these rules:
                 normalized.get("rewrite_directions", []),
                 payload,
             )
+            shadow_payload = _build_live_shadow_replacement_plan(
+                normalized.get("rewrite_directions_structured", []),
+                payload,
+            )
+
             return _attach_live_llm_cache_meta(
                 {
                     **_base_result_meta(llm_result),
@@ -2746,6 +2894,7 @@ You MUST obey these rules:
                     "raw_response": raw_response,
                     "retry_raw_response": retry_raw_response,
                     "parsed": normalized,
+                    **shadow_payload,
                 },
                 cache_meta,
                 cache_hit=False,
@@ -2763,6 +2912,11 @@ You MUST obey these rules:
             normalized.get("rewrite_directions", []),
             payload,
         )
+        shadow_payload = _build_live_shadow_replacement_plan(
+            normalized.get("rewrite_directions_structured", []),
+            payload,
+        )
+
         return _attach_live_llm_cache_meta(
             {
                 **_base_result_meta(llm_result),
@@ -2772,6 +2926,7 @@ You MUST obey these rules:
                 "raw_response": raw_response,
                 "retry_raw_response": retry_raw_response,
                 "parsed": normalized,
+                **shadow_payload,
             },
             cache_meta,
             cache_hit=False,

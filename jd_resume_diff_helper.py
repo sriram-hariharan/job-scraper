@@ -3,7 +3,7 @@ import json
 import re
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
-from types import SimpleNamespace
+from dataclasses import dataclass
 
 from src.config.consts import (
     TITLE_CANONICAL,
@@ -82,6 +82,44 @@ def _unique_preserve_order(values: List[str]) -> List[str]:
 def _normalized_skill_list(values: List[str]) -> List[str]:
     return _unique_preserve_order(
         [_normalize_text(value) for value in values if _normalize_text(value)]
+    )
+
+@dataclass(frozen=True)
+class PacketJobView:
+    title: str
+    required_skills: List[str]
+    preferred_skills: List[str]
+    all_skills: List[str]
+
+
+def _build_packet_job_view(job_evidence, selected_job_record: dict) -> PacketJobView:
+    required_skills = _normalized_skill_list(
+        selected_job_record.get("required_skills", []) or []
+    )
+    preferred_skills = [
+        skill
+        for skill in _normalized_skill_list(
+            selected_job_record.get("preferred_skills", []) or []
+        )
+        if skill not in required_skills
+    ]
+    all_skills = _unique_preserve_order(
+        required_skills
+        + preferred_skills
+        + [
+            skill
+            for skill in _normalized_skill_list(
+                selected_job_record.get("all_skills", []) or []
+            )
+            if skill not in required_skills and skill not in preferred_skills
+        ]
+    )
+
+    return PacketJobView(
+        title=job_evidence.title,
+        required_skills=required_skills,
+        preferred_skills=preferred_skills,
+        all_skills=all_skills,
     )
 
 def _packet_summary_job_view(job_evidence, selected_job_record: dict):
@@ -797,11 +835,17 @@ def _collect_facet_direct_evidence(resume, patterns: List[str], limit: int = 4) 
                 return rows
 
     for entry in resume.project_entries:
-        for bullet in entry.bullets:
+        for bullet_index, bullet in enumerate(entry.bullets):
             if not _text_matches_any_facet_pattern(bullet, patterns):
                 continue
 
-            key = ("project", entry.name, "", bullet)
+            key = (
+                "project",
+                entry.name,
+                "",
+                _entry_bullet_id_value(entry, bullet_index),
+                bullet,
+            )
             if key in seen:
                 continue
             seen.add(key)
@@ -1582,7 +1626,7 @@ def main() -> None:
         title_contains=args.title_contains,
     )
     job_evidence = build_job_evidence(selected_job_record)
-    summary_job = _packet_summary_job_view(job_evidence, selected_job_record)
+    packet_job = _build_packet_job_view(job_evidence, selected_job_record)
 
     resume_docs = _load_candidate_resume_documents(args.resume_name_contains)
 
@@ -1609,19 +1653,19 @@ def main() -> None:
 
     matched_required, missing_required, matched_preferred, missing_preferred = _split_job_skill_gaps(
         selected_resume,
-        summary_job,
+        packet_job,
     )
-    summary_term_support = _build_term_support_summary(selected_resume, summary_job)
-    summary_facet_support = _build_resume_facet_support(selected_resume, summary_job)
+    summary_term_support = _build_term_support_summary(selected_resume, packet_job)
+    summary_facet_support = _build_resume_facet_support(selected_resume, packet_job)
     top_bullets = _collect_top_relevant_bullets(
         selected_resume,
-        job_evidence,
+        packet_job,
         top_k=args.top_bullets,
         enable_semantic=not args.disable_semantic_evidence,
     )
     top_evidence_units = _collect_top_relevant_evidence_units(
         selected_resume,
-        job_evidence,
+        packet_job,
         top_k=max(args.top_bullets * 2, 12),
         enable_semantic=not args.disable_semantic_evidence,
     )

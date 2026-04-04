@@ -998,7 +998,70 @@ Rules:
             "error_type": f"call_failed: {exc}",
             "cache_hit": False,
         }
-    
+
+def _contains_any_normalized(text: str, phrases: List[str]) -> bool:
+    normalized_text = _normalize_text(text)
+    return any(_normalize_text(phrase) in normalized_text for phrase in phrases)
+
+
+def _should_suppress_low_value_llm_adjudication(llm_adjudication: Dict[str, Any]) -> bool:
+    adjudicated_resume = str(llm_adjudication.get("adjudicated_resume", "")).strip()
+    reason = str(llm_adjudication.get("reason", "")).strip()
+
+    if not adjudicated_resume or not reason:
+        return False
+
+    strong_evidence_markers = [
+        "retrieval corpus",
+        "embedded via pinecone",
+        "grounding responses in authoritative data",
+        "authoritative data",
+        "processing large datasets",
+        "3m+",
+        "k-means",
+        "pca",
+        "k-nearest neighbors",
+        "showcase more depth in big data",
+        "showcase more depth in big data processing",
+        "more depth in big data processing",
+        "vector databases",
+        "explainable diagnostics",
+    ]
+
+    low_value_markers = [
+        "slightly higher deterministic score",
+        "marginally higher deterministic score",
+        "difference is negligible",
+        "chosen due to a slightly higher score",
+        "slightly higher score",
+        "nearly identical in content and deterministic score",
+        "both resumes are nearly identical",
+        "both resumes are very similar",
+        "both resumes have nearly identical deterministic scores",
+        "has a marginally higher deterministic score",
+        "slightly more aligned",
+        "extracted titles",
+        "title match",
+        "more direct 'data scientist",
+        "ai engineer' in its extracted titles",
+    ]
+
+    if _contains_any_normalized(reason, strong_evidence_markers):
+        return False
+
+    return _contains_any_normalized(reason, low_value_markers)
+
+
+def _suppress_llm_adjudication_result(
+    llm_adjudication: Dict[str, Any],
+) -> Dict[str, Any]:
+    suppressed = dict(llm_adjudication)
+    suppressed["status"] = "suppressed_low_value_reason"
+    suppressed["adjudicated_resume"] = ""
+    suppressed["confidence"] = ""
+    suppressed["differs_from_deterministic"] = "False"
+    return suppressed
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Batch-select the best resume variant for multiple jobs."
@@ -1203,6 +1266,9 @@ def main() -> None:
                 llm_adjudication["differs_from_deterministic"] = str(
                     bool(adjudicated_resume and adjudicated_resume != winner.pair.resume_name)
                 )
+
+                if _should_suppress_low_value_llm_adjudication(llm_adjudication):
+                    llm_adjudication = _suppress_llm_adjudication_result(llm_adjudication)
         
         output_rows.append(
             {

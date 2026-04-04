@@ -4,6 +4,7 @@ import re
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
 from dataclasses import dataclass
+from types import SimpleNamespace
 
 from src.config.consts import (
     TITLE_CANONICAL,

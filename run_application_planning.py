@@ -211,11 +211,70 @@ def _parse_bool(value: str) -> bool:
     return str(value).strip().lower() == "true"
 
 
-def _requires_resolved_resume_selection(row: dict) -> bool:
-    return not (
-        _parse_bool(row.get("requires_manual_review", "false"))
-        or _parse_bool(row.get("is_tie", "false"))
-    )
+def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
+    selection_signal = str(row.get("selection_signal", "") or "").strip()
+    winner_resume = str(row.get("winner_resume", "") or "").strip()
+
+    llm_fallback_best_resume = str(
+        row.get("llm_fallback_best_resume", "") or ""
+    ).strip()
+    llm_fallback_status = str(
+        row.get("llm_fallback_status", "") or ""
+    ).strip()
+
+    llm_adjudication_resume = str(
+        row.get("llm_adjudication_resume", "") or ""
+    ).strip()
+    llm_adjudication_status = str(
+        row.get("llm_adjudication_status", "") or ""
+    ).strip()
+
+    if selection_signal == "no_credible_match":
+        if llm_fallback_status in {"generated", "cached"} and llm_fallback_best_resume:
+            return {
+                "packet_status": "generated",
+                "packet_resume": llm_fallback_best_resume,
+                "packet_resume_source": f"llm_fallback_{llm_fallback_status}",
+            }
+        return {
+            "packet_status": "unresolved_no_credible_match",
+            "packet_resume": "",
+            "packet_resume_source": "no_credible_match",
+        }
+
+    if selection_signal in {"effective_tie", "manual_review_close_call"}:
+        if llm_adjudication_resume:
+            return {
+                "packet_status": "generated",
+                "packet_resume": llm_adjudication_resume,
+                "packet_resume_source": f"llm_adjudication_{llm_adjudication_status or 'generated'}",
+            }
+
+        if llm_adjudication_status == "skipped_equivalent_variants" and winner_resume:
+            return {
+                "packet_status": "generated",
+                "packet_resume": winner_resume,
+                "packet_resume_source": "deterministic_equivalent_variants",
+            }
+
+        return {
+            "packet_status": "pending_variant_selection",
+            "packet_resume": "",
+            "packet_resume_source": llm_adjudication_status or selection_signal or "ambiguous_selector_result",
+        }
+
+    if winner_resume:
+        return {
+            "packet_status": "generated",
+            "packet_resume": winner_resume,
+            "packet_resume_source": "deterministic_winner",
+        }
+
+    return {
+        "packet_status": "unresolved_missing_winner",
+        "packet_resume": "",
+        "packet_resume_source": "missing_winner_resume",
+    }
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -442,13 +501,17 @@ def main() -> None:
         winner_resume = row["winner_resume"]
         company = row["job_company"]
         title = row["job_title"]
-        resume_selection_resolved = _requires_resolved_resume_selection(row)
-        packet_status = "generated" if resume_selection_resolved else "pending_variant_selection"
+
+        packet_resolution = _resolve_packet_resume_selection(row)
+        packet_status = packet_resolution["packet_status"]
+        packet_resume = packet_resolution["packet_resume"]
+        packet_resume_source = packet_resolution["packet_resume_source"]
+        resume_selection_resolved = packet_status == "generated"
 
         file_slug = (
             f"{_slugify(company, 30)}__"
             f"{_slugify(title, 60)}__"
-            f"{_slugify(winner_resume, 40)}"
+            f"{_slugify(packet_resume or winner_resume or 'unresolved', 40)}"
         )
 
         packet_json_path = ""
@@ -478,6 +541,8 @@ def main() -> None:
                 str(job_corpus_path),
                 "--job-index",
                 str(job_index),
+                "--resume-name-contains",
+                packet_resume,
                 "--output-json",
                 str(packet_json_path),
             ]
@@ -530,6 +595,8 @@ def main() -> None:
             f"company={company}",
             f"title={title}",
             f"packet_status={packet_status}",
+            f"packet_resume={packet_resume or '-'}",
+            f"packet_resume_source={packet_resume_source}",
             f"llm_status={llm_status['llm_tailoring_status']}",
             f"llm_cache_hit={llm_status['llm_cache_hit'] or '-'}",
             f"llm_error_type={llm_status['llm_error_type'] or '-'}",
@@ -558,6 +625,8 @@ def main() -> None:
                 "is_tie": row["is_tie"],
                 "tie_epsilon": row.get("tie_epsilon", ""),
                 "packet_status": packet_status,
+                "packet_resume": packet_resume,
+                "packet_resume_source": packet_resume_source,
                 "packet_json": str(packet_json_path),
                 "tailoring_json": str(tailoring_json_path) if tailoring_json_path else "",
                 "tailoring_md": str(tailoring_md_path) if tailoring_md_path else "",
@@ -606,6 +675,8 @@ def main() -> None:
         "is_tie",
         "tie_epsilon",
         "packet_status",
+        "packet_resume",
+        "packet_resume_source",
         "packet_json",
         "tailoring_json",
         "tailoring_md",
@@ -636,6 +707,8 @@ def main() -> None:
             writer.writerow(manifest_row)
     
     packet_status_counts = _count_by(manifest_rows, "packet_status")
+    packet_resume_source_counts = _count_by(manifest_rows, "packet_resume_source")
+
     packet_created_count = sum(
         1 for row in manifest_rows
         if str(row.get("packet_status", "")).strip() == "generated"
@@ -644,6 +717,16 @@ def main() -> None:
         1
         for row in manifest_rows
         if str(row.get("packet_status", "")).strip() == "pending_variant_selection"
+    )
+    unresolved_no_credible_match_count = sum(
+        1
+        for row in manifest_rows
+        if str(row.get("packet_status", "")).strip() == "unresolved_no_credible_match"
+    )
+    unresolved_missing_winner_count = sum(
+        1
+        for row in manifest_rows
+        if str(row.get("packet_status", "")).strip() == "unresolved_missing_winner"
     )
     action_counts = _count_by(manifest_rows, "action")
     llm_status_counts = _count_by(manifest_rows, "llm_tailoring_status")
@@ -660,6 +743,8 @@ def main() -> None:
     print(f"Training log     : {training_log_jsonl_path}")
     print(f"Packets created  : {packet_created_count}")
     print(f"Pending variant selection rows : {pending_variant_selection_count}")
+    print(f"Unresolved no-credible-match rows : {unresolved_no_credible_match_count}")
+    print(f"Unresolved missing-winner rows    : {unresolved_missing_winner_count}")
     print(f"Tailoring step      : {'enabled' if args.generate_tailoring else 'disabled'}")
     print(f"Live LLM tailoring  : {'enabled' if args.generate_llm_tailoring else 'disabled'}")
     if args.generate_llm_tailoring:
@@ -675,6 +760,11 @@ def main() -> None:
     print("Packet status counts:")
     for status, count in packet_status_counts.items():
         print(f"  {status}: {count}")
+    
+    print()
+    print("Packet resume source counts:")
+    for source, count in packet_resume_source_counts.items():
+        print(f"  {source}: {count}")
 
     print()
     print("LLM status counts:")

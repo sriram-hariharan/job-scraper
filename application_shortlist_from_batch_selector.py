@@ -39,31 +39,95 @@ def _normalize_text(value: str) -> str:
 def _selection_signal(row: dict) -> str:
     return str(row.get("selection_signal", "")).strip()
 
+def _resolved_resume(row: dict) -> str:
+    return str(
+        row.get("resolved_resume", "") or row.get("winner_resume", "")
+    ).strip()
 
-def _requires_manual_review(row: dict) -> bool:
+
+def _resolved_score(row: dict) -> float:
+    raw = str(row.get("resolved_score", "") or "").strip()
+    if raw:
+        return _parse_float(raw)
+    return _parse_float(row.get("winner_score", "0"))
+
+
+def _resolved_bucket(row: dict) -> str:
+    raw = str(row.get("resolved_bucket", "") or "").strip()
+    if raw:
+        return _normalize_text(raw)
+    return _normalize_text(row.get("winner_bucket", ""))
+
+
+def _resolved_top_dims(row: dict) -> str:
+    return str(
+        row.get("resolved_top_dims", "") or row.get("winner_top_dims", "")
+    ).strip()
+
+
+def _resolved_missing_requirements(row: dict) -> str:
+    return str(
+        row.get("resolved_missing_requirements", "") or row.get("winner_missing_requirements", "")
+    ).strip()
+
+
+def _resolved_matched_terms(row: dict) -> str:
+    return str(
+        row.get("resolved_matched_terms", "") or row.get("winner_matched_terms", "")
+    ).strip()
+
+
+def _resolved_resume_source(row: dict) -> str:
+    raw = str(row.get("resolved_resume_source", "") or "").strip()
+    if raw:
+        return raw
+    return "deterministic_winner" if _resolved_resume(row) else ""
+
+
+def _resolved_selection_status(row: dict) -> str:
+    raw = str(row.get("resolved_selection_status", "") or "").strip()
+    if raw:
+        return raw
+    return "resolved" if _resolved_resume(row) else "unresolved"
+
+
+def _variant_review_required(row: dict) -> bool:
+    raw = str(row.get("variant_review_required", "") or "").strip()
+    if raw:
+        return _parse_bool(raw)
+
     if _parse_bool(row.get("requires_manual_review", "false")):
         return True
-    return _selection_signal(row) == "manual_review_close_call"
+
+    return _selection_signal(row) in {"effective_tie", "manual_review_close_call"} or _parse_bool(row.get("is_tie", "false"))
+
+
+def _resolved_best_available_imperfect_match(row: dict) -> bool:
+    return _parse_bool(row.get("resolved_best_available_imperfect_match", "false"))
+
+
+def _source_label(source: str) -> str:
+    return str(source or "").replace("_", " ").strip() or "selector"
+
+def _requires_manual_review(row: dict) -> bool:
+    return _variant_review_required(row)
 
 def _classify_action(row: dict) -> tuple[str, str]:
-    winner_score = _parse_float(row.get("winner_score", "0"))
+    resolved_resume = _resolved_resume(row)
+    resolved_score = _resolved_score(row)
+    resolved_bucket = _resolved_bucket(row)
+    resolved_top_dims = _resolved_top_dims(row)
+    resolved_missing_requirements = _resolved_missing_requirements(row)
+    resolved_resume_source = _resolved_resume_source(row)
+    resolved_selection_status = _resolved_selection_status(row)
+    variant_review_required = _variant_review_required(row)
+    best_available_imperfect_match = _resolved_best_available_imperfect_match(row)
+
     score_gap = _parse_float(row.get("score_gap", "0"))
-    is_tie = _parse_bool(row.get("is_tie", "false"))
-    requires_manual_review = _requires_manual_review(row)
     selection_signal = _selection_signal(row)
     passed_prefilter = int(row.get("passed_prefilter", "0"))
-    filtered_out = int(row.get("filtered_out", "0"))
     resume_variants_considered = int(row.get("resume_variants_considered", "0"))
-    missing_count = _count_missing_requirements(row.get("winner_missing_requirements", ""))
-
-    winner_resume = str(row.get("winner_resume", "")).strip()
-    winner_bucket = _normalize_text(row.get("winner_bucket", ""))
-
-    if passed_prefilter == 0 or winner_bucket == "filtered_out" or not winner_resume:
-        return (
-            "SKIP_FOR_NOW",
-            "No credible deterministic resume match; all resume variants failed prefilter.",
-        )
+    missing_count = _count_missing_requirements(resolved_missing_requirements)
 
     pass_rate = (
         passed_prefilter / resume_variants_considered
@@ -71,67 +135,74 @@ def _classify_action(row: dict) -> tuple[str, str]:
         else 0.0
     )
 
+    if not resolved_resume or resolved_bucket == "filtered_out":
+        return (
+            "SKIP_FOR_NOW",
+            f"No resolved resume selection is available (status={resolved_selection_status}, source={resolved_resume_source or 'none'}).",
+        )
+
+    if best_available_imperfect_match:
+        if resolved_score >= GOOD_MATCH_SCORE:
+            return (
+                "MAYBE_TAILOR",
+                f"Resolved via { _source_label(resolved_resume_source) } as a best-available imperfect match (score {resolved_score:.3f}); tailor carefully before applying.",
+            )
+        return (
+            "SKIP_FOR_NOW",
+            f"Only a best-available imperfect fallback match was available via { _source_label(resolved_resume_source) } and the score remains weak ({resolved_score:.3f}).",
+        )
+
+    if variant_review_required:
+        if (
+            resolved_score >= STRONG_TIE_REVIEW_SCORE
+            and missing_count <= MAX_STRONG_TIE_MISSING_REQUIREMENTS
+        ):
+            return (
+                "APPLY_REVIEW_VARIANTS",
+                f"Strong match ({resolved_score:.3f}) but resume choice is still unresolved (source={resolved_resume_source}, signal={selection_signal}, gap {score_gap:.3f}); review top variants before applying.",
+            )
+
+        if resolved_score >= GOOD_MATCH_SCORE:
+            return (
+                "MAYBE_TAILOR",
+                f"Good match ({resolved_score:.3f}) but resume choice is still unresolved (source={resolved_resume_source}, signal={selection_signal}); tailor and review manually.",
+            )
+
+        if resolved_score >= BORDERLINE_SCORE and pass_rate < BORDERLINE_LOW_PASS_RATE:
+            return (
+                "MAYBE_TAILOR",
+                f"Borderline score ({resolved_score:.3f}) and unresolved variant choice (source={resolved_resume_source}, signal={selection_signal}); worth manual review.",
+            )
+
+        return (
+            "SKIP_FOR_NOW",
+            f"Resume choice is still unresolved (source={resolved_resume_source}, signal={selection_signal}) and the current score is too weak ({resolved_score:.3f}).",
+        )
+
     if (
-        winner_score >= HIGH_CONFIDENCE_APPLY_SCORE
-        and not is_tie
-        and not requires_manual_review
+        resolved_score >= HIGH_CONFIDENCE_APPLY_SCORE
         and missing_count <= MAX_DIRECT_APPLY_MISSING_REQUIREMENTS
     ):
         return (
             "APPLY",
-            f"High winner score ({winner_score:.3f}), clear lead over backup (gap {score_gap:.3f}), and manageable missing requirements ({missing_count}).",
+            f"Resolved resume selection via { _source_label(resolved_resume_source) } with strong score ({resolved_score:.3f}) and manageable missing requirements ({missing_count}).",
         )
 
-    if (
-        winner_score >= STRONG_TIE_REVIEW_SCORE
-        and missing_count <= MAX_STRONG_TIE_MISSING_REQUIREMENTS
-        and (is_tie or requires_manual_review)
-    ):
-        if is_tie:
-            return (
-                "APPLY_REVIEW_VARIANTS",
-                f"Strong deterministic match ({winner_score:.3f}) but top variants are effectively tied (gap {score_gap:.3f}); review the tied resume options before applying.",
-            )
-        return (
-            "APPLY_REVIEW_VARIANTS",
-            f"Strong deterministic match ({winner_score:.3f}) but winner versus backup is a selector close call (gap {score_gap:.3f}, signal={selection_signal}); review the top resume options before applying.",
-        )
-
-    if winner_score >= GOOD_MATCH_SCORE:
-        if requires_manual_review:
-            return (
-                "MAYBE_TAILOR",
-                f"Good deterministic match ({winner_score:.3f}) but the winner is a selector close call versus the backup (gap {score_gap:.3f}, signal={selection_signal}); tailor and review the top resume options manually.",
-            )
-        if is_tie:
-            return (
-                "MAYBE_TAILOR",
-                f"Good deterministic match ({winner_score:.3f}) but the top resume options are effectively tied (gap {score_gap:.3f}); tailor and review the tied variants manually.",
-            )
+    if resolved_score >= GOOD_MATCH_SCORE:
         return (
             "MAYBE_TAILOR",
-            f"Good deterministic match ({winner_score:.3f}) but not decisive enough for a straight apply; tailor around the missing requirements ({missing_count}).",
+            f"Resolved resume selection via { _source_label(resolved_resume_source) } with a good score ({resolved_score:.3f}); tailor around the missing requirements ({missing_count}).",
         )
 
-    if winner_score >= BORDERLINE_SCORE and pass_rate < BORDERLINE_LOW_PASS_RATE:
-        if requires_manual_review:
-            return (
-                "MAYBE_TAILOR",
-                f"Borderline score ({winner_score:.3f}) and selector close call versus backup (gap {score_gap:.3f}, signal={selection_signal}); worth manual review.",
-            )
-        if is_tie:
-            return (
-                "MAYBE_TAILOR",
-                f"Borderline score ({winner_score:.3f}) and top resume options are effectively tied (gap {score_gap:.3f}, pass rate {pass_rate:.2%}); review the tied variants manually.",
-            )
+    if resolved_score >= BORDERLINE_SCORE and pass_rate < BORDERLINE_LOW_PASS_RATE:
         return (
             "MAYBE_TAILOR",
-            f"Borderline score ({winner_score:.3f}) but the job was selective across resume variants (pass rate {pass_rate:.2%}); worth reviewing manually.",
+            f"Resolved resume selection via { _source_label(resolved_resume_source) } with a borderline score ({resolved_score:.3f}) but selective pass rate ({pass_rate:.2%}); worth manual review.",
         )
 
     return (
         "SKIP_FOR_NOW",
-        f"Winner score is too weak ({winner_score:.3f}) for a confident application recommendation.",
+        f"Resolved resume selection exists via { _source_label(resolved_resume_source) }, but the score is still too weak ({resolved_score:.3f}).",
     )
 
 
@@ -214,6 +285,25 @@ def main() -> None:
 
     for row in rows:
         action, rationale = _classify_action(row)
+        resolved_resume = _resolved_resume(row)
+        resolved_score = (
+            str(row.get("resolved_score", "") or "").strip()
+            or row.get("winner_score", "")
+        )
+        resolved_bucket = (
+            str(row.get("resolved_bucket", "") or "").strip()
+            or row.get("winner_bucket", "")
+        )
+        resolved_top_dims = _resolved_top_dims(row)
+        resolved_missing_requirements = _resolved_missing_requirements(row)
+        resolved_matched_terms = _resolved_matched_terms(row)
+        resolved_resume_source = _resolved_resume_source(row)
+        resolved_selection_status = _resolved_selection_status(row)
+        variant_review_required = str(_variant_review_required(row))
+        resolved_best_available_imperfect_match = str(
+            _resolved_best_available_imperfect_match(row)
+        )
+
         shortlist_rows.append(
             {
                 "job_doc_id": row["job_doc_id"],
@@ -222,9 +312,38 @@ def main() -> None:
                 "posted_at": row.get("posted_at", ""),
                 "action": action,
                 "action_rationale": rationale,
-                "winner_resume": row["winner_resume"],
-                "winner_score": row["winner_score"],
-                "winner_bucket": row["winner_bucket"],
+
+                # Primary resolved selection view for downstream consumers
+                "winner_resume": resolved_resume,
+                "winner_score": resolved_score,
+                "winner_bucket": resolved_bucket,
+                "winner_top_dims": resolved_top_dims,
+                "winner_missing_requirements": resolved_missing_requirements,
+                "winner_matched_terms": resolved_matched_terms,
+                "recommendation_summary": rationale,
+
+                # Resolution metadata
+                "resolved_resume": resolved_resume,
+                "resolved_score": resolved_score,
+                "resolved_bucket": resolved_bucket,
+                "resolved_top_dims": resolved_top_dims,
+                "resolved_missing_requirements": resolved_missing_requirements,
+                "resolved_matched_terms": resolved_matched_terms,
+                "resolved_resume_source": resolved_resume_source,
+                "resolved_selection_status": resolved_selection_status,
+                "variant_review_required": variant_review_required,
+                "resolved_best_available_imperfect_match": resolved_best_available_imperfect_match,
+
+                # Original selector winner retained for audit
+                "selector_winner_resume": row["winner_resume"],
+                "selector_winner_score": row["winner_score"],
+                "selector_winner_bucket": row["winner_bucket"],
+                "selector_winner_top_dims": row["winner_top_dims"],
+                "selector_winner_missing_requirements": row["winner_missing_requirements"],
+                "selector_winner_matched_terms": row["winner_matched_terms"],
+                "selector_recommendation_summary": row["recommendation_summary"],
+
+                # Raw selector ambiguity fields retained for audit/backward compatibility
                 "selection_signal": row.get("selection_signal", ""),
                 "requires_manual_review": row.get("requires_manual_review", ""),
                 "manual_review_gap_epsilon": row.get("manual_review_gap_epsilon", ""),
@@ -235,10 +354,8 @@ def main() -> None:
                 "score_gap": row["score_gap"],
                 "passed_prefilter": row["passed_prefilter"],
                 "filtered_out": row["filtered_out"],
-                "winner_top_dims": row["winner_top_dims"],
-                "winner_missing_requirements": row["winner_missing_requirements"],
-                "winner_matched_terms": row["winner_matched_terms"],
-                "recommendation_summary": row["recommendation_summary"],
+
+                # LLM adjudication audit
                 "llm_adjudication_resume": row.get("llm_adjudication_resume", ""),
                 "llm_adjudication_confidence": row.get("llm_adjudication_confidence", ""),
                 "llm_adjudication_reason": row.get("llm_adjudication_reason", ""),
@@ -249,6 +366,20 @@ def main() -> None:
                 "llm_adjudication_cache_hit": row.get("llm_adjudication_cache_hit", ""),
                 "llm_adjudication_differs_from_deterministic": row.get("llm_adjudication_differs_from_deterministic", ""),
                 "llm_adjudication_error_type": row.get("llm_adjudication_error_type", ""),
+
+                # LLM fallback audit
+                "llm_fallback_best_resume": row.get("llm_fallback_best_resume", ""),
+                "llm_fallback_best_score": row.get("llm_fallback_best_score", ""),
+                "llm_fallback_backup_resume": row.get("llm_fallback_backup_resume", ""),
+                "llm_fallback_backup_score": row.get("llm_fallback_backup_score", ""),
+                "llm_fallback_confidence": row.get("llm_fallback_confidence", ""),
+                "llm_fallback_reason": row.get("llm_fallback_reason", ""),
+                "llm_fallback_status": row.get("llm_fallback_status", ""),
+                "llm_fallback_parse_ok": row.get("llm_fallback_parse_ok", ""),
+                "llm_fallback_provider": row.get("llm_fallback_provider", ""),
+                "llm_fallback_model": row.get("llm_fallback_model", ""),
+                "llm_fallback_cache_hit": row.get("llm_fallback_cache_hit", ""),
+                "llm_fallback_error_type": row.get("llm_fallback_error_type", ""),
             }
         )
 
@@ -269,9 +400,34 @@ def main() -> None:
         "posted_at",
         "action",
         "action_rationale",
+
         "winner_resume",
         "winner_score",
         "winner_bucket",
+        "winner_top_dims",
+        "winner_missing_requirements",
+        "winner_matched_terms",
+        "recommendation_summary",
+
+        "resolved_resume",
+        "resolved_score",
+        "resolved_bucket",
+        "resolved_top_dims",
+        "resolved_missing_requirements",
+        "resolved_matched_terms",
+        "resolved_resume_source",
+        "resolved_selection_status",
+        "variant_review_required",
+        "resolved_best_available_imperfect_match",
+
+        "selector_winner_resume",
+        "selector_winner_score",
+        "selector_winner_bucket",
+        "selector_winner_top_dims",
+        "selector_winner_missing_requirements",
+        "selector_winner_matched_terms",
+        "selector_recommendation_summary",
+
         "selection_signal",
         "requires_manual_review",
         "manual_review_gap_epsilon",
@@ -282,10 +438,7 @@ def main() -> None:
         "score_gap",
         "passed_prefilter",
         "filtered_out",
-        "winner_top_dims",
-        "winner_missing_requirements",
-        "winner_matched_terms",
-        "recommendation_summary",
+
         "llm_adjudication_resume",
         "llm_adjudication_confidence",
         "llm_adjudication_reason",
@@ -296,7 +449,22 @@ def main() -> None:
         "llm_adjudication_cache_hit",
         "llm_adjudication_differs_from_deterministic",
         "llm_adjudication_error_type",
+
+        "llm_fallback_best_resume",
+        "llm_fallback_best_score",
+        "llm_fallback_backup_resume",
+        "llm_fallback_backup_score",
+        "llm_fallback_confidence",
+        "llm_fallback_reason",
+        "llm_fallback_status",
+        "llm_fallback_parse_ok",
+        "llm_fallback_provider",
+        "llm_fallback_model",
+        "llm_fallback_cache_hit",
+        "llm_fallback_error_type",
     ]
+
+    output_csv_path.parent.mkdir(parents=True, exist_ok=True)
 
     with output_csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
@@ -320,7 +488,8 @@ def main() -> None:
             f"score={_parse_float(row['winner_score']):.3f} | "
             f"bucket={row['winner_bucket']} | "
             f"selection={row['selection_signal']} | "
-            f"requires_manual_review={row['requires_manual_review']}"
+            f"variant_review_required={row['variant_review_required']} | "
+            f"source={row['resolved_resume_source']}"
         )
         if row["runner_up_resume"]:
             print(

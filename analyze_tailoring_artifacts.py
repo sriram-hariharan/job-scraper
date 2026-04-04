@@ -1,10 +1,16 @@
 import argparse
 import glob
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
+import re
 
+_SHADOW_DIRECTION_LIGHT_WORDS = {
+    "a", "an", "the", "and", "or", "to", "of", "for", "with", "in", "on",
+    "at", "by", "from", "into", "over", "use", "using", "keep", "lead",
+    "support", "explicit", "gap", "do", "not", "add",
+}
 
 def _load_json_object(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
@@ -44,6 +50,48 @@ def _safe_list(value: Any) -> List[str]:
     if not isinstance(value, list):
         return []
     return [_safe_text(item) for item in value if _safe_text(item)]
+
+def _shadow_direction_word_count(text: Any) -> int:
+    value = _safe_text(text, "")
+    if not value:
+        return 0
+    return len(re.findall(r"[A-Za-z0-9_+#/\-]+", value))
+
+
+def _shadow_direction_quality_bucket(direction: Any) -> str:
+    text = _safe_text(direction, "")
+    if not text:
+        return "missing"
+
+    words = re.findall(r"[A-Za-z0-9_+#/\-]+", text.lower())
+    word_count = len(words)
+
+    if word_count <= 4:
+        return "very_short"
+
+    has_number = any(ch.isdigit() for ch in text)
+    has_detail_marker = any(mark in text for mark in [";", ",", ":"])
+    content_words = [word for word in words if word not in _SHADOW_DIRECTION_LIGHT_WORDS]
+
+    if word_count <= 6 and not has_number and not has_detail_marker and len(content_words) <= 3:
+        return "generic_short"
+
+    return "ok"
+
+
+def _shadow_duplicate_source_rows(candidates: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    counter: Counter = Counter()
+
+    for item in candidates or []:
+        source = _safe_text(item.get("source"), "")
+        if source:
+            counter[source] += 1
+
+    rows: List[Dict[str, Any]] = []
+    for key, count in sorted(counter.items(), key=lambda item: (-item[1], item[0])):
+        if count > 1:
+            rows.append({"key": key, "count": count})
+    return rows
 
 def _is_llm_artifact_path(path: Path) -> bool:
     return path.name.lower().endswith("tailoring_llm.json")
@@ -220,6 +268,49 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
     shadow_summary = shadow_final_replacement_plan.get("summary", {}) or {}
     if not isinstance(shadow_summary, dict):
         shadow_summary = {}
+    
+    shadow_prefix_counter: Counter = Counter(
+        _safe_text(item.get("prefix"), "missing")
+        for item in live_rewrite_directions_structured
+    )
+
+    shadow_direction_quality_counter: Counter = Counter(
+        _shadow_direction_quality_bucket(item.get("direction"))
+        for item in live_rewrite_directions_structured
+        if _safe_text(item.get("direction"), "")
+    )
+
+    shadow_duplicate_sources = _shadow_duplicate_source_rows(shadow_replacement_candidates)
+
+    shadow_gap_only_count = sum(
+        1
+        for item in live_rewrite_directions_structured
+        if _safe_text(item.get("prefix"), "") in {"Keep gap explicit", "Do not add"}
+    )
+
+    shadow_very_short_direction_count = int(
+        shadow_direction_quality_counter.get("very_short", 0)
+    )
+    shadow_generic_short_direction_count = int(
+        shadow_direction_quality_counter.get("generic_short", 0)
+    )
+
+    shadow_candidate_collapse_count = max(
+        0,
+        len(shadow_replacement_candidates) - len(shadow_direction_only_replacements),
+    )
+
+    shadow_quality_flags: List[str] = []
+    if shadow_duplicate_sources:
+        shadow_quality_flags.append("duplicate_source_reuse")
+    if shadow_gap_only_count > 0:
+        shadow_quality_flags.append("gap_present")
+    if shadow_very_short_direction_count > 0:
+        shadow_quality_flags.append("very_short_direction_present")
+    if shadow_generic_short_direction_count > 0:
+        shadow_quality_flags.append("generic_short_direction_present")
+    if shadow_candidate_collapse_count > 0:
+        shadow_quality_flags.append("candidate_collapse")
 
     edit_cards = payload.get("edit_cards", []) or []
     rewrite_cards = _rewrite_edit_cards(payload)
@@ -425,6 +516,15 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
         "shadow_decision_count": len(shadow_decisions),
         "shadow_direction_only_replacement_count": len(shadow_direction_only_replacements),
         "shadow_summary": shadow_summary,
+        "shadow_prefix_counts": dict(shadow_prefix_counter),
+        "shadow_direction_quality_counts": dict(shadow_direction_quality_counter),
+        "shadow_duplicate_sources": shadow_duplicate_sources,
+        "shadow_duplicate_source_count": len(shadow_duplicate_sources),
+        "shadow_gap_only_count": shadow_gap_only_count,
+        "shadow_very_short_direction_count": shadow_very_short_direction_count,
+        "shadow_generic_short_direction_count": shadow_generic_short_direction_count,
+        "shadow_candidate_collapse_count": shadow_candidate_collapse_count,
+        "shadow_quality_flags": shadow_quality_flags,
     }
 
 
@@ -460,6 +560,19 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
     total_live_structured_directions = 0
     total_shadow_replacement_candidates = 0
     total_shadow_direction_only_replacements = 0
+    shadow_prefix_counter: Counter = Counter()
+    shadow_direction_quality_counter: Counter = Counter()
+
+    files_with_duplicate_shadow_sources = 0
+    files_with_gap_only_shadow_directions = 0
+    files_with_very_short_shadow_directions = 0
+    files_with_generic_short_shadow_directions = 0
+    files_with_shadow_candidate_collapse = 0
+
+    total_shadow_gap_only_directions = 0
+    total_shadow_very_short_directions = 0
+    total_shadow_generic_short_directions = 0
+    total_shadow_candidate_collapse = 0
 
     for path in paths:
         payload = _load_json_object(path)
@@ -499,6 +612,32 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
 
         if int(row.get("shadow_direction_only_replacement_count", 0) or 0) > 0:
             files_with_shadow_direction_only_replacements += 1
+        
+        for key, count in (row.get("shadow_prefix_counts", {}) or {}).items():
+            shadow_prefix_counter[key] += int(count)
+
+        for key, count in (row.get("shadow_direction_quality_counts", {}) or {}).items():
+            shadow_direction_quality_counter[key] += int(count)
+
+        if int(row.get("shadow_duplicate_source_count", 0) or 0) > 0:
+            files_with_duplicate_shadow_sources += 1
+
+        if int(row.get("shadow_gap_only_count", 0) or 0) > 0:
+            files_with_gap_only_shadow_directions += 1
+
+        if int(row.get("shadow_very_short_direction_count", 0) or 0) > 0:
+            files_with_very_short_shadow_directions += 1
+
+        if int(row.get("shadow_generic_short_direction_count", 0) or 0) > 0:
+            files_with_generic_short_shadow_directions += 1
+
+        if int(row.get("shadow_candidate_collapse_count", 0) or 0) > 0:
+            files_with_shadow_candidate_collapse += 1
+
+        total_shadow_gap_only_directions += int(row.get("shadow_gap_only_count", 0) or 0)
+        total_shadow_very_short_directions += int(row.get("shadow_very_short_direction_count", 0) or 0)
+        total_shadow_generic_short_directions += int(row.get("shadow_generic_short_direction_count", 0) or 0)
+        total_shadow_candidate_collapse += int(row.get("shadow_candidate_collapse_count", 0) or 0)
 
         total_live_rewrite_directions += int(row.get("live_rewrite_directions_count", 0) or 0)
         total_live_structured_directions += int(row.get("live_rewrite_directions_structured_count", 0) or 0)
@@ -539,6 +678,37 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
         )
     )
 
+    shadow_quality_rows = [
+        row for row in file_rows
+        if int(row.get("shadow_direction_only_replacement_count", 0) or 0) > 0
+    ]
+
+    strongest_shadow_rows = sorted(
+        shadow_quality_rows,
+        key=lambda row: (
+            -int(row.get("shadow_direction_only_replacement_count", 0) or 0),
+            int(row.get("shadow_candidate_collapse_count", 0) or 0),
+            int(row.get("shadow_gap_only_count", 0) or 0),
+            int(row.get("shadow_very_short_direction_count", 0) or 0)
+            + int(row.get("shadow_generic_short_direction_count", 0) or 0),
+            row.get("path", ""),
+        ),
+    )[:10]
+
+    weakest_shadow_rows = sorted(
+        shadow_quality_rows,
+        key=lambda row: (
+            -(
+                int(row.get("shadow_candidate_collapse_count", 0) or 0)
+                + int(row.get("shadow_gap_only_count", 0) or 0)
+                + int(row.get("shadow_very_short_direction_count", 0) or 0)
+                + int(row.get("shadow_generic_short_direction_count", 0) or 0)
+            ),
+            -int(row.get("shadow_direction_only_replacement_count", 0) or 0),
+            row.get("path", ""),
+        ),
+    )[:10]
+
     return {
         "total_files": len(file_rows),
         "empty_candidate_files": empty_candidate_files,
@@ -569,6 +739,25 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
         "total_live_structured_directions": total_live_structured_directions,
         "total_shadow_replacement_candidates": total_shadow_replacement_candidates,
         "total_shadow_direction_only_replacements": total_shadow_direction_only_replacements,
+        "files_with_duplicate_shadow_sources": files_with_duplicate_shadow_sources,
+        "files_with_gap_only_shadow_directions": files_with_gap_only_shadow_directions,
+        "files_with_very_short_shadow_directions": files_with_very_short_shadow_directions,
+        "files_with_generic_short_shadow_directions": files_with_generic_short_shadow_directions,
+        "files_with_shadow_candidate_collapse": files_with_shadow_candidate_collapse,
+        "total_shadow_gap_only_directions": total_shadow_gap_only_directions,
+        "total_shadow_very_short_directions": total_shadow_very_short_directions,
+        "total_shadow_generic_short_directions": total_shadow_generic_short_directions,
+        "total_shadow_candidate_collapse": total_shadow_candidate_collapse,
+        "aggregate_shadow_prefix_counts": _counter_rows(
+            shadow_prefix_counter,
+            sum(shadow_prefix_counter.values()),
+        ),
+        "aggregate_shadow_direction_quality_counts": _counter_rows(
+            shadow_direction_quality_counter,
+            sum(shadow_direction_quality_counter.values()),
+        ),
+        "strongest_shadow_rows": strongest_shadow_rows,
+        "weakest_shadow_rows": weakest_shadow_rows,
     }
 
 def _phase4_regression_failures(
@@ -618,6 +807,25 @@ def _print_counter_block(title: str, rows: List[Dict[str, Any]]) -> None:
     for row in rows:
         print(f"{row['key']}: {row['count']} ({row['pct']:.2f}%)")
 
+def _print_shadow_quality_rows(title: str, rows: List[Dict[str, Any]]) -> None:
+    print(f"\n{title}")
+    print("-" * len(title))
+    if not rows:
+        print("none")
+        return
+
+    for row in rows:
+        print(f"\n{row['path']}")
+        print(
+            f"  shadow_direction_only={row.get('shadow_direction_only_replacement_count', 0)} | "
+            f"gap_only={row.get('shadow_gap_only_count', 0)} | "
+            f"very_short={row.get('shadow_very_short_direction_count', 0)} | "
+            f"generic_short={row.get('shadow_generic_short_direction_count', 0)} | "
+            f"collapse={row.get('shadow_candidate_collapse_count', 0)}"
+        )
+        print(f"  shadow_quality_flags={row.get('shadow_quality_flags', [])}")
+        if row.get("shadow_duplicate_sources"):
+            print(f"  shadow_duplicate_sources={row['shadow_duplicate_sources']}")
 
 def _print_file_rows(summary: Dict[str, Any], top_n: int) -> None:
     print("\nPer-File Highlights")
@@ -770,6 +978,16 @@ def main() -> None:
     print(f"total_shadow_replacement_candidates: {summary['total_shadow_replacement_candidates']}")
     print(f"total_shadow_direction_only_replacements: {summary['total_shadow_direction_only_replacements']}")
 
+    print(f"files_with_duplicate_shadow_sources: {summary['files_with_duplicate_shadow_sources']}")
+    print(f"files_with_gap_only_shadow_directions: {summary['files_with_gap_only_shadow_directions']}")
+    print(f"files_with_very_short_shadow_directions: {summary['files_with_very_short_shadow_directions']}")
+    print(f"files_with_generic_short_shadow_directions: {summary['files_with_generic_short_shadow_directions']}")
+    print(f"files_with_shadow_candidate_collapse: {summary['files_with_shadow_candidate_collapse']}")
+    print(f"total_shadow_gap_only_directions: {summary['total_shadow_gap_only_directions']}")
+    print(f"total_shadow_very_short_directions: {summary['total_shadow_very_short_directions']}")
+    print(f"total_shadow_generic_short_directions: {summary['total_shadow_generic_short_directions']}")
+    print(f"total_shadow_candidate_collapse: {summary['total_shadow_candidate_collapse']}")
+
     _print_counter_block("Aggregate Operation Counts", summary["aggregate_operation_counts"])
     _print_counter_block("Aggregate Proposal Status Counts", summary["aggregate_proposal_status_counts"])
     _print_counter_block("Aggregate Patch Generation Counts", summary["aggregate_patch_generation_counts"])
@@ -779,6 +997,11 @@ def main() -> None:
     _print_counter_block("Aggregate LLM Judge Winner Counts", summary["aggregate_llm_judge_winner_counts"])
     _print_counter_block("Aggregate LLM Quality Flag Counts", summary["aggregate_llm_quality_flag_counts"])
     _print_file_rows(summary, max(args.top_n, 1))
+
+    _print_counter_block("Aggregate Shadow Prefix Counts", summary["aggregate_shadow_prefix_counts"])
+    _print_counter_block("Aggregate Shadow Direction Quality Counts", summary["aggregate_shadow_direction_quality_counts"])
+    _print_shadow_quality_rows("Strongest Shadow Rows", summary["strongest_shadow_rows"])
+    _print_shadow_quality_rows("Weakest Shadow Rows", summary["weakest_shadow_rows"])
 
     if args.output_json.strip():
         output_path = Path(args.output_json)

@@ -1184,6 +1184,61 @@ def _project_resolved_result(
         "resolved_best_available_imperfect_match": str(best_available_imperfect_match),
     }
 
+def _weighted_score_map(result) -> Dict[str, float]:
+    return {
+        str(dim.name): float(dim.weighted_score)
+        for dim in result.dimension_scores
+    }
+
+
+def _non_title_weighted_advantage(
+    winner,
+    runner_up: Optional[object],
+) -> float:
+    if runner_up is None:
+        return 0.0
+
+    winner_map = _weighted_score_map(winner)
+    runner_map = _weighted_score_map(runner_up)
+
+    total = 0.0
+    for name in set(winner_map) | set(runner_map):
+        if name == "title_alignment":
+            continue
+        total += winner_map.get(name, 0.0) - runner_map.get(name, 0.0)
+
+    return total
+
+
+def _should_resolve_suppressed_low_value_adjudication(
+    winner,
+    runner_up: Optional[object],
+    llm_adjudication: Dict[str, Any],
+) -> bool:
+    if runner_up is None:
+        return False
+
+    status = str(llm_adjudication.get("status", "") or "").strip()
+    differs = str(
+        llm_adjudication.get("differs_from_deterministic", "") or ""
+    ).strip().lower()
+
+    if status != "suppressed_low_value_reason":
+        return False
+
+    if differs not in {"", "false"}:
+        return False
+
+    if _is_close_call_manual_review(winner, runner_up):
+        return True
+
+    if not _is_effective_tie(winner, runner_up):
+        return False
+
+    if _is_title_only_edge(winner, runner_up):
+        return False
+
+    return _non_title_weighted_advantage(winner, runner_up) > NON_TITLE_DELTA_EPSILON
 
 def _resolved_selection_projection(
     *,
@@ -1236,6 +1291,23 @@ def _resolved_selection_projection(
                 result_by_resume_name=result_by_resume_name,
                 resume_name=winner_resume,
                 source="deterministic_equivalent_variants",
+                status="resolved",
+                variant_review_required=False,
+                best_available_imperfect_match=False,
+            )
+
+        if (
+            winner_resume
+            and _should_resolve_suppressed_low_value_adjudication(
+                winner=winner,
+                runner_up=runner_up,
+                llm_adjudication=llm_adjudication,
+            )
+        ):
+            return _project_resolved_result(
+                result_by_resume_name=result_by_resume_name,
+                resume_name=winner_resume,
+                source="suppressed_low_value_deterministic_winner",
                 status="resolved",
                 variant_review_required=False,
                 best_available_imperfect_match=False,

@@ -212,6 +212,31 @@ def _parse_bool(value: str) -> bool:
 
 
 def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
+    resolved_resume = str(row.get("resolved_resume", "") or "").strip()
+    resolved_selection_status = str(
+        row.get("resolved_selection_status", "") or ""
+    ).strip()
+    resolved_resume_source = str(
+        row.get("resolved_resume_source", "") or ""
+    ).strip()
+    variant_review_required = _parse_bool(
+        row.get("variant_review_required", "false")
+    )
+
+    if resolved_resume and resolved_selection_status == "resolved" and not variant_review_required:
+        return {
+            "packet_status": "generated",
+            "packet_resume": resolved_resume,
+            "packet_resume_source": resolved_resume_source or "resolved_selection_projection",
+        }
+
+    if variant_review_required:
+        return {
+            "packet_status": "pending_variant_selection",
+            "packet_resume": "",
+            "packet_resume_source": resolved_resume_source or "unresolved_variant_review",
+        }
+
     selection_signal = str(row.get("selection_signal", "") or "").strip()
     winner_resume = str(row.get("winner_resume", "") or "").strip()
 

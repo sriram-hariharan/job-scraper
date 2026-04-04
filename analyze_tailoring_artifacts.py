@@ -45,6 +45,8 @@ def _safe_list(value: Any) -> List[str]:
         return []
     return [_safe_text(item) for item in value if _safe_text(item)]
 
+def _is_llm_artifact_path(path: Path) -> bool:
+    return path.name.lower().endswith("tailoring_llm.json")
 
 def _llm_candidate_eval_row(candidate: Dict[str, Any]) -> Dict[str, Any] | None:
     status = _safe_text(candidate.get("llm_refinement_status"), "")
@@ -186,6 +188,38 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
 
     job = payload.get("job", {}) or {}
     selection = payload.get("selection", {}) or {}
+
+    is_llm_artifact = _is_llm_artifact_path(path)
+    parsed = payload.get("parsed", {}) if isinstance(payload.get("parsed"), dict) else {}
+    live_parse_ok = bool(payload.get("parse_ok", False)) if is_llm_artifact else False
+
+    live_rewrite_directions = parsed.get("rewrite_directions", []) or []
+    if not isinstance(live_rewrite_directions, list):
+        live_rewrite_directions = []
+
+    live_rewrite_directions_structured = parsed.get("rewrite_directions_structured", []) or []
+    if not isinstance(live_rewrite_directions_structured, list):
+        live_rewrite_directions_structured = []
+
+    shadow_replacement_candidates = payload.get("shadow_replacement_candidates", []) or []
+    if not isinstance(shadow_replacement_candidates, list):
+        shadow_replacement_candidates = []
+
+    shadow_final_replacement_plan = payload.get("shadow_final_replacement_plan", {}) or {}
+    if not isinstance(shadow_final_replacement_plan, dict):
+        shadow_final_replacement_plan = {}
+
+    shadow_decisions = shadow_final_replacement_plan.get("decisions", []) or []
+    if not isinstance(shadow_decisions, list):
+        shadow_decisions = []
+
+    shadow_direction_only_replacements = shadow_final_replacement_plan.get("direction_only_replacements", []) or []
+    if not isinstance(shadow_direction_only_replacements, list):
+        shadow_direction_only_replacements = []
+
+    shadow_summary = shadow_final_replacement_plan.get("summary", {}) or {}
+    if not isinstance(shadow_summary, dict):
+        shadow_summary = {}
 
     edit_cards = payload.get("edit_cards", []) or []
     rewrite_cards = _rewrite_edit_cards(payload)
@@ -331,6 +365,19 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
         if key != "missing" and count > 1
     ]
 
+    if is_llm_artifact and live_parse_ok:
+        if live_rewrite_directions and not live_rewrite_directions_structured:
+            invariant_violations.append("live_structured_directions_missing")
+
+        if live_rewrite_directions_structured and not shadow_replacement_candidates:
+            invariant_violations.append("live_shadow_candidates_missing")
+
+        if shadow_replacement_candidates and not shadow_direction_only_replacements:
+            invariant_violations.append("live_shadow_direction_only_missing")
+
+        if len(shadow_direction_only_replacements) > len(shadow_replacement_candidates):
+            invariant_violations.append("live_shadow_direction_only_exceeds_candidates")
+
     return {
         "path": str(path),
         "company": _safe_text(job.get("company")),
@@ -370,6 +417,14 @@ def _per_file_summary(path: Path, payload: Dict[str, Any]) -> Dict[str, Any]:
         "llm_invalid_option_count": llm_invalid_option_count,
         "writer_win_cases": writer_win_cases,
         "low_quality_cases": low_quality_cases,
+        "is_llm_artifact": is_llm_artifact,
+        "live_parse_ok": live_parse_ok,
+        "live_rewrite_directions_count": len(live_rewrite_directions),
+        "live_rewrite_directions_structured_count": len(live_rewrite_directions_structured),
+        "shadow_replacement_candidate_count": len(shadow_replacement_candidates),
+        "shadow_decision_count": len(shadow_decisions),
+        "shadow_direction_only_replacement_count": len(shadow_direction_only_replacements),
+        "shadow_summary": shadow_summary,
     }
 
 
@@ -396,6 +451,15 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
     files_with_duplicate_signal_keys = 0
     empty_candidate_files = 0
     files_with_missing_proposal_status = 0
+    files_with_llm_parse_ok = 0
+    files_with_live_structured_directions = 0
+    files_with_shadow_replacement_candidates = 0
+    files_with_shadow_direction_only_replacements = 0
+
+    total_live_rewrite_directions = 0
+    total_live_structured_directions = 0
+    total_shadow_replacement_candidates = 0
+    total_shadow_direction_only_replacements = 0
 
     for path in paths:
         payload = _load_json_object(path)
@@ -424,6 +488,23 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
             files_with_llm_writer_wins += 1
         if row["low_quality_cases"]:
             files_with_llm_low_quality_cases += 1
+        if row.get("is_llm_artifact", False) and row.get("live_parse_ok", False):
+            files_with_llm_parse_ok += 1
+
+        if int(row.get("live_rewrite_directions_structured_count", 0) or 0) > 0:
+            files_with_live_structured_directions += 1
+
+        if int(row.get("shadow_replacement_candidate_count", 0) or 0) > 0:
+            files_with_shadow_replacement_candidates += 1
+
+        if int(row.get("shadow_direction_only_replacement_count", 0) or 0) > 0:
+            files_with_shadow_direction_only_replacements += 1
+
+        total_live_rewrite_directions += int(row.get("live_rewrite_directions_count", 0) or 0)
+        total_live_structured_directions += int(row.get("live_rewrite_directions_structured_count", 0) or 0)
+        total_shadow_replacement_candidates += int(row.get("shadow_replacement_candidate_count", 0) or 0)
+        total_shadow_direction_only_replacements += int(row.get("shadow_direction_only_replacement_count", 0) or 0)
+
 
         for key, count in row["llm_status_counts"].items():
             llm_status_counter[key] += int(count)
@@ -480,6 +561,14 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
         "aggregate_llm_status_counts": _counter_rows(llm_status_counter, sum(llm_status_counter.values())),
         "aggregate_llm_judge_winner_counts": _counter_rows(llm_judge_winner_counter, sum(llm_judge_winner_counter.values())),
         "aggregate_llm_quality_flag_counts": _counter_rows(llm_quality_flag_counter, sum(llm_quality_flag_counter.values())),
+        "files_with_llm_parse_ok": files_with_llm_parse_ok,
+        "files_with_live_structured_directions": files_with_live_structured_directions,
+        "files_with_shadow_replacement_candidates": files_with_shadow_replacement_candidates,
+        "files_with_shadow_direction_only_replacements": files_with_shadow_direction_only_replacements,
+        "total_live_rewrite_directions": total_live_rewrite_directions,
+        "total_live_structured_directions": total_live_structured_directions,
+        "total_shadow_replacement_candidates": total_shadow_replacement_candidates,
+        "total_shadow_direction_only_replacements": total_shadow_direction_only_replacements,
     }
 
 def _phase4_regression_failures(
@@ -564,6 +653,14 @@ def _print_file_rows(summary: Dict[str, Any], top_n: int) -> None:
             f"directional_reorder={row['directional_reorder_count']} | "
             f"keep_only={row['keep_only_count']}"
         )
+        if row.get("is_llm_artifact", False):
+            print(
+                f"  live_parse_ok={row['live_parse_ok']} | "
+                f"live_dirs={row['live_rewrite_directions_count']} | "
+                f"live_structured_dirs={row['live_rewrite_directions_structured_count']} | "
+                f"shadow_candidates={row['shadow_replacement_candidate_count']} | "
+                f"shadow_direction_only={row['shadow_direction_only_replacement_count']}"
+            )
         if row.get("material_candidate_ids"):
             print(f"  material_candidate_ids={row['material_candidate_ids']}")
         if row.get("material_candidate_methods"):
@@ -663,6 +760,15 @@ def main() -> None:
     print(f"files_with_invariant_violations: {summary['files_with_invariant_violations']}")
     print(f"files_with_llm_writer_wins: {summary['files_with_llm_writer_wins']}")
     print(f"files_with_llm_low_quality_cases: {summary['files_with_llm_low_quality_cases']}")
+
+    print(f"files_with_llm_parse_ok: {summary['files_with_llm_parse_ok']}")
+    print(f"files_with_live_structured_directions: {summary['files_with_live_structured_directions']}")
+    print(f"files_with_shadow_replacement_candidates: {summary['files_with_shadow_replacement_candidates']}")
+    print(f"files_with_shadow_direction_only_replacements: {summary['files_with_shadow_direction_only_replacements']}")
+    print(f"total_live_rewrite_directions: {summary['total_live_rewrite_directions']}")
+    print(f"total_live_structured_directions: {summary['total_live_structured_directions']}")
+    print(f"total_shadow_replacement_candidates: {summary['total_shadow_replacement_candidates']}")
+    print(f"total_shadow_direction_only_replacements: {summary['total_shadow_direction_only_replacements']}")
 
     _print_counter_block("Aggregate Operation Counts", summary["aggregate_operation_counts"])
     _print_counter_block("Aggregate Proposal Status Counts", summary["aggregate_proposal_status_counts"])

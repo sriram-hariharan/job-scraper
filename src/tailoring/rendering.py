@@ -1403,13 +1403,13 @@ def _rewrite_card_fields_from_directional_candidate(
             "claim_safety": "keep_visible",
             "recommended_rewrite": "",
             "why_current_is_weak": (
-                f"The bullet already explicitly contains {lead}, so the issue is visibility/order, not wording."
+                f"The bullet already surfaces {lead} early enough, so the issue is visibility/order, not wording."
             ),
             "why_rewrite_is_better": (
                 "A textual rewrite is unnecessary here. Moving this bullet earlier is the cleaner ATS and recruiter-facing action."
             ),
             "why_it_matters": (
-                f"This bullet already has the right signal set ({lead}); it should be kept highly visible instead of rewritten."
+                f"This bullet already has the right signal set ({lead}) in a strong early position; keep it highly visible instead of rewriting it."
             ),
             "placement_guidance": (
                 "Move this bullet earlier within the section if stronger ATS visibility is needed."
@@ -1424,13 +1424,13 @@ def _rewrite_card_fields_from_directional_candidate(
             "claim_safety": "keep_visible",
             "recommended_rewrite": "",
             "why_current_is_weak": (
-                f"The bullet already states {lead} explicitly, so the issue is visibility/order, not missing wording."
+                f"The bullet already surfaces {lead} early enough, so the issue is visibility/order, not missing wording."
             ),
             "why_rewrite_is_better": (
                 "A textual rewrite is unnecessary here. Keeping this bullet visible or moving it earlier is cleaner than forcing a one-signal fronting edit."
             ),
             "why_it_matters": (
-                f"This bullet already proves {lead} directly; treat it as an anchor instead of a rewrite target."
+                f"This bullet already proves {lead} clearly enough in an early position; treat it as an anchor instead of a rewrite target."
             ),
             "placement_guidance": (
                 "Keep this bullet visible and move it earlier within the section only if stronger ATS visibility is needed."
@@ -2059,22 +2059,16 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     normalized = dict(diagnosis)
     normalized["precomputed_patch_generation_method"] = patch_generation_method
 
+    # If the deterministic patch builder can make a real patch, keep this in rewrite lane.
     if proposal_status == "patch_ready":
         return normalized
-    
-    rewrite_direction = str(normalized.get("recommended_rewrite", "") or "").strip()
-    has_grounded_directional_rewrite = (
-        bool(rewrite_direction)
-        and rewrite_direction.startswith(("Lead with", "Support with"))
-    )
 
-    if has_grounded_directional_rewrite and not _supported_term_already_salient_early(
-        original_text,
-        supported_terms,
-    ):
+    if not supported_terms:
         return normalized
 
-    if _supported_term_already_salient_early(original_text, supported_terms):
+    # Permanent rule:
+    # only downgrade to keep-visible when the supported terms are already surfaced EARLY.
+    if _all_supported_terms_already_salient_early(original_text, supported_terms):
         normalized["diagnosis_action"] = "keep"
         normalized["diagnosis_reason_type"] = "keep_existing_anchor"
         normalized["claim_safety"] = "keep_visible"
@@ -2086,27 +2080,7 @@ def _normalize_direct_overlap_rewrite_diagnosis(
         normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
         return normalized
 
-    if _supported_term_already_explicit_anywhere(original_text, supported_terms):
-        normalized["diagnosis_action"] = "keep"
-        normalized["diagnosis_reason_type"] = "keep_existing_anchor"
-        normalized["claim_safety"] = "keep_visible"
-        normalized["recommended_rewrite"] = ""
-        normalized["why"] = (
-            str(normalized.get("why", "") or "").strip()
-            or "This bullet already states the supported JD signal explicitly, and no stronger deterministic patch survived validation, so keep it as the visible anchor."
-        )
-        normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
-        return normalized
-
-    normalized["diagnosis_action"] = "keep"
-    normalized["diagnosis_reason_type"] = "keep_existing_anchor"
-    normalized["claim_safety"] = "keep_visible"
-    normalized["recommended_rewrite"] = ""
-    normalized["why"] = (
-        str(normalized.get("why", "") or "").strip()
-        or "This bullet already appears to be the strongest safe wording for the supported JD signal, so keep it visible instead of forcing a rewrite."
-    )
-    normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
+    # Otherwise, keep it in rewrite lane even if the signal is already explicit somewhere later.
     return normalized
 
 def _replacement_candidate_confidence(diagnosis: Dict[str, Any]) -> str:
@@ -2246,6 +2220,14 @@ def _diagnosis_to_replacement_candidate(
                 str(directional_only_reason or "").strip()
                 or str(deterministic_directional_reason or "").strip()
             )
+
+            # Only fall back to the pathological-instruction label AFTER
+            # deterministic patch generation has failed.
+            if (
+                not directional_only_reason
+                and _rewrite_instruction_is_pathological(diagnosis)
+            ):
+                directional_only_reason = "rewrite_instruction_pathological"
 
     return {
         "candidate_id": candidate_id,
@@ -3778,6 +3760,57 @@ def _deterministic_clause_extract_patch(
 
     return patch_text
 
+def _deterministic_fronted_using_phrase_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    supported_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+
+    if not original_text or not supported_terms:
+        return None
+
+    if len(supported_terms) > 3:
+        return None
+
+    match = _using_phrase_match_for_supported_term(original_text, supported_terms)
+    if not match:
+        return None
+
+    surface_segments = _supported_using_phrase_segments(match, supported_terms)
+    phrase = _natural_join_surface_segments(surface_segments)
+    if not phrase:
+        return None
+
+    before = re.sub(r"\s+", " ", original_text[: match.start()].strip(" ,"))
+    if not before:
+        return None
+
+    after_raw = original_text[match.end() :]
+    after_has_leading_comma = bool(re.match(r"^\s*,", str(after_raw or "")))
+    after = re.sub(r"^\s*,\s*", "", str(after_raw or "").strip())
+    after = re.sub(r"\s+", " ", after).strip()
+
+    patch_text = f"Using {phrase}, {_lowercase_first_character(before)}".strip()
+
+    if after:
+        patch_text = f"{patch_text}, {after}" if after_has_leading_comma else f"{patch_text} {after}"
+
+    patch_text = re.sub(r"\s+", " ", patch_text)
+    patch_text = re.sub(r"\s+,", ",", patch_text)
+    patch_text = patch_text.rstrip(" .")
+
+    if original_text.endswith("."):
+        patch_text += "."
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    return patch_text
+
 def _deterministic_family_alias_expansion_patch(
     diagnosis: Dict[str, Any],
 ) -> Optional[str]:
@@ -3949,19 +3982,26 @@ def _should_reroute_rewrite_to_directional_only(
         for item in (diagnosis.get("jd_signal_terms", []) or [])
         if str(item).strip()
     ]
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
 
     if _supported_terms_too_generic_to_front(diagnosis):
         return True, "supported_terms_too_generic_to_front"
 
-    if len(supported_terms) >= 2 and _all_supported_terms_already_explicit(diagnosis):
+    if len(supported_terms) >= 2 and _all_supported_terms_already_salient_early(
+        original_text,
+        supported_terms,
+    ):
         return True, "multi_signal_already_explicit_reorder_preferred"
 
-    if len(supported_terms) == 1 and _single_supported_term_already_explicit(diagnosis):
+    if len(supported_terms) == 1 and _supported_term_already_salient_early(
+        original_text,
+        supported_terms,
+    ):
         return True, "single_signal_already_explicit_reorder_preferred"
 
-    if _rewrite_instruction_is_pathological(diagnosis):
-        return True, "rewrite_instruction_pathological"
-
+    # IMPORTANT:
+    # Do NOT reroute just because the operator-facing rewrite instruction is ugly.
+    # Let deterministic patch generation try first.
     return False, ""
 
 def _supported_signal_surface_pairs(
@@ -4884,6 +4924,10 @@ def _deterministic_patch_text_from_diagnosis(
         front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
         if front_supported_phrase_patch:
             return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase", ""
+        
+        fronted_using_phrase_patch = _deterministic_fronted_using_phrase_patch(diagnosis)
+        if fronted_using_phrase_patch:
+            return "patch_ready", fronted_using_phrase_patch, "deterministic_fronted_using_phrase", ""
 
         compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
         if compression_patch:
@@ -4894,7 +4938,7 @@ def _deterministic_patch_text_from_diagnosis(
             _, patch_text = parent_signal_patch
             return "patch_ready", patch_text, "deterministic_parent_signal_label", ""
         
-        if _single_supported_term_already_explicit(diagnosis):
+        if _supported_term_already_salient_early(original_text, supported_terms):
             return "direction_only", "", "", "single_signal_already_explicit_reorder_preferred"
 
     # The current using-phrase operator is intentionally quarantined from exportable
@@ -4939,6 +4983,7 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
         "deterministic_family_alias_expansion",
         "deterministic_supported_alias_expansion",
         "deterministic_clarity_preserving_compression",
+        "deterministic_fronted_using_phrase",
     }
 
     return patch_generation_method_base in signal_fronting_methods
@@ -4966,6 +5011,7 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
         "deterministic_family_alias_expansion",
         "deterministic_supported_alias_expansion",
         "deterministic_clarity_preserving_compression",
+        "deterministic_fronted_using_phrase",
     }
 
 def _materiality_validate_rewrite_candidate(
@@ -5044,6 +5090,7 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_lead_preserving_using_phrase",
         "deterministic_front_supported_phrase",
         "deterministic_family_alias_expansion",
+        "deterministic_fronted_using_phrase"
     }
 
     if overall_delta == 0.0 and not evidence_changed:

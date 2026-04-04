@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 from typing import List, Optional, Set, Tuple
+from types import SimpleNamespace
 
 from src.config.consts import (
     TITLE_CANONICAL,
@@ -83,6 +84,35 @@ def _normalized_skill_list(values: List[str]) -> List[str]:
         [_normalize_text(value) for value in values if _normalize_text(value)]
     )
 
+def _packet_summary_job_view(job_evidence, selected_job_record: dict):
+    required_skills = _normalized_skill_list(
+        selected_job_record.get("required_skills", []) or []
+    )
+    preferred_skills = [
+        skill
+        for skill in _normalized_skill_list(
+            selected_job_record.get("preferred_skills", []) or []
+        )
+        if skill not in required_skills
+    ]
+    all_skills = _unique_preserve_order(
+        required_skills
+        + preferred_skills
+        + [
+            skill
+            for skill in _normalized_skill_list(
+                selected_job_record.get("all_skills", []) or []
+            )
+            if skill not in required_skills and skill not in preferred_skills
+        ]
+    )
+
+    return SimpleNamespace(
+        title=job_evidence.title,
+        required_skills=required_skills,
+        preferred_skills=preferred_skills,
+        all_skills=all_skills,
+    )
 
 def _contains_signal(text: str, signal: str) -> bool:
     text_norm = _normalize_match_text(text)
@@ -681,7 +711,6 @@ def _build_job_facet_targets(job) -> dict:
         list(job.required_skills or [])
         + list(job.preferred_skills or [])
         + list(job.all_skills or [])
-        + [job.title]
     )
 
     facet_targets = {}
@@ -1427,6 +1456,8 @@ def _payload_for_json(
     missing_required: List[str],
     matched_preferred: List[str],
     missing_preferred: List[str],
+    summary_term_support: dict,
+    summary_facet_support: List[dict],
     top_bullets: List[dict],
     top_evidence_units: List[dict],
 ) -> dict:
@@ -1464,8 +1495,8 @@ def _payload_for_json(
             "missing_preferred": missing_preferred,
             "matched_terms": list(selected_result.prefilter.matched_terms),
             "top_dimensions": _dimension_snapshot(selected_result),
-            "term_support": _build_term_support_summary(selected_resume, job_evidence),
-            "facet_support": _build_resume_facet_support(selected_resume, job_evidence),
+            "term_support": summary_term_support,
+            "facet_support": summary_facet_support,
         },
         "top_dimension_deltas_vs_backup": (
             _top_dimension_deltas(selected_result, runner_up_result)
@@ -1551,6 +1582,7 @@ def main() -> None:
         title_contains=args.title_contains,
     )
     job_evidence = build_job_evidence(selected_job_record)
+    summary_job = _packet_summary_job_view(job_evidence, selected_job_record)
 
     resume_docs = _load_candidate_resume_documents(args.resume_name_contains)
 
@@ -1577,8 +1609,10 @@ def main() -> None:
 
     matched_required, missing_required, matched_preferred, missing_preferred = _split_job_skill_gaps(
         selected_resume,
-        job_evidence,
+        summary_job,
     )
+    summary_term_support = _build_term_support_summary(selected_resume, summary_job)
+    summary_facet_support = _build_resume_facet_support(selected_resume, summary_job)
     top_bullets = _collect_top_relevant_bullets(
         selected_resume,
         job_evidence,
@@ -1683,6 +1717,8 @@ def main() -> None:
             missing_required=missing_required,
             matched_preferred=matched_preferred,
             missing_preferred=missing_preferred,
+            summary_term_support=summary_term_support,
+            summary_facet_support=summary_facet_support,
             top_bullets=top_bullets,
             top_evidence_units=top_evidence_units,
         )

@@ -1120,6 +1120,161 @@ def _suppress_llm_adjudication_result(
     suppressed["differs_from_deterministic"] = "False"
     return suppressed
 
+def _result_by_resume_name(results: List[object]) -> Dict[str, object]:
+    return {
+        str(result.pair.resume_name).strip(): result
+        for result in results
+        if str(result.pair.resume_name).strip()
+    }
+
+
+def _blank_resolved_selection(
+    *,
+    source: str,
+    status: str,
+    variant_review_required: bool,
+    best_available_imperfect_match: bool,
+) -> Dict[str, str]:
+    return {
+        "resolved_resume": "",
+        "resolved_score": "",
+        "resolved_bucket": "",
+        "resolved_top_dims": "",
+        "resolved_missing_requirements": "",
+        "resolved_matched_terms": "",
+        "resolved_prefilter_passed": "",
+        "resolved_resume_source": source,
+        "resolved_selection_status": status,
+        "variant_review_required": str(variant_review_required),
+        "resolved_best_available_imperfect_match": str(best_available_imperfect_match),
+    }
+
+
+def _project_resolved_result(
+    *,
+    result_by_resume_name: Dict[str, object],
+    resume_name: str,
+    source: str,
+    status: str,
+    variant_review_required: bool,
+    best_available_imperfect_match: bool,
+) -> Dict[str, str]:
+    resolved_resume = str(resume_name or "").strip()
+    result = result_by_resume_name.get(resolved_resume)
+
+    if not resolved_resume or result is None:
+        return _blank_resolved_selection(
+            source=source,
+            status=status,
+            variant_review_required=variant_review_required,
+            best_available_imperfect_match=best_available_imperfect_match,
+        )
+
+    return {
+        "resolved_resume": resolved_resume,
+        "resolved_score": f"{result.final_score:.6f}",
+        "resolved_bucket": result.match_bucket,
+        "resolved_top_dims": _dimension_snapshot(result),
+        "resolved_missing_requirements": " | ".join(result.prefilter.missing_requirements),
+        "resolved_matched_terms": " | ".join(result.prefilter.matched_terms),
+        "resolved_prefilter_passed": str(result.prefilter.passed),
+        "resolved_resume_source": source,
+        "resolved_selection_status": status,
+        "variant_review_required": str(variant_review_required),
+        "resolved_best_available_imperfect_match": str(best_available_imperfect_match),
+    }
+
+
+def _resolved_selection_projection(
+    *,
+    results: List[object],
+    selection_signal: str,
+    winner,
+    runner_up,
+    llm_fallback: Dict[str, Any],
+    llm_adjudication: Dict[str, Any],
+) -> Dict[str, str]:
+    result_by_resume_name = _result_by_resume_name(results)
+
+    winner_resume = winner.pair.resume_name if winner is not None else ""
+    llm_fallback_best_resume = str(llm_fallback.get("best_resume", "") or "").strip()
+    llm_fallback_status = str(llm_fallback.get("status", "") or "").strip()
+    llm_adjudication_resume = str(llm_adjudication.get("adjudicated_resume", "") or "").strip()
+    llm_adjudication_status = str(llm_adjudication.get("status", "") or "").strip()
+
+    if selection_signal == "no_credible_match":
+        if llm_fallback_status in {"generated", "cached"} and llm_fallback_best_resume:
+            return _project_resolved_result(
+                result_by_resume_name=result_by_resume_name,
+                resume_name=llm_fallback_best_resume,
+                source=f"llm_fallback_{llm_fallback_status}",
+                status="resolved",
+                variant_review_required=False,
+                best_available_imperfect_match=True,
+            )
+
+        return _blank_resolved_selection(
+            source=llm_fallback_status or "no_credible_match",
+            status="unresolved",
+            variant_review_required=False,
+            best_available_imperfect_match=False,
+        )
+
+    if selection_signal in {"effective_tie", "manual_review_close_call"}:
+        if llm_adjudication_resume:
+            return _project_resolved_result(
+                result_by_resume_name=result_by_resume_name,
+                resume_name=llm_adjudication_resume,
+                source=f"llm_adjudication_{llm_adjudication_status or 'generated'}",
+                status="resolved",
+                variant_review_required=False,
+                best_available_imperfect_match=False,
+            )
+
+        if llm_adjudication_status == "skipped_equivalent_variants" and winner_resume:
+            return _project_resolved_result(
+                result_by_resume_name=result_by_resume_name,
+                resume_name=winner_resume,
+                source="deterministic_equivalent_variants",
+                status="resolved",
+                variant_review_required=False,
+                best_available_imperfect_match=False,
+            )
+
+        if winner_resume:
+            return _project_resolved_result(
+                result_by_resume_name=result_by_resume_name,
+                resume_name=winner_resume,
+                source=llm_adjudication_status or selection_signal or "ambiguous_selector_result",
+                status="unresolved",
+                variant_review_required=True,
+                best_available_imperfect_match=False,
+            )
+
+        return _blank_resolved_selection(
+            source=llm_adjudication_status or selection_signal or "ambiguous_selector_result",
+            status="unresolved",
+            variant_review_required=True,
+            best_available_imperfect_match=False,
+        )
+
+    if winner_resume:
+        return _project_resolved_result(
+            result_by_resume_name=result_by_resume_name,
+            resume_name=winner_resume,
+            source="deterministic_winner",
+            status="resolved",
+            variant_review_required=False,
+            best_available_imperfect_match=False,
+        )
+
+    return _blank_resolved_selection(
+        source="missing_winner_resume",
+        status="unresolved",
+        variant_review_required=False,
+        best_available_imperfect_match=False,
+    )
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Batch-select the best resume variant for multiple jobs."
@@ -1296,6 +1451,7 @@ def main() -> None:
                 manual_review_gap_epsilon=args.manual_review_gap_epsilon,
             )
         ):
+
             if _should_skip_llm_adjudication_for_equivalent_variants(
                 winner=winner,
                 runner_up=runner_up,
@@ -1328,6 +1484,15 @@ def main() -> None:
                 if _should_suppress_low_value_llm_adjudication(llm_adjudication):
                     llm_adjudication = _suppress_llm_adjudication_result(llm_adjudication)
         
+        resolved_selection = _resolved_selection_projection(
+            results=results,
+            selection_signal=selection_signal,
+            winner=winner,
+            runner_up=runner_up,
+            llm_fallback=llm_fallback,
+            llm_adjudication=llm_adjudication,
+        )
+                
         output_rows.append(
             {
                 "job_doc_id": winner.pair.job_doc_id,
@@ -1440,6 +1605,17 @@ def main() -> None:
                     if has_credible_match
                     else " ".join(_no_credible_match_lines(winner))
                 ),
+                "resolved_resume": resolved_selection["resolved_resume"],
+                "resolved_score": resolved_selection["resolved_score"],
+                "resolved_bucket": resolved_selection["resolved_bucket"],
+                "resolved_top_dims": resolved_selection["resolved_top_dims"],
+                "resolved_missing_requirements": resolved_selection["resolved_missing_requirements"],
+                "resolved_matched_terms": resolved_selection["resolved_matched_terms"],
+                "resolved_prefilter_passed": resolved_selection["resolved_prefilter_passed"],
+                "resolved_resume_source": resolved_selection["resolved_resume_source"],
+                "resolved_selection_status": resolved_selection["resolved_selection_status"],
+                "variant_review_required": resolved_selection["variant_review_required"],
+                "resolved_best_available_imperfect_match": resolved_selection["resolved_best_available_imperfect_match"],
                 "llm_fallback_best_resume": llm_fallback["best_resume"],
                 "llm_fallback_best_score": llm_fallback["best_score"],
                 "llm_fallback_backup_resume": llm_fallback["backup_resume"],
@@ -1520,6 +1696,17 @@ def main() -> None:
         "manual_review_gap_epsilon",
         "tie_epsilon",
         "recommendation_summary",
+        "resolved_resume",
+        "resolved_score",
+        "resolved_bucket",
+        "resolved_top_dims",
+        "resolved_missing_requirements",
+        "resolved_matched_terms",
+        "resolved_prefilter_passed",
+        "resolved_resume_source",
+        "resolved_selection_status",
+        "variant_review_required",
+        "resolved_best_available_imperfect_match",
         "llm_fallback_best_resume",
         "llm_fallback_best_score",
         "llm_fallback_backup_resume",
@@ -1545,6 +1732,8 @@ def main() -> None:
     ]
 
     output_csv_path = Path(args.output_csv)
+    output_csv_path.parent.mkdir(parents=True, exist_ok=True)
+
     with output_csv_path.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

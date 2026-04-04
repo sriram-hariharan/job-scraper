@@ -5,6 +5,7 @@ import os
 import hashlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from difflib import SequenceMatcher
 
 from src.ai.llm_client import run_chat_completion
 from src.matching.job_adapter import build_job_evidence
@@ -364,6 +365,119 @@ def _resume_bullet_preview(resume_evidence, limit: int = 4) -> List[str]:
                 return bullets
     return bullets
 
+def _normalized_signature_list(values: List[str]) -> List[str]:
+    normalized: List[str] = []
+    for value in values:
+        cleaned = " ".join(str(value or "").split()).strip().lower()
+        if cleaned:
+            normalized.append(cleaned)
+    return sorted(normalized)
+
+
+def _adjudication_evidence_signature(result, resume_evidence) -> Dict[str, Any]:
+    return {
+        "bullet_preview": _normalized_signature_list(
+            _resume_bullet_preview(resume_evidence, limit=4)
+        ),
+        "matched_terms": _normalized_signature_list(
+            list(result.prefilter.matched_terms)
+        ),
+        "missing_requirements": _normalized_signature_list(
+            list(result.prefilter.missing_requirements)
+        ),
+    }
+
+
+def _text_similarity_ratio(left: str, right: str) -> float:
+    left_text = " ".join(str(left or "").split()).strip().lower()
+    right_text = " ".join(str(right or "").split()).strip().lower()
+
+    if not left_text and not right_text:
+        return 1.0
+    if not left_text or not right_text:
+        return 0.0
+
+    return SequenceMatcher(None, left_text, right_text).ratio()
+
+
+def _preview_lists_equivalent(
+    left: List[str],
+    right: List[str],
+    min_ratio: float = 0.84,
+) -> bool:
+    left_items = [
+        " ".join(str(value or "").split()).strip()
+        for value in left
+        if " ".join(str(value or "").split()).strip()
+    ]
+    right_remaining = [
+        " ".join(str(value or "").split()).strip()
+        for value in right
+        if " ".join(str(value or "").split()).strip()
+    ]
+
+    if len(left_items) != len(right_remaining):
+        return False
+
+    for left_item in left_items:
+        if not right_remaining:
+            return False
+
+        best_idx = -1
+        best_ratio = -1.0
+        for idx, right_item in enumerate(right_remaining):
+            ratio = _text_similarity_ratio(left_item, right_item)
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_idx = idx
+
+        if best_ratio < min_ratio:
+            return False
+
+        right_remaining.pop(best_idx)
+
+    return True
+
+
+def _should_skip_llm_adjudication_for_equivalent_variants(
+    winner,
+    runner_up,
+    resume_evidence_list: List[object],
+) -> bool:
+    if runner_up is None:
+        return False
+
+    evidence_by_resume_id = {
+        str(evidence.document.resume_id): evidence
+        for evidence in resume_evidence_list
+    }
+
+    winner_evidence = evidence_by_resume_id.get(str(winner.pair.resume_id))
+    runner_up_evidence = evidence_by_resume_id.get(str(runner_up.pair.resume_id))
+
+    if winner_evidence is None or runner_up_evidence is None:
+        return False
+
+    winner_sig = _adjudication_evidence_signature(winner, winner_evidence)
+    runner_sig = _adjudication_evidence_signature(runner_up, runner_up_evidence)
+
+    if winner_sig == runner_sig:
+        return True
+
+    matched_terms_equal = winner_sig["matched_terms"] == runner_sig["matched_terms"]
+    missing_requirements_equal = (
+        winner_sig["missing_requirements"] == runner_sig["missing_requirements"]
+    )
+    preview_equivalent = _preview_lists_equivalent(
+        winner_sig["bullet_preview"],
+        runner_sig["bullet_preview"],
+    )
+
+    return (
+        matched_terms_equal
+        and missing_requirements_equal
+        and preview_equivalent
+    )
 
 def _build_llm_fallback_prompt(
     record: dict,
@@ -1061,16 +1175,34 @@ def main() -> None:
                 manual_review_gap_epsilon=args.manual_review_gap_epsilon,
             )
         ):
-            llm_adjudication = _run_llm_adjudication(
-                record=record,
+            if _should_skip_llm_adjudication_for_equivalent_variants(
                 winner=winner,
                 runner_up=runner_up,
                 resume_evidence_list=resume_evidence_list,
-            )
-            adjudicated_resume = str(llm_adjudication.get("adjudicated_resume", "")).strip()
-            llm_adjudication["differs_from_deterministic"] = str(
-                bool(adjudicated_resume and adjudicated_resume != winner.pair.resume_name)
-            )
+            ):
+                llm_adjudication = {
+                    "status": "skipped_equivalent_variants",
+                    "parse_ok": "",
+                    "provider": "",
+                    "model": "",
+                    "adjudicated_resume": "",
+                    "confidence": "",
+                    "reason": "",
+                    "error_type": "",
+                    "cache_hit": "",
+                    "differs_from_deterministic": "False",
+                }
+            else:
+                llm_adjudication = _run_llm_adjudication(
+                    record=record,
+                    winner=winner,
+                    runner_up=runner_up,
+                    resume_evidence_list=resume_evidence_list,
+                )
+                adjudicated_resume = str(llm_adjudication.get("adjudicated_resume", "")).strip()
+                llm_adjudication["differs_from_deterministic"] = str(
+                    bool(adjudicated_resume and adjudicated_resume != winner.pair.resume_name)
+                )
         
         output_rows.append(
             {

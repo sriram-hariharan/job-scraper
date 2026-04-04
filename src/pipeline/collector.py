@@ -3,6 +3,7 @@ from typing import Any, Dict, List
 import asyncio
 import time
 from uuid import uuid4
+from pathlib import Path
 
 from src.pipeline.runtime_status import complete_stage, start_stage
 from src.utils.log_sections import section
@@ -109,7 +110,12 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         check_ats_health,
         check_pipeline_regression,
     )
-    from src.utils.job_cache import filter_new_jobs, load_seen_job_ids, save_new_job_ids
+    from src.utils.job_cache import (
+        cache_keys_for_jobs,
+        filter_new_jobs,
+        load_seen_job_ids,
+        save_new_job_ids,
+    )
     from src.utils.pipeline_metrics import log_stage_metrics
 
     scrapers = [
@@ -331,18 +337,36 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
 
+    corpus_path = "data/rag/job_corpus.jsonl"
+    corpus_file = Path(corpus_path)
+
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 
-    rag_export_count = export_job_corpus(
-        scored_jobs,
-        "data/rag/job_corpus.jsonl",
-    )
-    logger.info(f"RAG corpus exported: {rag_export_count} documents")
+    if scored_jobs:
+        rag_export_count = export_job_corpus(
+            scored_jobs,
+            corpus_path,
+        )
+        logger.info(f"RAG corpus exported: {rag_export_count} documents")
+    else:
+        if corpus_file.exists() and corpus_file.stat().st_size > 0:
+            rag_export_count = 0
+            logger.info(
+                "RAG export skipped because scored_jobs is empty; preserving existing corpus at %s",
+                corpus_path,
+            )
+        else:
+            rag_export_count = export_job_corpus(
+                scored_jobs,
+                corpus_path,
+            )
+            logger.info(f"RAG corpus exported: {rag_export_count} documents")
+
     complete_stage("rag_export", counts={"rag_export_count": rag_export_count})
 
     log_market_insights(detailed_jobs)
 
-    save_new_job_ids(new_job_ids)
+    save_new_job_ids(cache_keys_for_jobs(scored_jobs))
     persist_discovered_companies()
 
     pipeline_runtime = round(time.time() - start_total, 2)

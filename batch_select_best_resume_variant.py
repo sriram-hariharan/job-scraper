@@ -7,7 +7,11 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 from difflib import SequenceMatcher
 
-from src.ai.llm_client import run_chat_completion
+from src.ai.llm_client import (
+    get_default_model,
+    get_default_provider,
+    run_chat_completion,
+)
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
@@ -492,9 +496,13 @@ def _build_llm_fallback_prompt(
     lines: List[str] = []
     lines.append("You are ranking resume variants for a single job.")
     lines.append("This is a fallback ranking task because strict deterministic matching found no credible winner.")
+    lines.append("This is a best-available imperfect-match decision, not a true match selection.")
     lines.append("You must stay grounded only in the evidence provided.")
     lines.append("Do not invent tools, skills, domains, projects, outcomes, or responsibilities.")
     lines.append("Choose the best available resume and one backup even if all options are imperfect.")
+    lines.append("Do not describe any option as a strong fit, strong alignment, or ideal fit.")
+    lines.append("Explicitly acknowledge major missing requirements when they exist.")
+    lines.append("Confidence must be low because all variants failed deterministic prefilter.")
     lines.append("Use only the provided resume names. Return compact JSON only.")
     lines.append("")
     lines.append(f"Job company: {record.get('company', '')}")
@@ -522,8 +530,8 @@ def _build_llm_fallback_prompt(
     lines.append("2. best_score: number from 0.0 to 1.0")
     lines.append("3. backup_resume: exact resume filename from the provided list")
     lines.append("4. backup_score: number from 0.0 to 1.0")
-    lines.append("5. confidence: one of low, medium, high")
-    lines.append("6. reason: short grounded explanation")
+    lines.append("5. confidence: always low")
+    lines.append("6. reason: short grounded explanation that explicitly frames the choice as best available but imperfect")
     return "\n".join(lines)
 
 def _llm_fallback_cache_key(
@@ -594,9 +602,7 @@ def _normalize_llm_fallback_parsed(
     best_score = max(0.0, min(1.0, float(parsed.get("best_score", 0.0))))
     backup_score = max(0.0, min(1.0, float(parsed.get("backup_score", 0.0))))
 
-    confidence = str(parsed.get("confidence", "")).strip().lower()
-    if confidence not in {"low", "medium", "high"}:
-        confidence = "low"
+    confidence = "low"
 
     reason = str(parsed.get("reason", "")).strip()
 
@@ -608,6 +614,34 @@ def _normalize_llm_fallback_parsed(
         "confidence": confidence,
         "reason": reason,
     }
+
+def _enforce_fallback_honesty(
+    normalized: Dict[str, Any],
+    strict_results: List[object],
+) -> Dict[str, Any]:
+    best_resume = str(normalized.get("best_resume", "")).strip()
+    reason = str(normalized.get("reason", "")).strip()
+
+    if not reason:
+        reason = "Best available imperfect match; all resume variants failed deterministic prefilter."
+
+    best_result = next(
+        (result for result in strict_results if result.pair.resume_name == best_resume),
+        None,
+    )
+
+    if best_result is not None:
+        missing_requirements = list(best_result.prefilter.missing_requirements)
+        if missing_requirements and "major remaining gaps:" not in _normalize_text(reason):
+            reason = (
+                f"{reason} Major remaining gaps: "
+                f"{', '.join(missing_requirements[:6])}."
+            )
+
+    normalized_copy = dict(normalized)
+    normalized_copy["confidence"] = "low"
+    normalized_copy["reason"] = reason
+    return normalized_copy
 
 def _parse_llm_fallback_response(response: Any) -> Dict[str, Any]:
     if isinstance(response, dict):
@@ -633,6 +667,20 @@ def _parse_llm_fallback_response(response: Any) -> Dict[str, Any]:
 
     return json.loads(text)
 
+def _selector_provider_failover_kwargs(primary_provider: str) -> Dict[str, Any]:
+    primary = str(primary_provider or "").strip().lower()
+    default_provider = str(get_default_provider() or "").strip().lower()
+    default_model = str(get_default_model() or "").strip()
+
+    if default_provider and primary and primary != default_provider:
+        return {
+            "fallback_enabled": True,
+            "fallback_provider": default_provider,
+            "fallback_model": default_model,
+        }
+
+    return {}
+
 def _run_llm_fallback_ranking(
     record: dict,
     strict_results: List[object],
@@ -647,6 +695,7 @@ def _run_llm_fallback_ranking(
     allowed_resume_names = [result.pair.resume_name for result in strict_results]
     provider = str(LLM_FALLBACK_PROVIDER or "").strip().lower()
     model = str(LLM_FALLBACK_MODEL or "").strip()
+    failover_kwargs = _selector_provider_failover_kwargs(provider)
 
     system_prompt = """
 You rank resume variants for fallback use when strict deterministic matching found no credible winner.
@@ -654,9 +703,12 @@ You rank resume variants for fallback use when strict deterministic matching fou
 Rules:
 1. Use ONLY the evidence provided.
 2. Do NOT invent skills, tools, experience, metrics, or domain exposure.
-3. Pick the best available resume and one backup even if fit is weak.
-4. Use exact resume filenames from the provided list.
-5. Return ONLY valid JSON.
+3. This is a best-available imperfect-match fallback, not a true fit decision.
+4. Confidence must always be low.
+5. Explicitly acknowledge major missing requirements when they exist.
+6. Do NOT describe any option as a strong fit, strong alignment, or ideal fit.
+7. Use exact resume filenames from the provided list.
+8. Return ONLY valid JSON.
 """.strip()
 
     cache_key = _llm_fallback_cache_key(
@@ -681,6 +733,7 @@ Rules:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
+                **failover_kwargs,
             )
             parsed = _parse_llm_fallback_response(response)
         else:
@@ -697,10 +750,12 @@ Rules:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
+                **failover_kwargs,
             )
             parsed = _parse_llm_fallback_response(response)
 
         normalized = _normalize_llm_fallback_parsed(parsed, allowed_resume_names)
+        normalized = _enforce_fallback_honesty(normalized, strict_results)
 
         result = {
             "status": "generated",
@@ -908,6 +963,7 @@ def _run_llm_adjudication(
     ]
     provider = str(LLM_ADJUDICATION_PROVIDER or "").strip().lower()
     model = str(LLM_ADJUDICATION_MODEL or "").strip()
+    failover_kwargs = _selector_provider_failover_kwargs(provider)
 
     system_prompt = """
 You adjudicate between two finalist resume variants after deterministic scoring found an ambiguous result.
@@ -941,6 +997,7 @@ Rules:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
+                **failover_kwargs,
             )
             parsed = _parse_llm_fallback_response(response)
         else:
@@ -957,6 +1014,7 @@ Rules:
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": prompt},
                 ],
+                **failover_kwargs,
             )
             parsed = _parse_llm_fallback_response(response)
 

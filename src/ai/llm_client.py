@@ -2,6 +2,7 @@ import os
 import json
 from dotenv import load_dotenv
 from groq import Groq
+from openai import OpenAI
 from google import genai
 from google.genai import types
 from threading import Lock
@@ -21,6 +22,7 @@ _GROQ_MODELS_WITHOUT_JSON_SCHEMA = {
 }
 
 _groq_client = None
+_openai_client = None
 _gemini_client = None
 
 _provider_metrics_lock = Lock()
@@ -29,6 +31,7 @@ _provider_metrics = {
     "primary_attempts": 0,
     "fallback_attempts": 0,
     "groq_calls": 0,
+    "openai_calls": 0,
     "gemini_calls": 0,
     "fallback_successes": 0,
     "provider_failures": 0,
@@ -69,6 +72,16 @@ def get_groq_client():
 
     return _groq_client
 
+def get_openai_client():
+    global _openai_client
+
+    if _openai_client is None:
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+        if not openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY not found in environment")
+        _openai_client = OpenAI(api_key=openai_api_key)
+
+    return _openai_client
 
 def get_gemini_client():
     global _gemini_client
@@ -209,6 +222,68 @@ def _run_groq_chat_completion(
 
     return text
 
+def _run_openai_chat_completion(
+    messages,
+    model,
+    temperature,
+    max_tokens,
+    response_mime_type=None,
+    response_schema=None,
+    return_parsed=False,
+    thinking_budget=None,
+):
+    increment_provider_metric("openai_calls")
+    client = get_openai_client()
+
+    request_kwargs = {
+        "model": model,
+        "temperature": temperature,
+        "max_completion_tokens": max_tokens,
+        "messages": messages,
+    }
+
+    if response_mime_type == "application/json":
+        if response_schema is not None:
+            request_kwargs["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "structured_output",
+                    "strict": True,
+                    "schema": response_schema,
+                },
+            }
+        else:
+            request_kwargs["response_format"] = {"type": "json_object"}
+
+    completion = client.chat.completions.create(**request_kwargs)
+
+    message = completion.choices[0].message
+    content = getattr(message, "content", None)
+    text = _coerce_groq_message_content(content)
+
+    if not text:
+        refusal = getattr(message, "refusal", None)
+        detail = f"refusal={refusal}" if refusal else "no_content_returned"
+
+        try:
+            raw_dump = message.model_dump()
+        except Exception:
+            raw_dump = str(message)
+
+        print("\n[OPENAI DEBUG] model =", model)
+        print("[OPENAI DEBUG] response_mime_type =", response_mime_type)
+        print("[OPENAI DEBUG] response_schema_present =", response_schema is not None)
+        print("[OPENAI DEBUG] raw message dump =", json.dumps(raw_dump, indent=2, default=str))
+
+        raise RuntimeError(f"OpenAI returned no usable content ({detail})")
+
+    if return_parsed and response_mime_type == "application/json":
+        try:
+            return json.loads(text)
+        except Exception:
+            return text
+
+    return text
 
 def _run_gemini_chat_completion(
     messages,
@@ -273,6 +348,18 @@ def _run_single_provider(
 
     if provider_name == "groq":
         return _run_groq_chat_completion(
+            messages=messages,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            response_mime_type=response_mime_type,
+            response_schema=response_schema,
+            return_parsed=return_parsed,
+            thinking_budget=thinking_budget,
+        )
+
+    if provider_name == "openai":
+        return _run_openai_chat_completion(
             messages=messages,
             model=model,
             temperature=temperature,

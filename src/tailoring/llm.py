@@ -6,6 +6,7 @@ import json
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+from collections import Counter
 
 from src.tailoring.replacement_selector import build_final_replacement_plan
 
@@ -54,7 +55,7 @@ LLM_TAILOR_PROVIDER = os.getenv("LLM_TAILOR_PROVIDER", "groq").strip().lower()
 LLM_TAILOR_MODEL = os.getenv("LLM_TAILOR_MODEL", "llama-3.3-70b-versatile").strip()
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
-LLM_TAILOR_PROMPT_VERSION = "v4"
+LLM_TAILOR_PROMPT_VERSION = "v6"
 
 TAILOR_LLM_FALLBACK_ENABLED = (
     os.getenv(
@@ -95,7 +96,7 @@ LIVE_REWRITE_RESPONSE_SCHEMA = {
                     "source": {"type": "string"},
                     "direction": {"type": "string"},
                 },
-                "required": ["prefix", "direction"],
+                "required": ["prefix", "source", "direction"],
             },
         }
     },
@@ -560,6 +561,14 @@ def _build_live_rewrite_prompt(packet: Dict[str, Any], payload: Dict[str, Any]) 
     lines.append('- Do NOT paste or closely paraphrase the evidence bullet text into direction.')
     lines.append('- Good direction example: "sql and python in opening clause; preserve risk-reduction outcome"')
     lines.append('- Bad direction example: "Drove lapse and retention risk assessments using Python and customer segmentation with SQL..."')
+    lines.append('- Use at most 1 combined gap-style item across "Keep gap explicit" and "Do not add" when anchor evidence exists.')
+    lines.append('- When 2 or more anchor sources exist, include at least 2 source-tied Lead/Support items before any gap-style item.')
+    lines.append('- Prefer distinct source labels across Lead/Support items.')
+    lines.append('- Reuse the same source label at most once, and only when the second direction is materially different.')
+    lines.append('- Do not concentrate 3 or more Lead/Support items on the same source label when multiple valid sources exist.')
+    lines.append('- For "Lead with" and "Support with", direction must be at least 5 words and materially specific.')
+    lines.append('- Bad direction example: "excel reporting"')
+    lines.append('- Good direction example: "excel reporting consistency in support clause; preserve recurring error-reduction context"')
 
     return "\n".join(lines)
 
@@ -957,6 +966,20 @@ def _live_rewrite_source_texts_for_label(
 
     return _unique_preserve_order(texts)
 
+
+def _live_available_source_labels(payload: Dict[str, Any]) -> List[str]:
+    evidence_layers = payload.get("evidence_layers", {}) or {}
+    labels: List[str] = []
+
+    for bucket in ("anchors", "supports", "context"):
+        for row in list(evidence_layers.get(bucket, []) or [])[:4]:
+            label = _display_row_source(row)
+            if label:
+                labels.append(label)
+
+    return _unique_preserve_order(labels)
+
+
 def _canonicalize_live_direction_sources(
     directions: List[str],
     payload: Dict[str, Any],
@@ -1236,9 +1259,13 @@ def _validate_live_llm_parsed_contract(
         raise ValueError("live_llm_contract_empty_rewrite_directions")
 
     anchors = list(((payload.get("evidence_layers", {}) or {}).get("anchors", []) or []))[:4]
+    available_source_labels = _live_available_source_labels(payload)
     alias_map = _build_live_source_alias_map(payload)
 
     validated: List[Dict[str, str]] = []
+    lead_support_count = 0
+    gap_direction_count = 0
+    lead_support_sources: List[str] = []
 
     for idx, item in enumerate(directions, start=1):
         if not isinstance(item, dict):
@@ -1259,15 +1286,22 @@ def _validate_live_llm_parsed_contract(
                 raise ValueError(f"live_llm_contract_direction_{idx}_missing_source")
 
             source_key = source.rstrip(".").strip()
-            if (
-                source_key not in alias_map
-                and _cleanup_live_source_label(source_key) not in alias_map
-            ):
+            canonical_source = (
+                alias_map.get(source_key)
+                or alias_map.get(_cleanup_live_source_label(source_key))
+                or _cleanup_live_source_label(source_key)
+            )
+
+            if canonical_source not in alias_map.values() and canonical_source not in available_source_labels:
                 raise ValueError(
                     f"live_llm_contract_direction_{idx}_unknown_source:{source_key}"
                 )
-            
+
             direction_word_count = len(re.findall(r"\b[\w.+/\-]+\b", direction))
+            if direction_word_count < 5:
+                raise ValueError(
+                    f"live_llm_contract_direction_{idx}_too_short:{direction_word_count}"
+                )
             if direction_word_count > 20:
                 raise ValueError(
                     f"live_llm_contract_direction_{idx}_too_long:{direction_word_count}"
@@ -1282,6 +1316,11 @@ def _validate_live_llm_parsed_contract(
                     f"live_llm_contract_direction_{idx}_copies_source_text"
                 )
 
+            lead_support_count += 1
+            lead_support_sources.append(canonical_source)
+        else:
+            gap_direction_count += 1
+
         validated.append(
             {
                 "prefix": prefix,
@@ -1294,11 +1333,28 @@ def _validate_live_llm_parsed_contract(
         if len(validated) < 3:
             raise ValueError("live_llm_contract_anchor_case_requires_3_directions")
 
-        if not any(item["prefix"] in {"Lead with", "Support with"} for item in validated):
+        if lead_support_count < 1:
             raise ValueError("live_llm_contract_anchor_case_requires_anchor_direction")
 
-        if all(item["prefix"] == "Keep gap explicit" for item in validated):
-            raise ValueError("live_llm_contract_anchor_case_gap_only")
+        if len(anchors) >= 2 and lead_support_count < 2:
+            raise ValueError("live_llm_contract_anchor_case_requires_2_source_tied_directions")
+
+        if gap_direction_count > 1:
+            raise ValueError("live_llm_contract_anchor_case_allows_max_1_gap_direction")
+
+        if len(available_source_labels) >= 3 and lead_support_sources:
+            source_counts = Counter(lead_support_sources)
+            max_source_reuse = max(source_counts.values())
+
+            if lead_support_count >= 3 and max_source_reuse >= 3:
+                dominant_sources = [
+                    source for source, count in source_counts.items()
+                    if count == max_source_reuse
+                ]
+                raise ValueError(
+                    "live_llm_contract_anchor_case_excessive_single_source_reuse:"
+                    + ",".join(sorted(dominant_sources))
+                )
 
     return {
         "rewrite_directions": validated,
@@ -2288,6 +2344,46 @@ def _patch_refinement_similarity_ratio(a: str, b: str) -> float:
         return 1.0
     return SequenceMatcher(None, a_norm, b_norm).ratio()
 
+def _substantive_multisignal_option_introduces_unbacked_terms(
+    candidate: Dict[str, Any],
+    patch_text: str,
+) -> Tuple[bool, List[str]]:
+    original_text = str(candidate.get("original_text", "") or "").strip().lower()
+    candidate_text = str(patch_text or "").strip().lower()
+
+    if not original_text or not candidate_text:
+        return False, []
+
+    def _tokens(text: str) -> List[str]:
+        return re.findall(r"[A-Za-z0-9+#/\-]+", text.lower())
+
+    original_tokens = set(_tokens(original_text))
+    candidate_tokens = set(_tokens(candidate_text))
+
+    allowed_added_tokens = {
+        "a", "an", "and", "as", "at", "by", "for", "from", "in", "into",
+        "of", "on", "the", "to", "using", "via", "with", "while", "through",
+        "leveraging", "utilizing", "utilize", "used",
+    }
+
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    for term in supported_terms:
+        for variant in _patch_refinement_term_variants(term):
+            allowed_added_tokens.update(_tokens(variant))
+
+    added_tokens = sorted(
+        token for token in (candidate_tokens - original_tokens)
+        if token not in allowed_added_tokens
+        and not re.fullmatch(r"\d+(?:\.\d+)?(?:k|m)?\+?%?", token)
+    )
+
+    return (len(added_tokens) > 0), added_tokens[:12]
+
 def _validate_patch_refinement_output(
     candidate: Dict[str, Any],
     refined_patch_text: str,
@@ -2385,6 +2481,190 @@ def _validate_patch_refinement_output(
     
     return True, "ok"
 
+def _build_substantive_multisignal_writer_prompt(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> str:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    original_lead = _patch_refinement_lead_token(original_text)
+
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    lines: List[str] = []
+    lines.append("Return plain text only.")
+    lines.append("")
+    lines.append("You are rewriting one resume bullet under strict evidence constraints.")
+    lines.append("")
+    lines.append(f"Original lead token: {original_lead}")
+    lines.append(f"Supported JD signals already explicit in the bullet: {supported_terms}")
+    lines.append("")
+    lines.append("Original bullet:")
+    lines.append(original_text)
+    lines.append("")
+    lines.append("Goal:")
+    lines.append("Produce a materially stronger JD-facing rewrite by surfacing multiple already-explicit supported signals earlier and more cohesively.")
+    lines.append("")
+    lines.append("Hard rules:")
+    lines.append("1. Keep the same first lead action word/token as the original bullet.")
+    lines.append("2. Preserve every number, metric, and protected technical term.")
+    lines.append("3. Only reorder or front-load wording already present in the original bullet, except for light connective words and direct alias surface forms of the supported JD signals.")
+    lines.append("4. Do not infer workflows, evaluation styles, responsibilities, or business context from the job title, role family, or general role expectations.")
+    lines.append("5. Do not add umbrella terms such as experimentation, testing, analytics, libraries, modeling, evaluation, pipelines, strategy, or optimization unless they already appear literally in the original bullet.")
+    lines.append("6. Do not invent any new tool, method, domain, ownership, or business outcome.")
+    lines.append("7. Preserve the result clause unless the original bullet already contains a stronger result framing that remains literally true.")
+    lines.append("8. Do not merely expand acronyms, normalize punctuation, replace '&' with 'and', or swap connective wording.")
+    lines.append("9. Do not return a rewrite if the only possible change is cosmetic.")
+    lines.append("10. OPTION_1 must be your strongest materially better rewrite. OPTION_2 is optional.")
+    lines.append("11. Return ABSTAIN if you cannot produce a materially better truthful rewrite.")
+    lines.append("")
+    lines.append("Return format:")
+    lines.append("ABSTAIN: <short reason>")
+    lines.append("or")
+    lines.append("OPTION_1: <single rewritten bullet>")
+    lines.append("OPTION_2: <single rewritten bullet>")
+
+    return "\n".join(lines)
+
+
+def _maybe_promote_multisignal_directional_candidate(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+) -> Dict[str, Any]:
+    if str(candidate.get("operation_type", "") or "").strip() != "rewrite":
+        return candidate
+
+    if str(candidate.get("proposal_status", "") or "").strip() != "direction_only":
+        return candidate
+
+    direction_only_reason = str(candidate.get("direction_only_reason", "") or "").strip()
+    if direction_only_reason not in {
+        "multi_signal_already_explicit_reorder_preferred",
+        "deterministic_patch_not_available",
+    }:
+        return candidate
+
+    if str(candidate.get("evidence_type", "") or "").strip() != "direct_overlap":
+        return candidate
+
+    if str(candidate.get("claim_safety", "") or "").strip() != "safe_strengthen":
+        return candidate
+
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+    if len(supported_terms) < 2:
+        return candidate
+
+    if list(candidate.get("unsupported_risk_signals", []) or []):
+        return candidate
+
+    if list(candidate.get("adjacent_risk_signals", []) or []):
+        return candidate
+
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    if not original_text:
+        return candidate
+
+    writer_system_prompt = """
+You are the writer stage for one resume bullet under strict evidence constraints.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Either return:
+ABSTAIN: <short reason>
+or up to two lines:
+OPTION_1: <single rewritten bullet>
+OPTION_2: <single rewritten bullet>
+"""
+
+    writer_prompt = _build_substantive_multisignal_writer_prompt(payload, candidate)
+
+    writer_raw, writer_metadata, writer_error_type, writer_error_note = _run_patch_refinement_writer_plain_call(
+        provider=PATCH_REFINEMENT_WRITER_PROVIDER,
+        model=PATCH_REFINEMENT_WRITER_MODEL,
+        temperature=PATCH_REFINEMENT_WRITER_TEMPERATURE,
+        max_tokens=PATCH_REFINEMENT_WRITER_MAX_TOKENS,
+        system_prompt=writer_system_prompt,
+        user_prompt=writer_prompt,
+    )
+
+    unchanged = dict(candidate)
+    unchanged["llm_substantive_rewrite_used"] = False
+
+    if writer_error_type:
+        unchanged["llm_substantive_rewrite_status"] = f"{writer_error_type}_kept_directional"
+        unchanged["llm_substantive_rewrite_note"] = str(writer_error_note or "").strip()
+        unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        return unchanged
+
+    writer_parsed = _normalize_patch_refinement_writer_parsed(writer_raw or {})
+    if writer_parsed.get("abstain", False):
+        unchanged["llm_substantive_rewrite_status"] = "writer_abstained_kept_directional"
+        unchanged["llm_substantive_rewrite_note"] = str(writer_parsed.get("abstain_reason", "") or "").strip() or "writer_abstained"
+        unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        return unchanged
+
+    valid_options, invalid_options = _partition_writer_options_by_validation(
+        candidate,
+        list(writer_parsed.get("options", []) or []),
+    )
+
+    filtered_valid_options: List[Dict[str, Any]] = []
+    for option in valid_options:
+        patch_text = str(option.get("patch_text", "") or "").strip()
+        introduces_unbacked_terms, added_terms = _substantive_multisignal_option_introduces_unbacked_terms(
+            candidate,
+            patch_text,
+        )
+        if introduces_unbacked_terms:
+            invalid_options.append(
+                {
+                    **dict(option),
+                    "validation_reason": "unbacked_added_terms:" + ",".join(added_terms),
+                }
+            )
+            continue
+        filtered_valid_options.append(option)
+
+    valid_options = filtered_valid_options
+
+    if not valid_options:
+        unchanged["llm_substantive_rewrite_status"] = "writer_no_valid_options_kept_directional"
+        unchanged["llm_substantive_rewrite_note"] = "no writer options survived validation"
+        unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_writer_invalid_options"] = invalid_options
+        return unchanged
+
+    selected_option = valid_options[0]
+
+    promoted = dict(candidate)
+    promoted["patch_text"] = str(selected_option.get("patch_text", "") or "").strip()
+    promoted["proposed_text"] = promoted["patch_text"]
+    promoted["proposal_status"] = "patch_ready"
+    promoted["proposal_type"] = "patch_ready_rewrite"
+    promoted["patch_ready"] = True
+    promoted["direction_only_reason"] = ""
+    promoted["patch_generation_method"] = "llm_substantive_multisignal_reframe"
+    promoted["llm_substantive_rewrite_used"] = True
+    promoted["llm_substantive_rewrite_status"] = "writer_selected_option"
+    promoted["llm_substantive_rewrite_note"] = str(selected_option.get("reason", "") or "").strip()
+    promoted["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+    promoted["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+    promoted["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+    promoted["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+    promoted["llm_writer_options"] = valid_options
+    promoted["llm_writer_invalid_options"] = invalid_options
+
+    return promoted
 
 def _maybe_refine_patch_ready_rewrite_candidate(
     payload: Dict[str, Any],
@@ -2768,6 +3048,12 @@ You MUST obey these rules:
 9. Do not return only gap-explicit rewrite directions when anchor bullets exist.
 10. Every Lead with / Support with item must reference a specific source entry.
 11. Use only these prefixes: Lead with, Support with, Keep gap explicit, Do not add.
+12. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets exist.
+13. Prefer distinct source labels across Lead with / Support with items when multiple valid sources exist.
+14. Reuse the same source label at most once, and only when the second direction is materially different.
+15. Do not concentrate 3 or more Lead with / Support with items on the same source label.
+16. Lead with / Support with direction fragments must be at least 5 words and materially specific.
+17. Avoid ultra-short fragments like "excel reporting" or "sql visibility".
 """
 
 #     retry_system_prompt = """
@@ -2801,7 +3087,10 @@ You MUST obey these rules:
 7. rewrite_directions is REQUIRED and must contain at least 3 concrete items when anchor bullets are present.
 8. At least 1 rewrite_directions item must start with 'Lead with' or 'Support with' when anchor bullets are present.
 9. Do not return only gap-explicit rewrite directions when anchor bullets are present.
-10. Use ONLY the supplied evidence. Do NOT invent anything.
+10. Use at most 1 combined gap-style item across Keep gap explicit and Do not add when anchor bullets are present.
+11. Lead with / Support with direction fragments must be at least 5 words.
+12. Do not concentrate 3 or more Lead with / Support with items on the same source label.
+13. Use ONLY the supplied evidence. Do NOT invent anything.
 """
 
     fallback_attempted = bool(

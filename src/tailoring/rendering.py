@@ -1523,6 +1523,27 @@ def _rewrite_card_fields_from_directional_candidate(
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
         }
     
+    if reason == "cosmetic_patch_not_exportable":
+        return {
+            "edit_type": "keep_visible",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                "This candidate only normalizes punctuation or terminology and does not materially strengthen the bullet."
+            ),
+            "why_rewrite_is_better": (
+                "Leave the bullet as-is. Cosmetic normalization is not a strong enough reason to replace truthful existing wording."
+            ),
+            "why_it_matters": (
+                "A replacement bullet should improve JD-facing substance, not just expand acronyms or smooth punctuation."
+            ),
+            "placement_guidance": (
+                "Keep the bullet as-is unless a later rewrite materially improves JD alignment while preserving truth."
+            ),
+            "direction_only_reason": reason,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        }
+    
     if rewrite_instruction:
         return {
             "edit_type": "keep_visible",
@@ -2066,8 +2087,13 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     if not supported_terms:
         return normalized
 
-    # Permanent rule:
-    # only downgrade to keep-visible when the supported terms are already surfaced EARLY.
+    # IMPORTANT:
+    # Keep multi-signal explicit bullets in the rewrite lane.
+    # Those are the exact cases the bounded substantive LLM lane should see.
+    if len(supported_terms) >= 2:
+        return normalized
+
+    # For single-signal cases, early salience is still enough to downgrade to keep-visible.
     if _all_supported_terms_already_salient_early(original_text, supported_terms):
         normalized["diagnosis_action"] = "keep"
         normalized["diagnosis_reason_type"] = "keep_existing_anchor"
@@ -3331,11 +3357,20 @@ def _patched_resume_evidence_for_candidate(
         return None, "not_patch_ready"
 
     if operation_type == "rewrite":
-        return build_counterfactual_resume_evidence(
+        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+        patch_text = str(candidate.get("patch_text", "") or "").strip()
+
+        if not source_bullet_id or not patch_text:
+            return None, "missing_patch_inputs"
+
+        return build_counterfactual_resume_evidence_for_patches(
             original_resume,
-            str(candidate.get("source_bullet_id", "") or "").strip(),
-            str(candidate.get("patch_text", "") or "").strip(),
-            str(candidate.get("original_text", "") or "").strip(),
+            [
+                {
+                    "source_bullet_id": source_bullet_id,
+                    "patch_text": patch_text,
+                }
+            ],
         )
 
     if operation_type == "reorder":
@@ -3987,11 +4022,11 @@ def _should_reroute_rewrite_to_directional_only(
     if _supported_terms_too_generic_to_front(diagnosis):
         return True, "supported_terms_too_generic_to_front"
 
-    if len(supported_terms) >= 2 and _all_supported_terms_already_salient_early(
-        original_text,
-        supported_terms,
-    ):
-        return True, "multi_signal_already_explicit_reorder_preferred"
+    # IMPORTANT:
+    # Do NOT pre-reroute multi-signal explicit bullets to direction_only.
+    # Those are the exact candidates the bounded substantive LLM lane should see.
+    if len(supported_terms) >= 2:
+        return False, ""
 
     if len(supported_terms) == 1 and _supported_term_already_salient_early(
         original_text,
@@ -4171,6 +4206,107 @@ def _compression_candidate_is_cluttered(text: str) -> bool:
     )
 
 
+def _deterministic_using_coordination_cleanup_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    intro, result_clause = _split_result_clause(original_text)
+    if not intro or not result_clause:
+        return None
+
+    using_match = re.search(
+        r"^(?P<lead>.+?\busing\b)\s+(?P<body>.+)$",
+        intro,
+        flags=re.IGNORECASE,
+    )
+    if not using_match:
+        return None
+
+    lead = str(using_match.group("lead") or "").strip()
+    body = str(using_match.group("body") or "").strip()
+    if not lead or not body:
+        return None
+
+    patched_body = body.replace(" & ", " and ")
+    patched_body = re.sub(r"\band\s+and\b", "and", patched_body, flags=re.IGNORECASE)
+    patched_body = re.sub(
+        r",\s*and\s+(leveraging|using)\b",
+        r", \1",
+        patched_body,
+        flags=re.IGNORECASE,
+    )
+    patched_body = re.sub(r"\s+", " ", patched_body).strip(" ,")
+
+    patch_text = f"{lead} {patched_body}{result_clause}"
+    patch_text = re.sub(r"\s+", " ", patch_text).strip()
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    if not _compression_patch_preserves_evidence(diagnosis, patch_text):
+        return None
+
+    return patch_text
+
+
+def _deterministic_using_leveraging_cleanup_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    intro, result_clause = _split_result_clause(original_text)
+    if not intro or not result_clause:
+        return None
+
+    using_match = re.search(
+        r"^(?P<lead>.+?\busing\b)\s+(?P<body>.+)$",
+        intro,
+        flags=re.IGNORECASE,
+    )
+    if not using_match:
+        return None
+
+    lead = str(using_match.group("lead") or "").strip()
+    body = str(using_match.group("body") or "").strip()
+    if not lead or not body:
+        return None
+
+    segments = [seg.strip(" ,") for seg in body.replace(" & ", " and ").split(",") if seg.strip(" ,")]
+    if len(segments) != 2:
+        return None
+
+    first, second = segments
+    if not re.match(r"^leveraging\b", second, flags=re.IGNORECASE):
+        return None
+
+    leveraged = re.sub(r"^leveraging\s+", "", second, flags=re.IGNORECASE).strip()
+    if not leveraged:
+        return None
+
+    if re.match(
+        r"^(hitting|improving|reducing|increasing|driving|informing|enabling|resulting|leading)\b",
+        leveraged,
+        flags=re.IGNORECASE,
+    ):
+        return None
+
+    patch_text = f"{lead} {first}, {leveraged}{result_clause}"
+    patch_text = re.sub(r"\s+", " ", patch_text).strip()
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    if not _compression_patch_preserves_evidence(diagnosis, patch_text):
+        return None
+
+    return patch_text
+
+
 def _build_clarity_preserving_compression_patch(
     diagnosis: Dict[str, Any],
 ) -> Optional[str]:
@@ -4203,10 +4339,19 @@ def _build_clarity_preserving_compression_patch(
         return None
 
     compact_body = ", ".join(segments[:-1])
-    final_segment = segments[-1]
+    final_segment = re.sub(r"^(?:and\s+)+", "", segments[-1], flags=re.IGNORECASE).strip()
+
+    gerund_like_tail = bool(
+        re.match(
+            r"^(leveraging|using|hitting|improving|reducing|increasing|driving|informing|enabling|resulting|leading)\b",
+            final_segment,
+            flags=re.IGNORECASE,
+        )
+    )
 
     if compact_body:
-        compressed_intro = f"{lead} {compact_body}, and {final_segment}"
+        joiner = ", " if gerund_like_tail else ", and "
+        compressed_intro = f"{lead} {compact_body}{joiner}{final_segment}"
     else:
         compressed_intro = f"{lead} {final_segment}"
 
@@ -4915,23 +5060,23 @@ def _deterministic_patch_text_from_diagnosis(
 
         family_alias_patch = _deterministic_family_alias_expansion_patch(diagnosis)
         if family_alias_patch:
-            return "patch_ready", family_alias_patch, "deterministic_family_alias_expansion", ""
+            return "direction_only", "", "deterministic_family_alias_expansion", "cosmetic_patch_not_exportable"
 
         supported_alias_patch = _deterministic_supported_alias_expansion_patch(diagnosis)
         if supported_alias_patch:
-            return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion", ""
+            return "direction_only", "", "deterministic_supported_alias_expansion", "cosmetic_patch_not_exportable"
 
-        front_supported_phrase_patch = _deterministic_front_supported_phrase_patch(diagnosis)
-        if front_supported_phrase_patch:
-            return "patch_ready", front_supported_phrase_patch, "deterministic_front_supported_phrase", ""
-        
-        fronted_using_phrase_patch = _deterministic_fronted_using_phrase_patch(diagnosis)
-        if fronted_using_phrase_patch:
-            return "patch_ready", fronted_using_phrase_patch, "deterministic_fronted_using_phrase", ""
+        coordination_cleanup_patch = _deterministic_using_coordination_cleanup_patch(diagnosis)
+        if coordination_cleanup_patch:
+            return "direction_only", "", "deterministic_using_coordination_cleanup", "cosmetic_patch_not_exportable"
+
+        leveraging_cleanup_patch = _deterministic_using_leveraging_cleanup_patch(diagnosis)
+        if leveraging_cleanup_patch:
+            return "direction_only", "", "deterministic_using_leveraging_cleanup", "cosmetic_patch_not_exportable"
 
         compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
         if compression_patch:
-            return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression", ""
+            return "direction_only", "", "deterministic_clarity_preserving_compression", "cosmetic_patch_not_exportable"
 
         parent_signal_patch = _deterministic_parent_signal_label_patch(diagnosis)
         if parent_signal_patch:
@@ -4941,17 +5086,23 @@ def _deterministic_patch_text_from_diagnosis(
         if _supported_term_already_salient_early(original_text, supported_terms):
             return "direction_only", "", "", "single_signal_already_explicit_reorder_preferred"
 
+    if len(supported_terms) >= 2 and _all_supported_terms_already_salient_early(
+        original_text,
+        supported_terms,
+    ):
+        return "direction_only", "", "", "multi_signal_already_explicit_reorder_preferred"
+    
     # The current using-phrase operator is intentionally quarantined from exportable
     # patch generation because span surgery on multi-tool "using ..." bullets has shown
     # malformed outputs and no material lift in regression batches.
 
     supported_alias_patch = _deterministic_supported_alias_expansion_patch(diagnosis)
     if supported_alias_patch:
-        return "patch_ready", supported_alias_patch, "deterministic_supported_alias_expansion", ""
+        return "direction_only", "", "deterministic_supported_alias_expansion", "cosmetic_patch_not_exportable"
 
     compression_patch = _deterministic_clarity_preserving_compression_patch(diagnosis)
     if compression_patch:
-        return "patch_ready", compression_patch, "deterministic_clarity_preserving_compression", ""
+        return "direction_only", "", "deterministic_clarity_preserving_compression", "cosmetic_patch_not_exportable"
 
     return "direction_only", "", "", "deterministic_patch_not_available"
     
@@ -4984,6 +5135,9 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
         "deterministic_supported_alias_expansion",
         "deterministic_clarity_preserving_compression",
         "deterministic_fronted_using_phrase",
+        "deterministic_using_coordination_cleanup",
+        "deterministic_using_leveraging_cleanup",
+        "llm_substantive_multisignal_reframe",
     }
 
     return patch_generation_method_base in signal_fronting_methods
@@ -5008,10 +5162,9 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
         "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
-        "deterministic_family_alias_expansion",
-        "deterministic_supported_alias_expansion",
-        "deterministic_clarity_preserving_compression",
+        "deterministic_parent_signal_label",
         "deterministic_fronted_using_phrase",
+        "llm_substantive_multisignal_reframe",
     }
 
 def _materiality_validate_rewrite_candidate(
@@ -5081,6 +5234,29 @@ def _materiality_validate_rewrite_candidate(
 
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
     patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
+
+    cosmetic_non_export_methods = {
+        "deterministic_clarity_preserving_compression",
+        "deterministic_family_alias_expansion",
+        "deterministic_supported_alias_expansion",
+        "deterministic_using_coordination_cleanup",
+        "deterministic_using_leveraging_cleanup",
+    }
+
+    if patch_generation_method_base in cosmetic_non_export_methods:
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["direction_only_reason"] = (
+            str(candidate.get("direction_only_reason", "") or "").strip()
+            or "cosmetic_patch_not_exportable"
+        )
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = "cosmetic_patch_not_exportable"
+        candidate["materiality_validation_note"] = (
+            "This deterministic rewrite is cosmetic normalization only and is not exportable as a replacement bullet."
+        )
+        return candidate
 
     export_safe_neutral_methods = {
         "deterministic_clause_extract",
@@ -5247,16 +5423,29 @@ def _build_replacement_candidates(
                 else:
                     candidate = _diagnosis_to_replacement_candidate(payload, diagnosis, index)
 
+                    from src.tailoring.llm import _maybe_promote_multisignal_directional_candidate
+                    candidate = _maybe_promote_multisignal_directional_candidate(
+                        payload,
+                        candidate,
+                    )
+
                     candidate = _materiality_validate_rewrite_candidate(
                         payload,
                         candidate,
                         counterfactual_context,
                     )
 
+                    patch_method_base = str(candidate.get("patch_generation_method", "") or "").strip().split("+", 1)[0].strip()
+                    skip_llm_refinement_methods = {
+                        "deterministic_family_alias_expansion",
+                        "deterministic_supported_alias_expansion",
+                    }
                     if (
                         str(candidate.get("operation_type", "") or "").strip() == "rewrite"
                         and str(candidate.get("proposal_status", "") or "").strip() == "patch_ready"
                         and str(candidate.get("materiality_validation_status", "") or "").strip() == "material_candidate"
+                        and patch_method_base not in skip_llm_refinement_methods
+                        and patch_method_base != "llm_substantive_multisignal_reframe"
                     ):
                         from src.tailoring.llm import _maybe_refine_patch_ready_rewrite_candidate
                         candidate = _maybe_refine_patch_ready_rewrite_candidate(

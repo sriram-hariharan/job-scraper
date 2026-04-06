@@ -50,6 +50,46 @@ def _is_nonprod_fixture(path: Path) -> bool:
         or name.startswith("_phase")
     )
 
+def _resolve_manifest_packet_paths(manifest_path: Path) -> List[Path]:
+    raw = json.loads(manifest_path.read_text(encoding="utf-8"))
+
+    if isinstance(raw, dict):
+        raw_paths = raw.get("paths", [])
+    elif isinstance(raw, list):
+        raw_paths = raw
+    else:
+        raise ValueError(
+            f"Manifest must be a JSON object with 'paths' or a JSON list: {manifest_path}"
+        )
+
+    if not isinstance(raw_paths, list):
+        raise ValueError(f"Manifest 'paths' must be a list: {manifest_path}")
+
+    paths: List[Path] = []
+    seen = set()
+
+    for item in raw_paths:
+        if not isinstance(item, str):
+            raise ValueError(f"Manifest paths must be strings: {manifest_path}")
+
+        path = Path(item)
+        if not path.is_file():
+            raise ValueError(f"Manifest path does not exist: {path}")
+
+        if not _is_packet_fixture(path):
+            raise ValueError(f"Manifest path is not a packet fixture JSON: {path}")
+
+        normalized = str(path)
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        paths.append(path)
+
+    if not paths:
+        raise ValueError(f"No packet fixtures resolved from manifest: {manifest_path}")
+
+    return paths
+
 
 def _resolve_packet_paths(
     fixture_dir: Path,
@@ -247,17 +287,25 @@ def main() -> None:
         action="store_true",
         help="Exit nonzero if any real fixture fails selection-path expectations.",
     )
+    parser.add_argument(
+        "--manifest",
+        default="",
+        help="Optional JSON manifest listing exact packet fixture paths to run. Overrides --fixture-dir selection.",
+    )
     args = parser.parse_args()
 
     fixture_dir = Path(args.fixture_dir)
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    packet_paths = _resolve_packet_paths(
-        fixture_dir=fixture_dir,
-        include_nonprod=bool(args.include_nonprod),
-        limit=max(args.limit, 0),
-    )
+    if args.manifest.strip():
+        packet_paths = _resolve_manifest_packet_paths(Path(args.manifest.strip()))
+    else:
+        packet_paths = _resolve_packet_paths(
+            fixture_dir=fixture_dir,
+            include_nonprod=bool(args.include_nonprod),
+            limit=max(args.limit, 0),
+        )
 
     print("Tailoring Packet Regression Sweep")
     print("--------------------------------")

@@ -336,6 +336,73 @@ def _patch_refinement_protected_phrases(candidate: Dict[str, Any]) -> List[str]:
 
     return _unique_preserve_order([p for p in phrases if str(p).strip()])
 
+def _build_substantive_multisignal_judge_prompt(
+    payload: Dict[str, Any],
+    candidate: Dict[str, Any],
+    writer_options: List[Dict[str, Any]],
+) -> str:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    original_lead = _patch_refinement_lead_token(original_text)
+
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    protected_numbers = _patch_refinement_protected_numbers(candidate)
+    protected_core_terms = _patch_refinement_protected_core_terms(candidate)
+    protected_phrases = _patch_refinement_protected_phrases(candidate)
+
+    lines: List[str] = []
+    lines.append("Return plain text only.")
+    lines.append("")
+    lines.append("You are the final JUDGE for one bounded multi-signal resume-bullet rewrite.")
+    lines.append("")
+    lines.append("Choose one winner:")
+    lines.append("- writer_option_1")
+    lines.append("- writer_option_2")
+    lines.append("- abstain")
+    lines.append("")
+    lines.append("Judging rules:")
+    lines.append("1. Truthfulness beats polish.")
+    lines.append("2. The winner must remain a complete, natural English resume bullet, not a fragment or keyword stack.")
+    lines.append("3. Reject broken noun stacking, malformed connector order, dangling 'using/with/leveraging' clauses, and awkward grammar.")
+    lines.append("4. Reject any option that is less readable or less recruiter-ready than the original bullet.")
+    lines.append("5. Preserve the original lead-token style and the same factual claim strength.")
+    lines.append("6. Preserve every protected number, core technical term, and protected phrase.")
+    lines.append("7. Prefer options that surface multiple supported JD signals earlier only when the sentence still reads naturally.")
+    lines.append("8. Prefer concrete supported phrase bundles already present in the original bullet over generalized paraphrases.")
+    lines.append("9. Choose abstain if none are good enough to surface as a final bullet.")
+    lines.append("")
+    lines.append(f"Original lead token: {original_lead}")
+    lines.append(f"Supported JD signals: {supported_terms}")
+    lines.append(f"Protected numeric tokens: {protected_numbers}")
+    lines.append(f"Protected core technical terms: {protected_core_terms}")
+    lines.append(f"Protected substantive phrases: {protected_phrases}")
+    lines.append("")
+    lines.append("Original bullet:")
+    lines.append(original_text)
+    lines.append("")
+
+    for idx, option in enumerate(writer_options, start=1):
+        lines.append(f"writer_option_{idx}:")
+        lines.append(str(option.get("patch_text", "") or "").strip())
+        lines.append(f"writer_option_{idx}_reason: {str(option.get('reason', '') or '').strip()}")
+        lines.append("")
+
+    lines.append("Output contract:")
+    lines.append("Return plain text only.")
+    lines.append("Do NOT use markdown.")
+    lines.append("Do NOT use code fences.")
+    lines.append("Use exactly these lines:")
+    lines.append("WINNER: writer_option_1 | writer_option_2 | abstain")
+    lines.append("REASON: <one short sentence>")
+    lines.append("REJECTED: <comma-separated option ids or none>")
+    lines.append("QUALITY_FLAGS: <comma-separated tags or none>")
+
+    return "\n".join(lines)
+
 def _build_llm_prompt(
     packet: Dict[str, Any],
     tailoring_plan: Optional[Dict[str, Any]] = None,
@@ -2518,8 +2585,13 @@ def _build_substantive_multisignal_writer_prompt(
     lines.append("7. Preserve the result clause unless the original bullet already contains a stronger result framing that remains literally true.")
     lines.append("8. Do not merely expand acronyms, normalize punctuation, replace '&' with 'and', or swap connective wording.")
     lines.append("9. Do not return a rewrite if the only possible change is cosmetic.")
-    lines.append("10. OPTION_1 must be your strongest materially better rewrite. OPTION_2 is optional.")
-    lines.append("11. Return ABSTAIN if you cannot produce a materially better truthful rewrite.")
+    lines.append("10. Front-load at least two supported JD signals within the first 8 words when literally possible.")
+    lines.append("11. If the original bullet already contains a concrete '<tool> for <task>' or 'using <tool>, <tool>, and <tool>' phrase, preserve that phrase structure and move it directly after the lead verb.")
+    lines.append("12. Do not lead with a generic umbrella phrase such as exploratory data analysis, analytics, evaluation, modeling, analysis, statistics, or visualization when a supported concrete tool or method can appear earlier.")
+    lines.append("13. For multi-tool bullets, prefer the exact concrete sequence already present in the original bullet over a generalized paraphrase.")
+    lines.append("14. Reject rewrites that only smooth wording but do not move the supported signals materially earlier than in the original bullet.")
+    lines.append("15. OPTION_1 must be your strongest materially better rewrite. OPTION_2 is optional.")
+    lines.append("16. Return ABSTAIN if you cannot produce a materially better truthful rewrite.")
     lines.append("")
     lines.append("Return format:")
     lines.append("ABSTAIN: <short reason>")
@@ -2602,6 +2674,8 @@ OPTION_2: <single rewritten bullet>
         unchanged["llm_substantive_rewrite_note"] = str(writer_error_note or "").strip()
         unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
         unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
         return unchanged
 
     writer_parsed = _normalize_patch_refinement_writer_parsed(writer_raw or {})
@@ -2610,6 +2684,8 @@ OPTION_2: <single rewritten bullet>
         unchanged["llm_substantive_rewrite_note"] = str(writer_parsed.get("abstain_reason", "") or "").strip() or "writer_abstained"
         unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
         unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
         return unchanged
 
     valid_options, invalid_options = _partition_writer_options_by_validation(
@@ -2617,34 +2693,102 @@ OPTION_2: <single rewritten bullet>
         list(writer_parsed.get("options", []) or []),
     )
 
-    filtered_valid_options: List[Dict[str, Any]] = []
-    for option in valid_options:
-        patch_text = str(option.get("patch_text", "") or "").strip()
-        introduces_unbacked_terms, added_terms = _substantive_multisignal_option_introduces_unbacked_terms(
-            candidate,
-            patch_text,
-        )
-        if introduces_unbacked_terms:
-            invalid_options.append(
-                {
-                    **dict(option),
-                    "validation_reason": "unbacked_added_terms:" + ",".join(added_terms),
-                }
-            )
-            continue
-        filtered_valid_options.append(option)
-
-    valid_options = filtered_valid_options
-
     if not valid_options:
         unchanged["llm_substantive_rewrite_status"] = "writer_no_valid_options_kept_directional"
         unchanged["llm_substantive_rewrite_note"] = "no writer options survived validation"
         unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
         unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
         unchanged["llm_writer_invalid_options"] = invalid_options
         return unchanged
 
-    selected_option = valid_options[0]
+    judge_system_prompt = """
+You are the final quality gate for one bounded resume-bullet rewrite.
+Return plain text only.
+Do not use markdown.
+Do not use code fences.
+Use exactly:
+WINNER: writer_option_1 | writer_option_2 | abstain
+REASON: <one short sentence>
+REJECTED: <comma-separated option ids or none>
+QUALITY_FLAGS: <comma-separated tags or none>
+"""
+
+    judge_prompt = _build_substantive_multisignal_judge_prompt(
+        payload,
+        candidate,
+        valid_options,
+    )
+
+    judge_raw, judge_metadata, judge_error_type, judge_error_note = _run_patch_refinement_judge_plain_call(
+        provider=PATCH_REFINEMENT_JUDGE_PROVIDER,
+        model=PATCH_REFINEMENT_JUDGE_MODEL,
+        temperature=PATCH_REFINEMENT_JUDGE_TEMPERATURE,
+        max_tokens=PATCH_REFINEMENT_JUDGE_MAX_TOKENS,
+        system_prompt=judge_system_prompt,
+        user_prompt=judge_prompt,
+    )
+
+    if judge_error_type:
+        unchanged["llm_substantive_rewrite_status"] = f"{judge_error_type}_kept_directional"
+        unchanged["llm_substantive_rewrite_note"] = str(judge_error_note or "").strip() or "judge_call_failed"
+        unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+        unchanged["llm_substantive_judge_provider"] = str(judge_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_judge_model"] = str(judge_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_judge_requested_provider"] = str(judge_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_judge_requested_model"] = str(judge_metadata.get("requested_model", "") or "").strip()
+        unchanged["llm_writer_options"] = valid_options
+        unchanged["llm_writer_invalid_options"] = invalid_options
+        return unchanged
+
+    judge_parsed = _normalize_patch_refinement_judge_parsed(judge_raw or {})
+    winner = str(judge_parsed.get("winner", "") or "").strip()
+
+    if winner not in {"writer_option_1", "writer_option_2"}:
+        unchanged["llm_substantive_rewrite_status"] = "judge_abstained_kept_directional"
+        unchanged["llm_substantive_rewrite_note"] = str(judge_parsed.get("reason", "") or "").strip() or "judge_abstained"
+        unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+        unchanged["llm_substantive_judge_provider"] = str(judge_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_judge_model"] = str(judge_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_judge_requested_provider"] = str(judge_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_judge_requested_model"] = str(judge_metadata.get("requested_model", "") or "").strip()
+        unchanged["llm_substantive_judge_winner"] = winner
+        unchanged["llm_substantive_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
+        unchanged["llm_substantive_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
+        unchanged["llm_substantive_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
+        unchanged["llm_writer_options"] = valid_options
+        unchanged["llm_writer_invalid_options"] = invalid_options
+        return unchanged
+
+    selected_option = next(
+        (option for option in valid_options if str(option.get("option_id", "") or "").strip() == winner),
+        None,
+    )
+    if selected_option is None:
+        unchanged["llm_substantive_rewrite_status"] = "judge_selected_missing_option_kept_directional"
+        unchanged["llm_substantive_rewrite_note"] = "judge winner did not map to a surviving writer option"
+        unchanged["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+        unchanged["llm_substantive_judge_provider"] = str(judge_metadata.get("provider", "") or "").strip()
+        unchanged["llm_substantive_judge_model"] = str(judge_metadata.get("model", "") or "").strip()
+        unchanged["llm_substantive_judge_requested_provider"] = str(judge_metadata.get("requested_provider", "") or "").strip()
+        unchanged["llm_substantive_judge_requested_model"] = str(judge_metadata.get("requested_model", "") or "").strip()
+        unchanged["llm_substantive_judge_winner"] = winner
+        unchanged["llm_substantive_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
+        unchanged["llm_substantive_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
+        unchanged["llm_substantive_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
+        unchanged["llm_writer_options"] = valid_options
+        unchanged["llm_writer_invalid_options"] = invalid_options
+        return unchanged
 
     promoted = dict(candidate)
     promoted["patch_text"] = str(selected_option.get("patch_text", "") or "").strip()
@@ -2655,12 +2799,20 @@ OPTION_2: <single rewritten bullet>
     promoted["direction_only_reason"] = ""
     promoted["patch_generation_method"] = "llm_substantive_multisignal_reframe"
     promoted["llm_substantive_rewrite_used"] = True
-    promoted["llm_substantive_rewrite_status"] = "writer_selected_option"
-    promoted["llm_substantive_rewrite_note"] = str(selected_option.get("reason", "") or "").strip()
+    promoted["llm_substantive_rewrite_status"] = "judge_selected_option"
+    promoted["llm_substantive_rewrite_note"] = str(judge_parsed.get("reason", "") or "").strip() or str(selected_option.get("reason", "") or "").strip()
     promoted["llm_substantive_rewrite_provider"] = str(writer_metadata.get("provider", "") or "").strip()
     promoted["llm_substantive_rewrite_model"] = str(writer_metadata.get("model", "") or "").strip()
     promoted["llm_substantive_rewrite_requested_provider"] = str(writer_metadata.get("requested_provider", "") or "").strip()
     promoted["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
+    promoted["llm_substantive_judge_provider"] = str(judge_metadata.get("provider", "") or "").strip()
+    promoted["llm_substantive_judge_model"] = str(judge_metadata.get("model", "") or "").strip()
+    promoted["llm_substantive_judge_requested_provider"] = str(judge_metadata.get("requested_provider", "") or "").strip()
+    promoted["llm_substantive_judge_requested_model"] = str(judge_metadata.get("requested_model", "") or "").strip()
+    promoted["llm_substantive_judge_winner"] = winner
+    promoted["llm_substantive_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
+    promoted["llm_substantive_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
+    promoted["llm_substantive_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
     promoted["llm_writer_options"] = valid_options
     promoted["llm_writer_invalid_options"] = invalid_options
 

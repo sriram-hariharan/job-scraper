@@ -1141,6 +1141,74 @@ def _whitespace_flexible_pattern(text: str) -> Optional[re.Pattern]:
 
     return re.compile(r"\s+".join(parts))
 
+def _raw_text_fallback_search_texts(text: str) -> List[str]:
+    raw = str(text or "").strip()
+    if not raw:
+        return []
+
+    candidates: List[str] = [raw]
+
+    de_ellipsized = raw.replace("…", " ").replace("...", " ")
+    de_ellipsized = re.sub(r"\s+", " ", de_ellipsized).strip(" .")
+    if de_ellipsized and de_ellipsized != raw:
+        candidates.append(de_ellipsized)
+
+    return _unique_preserve_order(
+        [candidate for candidate in candidates if str(candidate or "").strip()]
+    )
+
+
+def _replace_unique_bullet_line(
+    field_value: str,
+    original_bullet_text: str,
+    patch_text: str,
+) -> Tuple[Optional[str], str]:
+    raw_field = str(field_value or "")
+    search_text = str(original_bullet_text or "").strip()
+    replacement = str(patch_text or "").strip()
+
+    if not raw_field or not search_text or not replacement:
+        return None, "missing_patch_inputs"
+
+    search_norm = _normalize(search_text)
+    if not search_norm:
+        return None, "missing_patch_inputs"
+
+    lines = raw_field.splitlines(keepends=True)
+    matches: List[Tuple[int, str, str]] = []
+
+    for idx, line in enumerate(lines):
+        newline = ""
+        if line.endswith("\r\n"):
+            newline = "\r\n"
+            line_body = line[:-2]
+        elif line.endswith("\n"):
+            newline = "\n"
+            line_body = line[:-1]
+        else:
+            line_body = line
+
+        bullet_prefix_match = re.match(r"^(\s*[\-\*\u2022\u25CF\u25E6\u2043]+\s*)", line_body)
+        bullet_prefix = bullet_prefix_match.group(1) if bullet_prefix_match else ""
+        line_core = line_body[len(bullet_prefix):].strip()
+        line_norm = _normalize(line_core)
+
+        if not line_norm:
+            continue
+
+        if search_norm in line_norm or line_norm in search_norm:
+            matches.append((idx, bullet_prefix, newline))
+
+    if not matches:
+        return None, "raw_text_bullet_not_found"
+
+    unique_line_indexes = {row[0] for row in matches}
+    if len(unique_line_indexes) > 1:
+        return None, "raw_text_bullet_not_unique"
+
+    line_index, bullet_prefix, newline = matches[0]
+    lines[line_index] = f"{bullet_prefix}{replacement}{newline}"
+    return "".join(lines), "ok"
 
 def _patched_resume_document(
     document: ResumeDocument,
@@ -1153,46 +1221,82 @@ def _patched_resume_document(
     if not original_bullet or not replacement:
         return None, "missing_patch_inputs"
 
-    pattern = _whitespace_flexible_pattern(original_bullet)
-    if pattern is None:
-        return None, "missing_patch_inputs"
-
     candidate_fields = [
         ("raw_text", str(getattr(document, "raw_text", "") or "")),
         ("text", str(getattr(document, "text", "") or "")),
     ]
 
-    for field_name, field_value in candidate_fields:
-        if not field_value:
+    search_texts = _raw_text_fallback_search_texts(original_bullet)
+
+    for search_text in search_texts:
+        pattern = _whitespace_flexible_pattern(search_text)
+        if pattern is None:
             continue
 
-        matches = list(pattern.finditer(field_value))
-        if not matches:
-            continue
+        for field_name, field_value in candidate_fields:
+            if not field_value:
+                continue
 
-        if len(matches) > 1:
-            return None, "raw_text_bullet_not_unique"
+            matches = list(pattern.finditer(field_value))
+            if not matches:
+                continue
 
-        start, end = matches[0].span()
-        patched_value = field_value[:start] + replacement + field_value[end:]
+            if len(matches) > 1:
+                return None, "raw_text_bullet_not_unique"
 
-        patched_document = copy.deepcopy(document)
+            start, end = matches[0].span()
+            patched_value = field_value[:start] + replacement + field_value[end:]
 
-        if field_name == "raw_text":
-            patched_document.raw_text = patched_value
-            if hasattr(patched_document, "text") and str(getattr(patched_document, "text", "") or "").strip():
-                patched_document.text = patched_value
-        else:
-            patched_document.text = patched_value
-            if hasattr(patched_document, "raw_text") and str(getattr(patched_document, "raw_text", "") or "").strip():
+            patched_document = copy.deepcopy(document)
+
+            if field_name == "raw_text":
                 patched_document.raw_text = patched_value
+                if hasattr(patched_document, "text") and str(getattr(patched_document, "text", "") or "").strip():
+                    patched_document.text = patched_value
+            else:
+                patched_document.text = patched_value
+                if hasattr(patched_document, "raw_text") and str(getattr(patched_document, "raw_text", "") or "").strip():
+                    patched_document.raw_text = patched_value
 
-        normalized_source = str(
-            getattr(patched_document, "raw_text", "") or getattr(patched_document, "text", "") or ""
-        )
-        patched_document.normalized_text = re.sub(r"\s+", " ", normalized_source).strip()
+            normalized_source = str(
+                getattr(patched_document, "raw_text", "") or getattr(patched_document, "text", "") or ""
+            )
+            patched_document.normalized_text = re.sub(r"\s+", " ", normalized_source).strip()
 
-        return patched_document, "ok"
+            return patched_document, "ok"
+
+    for search_text in search_texts:
+        for field_name, field_value in candidate_fields:
+            if not field_value:
+                continue
+
+            patched_value, status = _replace_unique_bullet_line(
+                field_value,
+                search_text,
+                replacement,
+            )
+            if patched_value is None:
+                if status == "raw_text_bullet_not_unique":
+                    return None, status
+                continue
+
+            patched_document = copy.deepcopy(document)
+
+            if field_name == "raw_text":
+                patched_document.raw_text = patched_value
+                if hasattr(patched_document, "text") and str(getattr(patched_document, "text", "") or "").strip():
+                    patched_document.text = patched_value
+            else:
+                patched_document.text = patched_value
+                if hasattr(patched_document, "raw_text") and str(getattr(patched_document, "raw_text", "") or "").strip():
+                    patched_document.raw_text = patched_value
+
+            normalized_source = str(
+                getattr(patched_document, "raw_text", "") or getattr(patched_document, "text", "") or ""
+            )
+            patched_document.normalized_text = re.sub(r"\s+", " ", normalized_source).strip()
+
+            return patched_document, "ok"
 
     return None, "raw_text_bullet_not_found"
 

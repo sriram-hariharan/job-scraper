@@ -270,6 +270,35 @@ def _parse_patch_refinement_writer_text(raw_text: str) -> Dict[str, Any]:
         "options": options[:2],
     }
 
+def _protected_phrase_preserved(candidate_text: str, protected_phrase: str) -> bool:
+    def _norm(value: str) -> str:
+        return re.sub(r"\s+", " ", str(value or "").strip().lower())
+
+    candidate_norm = _norm(candidate_text)
+    protected_norm = _norm(protected_phrase)
+
+    if not candidate_norm or not protected_norm:
+        return False
+
+    if protected_norm in candidate_norm:
+        return True
+
+    # Split on lightweight connectors but preserve substantive phrase chunks.
+    parts = [
+        part.strip()
+        for part in re.split(r"\b(?:and|for|with|using|via|in)\b", protected_norm)
+        if part.strip()
+    ]
+
+    if not parts:
+        return False
+
+    for part in parts:
+        if part not in candidate_norm:
+            return False
+
+    return True
+
 def _partition_writer_options_by_validation(
     candidate: Dict[str, Any],
     writer_options: List[Dict[str, Any]],
@@ -2484,27 +2513,13 @@ def _validate_patch_refinement_output(
             return False, f"missing_numeric_token:{token}"
     
     protected_phrases = _patch_refinement_protected_phrases(candidate)
-    supported_phrase_set = {
-        normalize_signal_text(term)
-        for term in (
-            list(candidate.get("supported_jd_signals", []) or [])
-            + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
-        )
-        if str(term or "").strip()
-    }
 
     for phrase in protected_phrases:
         phrase_clean = str(phrase or "").strip()
         if not phrase_clean:
             continue
 
-        phrase_norm = normalize_signal_text(phrase_clean)
-        if phrase_norm in supported_phrase_set:
-            if not _patch_refinement_contains_term_or_alias(refined, phrase_clean):
-                return False, f"missing_protected_phrase:{phrase_clean}"
-            continue
-
-        if not _patch_refinement_contains_term(refined, phrase_clean):
+        if not _protected_phrase_preserved(refined, phrase_clean):
             return False, f"missing_protected_phrase:{phrase_clean}"
 
     supported_terms = _unique_preserve_order(
@@ -2547,6 +2562,33 @@ def _validate_patch_refinement_output(
         return False, f"lead_token_changed:{original_lead}->{refined_lead}"
     
     return True, "ok"
+
+def _substantive_multisignal_reorder_likely_awkward(
+    candidate: Dict[str, Any],
+) -> bool:
+    original_text = str(candidate.get("original_text", "") or "").strip().lower()
+    supported_terms = _unique_preserve_order(
+        list(candidate.get("supported_jd_signals", []) or [])
+        + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
+    )
+    supported_terms = [term for term in supported_terms if str(term or "").strip()]
+
+    if len(supported_terms) < 2 or not original_text:
+        return False
+
+    # Pattern: "using X and Y, leveraging Z ..."
+    if "using " in original_text and " leveraging " in original_text:
+        return True
+
+    # Pattern: "using Python for ..., SQL for ..., and Power BI for ..."
+    if original_text.count(" for ") >= 2:
+        return True
+
+    # Pattern: tightly paired multi-tool phrase already doing real work
+    if re.search(r"\busing [^.,;]+?\bfor\b", original_text):
+        return True
+
+    return False
 
 def _build_substantive_multisignal_writer_prompt(
     payload: Dict[str, Any],
@@ -2642,6 +2684,15 @@ def _maybe_promote_multisignal_directional_candidate(
     original_text = str(candidate.get("original_text", "") or "").strip()
     if not original_text:
         return candidate
+    
+    if _substantive_multisignal_reorder_likely_awkward(candidate):
+        skipped = dict(candidate)
+        skipped["llm_substantive_rewrite_used"] = False
+        skipped["llm_substantive_rewrite_status"] = "structural_reorder_not_worth_attempting"
+        skipped["llm_substantive_rewrite_note"] = (
+            "Original already uses a structured multi-tool clause; bounded signal-fronting rewrite is likely to degrade grammar."
+        )
+        return skipped
 
     writer_system_prompt = """
 You are the writer stage for one resume bullet under strict evidence constraints.

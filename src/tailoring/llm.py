@@ -1022,6 +1022,24 @@ def _cleanup_live_source_label(source: str) -> str:
     cleaned = re.sub(r"\s*\|\s*type=.*$", "", cleaned).strip()
     return cleaned.rstrip(".")
 
+def _normalize_live_direction_fragment(prefix: str, direction: str) -> str:
+    prefix_text = str(prefix or "").strip()
+    text = re.sub(r"\s+", " ", str(direction or "").strip())
+
+    if not text:
+        return ""
+
+    if prefix_text not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
+        return text
+
+    repeated_prefix_pattern = re.compile(
+        rf"^(?:{re.escape(prefix_text)}(?:\s+|[:;\-,])*)+",
+        flags=re.IGNORECASE,
+    )
+    text = repeated_prefix_pattern.sub("", text).strip(" .,:;-")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
 def _live_rewrite_similarity_ratio(a: str, b: str) -> float:
     from difflib import SequenceMatcher
 
@@ -1268,7 +1286,10 @@ def _canonicalize_live_direction_objects(
 
         prefix = str(item.get("prefix", "") or "").strip()
         source = str(item.get("source", "") or "").strip()
-        direction = str(item.get("direction", "") or "").strip()
+        direction = _normalize_live_direction_fragment(
+            prefix,
+            str(item.get("direction", "") or ""),
+        )
 
         if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
             continue
@@ -1318,7 +1339,10 @@ def _coerce_live_rewrite_direction(item: Any) -> str:
 
     prefix = str(item.get("prefix", "") or "").strip()
     source = str(item.get("source", "") or "").strip()
-    direction = str(item.get("direction", "") or "").strip()
+    direction = _normalize_live_direction_fragment(
+        prefix,
+        str(item.get("direction", "") or ""),
+    )
 
     if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
         return ""
@@ -1369,7 +1393,10 @@ def _validate_live_llm_parsed_contract(
 
         prefix = str(item.get("prefix", "") or "").strip()
         source = str(item.get("source", "") or "").strip()
-        direction = str(item.get("direction", "") or "").strip()
+        direction = _normalize_live_direction_fragment(
+            prefix,
+            str(item.get("direction", "") or ""),
+        )
 
         if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
             raise ValueError(f"live_llm_contract_direction_{idx}_bad_prefix:{prefix}")
@@ -1467,7 +1494,10 @@ def _normalize_live_llm_parsed(parsed: Dict[str, Any]) -> Dict[str, Any]:
 
             prefix = str(item.get("prefix", "") or "").strip()
             source = str(item.get("source", "") or "").strip()
-            direction = str(item.get("direction", "") or "").strip()
+            direction = _normalize_live_direction_fragment(
+                prefix,
+                str(item.get("direction", "") or ""),
+            )
 
             if prefix not in {"Lead with", "Support with", "Keep gap explicit", "Do not add"}:
                 continue

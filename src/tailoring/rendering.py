@@ -3357,20 +3357,11 @@ def _patched_resume_evidence_for_candidate(
         return None, "not_patch_ready"
 
     if operation_type == "rewrite":
-        source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
-        patch_text = str(candidate.get("patch_text", "") or "").strip()
-
-        if not source_bullet_id or not patch_text:
-            return None, "missing_patch_inputs"
-
-        return build_counterfactual_resume_evidence_for_patches(
+        return build_counterfactual_resume_evidence(
             original_resume,
-            [
-                {
-                    "source_bullet_id": source_bullet_id,
-                    "patch_text": patch_text,
-                }
-            ],
+            _patch_candidate_bullet_id(candidate),
+            str(candidate.get("patch_text", "") or "").strip(),
+            str(candidate.get("original_text", "") or "").strip(),
         )
 
     if operation_type == "reorder":
@@ -3498,8 +3489,6 @@ def _patch_candidate_bullet_id(candidate: Dict[str, Any]) -> str:
     return (
         str(candidate.get("source_bullet_id", "") or "").strip()
         or str(candidate.get("bullet_id", "") or "").strip()
-        or str(candidate.get("diagnosis_id", "") or "").strip()
-        or str(candidate.get("candidate_id", "") or "").strip()
     )
 
 def _resolve_patch_set_selection(
@@ -3666,7 +3655,7 @@ def _apply_patch_set_counterfactual_preview(
 
     patches = [
         {
-            "source_bullet_id": str(candidate.get("source_bullet_id", "") or "").strip(),
+            "source_bullet_id": _patch_candidate_bullet_id(candidate),
             "patch_text": str(candidate.get("patch_text", "") or "").strip(),
         }
         for candidate in selected_candidates

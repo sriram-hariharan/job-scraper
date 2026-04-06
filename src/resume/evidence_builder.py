@@ -433,6 +433,43 @@ def _looks_like_unmarked_bullet_start(line: str) -> bool:
 
     return False
 
+def _split_inline_action_verb_fragments(text: str) -> List[str]:
+    value = str(text or "").strip()
+    if not value:
+        return []
+
+    action_verbs = sorted(
+        {
+            str(verb).strip()
+            for verb in ACTION_VERB_HINTS
+            if str(verb).strip()
+        },
+        key=len,
+        reverse=True,
+    )
+
+    verb_variants = sorted(
+        {
+            variant
+            for verb in action_verbs
+            for variant in {verb, verb.lower(), verb.title()}
+            if str(variant).strip()
+        },
+        key=len,
+        reverse=True,
+    )
+
+    verb_pattern = "|".join(re.escape(verb) for verb in verb_variants)
+
+    pattern = re.compile(
+        r"(?<!^)(?<=[a-z0-9%])\s+(?=(?:"
+        + (verb_pattern + r"|" if verb_pattern else "")
+        + r"[A-Z][a-z]+ed)\b)"
+    )
+
+    parts = [part.strip() for part in re.split(pattern, value) if str(part).strip()]
+    return parts or [value]
+
 def _consolidate_role_bullets(lines: List[str]) -> List[str]:
     bullets: List[str] = []
     current_bullet = ""
@@ -447,46 +484,78 @@ def _consolidate_role_bullets(lines: List[str]) -> List[str]:
         clean_line = _strip_bullet_marker(raw_line)
 
         # Standalone bullet marker line like "●"
-        # Treat it as a hard bullet boundary.
         if is_bullet_line and not clean_line:
-            if current_bullet:
-                bullets.append(current_bullet.strip())
-                current_bullet = ""
             pending_new_bullet = True
             continue
 
         if not clean_line:
             continue
 
-        if is_bullet_line:
-            if current_bullet:
-                bullets.append(current_bullet.strip())
-            current_bullet = clean_line
+        # OCR / PDF extraction sometimes emits a standalone bullet marker on its own line
+        # and then puts the wrapped continuation on the next line starting with lowercase
+        # text or a number. In that case, keep appending to the current bullet instead of
+        # starting a new one.
+        if (
+            pending_new_bullet
+            and current_bullet
+            and not is_bullet_line
+            and (clean_line[:1].islower() or clean_line[:1].isdigit())
+        ):
+            current_bullet = f"{current_bullet} {clean_line}".strip()
             pending_new_bullet = False
             continue
 
-        # If the previous line was only a bullet marker, this line starts a new bullet.
-        if pending_new_bullet:
-            if current_bullet:
-                bullets.append(current_bullet.strip())
-            current_bullet = clean_line
-            pending_new_bullet = False
-            continue
-
+        # If we already have a bullet and the next non-bulleted line starts like a fresh
+        # action-verb bullet, treat it as a new bullet even if the previous wrapped line
+        # did not end with punctuation.
         if (
             current_bullet
+            and not is_bullet_line
             and not pending_new_bullet
-            and _looks_like_completed_bullet(current_bullet)
             and _looks_like_unmarked_bullet_start(clean_line)
         ):
             bullets.append(current_bullet.strip())
             current_bullet = clean_line
             continue
 
-        if current_bullet:
-            current_bullet = f"{current_bullet} {clean_line}".strip()
-        else:
-            current_bullet = clean_line
+        fragments = _split_inline_action_verb_fragments(clean_line)
+
+        for frag_index, fragment in enumerate(fragments):
+            fragment = str(fragment or "").strip()
+            if not fragment:
+                continue
+
+            fragment_is_bullet_line = is_bullet_line and frag_index == 0
+            force_new_bullet = frag_index > 0
+
+            if fragment_is_bullet_line:
+                if current_bullet:
+                    bullets.append(current_bullet.strip())
+                current_bullet = fragment
+                pending_new_bullet = False
+                continue
+
+            if pending_new_bullet or force_new_bullet:
+                if current_bullet:
+                    bullets.append(current_bullet.strip())
+                current_bullet = fragment
+                pending_new_bullet = False
+                continue
+
+            if (
+                current_bullet
+                and not pending_new_bullet
+                and _looks_like_completed_bullet(current_bullet)
+                and _looks_like_unmarked_bullet_start(fragment)
+            ):
+                bullets.append(current_bullet.strip())
+                current_bullet = fragment
+                continue
+
+            if current_bullet:
+                current_bullet = f"{current_bullet} {fragment}".strip()
+            else:
+                current_bullet = fragment
 
     if current_bullet:
         bullets.append(current_bullet.strip())
@@ -984,7 +1053,7 @@ def build_counterfactual_resume_evidence(
     if not bullet_id:
         return None, "missing_patch_inputs"
 
-    return build_counterfactual_resume_evidence_for_patches(
+    rebuilt_resume, status = build_counterfactual_resume_evidence_for_patches(
         original_resume,
         [
             {
@@ -993,12 +1062,31 @@ def build_counterfactual_resume_evidence(
             }
         ],
     )
+    if rebuilt_resume is not None:
+        return rebuilt_resume, status
+
+    # Anchor-drift recovery:
+    # if the stored bullet_id is stale but we still have the original bullet text,
+    # try a unique raw-text patch before giving up.
+    if status == "bullet_id_not_found" and original_raw_text:
+        patched_document, raw_status = _patched_resume_document(
+            original_resume.document,
+            original_raw_text,
+            replacement,
+        )
+        if patched_document is None:
+            return None, raw_status
+
+        rebuilt_resume = build_resume_evidence(patched_document)
+        return rebuilt_resume, "ok"
+
+    return None, status
 
 def build_counterfactual_resume_evidence_for_patches(
     original_resume: ResumeEvidence,
     patches: List[dict],
 ) -> Tuple[Optional[ResumeEvidence], str]:
-    cleaned_patches: List[Tuple[str, str, str]] = []
+    cleaned_patches: List[Tuple[str, str]] = []
     seen_bullet_ids = set()
 
     for patch in list(patches or []):
@@ -1014,28 +1102,51 @@ def build_counterfactual_resume_evidence_for_patches(
         if bullet_id in seen_bullet_ids:
             return None, "duplicate_patch_bullet_id"
 
-        original_bullet_text, status = _bullet_text_by_id(original_resume, bullet_id)
-        if original_bullet_text is None:
-            return None, status
-
         seen_bullet_ids.add(bullet_id)
-        cleaned_patches.append((bullet_id, original_bullet_text, replacement))
+        cleaned_patches.append((bullet_id, replacement))
 
     if not cleaned_patches:
         return None, "missing_patch_inputs"
 
-    patched_document = copy.deepcopy(original_resume.document)
+    patched_experience_entries = copy.deepcopy(
+        list(getattr(original_resume, "experience_entries", []) or [])
+    )
+    patched_project_entries = copy.deepcopy(
+        list(getattr(original_resume, "project_entries", []) or [])
+    )
 
-    for _, original_bullet_text, replacement in cleaned_patches:
-        patched_document, status = _patched_resume_document(
-            patched_document,
-            original_bullet_text,
-            replacement,
+    for bullet_id, replacement in cleaned_patches:
+        slot, status = _structured_bullet_slot(
+            patched_experience_entries,
+            patched_project_entries,
+            bullet_id,
         )
-        if patched_document is None:
+        if slot is None:
             return None, status
 
-    rebuilt_resume = build_resume_evidence(patched_document)
+        section_name, entry_index, bullet_index = slot
+
+        if section_name == "experience":
+            entry = patched_experience_entries[entry_index]
+        elif section_name == "project":
+            entry = patched_project_entries[entry_index]
+        else:
+            return None, "unsupported_patch_section"
+
+        bullets = list(getattr(entry, "bullets", []) or [])
+        if bullet_index >= len(bullets):
+            return None, "bullet_index_out_of_range"
+
+        bullets[bullet_index] = replacement
+        entry.bullets = bullets
+
+    rebuilt_resume = rebuild_resume_evidence_from_structured_entries(
+        original_resume.document,
+        experience_entries=patched_experience_entries,
+        project_entries=patched_project_entries,
+        education_entries=list(getattr(original_resume, "education_entries", []) or []),
+        certifications=list(getattr(original_resume, "certifications", []) or []),
+    )
     return rebuilt_resume, "ok"
 
 def _bullet_text_by_id(
@@ -1175,7 +1286,9 @@ def _replace_unique_bullet_line(
         return None, "missing_patch_inputs"
 
     lines = raw_field.splitlines(keepends=True)
-    matches: List[Tuple[int, str, str]] = []
+
+    exact_matches: List[Tuple[int, str, str]] = []
+    loose_matches: List[Tuple[int, str, str]] = []
 
     for idx, line in enumerate(lines):
         newline = ""
@@ -1196,8 +1309,16 @@ def _replace_unique_bullet_line(
         if not line_norm:
             continue
 
+        row = (idx, bullet_prefix, newline)
+
+        if line_norm == search_norm:
+            exact_matches.append(row)
+            continue
+
         if search_norm in line_norm or line_norm in search_norm:
-            matches.append((idx, bullet_prefix, newline))
+            loose_matches.append(row)
+
+    matches = exact_matches if exact_matches else loose_matches
 
     if not matches:
         return None, "raw_text_bullet_not_found"
@@ -1227,6 +1348,7 @@ def _patched_resume_document(
     ]
 
     search_texts = _raw_text_fallback_search_texts(original_bullet)
+    saw_non_unique_match = False
 
     for search_text in search_texts:
         pattern = _whitespace_flexible_pattern(search_text)
@@ -1242,7 +1364,8 @@ def _patched_resume_document(
                 continue
 
             if len(matches) > 1:
-                return None, "raw_text_bullet_not_unique"
+                saw_non_unique_match = True
+                continue
 
             start, end = matches[0].span()
             patched_value = field_value[:start] + replacement + field_value[end:]
@@ -1277,7 +1400,7 @@ def _patched_resume_document(
             )
             if patched_value is None:
                 if status == "raw_text_bullet_not_unique":
-                    return None, status
+                    saw_non_unique_match = True
                 continue
 
             patched_document = copy.deepcopy(document)
@@ -1297,6 +1420,9 @@ def _patched_resume_document(
             patched_document.normalized_text = re.sub(r"\s+", " ", normalized_source).strip()
 
             return patched_document, "ok"
+
+    if saw_non_unique_match:
+        return None, "raw_text_bullet_not_unique"
 
     return None, "raw_text_bullet_not_found"
 

@@ -329,10 +329,37 @@ def _partition_writer_options_by_validation(
 
     return valid_options, invalid_options
 
+def _patch_refinement_lead_object_phrase(candidate: Dict[str, Any]) -> str:
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    if not original_text:
+        return ""
+
+    match = re.match(
+        r"^(?P<verb>[A-Z][A-Za-z-]+)(?:\s+and\s+[A-Za-z-]+)?\s+(?P<object>.+?)(?=\s+\b(?:using|with|via|for|to)\b|,\s|\.$|$)",
+        original_text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+
+    object_phrase = re.sub(r"\s+", " ", str(match.group("object") or "").strip())
+    if not object_phrase:
+        return ""
+
+    # keep this narrow: only preserve meaningful concrete object spans
+    if len(object_phrase.split()) < 3:
+        return ""
+
+    return object_phrase
+
 def _patch_refinement_protected_phrases(candidate: Dict[str, Any]) -> List[str]:
     original_text = str(candidate.get("original_text", "") or "").strip()
 
     phrases: List[str] = []
+
+    lead_object_phrase = _patch_refinement_lead_object_phrase(candidate)
+    if lead_object_phrase:
+        phrases.append(lead_object_phrase)
 
     # Keep supported signals and canonical signal
     phrases.extend(list(candidate.get("supported_jd_signals", []) or []))
@@ -382,6 +409,7 @@ def _build_substantive_multisignal_judge_prompt(
     protected_numbers = _patch_refinement_protected_numbers(candidate)
     protected_core_terms = _patch_refinement_protected_core_terms(candidate)
     protected_phrases = _patch_refinement_protected_phrases(candidate)
+    lead_object_phrase = _patch_refinement_lead_object_phrase(candidate)
 
     lines: List[str] = []
     lines.append("Return plain text only.")
@@ -402,6 +430,7 @@ def _build_substantive_multisignal_judge_prompt(
     lines.append("6. Preserve every protected number, core technical term, and protected phrase.")
     lines.append("7. Prefer options that surface multiple supported JD signals earlier only when the sentence still reads naturally.")
     lines.append("8. Prefer concrete supported phrase bundles already present in the original bullet over generalized paraphrases.")
+    lines.append("8a. Strongly prefer options that preserve the original concrete lead object phrase when one exists.")
     lines.append("9. Choose abstain if none are good enough to surface as a final bullet.")
     lines.append("")
     lines.append(f"Original lead token: {original_lead}")
@@ -409,6 +438,7 @@ def _build_substantive_multisignal_judge_prompt(
     lines.append(f"Protected numeric tokens: {protected_numbers}")
     lines.append(f"Protected core technical terms: {protected_core_terms}")
     lines.append(f"Protected substantive phrases: {protected_phrases}")
+    lines.append(f"Protected lead object phrase: {lead_object_phrase}")
     lines.append("")
     lines.append("Original bullet:")
     lines.append(original_text)
@@ -2095,6 +2125,11 @@ def _build_patch_refinement_writer_prompt(
     lines.append("12. If the best change is only stylistic, abstain.")
     lines.append("13. Do NOT replace a preserved protected phrase with a broader paraphrase.")
     lines.append("14. Do NOT change only connective wording such as using, leveraging, to enhance, or which improved unless the rewrite also adds stronger supported alignment.")
+    lines.append("15. Keep the original concrete work object immediately after the lead verb when one already exists.")
+    lines.append("16. Do NOT replace a concrete work object with broader placeholders like data, analytics, workflows, tools, or processes.")
+    lines.append("17. If the original bullet already has a natural '<verb> <object> using/with ...' structure, preserve that clause skeleton and prefer local tightening inside it over introducing a new action chain.")
+    lines.append("18. Avoid noun stacking and unnatural connector order; do not force multiple bare noun phrases immediately after the lead verb.")
+    lines.append("19. If front-loading the supported signals would make the sentence less natural than the original, ABSTAIN.")
     lines.append("")
     lines.append("Quality bar:")
     lines.append("- stronger supported alignment, not just smoother wording")
@@ -2102,6 +2137,19 @@ def _build_patch_refinement_writer_prompt(
     lines.append("- same claim, same evidence, same tone")
     lines.append("- no keyword stuffing")
     lines.append("- no awkward ATS bait phrasing")
+    lines.append("")
+    lines.append("Concrete shape guidance:")
+    lines.append("- Prefer preserving the original concrete object phrase before the tool phrase when the original already has one.")
+    lines.append("- Prefer: 'Manipulated large-scale clinical and real-world datasets using Python, SQL, and Databricks ...'")
+    lines.append("- Avoid: 'Manipulated data using Databricks, Python, and SQL to analyze large-scale clinical and real-world datasets ...'")
+    lines.append("- Avoid rewrites that introduce a second action infinitive like 'to analyze' when the original already stated the analyzed object cleanly.")
+    lines.append("")
+    lines.append("Minimal-edit preference:")
+    lines.append("- Good: delete a redundant verb or weak connective while keeping the original object phrase and tool phrase.")
+    lines.append("- Good: 'Manipulated large-scale clinical and real-world datasets using Python, SQL, and Databricks ...'")
+    lines.append("- Good: 'Cleaned multi-year datasets in Python, performing descriptive statistics ...'")
+    lines.append("- Bad: global reshuffles that move tools ahead of the concrete object phrase.")
+    lines.append("- Bad: rewrites that introduce a new infinitive chain like 'to analyze' when the original already stated the analyzed object cleanly.")
     lines.append("")
     lines.append(f"Resolved role family: {role_profile.get('family_name', TAILORING_ROLE_FAMILY_FALLBACK)}")
     lines.append(f"Role-family ATS priority terms: {role_profile.get('ats_priority_terms_any', [])}")
@@ -2632,6 +2680,10 @@ def _build_substantive_multisignal_writer_prompt(
         + [str(candidate.get("canonical_supported_signal", "") or "").strip()]
     )
     supported_terms = [term for term in supported_terms if str(term or "").strip()]
+    protected_numbers = _patch_refinement_protected_numbers(candidate)
+    protected_core_terms = _patch_refinement_protected_core_terms(candidate)
+    protected_phrases = _patch_refinement_protected_phrases(candidate)
+    lead_object_phrase = _patch_refinement_lead_object_phrase(candidate)
 
     lines: List[str] = []
     lines.append("Return plain text only.")
@@ -2640,13 +2692,18 @@ def _build_substantive_multisignal_writer_prompt(
     lines.append("")
     lines.append(f"Original lead token: {original_lead}")
     lines.append(f"Supported JD signals already explicit in the bullet: {supported_terms}")
+    lines.append(f"Protected numeric tokens: {protected_numbers}")
+    lines.append(f"Protected core technical terms: {protected_core_terms}")
+    lines.append(f"Protected substantive phrases: {protected_phrases}")
+    lines.append(f"Protected lead object phrase: {lead_object_phrase}")
     lines.append("")
     lines.append("Original bullet:")
     lines.append(original_text)
     lines.append("")
     lines.append("Goal:")
-    lines.append("Produce a materially stronger JD-facing rewrite by surfacing multiple already-explicit supported signals earlier and more cohesively.")
+    lines.append("Produce a materially stronger JD-facing rewrite using the smallest truthful edit that improves supported signal salience without changing the bullet's clause skeleton.")
     lines.append("")
+    lines.append(f"Protected lead object phrase: {lead_object_phrase}")
     lines.append("Hard rules:")
     lines.append("1. Keep the same first lead action word/token as the original bullet.")
     lines.append("2. Preserve every number, metric, and protected technical term.")
@@ -2657,7 +2714,10 @@ def _build_substantive_multisignal_writer_prompt(
     lines.append("7. Preserve the result clause unless the original bullet already contains a stronger result framing that remains literally true.")
     lines.append("8. Do not merely expand acronyms, normalize punctuation, replace '&' with 'and', or swap connective wording.")
     lines.append("9. Do not return a rewrite if the only possible change is cosmetic.")
-    lines.append("10. Front-load at least two supported JD signals within the first 8 words when literally possible.")
+    lines.append("10. Surface supported JD signals earlier within the opening clause when natural, but do not force them ahead of an existing concrete lead object phrase.")
+    lines.append("10a. Prefer minimal local surgery over full-sentence reshaping.")
+    lines.append("10b. Prefer deleting redundant verbs, redundant connectors, or weak filler before attempting clause reordering.")
+    lines.append("10c. If a strong rewrite can be achieved by shortening the original clause while preserving its object phrase and tool phrase, do that instead of reordering the sentence.")
     lines.append("11. If the original bullet already contains a concrete '<tool> for <task>' or 'using <tool>, <tool>, and <tool>' phrase, preserve that phrase structure and move it directly after the lead verb.")
     lines.append("12. Do not lead with a generic umbrella phrase such as exploratory data analysis, analytics, evaluation, modeling, analysis, statistics, or visualization when a supported concrete tool or method can appear earlier.")
     lines.append("13. For multi-tool bullets, prefer the exact concrete sequence already present in the original bullet over a generalized paraphrase.")

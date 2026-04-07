@@ -5800,6 +5800,7 @@ def _build_operator_markdown_payload(
     operator_payload["direct_apply_optional_replacements"] = final_replacement_plan.get("direct_apply_optional_replacements", [])
     operator_payload["direction_only_replacements"] = final_replacement_plan.get("direction_only_replacements", [])
     operator_payload["final_replacement_summary"] = final_replacement_plan.get("summary", {})
+    operator_payload["rewrite_review_groups"] = _build_rewrite_review_groups(operator_payload)
 
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
 
@@ -6398,6 +6399,148 @@ def _rewrite_idea_override_card(
 
     return lookup.get(key)
 
+def _rewrite_review_card_lookup_by_candidate_id(
+    payload: Dict[str, Any],
+) -> Dict[str, Dict[str, Any]]:
+    lookup: Dict[str, Dict[str, Any]] = {}
+
+    for card in (payload.get("edit_cards", []) or []):
+        candidate_id = str(card.get("replacement_candidate_id", "") or "").strip()
+        if not candidate_id:
+            continue
+
+        existing = lookup.get(candidate_id)
+
+        def _rank(item: Dict[str, Any]) -> tuple:
+            return (
+                1 if str(item.get("outcome_label", "") or "").strip() else 0,
+                1 if str(item.get("claim_safety", "") or "").strip() else 0,
+                1 if str(item.get("placement_guidance", "") or "").strip() else 0,
+                len(str(item.get("recommended_rewrite", "") or "").strip()),
+            )
+
+        if existing is None or _rank(card) > _rank(existing):
+            lookup[candidate_id] = card
+
+    return lookup
+
+def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    app_ready_replacements = list(payload.get("app_ready_replacements", []) or [])
+    direct_apply_optional_replacements = list(payload.get("direct_apply_optional_replacements", []) or [])
+    direction_only_replacements = list(payload.get("direction_only_replacements", []) or [])
+    card_lookup = _rewrite_review_card_lookup_by_candidate_id(payload)
+
+    def _rewrite_group_item(row: Dict[str, Any], bucket_id: str) -> Dict[str, Any]:
+        replacement_candidate_id = str(row.get("replacement_candidate_id", "") or "").strip()
+        override_card = card_lookup.get(replacement_candidate_id, {}) if replacement_candidate_id else {}
+
+        supported_jd_signals = list(
+            row.get("supported_jd_signals", []) or
+            row.get("jd_signal_terms", []) or
+            override_card.get("supported_jd_signals", []) or
+            override_card.get("jd_signal_terms", []) or
+            []
+        )
+
+        outcome_label = str(
+            row.get("materiality_validation_status", "") or
+            row.get("outcome_label", "") or
+            override_card.get("outcome_label", "") or
+            ""
+        ).strip()
+
+        outcome_reason = str(
+            row.get("materiality_validation_note", "") or
+            row.get("outcome_reason", "") or
+            override_card.get("outcome_reason", "") or
+            row.get("why_selected", "") or
+            ""
+        ).strip()
+
+        claim_safety = str(
+            row.get("claim_safety", "") or
+            override_card.get("claim_safety", "") or
+            ""
+        ).strip()
+
+        placement_guidance = str(
+            row.get("placement_guidance", "") or
+            override_card.get("placement_guidance", "") or
+            ""
+        ).strip()
+
+        original_text = str(
+            row.get("original_text", "") or
+            override_card.get("original_text", "") or
+            ""
+        ).strip()
+
+        recommended_rewrite = str(
+            row.get("final_replacement_text", "") or
+            row.get("rewrite_direction", "") or
+            override_card.get("recommended_rewrite", "") or
+            ""
+        ).strip()
+
+        return {
+            "bucket_id": bucket_id,
+            "replacement_candidate_id": replacement_candidate_id,
+            "section": str(row.get("section", "") or "").strip(),
+            "source": str(row.get("source", "") or "").strip(),
+            "original_text": original_text,
+            "recommended_rewrite": recommended_rewrite,
+            "supported_jd_signals": supported_jd_signals,
+            "outcome_label": outcome_label,
+            "outcome_reason": outcome_reason,
+            "claim_safety": claim_safety,
+            "placement_guidance": placement_guidance,
+            "apply_priority": str(row.get("apply_priority", "") or "").strip(),
+            "why_selected": str(row.get("why_selected", "") or "").strip(),
+        }
+
+    groups: List[Dict[str, Any]] = []
+
+    if app_ready_replacements:
+        groups.append(
+            {
+                "group_id": "high_confidence_rewrites",
+                "title": "High-Confidence Rewrites",
+                "description": "Grounded rewrites that are ready to apply now.",
+                "items": [
+                    _rewrite_group_item(row, "high_confidence_rewrites")
+                    for row in app_ready_replacements
+                ],
+            }
+        )
+
+    if direct_apply_optional_replacements:
+        groups.append(
+            {
+                "group_id": "export_safe_rewrites",
+                "title": "Export-Safe Rewrites",
+                "description": "Grounded rewrites that are safe to export but are not top-priority score-lift changes.",
+                "items": [
+                    _rewrite_group_item(row, "export_safe_rewrites")
+                    for row in direct_apply_optional_replacements
+                ],
+            }
+        )
+
+    if direction_only_replacements:
+        groups.append(
+            {
+                "group_id": "directional_only",
+                "title": "Directional Only",
+                "description": "Useful guidance, but not a grounded replacement bullet yet.",
+                "items": [
+                    _rewrite_group_item(row, "directional_only")
+                    for row in direction_only_replacements
+                ],
+            }
+        )
+
+    return groups
+
 def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     job = payload.get("job", {}) or {}
     selection = payload.get("selection", {}) or {}
@@ -6413,6 +6556,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     direct_apply_optional_replacements = payload.get("direct_apply_optional_replacements", []) or []
     direction_only_replacements = payload.get("direction_only_replacements", []) or []
     final_replacement_summary = payload.get("final_replacement_summary", {}) or {}
+    rewrite_review_groups = payload.get("rewrite_review_groups", []) or []
 
     lines: List[str] = []
 
@@ -6465,6 +6609,52 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             f"- Keep original: {final_replacement_summary.get('keep_original_count', 0)}"
         )
         lines.append("")
+
+    if rewrite_review_groups:
+        lines.append("## Rewrite Review Buckets")
+        lines.append("")
+
+        for group in rewrite_review_groups:
+            title = str(group.get("title", "") or "").strip()
+            description = str(group.get("description", "") or "").strip()
+            items = list(group.get("items", []) or [])
+
+            lines.append(f"### {title} ({len(items)})")
+            if description:
+                lines.append(description)
+            lines.append("")
+
+            for index, row in enumerate(items, start=1):
+                priority = str(row.get("apply_priority", "") or "").strip()
+                priority_prefix = f"{priority.title()} priority · " if priority else ""
+                lines.append(f"#### {index}. {priority_prefix}{title[:-1] if title.endswith('s') else title}")
+
+                if row.get("section"):
+                    lines.append(f"- Section: {row.get('section', '')}")
+                if row.get("source"):
+                    lines.append(f"- Source: {row.get('source', '')}")
+                if row.get("supported_jd_signals"):
+                    lines.append(
+                        f"- Supported JD signals: {', '.join(row.get('supported_jd_signals', []) or [])}"
+                    )
+                if row.get("outcome_label"):
+                    lines.append(f"- Outcome label: {row.get('outcome_label', '')}")
+                if row.get("outcome_reason"):
+                    lines.append(f"- Outcome reason: {row.get('outcome_reason', '')}")
+                if row.get("original_text"):
+                    lines.append("- Original text:")
+                    lines.append(f"  > {row.get('original_text', '')}")
+                if row.get("recommended_rewrite"):
+                    if str(group.get("group_id", "") or "").strip() == "directional_only":
+                        lines.append("- Recommended action:")
+                    else:
+                        lines.append("- Recommended rewrite:")
+                    lines.append(f"  > {row.get('recommended_rewrite', '')}")
+                if row.get("why_selected"):
+                    lines.append(f"- Why selected: {row.get('why_selected', '')}")
+                if row.get("placement_guidance"):
+                    lines.append(f"- Placement guidance: {row.get('placement_guidance', '')}")
+                lines.append("")
 
     if app_ready_replacements:
         lines.append("## Apply Now")

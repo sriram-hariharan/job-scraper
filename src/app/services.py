@@ -3414,8 +3414,11 @@ def load_tailoring_workspace_draft_payload(
             saved_data.get("manual_bullet_edits", {})
         ),
         "note": _clean_text(saved_data.get("note")),
-        "rewrite_review_decisions": _normalize_workspace_rewrite_review_decisions(
-            saved_data.get("rewrite_review_decisions", {})
+        "rewrite_review_decisions": _derive_workspace_rewrite_review_decisions(
+            payload_data,
+            selected_candidate_ids=saved_selected_ids,
+            manual_bullet_edits=saved_data.get("manual_bullet_edits", {}),
+            rewrite_review_decisions=saved_data.get("rewrite_review_decisions", {}),
         ),
     })
 
@@ -3486,6 +3489,12 @@ def save_tailoring_workspace_draft_payload(
     review_decision_map = _normalize_workspace_rewrite_review_decisions(
         rewrite_review_decisions
     )
+    derived_review_decisions = _derive_workspace_rewrite_review_decisions(
+        payload_data,
+        selected_candidate_ids=requested_candidate_ids,
+        manual_bullet_edits=manual_edit_map,
+        rewrite_review_decisions=review_decision_map,
+    )
 
     saved_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
     draft_payload.update({
@@ -3494,7 +3503,7 @@ def save_tailoring_workspace_draft_payload(
         "selected_patch_candidate_ids": requested_candidate_ids,
         "manual_bullet_edits": manual_edit_map,
         "note": _clean_text(note),
-        "rewrite_review_decisions": review_decision_map,
+        "rewrite_review_decisions": derived_review_decisions,
     })
 
     draft_path = Path(draft_payload["draft_json_path"])
@@ -3511,6 +3520,9 @@ def save_tailoring_workspace_draft_payload(
         "draft_json_path": str(draft_path),
         "draft": draft_payload,
     }
+
+def _normalize_tailoring_workspace_compare_text(value: Any) -> str:
+    return _normalize_tailoring_workspace_text_key(value)
 
 def _normalize_tailoring_workspace_text_key(value: Any) -> str:
     text = str(value or "").lower()
@@ -3544,6 +3556,86 @@ def _tailoring_workspace_surfaced_items(payload_data: Dict[str, Any]) -> List[Di
         *list(payload_data.get("direction_only_replacements", []) or []),
     ]
 
+
+def _derive_workspace_rewrite_review_decisions(
+    payload_data: Dict[str, Any],
+    *,
+    selected_candidate_ids: Any,
+    manual_bullet_edits: Any,
+    rewrite_review_decisions: Any,
+) -> Dict[str, Dict[str, str]]:
+    selected_set = set(_normalize_selected_patch_candidate_ids(selected_candidate_ids))
+    manual_map = _normalize_workspace_manual_bullet_edits(manual_bullet_edits)
+    decision_map = _normalize_workspace_rewrite_review_decisions(rewrite_review_decisions)
+
+    derived: Dict[str, Dict[str, str]] = {}
+
+    # Start with the explicit decision map so untouched entries survive.
+    for candidate_id, row in decision_map.items():
+        derived[candidate_id] = {
+            "state": _clean_text(row.get("state")).lower() or "pending",
+            "note": _clean_text(row.get("note")),
+        }
+
+    for item in _tailoring_workspace_surfaced_items(payload_data):
+        candidate_id = _tailoring_workspace_candidate_id(item)
+        if not candidate_id:
+            continue
+
+        current = dict(derived.get(candidate_id, {"state": "pending", "note": ""}))
+        state = _clean_text(current.get("state")).lower() or "pending"
+        note = _clean_text(current.get("note"))
+
+        # Only infer edited_after_accept from already-accepted items.
+        if state not in {"accepted", "edited_after_accept"}:
+            derived[candidate_id] = {
+                "state": state,
+                "note": note,
+            }
+            continue
+
+        if candidate_id not in selected_set:
+            # If it is no longer selected, keep the explicit state as-is.
+            derived[candidate_id] = {
+                "state": state,
+                "note": note,
+            }
+            continue
+
+        bullet_key = _tailoring_workspace_bullet_key(item)
+        if not bullet_key:
+            derived[candidate_id] = {
+                "state": state,
+                "note": note,
+            }
+            continue
+
+        manual_text = _clean_text(manual_map.get(bullet_key))
+        selected_patch_text = _clean_text(item.get("final_replacement_text"))
+
+        if not manual_text or not selected_patch_text:
+            # No actual manual override to compare, so treat this as accepted-as-is.
+            derived[candidate_id] = {
+                "state": "accepted",
+                "note": note,
+            }
+            continue
+
+        manual_norm = _normalize_tailoring_workspace_compare_text(manual_text)
+        selected_norm = _normalize_tailoring_workspace_compare_text(selected_patch_text)
+
+        if manual_norm and selected_norm and manual_norm != selected_norm:
+            derived[candidate_id] = {
+                "state": "edited_after_accept",
+                "note": note,
+            }
+        else:
+            derived[candidate_id] = {
+                "state": "accepted",
+                "note": note,
+            }
+
+    return derived
 
 def _build_tailoring_workspace_effective_patch_specs(
     payload_data: Dict[str, Any],

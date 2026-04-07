@@ -3328,6 +3328,12 @@ def _build_tailoring_workspace_default_draft_payload(
         "source_selected_patch_selection_note": _clean_text(
             payload_data.get("selected_patch_selection_note")
         ),
+        "rewrite_review_telemetry": _build_workspace_rewrite_review_telemetry(
+            payload_data,
+            selected_candidate_ids=selected_candidate_ids,
+            manual_bullet_edits={},
+            rewrite_review_decisions={},
+        ),
     }
 
 
@@ -3400,6 +3406,21 @@ def load_tailoring_workspace_draft_payload(
         for candidate_id in saved_selected_ids
         if candidate_id in valid_candidate_ids
     ]
+    saved_manual_edits = _normalize_workspace_manual_bullet_edits(
+        saved_data.get("manual_bullet_edits", {})
+    )
+    saved_review_decisions = _derive_workspace_rewrite_review_decisions(
+        payload_data,
+        selected_candidate_ids=saved_selected_ids,
+        manual_bullet_edits=saved_data.get("manual_bullet_edits", {}),
+        rewrite_review_decisions=saved_data.get("rewrite_review_decisions", {}),
+    )
+    saved_review_telemetry = _build_workspace_rewrite_review_telemetry(
+        payload_data,
+        selected_candidate_ids=saved_selected_ids,
+        manual_bullet_edits=saved_manual_edits,
+        rewrite_review_decisions=saved_review_decisions,
+    )
 
     merged = dict(default_draft)
     merged.update({
@@ -3410,16 +3431,10 @@ def load_tailoring_workspace_draft_payload(
             or merged["selected_resume"]
         ),
         "selected_patch_candidate_ids": saved_selected_ids,
-        "manual_bullet_edits": _normalize_workspace_manual_bullet_edits(
-            saved_data.get("manual_bullet_edits", {})
-        ),
+        "manual_bullet_edits": saved_manual_edits,
         "note": _clean_text(saved_data.get("note")),
-        "rewrite_review_decisions": _derive_workspace_rewrite_review_decisions(
-            payload_data,
-            selected_candidate_ids=saved_selected_ids,
-            manual_bullet_edits=saved_data.get("manual_bullet_edits", {}),
-            rewrite_review_decisions=saved_data.get("rewrite_review_decisions", {}),
-        ),
+        "rewrite_review_decisions": saved_review_decisions,
+        "rewrite_review_telemetry": saved_review_telemetry,
     })
 
     return {
@@ -3496,6 +3511,13 @@ def save_tailoring_workspace_draft_payload(
         rewrite_review_decisions=review_decision_map,
     )
 
+    derived_review_telemetry = _build_workspace_rewrite_review_telemetry(
+        payload_data,
+        selected_candidate_ids=requested_candidate_ids,
+        manual_bullet_edits=manual_edit_map,
+        rewrite_review_decisions=derived_review_decisions,
+    )
+    
     saved_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
     draft_payload.update({
         "draft_status": "saved",
@@ -3504,6 +3526,7 @@ def save_tailoring_workspace_draft_payload(
         "manual_bullet_edits": manual_edit_map,
         "note": _clean_text(note),
         "rewrite_review_decisions": derived_review_decisions,
+        "rewrite_review_telemetry": derived_review_telemetry,
     })
 
     draft_path = Path(draft_payload["draft_json_path"])
@@ -3636,6 +3659,78 @@ def _derive_workspace_rewrite_review_decisions(
             }
 
     return derived
+
+def _build_workspace_rewrite_review_telemetry(
+    payload_data: Dict[str, Any],
+    *,
+    selected_candidate_ids: Any,
+    manual_bullet_edits: Any,
+    rewrite_review_decisions: Any,
+) -> Dict[str, Any]:
+    selected_ids = _normalize_selected_patch_candidate_ids(selected_candidate_ids)
+    selected_set = set(selected_ids)
+    manual_map = _normalize_workspace_manual_bullet_edits(manual_bullet_edits)
+    effective_decisions = _derive_workspace_rewrite_review_decisions(
+        payload_data,
+        selected_candidate_ids=selected_ids,
+        manual_bullet_edits=manual_map,
+        rewrite_review_decisions=rewrite_review_decisions,
+    )
+
+    surfaced_candidate_ids: List[str] = []
+    seen = set()
+    for item in _tailoring_workspace_surfaced_items(payload_data):
+        candidate_id = _tailoring_workspace_candidate_id(item)
+        if not candidate_id or candidate_id in seen:
+            continue
+        seen.add(candidate_id)
+        surfaced_candidate_ids.append(candidate_id)
+
+    pending_candidate_ids: List[str] = []
+    reviewed_candidate_ids: List[str] = []
+
+    pending_count = 0
+    accepted_count = 0
+    accepted_as_is_count = 0
+    edited_after_accept_count = 0
+    rejected_count = 0
+
+    for candidate_id in surfaced_candidate_ids:
+        state_row = effective_decisions.get(candidate_id, {"state": "pending", "note": ""})
+        state = _clean_text(state_row.get("state")).lower() or "pending"
+
+        if state == "pending":
+            pending_count += 1
+            pending_candidate_ids.append(candidate_id)
+        else:
+            reviewed_candidate_ids.append(candidate_id)
+
+        if state == "accepted":
+            accepted_count += 1
+            accepted_as_is_count += 1
+        elif state == "edited_after_accept":
+            accepted_count += 1
+            edited_after_accept_count += 1
+        elif state == "rejected":
+            rejected_count += 1
+
+    reviewed_count = accepted_count + rejected_count
+    remaining_to_review_count = pending_count
+
+    return {
+        "pending_count": pending_count,
+        "accepted_count": accepted_count,
+        "accepted_as_is_count": accepted_as_is_count,
+        "edited_after_accept_count": edited_after_accept_count,
+        "rejected_count": rejected_count,
+        "reviewed_count": reviewed_count,
+        "remaining_to_review_count": remaining_to_review_count,
+        "selected_candidate_count": len(selected_set),
+        "manual_edit_count": len(manual_map),
+        "reviewed_candidate_ids": reviewed_candidate_ids,
+        "pending_candidate_ids": pending_candidate_ids,
+    }
+
 
 def _build_tailoring_workspace_effective_patch_specs(
     payload_data: Dict[str, Any],
@@ -3871,6 +3966,20 @@ def preview_tailoring_workspace_draft_payload(
             manual_bullet_edits
         )
 
+    effective_review_decisions = _derive_workspace_rewrite_review_decisions(
+        payload_data,
+        selected_candidate_ids=effective_selected_ids,
+        manual_bullet_edits=effective_manual_edits,
+        rewrite_review_decisions=draft.get("rewrite_review_decisions", {}),
+    )
+
+    effective_review_telemetry = _build_workspace_rewrite_review_telemetry(
+        payload_data,
+        selected_candidate_ids=effective_selected_ids,
+        manual_bullet_edits=effective_manual_edits,
+        rewrite_review_decisions=effective_review_decisions,
+    )
+
     selection = payload_data.get("selection", {}) or {}
     job = payload_data.get("job", {}) or {}
 
@@ -3926,6 +4035,8 @@ def preview_tailoring_workspace_draft_payload(
             "projected_delta": None,
             "selected_patch_set_counterfactual_preview": None,
             "unresolved_manual_edit_keys": unresolved_manual_keys,
+            "rewrite_review_decisions": effective_review_decisions,
+            "rewrite_review_telemetry": effective_review_telemetry,
         }
 
     counterfactual_resume = original_resume
@@ -3964,6 +4075,8 @@ def preview_tailoring_workspace_draft_payload(
             "selected_patch_set_counterfactual_preview": None,
             "patch_status": patch_status,
             "unresolved_manual_edit_keys": unresolved_manual_keys,
+            "rewrite_review_decisions": effective_review_decisions,
+            "rewrite_review_telemetry": effective_review_telemetry,
         }
 
     projected_result = score_resume_job_match(counterfactual_resume, job_evidence)
@@ -4009,6 +4122,8 @@ def preview_tailoring_workspace_draft_payload(
         "projected_delta": projected_delta,
         "selected_patch_set_counterfactual_preview": preview,
         "unresolved_manual_edit_keys": unresolved_manual_keys,
+        "rewrite_review_decisions": effective_review_decisions,
+        "rewrite_review_telemetry": effective_review_telemetry,
     }
 
 def application_actions_payload(

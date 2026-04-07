@@ -5829,7 +5829,11 @@ def _build_operator_markdown_payload(
     operator_payload["rewrite_review_presets"] = _build_rewrite_review_presets(
         operator_payload.get("rewrite_review_groups", []) or []
     )
-
+    operator_payload["rewrite_review_defaults"] = _build_rewrite_review_defaults(
+        operator_payload.get("rewrite_review_summary", {}) or {},
+        operator_payload.get("rewrite_review_filters", {}) or {},
+        operator_payload.get("rewrite_review_presets", []) or [],
+    )
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
 
     operator_payload["patch_set_counterfactual_preview"] = _apply_patch_set_counterfactual_preview(
@@ -6565,6 +6569,23 @@ def _build_rewrite_review_filters(
         "supported_signals": supported_signal_options,
     }
 
+def _rewrite_review_preset_sort_key(row: Dict[str, Any]) -> tuple:
+    preset_id = str(row.get("preset_id", "") or "").strip()
+
+    priority = {
+        "pending_review": 0,
+        "best_now": 1,
+        "safe_but_optional": 2,
+        "direction_only": 3,
+        "directly_supported": 4,
+        "accepted": 5,
+        "edited_after_accept": 6,
+        "rejected": 7,
+    }.get(preset_id, 50)
+
+    label = str(row.get("label", "") or "").strip().lower()
+    return (priority, label)
+
 def _build_rewrite_review_presets(
     rewrite_review_groups: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -6648,7 +6669,51 @@ def _build_rewrite_review_presets(
             }
         )
 
-    return [preset for preset in presets if int(preset.get("count", 0) or 0) > 0]
+    visible_presets = [
+        preset for preset in presets
+        if int(preset.get("count", 0) or 0) > 0
+    ]
+    return sorted(visible_presets, key=_rewrite_review_preset_sort_key)
+
+def _build_rewrite_review_defaults(
+    rewrite_review_summary: Dict[str, Any],
+    rewrite_review_filters: Dict[str, Any],
+    rewrite_review_presets: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    review_state_counts = dict(rewrite_review_summary.get("review_state_counts", {}) or {})
+    preset_ids = [
+        str(row.get("preset_id", "") or "").strip()
+        for row in (rewrite_review_presets or [])
+        if str(row.get("preset_id", "") or "").strip()
+    ]
+
+    if int(review_state_counts.get("pending", 0) or 0) > 0 and "pending_review" in preset_ids:
+        default_preset_id = "pending_review"
+    elif "best_now" in preset_ids:
+        default_preset_id = "best_now"
+    elif "accepted" in preset_ids:
+        default_preset_id = "accepted"
+    elif preset_ids:
+        default_preset_id = preset_ids[0]
+    else:
+        default_preset_id = ""
+
+    default_hidden_review_states: List[str] = []
+    if int(review_state_counts.get("rejected", 0) or 0) > 0:
+        default_hidden_review_states.append("rejected")
+
+    review_state_options = list(rewrite_review_filters.get("review_states", []) or [])
+    visible_review_states = [
+        str(row.get("value", "") or "").strip()
+        for row in review_state_options
+        if str(row.get("value", "") or "").strip() and str(row.get("value", "") or "").strip() not in default_hidden_review_states
+    ]
+
+    return {
+        "default_preset_id": default_preset_id,
+        "default_hidden_review_states": default_hidden_review_states,
+        "default_visible_review_states": visible_review_states,
+    }
 
 def _build_rewrite_review_summary(
     rewrite_review_groups: List[Dict[str, Any]],
@@ -6701,12 +6766,26 @@ def _build_rewrite_review_summary(
         for key in ("accepted", "rejected", "edited_after_accept")
     )
 
+    pending_count = int(review_state_counts.get("pending", 0) or 0)
+    accepted_count = int(review_state_counts.get("accepted", 0) or 0)
+    rejected_count = int(review_state_counts.get("rejected", 0) or 0)
+    edited_after_accept_count = int(review_state_counts.get("edited_after_accept", 0) or 0)
+
+    remaining_to_review_count = pending_count
+    reviewed_count = accepted_count + rejected_count + edited_after_accept_count
+
     return {
         "group_counts": group_counts,
         "outcome_label_counts": outcome_label_counts,
         "claim_safety_counts": claim_safety_counts,
         "review_state_counts": review_state_counts,
         "top_supported_signals": top_supported_signals,
+        "remaining_to_review_count": remaining_to_review_count,
+        "reviewed_count": reviewed_count,
+        "pending_count": pending_count,
+        "accepted_count": accepted_count,
+        "rejected_count": rejected_count,
+        "edited_after_accept_count": edited_after_accept_count,
         "remaining_to_review_count": remaining_to_review_count,
         "reviewed_count": reviewed_count,
         "total_grouped_items": sum(group_counts.values()),
@@ -6976,6 +7055,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     rewrite_review_summary = payload.get("rewrite_review_summary", {}) or {}
     rewrite_review_filters = payload.get("rewrite_review_filters", {}) or {}
     rewrite_review_presets = payload.get("rewrite_review_presets", []) or []
+    rewrite_review_defaults = payload.get("rewrite_review_defaults", {}) or {}
 
     lines: List[str] = []
 
@@ -7040,9 +7120,27 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         reviewed_count = int(rewrite_review_summary.get("reviewed_count", 0) or 0)
         review_state_counts = rewrite_review_summary.get("review_state_counts", {}) or {}
         top_supported_signals = rewrite_review_summary.get("top_supported_signals", []) or []
+        pending_count = int(rewrite_review_summary.get("pending_count", 0) or 0)
+        accepted_count = int(rewrite_review_summary.get("accepted_count", 0) or 0)
+        rejected_count = int(rewrite_review_summary.get("rejected_count", 0) or 0)
+        edited_after_accept_count = int(
+            rewrite_review_summary.get("edited_after_accept_count", 0) or 0
+        )
+        remaining_to_review_count = int(
+            rewrite_review_summary.get("remaining_to_review_count", 0) or 0
+        )
+        reviewed_count = int(rewrite_review_summary.get("reviewed_count", 0) or 0)
 
         lines.append(f"- Remaining to review: {remaining_to_review_count}")
         lines.append(f"- Reviewed: {reviewed_count}")
+        lines.append(f"- Accepted: {accepted_count}")
+        lines.append(f"- Edited after accept: {edited_after_accept_count}")
+        lines.append(f"- Rejected: {rejected_count}")
+
+        if rewrite_review_summary.get("total_grouped_items") is not None:
+            lines.append(
+                f"- Total grouped rewrite items: {rewrite_review_summary.get('total_grouped_items', 0)}"
+            )
 
         if rewrite_review_summary.get("total_grouped_items") is not None:
             lines.append(
@@ -7163,6 +7261,27 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 for row in rewrite_review_presets
             )
         )
+        default_preset_id = str(rewrite_review_defaults.get("default_preset_id", "") or "").strip()
+        default_hidden_review_states = list(
+            rewrite_review_defaults.get("default_hidden_review_states", []) or []
+        )
+
+        if default_preset_id:
+            matching = [
+                row for row in rewrite_review_presets
+                if str(row.get("preset_id", "") or "").strip() == default_preset_id
+            ]
+            if matching:
+                lines.append(f"- Default preset: {matching[0].get('label', '')}")
+
+        if default_hidden_review_states:
+            lines.append(
+                "- Default hidden review states: "
+                + ", ".join(
+                    _rewrite_review_state_display_label(value)
+                    for value in default_hidden_review_states
+                )
+            )
         lines.append("")
 
     if rewrite_review_groups:

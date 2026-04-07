@@ -5801,6 +5801,9 @@ def _build_operator_markdown_payload(
     operator_payload["direction_only_replacements"] = final_replacement_plan.get("direction_only_replacements", [])
     operator_payload["final_replacement_summary"] = final_replacement_plan.get("summary", {})
     operator_payload["rewrite_review_groups"] = _build_rewrite_review_groups(operator_payload)
+    operator_payload["rewrite_review_summary"] = _build_rewrite_review_summary(
+        operator_payload.get("rewrite_review_groups", []) or []
+    )
 
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
 
@@ -6424,6 +6427,54 @@ def _rewrite_review_card_lookup_by_candidate_id(
 
     return lookup
 
+def _build_rewrite_review_summary(
+    rewrite_review_groups: List[Dict[str, Any]],
+    top_signal_limit: int = 8,
+) -> Dict[str, Any]:
+    group_counts: Dict[str, int] = {}
+    outcome_label_counts: Dict[str, int] = {}
+    claim_safety_counts: Dict[str, int] = {}
+    signal_counts: Dict[str, int] = {}
+
+    for group in (rewrite_review_groups or []):
+        group_id = str(group.get("group_id", "") or "").strip()
+        items = list(group.get("items", []) or [])
+
+        if group_id:
+            group_counts[group_id] = len(items)
+
+        for item in items:
+            outcome_label = str(item.get("outcome_label", "") or "").strip()
+            claim_safety = str(item.get("claim_safety", "") or "").strip()
+
+            if outcome_label:
+                outcome_label_counts[outcome_label] = outcome_label_counts.get(outcome_label, 0) + 1
+
+            if claim_safety:
+                claim_safety_counts[claim_safety] = claim_safety_counts.get(claim_safety, 0) + 1
+
+            for signal in list(item.get("supported_jd_signals", []) or []):
+                signal_text = str(signal or "").strip()
+                if not signal_text:
+                    continue
+                signal_counts[signal_text] = signal_counts.get(signal_text, 0) + 1
+
+    top_supported_signals = [
+        {"signal": signal, "count": count}
+        for signal, count in sorted(
+            signal_counts.items(),
+            key=lambda pair: (-pair[1], pair[0].lower()),
+        )[:top_signal_limit]
+    ]
+
+    return {
+        "group_counts": group_counts,
+        "outcome_label_counts": outcome_label_counts,
+        "claim_safety_counts": claim_safety_counts,
+        "top_supported_signals": top_supported_signals,
+        "total_grouped_items": sum(group_counts.values()),
+    }
+
 def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     app_ready_replacements = list(payload.get("app_ready_replacements", []) or [])
     direct_apply_optional_replacements = list(payload.get("direct_apply_optional_replacements", []) or [])
@@ -6557,6 +6608,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     direction_only_replacements = payload.get("direction_only_replacements", []) or []
     final_replacement_summary = payload.get("final_replacement_summary", {}) or {}
     rewrite_review_groups = payload.get("rewrite_review_groups", []) or []
+    rewrite_review_summary = payload.get("rewrite_review_summary", {}) or {}
 
     lines: List[str] = []
 
@@ -6610,6 +6662,59 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         )
         lines.append("")
 
+    if rewrite_review_summary:
+        lines.append("## Rewrite Review Summary")
+
+        group_counts = rewrite_review_summary.get("group_counts", {}) or {}
+        outcome_label_counts = rewrite_review_summary.get("outcome_label_counts", {}) or {}
+        claim_safety_counts = rewrite_review_summary.get("claim_safety_counts", {}) or {}
+        top_supported_signals = rewrite_review_summary.get("top_supported_signals", []) or []
+
+        if rewrite_review_summary.get("total_grouped_items") is not None:
+            lines.append(
+                f"- Total grouped rewrite items: {rewrite_review_summary.get('total_grouped_items', 0)}"
+            )
+
+        if group_counts:
+            lines.append(
+                f"- High-confidence rewrites: {group_counts.get('high_confidence_rewrites', 0)}"
+            )
+            lines.append(
+                f"- Export-safe rewrites: {group_counts.get('export_safe_rewrites', 0)}"
+            )
+            lines.append(
+                f"- Directional only: {group_counts.get('directional_only', 0)}"
+            )
+
+        if outcome_label_counts:
+            lines.append(
+                "- Outcome labels: "
+                + ", ".join(
+                    f"{key}={value}"
+                    for key, value in sorted(outcome_label_counts.items())
+                )
+            )
+
+        if claim_safety_counts:
+            lines.append(
+                "- Claim safety: "
+                + ", ".join(
+                    f"{key}={value}"
+                    for key, value in sorted(claim_safety_counts.items())
+                )
+            )
+
+        if top_supported_signals:
+            lines.append(
+                "- Top supported signals: "
+                + ", ".join(
+                    f"{row.get('signal', '')} ({row.get('count', 0)})"
+                    for row in top_supported_signals
+                )
+            )
+
+        lines.append("")
+        
     if rewrite_review_groups:
         lines.append("## Rewrite Review Buckets")
         lines.append("")

@@ -2122,7 +2122,7 @@ function buildResumeChoiceButtonHtml(row) {
   const hasRunner = normalizeResumeName(row.runner_up_resume);
   const needsReview = normalizeBool(row.needs_variant_review);
 
-  if (!needsReview || !hasWinner ) {
+  if (!needsReview || !hasWinner || !hasRunner) {
     return "";
   }
 

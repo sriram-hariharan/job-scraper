@@ -200,6 +200,11 @@ def build_final_replacement_plan(
         resolved_bullet_id = _candidate_bullet_id(best_candidate) or bullet_id
 
         original_text = _text(best_candidate.get("original_text", "")) or _text(card.get("current_evidence", ""))
+        current_evidence = (
+            _text(best_candidate.get("current_evidence", ""))
+            or _text(card.get("current_evidence", ""))
+            or original_text
+        )
         rewrite_direction = _text(best_candidate.get("rewrite_instruction", "")) or _text(card.get("recommended_rewrite", ""))
 
         if _is_direct_apply_ready(best_candidate):
@@ -219,6 +224,7 @@ def build_final_replacement_plan(
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
+                    "current_evidence": current_evidence,
                     "final_replacement_text": _text(best_candidate.get("patch_text", "")),
                     "rewrite_direction": rewrite_direction,
                     "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
@@ -246,6 +252,7 @@ def build_final_replacement_plan(
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
+                    "current_evidence": current_evidence,
                     "final_replacement_text": _text(best_candidate.get("patch_text", "")),
                     "rewrite_direction": rewrite_direction,
                     "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
@@ -273,6 +280,7 @@ def build_final_replacement_plan(
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
+                    "current_evidence": current_evidence,
                     "final_replacement_text": "",
                     "rewrite_direction": rewrite_direction,
                     "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
@@ -299,6 +307,7 @@ def build_final_replacement_plan(
                 "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
                 "confidence": _text(best_candidate.get("confidence", "")),
                 "original_text": original_text,
+                "current_evidence": current_evidence,
                 "final_replacement_text": "",
                 "rewrite_direction": "",
                 "why_selected": "No safe stronger direct replacement survived final deterministic selection.",

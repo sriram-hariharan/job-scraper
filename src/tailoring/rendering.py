@@ -1249,8 +1249,10 @@ def _replacement_candidate_lookup_key(item: Dict[str, Any]) -> tuple:
 
     current_evidence = (
         str(item.get("current_evidence", "") or "").strip()
-        or str(item.get("parent_bullet", "") or "").strip()
         or str(item.get("bullet_excerpt", "") or "").strip()
+        or str(item.get("focused_clause_text", "") or "").strip()
+        or str(item.get("structural_clause_text", "") or "").strip()
+        or str(item.get("parent_bullet", "") or "").strip()
         or str(item.get("original_text", "") or "").strip()
     )
 
@@ -1343,6 +1345,16 @@ def _rewrite_outcome_label_from_candidate(candidate: Dict[str, Any]) -> str:
 
     return proposal_status or "unknown"
 
+def _rendered_candidate_current_evidence(replacement_candidate: Dict[str, Any]) -> str:
+    return (
+        str(replacement_candidate.get("current_evidence", "") or "").strip()
+        or str(replacement_candidate.get("bullet_excerpt", "") or "").strip()
+        or str(replacement_candidate.get("focused_clause_text", "") or "").strip()
+        or str(replacement_candidate.get("structural_clause_text", "") or "").strip()
+        or str(replacement_candidate.get("parent_bullet", "") or "").strip()
+        or str(replacement_candidate.get("original_text", "") or "").strip()
+    )
+
 def _rewrite_card_fields_from_patch_ready_candidate(
     replacement_candidate: Dict[str, Any],
     supported_terms: List[str],
@@ -1350,6 +1362,7 @@ def _rewrite_card_fields_from_patch_ready_candidate(
     patch_text = str(replacement_candidate.get("patch_text", "") or "").strip()
     status = str(replacement_candidate.get("materiality_validation_status", "") or "").strip()
     patch_method = str(replacement_candidate.get("patch_generation_method", "") or "").strip()
+    current_evidence = _rendered_candidate_current_evidence(replacement_candidate)
 
     if status == "material_candidate":
         why_it_matters = (
@@ -1391,6 +1404,7 @@ def _rewrite_card_fields_from_patch_ready_candidate(
         "outcome_reason": str(
             replacement_candidate.get("materiality_validation_note", "") or ""
         ).strip(),
+        "current_evidence": current_evidence,
     }
 
 
@@ -1400,7 +1414,21 @@ def _rewrite_card_fields_from_directional_candidate(
 ) -> Dict[str, Any]:
     reason = str(replacement_candidate.get("direction_only_reason", "") or "").strip()
     rewrite_instruction = str(replacement_candidate.get("rewrite_instruction", "") or "").strip()
+    current_evidence = _rendered_candidate_current_evidence(replacement_candidate)
 
+    common_fields = {
+        "direction_only_reason": reason,
+        "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+        "current_evidence": current_evidence,
+        "supported_jd_signals": list(supported_terms or []),
+        "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+        "outcome_reason": str(
+            replacement_candidate.get("materiality_validation_note", "") or ""
+        ).strip()
+        or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+    }
+    
     lead = ", ".join(_truncate_list(supported_terms, 4)) if supported_terms else "the supported JD signals"
 
     if reason == "multi_signal_already_explicit_reorder_preferred":
@@ -1420,15 +1448,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Move this bullet earlier within the section if stronger ATS visibility is needed."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-                or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
     
     if reason == "single_signal_already_explicit_reorder_preferred":
@@ -1448,15 +1468,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Keep this bullet visible and move it earlier within the section only if stronger ATS visibility is needed."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
     
     if reason == "supported_terms_too_generic_to_front":
@@ -1476,15 +1488,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Keep this bullet as supporting context only unless a stronger direct signal is available."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
 
     if reason == "rewrite_instruction_pathological":
@@ -1504,15 +1508,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Do not apply the current rewrite instruction. Keep the bullet visible as-is unless a grounded deterministic patch is generated later."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
 
     if reason == "scorer_neutral_no_evidence_change":
@@ -1532,15 +1528,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Do not treat this as a required patch. Keep the current bullet unless you want cosmetic phrasing cleanup only."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
 
     if reason == "materiality_prevalidation_failed":
@@ -1560,15 +1548,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Keep the bullet unchanged unless a later deterministic rerun validates the rewrite as material."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
     
     if reason == "cosmetic_patch_not_exportable":
@@ -1588,15 +1568,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Keep the bullet as-is unless a later rewrite materially improves JD alignment while preserving truth."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
     
     if rewrite_instruction:
@@ -1614,15 +1586,7 @@ def _rewrite_card_fields_from_directional_candidate(
             "placement_guidance": (
                 "Treat this as directional-only guidance. Do not convert it into a textual rewrite unless a grounded deterministic patch exists."
             ),
-            "direction_only_reason": reason,
-            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-            "supported_jd_signals": list(supported_terms or []),
-            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-            "outcome_reason": str(
-                replacement_candidate.get("materiality_validation_note", "") or ""
-            ).strip()
-            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+            **common_fields,
         }
 
     return {
@@ -1641,15 +1605,7 @@ def _rewrite_card_fields_from_directional_candidate(
         "placement_guidance": (
             "Keep this bullet visible only if it strengthens stronger primary anchors or ordering decisions."
         ),
-        "direction_only_reason": reason,
-        "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-        "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
-        "supported_jd_signals": list(supported_terms or []),
-        "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
-        "outcome_reason": str(
-            replacement_candidate.get("materiality_validation_note", "") or ""
-        ).strip()
-        or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
+        **common_fields,
     }
 
 
@@ -1748,7 +1704,7 @@ def _build_edit_cards(
                 "source_entry_id": candidate.get("source_entry_id", ""),
                 "section": candidate.get("section", ""),
                 "source": candidate.get("source", ""),
-                "current_evidence": parent_bullet or current_evidence,
+                "current_evidence": current_evidence,
                 "parent_bullet": parent_bullet,
                 "bullet_excerpt": current_evidence,
                 "original_text": source_text,
@@ -6972,7 +6928,11 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
             override_card.get("original_text", "") or
             ""
         ).strip()
-
+        current_evidence = str(
+            row.get("current_evidence", "") or
+            override_card.get("current_evidence", "") or
+            ""
+        ).strip()
         recommended_rewrite = str(
             row.get("final_replacement_text", "") or
             row.get("rewrite_direction", "") or
@@ -6986,6 +6946,7 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
             "section": str(row.get("section", "") or "").strip(),
             "source": str(row.get("source", "") or "").strip(),
             "original_text": original_text,
+            "current_evidence": current_evidence,
             "recommended_rewrite": recommended_rewrite,
             "supported_jd_signals": supported_jd_signals,
             "outcome_label": outcome_label,
@@ -7436,9 +7397,10 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Section: {row.get('section', '')}")
             if row.get("source"):
                 lines.append(f"- Source: {row.get('source', '')}")
-            if row.get("original_text"):
+            current_bullet = str(row.get("current_evidence", "") or row.get("original_text", "") or "").strip()
+            if current_bullet:
                 lines.append("- Current bullet:")
-                lines.append(f"  > {row.get('original_text', '')}")
+                lines.append(f"  > {current_bullet}")
             if row.get("rewrite_direction"):
                 lines.append(f"- Recommended action: {row.get('rewrite_direction', '')}")
             if row.get("why_selected"):

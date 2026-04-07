@@ -4126,6 +4126,39 @@ def preview_tailoring_workspace_draft_payload(
         "rewrite_review_telemetry": effective_review_telemetry,
     }
 
+def record_application_action_payload(
+    *,
+    job_doc_id: str = "",
+    job_url: str = "",
+    job_company: str = "",
+    job_title: str = "",
+    application_status: str = "",
+    source_view: str = "",
+    note: str = "",
+) -> Dict[str, Any]:
+    row = application_action_db_row(
+        {
+            "action_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+            "job_doc_id": _clean_text(job_doc_id),
+            "job_url": _clean_text(job_url),
+            "job_company": _clean_text(job_company),
+            "job_title": _clean_text(job_title),
+            "application_status": _normalize_application_status(application_status),
+            "source_view": _clean_text(source_view),
+            "note": _clean_text(note),
+        }
+    )
+
+    _validate_application_identity(row)
+    postgres_write = _dual_write_application_action_postgres(row)
+
+    return {
+        "ok": True,
+        "row": row,
+        "overlay": _application_overlay_from_row(row),
+        "postgres_write": postgres_write,
+    }
+
 def application_actions_payload(
     application_status: str = "",
     company_contains: str = "",

@@ -1343,6 +1343,25 @@ def _directional_rewrite_lookup(
 
     return lookup
 
+def _rewrite_outcome_label_from_candidate(candidate: Dict[str, Any]) -> str:
+    proposal_status = str(candidate.get("proposal_status", "") or "").strip()
+    materiality_status = str(candidate.get("materiality_validation_status", "") or "").strip()
+    direction_only_reason = str(candidate.get("direction_only_reason", "") or "").strip()
+
+    if proposal_status == "patch_ready":
+        if materiality_status == "material_candidate":
+            return "material_candidate"
+        if materiality_status == "export_safe_no_score_lift":
+            return "export_safe_no_score_lift"
+        return "patch_ready"
+
+    if proposal_status == "direction_only":
+        if materiality_status == "cosmetic_patch_not_exportable" or direction_only_reason == "cosmetic_patch_not_exportable":
+            return "cosmetic_only"
+        return "directional_only"
+
+    return proposal_status or "unknown"
+
 def _rewrite_card_fields_from_patch_ready_candidate(
     replacement_candidate: Dict[str, Any],
     supported_terms: List[str],
@@ -1385,6 +1404,12 @@ def _rewrite_card_fields_from_patch_ready_candidate(
         "replacement_materiality_validation_note": str(
             replacement_candidate.get("materiality_validation_note", "") or ""
         ).strip(),
+        "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+        "supported_jd_signals": list(supported_terms or []),
+        "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+        "outcome_reason": str(
+            replacement_candidate.get("materiality_validation_note", "") or ""
+        ).strip(),
     }
 
 
@@ -1416,6 +1441,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+                or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
     
     if reason == "single_signal_already_explicit_reorder_preferred":
@@ -1437,6 +1469,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
     
     if reason == "supported_terms_too_generic_to_front":
@@ -1458,6 +1497,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
 
     if reason == "rewrite_instruction_pathological":
@@ -1479,6 +1525,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
 
     if reason == "scorer_neutral_no_evidence_change":
@@ -1500,6 +1553,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
 
     if reason == "materiality_prevalidation_failed":
@@ -1521,6 +1581,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
     
     if reason == "cosmetic_patch_not_exportable":
@@ -1542,6 +1609,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
     
     if rewrite_instruction:
@@ -1561,6 +1635,13 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             "direction_only_reason": reason,
             "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+            "outcome_reason": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip()
+            or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
         }
 
     return {
@@ -1581,6 +1662,13 @@ def _rewrite_card_fields_from_directional_candidate(
         ),
         "direction_only_reason": reason,
         "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+        "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+        "supported_jd_signals": list(supported_terms or []),
+        "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
+        "outcome_reason": str(
+            replacement_candidate.get("materiality_validation_note", "") or ""
+        ).strip()
+        or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
     }
 
 

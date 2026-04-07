@@ -2429,6 +2429,103 @@ function buildTailoringStatusBadge(label, tone = "muted") {
   `;
 }
 
+function getTailoringWorkspaceEffectiveReviewTelemetry() {
+  const draft = tailoringWorkspaceState.draftPayload;
+  if (
+    draft &&
+    typeof draft === "object" &&
+    draft.rewrite_review_telemetry &&
+    typeof draft.rewrite_review_telemetry === "object"
+  ) {
+    return draft.rewrite_review_telemetry;
+  }
+
+  const payload = getTailoringWorkspacePayload();
+  if (
+    payload &&
+    typeof payload === "object" &&
+    payload.rewrite_review_telemetry &&
+    typeof payload.rewrite_review_telemetry === "object"
+  ) {
+    return payload.rewrite_review_telemetry;
+  }
+
+  return null;
+}
+
+function ensureTailoringWorkspaceReviewTelemetryStrip() {
+  const meta = qs("tailoringWorkspaceMeta");
+  if (!meta || !meta.parentElement) return null;
+
+  let strip = qs("tailoringWorkspaceReviewTelemetryStrip");
+  if (strip) return strip;
+
+  strip = document.createElement("div");
+  strip.id = "tailoringWorkspaceReviewTelemetryStrip";
+  strip.className = "tailoring-workspace-review-telemetry hidden";
+  meta.insertAdjacentElement("afterend", strip);
+  return strip;
+}
+
+function renderTailoringWorkspaceReviewTelemetryStrip() {
+  const strip = ensureTailoringWorkspaceReviewTelemetryStrip();
+  if (!strip) return;
+
+  const telemetry = getTailoringWorkspaceEffectiveReviewTelemetry();
+  if (!telemetry || typeof telemetry !== "object") {
+    strip.innerHTML = "";
+    strip.classList.add("hidden");
+    return;
+  }
+
+  const remainingCount = Number(telemetry.remaining_to_review_count || 0);
+  const acceptedAsIsCount = Number(telemetry.accepted_as_is_count || 0);
+  const editedAfterAcceptCount = Number(telemetry.edited_after_accept_count || 0);
+  const rejectedCount = Number(telemetry.rejected_count || 0);
+  const selectedCandidateCount = Number(telemetry.selected_candidate_count || 0);
+  const manualEditCount = Number(telemetry.manual_edit_count || 0);
+
+  const chips = [
+    {
+      label: "Remaining",
+      value: remainingCount,
+      tone: remainingCount > 0 ? "caution" : "muted",
+    },
+    {
+      label: "Accepted as-is",
+      value: acceptedAsIsCount,
+      tone: acceptedAsIsCount > 0 ? "safe" : "muted",
+    },
+    {
+      label: "Edited after accept",
+      value: editedAfterAcceptCount,
+      tone: editedAfterAcceptCount > 0 ? "neutral" : "muted",
+    },
+    {
+      label: "Rejected",
+      value: rejectedCount,
+      tone: rejectedCount > 0 ? "danger" : "muted",
+    },
+    {
+      label: "Selected",
+      value: selectedCandidateCount,
+      tone: selectedCandidateCount > 0 ? "safe" : "muted",
+    },
+    {
+      label: "Manual edits",
+      value: manualEditCount,
+      tone: manualEditCount > 0 ? "neutral" : "muted",
+    },
+  ];
+
+  strip.innerHTML = `
+    <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-workspace-review-telemetry-row">
+      ${chips.map((item) => buildTailoringTonePill(`${item.label} ${item.value}`, item.tone)).join("")}
+    </div>
+  `;
+  strip.classList.remove("hidden");
+}
+
 function deriveTailoringOverviewState(row, llmJsonArtifact) {
   const llmData = llmJsonArtifact && llmJsonArtifact.kind === "json" && llmJsonArtifact.data && typeof llmJsonArtifact.data === "object"
     ? llmJsonArtifact.data
@@ -3348,16 +3445,8 @@ function renderTailoringWorkspaceLiveDraftPreviewInto(payload) {
   const root = qs("tailoringWorkspaceLiveDraftPreview");
   if (!root) return;
 
-  if (!payload || typeof payload !== "object") {
-    root.innerHTML = `
-      <div class="tailoring-empty-state">
-        Live draft preview is not available for this row.
-      </div>
-    `;
-    return;
-  }
-
-  root.innerHTML = renderTailoringWorkspaceLiveDraftPreview(payload);
+  root.innerHTML = "";
+  setTailoringSectionVisible("tailoringWorkspaceLiveDraftPreview", false);
 }
 
 function getTailoringWorkspaceEditableBulletBaseMap(payload) {
@@ -3953,6 +4042,7 @@ function updateTailoringWorkspaceMetaSummary(payload) {
 
   if (!payload || typeof payload !== "object") {
     meta.textContent = "Suggested changes are not available for this row.";
+    renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
 
@@ -3974,6 +4064,7 @@ function updateTailoringWorkspaceMetaSummary(payload) {
     meta.textContent = editableCount
       ? `${editableCount} surfaced bullet${editableCount === 1 ? "" : "s"} loaded for free editing. Save stores manual edits in the workspace draft.`
       : "No surfaced bullets are available for free editing on this row yet.";
+    renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
 
@@ -3983,15 +4074,18 @@ function updateTailoringWorkspaceMetaSummary(payload) {
     } else {
       meta.textContent = `Actionable suggestions loaded. ${actionableCount} selectable suggestion${actionableCount === 1 ? "" : "s"} available. Review-only guidance stays read-only.`;
     }
+    renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
 
   if (reviewCount > 0) {
     meta.textContent = "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet.";
+    renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
 
   meta.textContent = "No safe bullet-level rewrites were found for this row.";
+  renderTailoringWorkspaceReviewTelemetryStrip();
 }
 
 function rerenderTailoringWorkspaceSelectionView() {
@@ -4101,6 +4195,25 @@ function toggleTailoringWorkspaceCandidateSelection(candidateId) {
   syncTailoringWorkspacePreviewHighlight();
 }
 
+function scrollTailoringWorkspaceLeftPaneToTabs() {
+  const leftPane = document.querySelector(".tailoring-workspace-pane--left");
+  const tabsShell = qs("tailoringWorkspaceSelectedTabsShell");
+
+  if (!leftPane || !tabsShell) return;
+
+  const align = () => {
+    const targetTop = Math.max(0, tabsShell.offsetTop - 8);
+    leftPane.scrollTop = targetTop;
+  };
+
+  window.requestAnimationFrame(() => {
+    align();
+    window.requestAnimationFrame(() => {
+      align();
+    });
+  });
+}
+
 function bindTailoringWorkspaceSelectionHandlers() {
   const root = qs("tailoringWorkspaceInteractiveSummary");
   if (root && root.dataset.selectionBound !== "true") {
@@ -4185,6 +4298,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
 
       tailoringWorkspaceState.selectedTab = nextTab;
       rerenderTailoringWorkspaceSelectionView();
+      scrollTailoringWorkspaceLeftPaneToTabs();
     });
   }
 }

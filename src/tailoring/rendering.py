@@ -5819,9 +5819,13 @@ def _build_operator_markdown_payload(
     operator_payload["rewrite_review_decisions"] = dict(
         payload.get("rewrite_review_decisions", {}) or {}
     )
+    operator_payload["rewrite_review_telemetry"] = dict(
+        payload.get("rewrite_review_telemetry", {}) or {}
+    )
     operator_payload["rewrite_review_groups"] = _build_rewrite_review_groups(operator_payload)
     operator_payload["rewrite_review_summary"] = _build_rewrite_review_summary(
-        operator_payload.get("rewrite_review_groups", []) or []
+        operator_payload.get("rewrite_review_groups", []) or [],
+        workspace_review_telemetry=operator_payload.get("rewrite_review_telemetry", {}) or {},
     )
     operator_payload["rewrite_review_filters"] = _build_rewrite_review_filters(
         operator_payload.get("rewrite_review_groups", []) or []
@@ -6717,6 +6721,7 @@ def _build_rewrite_review_defaults(
 
 def _build_rewrite_review_summary(
     rewrite_review_groups: List[Dict[str, Any]],
+    workspace_review_telemetry: Optional[Dict[str, Any]] = None,
     top_signal_limit: int = 8,
 ) -> Dict[str, Any]:
     group_counts: Dict[str, int] = {}
@@ -6742,7 +6747,7 @@ def _build_rewrite_review_summary(
 
             if claim_safety:
                 claim_safety_counts[claim_safety] = claim_safety_counts.get(claim_safety, 0) + 1
-            
+
             if review_state:
                 review_state_counts[review_state] = review_state_counts.get(review_state, 0) + 1
 
@@ -6760,19 +6765,52 @@ def _build_rewrite_review_summary(
         )[:top_signal_limit]
     ]
 
-    remaining_to_review_count = int(review_state_counts.get("pending", 0) or 0)
-    reviewed_count = sum(
-        int(review_state_counts.get(key, 0) or 0)
-        for key in ("accepted", "rejected", "edited_after_accept")
+    telemetry = dict(workspace_review_telemetry or {})
+
+    pending_count = int(
+        telemetry.get("pending_count", review_state_counts.get("pending", 0)) or 0
+    )
+    accepted_as_is_count = int(
+        telemetry.get("accepted_as_is_count", review_state_counts.get("accepted", 0)) or 0
+    )
+    edited_after_accept_count = int(
+        telemetry.get("edited_after_accept_count", review_state_counts.get("edited_after_accept", 0)) or 0
+    )
+    rejected_count = int(
+        telemetry.get("rejected_count", review_state_counts.get("rejected", 0)) or 0
+    )
+    accepted_count = int(
+        telemetry.get(
+            "accepted_count",
+            accepted_as_is_count + edited_after_accept_count,
+        ) or 0
+    )
+    reviewed_count = int(
+        telemetry.get(
+            "reviewed_count",
+            accepted_count + rejected_count,
+        ) or 0
+    )
+    remaining_to_review_count = int(
+        telemetry.get("remaining_to_review_count", pending_count) or 0
+    )
+    selected_candidate_count = int(
+        telemetry.get("selected_candidate_count", 0) or 0
+    )
+    manual_edit_count = int(
+        telemetry.get("manual_edit_count", 0) or 0
     )
 
-    pending_count = int(review_state_counts.get("pending", 0) or 0)
-    accepted_count = int(review_state_counts.get("accepted", 0) or 0)
-    rejected_count = int(review_state_counts.get("rejected", 0) or 0)
-    edited_after_accept_count = int(review_state_counts.get("edited_after_accept", 0) or 0)
-
-    remaining_to_review_count = pending_count
-    reviewed_count = accepted_count + rejected_count + edited_after_accept_count
+    reviewed_candidate_ids = [
+        str(candidate_id or "").strip()
+        for candidate_id in (telemetry.get("reviewed_candidate_ids", []) or [])
+        if str(candidate_id or "").strip()
+    ]
+    pending_candidate_ids = [
+        str(candidate_id or "").strip()
+        for candidate_id in (telemetry.get("pending_candidate_ids", []) or [])
+        if str(candidate_id or "").strip()
+    ]
 
     return {
         "group_counts": group_counts,
@@ -6780,14 +6818,17 @@ def _build_rewrite_review_summary(
         "claim_safety_counts": claim_safety_counts,
         "review_state_counts": review_state_counts,
         "top_supported_signals": top_supported_signals,
-        "remaining_to_review_count": remaining_to_review_count,
-        "reviewed_count": reviewed_count,
         "pending_count": pending_count,
         "accepted_count": accepted_count,
-        "rejected_count": rejected_count,
+        "accepted_as_is_count": accepted_as_is_count,
         "edited_after_accept_count": edited_after_accept_count,
-        "remaining_to_review_count": remaining_to_review_count,
+        "rejected_count": rejected_count,
         "reviewed_count": reviewed_count,
+        "remaining_to_review_count": remaining_to_review_count,
+        "selected_candidate_count": selected_candidate_count,
+        "manual_edit_count": manual_edit_count,
+        "reviewed_candidate_ids": reviewed_candidate_ids,
+        "pending_candidate_ids": pending_candidate_ids,
         "total_grouped_items": sum(group_counts.values()),
     }
 
@@ -7116,31 +7157,34 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         outcome_label_counts = rewrite_review_summary.get("outcome_label_counts", {}) or {}
         claim_safety_counts = rewrite_review_summary.get("claim_safety_counts", {}) or {}
         review_state_counts = rewrite_review_summary.get("review_state_counts", {}) or {}
-        remaining_to_review_count = int(rewrite_review_summary.get("remaining_to_review_count", 0) or 0)
-        reviewed_count = int(rewrite_review_summary.get("reviewed_count", 0) or 0)
-        review_state_counts = rewrite_review_summary.get("review_state_counts", {}) or {}
         top_supported_signals = rewrite_review_summary.get("top_supported_signals", []) or []
+
         pending_count = int(rewrite_review_summary.get("pending_count", 0) or 0)
         accepted_count = int(rewrite_review_summary.get("accepted_count", 0) or 0)
-        rejected_count = int(rewrite_review_summary.get("rejected_count", 0) or 0)
+        accepted_as_is_count = int(rewrite_review_summary.get("accepted_as_is_count", 0) or 0)
         edited_after_accept_count = int(
             rewrite_review_summary.get("edited_after_accept_count", 0) or 0
         )
+        rejected_count = int(rewrite_review_summary.get("rejected_count", 0) or 0)
         remaining_to_review_count = int(
             rewrite_review_summary.get("remaining_to_review_count", 0) or 0
         )
         reviewed_count = int(rewrite_review_summary.get("reviewed_count", 0) or 0)
+        selected_candidate_count = int(
+            rewrite_review_summary.get("selected_candidate_count", 0) or 0
+        )
+        manual_edit_count = int(
+            rewrite_review_summary.get("manual_edit_count", 0) or 0
+        )
 
         lines.append(f"- Remaining to review: {remaining_to_review_count}")
         lines.append(f"- Reviewed: {reviewed_count}")
         lines.append(f"- Accepted: {accepted_count}")
+        lines.append(f"- Accepted as-is: {accepted_as_is_count}")
         lines.append(f"- Edited after accept: {edited_after_accept_count}")
         lines.append(f"- Rejected: {rejected_count}")
-
-        if rewrite_review_summary.get("total_grouped_items") is not None:
-            lines.append(
-                f"- Total grouped rewrite items: {rewrite_review_summary.get('total_grouped_items', 0)}"
-            )
+        lines.append(f"- Selected candidate count: {selected_candidate_count}")
+        lines.append(f"- Manual edit count: {manual_edit_count}")
 
         if rewrite_review_summary.get("total_grouped_items") is not None:
             lines.append(

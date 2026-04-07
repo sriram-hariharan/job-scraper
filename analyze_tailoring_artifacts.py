@@ -545,6 +545,8 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
     files_with_patch_ready_rewrites = 0
     files_with_material_candidates = 0
     files_with_surfaced_patch_rewrite_cards = 0
+    files_with_export_safe_no_score_lift = 0
+    total_export_safe_no_score_lift = 0
     files_with_directional_suppress = 0
     files_with_directional_merge = 0
     files_with_invariant_violations = 0
@@ -583,6 +585,12 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
             files_with_patch_ready_rewrites += 1
         if row["material_candidate_count"] > 0:
             files_with_material_candidates += 1
+        if int(row.get("export_safe_no_score_lift_count", 0) or 0) > 0:
+            files_with_export_safe_no_score_lift += 1
+
+        total_export_safe_no_score_lift += int(
+            row.get("export_safe_no_score_lift_count", 0) or 0
+        )
         if row["surfaced_patch_rewrite_card_count"] > 0:
             files_with_surfaced_patch_rewrite_cards += 1
         if row["directional_suppress_count"] > 0:
@@ -716,6 +724,8 @@ def _build_summary(paths: List[Path]) -> Dict[str, Any]:
         "files_with_patch_ready_rewrites": files_with_patch_ready_rewrites,
         "files_with_material_candidates": files_with_material_candidates,
         "files_with_surfaced_patch_rewrite_cards": files_with_surfaced_patch_rewrite_cards,
+        "files_with_export_safe_no_score_lift": files_with_export_safe_no_score_lift,
+        "total_export_safe_no_score_lift": total_export_safe_no_score_lift,
         "files_with_directional_suppress": files_with_directional_suppress,
         "files_with_directional_merge": files_with_directional_merge,
         "files_with_duplicate_signal_keys": files_with_duplicate_signal_keys,
@@ -853,13 +863,7 @@ def _print_file_rows(summary: Dict[str, Any], top_n: int) -> None:
             f"candidates={row['replacement_candidate_count']}"
         )
         print(
-            f"  patch_ready_rewrites={row['patch_ready_rewrite_count']} | "
-            f"material_candidates={row['material_candidate_count']} | "
-            f"surfaced_patch_cards={row['surfaced_patch_rewrite_card_count']} | "
-            f"directional_merge={row['directional_merge_count']} | "
-            f"directional_suppress={row['directional_suppress_count']} | "
-            f"directional_reorder={row['directional_reorder_count']} | "
-            f"keep_only={row['keep_only_count']}"
+            f"  patch_ready_rewrites={row['patch_ready_rewrite_count']} | material_candidates={row['material_candidate_count']} | export_safe_no_score_lift={row.get('export_safe_no_score_lift_count', 0)} | surfaced_patch_cards={row['surfaced_patch_rewrite_card_count']} | directional_merge={row['directional_merge_count']} | directional_suppress={row['directional_suppress_count']} | directional_reorder={row['directional_reorder_count']} | keep_only={row['keep_only_count']}"
         )
         if row.get("is_llm_artifact", False):
             print(
@@ -962,6 +966,8 @@ def main() -> None:
     print(f"files_with_patch_ready_rewrites: {summary['files_with_patch_ready_rewrites']}")
     print(f"files_with_material_candidates: {summary['files_with_material_candidates']}")
     print(f"files_with_surfaced_patch_rewrite_cards: {summary['files_with_surfaced_patch_rewrite_cards']}")
+    print(f"files_with_export_safe_no_score_lift: {summary['files_with_export_safe_no_score_lift']}")
+    print(f"total_export_safe_no_score_lift: {summary['total_export_safe_no_score_lift']}")
     print(f"files_with_directional_suppress: {summary['files_with_directional_suppress']}")
     print(f"files_with_directional_merge: {summary['files_with_directional_merge']}")
     print(f"files_with_duplicate_signal_keys: {summary['files_with_duplicate_signal_keys']}")

@@ -6481,6 +6481,7 @@ def _build_rewrite_review_filters(
     group_options: List[Dict[str, Any]] = []
     outcome_counts: Dict[str, int] = {}
     claim_safety_counts: Dict[str, int] = {}
+    review_state_counts: Dict[str, int] = {}
     signal_counts: Dict[str, int] = {}
 
     for group in (rewrite_review_groups or []):
@@ -6501,12 +6502,16 @@ def _build_rewrite_review_filters(
         for item in items:
             outcome_label = str(item.get("outcome_label", "") or "").strip()
             claim_safety = str(item.get("claim_safety", "") or "").strip()
+            review_state = str(item.get("review_state", "") or "").strip()
 
             if outcome_label:
                 outcome_counts[outcome_label] = outcome_counts.get(outcome_label, 0) + 1
 
             if claim_safety:
                 claim_safety_counts[claim_safety] = claim_safety_counts.get(claim_safety, 0) + 1
+
+            if review_state:
+                review_state_counts[review_state] = review_state_counts.get(review_state, 0) + 1
 
             for signal in list(item.get("supported_jd_signals", []) or []):
                 signal_text = str(signal or "").strip()
@@ -6534,6 +6539,16 @@ def _build_rewrite_review_filters(
         for key, value in sorted(claim_safety_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
     ]
 
+    review_state_options = [
+        {
+            "value": key,
+            "label": _rewrite_review_state_display_label(key),
+            "raw_label": key,
+            "count": value,
+        }
+        for key, value in sorted(review_state_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+    ]
+
     supported_signal_options = [
         {"value": key, "label": key, "count": value}
         for key, value in sorted(signal_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
@@ -6543,6 +6558,7 @@ def _build_rewrite_review_filters(
         "groups": group_options,
         "outcome_labels": outcome_options,
         "claim_safety": claim_safety_options,
+        "review_states": review_state_options,
         "supported_signals": supported_signal_options,
     }
 
@@ -6593,6 +6609,30 @@ def _build_rewrite_review_presets(
             "count": _count(lambda item: str(item.get("claim_safety", "") or "").strip() == "safe_strengthen"),
             "filters": {"claim_safety": ["safe_strengthen"]},
         },
+        {
+            "preset_id": "pending_review",
+            "label": "Pending review",
+            "count": _count(lambda item: str(item.get("review_state", "") or "").strip() == "pending"),
+            "filters": {"review_states": ["pending"]},
+        },
+        {
+            "preset_id": "accepted",
+            "label": "Accepted",
+            "count": _count(lambda item: str(item.get("review_state", "") or "").strip() == "accepted"),
+            "filters": {"review_states": ["accepted"]},
+        },
+        {
+            "preset_id": "rejected",
+            "label": "Rejected",
+            "count": _count(lambda item: str(item.get("review_state", "") or "").strip() == "rejected"),
+            "filters": {"review_states": ["rejected"]},
+        },
+        {
+            "preset_id": "edited_after_accept",
+            "label": "Edited after accept",
+            "count": _count(lambda item: str(item.get("review_state", "") or "").strip() == "edited_after_accept"),
+            "filters": {"review_states": ["edited_after_accept"]},
+        },
     ]
 
     for signal in all_signals[:8]:
@@ -6614,6 +6654,7 @@ def _build_rewrite_review_summary(
     group_counts: Dict[str, int] = {}
     outcome_label_counts: Dict[str, int] = {}
     claim_safety_counts: Dict[str, int] = {}
+    review_state_counts: Dict[str, int] = {}
     signal_counts: Dict[str, int] = {}
 
     for group in (rewrite_review_groups or []):
@@ -6626,12 +6667,16 @@ def _build_rewrite_review_summary(
         for item in items:
             outcome_label = str(item.get("outcome_label", "") or "").strip()
             claim_safety = str(item.get("claim_safety", "") or "").strip()
+            review_state = str(item.get("review_state", "") or "").strip()
 
             if outcome_label:
                 outcome_label_counts[outcome_label] = outcome_label_counts.get(outcome_label, 0) + 1
 
             if claim_safety:
                 claim_safety_counts[claim_safety] = claim_safety_counts.get(claim_safety, 0) + 1
+            
+            if review_state:
+                review_state_counts[review_state] = review_state_counts.get(review_state, 0) + 1
 
             for signal in list(item.get("supported_jd_signals", []) or []):
                 signal_text = str(signal or "").strip()
@@ -6651,6 +6696,7 @@ def _build_rewrite_review_summary(
         "group_counts": group_counts,
         "outcome_label_counts": outcome_label_counts,
         "claim_safety_counts": claim_safety_counts,
+        "review_state_counts": review_state_counts,
         "top_supported_signals": top_supported_signals,
         "total_grouped_items": sum(group_counts.values()),
     }
@@ -6941,6 +6987,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         group_counts = rewrite_review_summary.get("group_counts", {}) or {}
         outcome_label_counts = rewrite_review_summary.get("outcome_label_counts", {}) or {}
         claim_safety_counts = rewrite_review_summary.get("claim_safety_counts", {}) or {}
+        review_state_counts = rewrite_review_summary.get("review_state_counts", {}) or {}
         top_supported_signals = rewrite_review_summary.get("top_supported_signals", []) or []
 
         if rewrite_review_summary.get("total_grouped_items") is not None:
@@ -6977,6 +7024,15 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 )
             )
 
+        if review_state_counts:
+            lines.append(
+                "- Review states: "
+                + ", ".join(
+                    f"{_rewrite_review_state_display_label(key)}={value}"
+                    for key, value in sorted(review_state_counts.items())
+                )
+            )
+
         if top_supported_signals:
             lines.append(
                 "- Top supported signals: "
@@ -6994,6 +7050,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         group_options = rewrite_review_filters.get("groups", []) or []
         outcome_options = rewrite_review_filters.get("outcome_labels", []) or []
         claim_safety_options = rewrite_review_filters.get("claim_safety", []) or []
+        review_state_options = rewrite_review_filters.get("review_states", []) or []
         supported_signal_options = rewrite_review_filters.get("supported_signals", []) or []
 
         if group_options:
@@ -7020,6 +7077,15 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 + ", ".join(
                     f"{row.get('label', '')} ({row.get('count', 0)})"
                     for row in claim_safety_options
+                )
+            )
+        
+        if review_state_options:
+            lines.append(
+                "- Review states: "
+                + ", ".join(
+                    f"{row.get('label', '')} ({row.get('count', 0)})"
+                    for row in review_state_options
                 )
             )
 
@@ -7074,6 +7140,10 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                     )
                 if row.get("outcome_label"):
                     lines.append(f"- Outcome label: {row.get('outcome_label', '')}")
+                if row.get("review_state_display_label"):
+                    lines.append(f"- Review state: {row.get('review_state_display_label', '')}")
+                if row.get("review_note"):
+                    lines.append(f"- Review note: {row.get('review_note', '')}")
                 if row.get("outcome_reason"):
                     lines.append(f"- Outcome reason: {row.get('outcome_reason', '')}")
                 if row.get("original_text"):

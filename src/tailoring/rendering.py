@@ -6475,6 +6475,47 @@ def _build_rewrite_review_summary(
         "total_grouped_items": sum(group_counts.values()),
     }
 
+def _rewrite_review_item_sort_key(item: Dict[str, Any]) -> tuple:
+    apply_priority = str(item.get("apply_priority", "") or "").strip().lower()
+    outcome_label = str(item.get("outcome_label", "") or "").strip().lower()
+    claim_safety = str(item.get("claim_safety", "") or "").strip().lower()
+
+    priority_rank = {
+        "high": 0,
+        "medium": 1,
+        "low": 2,
+    }.get(apply_priority, 9)
+
+    outcome_rank = {
+        "material_candidate": 0,
+        "export_safe_no_score_lift": 1,
+        "patch_ready": 2,
+        "directional_only": 3,
+        "cosmetic_only": 4,
+    }.get(outcome_label, 9)
+
+    claim_safety_rank = {
+        "safe_strengthen": 0,
+        "keep_visible": 1,
+        "adjacent_only": 2,
+        "safe_reorder": 3,
+        "safe_merge": 4,
+        "safe_suppress": 5,
+    }.get(claim_safety, 9)
+
+    supported_signal_count = len(list(item.get("supported_jd_signals", []) or []))
+
+    return (
+        priority_rank,
+        outcome_rank,
+        claim_safety_rank,
+        -supported_signal_count,
+        str(item.get("section", "") or "").strip().lower(),
+        str(item.get("source", "") or "").strip().lower(),
+        str(item.get("replacement_candidate_id", "") or "").strip().lower(),
+        str(item.get("recommended_rewrite", "") or "").strip().lower(),
+    )
+
 def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     app_ready_replacements = list(payload.get("app_ready_replacements", []) or [])
     direct_apply_optional_replacements = list(payload.get("direct_apply_optional_replacements", []) or [])
@@ -6557,10 +6598,13 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "group_id": "high_confidence_rewrites",
                 "title": "High-Confidence Rewrites",
                 "description": "Grounded rewrites that are ready to apply now.",
-                "items": [
-                    _rewrite_group_item(row, "high_confidence_rewrites")
-                    for row in app_ready_replacements
-                ],
+                "items": sorted(
+                    [
+                        _rewrite_group_item(row, "high_confidence_rewrites")
+                        for row in app_ready_replacements
+                    ],
+                    key=_rewrite_review_item_sort_key,
+                ),
             }
         )
 
@@ -6570,10 +6614,13 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "group_id": "export_safe_rewrites",
                 "title": "Export-Safe Rewrites",
                 "description": "Grounded rewrites that are safe to export but are not top-priority score-lift changes.",
-                "items": [
-                    _rewrite_group_item(row, "export_safe_rewrites")
-                    for row in direct_apply_optional_replacements
-                ],
+                "items": sorted(
+                    [
+                        _rewrite_group_item(row, "export_safe_rewrites")
+                        for row in direct_apply_optional_replacements
+                    ],
+                    key=_rewrite_review_item_sort_key,
+                ),
             }
         )
 
@@ -6583,10 +6630,13 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
                 "group_id": "directional_only",
                 "title": "Directional Only",
                 "description": "Useful guidance, but not a grounded replacement bullet yet.",
-                "items": [
-                    _rewrite_group_item(row, "directional_only")
-                    for row in direction_only_replacements
-                ],
+                "items": sorted(
+                    [
+                        _rewrite_group_item(row, "directional_only")
+                        for row in direction_only_replacements
+                    ],
+                    key=_rewrite_review_item_sort_key,
+                ),
             }
         )
 
@@ -6714,7 +6764,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             )
 
         lines.append("")
-        
+
     if rewrite_review_groups:
         lines.append("## Rewrite Review Buckets")
         lines.append("")

@@ -52,36 +52,16 @@ from src.matching.signal_family_matcher import (
     supported_signal_match_in_text,
 )
 
-from src.config.consts import ACTION_VERB_HINTS
-
-_PROMOTABLE_SIGNAL_FAMILY_LABELS = {
-    "experimentation": "Experimentation",
-    "analytics_ml": "Modeling",
-}
-
-_PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS = {
-    "experimentation": {"experimentation_depth"},
-    "analytics_ml": {"analytics_ml_depth"},
-}
-
-_CLAUSE_SPLIT_ACTION_VERBS = (
-    "Implemented",
-    "Designed",
-    "Developed",
-    "Built",
-    "Created",
-    "Led",
-    "Ran",
-    "Conducted",
-    "Engineered",
-    "Automated",
-    "Performed",
+from src.config.consts import (
+    ACTION_VERB_HINTS, 
+    _CLAUSE_SPLIT_ACTION_VERBS,
+    _STRUCTURAL_CLAUSE_FAMILY_PRIORITY,
+    _PROMOTABLE_SIGNAL_FAMILY_LABELS,
+    _PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS,
+    _REWRITE_CLAIM_SAFETY_DISPLAY_LABELS,
+    _REWRITE_GROUP_DISPLAY_LABELS,
+    _REWRITE_OUTCOME_DISPLAY_LABELS,
 )
-
-_STRUCTURAL_CLAUSE_FAMILY_PRIORITY = {
-    "experimentation": 0,
-    "analytics_ml": 1,
-}
 
 _ACTION_VERB_HINTS_LOWER = {
     str(item).strip().lower()
@@ -5804,6 +5784,12 @@ def _build_operator_markdown_payload(
     operator_payload["rewrite_review_summary"] = _build_rewrite_review_summary(
         operator_payload.get("rewrite_review_groups", []) or []
     )
+    operator_payload["rewrite_review_filters"] = _build_rewrite_review_filters(
+        operator_payload.get("rewrite_review_groups", []) or []
+    )
+    operator_payload["rewrite_review_presets"] = _build_rewrite_review_presets(
+        operator_payload.get("rewrite_review_groups", []) or []
+    )
 
     operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
 
@@ -6427,6 +6413,161 @@ def _rewrite_review_card_lookup_by_candidate_id(
 
     return lookup
 
+
+def _rewrite_outcome_display_label(value: str) -> str:
+    key = str(value or "").strip()
+    if not key:
+        return ""
+    return _REWRITE_OUTCOME_DISPLAY_LABELS.get(key, key.replace("_", " ").title())
+
+
+def _rewrite_claim_safety_display_label(value: str) -> str:
+    key = str(value or "").strip()
+    if not key:
+        return ""
+    return _REWRITE_CLAIM_SAFETY_DISPLAY_LABELS.get(key, key.replace("_", " ").title())
+
+
+
+def _rewrite_group_display_label(value: str) -> str:
+    key = str(value or "").strip()
+    if not key:
+        return ""
+    return _REWRITE_GROUP_DISPLAY_LABELS.get(key, key.replace("_", " ").title())
+
+def _build_rewrite_review_filters(
+    rewrite_review_groups: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    
+    group_options: List[Dict[str, Any]] = []
+    outcome_counts: Dict[str, int] = {}
+    claim_safety_counts: Dict[str, int] = {}
+    signal_counts: Dict[str, int] = {}
+
+    for group in (rewrite_review_groups or []):
+        group_id = str(group.get("group_id", "") or "").strip()
+        title = str(group.get("title", "") or "").strip()
+        items = list(group.get("items", []) or [])
+
+        if group_id:
+            group_options.append(
+                {
+                    "value": group_id,
+                    "label": _rewrite_group_display_label(group_id),
+                    "raw_label": title or group_id,
+                    "count": len(items),
+                }
+            )
+
+        for item in items:
+            outcome_label = str(item.get("outcome_label", "") or "").strip()
+            claim_safety = str(item.get("claim_safety", "") or "").strip()
+
+            if outcome_label:
+                outcome_counts[outcome_label] = outcome_counts.get(outcome_label, 0) + 1
+
+            if claim_safety:
+                claim_safety_counts[claim_safety] = claim_safety_counts.get(claim_safety, 0) + 1
+
+            for signal in list(item.get("supported_jd_signals", []) or []):
+                signal_text = str(signal or "").strip()
+                if not signal_text:
+                    continue
+                signal_counts[signal_text] = signal_counts.get(signal_text, 0) + 1
+
+    outcome_options = [
+        {
+            "value": key,
+            "label": _rewrite_outcome_display_label(key),
+            "raw_label": key,
+            "count": value,
+        }
+        for key, value in sorted(outcome_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+    ]
+
+    claim_safety_options = [
+        {
+            "value": key,
+            "label": _rewrite_claim_safety_display_label(key),
+            "raw_label": key,
+            "count": value,
+        }
+        for key, value in sorted(claim_safety_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+    ]
+
+    supported_signal_options = [
+        {"value": key, "label": key, "count": value}
+        for key, value in sorted(signal_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+    ]
+
+    return {
+        "groups": group_options,
+        "outcome_labels": outcome_options,
+        "claim_safety": claim_safety_options,
+        "supported_signals": supported_signal_options,
+    }
+
+def _build_rewrite_review_presets(
+    rewrite_review_groups: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    items = [
+        item
+        for group in (rewrite_review_groups or [])
+        for item in list(group.get("items", []) or [])
+    ]
+
+    def _count(predicate) -> int:
+        return sum(1 for item in items if predicate(item))
+
+    all_signals = sorted(
+        {
+            str(signal).strip()
+            for item in items
+            for signal in list(item.get("supported_jd_signals", []) or [])
+            if str(signal).strip()
+        },
+        key=lambda x: x.lower(),
+    )
+
+    presets: List[Dict[str, Any]] = [
+        {
+            "preset_id": "best_now",
+            "label": "Best now",
+            "count": _count(lambda item: str(item.get("bucket_id", "") or "").strip() == "high_confidence_rewrites"),
+            "filters": {"groups": ["high_confidence_rewrites"]},
+        },
+        {
+            "preset_id": "safe_but_optional",
+            "label": "Safe but optional",
+            "count": _count(lambda item: str(item.get("bucket_id", "") or "").strip() == "export_safe_rewrites"),
+            "filters": {"groups": ["export_safe_rewrites"]},
+        },
+        {
+            "preset_id": "direction_only",
+            "label": "Direction only",
+            "count": _count(lambda item: str(item.get("bucket_id", "") or "").strip() == "directional_only"),
+            "filters": {"groups": ["directional_only"]},
+        },
+        {
+            "preset_id": "directly_supported",
+            "label": "Directly supported",
+            "count": _count(lambda item: str(item.get("claim_safety", "") or "").strip() == "safe_strengthen"),
+            "filters": {"claim_safety": ["safe_strengthen"]},
+        },
+    ]
+
+    for signal in all_signals[:8]:
+        presets.append(
+            {
+                "preset_id": f"signal::{signal}",
+                "label": signal,
+                "count": _count(lambda item, s=signal: s in list(item.get("supported_jd_signals", []) or [])),
+                "filters": {"supported_signals": [signal]},
+            }
+        )
+
+    return [preset for preset in presets if int(preset.get("count", 0) or 0) > 0]
+
 def _build_rewrite_review_summary(
     rewrite_review_groups: List[Dict[str, Any]],
     top_signal_limit: int = 8,
@@ -6588,6 +6729,9 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
             "placement_guidance": placement_guidance,
             "apply_priority": str(row.get("apply_priority", "") or "").strip(),
             "why_selected": str(row.get("why_selected", "") or "").strip(),
+            "group_display_label": _rewrite_group_display_label(bucket_id),
+            "outcome_display_label": _rewrite_outcome_display_label(outcome_label),
+            "claim_safety_display_label": _rewrite_claim_safety_display_label(claim_safety),
         }
 
     groups: List[Dict[str, Any]] = []
@@ -6659,6 +6803,8 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     final_replacement_summary = payload.get("final_replacement_summary", {}) or {}
     rewrite_review_groups = payload.get("rewrite_review_groups", []) or []
     rewrite_review_summary = payload.get("rewrite_review_summary", {}) or {}
+    rewrite_review_filters = payload.get("rewrite_review_filters", {}) or {}
+    rewrite_review_presets = payload.get("rewrite_review_presets", []) or []
 
     lines: List[str] = []
 
@@ -6763,6 +6909,63 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 )
             )
 
+        lines.append("")
+
+    if rewrite_review_filters:
+        lines.append("## Rewrite Review Filters")
+
+        group_options = rewrite_review_filters.get("groups", []) or []
+        outcome_options = rewrite_review_filters.get("outcome_labels", []) or []
+        claim_safety_options = rewrite_review_filters.get("claim_safety", []) or []
+        supported_signal_options = rewrite_review_filters.get("supported_signals", []) or []
+
+        if group_options:
+            lines.append(
+                "- Groups: "
+                + ", ".join(
+                    f"{row.get('label', '')} ({row.get('count', 0)})"
+                    for row in group_options
+                )
+            )
+
+        if outcome_options:
+            lines.append(
+                "- Outcome labels: "
+                + ", ".join(
+                    f"{row.get('label', '')} ({row.get('count', 0)})"
+                    for row in outcome_options
+                )
+            )
+
+        if claim_safety_options:
+            lines.append(
+                "- Claim safety: "
+                + ", ".join(
+                    f"{row.get('label', '')} ({row.get('count', 0)})"
+                    for row in claim_safety_options
+                )
+            )
+
+        if supported_signal_options:
+            lines.append(
+                "- Supported signals: "
+                + ", ".join(
+                    f"{row.get('label', '')} ({row.get('count', 0)})"
+                    for row in supported_signal_options[:12]
+                )
+            )
+
+        lines.append("")
+
+    if rewrite_review_presets:
+        lines.append("## Rewrite Review Presets")
+        lines.append(
+            "- Presets: "
+            + ", ".join(
+                f"{row.get('label', '')} ({row.get('count', 0)})"
+                for row in rewrite_review_presets
+            )
+        )
         lines.append("")
 
     if rewrite_review_groups:

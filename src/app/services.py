@@ -13,6 +13,7 @@ import sys
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 
+from src.config.consts import _ALLOWED_REWRITE_REVIEW_STATES
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -3209,6 +3210,51 @@ def _tailoring_workspace_draft_artifact_path(artifact_path: Path) -> Path:
     return artifact_path.with_name(f"{artifact_path.stem}__tailoring_workspace_draft.json")
 
 
+def _normalize_workspace_rewrite_review_decisions(value: Any) -> Dict[str, Dict[str, str]]:
+    if isinstance(value, dict):
+        raw_items = value
+    else:
+        raw_text = _clean_text(value)
+        if not raw_text:
+            return {}
+
+        try:
+            parsed = json.loads(raw_text)
+        except Exception as exc:
+            raise ValueError("rewrite_review_decisions must be a JSON object.") from exc
+
+        if not isinstance(parsed, dict):
+            raise ValueError("rewrite_review_decisions must be a JSON object.")
+
+        raw_items = parsed
+
+    normalized: Dict[str, Dict[str, str]] = {}
+
+    for raw_key, raw_value in raw_items.items():
+        candidate_id = _clean_text(raw_key)
+        if not candidate_id:
+            continue
+
+        if isinstance(raw_value, dict):
+            state = _clean_text(raw_value.get("state")).lower() or "pending"
+            note = _clean_text(raw_value.get("note"))
+        else:
+            state = _clean_text(raw_value).lower() or "pending"
+            note = ""
+
+        if state not in _ALLOWED_REWRITE_REVIEW_STATES:
+            allowed = ", ".join(sorted(_ALLOWED_REWRITE_REVIEW_STATES))
+            raise ValueError(
+                f"Invalid rewrite review state={state!r} for {candidate_id!r}. Allowed: {allowed}"
+            )
+
+        normalized[candidate_id] = {
+            "state": state,
+            "note": note,
+        }
+
+    return normalized
+
 def _normalize_workspace_manual_bullet_edits(value: Any) -> Dict[str, str]:
     if isinstance(value, dict):
         raw_items = value
@@ -3275,6 +3321,7 @@ def _build_tailoring_workspace_default_draft_payload(
         "selected_patch_candidate_ids": selected_candidate_ids,
         "manual_bullet_edits": {},
         "note": "",
+        "rewrite_review_decisions": {},
         "source_selected_patch_selection_status": _clean_text(
             payload_data.get("selected_patch_selection_status")
         ),
@@ -3367,6 +3414,9 @@ def load_tailoring_workspace_draft_payload(
             saved_data.get("manual_bullet_edits", {})
         ),
         "note": _clean_text(saved_data.get("note")),
+        "rewrite_review_decisions": _normalize_workspace_rewrite_review_decisions(
+            saved_data.get("rewrite_review_decisions", {})
+        ),
     })
 
     return {
@@ -3384,6 +3434,7 @@ def save_tailoring_workspace_draft_payload(
     selected_resume: str = "",
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
+    rewrite_review_decisions: Any = None,
     note: str = "",
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(
@@ -3432,6 +3483,9 @@ def save_tailoring_workspace_draft_payload(
         )
 
     manual_edit_map = _normalize_workspace_manual_bullet_edits(manual_bullet_edits)
+    review_decision_map = _normalize_workspace_rewrite_review_decisions(
+        rewrite_review_decisions
+    )
 
     saved_at = datetime.now(timezone.utc).isoformat(timespec="microseconds")
     draft_payload.update({
@@ -3440,6 +3494,7 @@ def save_tailoring_workspace_draft_payload(
         "selected_patch_candidate_ids": requested_candidate_ids,
         "manual_bullet_edits": manual_edit_map,
         "note": _clean_text(note),
+        "rewrite_review_decisions": review_decision_map,
     })
 
     draft_path = Path(draft_payload["draft_json_path"])

@@ -61,6 +61,7 @@ from src.config.consts import (
     _REWRITE_CLAIM_SAFETY_DISPLAY_LABELS,
     _REWRITE_GROUP_DISPLAY_LABELS,
     _REWRITE_OUTCOME_DISPLAY_LABELS,
+    _REWRITE_REVIEW_STATE_DISPLAY_LABELS
 )
 
 _ACTION_VERB_HINTS_LOWER = {
@@ -2563,6 +2564,12 @@ def _rewrite_candidate_to_reorder_companion(
 def _candidate_promotable_family(candidate: Dict[str, Any]) -> str:
     terms = list(candidate.get("supported_jd_signals", []) or candidate.get("jd_signal_terms", []) or [])
     return _primary_promotable_family_from_terms(terms)
+
+def _rewrite_review_state_display_label(value: str) -> str:
+    key = str(value or "").strip()
+    if not key:
+        return "Pending"
+    return _REWRITE_REVIEW_STATE_DISPLAY_LABELS.get(key, key.replace("_", " ").title())
 
 def _promotable_family_display_label(family: str) -> str:
     raw_family = str(family or "").strip()
@@ -5695,6 +5702,32 @@ def _align_edit_cards_with_final_diagnoses(
 
     return aligned_cards
 
+def _apply_rewrite_review_state_to_edit_cards(
+    edit_cards: List[Dict[str, Any]],
+    payload: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    decision_lookup = _rewrite_review_decisions_by_candidate_id(payload)
+    output: List[Dict[str, Any]] = []
+
+    for card in (edit_cards or []):
+        updated = dict(card)
+        replacement_candidate_id = str(updated.get("replacement_candidate_id", "") or "").strip()
+
+        decision = decision_lookup.get(
+            replacement_candidate_id,
+            {"state": "pending", "note": ""},
+        )
+        review_state = str(decision.get("state", "") or "pending").strip()
+        review_note = str(decision.get("note", "") or "").strip()
+
+        updated["review_state"] = review_state
+        updated["review_state_display_label"] = _rewrite_review_state_display_label(review_state)
+        updated["review_note"] = review_note
+
+        output.append(updated)
+
+    return output
+
 def _build_operator_markdown_payload(
     payload: Dict[str, Any],
     llm_output: Optional[Dict[str, Any]],
@@ -5759,7 +5792,10 @@ def _build_operator_markdown_payload(
         bullet_diagnoses,
     )
 
-    operator_payload["edit_cards"] = edit_cards
+    operator_payload["edit_cards"] = _apply_rewrite_review_state_to_edit_cards(
+        edit_cards,
+        operator_payload,
+    )
 
     final_bullet_diagnoses = _build_bullet_diagnoses(
         operator_payload,
@@ -5780,6 +5816,9 @@ def _build_operator_markdown_payload(
     operator_payload["direct_apply_optional_replacements"] = final_replacement_plan.get("direct_apply_optional_replacements", [])
     operator_payload["direction_only_replacements"] = final_replacement_plan.get("direction_only_replacements", [])
     operator_payload["final_replacement_summary"] = final_replacement_plan.get("summary", {})
+    operator_payload["rewrite_review_decisions"] = dict(
+        payload.get("rewrite_review_decisions", {}) or {}
+    )
     operator_payload["rewrite_review_groups"] = _build_rewrite_review_groups(operator_payload)
     operator_payload["rewrite_review_summary"] = _build_rewrite_review_summary(
         operator_payload.get("rewrite_review_groups", []) or []
@@ -6657,14 +6696,49 @@ def _rewrite_review_item_sort_key(item: Dict[str, Any]) -> tuple:
         str(item.get("recommended_rewrite", "") or "").strip().lower(),
     )
 
+def _rewrite_review_decisions_by_candidate_id(
+    payload: Dict[str, Any],
+) -> Dict[str, Dict[str, str]]:
+    raw = payload.get("rewrite_review_decisions", {}) or {}
+    if not isinstance(raw, dict):
+        return {}
+
+    normalized: Dict[str, Dict[str, str]] = {}
+
+    for raw_key, raw_value in raw.items():
+        candidate_id = str(raw_key or "").strip()
+        if not candidate_id:
+            continue
+
+        if isinstance(raw_value, dict):
+            state = str(raw_value.get("state", "") or "").strip().lower() or "pending"
+            note = str(raw_value.get("note", "") or "").strip()
+        else:
+            state = str(raw_value or "").strip().lower() or "pending"
+            note = ""
+
+        normalized[candidate_id] = {
+            "state": state,
+            "note": note,
+        }
+
+    return normalized
+
 def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     app_ready_replacements = list(payload.get("app_ready_replacements", []) or [])
     direct_apply_optional_replacements = list(payload.get("direct_apply_optional_replacements", []) or [])
     direction_only_replacements = list(payload.get("direction_only_replacements", []) or [])
     card_lookup = _rewrite_review_card_lookup_by_candidate_id(payload)
+    decision_lookup = _rewrite_review_decisions_by_candidate_id(payload)
 
     def _rewrite_group_item(row: Dict[str, Any], bucket_id: str) -> Dict[str, Any]:
         replacement_candidate_id = str(row.get("replacement_candidate_id", "") or "").strip()
+        review_decision = decision_lookup.get(
+            replacement_candidate_id,
+            {"state": "pending", "note": ""},
+        )
+        review_state = str(review_decision.get("state", "") or "pending").strip()
+        review_note = str(review_decision.get("note", "") or "").strip()
         override_card = card_lookup.get(replacement_candidate_id, {}) if replacement_candidate_id else {}
 
         supported_jd_signals = list(
@@ -6732,6 +6806,9 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
             "group_display_label": _rewrite_group_display_label(bucket_id),
             "outcome_display_label": _rewrite_outcome_display_label(outcome_label),
             "claim_safety_display_label": _rewrite_claim_safety_display_label(claim_safety),
+            "review_state": review_state,
+            "review_state_display_label": _rewrite_review_state_display_label(review_state),
+            "review_note": review_note,
         }
 
     groups: List[Dict[str, Any]] = []

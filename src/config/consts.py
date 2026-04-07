@@ -1690,3 +1690,70 @@ _VARIANT_TITLE_ABBREVIATIONS = {
     "da": "data analyst",
     "ae": "analytics engineer",
 }
+
+
+_REWRITE_OUTCOME_DISPLAY_LABELS = {
+    "material_candidate": "Best now",
+    "export_safe_no_score_lift": "Safe but optional",
+    "directional_only": "Direction only",
+    "cosmetic_only": "Cosmetic only",
+    "patch_ready": "Ready",
+}
+
+_REWRITE_CLAIM_SAFETY_DISPLAY_LABELS = {
+    "safe_strengthen": "Directly supported",
+    "keep_visible": "Keep visible",
+    "adjacent_only": "Adjacent support only",
+    "safe_reorder": "Reorder only",
+    "safe_merge": "Merge guidance",
+    "safe_suppress": "Suppress guidance",
+}
+
+_REWRITE_GROUP_DISPLAY_LABELS = {
+    "high_confidence_rewrites": "Best now",
+    "export_safe_rewrites": "Safe but optional",
+    "directional_only": "Direction only",
+}
+
+_PROMOTABLE_SIGNAL_FAMILY_LABELS = {
+    "experimentation": "Experimentation",
+    "analytics_ml": "Modeling",
+}
+
+_PROMOTABLE_SIGNAL_FAMILY_REQUIRED_DIMENSIONS = {
+    "experimentation": {"experimentation_depth"},
+    "analytics_ml": {"analytics_ml_depth"},
+}
+
+_CLAUSE_SPLIT_ACTION_VERBS = (
+    "Implemented",
+    "Designed",
+    "Developed",
+    "Built",
+    "Created",
+    "Led",
+    "Ran",
+    "Conducted",
+    "Engineered",
+    "Automated",
+    "Performed",
+)
+
+_STRUCTURAL_CLAUSE_FAMILY_PRIORITY = {
+    "experimentation": 0,
+    "analytics_ml": 1,
+}
+
+_REWRITE_REVIEW_STATE_DISPLAY_LABELS = {
+    "pending": "Pending",
+    "accepted": "Accepted",
+    "rejected": "Rejected",
+    "edited_after_accept": "Edited after accept",
+}
+
+_ALLOWED_REWRITE_REVIEW_STATES = {
+    "pending",
+    "accepted",
+    "rejected",
+    "edited_after_accept",
+}

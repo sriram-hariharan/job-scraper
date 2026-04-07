@@ -6546,7 +6546,10 @@ def _build_rewrite_review_filters(
             "raw_label": key,
             "count": value,
         }
-        for key, value in sorted(review_state_counts.items(), key=lambda pair: (-pair[1], pair[0].lower()))
+        for key, value in sorted(
+            review_state_counts.items(),
+            key=lambda pair: (_rewrite_review_state_sort_rank(pair[0]), pair[0].lower()),
+        )
     ]
 
     supported_signal_options = [
@@ -6692,19 +6695,38 @@ def _build_rewrite_review_summary(
         )[:top_signal_limit]
     ]
 
+    remaining_to_review_count = int(review_state_counts.get("pending", 0) or 0)
+    reviewed_count = sum(
+        int(review_state_counts.get(key, 0) or 0)
+        for key in ("accepted", "rejected", "edited_after_accept")
+    )
+
     return {
         "group_counts": group_counts,
         "outcome_label_counts": outcome_label_counts,
         "claim_safety_counts": claim_safety_counts,
         "review_state_counts": review_state_counts,
         "top_supported_signals": top_supported_signals,
+        "remaining_to_review_count": remaining_to_review_count,
+        "reviewed_count": reviewed_count,
         "total_grouped_items": sum(group_counts.values()),
     }
+
+def _rewrite_review_state_sort_rank(value: str) -> int:
+    key = str(value or "").strip().lower()
+
+    return {
+        "accepted": 0,
+        "edited_after_accept": 1,
+        "pending": 2,
+        "rejected": 3,
+    }.get(key, 9)
 
 def _rewrite_review_item_sort_key(item: Dict[str, Any]) -> tuple:
     apply_priority = str(item.get("apply_priority", "") or "").strip().lower()
     outcome_label = str(item.get("outcome_label", "") or "").strip().lower()
     claim_safety = str(item.get("claim_safety", "") or "").strip().lower()
+    review_state = str(item.get("review_state", "") or "").strip().lower()
 
     priority_rank = {
         "high": 0,
@@ -6729,9 +6751,12 @@ def _rewrite_review_item_sort_key(item: Dict[str, Any]) -> tuple:
         "safe_suppress": 5,
     }.get(claim_safety, 9)
 
+    review_state_rank = _rewrite_review_state_sort_rank(review_state)
+
     supported_signal_count = len(list(item.get("supported_jd_signals", []) or []))
 
     return (
+        review_state_rank,
         priority_rank,
         outcome_rank,
         claim_safety_rank,
@@ -6909,6 +6934,29 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
 
     return groups
 
+def _ordered_rewrite_review_state_rows(counts: Dict[str, int]) -> List[tuple]:
+    ordered_keys = [
+        "pending",
+        "accepted",
+        "edited_after_accept",
+        "rejected",
+    ]
+
+    rows: List[tuple] = []
+    seen = set()
+
+    for key in ordered_keys:
+        if key in counts:
+            rows.append((key, int(counts.get(key, 0) or 0)))
+            seen.add(key)
+
+    for key in sorted(counts.keys()):
+        if key in seen:
+            continue
+        rows.append((key, int(counts.get(key, 0) or 0)))
+
+    return rows
+
 def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     job = payload.get("job", {}) or {}
     selection = payload.get("selection", {}) or {}
@@ -6988,7 +7036,13 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
         outcome_label_counts = rewrite_review_summary.get("outcome_label_counts", {}) or {}
         claim_safety_counts = rewrite_review_summary.get("claim_safety_counts", {}) or {}
         review_state_counts = rewrite_review_summary.get("review_state_counts", {}) or {}
+        remaining_to_review_count = int(rewrite_review_summary.get("remaining_to_review_count", 0) or 0)
+        reviewed_count = int(rewrite_review_summary.get("reviewed_count", 0) or 0)
+        review_state_counts = rewrite_review_summary.get("review_state_counts", {}) or {}
         top_supported_signals = rewrite_review_summary.get("top_supported_signals", []) or []
+
+        lines.append(f"- Remaining to review: {remaining_to_review_count}")
+        lines.append(f"- Reviewed: {reviewed_count}")
 
         if rewrite_review_summary.get("total_grouped_items") is not None:
             lines.append(
@@ -7029,7 +7083,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 "- Review states: "
                 + ", ".join(
                     f"{_rewrite_review_state_display_label(key)}={value}"
-                    for key, value in sorted(review_state_counts.items())
+                    for key, value in _ordered_rewrite_review_state_rows(review_state_counts)
                 )
             )
 

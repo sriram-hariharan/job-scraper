@@ -4635,18 +4635,21 @@ function renderReplacementDecisionSection({
                 : "caution";
 
           const claimSafetyValue = String(item.claim_safety || "").trim();
-          const claimSafetyLabel = claimSafetyValue
+
+          const showClaimSafetyChip =
+            claimSafetyValue &&
+            claimSafetyValue !== "safe_strengthen";
+
+          const claimSafetyLabel = showClaimSafetyChip
             ? humanizeUnderscoreLabel(claimSafetyValue)
             : "";
 
           const claimSafetyTone =
-            claimSafetyValue === "safe_strengthen"
-              ? "safe"
-              : claimSafetyValue === "adjacent_only"
-                ? "caution"
-                : claimSafetyValue
-                  ? "danger"
-                  : "";
+            claimSafetyValue === "adjacent_only"
+              ? "caution"
+              : claimSafetyValue
+                ? "danger"
+                : "";
 
           const trustReasonText = String(
             item.direction_only_reason ||
@@ -4657,13 +4660,14 @@ function renderReplacementDecisionSection({
           ).trim();
 
           const compactTrustHtml =
-            trustLabel || claimSafetyLabel || trustReasonText
+            claimSafetyLabel || trustReasonText
               ? `
                 <div class="tailoring-edit-inline-summary tailoring-edit-inline-summary--trust">
-                  <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
-                    ${trustLabel ? buildTailoringTonePill(trustLabel, trustTone) : ""}
-                    ${claimSafetyLabel ? buildTailoringTonePill(claimSafetyLabel, claimSafetyTone) : ""}
-                  </div>
+                  ${claimSafetyLabel ? `
+                    <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
+                      ${buildTailoringTonePill(claimSafetyLabel, claimSafetyTone)}
+                    </div>
+                  ` : ""}
                   ${trustReasonText ? `
                     <div
                       class="tailoring-edit-inline-reason tailoring-edit-inline-reason--trust"

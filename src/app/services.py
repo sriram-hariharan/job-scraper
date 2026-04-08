@@ -1860,6 +1860,126 @@ def _load_job_doc_id_to_index(job_corpus_path: Path) -> Dict[str, int]:
 
     return mapping
 
+def _job_corpus_identity_values(record: Dict[str, Any]) -> List[str]:
+    from src.matching.job_adapter import build_job_evidence
+
+    metadata = record.get("metadata", {}) if isinstance(record.get("metadata"), dict) else {}
+
+    adapter_job_doc_id = ""
+    try:
+        adapter_job_doc_id = _clean_text(getattr(build_job_evidence(record), "job_doc_id", ""))
+    except Exception:
+        adapter_job_doc_id = ""
+
+    values = [
+        adapter_job_doc_id,
+        _clean_text(record.get("job_doc_id")),
+        _clean_text(record.get("doc_id")),
+        _clean_text(record.get("job_url")),
+        _clean_text(metadata.get("job_doc_id")),
+        _clean_text(metadata.get("doc_id")),
+        _clean_text(metadata.get("job_url")),
+    ]
+
+    out: List[str] = []
+    seen = set()
+    for value in values:
+        if not value or value in seen:
+            continue
+        seen.add(value)
+        out.append(value)
+    return out
+
+
+def _job_corpus_company_title(record: Dict[str, Any]) -> Tuple[str, str]:
+    metadata = record.get("metadata", {}) if isinstance(record.get("metadata"), dict) else {}
+
+    company = _clean_text(
+        record.get("job_company")
+        or record.get("company")
+        or metadata.get("job_company")
+        or metadata.get("company")
+    )
+    title = _clean_text(
+        record.get("job_title")
+        or record.get("title")
+        or metadata.get("job_title")
+        or metadata.get("title")
+    )
+    return company, title
+
+
+def _resolve_job_index_for_regeneration(
+    job_corpus_path: Path,
+    *,
+    job_doc_id: str = "",
+    job_url: str = "",
+    job_company: str = "",
+    job_title: str = "",
+) -> int:
+    ja = _job_app()
+
+    clean_job_doc_id = _clean_text(job_doc_id)
+    clean_job_url = _clean_text(job_url)
+    target_company_norm = ja._normalize_text(job_company)
+    target_title_norm = ja._normalize_text(job_title)
+
+    if not job_corpus_path.exists():
+        raise ValueError(f"Missing job corpus: {job_corpus_path}")
+
+    exact_identity_hits: List[int] = []
+    title_company_hits: List[int] = []
+
+    with job_corpus_path.open("r", encoding="utf-8") as f:
+        for idx, raw_line in enumerate(f):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            record = json.loads(line)
+
+            identity_values = _job_corpus_identity_values(record)
+            if clean_job_doc_id and clean_job_doc_id in identity_values:
+                exact_identity_hits.append(idx)
+                continue
+
+            if clean_job_url and clean_job_url in identity_values:
+                exact_identity_hits.append(idx)
+                continue
+
+            record_company, record_title = _job_corpus_company_title(record)
+            record_company_norm = ja._normalize_text(record_company)
+            record_title_norm = ja._normalize_text(record_title)
+
+            if (
+                target_company_norm
+                and target_title_norm
+                and record_company_norm == target_company_norm
+                and record_title_norm == target_title_norm
+            ):
+                title_company_hits.append(idx)
+
+    if len(exact_identity_hits) == 1:
+        return exact_identity_hits[0]
+
+    if len(exact_identity_hits) > 1:
+        raise ValueError(
+            f"Ambiguous corpus match for job identity: job_doc_id={clean_job_doc_id!r} job_url={clean_job_url!r}"
+        )
+
+    if len(title_company_hits) == 1:
+        return title_company_hits[0]
+
+    if len(title_company_hits) > 1:
+        raise ValueError(
+            f"Ambiguous corpus match for company/title fallback: company={job_company!r} title={job_title!r}"
+        )
+
+    raise ValueError(
+        f"Could not resolve corpus index for regeneration: "
+        f"job_doc_id={clean_job_doc_id!r} job_url={clean_job_url!r} "
+        f"company={job_company!r} title={job_title!r}"
+    )
 
 def _load_csv_rows_with_fieldnames(path: Path) -> Tuple[List[Dict[str, str]], List[str]]:
     if not path.exists():
@@ -1993,16 +2113,21 @@ def regenerate_selected_resume_tailoring_payload(
         )
 
     job_doc_id_value = _clean_text(target_row.get("job_doc_id"))
-    if not job_doc_id_value:
-        raise ValueError("Target planning row is missing job_doc_id.")
-
-    job_doc_id_to_index = _load_job_doc_id_to_index(job_corpus)
-    if job_doc_id_value not in job_doc_id_to_index:
-        raise ValueError(f"Could not map job_doc_id to corpus index: {job_doc_id_value}")
-
+    job_url_value = _clean_text(target_row.get("job_url"))
     company = _clean_text(target_row.get("job_company"))
     title = _clean_text(target_row.get("job_title"))
     action = _clean_text(target_row.get("action"))
+
+    if not any([job_doc_id_value, job_url_value, company, title]):
+        raise ValueError("Target planning row is missing usable job identity for regeneration.")
+
+    job_index = _resolve_job_index_for_regeneration(
+        job_corpus,
+        job_doc_id=job_doc_id_value,
+        job_url=job_url_value,
+        job_company=company,
+        job_title=title,
+    )
 
     job_packets_dir = Path(output_dir) / "job_packets"
     job_packets_dir.mkdir(parents=True, exist_ok=True)
@@ -2027,7 +2152,7 @@ def regenerate_selected_resume_tailoring_payload(
         "--job-corpus",
         str(job_corpus),
         "--job-index",
-        str(job_doc_id_to_index[job_doc_id_value]),
+        str(job_index),
         "--resume-name-contains",
         chosen_resume,
         "--disable-semantic-evidence",

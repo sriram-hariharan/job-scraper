@@ -4721,6 +4721,30 @@ th.sortable-col {
     inset 0 0 0 1px rgba(145, 242, 195, 0.08);
 }
 
+.tailoring-edit-card--active {
+  border-color: rgba(120, 166, 255, 0.42);
+  background: linear-gradient(180deg, rgba(120, 166, 255, 0.12) 0%, rgba(18, 25, 51, 0.9) 100%);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(120, 166, 255, 0.12);
+}
+
+.tailoring-edit-card--muted {
+  opacity: 0.72;
+}
+
+.tailoring-edit-card--muted:hover {
+  opacity: 0.9;
+}
+
+.tailoring-edit-card--selected.tailoring-edit-card--active {
+  border-color: rgba(145, 242, 195, 0.4);
+  background: linear-gradient(180deg, rgba(145, 242, 195, 0.14) 0%, rgba(18, 25, 51, 0.9) 100%);
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.18),
+    inset 0 0 0 1px rgba(145, 242, 195, 0.12);
+}
+
 .tailoring-card-actions {
   display: flex;
   justify-content: flex-end;

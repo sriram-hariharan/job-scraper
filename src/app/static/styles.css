@@ -5790,7 +5790,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
 
 .tailoring-edit-inline-summary--trust {
   margin-top: 6px;
-  padding-top: 0;
+  gap: 6px 10px;
   align-items: flex-start;
 }
 

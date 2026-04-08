@@ -1208,6 +1208,92 @@ tbody tr:hover {
   gap: 10px;
 }
 
+/* === tailoring workspace export modal === */
+
+.tailoring-workspace-export-modal-card {
+  width: min(620px, calc(100vw - 24px));
+}
+
+.tailoring-workspace-export-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tailoring-workspace-export-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tailoring-workspace-export-note {
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 166, 255, 0.18);
+  background: rgba(120, 166, 255, 0.08);
+  color: #dbe6ff;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tailoring-workspace-export-format-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.tailoring-workspace-export-format-btn {
+  min-height: 112px;
+  padding: 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(42, 53, 99, 0.8);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  text-align: left;
+}
+
+.tailoring-workspace-export-format-btn:hover:not(:disabled) {
+  opacity: 1;
+  border-color: rgba(120, 166, 255, 0.34);
+  background: rgba(120, 166, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.tailoring-workspace-export-format-btn:disabled {
+  opacity: 0.46;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.tailoring-workspace-export-format-title {
+  color: #eef4ff;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 30px;
+}
+
+.tailoring-workspace-export-format-copy {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .tailoring-workspace-export-summary,
+  .tailoring-workspace-export-format-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* === planning resume choice modal === */
 
 .resume-choice-modal-card {
@@ -4954,6 +5040,30 @@ th.sortable-col {
   justify-content: center;
 }
 
+.tailoring-workspace-preview-header .tailoring-workspace-action-tooltip::before {
+  left: auto;
+  right: 8px;
+  transform: translateY(4px);
+}
+
+.tailoring-workspace-preview-header .tailoring-workspace-action-tooltip::after {
+  left: auto;
+  right: 0;
+  transform: translateY(4px);
+  max-width: 240px;
+  min-width: 160px;
+  white-space: normal;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.tailoring-workspace-preview-header .tailoring-workspace-action-tooltip:hover::before,
+.tailoring-workspace-preview-header .tailoring-workspace-action-tooltip:hover::after,
+.tailoring-workspace-preview-header .tailoring-workspace-action-tooltip:focus-within::before,
+.tailoring-workspace-preview-header .tailoring-workspace-action-tooltip:focus-within::after {
+  transform: translateY(0);
+}
+
 .tailoring-workspace-action-tooltip::before,
 .tailoring-workspace-action-tooltip::after {
   opacity: 0;
@@ -5114,8 +5224,11 @@ th.sortable-col {
 }
 
 .tailoring-workspace-action-icon {
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  flex: 0 0 30px;
   display: block;
   object-fit: contain;
   pointer-events: none;

@@ -57,6 +57,10 @@ class PlanningWorkspaceDraftPreviewRequest(BaseModel):
     manual_bullet_edits: dict[str, str] | None = None
     rewrite_review_decisions: dict[str, dict[str, str] | str] | None = None
 
+class PlanningWorkspaceDraftExportRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+    format: str = "pdf"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -626,22 +630,26 @@ def preview_workspace_draft(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-@app.post("/planning/preview-workspace-draft")
-def preview_workspace_draft(
-    request: PlanningWorkspaceDraftPreviewRequest,
+@app.post("/planning/export-workspace-draft")
+def export_workspace_draft(
+    request: PlanningWorkspaceDraftExportRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
     try:
-        return services.preview_tailoring_workspace_draft_payload(
+        payload = services.export_tailoring_workspace_draft_payload(
             output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
-            selected_patch_candidate_ids=request.selected_patch_candidate_ids,
-            manual_bullet_edits=request.manual_bullet_edits,
+            format=request.format,
+        )
+        return FileResponse(
+            path=str(payload["path"]),
+            media_type=str(payload["media_type"]),
+            filename=str(payload["filename"]),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    
+        
 @app.get("/application-actions")
 def application_actions(
     application_status: str = "",

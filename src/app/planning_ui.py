@@ -93,7 +93,7 @@ def planning_dashboard() -> str:
               </div>
             </div>
           </div>
-          
+
           <div class="control-group dashboard-field planning-field--tailoring">
             <label>Tailoring</label>
             <div class="multi-select" id="planningTailoringFilter" data-placeholder="All">
@@ -181,30 +181,118 @@ def planning_dashboard() -> str:
       </div>
 
       <div class="table-wrap">
-        <table id="planningTable">
+        <table id="planningTable" class="resizable-table">
+          <colgroup id="planningTableColgroup">
+            <col data-col-key="queue_rank" style="width: 110px;" />
+            <col data-col-key="action" style="width: 120px;" />
+            <col data-col-key="job_company" style="width: 180px;" />
+            <col data-col-key="job_title" style="width: 260px;" />
+            <col data-col-key="posted_at" style="width: 160px;" />
+            <col data-col-key="winner_resume" style="width: 220px;" />
+            <col data-col-key="winner_score" style="width: 120px;" />
+            <col data-col-key="runner_up_resume" style="width: 220px;" />
+            <col data-col-key="runner_up_score" style="width: 130px;" />
+            <col data-col-key="score_gap" style="width: 120px;" />
+            <col data-col-key="winner_bucket" style="width: 150px;" />
+            <col data-col-key="review_state" style="width: 150px;" />
+            <col data-col-key="missing_requirement_count" style="width: 150px;" />
+            <col data-col-key="llm_fallback_best_resume" style="width: 220px;" />
+            <col data-col-key="llm_fallback_status" style="width: 150px;" />
+            <col data-col-key="llm_adjudication_resume" style="width: 180px;" />
+            <col data-col-key="operator_decision" style="width: 170px;" />
+            <col data-col-key="operator_selected_resume" style="width: 220px;" />
+            <col data-col-key="queue_priority_reason" style="width: 260px;" />
+            <col data-col-key="tailoring" style="width: 190px;" />
+            <col class="table-static-col" data-static-col-key="apply" style="width: 140px;" />
+          </colgroup>
+
           <thead>
             <tr>
-              <th>Queue Rank</th>
-              <th>Action</th>
-              <th>Company</th>
-              <th>Title</th>
-              <th>Posted At</th>
-              <th>Winner Resume</th>
-              <th>Winner Score</th>
-              <th>Runner-Up Resume</th>
-              <th>Runner-Up Score</th>
-              <th>Score Gap</th>
-              <th>Match Strength</th>
-              <th>Review State</th>
-              <th>Missing Req Count</th>
-              <th>Fallback Best Resume</th>
-              <th>Fallback Status</th>
-              <th>LLM Review Hint</th>
-              <th>Operator Decision</th>
-              <th>Operator Selected Resume</th>
-              <th>Priority Reason</th>
-              <th>Tailoring</th>
-              <th class="sticky-apply-col">Apply</th>
+              <th data-col-key="queue_rank">
+                <div class="resizable-col-content"><span class="resizable-col-label">Queue Rank</span></div>
+                <span class="col-resize-handle" data-resize-key="queue_rank"></span>
+              </th>
+              <th data-col-key="action">
+                <div class="resizable-col-content"><span class="resizable-col-label">Action</span></div>
+                <span class="col-resize-handle" data-resize-key="action"></span>
+              </th>
+              <th data-col-key="job_company">
+                <div class="resizable-col-content"><span class="resizable-col-label">Company</span></div>
+                <span class="col-resize-handle" data-resize-key="job_company"></span>
+              </th>
+              <th data-col-key="job_title">
+                <div class="resizable-col-content"><span class="resizable-col-label">Title</span></div>
+                <span class="col-resize-handle" data-resize-key="job_title"></span>
+              </th>
+              <th data-col-key="posted_at">
+                <div class="resizable-col-content"><span class="resizable-col-label">Posted At</span></div>
+                <span class="col-resize-handle" data-resize-key="posted_at"></span>
+              </th>
+              <th data-col-key="winner_resume">
+                <div class="resizable-col-content"><span class="resizable-col-label">Winner Resume</span></div>
+                <span class="col-resize-handle" data-resize-key="winner_resume"></span>
+              </th>
+              <th data-col-key="winner_score">
+                <div class="resizable-col-content"><span class="resizable-col-label">Winner Score</span></div>
+                <span class="col-resize-handle" data-resize-key="winner_score"></span>
+              </th>
+              <th data-col-key="runner_up_resume">
+                <div class="resizable-col-content"><span class="resizable-col-label">Runner-Up Resume</span></div>
+                <span class="col-resize-handle" data-resize-key="runner_up_resume"></span>
+              </th>
+              <th data-col-key="runner_up_score">
+                <div class="resizable-col-content"><span class="resizable-col-label">Runner-Up Score</span></div>
+                <span class="col-resize-handle" data-resize-key="runner_up_score"></span>
+              </th>
+              <th data-col-key="score_gap">
+                <div class="resizable-col-content"><span class="resizable-col-label">Score Gap</span></div>
+                <span class="col-resize-handle" data-resize-key="score_gap"></span>
+              </th>
+              <th data-col-key="winner_bucket">
+                <div class="resizable-col-content"><span class="resizable-col-label">Match Strength</span></div>
+                <span class="col-resize-handle" data-resize-key="winner_bucket"></span>
+              </th>
+              <th data-col-key="review_state">
+                <div class="resizable-col-content"><span class="resizable-col-label">Review State</span></div>
+                <span class="col-resize-handle" data-resize-key="review_state"></span>
+              </th>
+              <th data-col-key="missing_requirement_count">
+                <div class="resizable-col-content"><span class="resizable-col-label">Missing Req Count</span></div>
+                <span class="col-resize-handle" data-resize-key="missing_requirement_count"></span>
+              </th>
+              <th data-col-key="llm_fallback_best_resume">
+                <div class="resizable-col-content"><span class="resizable-col-label">Fallback Best Resume</span></div>
+                <span class="col-resize-handle" data-resize-key="llm_fallback_best_resume"></span>
+              </th>
+              <th data-col-key="llm_fallback_status">
+                <div class="resizable-col-content"><span class="resizable-col-label">Fallback Status</span></div>
+                <span class="col-resize-handle" data-resize-key="llm_fallback_status"></span>
+              </th>
+              <th data-col-key="llm_adjudication_resume">
+                <div class="resizable-col-content"><span class="resizable-col-label">LLM Review Hint</span></div>
+                <span class="col-resize-handle" data-resize-key="llm_adjudication_resume"></span>
+              </th>
+              <th data-col-key="operator_decision">
+                <div class="resizable-col-content"><span class="resizable-col-label">Operator Decision</span></div>
+                <span class="col-resize-handle" data-resize-key="operator_decision"></span>
+              </th>
+              <th data-col-key="operator_selected_resume">
+                <div class="resizable-col-content"><span class="resizable-col-label">Operator Selected Resume</span></div>
+                <span class="col-resize-handle" data-resize-key="operator_selected_resume"></span>
+              </th>
+              <th data-col-key="queue_priority_reason">
+                <div class="resizable-col-content"><span class="resizable-col-label">Priority Reason</span></div>
+                <span class="col-resize-handle" data-resize-key="queue_priority_reason"></span>
+              </th>
+              <th data-col-key="tailoring">
+                <div class="resizable-col-content"><span class="resizable-col-label">Tailor</span></div>
+                <span class="col-resize-handle" data-resize-key="tailoring"></span>
+              </th>
+              <th class="sticky-apply-col apply-col-fixed">
+                <div class="resizable-col-content">
+                  <span class="resizable-col-label">Apply</span>
+                </div>
+              </th>
             </tr>
           </thead>
           <tbody id="planningTableBody"></tbody>

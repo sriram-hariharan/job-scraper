@@ -54,6 +54,7 @@ const tailoringWorkspaceState = {
   isSaving: false,
   previewReadyKey: "",
   reviewTelemetryFilter: "",
+  previewMode: "pdf",
 };
 
 const tailoringWorkspacePdfState = {
@@ -406,6 +407,88 @@ function selectionToneForStatus(status) {
   if (normalized === "none") return "muted";
   if (normalized === "stale_signature" || normalized === "no_valid_candidates") return "caution";
   return "muted";
+}
+
+function getTailoringWorkspaceModeToggleButton() {
+  return qs("tailoringWorkspaceModeToggleBtn");
+}
+
+function getTailoringWorkspacePreviewMode() {
+  return String(tailoringWorkspaceState.previewMode || "pdf").trim().toLowerCase() === "edit"
+    ? "edit"
+    : "pdf";
+}
+
+function buildTailoringWorkspacePreviewDisplayName() {
+  const resumeName = normalizeResumeName(tailoringWorkspacePdfState.resumeName || "");
+  return resumeName ? humanizeResumeDisplayName(resumeName) : "No resume selected";
+}
+
+function syncTailoringWorkspacePreviewName() {
+  const nameEl = qs("tailoringWorkspacePreviewName");
+  if (!nameEl) return;
+  nameEl.textContent = buildTailoringWorkspacePreviewDisplayName();
+}
+
+function syncTailoringWorkspaceModeToggleUi() {
+  const btn = getTailoringWorkspaceModeToggleButton();
+  if (!btn) return;
+
+  const mode = getTailoringWorkspacePreviewMode();
+  btn.dataset.previewMode = mode;
+  btn.setAttribute("aria-pressed", mode === "edit" ? "true" : "false");
+  btn.setAttribute(
+    "aria-label",
+    mode === "edit" ? "Switch to original PDF preview" : "Switch to edit mode"
+  );
+
+  const pdfSegment = btn.querySelector('[data-mode-segment="pdf"]');
+  const editSegment = btn.querySelector('[data-mode-segment="edit"]');
+
+  if (pdfSegment) {
+    pdfSegment.classList.toggle("is-active", mode === "pdf");
+  }
+  if (editSegment) {
+    editSegment.classList.toggle("is-active", mode === "edit");
+  }
+
+  syncTailoringWorkspacePreviewName();
+}
+
+function setTailoringWorkspacePreviewMode(mode) {
+  const nextMode = String(mode || "").trim().toLowerCase() === "edit" ? "edit" : "pdf";
+  if (tailoringWorkspaceState.previewMode === nextMode) return;
+
+  tailoringWorkspaceState.previewMode = nextMode;
+  syncTailoringWorkspaceModeToggleUi();
+
+  const liveDraftRoot = qs("tailoringWorkspaceLiveDraftPreview");
+  const pdfScroller = qs("tailoringWorkspacePdfScroller");
+  const pdfPages = qs("tailoringWorkspacePdfPages");
+  const previewEmpty = qs("tailoringWorkspacePreviewEmpty");
+
+  if (liveDraftRoot) {
+    liveDraftRoot.classList.toggle("hidden", nextMode !== "edit");
+  }
+
+  if (pdfScroller) {
+    pdfScroller.classList.toggle("hidden", nextMode !== "pdf");
+  }
+
+  if (nextMode === "edit") {
+    renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+    setTailoringWorkspacePreviewMeta("Working draft preview");
+    clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
+  } else {
+    if (pdfPages && tailoringWorkspacePdfState.pdfDoc) {
+      pdfPages.classList.remove("hidden");
+    }
+    if (previewEmpty && !tailoringWorkspacePdfState.pdfDoc) {
+      previewEmpty.classList.remove("hidden");
+    }
+    setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
+    syncTailoringWorkspacePreviewHighlight();
+  }
 }
 
 function renderPatchPreviewDimensionDeltas(deltas) {
@@ -1704,9 +1787,8 @@ async function setTailoringWorkspacePreview(resumeName) {
   const safeName = normalizeResumeName(resumeName);
   const nameEl = qs("tailoringWorkspacePreviewName");
 
-  if (nameEl) {
-    nameEl.textContent = safeName ? humanizeResumeDisplayName(safeName) : "No resume selected";
-  }
+  tailoringWorkspacePdfState.resumeName = safeName;
+  syncTailoringWorkspacePreviewName();
 
   if (!safeName) {
     await clearTailoringWorkspacePdfView("No resume selected for this workspace row.");
@@ -1753,7 +1835,6 @@ async function setTailoringWorkspacePreview(resumeName) {
     }
 
     tailoringWorkspacePdfState.pdfDoc = pdfDoc;
-    tailoringWorkspacePdfState.resumeName = safeName;
     tailoringWorkspacePdfState.scale = 1;
     tailoringWorkspacePdfState.fitScale = 1;
     tailoringWorkspacePdfState.isFitPage = true;
@@ -1797,6 +1878,17 @@ function bindTailoringWorkspacePreviewControls() {
     updateTailoringWorkspaceZoomLabel();
     await renderTailoringWorkspacePdfPages();
   });
+
+  const modeToggleBtn = getTailoringWorkspaceModeToggleButton();
+  if (modeToggleBtn && modeToggleBtn.dataset.bound !== "true") {
+    modeToggleBtn.dataset.bound = "true";
+    modeToggleBtn.addEventListener("click", () => {
+      const nextMode = getTailoringWorkspacePreviewMode() === "pdf" ? "edit" : "pdf";
+      setTailoringWorkspacePreviewMode(nextMode);
+    });
+  }
+
+  syncTailoringWorkspaceModeToggleUi();
 
   window.addEventListener("resize", () => {
     if (!tailoringWorkspacePdfState.pdfDoc) return;
@@ -3602,8 +3694,48 @@ function renderTailoringWorkspaceLiveDraftPreviewInto(payload) {
   const root = qs("tailoringWorkspaceLiveDraftPreview");
   if (!root) return;
 
-  root.innerHTML = "";
-  setTailoringSectionVisible("tailoringWorkspaceLiveDraftPreview", false);
+  const safePayload = payload && typeof payload === "object" ? payload : null;
+  if (!safePayload) {
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        Working draft preview is not available.
+      </div>
+    `;
+    return;
+  }
+
+  const rows = buildTailoringWorkspaceWorkingDraftRows(safePayload);
+  if (!rows.length) {
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        No surfaced draft bullets available yet.
+      </div>
+    `;
+    return;
+  }
+
+  root.innerHTML = `
+    <div class="tailoring-workspace-draft-preview-doc">
+      ${rows.map((row) => `
+        <article class="tailoring-workspace-draft-preview-row">
+          <div class="tailoring-workspace-draft-preview-row-topline">
+            <div class="tailoring-workspace-draft-preview-row-label">
+              ${escapeHtml(row.bucketLabel || "Resume bullet")}
+            </div>
+
+            <div class="tailoring-chip-group tailoring-chip-group--compact">
+              ${row.hasManualEdit ? buildTailoringTonePill("Manual edit", "neutral") : ""}
+              ${row.hasSelectedPatch ? buildTailoringTonePill("Selected rewrite", "safe") : ""}
+            </div>
+          </div>
+
+          <div class="tailoring-workspace-draft-preview-row-text">
+            ${escapeHtml(row.currentText || row.originalText || "")}
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
 }
 
 function getTailoringWorkspaceEditableBulletBaseMap(payload) {
@@ -4123,10 +4255,9 @@ function updateTailoringWorkspaceSelectionActionBar() {
   const statusEl = qs("tailoringWorkspaceSelectionStatus");
   const discardBtn = qs("tailoringWorkspaceDiscardBtn");
   const downloadBtn = qs("tailoringWorkspaceDownloadBtn");
-  const previewBtn = qs("tailoringWorkspacePreviewBtn");
   const saveBtn = qs("tailoringWorkspaceSaveSelectionBtn");
 
-  if (!statusEl || !discardBtn || !downloadBtn || !previewBtn || !saveBtn) return;
+  if (!statusEl || !discardBtn || !downloadBtn || !saveBtn) return;
 
   const payload = getTailoringWorkspacePayload();
   const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
@@ -4161,20 +4292,15 @@ function updateTailoringWorkspaceSelectionActionBar() {
     hasAnySavedState ? manualDraftChanged : hasManualEdits;
 
   const hasUnsavedWorkspaceChanges = hasUnsavedSelectionChange || hasUnsavedManualChange;
-  const hasPreviewableWorkspaceChanges = hasSelection || hasManualEdits;
 
   const context = getTailoringWorkspaceContext();
   const hasResume = Boolean(context && String(context.resumeName || "").trim());
 
   const discardTooltip = discardBtn.closest(".tailoring-workspace-action-tooltip");
   const downloadTooltip = downloadBtn.closest(".tailoring-workspace-action-tooltip");
-  const previewTooltip = previewBtn.closest(".tailoring-workspace-action-tooltip");
   const saveTooltip = saveBtn.closest(".tailoring-workspace-action-tooltip");
   const discardIcon = discardBtn.querySelector(".tailoring-workspace-icon");
 
-  if (previewTooltip) {
-    previewTooltip.classList.toggle("hidden", isFreeEditTab);
-  }
   if (saveTooltip) {
     saveTooltip.classList.toggle("hidden", isFreeEditTab);
   }
@@ -4231,22 +4357,6 @@ function updateTailoringWorkspaceSelectionActionBar() {
       discardIcon.classList.add("tailoring-workspace-icon--discard");
     }
   }
-
-  previewBtn.disabled =
-    tailoringWorkspaceState.isSaving ||
-    tailoringWorkspaceState.isPreviewing ||
-    !hasPreviewableWorkspaceChanges;
-
-  if (previewTooltip) {
-    previewTooltip.dataset.tooltip = tailoringWorkspaceState.isPreviewing
-      ? "Previewing score impact..."
-      : "Preview score impact";
-  }
-
-  previewBtn.setAttribute(
-    "aria-label",
-    tailoringWorkspaceState.isPreviewing ? "Previewing score impact..." : "Preview score impact"
-  );
 
   saveBtn.disabled =
     tailoringWorkspaceState.isSaving ||
@@ -4631,6 +4741,7 @@ function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = nu
   tailoringWorkspaceState.previewPayload = null;
   tailoringWorkspaceState.activeInlineScoreKey = "";
   tailoringWorkspaceState.activeReviewEditCandidateId = "";
+  tailoringWorkspaceState.previewMode = "pdf";
 
   const payload =
     artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
@@ -5044,10 +5155,9 @@ function revertTailoringWorkspaceSelectionToSaved() {
 function bindTailoringWorkspaceActionBar() {
   const discardBtn = qs("tailoringWorkspaceDiscardBtn");
   const downloadBtn = qs("tailoringWorkspaceDownloadBtn");
-  const previewBtn = qs("tailoringWorkspacePreviewBtn");
   const saveBtn = qs("tailoringWorkspaceSaveSelectionBtn");
 
-  if (!discardBtn || !downloadBtn || !previewBtn || !saveBtn) return;
+  if (!discardBtn || !downloadBtn || !saveBtn) return;
   if (discardBtn.dataset.bound === "true") return;
 
   discardBtn.dataset.bound = "true";
@@ -5055,7 +5165,7 @@ function bindTailoringWorkspaceActionBar() {
   discardBtn.addEventListener("click", () => {
     const savedIds = getTailoringWorkspaceSavedCandidateIds();
 
-    if (savedIds.length) {
+    if (savedIds.length || Object.keys(getTailoringWorkspaceSavedManualBulletEdits()).length) {
       revertTailoringWorkspaceSelectionToSaved();
     } else {
       clearTailoringWorkspaceSelection();
@@ -5064,10 +5174,6 @@ function bindTailoringWorkspaceActionBar() {
 
   downloadBtn.addEventListener("click", async () => {
     await downloadCurrentTailoringWorkspaceResume();
-  });
-
-  previewBtn.addEventListener("click", async () => {
-    await previewTailoringWorkspaceSelection();
   });
 
   saveBtn.addEventListener("click", async () => {

@@ -3982,6 +3982,7 @@ def preview_tailoring_workspace_draft_payload(
 
     selection = payload_data.get("selection", {}) or {}
     job = payload_data.get("job", {}) or {}
+    job_snapshot = payload_data.get("job_snapshot", {}) or {}
 
     effective_selected_resume = (
         _sanitize_optional_resume_filename(selected_resume)
@@ -3991,22 +3992,51 @@ def preview_tailoring_workspace_draft_payload(
     if not effective_selected_resume:
         raise ValueError("Workspace draft preview requires a selected resume.")
 
-    original_resume = _load_resume_evidence_for_workspace_preview(effective_selected_resume)
-    job_record = _load_job_record_for_workspace_preview(
-        _clean_text(job.get("job_doc_id"))
-    )
-    job_evidence = build_job_evidence(job_record)
+    manual_edit_count = len(effective_manual_edits)
 
-    original_result = score_resume_job_match(original_resume, job_evidence)
-    original_score = round(float(original_result.final_score), 6)
+    try:
+        original_resume = _load_resume_evidence_for_workspace_preview(effective_selected_resume)
+
+        if isinstance(job_snapshot, dict) and job_snapshot:
+            job_record = dict(job_snapshot)
+        elif isinstance(job, dict) and job:
+            job_record = dict(job)
+        else:
+            job_record = _load_job_record_for_workspace_preview(
+                _clean_text(job.get("job_doc_id"))
+            )
+
+        job_evidence = build_job_evidence(job_record)
+
+        original_result = score_resume_job_match(original_resume, job_evidence)
+        original_score = round(float(original_result.final_score), 6)
+    except ValueError as exc:
+        return {
+            "ok": True,
+            "preview_status": "preview_unavailable",
+            "preview_note": str(exc),
+            "tailoring_json_path": str(artifact_path),
+            "draft_status": _clean_text(draft_response.get("draft_status")),
+            "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+            "selected_patch_candidate_ids": effective_selected_ids,
+            "manual_bullet_edits": effective_manual_edits,
+            "manual_edit_count": manual_edit_count,
+            "manual_edit_rescore_supported": False,
+            "needs_full_draft_rescore": True,
+            "original_score": None,
+            "projected_score": None,
+            "projected_delta": None,
+            "selected_patch_set_counterfactual_preview": None,
+            "unresolved_manual_edit_keys": [],
+            "rewrite_review_decisions": effective_review_decisions,
+            "rewrite_review_telemetry": effective_review_telemetry,
+        }
 
     patch_specs, unresolved_manual_keys = _build_tailoring_workspace_effective_patch_specs(
         payload_data,
         selected_candidate_ids=effective_selected_ids,
         manual_bullet_edits=effective_manual_edits,
     )
-
-    manual_edit_count = len(effective_manual_edits)
 
     if not patch_specs:
         if unresolved_manual_keys:

@@ -51,6 +51,7 @@ const tailoringWorkspaceState = {
   isPreviewing: false,
   isSaving: false,
   previewReadyKey: "",
+  reviewTelemetryFilter: "",
 };
 
 const tailoringWorkspacePdfState = {
@@ -2514,63 +2515,165 @@ function ensureTailoringWorkspaceReviewTelemetryStrip() {
   return strip;
 }
 
+function getTailoringWorkspaceReviewFilterItems() {
+  const telemetry = getTailoringWorkspaceEffectiveReviewTelemetry();
+  const payload = getTailoringWorkspacePayload();
+  const activeTab = String(tailoringWorkspaceState.selectedTab || "").trim();
+  const activeFilter = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+
+  if (!telemetry || typeof telemetry !== "object") {
+    return [];
+  }
+
+  const appReady = Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : [];
+  const directApplyOptional = Array.isArray(payload?.direct_apply_optional_replacements)
+    ? payload.direct_apply_optional_replacements
+    : [];
+  const actionableCount = appReady.length + directApplyOptional.length;
+
+  if (activeTab === "free_edit") {
+    return [
+      {
+        key: "manual_edits",
+        label: "Manual edits",
+        value: Number(telemetry.manual_edit_count || 0),
+        tone: Number(telemetry.manual_edit_count || 0) > 0 ? "neutral" : "muted",
+        active: activeFilter === "manual_edits",
+      },
+    ];
+  }
+
+  if (activeTab === "ready") {
+    if (!actionableCount) return [];
+    return [
+      {
+        key: "selected",
+        label: "Selected",
+        value: Number(telemetry.selected_candidate_count || 0),
+        tone: Number(telemetry.selected_candidate_count || 0) > 0 ? "safe" : "muted",
+        active: activeFilter === "selected",
+      },
+    ];
+  }
+
+  return [
+    {
+      key: "remaining",
+      label: "Remaining",
+      value: Number(telemetry.remaining_to_review_count || 0),
+      tone: Number(telemetry.remaining_to_review_count || 0) > 0 ? "caution" : "muted",
+      active: activeFilter === "remaining",
+    },
+    {
+      key: "accepted_as_is",
+      label: "Accepted as-is",
+      value: Number(telemetry.accepted_as_is_count || 0),
+      tone: Number(telemetry.accepted_as_is_count || 0) > 0 ? "safe" : "muted",
+      active: activeFilter === "accepted_as_is",
+    },
+    {
+      key: "edited_after_accept",
+      label: "Edited after accept",
+      value: Number(telemetry.edited_after_accept_count || 0),
+      tone: Number(telemetry.edited_after_accept_count || 0) > 0 ? "neutral" : "muted",
+      active: activeFilter === "edited_after_accept",
+    },
+    {
+      key: "rejected",
+      label: "Rejected",
+      value: Number(telemetry.rejected_count || 0),
+      tone: Number(telemetry.rejected_count || 0) > 0 ? "danger" : "muted",
+      active: activeFilter === "rejected",
+    },
+  ];
+}
+
+function buildTailoringWorkspaceReviewFilterChip(item) {
+  return `
+    <button
+      type="button"
+      class="tailoring-review-filter-chip tailoring-review-filter-chip--${escapeHtml(item.tone || "muted")} ${item.active ? "is-active" : ""}"
+      data-tailoring-review-filter="${escapeHtml(item.key || "")}"
+    >
+      ${escapeHtml(item.label)} ${escapeHtml(String(item.value ?? 0))}
+    </button>
+  `;
+}
+
+function getTailoringWorkspaceFilteredReviewItems(items) {
+  const safeItems = Array.isArray(items) ? items : [];
+  const filterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+
+  if (!filterKey || filterKey === "manual_edits" || filterKey === "selected") {
+    return safeItems;
+  }
+
+  return safeItems.filter((item) => {
+    const reviewState = String(item?.review_state || "").trim().toLowerCase();
+
+    if (filterKey === "remaining") {
+      return !reviewState || reviewState === "pending";
+    }
+
+    if (filterKey === "accepted_as_is") {
+      return reviewState === "accepted_as_is" || reviewState === "accepted";
+    }
+
+    if (filterKey === "edited_after_accept") {
+      return reviewState === "edited_after_accept" || reviewState === "edited";
+    }
+
+    if (filterKey === "rejected") {
+      return reviewState === "rejected";
+    }
+
+    return true;
+  });
+}
+
+function getTailoringWorkspaceFilteredFreeEditRows(payload) {
+  const rows = buildTailoringWorkspaceEditableBulletRows(payload);
+  const filterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+
+  if (filterKey !== "manual_edits") {
+    return rows;
+  }
+
+  return rows.filter((row) => row.hasManualEdit || row.changeSource === "manual_edit");
+}
+
 function renderTailoringWorkspaceReviewTelemetryStrip() {
   const strip = ensureTailoringWorkspaceReviewTelemetryStrip();
   if (!strip) return;
 
-  const telemetry = getTailoringWorkspaceEffectiveReviewTelemetry();
-  if (!telemetry || typeof telemetry !== "object") {
+  const items = getTailoringWorkspaceReviewFilterItems();
+  if (!items.length) {
     strip.innerHTML = "";
     strip.classList.add("hidden");
     return;
   }
 
-  const remainingCount = Number(telemetry.remaining_to_review_count || 0);
-  const acceptedAsIsCount = Number(telemetry.accepted_as_is_count || 0);
-  const editedAfterAcceptCount = Number(telemetry.edited_after_accept_count || 0);
-  const rejectedCount = Number(telemetry.rejected_count || 0);
-  const selectedCandidateCount = Number(telemetry.selected_candidate_count || 0);
-  const manualEditCount = Number(telemetry.manual_edit_count || 0);
-
-  const chips = [
-    {
-      label: "Remaining",
-      value: remainingCount,
-      tone: remainingCount > 0 ? "caution" : "muted",
-    },
-    {
-      label: "Accepted as-is",
-      value: acceptedAsIsCount,
-      tone: acceptedAsIsCount > 0 ? "safe" : "muted",
-    },
-    {
-      label: "Edited after accept",
-      value: editedAfterAcceptCount,
-      tone: editedAfterAcceptCount > 0 ? "neutral" : "muted",
-    },
-    {
-      label: "Rejected",
-      value: rejectedCount,
-      tone: rejectedCount > 0 ? "danger" : "muted",
-    },
-    {
-      label: "Selected",
-      value: selectedCandidateCount,
-      tone: selectedCandidateCount > 0 ? "safe" : "muted",
-    },
-    {
-      label: "Manual edits",
-      value: manualEditCount,
-      tone: manualEditCount > 0 ? "neutral" : "muted",
-    },
-  ];
-
   strip.innerHTML = `
-    <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-workspace-review-telemetry-row">
-      ${chips.map((item) => buildTailoringTonePill(`${item.label} ${item.value}`, item.tone)).join("")}
+    <div class="tailoring-workspace-review-telemetry-row">
+      ${items.map(buildTailoringWorkspaceReviewFilterChip).join("")}
     </div>
   `;
   strip.classList.remove("hidden");
+
+  if (strip.dataset.bound !== "true") {
+    strip.dataset.bound = "true";
+
+    strip.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-tailoring-review-filter]");
+      if (!button) return;
+
+      const nextFilter = String(button.dataset.tailoringReviewFilter || "").trim();
+      tailoringWorkspaceState.reviewTelemetryFilter =
+        tailoringWorkspaceState.reviewTelemetryFilter === nextFilter ? "" : nextFilter;
+
+      rerenderTailoringWorkspaceSelectionView();
+    });
+  }
 }
 
 function deriveTailoringOverviewState(row, llmJsonArtifact) {
@@ -3624,14 +3727,18 @@ function refreshTailoringWorkspaceInlineScoreControls() {
 }
 
 function renderTailoringWorkspaceFreeEditSection(payload) {
-  const rows = buildTailoringWorkspaceEditableBulletRows(payload);
+  const rows = getTailoringWorkspaceFilteredFreeEditRows(payload);
+  const filterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+  const showingManualEditsOnly = filterKey === "manual_edits";
 
   if (!rows.length) {
     return `
       <section class="tailoring-section-block">
         <div class="tailoring-section-title">Free edit</div>
-        <div class="tailoring-empty-inline">
-          No surfaced bullets are available for manual editing on this row yet.
+        <div class="tailoring-card-copy">
+          ${showingManualEditsOnly
+            ? "No manually edited bullets are available yet."
+            : "No surfaced bullets are available for manual editing on this row yet."}
         </div>
       </section>
     `;
@@ -3641,7 +3748,9 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
     <section class="tailoring-section-block">
       <div class="tailoring-section-title">Free edit</div>
       <div class="tailoring-card-copy">
-        Edit the surfaced bullets directly. The button below previews the whole current draft score, then turns into Save.
+        ${showingManualEditsOnly
+          ? `Showing ${rows.length} manually edited bullet${rows.length === 1 ? "" : "s"}.`
+          : "Edit the surfaced bullets directly. The button below previews the whole current draft score, then turns into Save."}
       </div>
 
       <div class="tailoring-edit-card-list">
@@ -3671,6 +3780,7 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
                 <div class="tailoring-chip-group tailoring-chip-group--compact">
                   ${buildTailoringTonePill(row.bucketLabel, bucketTone)}
                   ${buildTailoringTonePill(sourceLabel, sourceTone)}
+                  ${row.hasManualEdit ? buildTailoringTonePill("Manual edit", "neutral") : ""}
                 </div>
               </div>
 
@@ -3679,31 +3789,23 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
                 <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
               </div>
 
-              ${row.baseSource === "selected_patch" ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Current selected rewrite base</div>
-                  <div class="tailoring-rewrite-callout">${escapeHtml(row.baseText)}</div>
-                </div>
-              ` : ""}
-
               <div class="tailoring-info-block tailoring-info-block--compact">
                 <div class="tailoring-info-label">Editable draft text</div>
                 <textarea
                   class="tailoring-free-edit-textarea"
                   data-tailoring-free-edit-key="${escapeHtml(row.bulletKey)}"
-                  rows="5"
                 >${escapeHtml(row.currentText)}</textarea>
               </div>
 
-              <div class="tailoring-card-actions tailoring-card-actions--compact">
+              <div class="tailoring-edit-card-footer tailoring-edit-card-footer--inline">
                 <div
-                  class="tailoring-chip-group tailoring-chip-group--compact"
+                  class="tailoring-chip-group"
                   data-tailoring-free-edit-score="${escapeHtml(row.bulletKey)}"
                 ></div>
 
                 <button
                   type="button"
-                  class="ghost-btn btn-sm"
+                  class="ghost-btn"
                   data-tailoring-free-edit-action="${escapeHtml(row.bulletKey)}"
                 >
                   Continue
@@ -4115,9 +4217,47 @@ function updateTailoringWorkspaceMetaSummary(payload) {
   const activeTab = String(tailoringWorkspaceState.selectedTab || "").trim();
 
   if (activeTab === "free_edit") {
-    meta.textContent = editableCount
-      ? `${editableCount} surfaced bullet${editableCount === 1 ? "" : "s"} loaded for free editing. Save stores manual edits in the workspace draft.`
-      : "No surfaced bullets are available for free editing on this row yet.";
+    const freeEditRows = getTailoringWorkspaceFilteredFreeEditRows(payload);
+    const filterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+
+    meta.textContent = filterKey === "manual_edits"
+      ? freeEditRows.length
+        ? `Showing ${freeEditRows.length} manually edited bullet${freeEditRows.length === 1 ? "" : "s"}. Save stores manual edits in the workspace draft.`
+        : "No manually edited bullets are available yet."
+      : editableCount
+        ? `${editableCount} surfaced bullet${editableCount === 1 ? "" : "s"} loaded for free editing. Save stores manual edits in the workspace draft.`
+        : "No surfaced bullets are available for free editing on this row yet.";
+
+    renderTailoringWorkspaceReviewTelemetryStrip();
+    return;
+  }
+
+  if (activeTab === "review") {
+    const reviewItems = getTailoringWorkspaceFilteredReviewItems(directionOnly);
+    const filterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+
+    if (filterKey === "remaining") {
+      meta.textContent = reviewItems.length
+        ? `Showing ${reviewItems.length} remaining review suggestion${reviewItems.length === 1 ? "" : "s"}.`
+        : "No remaining review suggestions match the current filter.";
+    } else if (filterKey === "accepted_as_is") {
+      meta.textContent = reviewItems.length
+        ? `Showing ${reviewItems.length} accepted-as-is review suggestion${reviewItems.length === 1 ? "" : "s"}.`
+        : "No accepted-as-is review suggestions match the current filter.";
+    } else if (filterKey === "edited_after_accept") {
+      meta.textContent = reviewItems.length
+        ? `Showing ${reviewItems.length} edited-after-accept review suggestion${reviewItems.length === 1 ? "" : "s"}.`
+        : "No edited-after-accept review suggestions match the current filter.";
+    } else if (filterKey === "rejected") {
+      meta.textContent = reviewItems.length
+        ? `Showing ${reviewItems.length} rejected review suggestion${reviewItems.length === 1 ? "" : "s"}.`
+        : "No rejected review suggestions match the current filter.";
+    } else {
+      meta.textContent = reviewCount > 0
+        ? "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet."
+        : "No review guidance is available for this row.";
+    }
+
     renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
@@ -4151,9 +4291,27 @@ function rerenderTailoringWorkspaceSelectionView() {
   if (tailoringWorkspaceState.selectedTab === "free_edit") {
     qs("tailoringWorkspaceInteractiveSummary").innerHTML = renderTailoringWorkspaceFreeEditSection(payload);
   } else {
+    const reviewFilteredPayload =
+      tailoringWorkspaceState.selectedTab === "review" && payload
+        ? {
+            ...payload,
+            direction_only_replacements: getTailoringWorkspaceFilteredReviewItems(
+              payload.direction_only_replacements
+            ),
+          }
+        : payload;
+
+    const artifactForRender =
+      reviewFilteredPayload && reviewFilteredPayload !== payload
+        ? {
+            ...tailoringWorkspaceState.artifact,
+            data: reviewFilteredPayload,
+          }
+        : tailoringWorkspaceState.artifact;
+
     renderTailoringInteractiveSummaryInto(
       "tailoringWorkspaceInteractiveSummary",
-      tailoringWorkspaceState.artifact,
+      artifactForRender,
       {
         includeDiagnostics: false,
         selectionEnabled: true,
@@ -4163,7 +4321,6 @@ function rerenderTailoringWorkspaceSelectionView() {
     );
   }
 
-  syncTailoringWorkspaceFocusedCards();
   renderTailoringWorkspaceLiveDraftPreviewInto(payload);
   updateTailoringWorkspaceMetaSummary(payload);
   refreshTailoringWorkspaceSelectionPanels();
@@ -4351,6 +4508,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
       if (!nextTab || nextTab === tailoringWorkspaceState.selectedTab) return;
 
       tailoringWorkspaceState.selectedTab = nextTab;
+      tailoringWorkspaceState.reviewTelemetryFilter = "";
       rerenderTailoringWorkspaceSelectionView();
       scrollTailoringWorkspaceLeftPaneToTabs();
     });
@@ -4584,6 +4742,21 @@ function renderReplacementDecisionSection({
   selectedCandidateIds = [],
 }) {
   const safeItems = Array.isArray(items) ? items : [];
+  const orderedItems = selectionEnabled
+    ? safeItems.slice().sort((left, right) => {
+        const leftId = getTailoringReplacementCandidateId(left);
+        const rightId = getTailoringReplacementCandidateId(right);
+
+        const leftSelected = Boolean(leftId && selectedSet.has(leftId));
+        const rightSelected = Boolean(rightId && selectedSet.has(rightId));
+
+        if (leftSelected === rightSelected) return 0;
+        return leftSelected ? -1 : 1;
+      })
+    : safeItems;
+
+  const selectedCount = selectionEnabled ? selectedSet.size : 0;
+
   const selectedSet = new Set(
     (Array.isArray(selectedCandidateIds) ? selectedCandidateIds : [])
       .map((value) => String(value || "").trim())
@@ -4594,6 +4767,12 @@ function renderReplacementDecisionSection({
     return `
       <section class="tailoring-section-block">
         <div class="tailoring-section-title">${escapeHtml(title)}</div>
+        ${selectionEnabled ? `
+          <div class="tailoring-section-meta">
+            <span class="tailoring-section-meta-count">${escapeHtml(String(selectedCount))} selected</span>
+            <span class="tailoring-section-meta-copy">Preview or save from the toolbar when ready.</span>
+          </div>
+        ` : ""}
         ${subtitle ? `<div class="tailoring-card-copy">${escapeHtml(subtitle)}</div>` : ""}
         <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
       </section>
@@ -4606,7 +4785,7 @@ function renderReplacementDecisionSection({
       ${subtitle ? `<div class="tailoring-card-copy">${escapeHtml(subtitle)}</div>` : ""}
 
       <div class="tailoring-edit-card-list">
-        ${safeItems.map((item, index) => {
+        ${orderedItems.map((item, index) => {
           const displayCurrentBullet = getTailoringWorkspaceDisplayBulletText(item, mode);
           const priority = String(item.apply_priority || "low");
           const likelyImpactedDimensions = Array.isArray(item.likely_impacted_dimensions)
@@ -4782,10 +4961,11 @@ function renderReplacementDecisionSection({
                     class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
                     data-tailoring-select-candidate="${escapeHtml(candidateId)}"
                   >
-                    ${isSelected ? "Selected" : "Select"}
+                    ${isSelected ? "Remove" : "Add"}
                   </button>
                 </div>
               ` : ""}
+              ${isSelected ? buildTailoringTonePill("Selected", "safe") : ""}
             </article>
           `;
         }).join("")}
@@ -5089,8 +5269,8 @@ function renderTailoringInteractiveSummaryInto(
 
   const recommendedHtml = Array.isArray(directionOnly) && directionOnly.length
     ? renderReplacementDecisionSection({
-        title: "Recommended changes",
-        subtitle: "These are the main edits to review first.",
+        title: "Review guidance",
+        subtitle: "These bullets need review, reordering, or manual judgment before any export decision.",
         items: directionOnly,
         emptyLabel: "No review-only suggestions.",
         tone: "muted",
@@ -5142,8 +5322,8 @@ function renderTailoringInteractiveSummaryInto(
     if (!bucketHtml.trim()) {
       bucketHtml = `
         <section class="tailoring-section-block">
-          <div class="tailoring-section-title">Recommended changes</div>
-          <div class="tailoring-empty-inline">No review suggestions for this row.</div>
+          <div class="tailoring-section-title">Review guidance</div>
+          <div class="tailoring-empty-inline">No review suggestions match the current filter.</div>
         </section>
       `;
     }

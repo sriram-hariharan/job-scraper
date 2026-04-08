@@ -1054,12 +1054,14 @@ function buildPlanningUrl() {
   const params = new URLSearchParams();
   const actions = getMultiSelectValues("planningActionFilter");
   const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
+  const tailoringStates = getMultiSelectValues("planningTailoringFilter");
   const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
   const limit = qs("planningLimitInput").value || "15";
   const page = planningTableState.pagination.page || 1;
 
   appendMultiValueParams(params, "action", actions);
   appendMultiValueParams(params, "winner_bucket", winnerBuckets);
+  appendMultiValueParams(params, "tailoring_state", tailoringStates);
   if (undecidedOnly) params.set("undecided_only", undecidedOnly);
   params.set("limit", limit);
   params.set("page", String(page));
@@ -6187,6 +6189,7 @@ async function loadPlanningTable() {
 function clearPlanningFilters() {
   clearMultiSelect("planningActionFilter");
   clearMultiSelect("planningWinnerBucket");
+  clearMultiSelect("planningTailoringFilter");
 
   const defaultUndecided = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
   if (defaultUndecided) {
@@ -6201,6 +6204,7 @@ function clearPlanningFilters() {
 function attachPlanningHandlers() {
   initMultiSelect("planningActionFilter");
   initMultiSelect("planningWinnerBucket");
+  initMultiSelect("planningTailoringFilter");
 
   qs("planningApplyFiltersBtn").addEventListener("click", async () => {
     setPlanningRequestedPage(1);

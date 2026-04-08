@@ -1247,6 +1247,7 @@ function clearTailoringWorkspacePdfHighlight({ restoreMeta = true } = {}) {
   }
 
   tailoringWorkspacePdfState.highlightedCandidateId = "";
+  syncTailoringWorkspaceFocusedCards();
 
   if (restoreMeta) {
     setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
@@ -1275,6 +1276,7 @@ function applyTailoringWorkspacePdfHighlight(match, candidateId = "") {
 
   overlay.appendChild(highlight);
   tailoringWorkspacePdfState.highlightedCandidateId = String(candidateId || "").trim();
+  syncTailoringWorkspaceFocusedCards();
 
   pageShell.scrollIntoView({
     behavior: "smooth",
@@ -1326,6 +1328,28 @@ function setTailoringWorkspacePreviewMeta(message) {
   if (meta) {
     meta.textContent = message || "";
   }
+}
+
+function syncTailoringWorkspaceFocusedCards() {
+  const root = qs("tailoringWorkspaceInteractiveSummary");
+  if (!root) return;
+
+  const activeCandidateId = String(
+    tailoringWorkspacePdfState.highlightedCandidateId || ""
+  ).trim();
+
+  const cards = Array.from(
+    root.querySelectorAll("[data-tailoring-focus-candidate]")
+  );
+
+  cards.forEach((card) => {
+    const candidateId = String(card.dataset.tailoringFocusCandidate || "").trim();
+    const isActive = Boolean(activeCandidateId && candidateId === activeCandidateId);
+    const shouldMute = Boolean(activeCandidateId && candidateId && candidateId !== activeCandidateId);
+
+    card.classList.toggle("tailoring-edit-card--active", isActive);
+    card.classList.toggle("tailoring-edit-card--muted", shouldMute);
+  });
 }
 
 function updateTailoringWorkspaceZoomLabel() {
@@ -4139,6 +4163,7 @@ function rerenderTailoringWorkspaceSelectionView() {
     );
   }
 
+  syncTailoringWorkspaceFocusedCards();
   renderTailoringWorkspaceLiveDraftPreviewInto(payload);
   updateTailoringWorkspaceMetaSummary(payload);
   refreshTailoringWorkspaceSelectionPanels();
@@ -5039,6 +5064,7 @@ function renderTailoringInteractiveSummaryInto(
 
   if (!payload) {
     root.innerHTML = `<div class="tailoring-empty-state">Suggested changes are not available for this row.</div>`;
+    syncTailoringWorkspaceFocusedCards();
     return;
   }
 

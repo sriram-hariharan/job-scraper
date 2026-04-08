@@ -4382,7 +4382,7 @@ def _workspace_export_line_is_heading(
     if len(clean) > 96:
         return False
 
-    if clean.startswith(("•", "▪", "◦", "·", "-")):
+    if clean.startswith(("●", "•", "▪", "◦", "·", "-")):
         return False
 
     if is_bold and font_size >= 10.5:
@@ -4594,7 +4594,7 @@ def _workspace_export_finalize_paragraph(
         left=float(left),
     )
 
-    is_bullet = text.lstrip().startswith(("•", "▪", "◦", "·", "-"))
+    is_bullet = text.lstrip().startswith(("●", "•", "▪", "◦", "·", "-"))
     line_spacing = 1.16 if is_heading else (1.22 if len(line_records) > 1 else 1.12)
 
     return {
@@ -4725,13 +4725,132 @@ def _workspace_export_annotate_page_layout(
             ):
                 paragraph["alignment"] = "center"
                 paragraph["left_indent_pt"] = 0.0
-            elif float(paragraph.get("right", 0.0) or 0.0) >= (page_width - 54.0):
+            elif (
+                not bool(paragraph.get("is_bullet"))
+                and int(paragraph.get("line_count", 0) or 0) == 1
+                and float(paragraph.get("right", 0.0) or 0.0) >= (page_width - 54.0)
+            ):
                 paragraph["alignment"] = "right"
                 paragraph["left_indent_pt"] = 0.0
             else:
                 paragraph["alignment"] = "left"
 
         idx = scan
+
+def _workspace_export_line_starts_bullet(text: str) -> bool:
+    clean = str(text or "").lstrip()
+    return clean.startswith(("●", "•", "▪", "◦", "·", "-"))
+
+
+def _workspace_export_line_is_contact(text: str) -> bool:
+    clean = _clean_text(text).lower()
+    if not clean or len(clean) > 180:
+        return False
+
+    if any(
+        token in clean
+        for token in (
+            "@",
+            "linkedin",
+            "github",
+            "portfolio",
+            "www.",
+            "http://",
+            "https://",
+            ".com",
+            "|",
+        )
+    ):
+        return True
+
+    return bool(re.search(r"\+?\d[\d(). \-]{6,}\d", clean))
+
+
+def _workspace_export_line_is_centered(
+    line: Dict[str, Any],
+    *,
+    page_width: float,
+) -> bool:
+    left = float(line.get("left", 0.0) or 0.0)
+    right = float(line.get("right", 0.0) or 0.0)
+    mid = (left + right) / 2.0
+    page_mid = page_width / 2.0
+
+    return abs(mid - page_mid) <= max(24.0, page_width * 0.04)
+
+
+def _workspace_export_should_start_new_paragraph(
+    previous_line: Dict[str, Any],
+    current_line: Dict[str, Any],
+    *,
+    page_width: float,
+) -> bool:
+    previous_text = _clean_text(previous_line.get("text"))
+    current_text = _clean_text(current_line.get("text"))
+
+    if not previous_text or not current_text:
+        return False
+
+    previous_starts_bullet = _workspace_export_line_starts_bullet(previous_text)
+    current_starts_bullet = _workspace_export_line_starts_bullet(current_text)
+
+    if current_starts_bullet:
+        return True
+
+    previous_font_size = float(previous_line.get("font_size", 11.0) or 11.0)
+    current_font_size = float(current_line.get("font_size", 11.0) or 11.0)
+
+    previous_is_heading = _workspace_export_line_is_heading(
+        previous_text,
+        font_size=previous_font_size,
+        is_bold=bool(previous_line.get("is_bold", False)),
+        left=float(previous_line.get("left", 0.0) or 0.0),
+    )
+    current_is_heading = _workspace_export_line_is_heading(
+        current_text,
+        font_size=current_font_size,
+        is_bold=bool(current_line.get("is_bold", False)),
+        left=float(current_line.get("left", 0.0) or 0.0),
+    )
+
+    if bool(previous_is_heading) != bool(current_is_heading):
+        return True
+
+    gap = float(current_line.get("top", 0.0) or 0.0) - float(previous_line.get("bottom", 0.0) or 0.0)
+    if gap > max(8.0, previous_font_size * 0.9):
+        return True
+
+    previous_centered = _workspace_export_line_is_centered(
+        previous_line,
+        page_width=page_width,
+    )
+    current_centered = _workspace_export_line_is_centered(
+        current_line,
+        page_width=page_width,
+    )
+
+    if previous_centered and current_centered:
+        if _workspace_export_line_is_contact(previous_text) != _workspace_export_line_is_contact(current_text):
+            return True
+        if abs(current_font_size - previous_font_size) >= 0.75:
+            return True
+        if bool(previous_line.get("is_bold", False)) != bool(current_line.get("is_bold", False)):
+            return True
+
+    previous_left = float(previous_line.get("left", 0.0) or 0.0)
+    current_left = float(current_line.get("left", 0.0) or 0.0)
+    indent_delta = current_left - previous_left
+
+    if indent_delta <= -8.0:
+        return True
+
+    if previous_starts_bullet and indent_delta >= 10.0:
+        return False
+
+    if abs(indent_delta) > 32.0:
+        return True
+
+    return False
 
 def _extract_resume_pdf_paragraph_pages_for_export(
     resume_pdf_path: Path,
@@ -4746,6 +4865,7 @@ def _extract_resume_pdf_paragraph_pages_for_export(
             text_dict = page.get_text("dict", sort=True)
             page_blocks: List[Dict[str, Any]] = []
             previous_visible_bottom: float | None = None
+            page_width = float(page.rect.width)
 
             text_blocks = [
                 block
@@ -4813,28 +4933,11 @@ def _extract_resume_pdf_paragraph_pages_for_export(
                         continue
 
                     previous_line = current_group[-1]
-                    starts_bullet = str(line["text"]).lstrip().startswith(("•", "▪", "◦", "·", "-"))
-                    line_is_heading = _workspace_export_line_is_heading(
-                        str(line["text"]),
-                        font_size=float(line["font_size"]),
-                        is_bold=bool(line["is_bold"]),
-                        left=float(line["left"]),
-                    )
-                    previous_is_heading = _workspace_export_line_is_heading(
-                        str(previous_line["text"]),
-                        font_size=float(previous_line["font_size"]),
-                        is_bold=bool(previous_line["is_bold"]),
-                        left=float(previous_line["left"]),
-                    )
 
-                    gap = float(line["top"]) - float(previous_line["bottom"])
-                    indent_delta = abs(float(line["left"]) - float(previous_line["left"]))
-
-                    should_start_new_paragraph = (
-                        starts_bullet
-                        or gap > max(8.0, float(previous_line["font_size"]) * 0.9)
-                        or indent_delta > 32.0
-                        or bool(line_is_heading) != bool(previous_is_heading)
+                    should_start_new_paragraph = _workspace_export_should_start_new_paragraph(
+                        previous_line,
+                        line,
+                        page_width=page_width,
                     )
 
                     if should_start_new_paragraph:
@@ -4881,7 +4984,6 @@ def _extract_resume_pdf_paragraph_pages_for_export(
                     }
                 )
 
-            page_width = float(page.rect.width)
             _workspace_export_annotate_page_layout(
                 page_width=page_width,
                 page_blocks=page_blocks,
@@ -4900,6 +5002,48 @@ def _extract_resume_pdf_paragraph_pages_for_export(
     finally:
         doc.close()
 
+def _workspace_export_has_leading_bullet(text: str) -> bool:
+    return str(text or "").lstrip().startswith(("●", "•", "▪", "◦", "·"))
+
+
+def _workspace_export_preserve_bullet_prefix(
+    original_text: str,
+    patch_text: str,
+) -> str:
+    original = str(original_text or "")
+    patched = str(patch_text or "").strip()
+
+    if not patched:
+        return patched
+
+    if _workspace_export_has_leading_bullet(patched):
+        return patched
+
+    stripped = original.lstrip()
+    leading_ws = original[: len(original) - len(stripped)]
+
+    for marker in ("●", "•", "▪", "◦", "·"):
+        if stripped.startswith(marker):
+            return f"{leading_ws}{marker} {patched}"
+
+    return patched
+
+
+def _workspace_export_docx_has_merged_bullet_paragraphs(docx_path: Path) -> bool:
+    from docx import Document
+
+    document = Document(str(docx_path))
+
+    for paragraph in list(document.paragraphs):
+        text = _clean_text(paragraph.text)
+        if not text:
+            continue
+
+        bullet_count = sum(text.count(marker) for marker in ("●", "•", "▪", "◦", "·"))
+        if bullet_count >= 2:
+            return True
+
+    return False
 
 def _workspace_export_match_score(source_text: str, candidate_text: str) -> int:
     source_norm = _normalize_tailoring_workspace_compare_text(source_text)
@@ -4972,12 +5116,17 @@ def _apply_workspace_export_patch_specs(
         updated = dict(paragraph)
         dominant_style = dict(updated.get("style", {}) or {})
 
-        updated["text"] = patch_text
+        effective_patch_text = _workspace_export_preserve_bullet_prefix(
+            _clean_text(paragraph.get("text")),
+            patch_text,
+        )
+
+        updated["text"] = effective_patch_text
         updated["patched"] = True
         updated["patch_source"] = _clean_text(patch.get("patch_source"))
         updated["runs"] = [
             {
-                "text": patch_text,
+                "text": effective_patch_text,
                 "font_name": _clean_text(dominant_style.get("font_name")),
                 "font_size": float(dominant_style.get("font_size", updated.get("font_size", 11.0)) or 11.0),
                 "bold": bool(dominant_style.get("bold", updated.get("is_heading", False))),
@@ -5362,9 +5511,14 @@ def _workspace_export_replace_docx_paragraph_text(paragraph, patch_text: str) ->
     from docx.shared import Pt
 
     style = _workspace_export_docx_first_run_style(paragraph)
+    effective_patch_text = _workspace_export_preserve_bullet_prefix(
+        paragraph.text,
+        patch_text,
+    )
+
     _workspace_export_clear_docx_paragraph_content(paragraph)
 
-    run = paragraph.add_run(str(patch_text or ""))
+    run = paragraph.add_run(str(effective_patch_text or ""))
     font = run.font
     font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
     font.size = Pt(
@@ -5468,6 +5622,11 @@ def _build_workspace_export_docx_with_pdf2docx_bootstrap(
             temp_output_path,
             patch_specs,
         )
+
+        if _workspace_export_docx_has_merged_bullet_paragraphs(temp_output_path):
+            raise ValueError(
+                "pdf2docx bootstrap merged multiple bullets into a single paragraph; falling back to native DOCX export."
+            )
 
         temp_output_path.replace(output_path)
 

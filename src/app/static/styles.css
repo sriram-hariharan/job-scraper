@@ -4334,6 +4334,30 @@ th.sortable-col {
   }
 }
 
+.tailoring-card-actions--review {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tailoring-review-action-btn.is-active[data-review-state="accepted"] {
+  border-color: rgba(145, 242, 195, 0.34);
+  background: rgba(145, 242, 195, 0.16);
+  color: #e9fff4;
+}
+
+.tailoring-review-action-btn.is-active[data-review-state="rejected"] {
+  border-color: rgba(255, 143, 143, 0.34);
+  background: rgba(255, 143, 143, 0.14);
+  color: #ffe7e7;
+}
+
+.tailoring-review-action-btn.is-active[data-review-state="edited_after_accept"] {
+  border-color: rgba(120, 166, 255, 0.34);
+  background: rgba(120, 166, 255, 0.12);
+  color: #eef4ff;
+}
+
 /* === tailoring workspace canonical layout === */
 
 .tailoring-workspace-page {

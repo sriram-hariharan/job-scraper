@@ -3718,7 +3718,6 @@ def _derive_workspace_rewrite_review_decisions(
 
     derived: Dict[str, Dict[str, str]] = {}
 
-    # Start with the explicit decision map so untouched entries survive.
     for candidate_id, row in decision_map.items():
         derived[candidate_id] = {
             "state": _clean_text(row.get("state")).lower() or "pending",
@@ -3734,16 +3733,7 @@ def _derive_workspace_rewrite_review_decisions(
         state = _clean_text(current.get("state")).lower() or "pending"
         note = _clean_text(current.get("note"))
 
-        # Only infer edited_after_accept from already-accepted items.
         if state not in {"accepted", "edited_after_accept"}:
-            derived[candidate_id] = {
-                "state": state,
-                "note": note,
-            }
-            continue
-
-        if candidate_id not in selected_set:
-            # If it is no longer selected, keep the explicit state as-is.
             derived[candidate_id] = {
                 "state": state,
                 "note": note,
@@ -3758,11 +3748,15 @@ def _derive_workspace_rewrite_review_decisions(
             }
             continue
 
-        manual_text = _clean_text(manual_map.get(bullet_key))
-        selected_patch_text = _clean_text(item.get("final_replacement_text"))
+        current_text = _clean_text(item.get("current_evidence") or item.get("original_text"))
+        selected_patch_text = ""
+        if candidate_id in selected_set:
+            selected_patch_text = _clean_text(item.get("final_replacement_text"))
 
-        if not manual_text or not selected_patch_text:
-            # No actual manual override to compare, so treat this as accepted-as-is.
+        effective_base_text = selected_patch_text or current_text
+        manual_text = _clean_text(manual_map.get(bullet_key))
+
+        if not manual_text or not effective_base_text:
             derived[candidate_id] = {
                 "state": "accepted",
                 "note": note,
@@ -3770,18 +3764,12 @@ def _derive_workspace_rewrite_review_decisions(
             continue
 
         manual_norm = _normalize_tailoring_workspace_compare_text(manual_text)
-        selected_norm = _normalize_tailoring_workspace_compare_text(selected_patch_text)
+        base_norm = _normalize_tailoring_workspace_compare_text(effective_base_text)
 
-        if manual_norm and selected_norm and manual_norm != selected_norm:
-            derived[candidate_id] = {
-                "state": "edited_after_accept",
-                "note": note,
-            }
-        else:
-            derived[candidate_id] = {
-                "state": "accepted",
-                "note": note,
-            }
+        derived[candidate_id] = {
+            "state": "edited_after_accept" if manual_norm and base_norm and manual_norm != base_norm else "accepted",
+            "note": note,
+        }
 
     return derived
 
@@ -4027,6 +4015,7 @@ def preview_tailoring_workspace_draft_payload(
     selected_resume: str = "",
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
+    rewrite_review_decisions: Any = None,
 ) -> Dict[str, Any]:
     from src.matching.job_adapter import build_job_evidence
     from src.matching.scorer import score_resume_job_match
@@ -4091,11 +4080,17 @@ def preview_tailoring_workspace_draft_payload(
             manual_bullet_edits
         )
 
+    review_decision_source = (
+        draft.get("rewrite_review_decisions", {})
+        if rewrite_review_decisions is None
+        else rewrite_review_decisions
+    )
+
     effective_review_decisions = _derive_workspace_rewrite_review_decisions(
         payload_data,
         selected_candidate_ids=effective_selected_ids,
         manual_bullet_edits=effective_manual_edits,
-        rewrite_review_decisions=draft.get("rewrite_review_decisions", {}),
+        rewrite_review_decisions=review_decision_source,
     )
 
     effective_review_telemetry = _build_workspace_rewrite_review_telemetry(

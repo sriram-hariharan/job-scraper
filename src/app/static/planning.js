@@ -43,11 +43,13 @@ const tailoringWorkspaceState = {
   draftPayload: null,
   manualBulletEdits: {},
   selectedCandidateIds: [],
+  rewriteReviewDecisions: {},
   candidateLookup: new Map(),
   previewPayload: null,
   savedSelectionPayload: null,
   selectedTab: "ready",
   activeInlineScoreKey: "",
+  activeReviewEditCandidateId: "",
   isPreviewing: false,
   isSaving: false,
   previewReadyKey: "",
@@ -2603,26 +2605,31 @@ function buildTailoringWorkspaceReviewFilterChip(item) {
 function getTailoringWorkspaceFilteredReviewItems(items) {
   const safeItems = Array.isArray(items) ? items : [];
   const filterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+  const effectiveMap = buildTailoringWorkspaceEffectiveReviewDecisionMap(
+    getTailoringWorkspacePayload()
+  );
 
   if (!filterKey || filterKey === "manual_edits" || filterKey === "selected") {
     return safeItems;
   }
 
   return safeItems.filter((item) => {
-    const reviewState = String(item?.review_state || "").trim().toLowerCase();
+    const candidateId = getTailoringReplacementCandidateId(item);
+    const reviewState = String(
+      candidateId && effectiveMap[candidateId]
+        ? effectiveMap[candidateId].state
+        : "pending"
+    ).trim().toLowerCase();
 
     if (filterKey === "remaining") {
-      return !reviewState || reviewState === "pending";
+      return reviewState === "pending";
     }
-
     if (filterKey === "accepted_as_is") {
-      return reviewState === "accepted_as_is" || reviewState === "accepted";
+      return reviewState === "accepted";
     }
-
     if (filterKey === "edited_after_accept") {
-      return reviewState === "edited_after_accept" || reviewState === "edited";
+      return reviewState === "edited_after_accept";
     }
-
     if (filterKey === "rejected") {
       return reviewState === "rejected";
     }
@@ -3629,6 +3636,299 @@ function normalizeTailoringWorkspaceManualBulletEdits(editMap, payload) {
   return normalized;
 }
 
+function normalizeTailoringWorkspaceReviewDecisionMap(value) {
+  const allowed = new Set(["pending", "accepted", "edited_after_accept", "rejected"]);
+  const normalized = {};
+
+  Object.entries(value || {}).forEach(([rawCandidateId, rawValue]) => {
+    const candidateId = String(rawCandidateId || "").trim();
+    if (!candidateId) return;
+
+    let state = "pending";
+    let note = "";
+
+    if (rawValue && typeof rawValue === "object" && !Array.isArray(rawValue)) {
+      state = String(rawValue.state || "").trim().toLowerCase() || "pending";
+      note = String(rawValue.note || "").trim();
+    } else {
+      state = String(rawValue || "").trim().toLowerCase() || "pending";
+    }
+
+    if (!allowed.has(state)) return;
+
+    normalized[candidateId] = { state, note };
+  });
+
+  return normalized;
+}
+
+function getTailoringWorkspaceSavedReviewDecisionMap() {
+  const draft = tailoringWorkspaceState.draftPayload;
+  if (!draft || typeof draft !== "object") return {};
+  return normalizeTailoringWorkspaceReviewDecisionMap(draft.rewrite_review_decisions || {});
+}
+
+function getTailoringWorkspaceCurrentReviewDecisionMap() {
+  return normalizeTailoringWorkspaceReviewDecisionMap(
+    tailoringWorkspaceState.rewriteReviewDecisions || {}
+  );
+}
+
+function getTailoringWorkspaceBulletKeyForCandidate(candidateId) {
+  const item = getTailoringWorkspaceCandidateItem(candidateId);
+  return item ? buildTailoringWorkspaceEditableBulletKey(item) : "";
+}
+
+function getTailoringWorkspaceBaseTextForCandidate(candidateId) {
+  const item = getTailoringWorkspaceCandidateItem(candidateId);
+  if (!item) return "";
+
+  const selectedIds = new Set(getTailoringWorkspaceSelectedCandidateIds());
+  const currentText = String(item.current_evidence || item.original_text || "").trim();
+  const selectedPatchText = selectedIds.has(candidateId)
+    ? String(item.final_replacement_text || "").trim()
+    : "";
+
+  return selectedPatchText || currentText;
+}
+
+function buildTailoringWorkspaceEffectiveReviewDecisionMap(payload) {
+  const safePayload = payload || getTailoringWorkspacePayload();
+  const explicitMap = getTailoringWorkspaceCurrentReviewDecisionMap();
+  const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    safePayload
+  );
+  const derived = {};
+
+  getTailoringWorkspaceSelectableItems(safePayload).forEach((item) => {
+    const candidateId = getTailoringReplacementCandidateId(item);
+    if (!candidateId) return;
+
+    const current = explicitMap[candidateId] || { state: "pending", note: "" };
+    let state = String(current.state || "pending").trim().toLowerCase();
+    const note = String(current.note || "").trim();
+
+    if (state === "accepted" || state === "edited_after_accept") {
+      const bulletKey = buildTailoringWorkspaceEditableBulletKey(item);
+      const manualText = String(manualEdits[bulletKey] || "");
+      const baseText = getTailoringWorkspaceBaseTextForCandidate(candidateId);
+
+      const manualNorm = normalizeTailoringWorkspaceText(manualText);
+      const baseNorm = normalizeTailoringWorkspaceText(baseText);
+
+      state = manualNorm && baseNorm && manualNorm !== baseNorm
+        ? "edited_after_accept"
+        : "accepted";
+    }
+
+    derived[candidateId] = { state, note };
+  });
+
+  return derived;
+}
+
+function getTailoringWorkspaceEffectiveReviewState(item) {
+  const candidateId = getTailoringReplacementCandidateId(item);
+  if (!candidateId) return "pending";
+
+  const map = buildTailoringWorkspaceEffectiveReviewDecisionMap(getTailoringWorkspacePayload());
+  return map[candidateId]?.state || "pending";
+}
+
+function buildTailoringWorkspaceReviewTelemetry(payload) {
+  const safePayload = payload || getTailoringWorkspacePayload();
+  if (!safePayload) return null;
+
+  const decisionMap = buildTailoringWorkspaceEffectiveReviewDecisionMap(safePayload);
+  const surfacedIds = [];
+  const seen = new Set();
+
+  getTailoringWorkspaceSelectableItems(safePayload).forEach((item) => {
+    const candidateId = getTailoringReplacementCandidateId(item);
+    if (!candidateId || seen.has(candidateId)) return;
+    seen.add(candidateId);
+    surfacedIds.push(candidateId);
+  });
+
+  let pendingCount = 0;
+  let acceptedCount = 0;
+  let acceptedAsIsCount = 0;
+  let editedAfterAcceptCount = 0;
+  let rejectedCount = 0;
+
+  const pendingCandidateIds = [];
+  const reviewedCandidateIds = [];
+
+  surfacedIds.forEach((candidateId) => {
+    const state = String(decisionMap[candidateId]?.state || "pending").trim().toLowerCase();
+
+    if (state === "pending") {
+      pendingCount += 1;
+      pendingCandidateIds.push(candidateId);
+    } else {
+      reviewedCandidateIds.push(candidateId);
+    }
+
+    if (state === "accepted") {
+      acceptedCount += 1;
+      acceptedAsIsCount += 1;
+    } else if (state === "edited_after_accept") {
+      acceptedCount += 1;
+      editedAfterAcceptCount += 1;
+    } else if (state === "rejected") {
+      rejectedCount += 1;
+    }
+  });
+
+  const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    safePayload
+  );
+
+  return {
+    pending_count: pendingCount,
+    accepted_count: acceptedCount,
+    accepted_as_is_count: acceptedAsIsCount,
+    edited_after_accept_count: editedAfterAcceptCount,
+    rejected_count: rejectedCount,
+    reviewed_count: acceptedCount + rejectedCount,
+    remaining_to_review_count: pendingCount,
+    selected_candidate_count: getTailoringWorkspaceSelectedCandidateIds().length,
+    manual_edit_count: Object.keys(manualEdits).length,
+    reviewed_candidate_ids: reviewedCandidateIds,
+    pending_candidate_ids: pendingCandidateIds,
+  };
+}
+
+function getTailoringWorkspaceEffectiveReviewTelemetry() {
+  const payload = getTailoringWorkspacePayload();
+  if (payload) {
+    return buildTailoringWorkspaceReviewTelemetry(payload);
+  }
+
+  const draft = tailoringWorkspaceState.draftPayload;
+  if (
+    draft &&
+    typeof draft === "object" &&
+    draft.rewrite_review_telemetry &&
+    typeof draft.rewrite_review_telemetry === "object"
+  ) {
+    return draft.rewrite_review_telemetry;
+  }
+
+  return null;
+}
+
+function getTailoringWorkspaceReviewDecisionTone(state) {
+  if (state === "accepted") return "safe";
+  if (state === "edited_after_accept") return "neutral";
+  if (state === "rejected") return "danger";
+  return "muted";
+}
+
+function getTailoringWorkspaceReviewDecisionLabel(state) {
+  if (state === "accepted") return "Accepted as-is";
+  if (state === "edited_after_accept") return "Edited after accept";
+  if (state === "rejected") return "Rejected";
+  return "Pending";
+}
+
+function setTailoringWorkspaceReviewDecision(candidateId, state, note = "") {
+  const safeCandidateId = String(candidateId || "").trim();
+  const safeState = String(state || "").trim().toLowerCase();
+  if (!safeCandidateId || !safeState) return;
+
+  const next = {
+    ...getTailoringWorkspaceCurrentReviewDecisionMap(),
+  };
+
+  next[safeCandidateId] = {
+    state: safeState,
+    note: String(note || "").trim(),
+  };
+
+  tailoringWorkspaceState.rewriteReviewDecisions = next;
+  tailoringWorkspaceState.previewPayload = null;
+  tailoringWorkspaceState.previewReadyKey = "";
+  tailoringWorkspaceState.activeInlineScoreKey = "";
+  rerenderTailoringWorkspaceSelectionView();
+  focusTailoringWorkspaceCandidateInPreview(safeCandidateId);
+}
+
+async function openTailoringWorkspaceManualEditForCandidate(candidateId) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId) return;
+
+  const bulletKey = getTailoringWorkspaceBulletKeyForCandidate(safeCandidateId);
+  if (!bulletKey) return;
+
+  tailoringWorkspaceState.activeReviewEditCandidateId = safeCandidateId;
+  tailoringWorkspaceState.selectedTab = "free_edit";
+  tailoringWorkspaceState.reviewTelemetryFilter = "";
+  rerenderTailoringWorkspaceSelectionView();
+  scrollTailoringWorkspaceLeftPaneToTabs();
+  focusTailoringWorkspaceCandidateInPreview(safeCandidateId);
+
+  window.requestAnimationFrame(() => {
+    const textarea = document.querySelector(
+      `[data-tailoring-free-edit-key="${CSS.escape(bulletKey)}"]`
+    );
+    if (!textarea) return;
+
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    textarea.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+}
+
+function syncTailoringWorkspaceReviewDecisionFromTextarea(bulletKey) {
+  const payload = getTailoringWorkspacePayload();
+  if (!payload) return;
+
+  const rows = buildTailoringWorkspaceEditableBulletRows(payload);
+  const row = rows.find((item) => item.bulletKey === bulletKey);
+  const candidateId = String(row?.candidateId || "").trim();
+  if (!candidateId) return;
+
+  const currentMap = getTailoringWorkspaceCurrentReviewDecisionMap();
+  const currentDecision = currentMap[candidateId] || { state: "pending", note: "" };
+  const isReviewEditFlow = tailoringWorkspaceState.activeReviewEditCandidateId === candidateId;
+
+  if (!isReviewEditFlow && !["accepted", "edited_after_accept"].includes(currentDecision.state)) {
+    return;
+  }
+
+  const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    payload
+  );
+  const manualText = String(manualEdits[bulletKey] || "");
+  const baseText = getTailoringWorkspaceBaseTextForCandidate(candidateId);
+
+  const manualNorm = normalizeTailoringWorkspaceText(manualText);
+  const baseNorm = normalizeTailoringWorkspaceText(baseText);
+  const hasDiff = Boolean(manualNorm && baseNorm && manualNorm !== baseNorm);
+
+  const next = { ...currentMap };
+
+  if (hasDiff) {
+    next[candidateId] = {
+      state: "edited_after_accept",
+      note: currentDecision.note || "",
+    };
+  } else if (isReviewEditFlow) {
+    delete next[candidateId];
+  } else if (currentDecision.state === "edited_after_accept") {
+    next[candidateId] = {
+      state: "accepted",
+      note: currentDecision.note || "",
+    };
+  }
+
+  tailoringWorkspaceState.rewriteReviewDecisions = next;
+}
+
 function haveSameTailoringWorkspaceManualBulletEdits(left, right, payload) {
   const a = normalizeTailoringWorkspaceManualBulletEdits(left, payload);
   const b = normalizeTailoringWorkspaceManualBulletEdits(right, payload);
@@ -4330,6 +4630,7 @@ function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = nu
   tailoringWorkspaceState.artifact = artifact;
   tailoringWorkspaceState.previewPayload = null;
   tailoringWorkspaceState.activeInlineScoreKey = "";
+  tailoringWorkspaceState.activeReviewEditCandidateId = "";
 
   const payload =
     artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
@@ -4345,6 +4646,10 @@ function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = nu
   tailoringWorkspaceState.manualBulletEdits =
     loadedDraft && loadedDraft.manual_bullet_edits && typeof loadedDraft.manual_bullet_edits === "object"
       ? { ...loadedDraft.manual_bullet_edits }
+      : {};
+  tailoringWorkspaceState.rewriteReviewDecisions =
+    loadedDraft && loadedDraft.rewrite_review_decisions && typeof loadedDraft.rewrite_review_decisions === "object"
+      ? normalizeTailoringWorkspaceReviewDecisionMap(loadedDraft.rewrite_review_decisions)
       : {};
 
   if (!payload) {
@@ -4432,6 +4737,25 @@ function bindTailoringWorkspaceSelectionHandlers() {
     root.dataset.selectionBound = "true";
 
     root.addEventListener("click", async (event) => {
+      const reviewActionButton = event.target.closest("[data-tailoring-review-action]");
+      if (reviewActionButton) {
+        event.preventDefault();
+        const candidateId = String(reviewActionButton.dataset.tailoringReviewCandidate || "").trim();
+        const nextState = String(reviewActionButton.dataset.tailoringReviewAction || "").trim().toLowerCase();
+        if (!candidateId || !nextState) return;
+        setTailoringWorkspaceReviewDecision(candidateId, nextState);
+        return;
+      }
+
+      const reviewEditButton = event.target.closest("[data-tailoring-review-edit]");
+      if (reviewEditButton) {
+        event.preventDefault();
+        const candidateId = String(reviewEditButton.dataset.tailoringReviewEdit || "").trim();
+        if (!candidateId) return;
+        await openTailoringWorkspaceManualEditForCandidate(candidateId);
+        return;
+      }
+
       const selectButton = event.target.closest("[data-tailoring-select-candidate]");
       if (selectButton) {
         event.preventDefault();
@@ -4490,7 +4814,9 @@ function bindTailoringWorkspaceSelectionHandlers() {
       tailoringWorkspaceState.previewReadyKey = "";
       tailoringWorkspaceState.activeInlineScoreKey = bulletKey;
 
+      syncTailoringWorkspaceReviewDecisionFromTextarea(bulletKey);
       renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+      updateTailoringWorkspaceMetaSummary(getTailoringWorkspacePayload());
       refreshTailoringWorkspaceInlineScoreControls();
       updateTailoringWorkspaceSelectionActionBar();
     });
@@ -4553,12 +4879,15 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
     tailoringWorkspaceState.manualBulletEdits || {},
     payload
   );
+  const reviewDecisions = getTailoringWorkspaceCurrentReviewDecisionMap();
   const hasManualEdits = Object.keys(manualEdits).length > 0;
 
   if (!context || !context.tailoringJsonPath) return;
   if (!selectedIds.length && !hasManualEdits) return;
 
-  tailoringWorkspaceState.activeInlineScoreKey = String(targetKey || tailoringWorkspaceState.activeInlineScoreKey || "").trim();
+  tailoringWorkspaceState.activeInlineScoreKey = String(
+    targetKey || tailoringWorkspaceState.activeInlineScoreKey || ""
+  ).trim();
   tailoringWorkspaceState.previewReadyKey = "";
   tailoringWorkspaceState.isPreviewing = true;
   refreshTailoringWorkspaceInlineScoreControls();
@@ -4570,6 +4899,7 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
       selected_resume: context.resumeName,
       selected_patch_candidate_ids: selectedIds,
       manual_bullet_edits: manualEdits,
+      rewrite_review_decisions: reviewDecisions,
     });
 
     tailoringWorkspaceState.previewPayload = {
@@ -4589,6 +4919,11 @@ async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
       projected_score: response.projected_score,
       projected_delta: response.projected_delta,
       selected_patch_set_counterfactual_preview: response.selected_patch_set_counterfactual_preview || null,
+      rewrite_review_decisions:
+        response && response.rewrite_review_decisions && typeof response.rewrite_review_decisions === "object"
+          ? response.rewrite_review_decisions
+          : reviewDecisions,
+      rewrite_review_telemetry: response.rewrite_review_telemetry || null,
     };
 
     tailoringWorkspaceState.previewReadyKey = String(
@@ -4624,6 +4959,7 @@ async function saveTailoringWorkspaceSelection() {
         tailoringWorkspaceState.manualBulletEdits || {},
         getTailoringWorkspacePayload()
       ),
+      rewrite_review_decisions: getTailoringWorkspaceCurrentReviewDecisionMap(),
       note: "Saved from tailoring workspace draft.",
     });
 
@@ -4639,10 +4975,16 @@ async function saveTailoringWorkspaceSelection() {
     tailoringWorkspaceState.previewPayload = null;
     tailoringWorkspaceState.previewReadyKey = "";
     tailoringWorkspaceState.activeInlineScoreKey = "";
+    tailoringWorkspaceState.activeReviewEditCandidateId = "";
 
     if (savedDraft && savedDraft.manual_bullet_edits && typeof savedDraft.manual_bullet_edits === "object") {
       tailoringWorkspaceState.manualBulletEdits = { ...savedDraft.manual_bullet_edits };
     }
+
+    tailoringWorkspaceState.rewriteReviewDecisions =
+      savedDraft && savedDraft.rewrite_review_decisions && typeof savedDraft.rewrite_review_decisions === "object"
+        ? normalizeTailoringWorkspaceReviewDecisionMap(savedDraft.rewrite_review_decisions)
+        : {};
 
     if (tailoringWorkspaceState.savedSelectionPayload) {
       syncTailoringWorkspaceSavedSelectionIntoArtifact(
@@ -4663,9 +5005,11 @@ async function saveTailoringWorkspaceSelection() {
 function clearTailoringWorkspaceSelection() {
   tailoringWorkspaceState.selectedCandidateIds = [];
   tailoringWorkspaceState.manualBulletEdits = {};
+  tailoringWorkspaceState.rewriteReviewDecisions = {};
   tailoringWorkspaceState.previewPayload = null;
   tailoringWorkspaceState.previewReadyKey = "";
   tailoringWorkspaceState.activeInlineScoreKey = "";
+  tailoringWorkspaceState.activeReviewEditCandidateId = "";
 
   rerenderTailoringWorkspaceSelectionView();
   syncTailoringWorkspacePreviewHighlight();
@@ -4676,9 +5020,11 @@ function revertTailoringWorkspaceSelectionToSaved() {
   const savedIds = getTailoringWorkspaceSavedCandidateIds();
 
   tailoringWorkspaceState.manualBulletEdits = getTailoringWorkspaceSavedManualBulletEdits();
+  tailoringWorkspaceState.rewriteReviewDecisions = getTailoringWorkspaceSavedReviewDecisionMap();
   tailoringWorkspaceState.previewPayload = null;
   tailoringWorkspaceState.previewReadyKey = "";
   tailoringWorkspaceState.activeInlineScoreKey = "";
+  tailoringWorkspaceState.activeReviewEditCandidateId = "";
 
   if (!savedIds.length) {
     tailoringWorkspaceState.selectedCandidateIds = [];
@@ -4740,8 +5086,15 @@ function renderReplacementDecisionSection({
   mode = "replacement",
   selectionEnabled = false,
   selectedCandidateIds = [],
+  reviewActionsEnabled = false,
 }) {
   const safeItems = Array.isArray(items) ? items : [];
+  const selectedSet = new Set(
+    (Array.isArray(selectedCandidateIds) ? selectedCandidateIds : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
   const orderedItems = selectionEnabled
     ? safeItems.slice().sort((left, right) => {
         const leftId = getTailoringReplacementCandidateId(left);
@@ -4756,12 +5109,6 @@ function renderReplacementDecisionSection({
     : safeItems;
 
   const selectedCount = selectionEnabled ? selectedSet.size : 0;
-
-  const selectedSet = new Set(
-    (Array.isArray(selectedCandidateIds) ? selectedCandidateIds : [])
-      .map((value) => String(value || "").trim())
-      .filter(Boolean)
-  );
 
   if (!safeItems.length) {
     return `
@@ -4800,6 +5147,18 @@ function renderReplacementDecisionSection({
           const isSelectable = Boolean(selectionEnabled && mode === "replacement" && candidateId);
           const isSelected = Boolean(isSelectable && selectedSet.has(candidateId));
 
+          const reviewState =
+            reviewActionsEnabled && mode === "direction_only"
+              ? getTailoringWorkspaceEffectiveReviewState(item)
+              : "";
+          const reviewStatusChip =
+            reviewActionsEnabled && candidateId
+              ? buildTailoringTonePill(
+                  getTailoringWorkspaceReviewDecisionLabel(reviewState),
+                  getTailoringWorkspaceReviewDecisionTone(reviewState)
+                )
+              : "";
+
           const statusLabel =
             item.replacement_status === "direct_apply_ready"
               ? "Ready to use"
@@ -4823,23 +5182,8 @@ function renderReplacementDecisionSection({
               </div>
             `
             : "";
-          
-          const trustLabel =
-            item.replacement_status === "direct_apply_ready"
-              ? "Export-safe"
-              : item.replacement_status === "direct_apply_optional"
-                ? "Low-risk"
-                : "Review-only";
-
-          const trustTone =
-            item.replacement_status === "direct_apply_ready"
-              ? "safe"
-              : item.replacement_status === "direct_apply_optional"
-                ? "neutral"
-                : "caution";
 
           const claimSafetyValue = String(item.claim_safety || "").trim();
-
           const showClaimSafetyChip =
             claimSafetyValue &&
             claimSafetyValue !== "safe_strengthen";
@@ -4883,7 +5227,7 @@ function renderReplacementDecisionSection({
                 </div>
               `
               : "";
-          
+
           const shouldShowCompactReason =
             reasonText &&
             (!trustReasonText || reasonText !== trustReasonText);
@@ -4921,6 +5265,7 @@ function renderReplacementDecisionSection({
                         ? "caution"
                         : "muted"
                   )}
+                  ${reviewStatusChip}
                 </div>
               </div>
 
@@ -4930,9 +5275,9 @@ function renderReplacementDecisionSection({
                   <div class="tailoring-quote-block">${escapeHtml(displayCurrentBullet)}</div>
                 </div>
               ` : ""}
-              
+
               ${compactTrustHtml}
-              
+
               ${mode !== "direction_only" && item.final_replacement_text ? `
                 <div class="tailoring-info-block tailoring-info-block--compact">
                   <div class="tailoring-info-label">Suggested edit</div>
@@ -4954,7 +5299,38 @@ function renderReplacementDecisionSection({
                 </div>
               ` : ""}
 
-              ${isSelectable ? `
+              ${reviewActionsEnabled && mode === "direction_only" && candidateId ? `
+                <div class="tailoring-card-actions tailoring-card-actions--compact tailoring-card-actions--review">
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "accepted" ? "is-active" : ""}"
+                    data-review-state="accepted"
+                    data-tailoring-review-action="accepted"
+                    data-tailoring-review-candidate="${escapeHtml(candidateId)}"
+                  >
+                    Accept as-is
+                  </button>
+
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "rejected" ? "is-active" : ""}"
+                    data-review-state="rejected"
+                    data-tailoring-review-action="rejected"
+                    data-tailoring-review-candidate="${escapeHtml(candidateId)}"
+                  >
+                    Reject
+                  </button>
+
+                  <button
+                    type="button"
+                    class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "edited_after_accept" ? "is-active" : ""}"
+                    data-review-state="edited_after_accept"
+                    data-tailoring-review-edit="${escapeHtml(candidateId)}"
+                  >
+                    Edit manually
+                  </button>
+                </div>
+              ` : isSelectable ? `
                 <div class="tailoring-card-actions tailoring-card-actions--compact">
                   <button
                     type="button"
@@ -4965,6 +5341,7 @@ function renderReplacementDecisionSection({
                   </button>
                 </div>
               ` : ""}
+
               ${isSelected ? buildTailoringTonePill("Selected", "safe") : ""}
             </article>
           `;
@@ -5275,6 +5652,7 @@ function renderTailoringInteractiveSummaryInto(
         emptyLabel: "No review-only suggestions.",
         tone: "muted",
         mode: "direction_only",
+        reviewActionsEnabled: selectionEnabled,
       })
     : "";
 

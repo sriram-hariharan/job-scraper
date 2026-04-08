@@ -989,20 +989,37 @@ function renderPipelineStatus(payload) {
 
   const status = pipeline.status || "idle";
   meta.textContent = buildPipelineMetaText(pipeline);
+  const overlayEl = qs("pageLoadingOverlay");
+  const pendingStart = hasPipelinePendingSuccess();
+
+  if (pendingStart && status !== "succeeded" && status !== "failed" && status !== "stopped") {
+    showPageLoadingOverlay(
+      "Running live pipeline...",
+      pipeline.stage_message || "Starting pipeline run...",
+      {
+        ...pipeline,
+        status: "running",
+        current_stage: pipeline.current_stage || "startup",
+        stage_message: pipeline.stage_message || "Launching pipeline subprocess",
+        stage_order: pipeline.stage_order || DEFAULT_STAGE_ORDER,
+        completed_stages: pipeline.completed_stages || [],
+        counts: pipeline.counts || {},
+      }
+    );
+    runBtn.disabled = true;
+    runBtn.textContent = "Pipeline Running...";
+    return;
+  }
 
   if (status === "running") {
     runBtn.disabled = true;
     runBtn.textContent = "Pipeline Running...";
 
-    const overlayIsVisible = !qs("pageLoadingOverlay").classList.contains("hidden");
-
-    if (overlayIsVisible) {
-      showPageLoadingOverlay(
-        `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
-        pipeline.stage_message || "Pipeline is running.",
-        pipeline
-      );
-    }
+    showPageLoadingOverlay(
+      `Running · ${titleCaseStage(pipeline.current_stage || "startup")}`,
+      pipeline.stage_message || "Pipeline is running.",
+      pipeline
+    );
 
     return;
   }
@@ -1639,23 +1656,25 @@ function attachApplicationHandlers() {
   });
 
   qs("confirmPipelineRunBtn").addEventListener("click", async () => {
-  try {
-    const config = state.pendingPipelineConfig || collectPipelineConfig();
-    closePipelineConfirmModal();
-    showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
-      status: "running",
-      current_stage: "startup",
-      stage_message: "Launching pipeline subprocess",
-      stage_order: DEFAULT_STAGE_ORDER,
-      completed_stages: [],
-      counts: {},
-    });
-    await postJson("/pipeline/run", config);
-    markPipelinePendingSuccess();
-    await loadPipelineStatus();
-    startPipelinePolling();
-  } catch (err) {
-    clearPipelinePendingSuccess();
+    try {
+      const config = state.pendingPipelineConfig || collectPipelineConfig();
+      closePipelineConfirmModal();
+      markPipelinePendingSuccess();
+
+      showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
+        status: "running",
+        current_stage: "startup",
+        stage_message: "Launching pipeline subprocess",
+        stage_order: DEFAULT_STAGE_ORDER,
+        completed_stages: [],
+        counts: {},
+      });
+
+      await postJson("/pipeline/run", config);
+      await loadPipelineStatus();
+      startPipelinePolling();
+    } catch (err) {
+      clearPipelinePendingSuccess();
       hidePageLoadingOverlay();
       showAppError("Failed to start live pipeline", err);
     }

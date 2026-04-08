@@ -5473,6 +5473,44 @@ async function handleTailoringWorkspaceExportSelection(format) {
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(objectUrl);
+    
+    const exportStatus = String(
+      response.headers.get("X-Tailoring-Export-Status") || "complete"
+    ).trim().toLowerCase();
+
+    const unresolvedCandidateCount = Number(
+      response.headers.get("X-Tailoring-Export-Unresolved-Candidate-Count") || 0
+    );
+
+    const unresolvedManualKeyCount = Number(
+      response.headers.get("X-Tailoring-Export-Unresolved-Manual-Key-Count") || 0
+    );
+
+    const warningMessage = String(
+      response.headers.get("X-Tailoring-Export-Warning-Message") || ""
+    ).trim();
+
+    const statusEl = qs("tailoringWorkspaceExportStatus");
+    const hintEl = qs("tailoringWorkspaceExportHint");
+
+    if (
+      exportStatus === "partial" &&
+      (unresolvedCandidateCount > 0 || unresolvedManualKeyCount > 0)
+    ) {
+      if (statusEl) {
+        statusEl.textContent = "Exported with warnings";
+      }
+
+      if (hintEl) {
+        hintEl.textContent =
+          warningMessage ||
+          "The file downloaded, but some edits could not be mapped exactly into the exported document.";
+      }
+
+      return;
+    }
+
+    closeTailoringWorkspaceExportModal();
 
     closeTailoringWorkspaceExportModal();
   } catch (err) {

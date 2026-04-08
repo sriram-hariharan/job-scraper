@@ -1675,9 +1675,9 @@ def _build_edit_cards(
             for term in (candidate.get("supported_terms", []) or [])
             if str(term).strip()
         ]
-        current_evidence = str(candidate.get("bullet_excerpt", "") or "").strip()
+        current_evidence = _rendered_candidate_current_evidence(candidate)
         parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
-        source_text = parent_bullet or current_evidence
+        source_text = current_evidence or parent_bullet
 
         signal_match = supported_signal_match_in_text(
             source_text,

@@ -4776,6 +4776,31 @@ def export_tailoring_workspace_draft_payload(
     else:
         _build_workspace_export_pdf(exported_pages, output_path)
 
+    unresolved_candidate_ids = list(patch_result.get("unresolved_candidate_ids", []) or [])
+    unresolved_manual_edit_keys = list(unresolved_manual_keys or [])
+
+    export_status = (
+        "partial"
+        if unresolved_candidate_ids or unresolved_manual_edit_keys
+        else "complete"
+    )
+
+    warning_parts: List[str] = []
+    if unresolved_candidate_ids:
+        warning_parts.append(
+            f"{len(unresolved_candidate_ids)} candidate mapping failure"
+            f"{'' if len(unresolved_candidate_ids) == 1 else 's'}"
+        )
+    if unresolved_manual_edit_keys:
+        warning_parts.append(
+            f"{len(unresolved_manual_edit_keys)} manual edit key"
+            f"{'' if len(unresolved_manual_edit_keys) == 1 else 's'} ignored"
+        )
+
+    warning_message = ""
+    if warning_parts:
+        warning_message = "Export completed with warnings: " + " and ".join(warning_parts) + "."
+
     return {
         "ok": True,
         "path": str(output_path),
@@ -4785,9 +4810,11 @@ def export_tailoring_workspace_draft_payload(
         "selected_resume": effective_selected_resume,
         "page_count": len(exported_pages),
         "workspace_patch_count": len(patch_specs),
+        "export_status": export_status,
+        "warning_message": warning_message,
         "applied_candidate_ids": patch_result.get("applied_candidate_ids", []),
-        "unresolved_candidate_ids": patch_result.get("unresolved_candidate_ids", []),
-        "unresolved_manual_edit_keys": unresolved_manual_keys,
+        "unresolved_candidate_ids": unresolved_candidate_ids,
+        "unresolved_manual_edit_keys": unresolved_manual_edit_keys,
     }
 
 def record_application_action_payload(

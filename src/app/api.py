@@ -646,6 +646,17 @@ def export_workspace_draft(
             path=str(payload["path"]),
             media_type=str(payload["media_type"]),
             filename=str(payload["filename"]),
+            headers={
+                "X-Tailoring-Export-Status": str(payload.get("export_status", "complete")),
+                "X-Tailoring-Export-Workspace-Patch-Count": str(payload.get("workspace_patch_count", 0)),
+                "X-Tailoring-Export-Unresolved-Candidate-Count": str(
+                    len(payload.get("unresolved_candidate_ids", []) or [])
+                ),
+                "X-Tailoring-Export-Unresolved-Manual-Key-Count": str(
+                    len(payload.get("unresolved_manual_edit_keys", []) or [])
+                ),
+                "X-Tailoring-Export-Warning-Message": str(payload.get("warning_message", "") or ""),
+            },
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

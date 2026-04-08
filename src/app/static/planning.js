@@ -789,10 +789,21 @@ function extractErrorMessage(err) {
 }
 
 function showAppError(title, err, subtitle = "Review the message below.") {
-  qs("appErrorTitle").textContent = title || "Something went wrong";
-  qs("appErrorSubtitle").textContent = subtitle;
-  qs("appErrorMessage").textContent = extractErrorMessage(err);
-  getAppErrorModal().classList.remove("hidden");
+  const modal = getAppErrorModal();
+  const titleEl = qs("appErrorTitle");
+  const subtitleEl = qs("appErrorSubtitle");
+  const messageEl = qs("appErrorMessage");
+  const message = extractErrorMessage(err);
+
+  if (!modal || !titleEl || !subtitleEl || !messageEl) {
+    console.error(title || "Something went wrong", message);
+    return;
+  }
+
+  titleEl.textContent = title || "Something went wrong";
+  subtitleEl.textContent = subtitle;
+  messageEl.textContent = message;
+  modal.classList.remove("hidden");
 }
 
 function bindAppErrorModal() {

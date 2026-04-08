@@ -683,7 +683,7 @@ function setTailoringWorkspacePreviewMode(mode) {
 
   if (nextMode === "edit") {
     renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
-    setTailoringWorkspacePreviewMeta("Working draft preview");
+    setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
     clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
   } else {
     if (pdfPages && tailoringWorkspacePdfState.pdfDoc) {
@@ -1504,6 +1504,7 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
       if (!best || score > best.score) {
         best = {
           pageNumber: pageEntry.pageNumber,
+          lineId: line.lineId,
           lineText: line.text,
           bbox: line.bbox,
           score,
@@ -1895,6 +1896,10 @@ async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not
   tailoringWorkspacePdfState.fitScale = 1;
   tailoringWorkspacePdfState.isFitPage = true;
 
+  if (getTailoringWorkspacePreviewMode() === "edit") {
+    renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+  }
+
   setTailoringWorkspacePreviewMeta(emptyText);
   updateTailoringWorkspaceZoomLabel();
 }
@@ -1973,6 +1978,8 @@ async function renderTailoringWorkspacePdfPages() {
 
     pageTextIndex.push({
       pageNumber,
+      width: viewport.width,
+      height: viewport.height,
       lines: lineIndex,
     });
   }
@@ -1987,6 +1994,12 @@ async function renderTailoringWorkspacePdfPages() {
   empty.classList.add("hidden");
 
   syncTailoringWorkspaceLayoutToFirstPage();
+
+  if (getTailoringWorkspacePreviewMode() === "edit") {
+    renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+    setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
+    return;
+  }
 
   setTailoringWorkspacePreviewMeta(buildTailoringWorkspaceDefaultPreviewMeta());
   syncTailoringWorkspacePreviewHighlight();
@@ -3842,116 +3855,179 @@ function buildTailoringWorkspaceWorkingDraftRows(payload) {
   });
 }
 
-function renderTailoringWorkspaceLiveDraftPreview(payload) {
-  const rows = buildTailoringWorkspaceWorkingDraftRows(payload);
+function getTailoringWorkspaceDocumentPreviewMeta() {
+  const pageCount = Array.isArray(tailoringWorkspacePdfState.pageTextIndex)
+    ? tailoringWorkspacePdfState.pageTextIndex.length
+    : 0;
 
-  if (!rows.length) {
+  return pageCount
+    ? `Read-only reconstructed draft • ${pageCount} page${pageCount === 1 ? "" : "s"}`
+    : "Read-only reconstructed draft";
+}
+
+function classifyTailoringWorkspaceDocumentLine(line) {
+  const text = String(line?.text || "").trim();
+  const left = Number(line?.bbox?.left || 0);
+
+  if (!text) return "body";
+  if (/^[•▪◦·]/.test(text)) return "bullet";
+
+  if (
+    (/^[A-Z0-9 /,&().-]{3,}$/.test(text) && text.length <= 64) ||
+    (left <= 36 && text.length <= 52 && !/[.!?:;]$/.test(text))
+  ) {
+    return "heading";
+  }
+
+  return "body";
+}
+
+function buildTailoringWorkspaceDocumentMirrorMatchMap(payload) {
+  const rows = buildTailoringWorkspaceWorkingDraftRows(payload);
+  const replacements = new Map();
+
+  rows.forEach((row) => {
+    const hasVisibleChange =
+      String(row.currentText || "").trim() !== String(row.originalText || "").trim() ||
+      row.hasSelectedPatch ||
+      row.hasManualEdit;
+
+    if (!hasVisibleChange) return;
+
+    const match = findTailoringWorkspaceBestPdfMatch(
+      row.originalText || row.baseText || row.currentText || ""
+    );
+    if (!match) return;
+
+    const matchKey = `${match.pageNumber}:${match.lineId}`;
+    const existing = replacements.get(matchKey);
+
+    if (existing && Number(existing.matchScore || 0) >= Number(match.score || 0)) {
+      return;
+    }
+
+    replacements.set(matchKey, {
+      ...row,
+      matchScore: match.score || 0,
+    });
+  });
+
+  return replacements;
+}
+
+function renderTailoringWorkspaceDocumentMirror(payload) {
+  const pages = Array.isArray(tailoringWorkspacePdfState.pageTextIndex)
+    ? tailoringWorkspacePdfState.pageTextIndex
+    : [];
+
+  if (!pages.length) {
     return `
       <div class="tailoring-empty-state">
-        No surfaced bullets are available for live draft preview on this row yet.
+        Document mirror is still loading from the PDF preview.
       </div>
     `;
   }
 
+  const replacements = buildTailoringWorkspaceDocumentMirrorMatchMap(payload);
+  const changedCount = Array.from(replacements.values()).length;
+  const showPageLabel = pages.length > 1;
+
   return `
-    <div class="tailoring-edit-card-list">
-      ${rows.map((row, index) => {
-        const bucketTone =
-          row.bucketLabel === "Ready"
-            ? "safe"
-            : row.bucketLabel === "Optional"
-              ? "caution"
-              : "muted";
+    <div class="tailoring-workspace-doc-mirror">
+      <div class="tailoring-workspace-doc-mirror-note">
+        Read-only reconstructed draft. Changes from the left pane appear here immediately and persist after Save.
+        ${changedCount ? `${changedCount} changed bullet${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
+      </div>
 
-        const sourceLabel =
-          row.changeSource === "manual_edit"
-            ? "Manual edit"
-            : row.changeSource === "selected_patch"
-              ? "Selected rewrite"
-              : "Original";
-
-        const sourceTone =
-          row.changeSource === "manual_edit"
-            ? "safe"
-            : row.changeSource === "selected_patch"
-              ? "caution"
-              : "muted";
-
-        return `
-          <article class="tailoring-edit-card tailoring-edit-card--compact">
-            <div class="tailoring-card-topline tailoring-card-topline--compact">
-              <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
-
-              <div class="tailoring-chip-group tailoring-chip-group--compact">
-                ${buildTailoringTonePill(row.bucketLabel, bucketTone)}
-                ${buildTailoringTonePill(sourceLabel, sourceTone)}
-              </div>
+      ${pages.map((page) => `
+        <section
+          class="tailoring-workspace-doc-page"
+          style="
+            width: ${Math.max(420, Math.round(Number(page.width || 760)))}px;
+            min-height: ${Math.max(540, Math.round(Number(page.height || 980)))}px;
+          "
+        >
+          ${showPageLabel ? `
+            <div class="tailoring-workspace-doc-page-header">
+              <span class="tailoring-workspace-doc-page-number">
+                Page ${escapeHtml(String(page.pageNumber || ""))}
+              </span>
             </div>
+          ` : ""}
 
-            ${row.currentText !== row.originalText ? `
-              <div class="tailoring-info-block tailoring-info-block--compact">
-                <div class="tailoring-info-label">Original bullet</div>
-                <div class="tailoring-quote-block">${escapeHtml(row.originalText)}</div>
-              </div>
-            ` : ""}
+          <div class="tailoring-workspace-doc-page-body">
+            ${(Array.isArray(page.lines) ? page.lines : []).map((line, index, allLines) => {
+              const prevLine = index > 0 ? allLines[index - 1] : null;
+              const rawGap = prevLine
+                ? Number(line?.bbox?.top || 0) -
+                  (Number(prevLine?.bbox?.top || 0) + Number(prevLine?.bbox?.height || 0))
+                : Math.max(0, Number(line?.bbox?.top || 0) - 16);
 
-            <div class="tailoring-info-block tailoring-info-block--compact">
-              <div class="tailoring-info-label">Current draft bullet</div>
-              <div class="tailoring-rewrite-callout">${escapeHtml(row.currentText)}</div>
-            </div>
-          </article>
-        `;
-      }).join("")}
+              const gapBefore = Math.max(0, Math.min(28, Math.round(rawGap)));
+              const indent = Math.max(0, Math.min(240, Math.round(Number(line?.bbox?.left || 0))));
+              const lineRole = classifyTailoringWorkspaceDocumentLine(line);
+              const replacement = replacements.get(`${page.pageNumber}:${line.lineId}`);
+              const displayText = replacement
+                ? String(replacement.currentText || replacement.originalText || line.text || "")
+                : String(line?.text || "");
+
+              const classes = [
+                "tailoring-workspace-doc-line",
+                `tailoring-workspace-doc-line--${lineRole}`,
+              ];
+
+              if (replacement) {
+                classes.push("tailoring-workspace-doc-line--changed");
+                if (replacement.hasManualEdit) {
+                  classes.push("tailoring-workspace-doc-line--manual");
+                } else if (replacement.hasSelectedPatch) {
+                  classes.push("tailoring-workspace-doc-line--selected");
+                }
+              }
+
+              return `
+                <div class="${classes.join(" ")}" style="margin-top: ${gapBefore}px;">
+                  <div
+                    class="tailoring-workspace-doc-line-copy"
+                    style="padding-left: ${indent}px;"
+                  >${escapeHtml(displayText)}</div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </section>
+      `).join("")}
     </div>
   `;
+}
+
+function renderTailoringWorkspaceLiveDraftPreview(payload) {
+  const safePayload = payload && typeof payload === "object" ? payload : null;
+  if (!safePayload) {
+    return `
+      <div class="tailoring-empty-state">
+        Working draft preview is not available.
+      </div>
+    `;
+  }
+
+  const rows = buildTailoringWorkspaceWorkingDraftRows(safePayload);
+  if (!rows.length) {
+    return `
+      <div class="tailoring-empty-state">
+        No surfaced draft bullets available yet.
+      </div>
+    `;
+  }
+
+  return renderTailoringWorkspaceDocumentMirror(safePayload);
 }
 
 function renderTailoringWorkspaceLiveDraftPreviewInto(payload) {
   const root = qs("tailoringWorkspaceLiveDraftPreview");
   if (!root) return;
 
-  const safePayload = payload && typeof payload === "object" ? payload : null;
-  if (!safePayload) {
-    root.innerHTML = `
-      <div class="tailoring-empty-state">
-        Working draft preview is not available.
-      </div>
-    `;
-    return;
-  }
-
-  const rows = buildTailoringWorkspaceWorkingDraftRows(safePayload);
-  if (!rows.length) {
-    root.innerHTML = `
-      <div class="tailoring-empty-state">
-        No surfaced draft bullets available yet.
-      </div>
-    `;
-    return;
-  }
-
-  root.innerHTML = `
-    <div class="tailoring-workspace-draft-preview-doc">
-      ${rows.map((row) => `
-        <article class="tailoring-workspace-draft-preview-row">
-          <div class="tailoring-workspace-draft-preview-row-topline">
-            <div class="tailoring-workspace-draft-preview-row-label">
-              ${escapeHtml(row.bucketLabel || "Resume bullet")}
-            </div>
-
-            <div class="tailoring-chip-group tailoring-chip-group--compact">
-              ${row.hasManualEdit ? buildTailoringTonePill("Manual edit", "neutral") : ""}
-              ${row.hasSelectedPatch ? buildTailoringTonePill("Selected rewrite", "safe") : ""}
-            </div>
-          </div>
-
-          <div class="tailoring-workspace-draft-preview-row-text">
-            ${escapeHtml(row.currentText || row.originalText || "")}
-          </div>
-        </article>
-      `).join("")}
-    </div>
-  `;
+  root.innerHTML = renderTailoringWorkspaceLiveDraftPreview(payload);
 }
 
 function getTailoringWorkspaceEditableBulletBaseMap(payload) {

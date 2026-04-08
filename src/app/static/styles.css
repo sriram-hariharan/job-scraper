@@ -2149,6 +2149,142 @@ tbody tr:hover {
   color: #ffd7d7;
 }
 
+.page-loading-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(5, 10, 20, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.page-loading-overlay.hidden {
+  display: none !important;
+}
+
+.page-loading-card {
+  width: min(860px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 20px;
+  background: rgba(18, 25, 51, 0.98);
+  border: 1px solid rgba(120, 166, 255, 0.18);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.page-loading-title {
+  color: #eef4ff;
+  font-size: 28px;
+  font-weight: 800;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.page-loading-text {
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1.55;
+  text-align: center;
+}
+
+.pipeline-loading-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.pipeline-loading-meta {
+  color: #dbe6ff;
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.pipeline-loading-counts {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pipeline-count-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.pipeline-count-empty {
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.pipeline-stage-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+
+.pipeline-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pipeline-step--current {
+  color: #e7f0ff;
+  border-color: rgba(120, 166, 255, 0.3);
+  background: rgba(120, 166, 255, 0.12);
+}
+
+.pipeline-step--complete {
+  color: #d7f8ea;
+  border-color: rgba(145, 242, 195, 0.28);
+  background: rgba(145, 242, 195, 0.12);
+}
+
+.pipeline-step--failed {
+  color: #ffd7d7;
+  border-color: rgba(255, 143, 143, 0.24);
+  background: rgba(255, 143, 143, 0.12);
+}
+
+.pipeline-step-marker {
+  font-weight: 900;
+  line-height: 1;
+}
+
+@media (max-width: 700px) {
+  .page-loading-card {
+    width: min(100vw - 16px, 860px);
+    max-height: calc(100vh - 16px);
+    padding: 18px;
+  }
+
+  .page-loading-title {
+    font-size: 24px;
+  }
+}
+
 .pipeline-success-visual {
   width: 180px;
   height: 180px;

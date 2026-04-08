@@ -1474,24 +1474,86 @@ function collectPipelineConfig() {
 }
 
 function renderPipelineConfirmSummary(config) {
-  const lines = [
-    `Job limit: ${config.job_limit}`,
-    `Job packet limit: ${config.job_packet_limit}`,
-    `Output directory: ${config.output_dir}`,
-    `Log path: ${config.log_path}`,
-    `LLM actions: ${config.llm_actions.join(", ")}`,
-    `Planning only: ${config.planning_only ? "Yes" : "No"}`,
-    `Generate tailoring: ${config.generate_tailoring ? "Yes" : "No"}`,
-    `Generate LLM tailoring: ${config.generate_llm_tailoring ? "Yes" : "No"}`,
-    `Refresh LLM tailoring: ${config.refresh_llm_tailoring ? "Yes" : "No"}`,
-    `Generate LLM fallback: ${config.generate_llm_fallback ? "Yes" : "No"}`,
-    `Generate LLM adjudication: ${config.generate_llm_adjudication ? "Yes" : "No"}`,
-    `Delete seen data: ${config.delete_seen_data === "yes" ? "Yes" : "No"}`,
-  ];
+  const llmActions = Array.isArray(config.llm_actions) ? config.llm_actions : [];
 
-  qs("pipelineConfirmSummary").innerHTML = lines
-    .map((line) => `<div class="confirm-summary-line">${escapeHtml(line)}</div>`)
-    .join("");
+  const buildBoolTile = (label, enabled) => `
+    <div class="pipeline-confirm-flag ${enabled ? "is-enabled" : "is-disabled"}">
+      <div class="pipeline-confirm-flag-copy">
+        <div class="pipeline-confirm-flag-label">${escapeHtml(label)}</div>
+      </div>
+      <div class="pipeline-confirm-flag-pill">${enabled ? "Yes" : "No"}</div>
+    </div>
+  `;
+
+  const buildMetaRow = (label, value, extraClass = "") => `
+    <div class="pipeline-confirm-meta-row">
+      <div class="pipeline-confirm-meta-label">${escapeHtml(label)}</div>
+      <div class="pipeline-confirm-meta-value ${extraClass}">${escapeHtml(String(value ?? "-"))}</div>
+    </div>
+  `;
+
+  qs("pipelineConfirmSummary").innerHTML = `
+    <div class="pipeline-confirm-shell">
+      <section class="pipeline-confirm-hero">
+        <div class="pipeline-confirm-hero-badge">Launch review</div>
+        <div class="pipeline-confirm-hero-title">Ready to start this pipeline run</div>
+        <div class="pipeline-confirm-hero-copy">
+          Review the scope, enabled actions, and run options below before launch.
+        </div>
+
+        <div class="pipeline-confirm-hero-stats">
+          <div class="pipeline-confirm-stat">
+            <div class="pipeline-confirm-stat-label">Job limit</div>
+            <div class="pipeline-confirm-stat-value">${escapeHtml(String(config.job_limit ?? 0))}</div>
+          </div>
+          <div class="pipeline-confirm-stat">
+            <div class="pipeline-confirm-stat-label">Packet limit</div>
+            <div class="pipeline-confirm-stat-value">${escapeHtml(String(config.job_packet_limit ?? 0))}</div>
+          </div>
+          <div class="pipeline-confirm-stat">
+            <div class="pipeline-confirm-stat-label">LLM actions</div>
+            <div class="pipeline-confirm-stat-value">${escapeHtml(String(llmActions.length))}</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="pipeline-confirm-grid">
+        <section class="pipeline-confirm-panel pipeline-confirm-panel--scope">
+          <div class="pipeline-confirm-panel-title">Run scope</div>
+          ${buildMetaRow("Job limit", config.job_limit)}
+          ${buildMetaRow("Job packet limit", config.job_packet_limit)}
+          ${buildMetaRow("Output directory", config.output_dir, "pipeline-confirm-meta-value--path")}
+          ${buildMetaRow("Log path", config.log_path, "pipeline-confirm-meta-value--path")}
+        </section>
+
+        <section class="pipeline-confirm-panel pipeline-confirm-panel--actions">
+          <div class="pipeline-confirm-panel-title">LLM actions</div>
+          <div class="pipeline-confirm-chip-row">
+            ${
+              llmActions.length
+                ? llmActions
+                    .map((action) => `<span class="pipeline-confirm-chip">${escapeHtml(action)}</span>`)
+                    .join("")
+                : `<span class="pipeline-confirm-chip pipeline-confirm-chip--muted">None selected</span>`
+            }
+          </div>
+        </section>
+      </div>
+
+      <section class="pipeline-confirm-panel pipeline-confirm-panel--flags">
+        <div class="pipeline-confirm-panel-title">Run options</div>
+        <div class="pipeline-confirm-flag-grid">
+          ${buildBoolTile("Planning only", config.planning_only)}
+          ${buildBoolTile("Generate tailoring", config.generate_tailoring)}
+          ${buildBoolTile("Generate LLM tailoring", config.generate_llm_tailoring)}
+          ${buildBoolTile("Refresh LLM tailoring", config.refresh_llm_tailoring)}
+          ${buildBoolTile("Generate LLM fallback", config.generate_llm_fallback)}
+          ${buildBoolTile("Generate LLM adjudication", config.generate_llm_adjudication)}
+          ${buildBoolTile("Delete seen data", config.delete_seen_data === "yes")}
+        </div>
+      </section>
+    </div>
+  `;
 }
 
 function stopPipelinePolling() {

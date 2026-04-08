@@ -564,19 +564,21 @@ def executive_dashboard() -> str:
 
   <section class="modal-backdrop hidden" id="pipelineConfirmModal">
     <div class="modal-card pipeline-confirm-card">
-      <div class="modal-header">
+      <div class="modal-header pipeline-confirm-header">
         <div>
           <h3>Confirm pipeline run</h3>
-          <div class="subtext">Review the selected configuration before launch.</div>
+          <div class="subtext">Final review before launching the live pipeline.</div>
         </div>
         <button class="ghost-btn modal-close-btn" id="closePipelineConfirmModalBtn" type="button">Close</button>
       </div>
 
-      <div class="confirm-summary-block" id="pipelineConfirmSummary"></div>
+      <div class="pipeline-confirm-scroll">
+        <div class="confirm-summary-block" id="pipelineConfirmSummary"></div>
+      </div>
 
-      <div class="modal-actions">
+      <div class="modal-actions pipeline-confirm-actions">
         <button type="button" class="ghost-btn" id="backToPipelineConfigBtn">Back</button>
-        <button type="button" id="confirmPipelineRunBtn">Run</button>
+        <button type="button" id="confirmPipelineRunBtn">Run pipeline</button>
       </div>
     </div>
   </section>

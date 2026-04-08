@@ -5995,6 +5995,118 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
   border-spacing: 0;
 }
 
+
+
+.table-wrap {
+  overflow-x: auto;
+  overflow-y: visible;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  position: relative;
+}
+
+table.resizable-table {
+  table-layout: fixed;
+}
+
+table.resizable-table th,
+table.resizable-table td {
+  overflow: hidden;
+}
+
+table.resizable-table th {
+  position: relative;
+}
+
+table.resizable-table col[data-col-key],
+table.resizable-table col.table-static-col {
+  width: auto;
+}
+
+.table-width-measure {
+  position: absolute;
+  left: -99999px;
+  top: -99999px;
+  visibility: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.resizable-col-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.resizable-col-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -5px;
+  width: 10px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 12;
+  background: transparent;
+}
+
+.col-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 2px;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background: rgba(120, 166, 255, 0.18);
+  transition: background 0.14s ease;
+}
+
+.col-resize-handle:hover::after,
+body.table-column-resizing .col-resize-handle::after {
+  background: rgba(120, 166, 255, 0.38);
+}
+
+body.table-column-resizing,
+body.table-column-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.resizable-cell-text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-cell-text {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+#queueTable col[data-static-col-key="apply"],
+#planningTable col[data-static-col-key="apply"],
+#decisionsTable col[data-static-col-key="apply"] {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+}
+
 #queueTable th.sticky-apply-col,
 #queueTable td.sticky-apply-col,
 #planningTable th.sticky-apply-col,
@@ -6004,11 +6116,14 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
   position: sticky;
   right: 0;
   z-index: 6;
-  background: rgba(12, 18, 36, 0.98);
-  box-shadow: -12px 0 18px rgba(0, 0, 0, 0.22);
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  background: rgba(12, 18, 36, 0.99);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   white-space: nowrap;
   background-clip: padding-box;
+  box-shadow: none;
 }
 
 #queueTable thead .sticky-apply-col,
@@ -6018,9 +6133,68 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
   background: rgba(16, 22, 44, 0.99);
 }
 
-.apply-cell,
-.sticky-apply-col {
-  min-width: 130px;
+#queueTable th.sticky-apply-col,
+#planningTable th.sticky-apply-col,
+#decisionsTable th.sticky-apply-col {
+  text-align: left;
+}
+
+#queueTable th.sticky-apply-col .resizable-col-content,
+#planningTable th.sticky-apply-col .resizable-col-content,
+#decisionsTable th.sticky-apply-col .resizable-col-content {
+  justify-content: flex-start;
+}
+
+#queueTable td.apply-cell,
+#planningTable td.apply-cell,
+#decisionsTable td.apply-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  text-align: center;
+}
+
+#queueTable td.apply-cell .job-apply-btn,
+#planningTable td.apply-cell .job-apply-btn,
+#decisionsTable td.apply-cell .job-apply-btn {
+  margin: 0 auto;
+}
+
+.apply-col-fixed,
+.apply-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+}
+
+#queueTable th.sticky-apply-col,
+#planningTable th.sticky-apply-col,
+#decisionsTable th.sticky-apply-col {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  text-align: center;
+}
+
+#queueTable td.apply-cell,
+#planningTable td.apply-cell,
+#decisionsTable td.apply-cell {
+  width: 140px;
+  min-width: 140px;
+  max-width: 140px;
+  text-align: center;
+}
+
+#queueTable th.sticky-apply-col .resizable-col-content,
+#planningTable th.sticky-apply-col .resizable-col-content,
+#decisionsTable th.sticky-apply-col .resizable-col-content {
+  justify-content: center;
+}
+
+#queueTable td.apply-cell .job-apply-btn,
+#planningTable td.apply-cell .job-apply-btn,
+#decisionsTable td.apply-cell .job-apply-btn {
+  margin: 0 auto;
 }
 
 /* === restore notification dropdown base layout === */

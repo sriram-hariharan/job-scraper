@@ -80,6 +80,161 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function loadTableColumnWidths(storageKey) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveTableColumnWidths(storageKey, widths) {
+  localStorage.setItem(storageKey, JSON.stringify(widths));
+}
+
+function getTableColumnElement(table, key) {
+  return table.querySelector(`col[data-col-key="${key}"]`);
+}
+
+function applyTableColumnWidths(tableId, storageKey) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+
+  const widths = loadTableColumnWidths(storageKey);
+  Object.entries(widths).forEach(([key, width]) => {
+    const col = getTableColumnElement(table, key);
+    if (col && Number(width) > 0) {
+      col.style.width = `${Number(width)}px`;
+    }
+  });
+}
+
+function getTableColumnIndex(th) {
+  if (!th || !th.parentElement) return -1;
+  return Array.from(th.parentElement.children).indexOf(th);
+}
+
+function measureAutoFitColumnWidth(table, th) {
+  const columnIndex = getTableColumnIndex(th);
+  if (columnIndex < 0) return 140;
+
+  const samples = [];
+  const headerLabel = th.querySelector(".resizable-col-label");
+  if (headerLabel && headerLabel.textContent.trim()) {
+    samples.push({ text: headerLabel.textContent.trim(), source: headerLabel });
+  }
+
+  table.querySelectorAll("tbody tr").forEach((row) => {
+    const cell = row.children[columnIndex];
+    if (!cell) return;
+
+    const preferred =
+      cell.querySelector(".resume-cell-text") ||
+      cell.querySelector(".resizable-cell-text") ||
+      cell;
+
+    const text = String(preferred.textContent || "").trim();
+    if (!text) return;
+
+    samples.push({ text, source: preferred });
+  });
+
+  const measurer = document.createElement("span");
+  measurer.className = "table-width-measure";
+  document.body.appendChild(measurer);
+
+  let maxWidth = 140;
+
+  samples.forEach(({ text, source }) => {
+    const styles = window.getComputedStyle(source);
+    measurer.style.font = styles.font;
+    measurer.style.fontFamily = styles.fontFamily;
+    measurer.style.fontSize = styles.fontSize;
+    measurer.style.fontWeight = styles.fontWeight;
+    measurer.style.letterSpacing = styles.letterSpacing;
+    measurer.style.textTransform = styles.textTransform;
+    measurer.textContent = text;
+
+    maxWidth = Math.max(maxWidth, Math.ceil(measurer.getBoundingClientRect().width) + 32);
+  });
+
+  document.body.removeChild(measurer);
+  return Math.min(Math.max(maxWidth, 140), 900);
+}
+
+function initResizableTableColumns(tableId, storageKey) {
+  const table = document.getElementById(tableId);
+  if (!table) return;
+
+  applyTableColumnWidths(tableId, storageKey);
+
+  const handles = Array.from(table.querySelectorAll(".col-resize-handle"));
+
+  handles.forEach((handle) => {
+    if (handle.dataset.resizeBound === "true") return;
+    handle.dataset.resizeBound = "true";
+
+    handle.addEventListener("dblclick", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const th = handle.closest("th");
+      if (!th) return;
+
+      const key = handle.dataset.resizeKey;
+      if (!key) return;
+
+      const col = getTableColumnElement(table, key);
+      if (!col) return;
+
+      const nextWidth = measureAutoFitColumnWidth(table, th);
+      col.style.width = `${nextWidth}px`;
+
+      const widths = loadTableColumnWidths(storageKey);
+      widths[key] = nextWidth;
+      saveTableColumnWidths(storageKey, widths);
+    });
+
+    handle.addEventListener("mousedown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const th = handle.closest("th");
+      if (!th) return;
+
+      const key = handle.dataset.resizeKey;
+      if (!key) return;
+
+      const col = getTableColumnElement(table, key);
+      if (!col) return;
+
+      const widths = loadTableColumnWidths(storageKey);
+      const startX = event.clientX;
+      const startWidth = th.getBoundingClientRect().width;
+
+      document.body.classList.add("table-column-resizing");
+
+      function onMouseMove(moveEvent) {
+        const delta = moveEvent.clientX - startX;
+        const nextWidth = Math.max(90, Math.round(startWidth + delta));
+        col.style.width = `${nextWidth}px`;
+        widths[key] = nextWidth;
+      }
+
+      function onMouseUp() {
+        document.body.classList.remove("table-column-resizing");
+        saveTableColumnWidths(storageKey, widths);
+        window.removeEventListener("mousemove", onMouseMove);
+        window.removeEventListener("mouseup", onMouseUp);
+      }
+
+      window.addEventListener("mousemove", onMouseMove);
+      window.addEventListener("mouseup", onMouseUp);
+    });
+  });
+}
+
 function clampToRange(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -147,6 +302,49 @@ function getSortIndicator(sortState, key) {
   return sortState.direction === "desc" ? "↓" : "↑";
 }
 
+function buildResizableHeaderInnerHtml(label, key, { sortable = true } = {}) {
+  const safeLabel = escapeHtml(label || "");
+
+  if (!sortable) {
+    return `
+      <div class="resizable-col-content">
+        <span class="resizable-col-label">${safeLabel}</span>
+      </div>
+      <span class="col-resize-handle" data-resize-key="${escapeHtml(key || "")}"></span>
+    `;
+  }
+
+  return `
+    <div class="resizable-col-content">
+      <button
+        type="button"
+        class="sort-header-btn"
+        data-sort-key="${escapeHtml(key || "")}"
+        aria-label="Sort by ${safeLabel}"
+      >
+        <span class="sort-header-label resizable-col-label">${safeLabel}</span>
+        <span class="sort-header-indicator">↕</span>
+      </button>
+    </div>
+    <span class="col-resize-handle" data-resize-key="${escapeHtml(key || "")}"></span>
+  `;
+}
+
+function setResizableHeaderCell(th, column) {
+  const key = column.key || "";
+  const label = column.label || "";
+  const sortable = column.sortable !== false;
+
+  th.dataset.colKey = key;
+  th.classList.toggle("sortable-col", sortable);
+
+  const currentWidth = th.style.width;
+  th.innerHTML = buildResizableHeaderInnerHtml(label, key, { sortable });
+  if (currentWidth) {
+    th.style.width = currentWidth;
+  }
+}
+
 function renderSortableHeaders(tableId, columns, sortState) {
   const table = qs(tableId);
   if (!table) return;
@@ -159,24 +357,32 @@ function renderSortableHeaders(tableId, columns, sortState) {
     const label = column.label || th.dataset.originalLabel || th.textContent.trim();
     th.dataset.originalLabel = label;
 
+    const button = th.querySelector(".sort-header-btn");
+    const labelEl = th.querySelector(".sort-header-label");
+    const indicatorEl = th.querySelector(".sort-header-indicator");
+
     if (column.sortable === false) {
-      th.innerHTML = escapeHtml(label);
+      if (!th.querySelector(".col-resize-handle")) {
+        setResizableHeaderCell(th, column);
+      }
       th.classList.remove("sortable-col");
       return;
     }
 
+    if (!button || !labelEl || !indicatorEl) {
+      setResizableHeaderCell(th, column);
+    }
+
+    const nextButton = th.querySelector(".sort-header-btn");
+    const nextLabel = th.querySelector(".sort-header-label");
+    const nextIndicator = th.querySelector(".sort-header-indicator");
+
     th.classList.add("sortable-col");
-    th.innerHTML = `
-      <button
-        type="button"
-        class="sort-header-btn ${sortState.key === column.key ? "is-active" : ""}"
-        data-sort-key="${escapeHtml(column.key)}"
-        aria-label="Sort by ${escapeHtml(label)}"
-      >
-        <span class="sort-header-label">${escapeHtml(label)}</span>
-        <span class="sort-header-indicator">${getSortIndicator(sortState, column.key)}</span>
-      </button>
-    `;
+    nextButton.dataset.sortKey = column.key;
+    nextButton.setAttribute("aria-label", `Sort by ${label}`);
+    nextButton.classList.toggle("is-active", sortState.key === column.key);
+    nextLabel.textContent = label;
+    nextIndicator.textContent = getSortIndicator(sortState, column.key);
   });
 }
 
@@ -914,6 +1120,7 @@ function countPlanningActiveFilters() {
   let count = 0;
   if (getMultiSelectValues("planningActionFilter").length) count += 1;
   if (getMultiSelectValues("planningWinnerBucket").length) count += 1;
+  if (getMultiSelectValues("planningTailoringFilter").length) count += 1;
   if (planningUndecidedOnlyEnabled()) count += 1;
   return count;
 }
@@ -2432,14 +2639,21 @@ function humanizeResumeDisplayName(value) {
   return stripPdfExtension(raw).replaceAll("_", " ");
 }
 
-function buildCompactTextHtml(value, { maxLength = 36, emptyLabel = "-" } = {}) {
+function buildCompactTextHtml(
+  value,
+  { maxLength = 36, emptyLabel = "-", truncate = true, wrap = false } = {}
+) {
   const fullRaw = String(value || "").trim();
-  if (!fullRaw) return escapeHtml(emptyLabel);
+  const className = wrap ? "resizable-cell-text resume-cell-text" : "resizable-cell-text";
+
+  if (!fullRaw) {
+    return `<span class="${className}">${escapeHtml(emptyLabel)}</span>`;
+  }
 
   const full = humanizeResumeDisplayName(fullRaw);
-  const visible = truncateText(full, maxLength);
+  const visible = truncate ? truncateText(full, maxLength) : full;
 
-  return `<span title="${escapeHtml(fullRaw)}">${escapeHtml(visible)}</span>`;
+  return `<span class="${className}" title="${escapeHtml(full)}">${escapeHtml(visible)}</span>`;
 }
 
 function humanizeWinnerBucket(value) {
@@ -2503,7 +2717,7 @@ function buildFallbackResumeHtml(row) {
   if (!row.llm_fallback_best_resume || !status || status === "disabled") {
     return "-";
   }
-  return buildCompactTextHtml(row.llm_fallback_best_resume, { maxLength: 28 });
+  return buildCompactTextHtml(row.llm_fallback_best_resume, { truncate: false, wrap: true });
 }
 
 function buildAdjudicationHintHtml(row) {
@@ -2521,7 +2735,7 @@ function buildAdjudicationHintHtml(row) {
   return `
     <div class="planning-decision-cell" title="${escapeHtml(reason || adjudicatedResume)}">
       <div class="planning-decision-label">${buildPlanningPill(badgeLabel)}</div>
-      <div>${buildCompactTextHtml(adjudicatedResume, { maxLength: 28 })}</div>
+      <div>${buildCompactTextHtml(adjudicatedResume, { truncate: false, wrap: true })}</div>
       ${metaText ? `<div class="subtext">${escapeHtml(metaText)}</div>` : ""}
     </div>
   `;
@@ -6130,9 +6344,9 @@ function renderPlanningRows(rows, metaLabel) {
           <div>${titleHtml}</div>
         </td>
         <td>${buildDateTimeCellHtml(row.posted_at)}</td>
-        <td>${buildCompactTextHtml(row.winner_resume, { maxLength: 34 })}</td>
+        <td>${buildCompactTextHtml(row.winner_resume, { truncate: false, wrap:true })}</td>
         <td>${escapeHtml(formatScore100(row.winner_score))}</td>
-        <td>${buildCompactTextHtml(row.runner_up_resume, { maxLength: 34 })}</td>
+        <td>${buildCompactTextHtml(row.runner_up_resume, { truncate: false, wrap:true })}</td>
         <td>${escapeHtml(formatScore100(row.runner_up_score))}</td>
         <td>${escapeHtml(formatScore100(row.score_gap))}</td>
         <td>${buildMatchStrengthHtml(row)}</td>
@@ -6142,7 +6356,7 @@ function renderPlanningRows(rows, metaLabel) {
         <td>${escapeHtml(humanizeFallbackStatus(row.llm_fallback_status || ""))}</td>
         <td>${buildAdjudicationHintHtml(row)}</td>
         <td>${buildOperatorDecisionCellHtml(row)}</td>
-        <td>${buildCompactTextHtml(row.operator_selected_resume, { maxLength: 28, emptyLabel: "-" })}</td>
+        <td>${buildCompactTextHtml(row.operator_selected_resume, { emptyLabel: "-", truncate: false, wrap: true })}</td>
         <td class="reason-cell">${buildReasonHtml(buildPlanningPriorityReason(row))}</td>
         <td>${buildTailoringButtonHtml(row)}</td>
         <td class="apply-cell sticky-apply-col">${buildApplicationButtonHtml(row)}</td>
@@ -6153,6 +6367,7 @@ function renderPlanningRows(rows, metaLabel) {
   qs("planningTableMeta").textContent = planningTableState.metaLabel;
   renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
   renderPlanningPagination();
+  initResizableTableColumns("planningTable", "planningTableColumnWidths");
 }
 
 async function loadPlanningTable() {

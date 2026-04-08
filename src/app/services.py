@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 
@@ -4389,6 +4390,348 @@ def _workspace_export_line_is_heading(
 
     return left <= 72 and font_size >= 12.5
 
+def _workspace_export_span_style(span: Dict[str, Any]) -> Dict[str, Any]:
+    raw_font_name = _clean_text(span.get("font"))
+    raw_font_name_lower = raw_font_name.lower()
+    flags = int(span.get("flags", 0) or 0)
+
+    is_bold = "bold" in raw_font_name_lower or (flags & 16) != 0
+    is_italic = "italic" in raw_font_name_lower or "oblique" in raw_font_name_lower
+
+    return {
+        "font_name": raw_font_name,
+        "font_size": float(span.get("size", 0) or 11.0),
+        "bold": bool(is_bold),
+        "italic": bool(is_italic),
+    }
+
+
+def _workspace_export_style_key(style: Dict[str, Any]) -> Tuple[str, float, bool, bool]:
+    return (
+        _clean_text(style.get("font_name")),
+        round(float(style.get("font_size", 11.0) or 11.0), 2),
+        bool(style.get("bold", False)),
+        bool(style.get("italic", False)),
+    )
+
+
+def _workspace_export_runs_from_spans(spans: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    runs: List[Dict[str, Any]] = []
+
+    for span in list(spans or []):
+        text = str(span.get("text", "") or "")
+        if not text:
+            continue
+
+        style = _workspace_export_span_style(span)
+        style_key = _workspace_export_style_key(style)
+
+        if runs and runs[-1]["_style_key"] == style_key:
+            runs[-1]["text"] += text
+            continue
+
+        runs.append(
+            {
+                "text": text,
+                "font_name": style["font_name"],
+                "font_size": style["font_size"],
+                "bold": style["bold"],
+                "italic": style["italic"],
+                "_style_key": style_key,
+            }
+        )
+
+    for run in runs:
+        run.pop("_style_key", None)
+
+    return runs
+
+
+def _workspace_export_dominant_style(line_records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    style_weights: Dict[Tuple[str, float, bool, bool], int] = {}
+    styles_by_key: Dict[Tuple[str, float, bool, bool], Dict[str, Any]] = {}
+
+    for line in list(line_records or []):
+        for run in list(line.get("runs", []) or []):
+            text = str(run.get("text", "") or "")
+            style = {
+                "font_name": _clean_text(run.get("font_name")),
+                "font_size": float(run.get("font_size", 11.0) or 11.0),
+                "bold": bool(run.get("bold", False)),
+                "italic": bool(run.get("italic", False)),
+            }
+            style_key = _workspace_export_style_key(style)
+            weight = max(len(_clean_text(text)), len(text), 1)
+
+            style_weights[style_key] = style_weights.get(style_key, 0) + weight
+            styles_by_key[style_key] = style
+
+    if not style_weights:
+        return {
+            "font_name": "",
+            "font_size": 11.0,
+            "bold": False,
+            "italic": False,
+        }
+
+    dominant_key = max(
+        style_weights.items(),
+        key=lambda item: (item[1], item[0][1]),
+    )[0]
+    return dict(styles_by_key[dominant_key])
+
+
+def _workspace_export_docx_font_name(raw_font_name: str) -> str:
+    font = _clean_text(raw_font_name).lower()
+
+    if "times" in font:
+        return "Times New Roman"
+    if "arial" in font or "helvetica" in font:
+        return "Arial"
+    if "calibri" in font:
+        return "Calibri"
+    if "courier" in font:
+        return "Courier New"
+    if "georgia" in font:
+        return "Georgia"
+
+    return "Calibri"
+
+
+def _workspace_export_pdf_font_name(style: Dict[str, Any]) -> str:
+    family = _workspace_export_docx_font_name(str(style.get("font_name", "")))
+    is_bold = bool(style.get("bold", False))
+    is_italic = bool(style.get("italic", False))
+
+    if family == "Times New Roman":
+        if is_bold and is_italic:
+            return "Times-BoldItalic"
+        if is_bold:
+            return "Times-Bold"
+        if is_italic:
+            return "Times-Italic"
+        return "Times-Roman"
+
+    if family == "Courier New":
+        if is_bold and is_italic:
+            return "Courier-BoldOblique"
+        if is_bold:
+            return "Courier-Bold"
+        if is_italic:
+            return "Courier-Oblique"
+        return "Courier"
+
+    if is_bold and is_italic:
+        return "Helvetica-BoldOblique"
+    if is_bold:
+        return "Helvetica-Bold"
+    if is_italic:
+        return "Helvetica-Oblique"
+    return "Helvetica"
+
+
+def _workspace_export_finalize_paragraph(
+    line_records: List[Dict[str, Any]],
+    *,
+    previous_bottom: float | None,
+    fallback_gap_before: float,
+) -> Dict[str, Any]:
+    if not line_records:
+        return {}
+
+    paragraph_text_parts: List[str] = []
+    paragraph_runs: List[Dict[str, Any]] = []
+
+    for line_index, line in enumerate(line_records):
+        line_text = _clean_text(line.get("text"))
+        if line_text:
+            paragraph_text_parts.append(line_text)
+
+        if line_index > 0 and paragraph_runs:
+            paragraph_runs[-1]["text"] += " "
+
+        for run in list(line.get("runs", []) or []):
+            run_text = str(run.get("text", "") or "")
+            if not run_text:
+                continue
+
+            normalized_run = {
+                "text": run_text,
+                "font_name": _clean_text(run.get("font_name")),
+                "font_size": float(run.get("font_size", 11.0) or 11.0),
+                "bold": bool(run.get("bold", False)),
+                "italic": bool(run.get("italic", False)),
+            }
+
+            if (
+                paragraph_runs
+                and _workspace_export_style_key(paragraph_runs[-1])
+                == _workspace_export_style_key(normalized_run)
+            ):
+                paragraph_runs[-1]["text"] += normalized_run["text"]
+            else:
+                paragraph_runs.append(normalized_run)
+
+    text = " ".join(part for part in paragraph_text_parts if part).strip()
+    style = _workspace_export_dominant_style(line_records)
+
+    left = min(float(line.get("left", 0) or 0) for line in line_records)
+    right = max(float(line.get("right", 0) or 0) for line in line_records)
+    top = min(float(line.get("top", 0) or 0) for line in line_records)
+    bottom = max(float(line.get("bottom", 0) or 0) for line in line_records)
+
+    gap_before_raw = (
+        top - float(previous_bottom)
+        if previous_bottom is not None
+        else float(fallback_gap_before)
+    )
+    gap_before = max(0.0, min(float(gap_before_raw), 28.0))
+
+    is_heading = _workspace_export_line_is_heading(
+        text,
+        font_size=float(style.get("font_size", 11.0) or 11.0),
+        is_bold=bool(style.get("bold", False)),
+        left=float(left),
+    )
+
+    is_bullet = text.lstrip().startswith(("•", "▪", "◦", "·", "-"))
+    line_spacing = 1.16 if is_heading else (1.22 if len(line_records) > 1 else 1.12)
+
+    return {
+        "text": text,
+        "runs": paragraph_runs,
+        "style": style,
+        "left": float(left),
+        "right": float(right),
+        "top": float(top),
+        "bottom": float(bottom),
+        "font_size": float(style.get("font_size", 11.0) or 11.0),
+        "is_heading": bool(is_heading),
+        "is_bullet": bool(is_bullet),
+        "line_count": len(line_records),
+        "gap_before": float(gap_before),
+        "line_spacing": float(line_spacing),
+        "left_indent_pt": max(0.0, min(float(left) - 36.0, 220.0)),
+        "alignment": "left",
+        "row_kind": "paragraph",
+        "row_group_id": "",
+        "row_side": "",
+    }
+
+def _workspace_export_same_row(
+    left_paragraph: Dict[str, Any],
+    right_paragraph: Dict[str, Any],
+    *,
+    y_tolerance: float = 6.0,
+) -> bool:
+    return abs(
+        float(left_paragraph.get("top", 0.0) or 0.0)
+        - float(right_paragraph.get("top", 0.0) or 0.0)
+    ) <= y_tolerance
+
+
+def _workspace_export_is_centered_paragraph(
+    paragraph: Dict[str, Any],
+    *,
+    page_width: float,
+) -> bool:
+    if bool(paragraph.get("is_bullet")):
+        return False
+
+    if int(paragraph.get("line_count", 0) or 0) != 1:
+        return False
+
+    text = _clean_text(paragraph.get("text"))
+    if not text or len(text) > 120:
+        return False
+
+    left = float(paragraph.get("left", 0.0) or 0.0)
+    right = float(paragraph.get("right", 0.0) or 0.0)
+    mid = (left + right) / 2.0
+    page_mid = page_width / 2.0
+
+    return abs(mid - page_mid) <= max(24.0, page_width * 0.04)
+
+
+def _workspace_export_annotate_page_layout(
+    *,
+    page_width: float,
+    page_blocks: List[Dict[str, Any]],
+) -> None:
+    flat_paragraphs: List[Dict[str, Any]] = []
+
+    for block in list(page_blocks or []):
+        for paragraph in list(block.get("paragraphs", []) or []):
+            flat_paragraphs.append(paragraph)
+
+    flat_paragraphs.sort(
+        key=lambda paragraph: (
+            round(float(paragraph.get("top", 0.0) or 0.0), 2),
+            round(float(paragraph.get("left", 0.0) or 0.0), 2),
+        )
+    )
+
+    row_index = 0
+    idx = 0
+
+    while idx < len(flat_paragraphs):
+        current = flat_paragraphs[idx]
+        row_group = [current]
+        scan = idx + 1
+
+        while scan < len(flat_paragraphs):
+            candidate = flat_paragraphs[scan]
+            if not _workspace_export_same_row(current, candidate):
+                break
+            row_group.append(candidate)
+            scan += 1
+
+        row_group.sort(key=lambda paragraph: float(paragraph.get("left", 0.0) or 0.0))
+
+        if len(row_group) >= 2:
+            left_item = row_group[0]
+            right_item = row_group[-1]
+
+            left_left = float(left_item.get("left", 0.0) or 0.0)
+            right_left = float(right_item.get("left", 0.0) or 0.0)
+            right_edge = float(right_item.get("right", 0.0) or 0.0)
+
+            has_clear_split = (right_left - left_left) >= 120.0
+            right_is_right_aligned = right_edge >= (page_width - 54.0)
+
+            if has_clear_split and right_is_right_aligned:
+                row_group_id = f"row_{row_index}"
+                row_index += 1
+
+                left_item["row_kind"] = "paired_row"
+                left_item["row_group_id"] = row_group_id
+                left_item["row_side"] = "left"
+                left_item["alignment"] = "left"
+                left_item["left_indent_pt"] = 0.0
+
+                right_item["row_kind"] = "paired_row"
+                right_item["row_group_id"] = row_group_id
+                right_item["row_side"] = "right"
+                right_item["alignment"] = "right"
+                right_item["left_indent_pt"] = 0.0
+
+        for paragraph in row_group:
+            if _clean_text(paragraph.get("row_kind")) == "paired_row":
+                continue
+
+            if _workspace_export_is_centered_paragraph(
+                paragraph,
+                page_width=page_width,
+            ):
+                paragraph["alignment"] = "center"
+                paragraph["left_indent_pt"] = 0.0
+            elif float(paragraph.get("right", 0.0) or 0.0) >= (page_width - 54.0):
+                paragraph["alignment"] = "right"
+                paragraph["left_indent_pt"] = 0.0
+            else:
+                paragraph["alignment"] = "left"
+
+        idx = scan
 
 def _extract_resume_pdf_paragraph_pages_for_export(
     resume_pdf_path: Path,
@@ -4400,107 +4743,156 @@ def _extract_resume_pdf_paragraph_pages_for_export(
         exported_pages: List[Dict[str, Any]] = []
 
         for page_index, page in enumerate(doc, start=1):
-            text_dict = page.get_text("dict")
-            raw_lines: List[Dict[str, Any]] = []
+            text_dict = page.get_text("dict", sort=True)
+            page_blocks: List[Dict[str, Any]] = []
+            previous_visible_bottom: float | None = None
 
-            for block in list(text_dict.get("blocks", []) or []):
-                if int(block.get("type", -1)) != 0:
-                    continue
+            text_blocks = [
+                block
+                for block in list(text_dict.get("blocks", []) or [])
+                if int(block.get("type", -1)) == 0
+            ]
+            text_blocks.sort(
+                key=lambda block: (
+                    round(float((block.get("bbox") or [0, 0, 0, 0])[1]), 2),
+                    round(float((block.get("bbox") or [0, 0, 0, 0])[0]), 2),
+                )
+            )
 
+            for block_index, block in enumerate(text_blocks):
+                block_bbox = tuple(block.get("bbox", (0, 0, 0, 0)))
+                block_left = float(block_bbox[0] or 0)
+                block_top = float(block_bbox[1] or 0)
+
+                line_records: List[Dict[str, Any]] = []
                 for line in list(block.get("lines", []) or []):
                     spans = list(line.get("spans", []) or [])
-                    if not spans:
+                    runs = _workspace_export_runs_from_spans(spans)
+                    if not runs:
                         continue
 
-                    text = "".join(str(span.get("text", "") or "") for span in spans).strip()
-                    if not text:
+                    line_text = "".join(str(run.get("text", "") or "") for run in runs).strip()
+                    if not line_text:
                         continue
 
                     bbox = tuple(line.get("bbox", (0, 0, 0, 0)))
                     x0, y0, x1, y1 = bbox
-                    font_size = max(float(span.get("size", 0) or 0) for span in spans) or 11.0
-                    is_bold = any(
-                        "bold" in str(span.get("font", "")).lower()
-                        or (int(span.get("flags", 0) or 0) & 16) != 0
-                        for span in spans
+                    dominant_style = _workspace_export_dominant_style(
+                        [{"runs": runs}]
                     )
 
-                    raw_lines.append(
+                    line_records.append(
                         {
-                            "text": text,
+                            "text": line_text,
                             "left": float(x0),
                             "top": float(y0),
                             "right": float(x1),
                             "bottom": float(y1),
-                            "font_size": float(font_size),
-                            "is_bold": bool(is_bold),
+                            "runs": runs,
+                            "font_size": float(dominant_style.get("font_size", 11.0) or 11.0),
+                            "is_bold": bool(dominant_style.get("bold", False)),
                         }
                     )
 
-            raw_lines.sort(key=lambda row: (round(float(row["top"]), 2), round(float(row["left"]), 2)))
-
-            paragraphs: List[Dict[str, Any]] = []
-            current: Dict[str, Any] | None = None
-
-            for line in raw_lines:
-                line_is_heading = _workspace_export_line_is_heading(
-                    str(line["text"]),
-                    font_size=float(line["font_size"]),
-                    is_bold=bool(line["is_bold"]),
-                    left=float(line["left"]),
-                )
-                starts_bullet = str(line["text"]).lstrip().startswith(("•", "▪", "◦", "·", "-"))
-
-                if current is None:
-                    current = {
-                        "text": str(line["text"]),
-                        "left": float(line["left"]),
-                        "top": float(line["top"]),
-                        "bottom": float(line["bottom"]),
-                        "font_size": float(line["font_size"]),
-                        "is_heading": bool(line_is_heading),
-                        "line_count": 1,
-                    }
+                if not line_records:
                     continue
 
-                gap = float(line["top"]) - float(current["bottom"])
-                indent_delta = abs(float(line["left"]) - float(current["left"]))
-
-                should_start_new_paragraph = (
-                    starts_bullet
-                    or gap > max(9.0, float(current["font_size"]) * 0.9)
-                    or indent_delta > 40.0
-                    or bool(line_is_heading) != bool(current["is_heading"])
+                line_records.sort(
+                    key=lambda row: (
+                        round(float(row["top"]), 2),
+                        round(float(row["left"]), 2),
+                    )
                 )
 
-                if should_start_new_paragraph:
-                    paragraphs.append(current)
-                    current = {
-                        "text": str(line["text"]),
-                        "left": float(line["left"]),
-                        "top": float(line["top"]),
-                        "bottom": float(line["bottom"]),
-                        "font_size": float(line["font_size"]),
-                        "is_heading": bool(line_is_heading),
-                        "line_count": 1,
-                    }
+                paragraph_line_groups: List[List[Dict[str, Any]]] = []
+                current_group: List[Dict[str, Any]] = []
+
+                for line in line_records:
+                    if not current_group:
+                        current_group = [line]
+                        continue
+
+                    previous_line = current_group[-1]
+                    starts_bullet = str(line["text"]).lstrip().startswith(("•", "▪", "◦", "·", "-"))
+                    line_is_heading = _workspace_export_line_is_heading(
+                        str(line["text"]),
+                        font_size=float(line["font_size"]),
+                        is_bold=bool(line["is_bold"]),
+                        left=float(line["left"]),
+                    )
+                    previous_is_heading = _workspace_export_line_is_heading(
+                        str(previous_line["text"]),
+                        font_size=float(previous_line["font_size"]),
+                        is_bold=bool(previous_line["is_bold"]),
+                        left=float(previous_line["left"]),
+                    )
+
+                    gap = float(line["top"]) - float(previous_line["bottom"])
+                    indent_delta = abs(float(line["left"]) - float(previous_line["left"]))
+
+                    should_start_new_paragraph = (
+                        starts_bullet
+                        or gap > max(8.0, float(previous_line["font_size"]) * 0.9)
+                        or indent_delta > 32.0
+                        or bool(line_is_heading) != bool(previous_is_heading)
+                    )
+
+                    if should_start_new_paragraph:
+                        paragraph_line_groups.append(current_group)
+                        current_group = [line]
+                    else:
+                        current_group.append(line)
+
+                if current_group:
+                    paragraph_line_groups.append(current_group)
+
+                block_paragraphs: List[Dict[str, Any]] = []
+                paragraph_previous_bottom = previous_visible_bottom
+
+                for group_index, group in enumerate(paragraph_line_groups):
+                    fallback_gap_before = (
+                        float(group[0]["top"]) - float(block_top)
+                        if group_index == 0 and previous_visible_bottom is None
+                        else 0.0
+                    )
+
+                    paragraph = _workspace_export_finalize_paragraph(
+                        group,
+                        previous_bottom=paragraph_previous_bottom,
+                        fallback_gap_before=fallback_gap_before,
+                    )
+                    if not paragraph or not _clean_text(paragraph.get("text")):
+                        continue
+
+                    block_paragraphs.append(paragraph)
+                    paragraph_previous_bottom = float(paragraph["bottom"])
+
+                if not block_paragraphs:
                     continue
 
-                current["text"] = f"{current['text']} {line['text']}".strip()
-                current["bottom"] = max(float(current["bottom"]), float(line["bottom"]))
-                current["font_size"] = max(float(current["font_size"]), float(line["font_size"]))
-                current["line_count"] = int(current["line_count"]) + 1
-                current["is_heading"] = bool(current["is_heading"]) or bool(line_is_heading)
+                previous_visible_bottom = float(block_paragraphs[-1]["bottom"])
 
-            if current is not None:
-                paragraphs.append(current)
+                page_blocks.append(
+                    {
+                        "block_index": block_index,
+                        "left": block_left,
+                        "top": block_top,
+                        "paragraphs": block_paragraphs,
+                    }
+                )
+
+            page_width = float(page.rect.width)
+            _workspace_export_annotate_page_layout(
+                page_width=page_width,
+                page_blocks=page_blocks,
+            )
 
             exported_pages.append(
                 {
                     "page_number": page_index,
-                    "width": float(page.rect.width),
+                    "width": page_width,
                     "height": float(page.rect.height),
-                    "paragraphs": paragraphs,
+                    "blocks": page_blocks,
                 }
             )
 
@@ -4536,10 +4928,12 @@ def _apply_workspace_export_patch_specs(
     exported_pages: List[Dict[str, Any]],
     patch_specs: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
-    flat_targets: List[Tuple[int, int, Dict[str, Any]]] = []
+    flat_targets: List[Tuple[int, int, int, Dict[str, Any]]] = []
+
     for page_index, page in enumerate(exported_pages):
-        for paragraph_index, paragraph in enumerate(list(page.get("paragraphs", []) or [])):
-            flat_targets.append((page_index, paragraph_index, paragraph))
+        for block_index, block in enumerate(list(page.get("blocks", []) or [])):
+            for paragraph_index, paragraph in enumerate(list(block.get("paragraphs", []) or [])):
+                flat_targets.append((page_index, block_index, paragraph_index, paragraph))
 
     used_targets = set()
     applied_candidate_ids: List[str] = []
@@ -4553,11 +4947,11 @@ def _apply_workspace_export_patch_specs(
         if not source_raw_text or not patch_text:
             continue
 
-        best_target: Tuple[int, int, Dict[str, Any]] | None = None
+        best_target: Tuple[int, int, int, Dict[str, Any]] | None = None
         best_score = 0
 
-        for page_index, paragraph_index, paragraph in flat_targets:
-            target_key = (page_index, paragraph_index)
+        for page_index, block_index, paragraph_index, paragraph in flat_targets:
+            target_key = (page_index, block_index, paragraph_index)
             if target_key in used_targets:
                 continue
 
@@ -4567,21 +4961,32 @@ def _apply_workspace_export_patch_specs(
             )
             if score > best_score:
                 best_score = score
-                best_target = (page_index, paragraph_index, paragraph)
+                best_target = (page_index, block_index, paragraph_index, paragraph)
 
         if best_target is None or best_score < 2000:
             if candidate_id:
                 unresolved_candidate_ids.append(candidate_id)
             continue
 
-        page_index, paragraph_index, paragraph = best_target
+        page_index, block_index, paragraph_index, paragraph = best_target
         updated = dict(paragraph)
+        dominant_style = dict(updated.get("style", {}) or {})
+
         updated["text"] = patch_text
         updated["patched"] = True
         updated["patch_source"] = _clean_text(patch.get("patch_source"))
+        updated["runs"] = [
+            {
+                "text": patch_text,
+                "font_name": _clean_text(dominant_style.get("font_name")),
+                "font_size": float(dominant_style.get("font_size", updated.get("font_size", 11.0)) or 11.0),
+                "bold": bool(dominant_style.get("bold", updated.get("is_heading", False))),
+                "italic": bool(dominant_style.get("italic", False)),
+            }
+        ]
 
-        exported_pages[page_index]["paragraphs"][paragraph_index] = updated
-        used_targets.add((page_index, paragraph_index))
+        exported_pages[page_index]["blocks"][block_index]["paragraphs"][paragraph_index] = updated
+        used_targets.add((page_index, block_index, paragraph_index))
 
         if candidate_id:
             applied_candidate_ids.append(candidate_id)
@@ -4597,6 +5002,7 @@ def _build_workspace_export_pdf(
     output_path: Path,
 ) -> None:
     from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen import canvas
 
     c = canvas.Canvas(str(output_path))
@@ -4606,46 +5012,139 @@ def _build_workspace_export_pdf(
         height = max(792.0, float(page.get("height") or 0))
         c.setPageSize((width, height))
 
-        y = height - 48.0
-        paragraphs = list(page.get("paragraphs", []) or [])
+        y = height - 42.0
+        blocks = list(page.get("blocks", []) or [])
 
-        for paragraph in paragraphs:
-            text = _clean_text(paragraph.get("text"))
-            if not text:
-                y -= 6.0
-                continue
+        for block in blocks:
+            block_paragraphs = list(block.get("paragraphs", []) or [])
+            idx = 0
 
-            is_heading = bool(paragraph.get("is_heading"))
-            font_name = "Helvetica-Bold" if is_heading else "Helvetica"
-            font_size = max(
-                10.0,
-                min(
-                    float(paragraph.get("font_size") or 11.0),
-                    16.0 if is_heading else 12.5,
-                ),
-            )
-            left = max(36.0, min(float(paragraph.get("left") or 36.0), width - 144.0))
-            available_width = max(120.0, width - left - 36.0)
+            while idx < len(block_paragraphs):
+                paragraph = block_paragraphs[idx]
+                text = _clean_text(paragraph.get("text"))
+                if not text:
+                    idx += 1
+                    continue
 
-            wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
-            line_height = font_size * (1.28 if is_heading else 1.35)
-            block_height = (len(wrapped_lines) * line_height) + (10.0 if is_heading else 6.0)
+                row_kind = _clean_text(paragraph.get("row_kind"))
+                row_group_id = _clean_text(paragraph.get("row_group_id"))
 
-            if y - block_height < 42.0:
-                c.showPage()
-                c.setPageSize((width, height))
-                y = height - 48.0
+                if row_kind == "paired_row" and row_group_id:
+                    row_items = [paragraph]
+                    scan = idx + 1
 
-            text_obj = c.beginText()
-            text_obj.setTextOrigin(left, y)
-            text_obj.setFont(font_name, font_size)
-            text_obj.setLeading(line_height)
+                    while scan < len(block_paragraphs):
+                        candidate = block_paragraphs[scan]
+                        if _clean_text(candidate.get("row_group_id")) != row_group_id:
+                            break
+                        row_items.append(candidate)
+                        scan += 1
 
-            for line in wrapped_lines:
-                text_obj.textLine(line)
+                    left_item = next(
+                        (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
+                        row_items[0],
+                    )
+                    right_item = next(
+                        (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
+                        row_items[-1],
+                    )
 
-            c.drawText(text_obj)
-            y -= block_height
+                    left_style = dict(left_item.get("style", {}) or {})
+                    right_style = dict(right_item.get("style", {}) or {})
+
+                    left_font = _workspace_export_pdf_font_name(left_style)
+                    right_font = _workspace_export_pdf_font_name(right_style)
+
+                    left_font_size = max(
+                        9.5,
+                        min(float(left_style.get("font_size", left_item.get("font_size", 11.0)) or 11.0), 15.5),
+                    )
+                    right_font_size = max(
+                        9.5,
+                        min(float(right_style.get("font_size", right_item.get("font_size", 11.0)) or 11.0), 15.5),
+                    )
+
+                    line_height = max(left_font_size, right_font_size) * 1.18
+                    gap_before = max(
+                        0.0,
+                        min(
+                            max(
+                                float(left_item.get("gap_before") or 0.0),
+                                float(right_item.get("gap_before") or 0.0),
+                            ),
+                            22.0,
+                        ),
+                    )
+
+                    if y - (gap_before + line_height + 3.0) < 42.0:
+                        c.showPage()
+                        c.setPageSize((width, height))
+                        y = height - 42.0
+
+                    y -= gap_before
+
+                    left_text = _clean_text(left_item.get("text"))
+                    right_text = _clean_text(right_item.get("text"))
+
+                    left_x = max(36.0, min(float(left_item.get("left") or 36.0), width - 180.0))
+                    right_text_width = stringWidth(right_text, right_font, right_font_size)
+                    right_x = max(left_x + 120.0, width - 36.0 - right_text_width)
+
+                    c.setFont(left_font, left_font_size)
+                    c.drawString(left_x, y, left_text)
+
+                    c.setFont(right_font, right_font_size)
+                    c.drawString(right_x, y, right_text)
+
+                    y -= line_height + 3.0
+                    idx = scan
+                    continue
+
+                style = dict(paragraph.get("style", {}) or {})
+                font_name = _workspace_export_pdf_font_name(style)
+                font_size = max(
+                    9.5,
+                    min(float(style.get("font_size", paragraph.get("font_size", 11.0)) or 11.0), 15.5),
+                )
+                gap_before = max(0.0, min(float(paragraph.get("gap_before") or 0.0), 22.0))
+                line_spacing = max(1.05, min(float(paragraph.get("line_spacing") or 1.18), 1.45))
+                alignment = _clean_text(paragraph.get("alignment")).lower()
+
+                if alignment == "center":
+                    available_width = max(120.0, width - 72.0)
+                elif alignment == "right":
+                    available_width = max(120.0, width - 72.0)
+                else:
+                    left = max(36.0, min(float(paragraph.get("left") or 36.0), width - 144.0))
+                    available_width = max(120.0, width - left - 36.0)
+
+                wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
+                line_height = font_size * line_spacing
+                block_height = gap_before + (len(wrapped_lines) * line_height) + 3.0
+
+                if y - block_height < 42.0:
+                    c.showPage()
+                    c.setPageSize((width, height))
+                    y = height - 42.0
+
+                y -= gap_before
+
+                for line in wrapped_lines:
+                    line_width = stringWidth(line, font_name, font_size)
+
+                    if alignment == "center":
+                        x = max(36.0, (width - line_width) / 2.0)
+                    elif alignment == "right":
+                        x = max(36.0, width - 36.0 - line_width)
+                    else:
+                        x = max(36.0, min(float(paragraph.get("left") or 36.0), width - 144.0))
+
+                    c.setFont(font_name, font_size)
+                    c.drawString(x, y, line)
+                    y -= line_height
+
+                y -= 3.0
+                idx += 1
 
         if page_index < len(exported_pages) - 1:
             c.showPage()
@@ -4658,7 +5157,25 @@ def _build_workspace_export_docx(
     output_path: Path,
 ) -> None:
     from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
     from docx.shared import Pt
+
+    def _append_runs(paragraph, runs: List[Dict[str, Any]]) -> None:
+        for run_data in list(runs or []):
+            run_text = str(run_data.get("text", "") or "")
+            if not run_text:
+                continue
+
+            run = paragraph.add_run(run_text)
+            font = run.font
+            font.name = _workspace_export_docx_font_name(
+                str(run_data.get("font_name", ""))
+            )
+            font.size = Pt(
+                max(9.5, min(float(run_data.get("font_size", 11.0) or 11.0), 15.5))
+            )
+            font.bold = bool(run_data.get("bold", False))
+            font.italic = bool(run_data.get("italic", False))
 
     document = Document()
     use_seed_paragraph = True
@@ -4667,40 +5184,310 @@ def _build_workspace_export_docx(
         if page_index > 0:
             document.add_page_break()
 
-        for paragraph_data in list(page.get("paragraphs", []) or []):
-            text = _clean_text(paragraph_data.get("text"))
-            if not text:
-                continue
+        page_width_pt = max(612.0, float(page.get("width") or 612.0))
+        right_tab_stop_pt = max(360.0, page_width_pt - 92.0)
 
-            if use_seed_paragraph and document.paragraphs:
-                paragraph = document.paragraphs[0]
-                use_seed_paragraph = False
-            else:
-                paragraph = document.add_paragraph()
+        for block in list(page.get("blocks", []) or []):
+            block_paragraphs = list(block.get("paragraphs", []) or [])
+            idx = 0
 
-            paragraph_format = paragraph.paragraph_format
-            paragraph_format.left_indent = Pt(
-                max(0.0, min(float(paragraph_data.get("left") or 0.0), 220.0))
-            )
-            paragraph_format.space_after = Pt(6.0 if paragraph_data.get("is_heading") else 3.0)
+            while idx < len(block_paragraphs):
+                paragraph_data = block_paragraphs[idx]
+                text = _clean_text(paragraph_data.get("text"))
+                if not text:
+                    idx += 1
+                    continue
 
-            run = paragraph.add_run(text)
-            font = run.font
-            font.name = "Calibri"
-            font.size = Pt(
-                max(
-                    10.0,
-                    min(
-                        float(paragraph_data.get("font_size") or 11.0),
-                        16.0 if paragraph_data.get("is_heading") else 12.5,
-                    ),
+                row_kind = _clean_text(paragraph_data.get("row_kind"))
+                row_group_id = _clean_text(paragraph_data.get("row_group_id"))
+
+                if row_kind == "paired_row" and row_group_id:
+                    row_items = [paragraph_data]
+                    scan = idx + 1
+
+                    while scan < len(block_paragraphs):
+                        candidate = block_paragraphs[scan]
+                        if _clean_text(candidate.get("row_group_id")) != row_group_id:
+                            break
+                        row_items.append(candidate)
+                        scan += 1
+
+                    left_item = next(
+                        (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
+                        row_items[0],
+                    )
+                    right_item = next(
+                        (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
+                        row_items[-1],
+                    )
+
+                    if use_seed_paragraph and document.paragraphs:
+                        paragraph = document.paragraphs[0]
+                        use_seed_paragraph = False
+                    else:
+                        paragraph = document.add_paragraph()
+
+                    paragraph_format = paragraph.paragraph_format
+                    paragraph_format.left_indent = Pt(0.0)
+                    paragraph_format.first_line_indent = Pt(0.0)
+                    paragraph_format.space_before = Pt(
+                        max(
+                            0.0,
+                            min(
+                                max(
+                                    float(left_item.get("gap_before") or 0.0),
+                                    float(right_item.get("gap_before") or 0.0),
+                                ),
+                                18.0,
+                            ),
+                        )
+                    )
+                    paragraph_format.space_after = Pt(0.0)
+                    paragraph_format.line_spacing = max(
+                        1.0,
+                        min(
+                            max(
+                                float(left_item.get("line_spacing") or 1.12),
+                                float(right_item.get("line_spacing") or 1.12),
+                            ),
+                            1.35,
+                        ),
+                    )
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    paragraph_format.tab_stops.add_tab_stop(
+                        Pt(right_tab_stop_pt),
+                        WD_TAB_ALIGNMENT.RIGHT,
+                        WD_TAB_LEADER.SPACES,
+                    )
+
+                    _append_runs(paragraph, list(left_item.get("runs", []) or []))
+                    paragraph.add_run("\t")
+                    _append_runs(paragraph, list(right_item.get("runs", []) or []))
+
+                    idx = scan
+                    continue
+
+                if use_seed_paragraph and document.paragraphs:
+                    paragraph = document.paragraphs[0]
+                    use_seed_paragraph = False
+                else:
+                    paragraph = document.add_paragraph()
+
+                paragraph_format = paragraph.paragraph_format
+                alignment = _clean_text(paragraph_data.get("alignment")).lower()
+
+                if alignment == "center":
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    paragraph_format.left_indent = Pt(0.0)
+                elif alignment == "right":
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+                    paragraph_format.left_indent = Pt(0.0)
+                else:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                    paragraph_format.left_indent = Pt(
+                        max(0.0, min(float(paragraph_data.get("left_indent_pt") or 0.0), 220.0))
+                    )
+
+                paragraph_format.space_before = Pt(
+                    max(0.0, min(float(paragraph_data.get("gap_before") or 0.0), 18.0))
                 )
-            )
-            if paragraph_data.get("is_heading"):
-                font.bold = True
+                paragraph_format.space_after = Pt(1.5 if paragraph_data.get("is_heading") else 0.0)
+                paragraph_format.line_spacing = max(
+                    1.0,
+                    min(float(paragraph_data.get("line_spacing") or 1.15), 1.4),
+                )
+
+                if paragraph_data.get("is_bullet"):
+                    paragraph_format.first_line_indent = Pt(-10.0)
+                else:
+                    paragraph_format.first_line_indent = Pt(0.0)
+
+                runs = list(paragraph_data.get("runs", []) or [])
+                if not runs:
+                    style = dict(paragraph_data.get("style", {}) or {})
+                    runs = [
+                        {
+                            "text": text,
+                            "font_name": _clean_text(style.get("font_name")),
+                            "font_size": float(style.get("font_size", paragraph_data.get("font_size", 11.0)) or 11.0),
+                            "bold": bool(style.get("bold", paragraph_data.get("is_heading", False))),
+                            "italic": bool(style.get("italic", False)),
+                        }
+                    ]
+
+                _append_runs(paragraph, runs)
+                idx += 1
 
     document.save(str(output_path))
 
+def _workspace_export_docx_first_run_style(paragraph) -> Dict[str, Any]:
+    for run in list(paragraph.runs):
+        if not _clean_text(run.text):
+            continue
+
+        font = run.font
+        font_size = 11.0
+        if font.size is not None:
+            try:
+                font_size = float(font.size.pt)
+            except Exception:
+                font_size = 11.0
+
+        return {
+            "font_name": _clean_text(font.name),
+            "font_size": font_size,
+            "bold": bool(run.bold if run.bold is not None else font.bold),
+            "italic": bool(run.italic if run.italic is not None else font.italic),
+            "underline": bool(run.underline) if run.underline is not None else False,
+        }
+
+    return {
+        "font_name": "",
+        "font_size": 11.0,
+        "bold": False,
+        "italic": False,
+        "underline": False,
+    }
+
+
+def _workspace_export_clear_docx_paragraph_content(paragraph) -> None:
+    paragraph_xml = paragraph._p
+    for child in list(paragraph_xml):
+        if child.tag.endswith("}pPr"):
+            continue
+        paragraph_xml.remove(child)
+
+
+def _workspace_export_replace_docx_paragraph_text(paragraph, patch_text: str) -> None:
+    from docx.shared import Pt
+
+    style = _workspace_export_docx_first_run_style(paragraph)
+    _workspace_export_clear_docx_paragraph_content(paragraph)
+
+    run = paragraph.add_run(str(patch_text or ""))
+    font = run.font
+    font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
+    font.size = Pt(
+        max(9.5, min(float(style.get("font_size", 11.0) or 11.0), 15.5))
+    )
+    font.bold = bool(style.get("bold", False))
+    font.italic = bool(style.get("italic", False))
+    run.underline = bool(style.get("underline", False))
+
+
+def _apply_workspace_export_patch_specs_to_docx(
+    docx_path: Path,
+    patch_specs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    from docx import Document
+
+    document = Document(str(docx_path))
+
+    table_count = len(list(document.tables))
+    if table_count > 0:
+        raise ValueError(
+            f"pdf2docx bootstrap produced {table_count} table(s); falling back to native DOCX export for ATS safety."
+        )
+
+    paragraphs = [
+        paragraph
+        for paragraph in list(document.paragraphs)
+        if _clean_text(paragraph.text)
+    ]
+
+    used_paragraph_indexes = set()
+    applied_candidate_ids: List[str] = []
+    unresolved_candidate_ids: List[str] = []
+
+    for patch in list(patch_specs or []):
+        source_raw_text = _clean_text(patch.get("source_raw_text"))
+        patch_text = _clean_text(patch.get("patch_text"))
+        candidate_id = _clean_text(patch.get("candidate_id"))
+
+        if not source_raw_text or not patch_text:
+            continue
+
+        best_index = -1
+        best_score = 0
+
+        for idx, paragraph in enumerate(paragraphs):
+            if idx in used_paragraph_indexes:
+                continue
+
+            score = _workspace_export_match_score(source_raw_text, paragraph.text)
+            if score > best_score:
+                best_score = score
+                best_index = idx
+
+        if best_index < 0 or best_score < 2000:
+            if candidate_id:
+                unresolved_candidate_ids.append(candidate_id)
+            continue
+
+        _workspace_export_replace_docx_paragraph_text(
+            paragraphs[best_index],
+            patch_text,
+        )
+        used_paragraph_indexes.add(best_index)
+
+        if candidate_id:
+            applied_candidate_ids.append(candidate_id)
+
+    document.save(str(docx_path))
+
+    return {
+        "applied_candidate_ids": applied_candidate_ids,
+        "unresolved_candidate_ids": unresolved_candidate_ids,
+    }
+
+
+def _build_workspace_export_docx_with_pdf2docx_bootstrap(
+    *,
+    resume_pdf_path: Path,
+    patch_specs: List[Dict[str, Any]],
+    output_path: Path,
+) -> Dict[str, Any]:
+    from pdf2docx import Converter
+
+    temp_output_path: Path | None = None
+    converter = None
+
+    try:
+        with tempfile.NamedTemporaryFile(
+            prefix="workspace_export_bootstrap_",
+            suffix=".docx",
+            dir=str(output_path.parent),
+            delete=False,
+        ) as temp_file:
+            temp_output_path = Path(temp_file.name)
+
+        converter = Converter(str(resume_pdf_path))
+        converter.convert(str(temp_output_path))
+
+        patch_result = _apply_workspace_export_patch_specs_to_docx(
+            temp_output_path,
+            patch_specs,
+        )
+
+        temp_output_path.replace(output_path)
+
+        return {
+            "applied_candidate_ids": list(patch_result.get("applied_candidate_ids", []) or []),
+            "unresolved_candidate_ids": list(patch_result.get("unresolved_candidate_ids", []) or []),
+            "strategy": "pdf2docx_bootstrap",
+        }
+    finally:
+        if converter is not None:
+            try:
+                converter.close()
+            except Exception:
+                pass
+
+        if temp_output_path is not None and temp_output_path.exists():
+            try:
+                temp_output_path.unlink()
+            except Exception:
+                pass
 
 def export_tailoring_workspace_draft_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -4771,8 +5558,31 @@ def export_tailoring_workspace_draft_payload(
         export_format=export_format,
     )
 
+    export_strategy = "native_pdf" if export_format == "pdf" else "native_docx"
+    export_strategy_note = ""
+
     if export_format == "word":
-        _build_workspace_export_docx(exported_pages, output_path)
+        try:
+            bootstrap_patch_result = _build_workspace_export_docx_with_pdf2docx_bootstrap(
+                resume_pdf_path=resume_pdf_path,
+                patch_specs=patch_specs,
+                output_path=output_path,
+            )
+            patch_result = {
+                "applied_candidate_ids": list(
+                    bootstrap_patch_result.get("applied_candidate_ids", []) or []
+                ),
+                "unresolved_candidate_ids": list(
+                    bootstrap_patch_result.get("unresolved_candidate_ids", []) or []
+                ),
+            }
+            export_strategy = str(
+                bootstrap_patch_result.get("strategy", "pdf2docx_bootstrap")
+            )
+        except Exception as exc:
+            _build_workspace_export_docx(exported_pages, output_path)
+            export_strategy = "native_docx_fallback"
+            export_strategy_note = f"{exc.__class__.__name__}: {exc}"
     else:
         _build_workspace_export_pdf(exported_pages, output_path)
 
@@ -4812,6 +5622,8 @@ def export_tailoring_workspace_draft_payload(
         "workspace_patch_count": len(patch_specs),
         "export_status": export_status,
         "warning_message": warning_message,
+        "export_strategy": export_strategy,
+        "export_strategy_note": export_strategy_note,
         "applied_candidate_ids": patch_result.get("applied_candidate_ids", []),
         "unresolved_candidate_ids": unresolved_candidate_ids,
         "unresolved_manual_edit_keys": unresolved_manual_edit_keys,

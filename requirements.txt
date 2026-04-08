@@ -21,3 +21,6 @@ llama-index
 llama-index-embeddings-huggingface
 fastapi
 uvicorn
+pymupdf 
+reportlab 
+python-docx

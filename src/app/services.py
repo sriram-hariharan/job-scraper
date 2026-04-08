@@ -4336,6 +4336,460 @@ def preview_tailoring_workspace_draft_payload(
         "rewrite_review_telemetry": effective_review_telemetry,
     }
 
+def _normalize_workspace_export_format(value: Any) -> str:
+    raw = _clean_text(value).lower()
+    if raw == "pdf":
+        return "pdf"
+    if raw in {"word", "docx"}:
+        return "word"
+    raise ValueError("format must be either 'pdf' or 'word'.")
+
+
+def _workspace_export_output_path(
+    output_dir: Path,
+    *,
+    selected_resume: str,
+    export_format: str,
+) -> Tuple[Path, str, str]:
+    export_dir = Path(output_dir) / "workspace_exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+
+    resume_stem = Path(_sanitize_resume_filename(selected_resume)).stem
+    base_name = _slugify_text(resume_stem, max_len=80)
+
+    if export_format == "word":
+        filename = f"{base_name}__tailored_draft.docx"
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    else:
+        filename = f"{base_name}__tailored_draft.pdf"
+        media_type = "application/pdf"
+
+    return export_dir / filename, filename, media_type
+
+
+def _workspace_export_line_is_heading(
+    text: str,
+    *,
+    font_size: float,
+    is_bold: bool,
+    left: float,
+) -> bool:
+    clean = _clean_text(text)
+    if not clean:
+        return False
+
+    if len(clean) > 96:
+        return False
+
+    if clean.startswith(("•", "▪", "◦", "·", "-")):
+        return False
+
+    if is_bold and font_size >= 10.5:
+        return True
+
+    return left <= 72 and font_size >= 12.5
+
+
+def _extract_resume_pdf_paragraph_pages_for_export(
+    resume_pdf_path: Path,
+) -> List[Dict[str, Any]]:
+    import pymupdf as fitz
+
+    doc = fitz.open(str(resume_pdf_path))
+    try:
+        exported_pages: List[Dict[str, Any]] = []
+
+        for page_index, page in enumerate(doc, start=1):
+            text_dict = page.get_text("dict")
+            raw_lines: List[Dict[str, Any]] = []
+
+            for block in list(text_dict.get("blocks", []) or []):
+                if int(block.get("type", -1)) != 0:
+                    continue
+
+                for line in list(block.get("lines", []) or []):
+                    spans = list(line.get("spans", []) or [])
+                    if not spans:
+                        continue
+
+                    text = "".join(str(span.get("text", "") or "") for span in spans).strip()
+                    if not text:
+                        continue
+
+                    bbox = tuple(line.get("bbox", (0, 0, 0, 0)))
+                    x0, y0, x1, y1 = bbox
+                    font_size = max(float(span.get("size", 0) or 0) for span in spans) or 11.0
+                    is_bold = any(
+                        "bold" in str(span.get("font", "")).lower()
+                        or (int(span.get("flags", 0) or 0) & 16) != 0
+                        for span in spans
+                    )
+
+                    raw_lines.append(
+                        {
+                            "text": text,
+                            "left": float(x0),
+                            "top": float(y0),
+                            "right": float(x1),
+                            "bottom": float(y1),
+                            "font_size": float(font_size),
+                            "is_bold": bool(is_bold),
+                        }
+                    )
+
+            raw_lines.sort(key=lambda row: (round(float(row["top"]), 2), round(float(row["left"]), 2)))
+
+            paragraphs: List[Dict[str, Any]] = []
+            current: Dict[str, Any] | None = None
+
+            for line in raw_lines:
+                line_is_heading = _workspace_export_line_is_heading(
+                    str(line["text"]),
+                    font_size=float(line["font_size"]),
+                    is_bold=bool(line["is_bold"]),
+                    left=float(line["left"]),
+                )
+                starts_bullet = str(line["text"]).lstrip().startswith(("•", "▪", "◦", "·", "-"))
+
+                if current is None:
+                    current = {
+                        "text": str(line["text"]),
+                        "left": float(line["left"]),
+                        "top": float(line["top"]),
+                        "bottom": float(line["bottom"]),
+                        "font_size": float(line["font_size"]),
+                        "is_heading": bool(line_is_heading),
+                        "line_count": 1,
+                    }
+                    continue
+
+                gap = float(line["top"]) - float(current["bottom"])
+                indent_delta = abs(float(line["left"]) - float(current["left"]))
+
+                should_start_new_paragraph = (
+                    starts_bullet
+                    or gap > max(9.0, float(current["font_size"]) * 0.9)
+                    or indent_delta > 40.0
+                    or bool(line_is_heading) != bool(current["is_heading"])
+                )
+
+                if should_start_new_paragraph:
+                    paragraphs.append(current)
+                    current = {
+                        "text": str(line["text"]),
+                        "left": float(line["left"]),
+                        "top": float(line["top"]),
+                        "bottom": float(line["bottom"]),
+                        "font_size": float(line["font_size"]),
+                        "is_heading": bool(line_is_heading),
+                        "line_count": 1,
+                    }
+                    continue
+
+                current["text"] = f"{current['text']} {line['text']}".strip()
+                current["bottom"] = max(float(current["bottom"]), float(line["bottom"]))
+                current["font_size"] = max(float(current["font_size"]), float(line["font_size"]))
+                current["line_count"] = int(current["line_count"]) + 1
+                current["is_heading"] = bool(current["is_heading"]) or bool(line_is_heading)
+
+            if current is not None:
+                paragraphs.append(current)
+
+            exported_pages.append(
+                {
+                    "page_number": page_index,
+                    "width": float(page.rect.width),
+                    "height": float(page.rect.height),
+                    "paragraphs": paragraphs,
+                }
+            )
+
+        return exported_pages
+    finally:
+        doc.close()
+
+
+def _workspace_export_match_score(source_text: str, candidate_text: str) -> int:
+    source_norm = _normalize_tailoring_workspace_compare_text(source_text)
+    candidate_norm = _normalize_tailoring_workspace_compare_text(candidate_text)
+
+    if not source_norm or not candidate_norm:
+        return 0
+
+    if source_norm == candidate_norm:
+        return 100000 + len(source_norm)
+
+    if source_norm in candidate_norm or candidate_norm in source_norm:
+        return 50000 + min(len(source_norm), len(candidate_norm))
+
+    source_words = {word for word in source_norm.split(" ") if len(word) > 2}
+    candidate_words = {word for word in candidate_norm.split(" ") if len(word) > 2}
+    overlap = len(source_words & candidate_words)
+
+    if not overlap:
+        return 0
+
+    return (overlap * 1000) - (abs(len(source_words) - len(candidate_words)) * 10)
+
+
+def _apply_workspace_export_patch_specs(
+    exported_pages: List[Dict[str, Any]],
+    patch_specs: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    flat_targets: List[Tuple[int, int, Dict[str, Any]]] = []
+    for page_index, page in enumerate(exported_pages):
+        for paragraph_index, paragraph in enumerate(list(page.get("paragraphs", []) or [])):
+            flat_targets.append((page_index, paragraph_index, paragraph))
+
+    used_targets = set()
+    applied_candidate_ids: List[str] = []
+    unresolved_candidate_ids: List[str] = []
+
+    for patch in list(patch_specs or []):
+        source_raw_text = _clean_text(patch.get("source_raw_text"))
+        patch_text = _clean_text(patch.get("patch_text"))
+        candidate_id = _clean_text(patch.get("candidate_id"))
+
+        if not source_raw_text or not patch_text:
+            continue
+
+        best_target: Tuple[int, int, Dict[str, Any]] | None = None
+        best_score = 0
+
+        for page_index, paragraph_index, paragraph in flat_targets:
+            target_key = (page_index, paragraph_index)
+            if target_key in used_targets:
+                continue
+
+            score = _workspace_export_match_score(
+                source_raw_text,
+                _clean_text(paragraph.get("text")),
+            )
+            if score > best_score:
+                best_score = score
+                best_target = (page_index, paragraph_index, paragraph)
+
+        if best_target is None or best_score < 2000:
+            if candidate_id:
+                unresolved_candidate_ids.append(candidate_id)
+            continue
+
+        page_index, paragraph_index, paragraph = best_target
+        updated = dict(paragraph)
+        updated["text"] = patch_text
+        updated["patched"] = True
+        updated["patch_source"] = _clean_text(patch.get("patch_source"))
+
+        exported_pages[page_index]["paragraphs"][paragraph_index] = updated
+        used_targets.add((page_index, paragraph_index))
+
+        if candidate_id:
+            applied_candidate_ids.append(candidate_id)
+
+    return {
+        "applied_candidate_ids": applied_candidate_ids,
+        "unresolved_candidate_ids": unresolved_candidate_ids,
+    }
+
+
+def _build_workspace_export_pdf(
+    exported_pages: List[Dict[str, Any]],
+    output_path: Path,
+) -> None:
+    from reportlab.lib.utils import simpleSplit
+    from reportlab.pdfgen import canvas
+
+    c = canvas.Canvas(str(output_path))
+
+    for page_index, page in enumerate(exported_pages):
+        width = max(612.0, float(page.get("width") or 0))
+        height = max(792.0, float(page.get("height") or 0))
+        c.setPageSize((width, height))
+
+        y = height - 48.0
+        paragraphs = list(page.get("paragraphs", []) or [])
+
+        for paragraph in paragraphs:
+            text = _clean_text(paragraph.get("text"))
+            if not text:
+                y -= 6.0
+                continue
+
+            is_heading = bool(paragraph.get("is_heading"))
+            font_name = "Helvetica-Bold" if is_heading else "Helvetica"
+            font_size = max(
+                10.0,
+                min(
+                    float(paragraph.get("font_size") or 11.0),
+                    16.0 if is_heading else 12.5,
+                ),
+            )
+            left = max(36.0, min(float(paragraph.get("left") or 36.0), width - 144.0))
+            available_width = max(120.0, width - left - 36.0)
+
+            wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
+            line_height = font_size * (1.28 if is_heading else 1.35)
+            block_height = (len(wrapped_lines) * line_height) + (10.0 if is_heading else 6.0)
+
+            if y - block_height < 42.0:
+                c.showPage()
+                c.setPageSize((width, height))
+                y = height - 48.0
+
+            text_obj = c.beginText()
+            text_obj.setTextOrigin(left, y)
+            text_obj.setFont(font_name, font_size)
+            text_obj.setLeading(line_height)
+
+            for line in wrapped_lines:
+                text_obj.textLine(line)
+
+            c.drawText(text_obj)
+            y -= block_height
+
+        if page_index < len(exported_pages) - 1:
+            c.showPage()
+
+    c.save()
+
+
+def _build_workspace_export_docx(
+    exported_pages: List[Dict[str, Any]],
+    output_path: Path,
+) -> None:
+    from docx import Document
+    from docx.shared import Pt
+
+    document = Document()
+    use_seed_paragraph = True
+
+    for page_index, page in enumerate(exported_pages):
+        if page_index > 0:
+            document.add_page_break()
+
+        for paragraph_data in list(page.get("paragraphs", []) or []):
+            text = _clean_text(paragraph_data.get("text"))
+            if not text:
+                continue
+
+            if use_seed_paragraph and document.paragraphs:
+                paragraph = document.paragraphs[0]
+                use_seed_paragraph = False
+            else:
+                paragraph = document.add_paragraph()
+
+            paragraph_format = paragraph.paragraph_format
+            paragraph_format.left_indent = Pt(
+                max(0.0, min(float(paragraph_data.get("left") or 0.0), 220.0))
+            )
+            paragraph_format.space_after = Pt(6.0 if paragraph_data.get("is_heading") else 3.0)
+
+            run = paragraph.add_run(text)
+            font = run.font
+            font.name = "Calibri"
+            font.size = Pt(
+                max(
+                    10.0,
+                    min(
+                        float(paragraph_data.get("font_size") or 11.0),
+                        16.0 if paragraph_data.get("is_heading") else 12.5,
+                    ),
+                )
+            )
+            if paragraph_data.get("is_heading"):
+                font.bold = True
+
+    document.save(str(output_path))
+
+
+def export_tailoring_workspace_draft_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    format: str = "pdf",
+) -> Dict[str, Any]:
+    export_format = _normalize_workspace_export_format(format)
+
+    draft_response = load_tailoring_workspace_draft_payload(
+        output_dir=output_dir,
+        tailoring_json_path=tailoring_json_path,
+        selected_resume=selected_resume,
+    )
+
+    if not bool(draft_response.get("has_saved_draft", False)):
+        raise ValueError("Save a tailored draft before exporting.")
+
+    if _clean_text(draft_response.get("draft_status")) != "saved":
+        raise ValueError("Only a saved tailoring workspace draft can be exported.")
+
+    draft = dict(draft_response.get("draft", {}) or {})
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    payload_data = _load_tailoring_json_artifact(artifact_path)
+    if artifact_path.name.endswith("__tailoring.json"):
+        payload_data = _rehydrate_legacy_tailoring_operator_payload(
+            artifact_path,
+            payload_data,
+        )
+
+    if payload_data.get("replacement_candidates") is not None:
+        payload_data = _apply_saved_patch_selection_overlay(
+            artifact_path,
+            payload_data,
+        )
+
+    effective_selected_resume = (
+        _sanitize_optional_resume_filename(selected_resume)
+        or _sanitize_optional_resume_filename(draft.get("selected_resume"))
+    )
+    if not effective_selected_resume:
+        raise ValueError("Saved workspace draft is missing selected_resume.")
+
+    patch_specs, unresolved_manual_keys = _build_tailoring_workspace_effective_patch_specs(
+        payload_data,
+        selected_candidate_ids=draft.get("selected_patch_candidate_ids", []),
+        manual_bullet_edits=draft.get("manual_bullet_edits", {}),
+    )
+
+    resume_pdf_path = planning_resume_preview_path(effective_selected_resume)
+    exported_pages = _extract_resume_pdf_paragraph_pages_for_export(resume_pdf_path)
+    if not exported_pages:
+        raise ValueError("Could not extract resume text for export.")
+
+    patch_result = _apply_workspace_export_patch_specs(
+        exported_pages,
+        patch_specs,
+    )
+
+    output_path, filename, media_type = _workspace_export_output_path(
+        output_dir,
+        selected_resume=effective_selected_resume,
+        export_format=export_format,
+    )
+
+    if export_format == "word":
+        _build_workspace_export_docx(exported_pages, output_path)
+    else:
+        _build_workspace_export_pdf(exported_pages, output_path)
+
+    return {
+        "ok": True,
+        "path": str(output_path),
+        "filename": filename,
+        "media_type": media_type,
+        "format": export_format,
+        "selected_resume": effective_selected_resume,
+        "page_count": len(exported_pages),
+        "workspace_patch_count": len(patch_specs),
+        "applied_candidate_ids": patch_result.get("applied_candidate_ids", []),
+        "unresolved_candidate_ids": patch_result.get("unresolved_candidate_ids", []),
+        "unresolved_manual_edit_keys": unresolved_manual_keys,
+    }
+
 def record_application_action_payload(
     *,
     job_doc_id: str = "",

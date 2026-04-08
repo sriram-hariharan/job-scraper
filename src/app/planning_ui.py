@@ -908,12 +908,12 @@ def tailoring_workspace(
                   </button>
                 </span>
 
-                <span class="tailoring-workspace-action-tooltip" data-tooltip="Download resume">
+                <span class="tailoring-workspace-action-tooltip" data-tooltip="Export tailored draft">
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-workspace-icon-btn"
                     id="tailoringWorkspaceDownloadBtn"
-                    aria-label="Download resume"
+                    aria-label="Export tailored draft"
                   >
                     <span
                       class="tailoring-workspace-icon tailoring-workspace-icon--download"
@@ -1004,6 +1004,87 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
+  <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
+    <div class="modal-card tailoring-workspace-export-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3>Export tailored draft</h3>
+          <div class="subtext">
+            Export is only available from the saved workspace draft.
+          </div>
+        </div>
+        <button
+          class="ghost-btn modal-close-btn"
+          id="closeTailoringWorkspaceExportModalBtn"
+          type="button"
+        >
+          Close
+        </button>
+      </div>
+
+      <div class="tailoring-workspace-export-shell">
+        <div class="tailoring-workspace-export-summary">
+          <div class="info-pair">
+            <span class="label">Resume variant</span>
+            <span id="tailoringWorkspaceExportResume">-</span>
+          </div>
+
+          <div class="info-pair">
+            <span class="label">Export status</span>
+            <span id="tailoringWorkspaceExportStatus">-</span>
+          </div>
+        </div>
+
+        <div
+          class="tailoring-workspace-export-note"
+          id="tailoringWorkspaceExportHint"
+        >
+          Save changes before exporting.
+        </div>
+
+        <div class="tailoring-workspace-export-format-grid">
+          <button
+            type="button"
+            class="ghost-btn tailoring-workspace-export-format-btn planning-tailoring-btn--review"
+            id="tailoringWorkspaceExportPdfBtn"
+          >
+            <span class="tailoring-workspace-export-format-title">
+              <img
+                src="/static/media/pdf-icon.svg"
+                alt=""
+                class="tailoring-workspace-action-icon"
+                aria-hidden="true"
+                style="width: 34px; height: 34px; min-width: 34px; min-height: 34px; flex: 0 0 34px;"
+              />
+              <span>PDF</span>
+            </span>
+            <span class="tailoring-workspace-export-format-copy">
+              Export the saved tailored draft as PDF.
+            </span>
+          </button>
+
+          <button
+            type="button"
+            class="ghost-btn tailoring-workspace-export-format-btn planning-tailoring-btn--ready"
+            id="tailoringWorkspaceExportWordBtn"
+          >
+            <span class="tailoring-workspace-export-format-title">
+              <img
+                src="/static/media/doc-icon.svg"
+                alt=""
+                class="tailoring-workspace-action-icon"
+                aria-hidden="true"
+              />
+              <span>Word</span>
+            </span>
+            <span class="tailoring-workspace-export-format-copy">
+              Export the saved tailored draft as .docx.
+            </span>
+          </button>
+        </div>
+        </div>
+    </div>
+  </section>
   <script src="/static/planning.js?v=tailoring_workspace_20260408_7"></script>
 </body>
 </html>

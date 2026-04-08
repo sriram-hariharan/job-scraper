@@ -4673,15 +4673,14 @@ function updateTailoringWorkspaceSelectionActionBar() {
     tailoringWorkspaceState.isPreviewing ||
     !hasUnsavedWorkspaceChanges;
 
-  downloadBtn.disabled = !hasResume;
+  const exportState = getTailoringWorkspaceExportState();
+
+  downloadBtn.disabled = !exportState.hasResume;
 
   if (downloadTooltip) {
-    downloadTooltip.dataset.tooltip = hasResume ? "Download resume" : "Resume download unavailable";
+    downloadTooltip.dataset.tooltip = exportState.tooltip;
   }
-  downloadBtn.setAttribute(
-    "aria-label",
-    hasResume ? "Download resume" : "Resume download unavailable"
-  );
+  downloadBtn.setAttribute("aria-label", exportState.tooltip);
 
   if (saveTooltip) {
     saveTooltip.dataset.tooltip = tailoringWorkspaceState.isSaving ? "Saving changes..." : "Save changes";
@@ -5262,33 +5261,251 @@ function bindTailoringWorkspaceSelectionHandlers() {
   }
 }
 
-async function downloadCurrentTailoringWorkspaceResume() {
-  const context = getTailoringWorkspaceContext();
-  const resumeName = context ? String(context.resumeName || "").trim() : "";
+function getTailoringWorkspaceExportModal() {
+  return qs("tailoringWorkspaceExportModal");
+}
 
-  if (!resumeName) {
-    showAppError("Resume download unavailable", new Error("No resume is loaded for this workspace row."));
+function closeTailoringWorkspaceExportModal() {
+  const modal = getTailoringWorkspaceExportModal();
+  if (!modal) return;
+  modal.classList.add("hidden");
+}
+
+function getTailoringWorkspaceExportState() {
+  const context = getTailoringWorkspaceContext();
+  const payload = getTailoringWorkspacePayload();
+
+  const resumeName = context ? String(context.resumeName || "").trim() : "";
+  const hasResume = Boolean(resumeName);
+
+  const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
+  const savedIds = getTailoringWorkspaceSavedCandidateIds();
+  const hasSelection = selectedIds.length > 0;
+  const matchesSavedSelection = haveSameTailoringWorkspaceCandidateIds(selectedIds, savedIds);
+  const hasSavedSelection = savedIds.length > 0;
+
+  const currentManualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    tailoringWorkspaceState.manualBulletEdits || {},
+    payload
+  );
+  const savedManualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+    getTailoringWorkspaceSavedManualBulletEdits(),
+    payload
+  );
+  const manualMatchesSaved = haveSameTailoringWorkspaceManualBulletEdits(
+    currentManualEdits,
+    savedManualEdits,
+    payload
+  );
+
+  const currentReviewDecisions = getTailoringWorkspaceCurrentReviewDecisionMap();
+  const savedReviewDecisions = getTailoringWorkspaceSavedReviewDecisionMap();
+  const reviewMatchesSaved =
+    JSON.stringify(currentReviewDecisions) === JSON.stringify(savedReviewDecisions);
+
+  const hasManualEdits = Object.keys(currentManualEdits).length > 0;
+  const hasSavedManualEdits = Object.keys(savedManualEdits).length > 0;
+  const hasSavedReviewDecisions = Object.keys(savedReviewDecisions).length > 0;
+
+  const hasAnySavedState =
+    hasSavedSelection || hasSavedManualEdits || hasSavedReviewDecisions;
+
+  const hasUnsavedSelectionChange =
+    hasSavedSelection ? !matchesSavedSelection : hasSelection;
+
+  const hasUnsavedManualChange =
+    hasSavedManualEdits ? !manualMatchesSaved : hasManualEdits;
+
+  const hasUnsavedReviewChange =
+    hasSavedReviewDecisions
+      ? !reviewMatchesSaved
+      : Object.keys(currentReviewDecisions).length > 0;
+
+  const hasUnsavedWorkspaceChanges =
+    hasUnsavedSelectionChange || hasUnsavedManualChange || hasUnsavedReviewChange;
+
+  const canExport =
+    hasResume &&
+    hasAnySavedState &&
+    !hasUnsavedWorkspaceChanges &&
+    !tailoringWorkspaceState.isSaving &&
+    !tailoringWorkspaceState.isPreviewing;
+
+  let statusLabel = "Unavailable";
+  let hint = "A resume is required before export can be offered.";
+  let tooltip = "Export unavailable";
+
+  if (!hasResume) {
+    statusLabel = "No resume loaded";
+    hint = "A resume must be loaded for this workspace row before export is possible.";
+    tooltip = "Export unavailable";
+  } else if (!hasAnySavedState) {
+    statusLabel = "Not saved yet";
+    hint = "Save at least one selected suggestion, manual edit, or review decision to enable export.";
+    tooltip = "Save draft to export";
+  } else if (hasUnsavedWorkspaceChanges) {
+    statusLabel = "Unsaved changes";
+    hint = "Save the current workspace draft before exporting so the file matches the saved state.";
+    tooltip = "Save changes to export";
+  } else if (tailoringWorkspaceState.isSaving) {
+    statusLabel = "Saving in progress";
+    hint = "Wait for the current save to finish before exporting.";
+    tooltip = "Saving changes...";
+  } else if (tailoringWorkspaceState.isPreviewing) {
+    statusLabel = "Preview in progress";
+    hint = "Wait for preview scoring to finish before exporting.";
+    tooltip = "Preview in progress";
+  } else {
+    statusLabel = "Ready to export";
+    hint = "Choose the format for the saved tailored draft.";
+    tooltip = "Export tailored draft";
+  }
+
+  return {
+    resumeName,
+    hasResume,
+    hasAnySavedState,
+    hasUnsavedWorkspaceChanges,
+    canExport,
+    statusLabel,
+    hint,
+    tooltip,
+  };
+}
+
+function openTailoringWorkspaceExportModal() {
+  const modal = getTailoringWorkspaceExportModal();
+  const resumeEl = qs("tailoringWorkspaceExportResume");
+  const statusEl = qs("tailoringWorkspaceExportStatus");
+  const hintEl = qs("tailoringWorkspaceExportHint");
+  const pdfBtn = qs("tailoringWorkspaceExportPdfBtn");
+  const wordBtn = qs("tailoringWorkspaceExportWordBtn");
+
+  if (!modal || !resumeEl || !statusEl || !hintEl || !pdfBtn || !wordBtn) return;
+
+  const exportState = getTailoringWorkspaceExportState();
+
+  resumeEl.textContent = exportState.resumeName
+    ? humanizeResumeDisplayName(exportState.resumeName)
+    : "No resume loaded";
+
+  statusEl.textContent = exportState.statusLabel;
+  hintEl.textContent = exportState.hint;
+
+  pdfBtn.disabled = !exportState.canExport;
+  wordBtn.disabled = !exportState.canExport;
+
+  modal.classList.remove("hidden");
+}
+
+async function handleTailoringWorkspaceExportSelection(format) {
+  const exportState = getTailoringWorkspaceExportState();
+  const context = getTailoringWorkspaceContext();
+  const normalizedFormat = String(format || "").trim().toLowerCase();
+
+  if (!exportState.canExport) {
+    showAppError("Export unavailable", new Error(exportState.hint));
+    return;
+  }
+
+  if (!context || !context.tailoringJsonPath || !context.resumeName) {
+    showAppError("Export unavailable", new Error("Missing tailoring workspace context."));
     return;
   }
 
   try {
-    const response = await fetch(buildResumePdfFileUrl(resumeName));
+    const response = await fetch("/planning/export-workspace-draft", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tailoring_json_path: context.tailoringJsonPath,
+        selected_resume: context.resumeName,
+        format: normalizedFormat,
+      }),
+    });
+
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: Failed to download resume PDF.`);
+      let errorMessage = `HTTP ${response.status}: Failed to export tailored draft.`;
+
+      try {
+        const payload = await response.json();
+        if (payload && typeof payload.detail === "string" && payload.detail.trim()) {
+          errorMessage = payload.detail.trim();
+        }
+      } catch {
+        try {
+          const rawText = await response.text();
+          if (rawText && rawText.trim()) {
+            errorMessage = rawText.trim();
+          }
+        } catch {
+          // ignore secondary parse failure
+        }
+      }
+
+      throw new Error(errorMessage);
     }
 
     const blob = await response.blob();
     const objectUrl = URL.createObjectURL(blob);
+
+    const disposition = response.headers.get("Content-Disposition") || "";
+    const filenameMatch =
+      disposition.match(/filename\*=UTF-8''([^;]+)/i) ||
+      disposition.match(/filename="([^"]+)"/i) ||
+      disposition.match(/filename=([^;]+)/i);
+
+    const fallbackFilename =
+      normalizedFormat === "word"
+        ? "tailored_draft.docx"
+        : "tailored_draft.pdf";
+
+    const filename = filenameMatch
+      ? decodeURIComponent(String(filenameMatch[1] || "").trim().replace(/^["']|["']$/g, ""))
+      : fallbackFilename;
+
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = resumeName;
+    link.download = filename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(objectUrl);
+
+    closeTailoringWorkspaceExportModal();
   } catch (err) {
-    showAppError("Failed to download resume", err);
+    showAppError("Failed to export tailored draft", err);
   }
+}
+
+function bindTailoringWorkspaceExportModal() {
+  const modal = getTailoringWorkspaceExportModal();
+  const closeBtn = qs("closeTailoringWorkspaceExportModalBtn");
+  const pdfBtn = qs("tailoringWorkspaceExportPdfBtn");
+  const wordBtn = qs("tailoringWorkspaceExportWordBtn");
+
+  if (!modal || !closeBtn || !pdfBtn || !wordBtn) return;
+  if (modal.dataset.bound === "true") return;
+
+  modal.dataset.bound = "true";
+
+  closeBtn.addEventListener("click", closeTailoringWorkspaceExportModal);
+
+  pdfBtn.addEventListener("click", async () => {
+    await handleTailoringWorkspaceExportSelection("pdf");
+  });
+
+  wordBtn.addEventListener("click", async () => {
+    await handleTailoringWorkspaceExportSelection("word");
+  });
+
+  modal.addEventListener("click", (event) => {
+    if (event.target === modal) {
+      closeTailoringWorkspaceExportModal();
+    }
+  });
 }
 
 async function previewTailoringWorkspaceSelection({ targetKey = "" } = {}) {
@@ -5493,8 +5710,8 @@ function bindTailoringWorkspaceActionBar() {
     }
   });
 
-  downloadBtn.addEventListener("click", async () => {
-    await downloadCurrentTailoringWorkspaceResume();
+  downloadBtn.addEventListener("click", () => {
+    openTailoringWorkspaceExportModal();
   });
 
   saveBtn.addEventListener("click", async () => {
@@ -6685,6 +6902,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     bindTailoringWorkspacePreviewControls();
     bindTailoringWorkspaceSelectionHandlers();
     bindTailoringWorkspaceActionBar();
+    bindTailoringWorkspaceExportModal();
     bindTailoringWorkspaceDivider();
     await initTailoringWorkspacePage();
   }

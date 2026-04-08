@@ -93,6 +93,31 @@ def planning_dashboard() -> str:
               </div>
             </div>
           </div>
+          
+          <div class="control-group dashboard-field planning-field--tailoring">
+            <label>Tailoring</label>
+            <div class="multi-select" id="planningTailoringFilter" data-placeholder="All">
+              <button type="button" class="multi-select-trigger" aria-haspopup="menu" aria-expanded="false">
+                <span class="multi-select-trigger-label">All</span>
+                <span class="multi-select-trigger-icon">▾</span>
+              </button>
+
+              <div class="multi-select-menu" role="menu" hidden>
+                <button type="button" class="multi-select-option" data-value="ready" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Ready</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="review" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Review</span>
+                </button>
+                <button type="button" class="multi-select-option" data-value="unavailable" aria-checked="false">
+                  <span class="multi-select-option-check">✓</span>
+                  <span class="multi-select-option-label">Unavailable</span>
+                </button>
+              </div>
+            </div>
+          </div>
 
           <div class="control-group dashboard-toggle-group planning-toolbar-toggle">
             <label>Undecided only</label>

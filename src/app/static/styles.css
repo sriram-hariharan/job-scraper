@@ -2285,6 +2285,10 @@ tbody tr:hover {
   }
 }
 
+.planning-field--tailoring {
+  min-width: 0;
+}
+
 .pipeline-success-visual {
   width: 180px;
   height: 180px;

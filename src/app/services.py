@@ -1687,6 +1687,56 @@ def _tailoring_workspace_button_state(
 
     return result
 
+def _normalize_tailoring_state_filter_values(value: Any) -> List[str]:
+    if isinstance(value, list):
+        raw_items = value
+    else:
+        raw_text = _clean_text(value)
+        raw_items = [part.strip() for part in raw_text.split(",")] if raw_text else []
+
+    normalized: List[str] = []
+    seen = set()
+
+    for item in raw_items:
+        text = _clean_text(item).lower()
+        if not text:
+            continue
+
+        if text == "empty":
+            text = "unavailable"
+
+        if text not in {"ready", "review", "unavailable"}:
+            continue
+
+        if text in seen:
+            continue
+
+        seen.add(text)
+        normalized.append(text)
+
+    return normalized
+
+
+def _row_matches_tailoring_state_filter(
+    row: Dict[str, Any],
+    requested_states: List[str],
+    *,
+    output_dir: Path,
+) -> Tuple[bool, Dict[str, Any]]:
+    tailoring_state = _tailoring_workspace_button_state(row, output_dir=output_dir)
+    workspace_state = _clean_text(tailoring_state.get("tailoring_workspace_state")).lower()
+
+    normalized_state = "unavailable" if workspace_state == "empty" else workspace_state
+    matches = not requested_states or normalized_state in set(requested_states)
+
+    enriched_row = {
+        **dict(row),
+        **tailoring_state,
+    }
+    enriched_row["tailoring_workspace_state"] = normalized_state
+
+    return matches, enriched_row
+
 def _apply_saved_patch_selection_overlay(
     artifact_path: Path,
     payload_data: Dict[str, Any],
@@ -2747,6 +2797,7 @@ def browse_payload(
         "is_tie": "",
         "fallback_status": "",
         "winner_bucket": "",
+        "tailoring_state": "",
         "company_contains": "",
         "title_contains": "",
         "limit": 15,
@@ -2762,6 +2813,7 @@ def browse_payload(
     selection_filters = dict(resolved_filters)
     selection_filters["limit"] = max(len(rows), 1)
     selection_filters.pop("page", None)
+    selection_filters.pop("tailoring_state", None)
 
     args = _make_args(**selection_filters)
     selected = ja._select_browse_rows(rows, args)
@@ -2769,7 +2821,21 @@ def browse_payload(
     selected = _overlay_application_actions(selected)
     selected = _exclude_applied_rows(selected)
 
-    selected = selected[:requested_limit]
+    requested_tailoring_states = _normalize_tailoring_state_filter_values(
+        resolved_filters.get("tailoring_state", [])
+    )
+
+    enriched_selected: List[Dict[str, Any]] = []
+    for row in selected:
+        matches, enriched_row = _row_matches_tailoring_state_filter(
+            row,
+            requested_tailoring_states,
+            output_dir=output_dir,
+        )
+        if matches:
+            enriched_selected.append(enriched_row)
+
+    selected = enriched_selected[:requested_limit]
 
     total_count = len(selected)
     total_pages = max((total_count + page_size - 1) // page_size, 1)
@@ -2778,13 +2844,6 @@ def browse_payload(
     start = (current_page - 1) * page_size
     end = start + page_size
     page_rows = selected[start:end]
-    page_rows = [
-        {
-            **dict(row),
-            **_tailoring_workspace_button_state(row, output_dir=output_dir),
-        }
-        for row in page_rows
-    ]
 
     return {
         "filters": {
@@ -2793,6 +2852,7 @@ def browse_payload(
             "is_tie": resolved_filters.get("is_tie", ""),
             "fallback_status": resolved_filters.get("fallback_status", ""),
             "winner_bucket": resolved_filters.get("winner_bucket", ""),
+            "tailoring_state": requested_tailoring_states,
             "company_contains": resolved_filters.get("company_contains", ""),
             "title_contains": resolved_filters.get("title_contains", ""),
             "limit": requested_limit,

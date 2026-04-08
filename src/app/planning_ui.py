@@ -730,9 +730,46 @@ def tailoring_workspace(
             <div class="tailoring-workspace-preview-header">
               <div class="tailoring-workspace-preview-header-main">
                 <div class="subtext">Current resume preview</div>
-                <div class="tailoring-workspace-preview-name" id="tailoringWorkspacePreviewName">
-                  {resume_display_safe}
+
+                <div class="tailoring-workspace-preview-title-row">
+                  <div
+                    class="tailoring-workspace-preview-name"
+                    id="tailoringWorkspacePreviewName"
+                  >
+                    {resume_display_safe}
+                  </div>
+
+                  <button
+                    type="button"
+                    class="ghost-btn tailoring-workspace-mode-toggle"
+                    id="tailoringWorkspaceModeToggleBtn"
+                    aria-label="Switch to edit mode"
+                    aria-pressed="false"
+                    data-preview-mode="pdf"
+                  >
+                    <span
+                      class="tailoring-workspace-mode-toggle-segment tailoring-workspace-mode-toggle-segment--pdf is-active"
+                      data-mode-segment="pdf"
+                      aria-hidden="true"
+                    >
+                      <span class="tailoring-workspace-icon tailoring-workspace-icon--preview"></span>
+                    </span>
+
+                    <span
+                      class="tailoring-workspace-mode-toggle-separator"
+                      aria-hidden="true"
+                    ></span>
+
+                    <span
+                      class="tailoring-workspace-mode-toggle-segment tailoring-workspace-mode-toggle-segment--edit"
+                      data-mode-segment="edit"
+                      aria-hidden="true"
+                    >
+                      <span class="tailoring-workspace-mode-image-icon"></span>
+                    </span>
+                  </button>
                 </div>
+
                 <div
                   class="subtext tailoring-workspace-selection-status-hidden"
                   id="tailoringWorkspaceSelectionStatus"
@@ -772,21 +809,6 @@ def tailoring_workspace(
                   </button>
                 </span>
 
-                <span class="tailoring-workspace-action-tooltip" data-tooltip="Preview impact">
-                  <button
-                    type="button"
-                    class="ghost-btn btn-sm tailoring-workspace-icon-btn"
-                    id="tailoringWorkspacePreviewBtn"
-                    aria-label="Preview impact"
-                    disabled
-                  >
-                    <span
-                      class="tailoring-workspace-icon tailoring-workspace-icon--preview"
-                      aria-hidden="true"
-                    ></span>
-                  </button>
-                </span>
-
                 <span class="tailoring-workspace-action-tooltip" data-tooltip="Save changes">
                   <button
                     type="button"
@@ -803,24 +825,6 @@ def tailoring_workspace(
                 </span>
               </div>
             </div>
-
-            <section class="card tailoring-workspace-subcard">
-              <div class="section-header section-header--compact">
-                <div>
-                  <h3>Live draft preview</h3>
-                  <div class="subtext">
-                    This mirrors the current working draft for surfaced bullets. The PDF below remains the original resume reference for now.
-                  </div>
-                </div>
-              </div>
-
-              <div id="tailoringWorkspaceLiveDraftPreview" class="tailoring-interactive-shell">
-                <div class="tailoring-empty-state">
-                  Loading live draft preview...
-                </div>
-              </div>
-            </section>
-
             <div class="tailoring-workspace-preview-toolbar">
               <div class="tailoring-workspace-preview-toolbar-left">
                 <button
@@ -856,15 +860,29 @@ def tailoring_workspace(
               </div>
             </div>
 
-            <div class="tailoring-workspace-pdf-scroller" id="tailoringWorkspacePdfScroller">
-              <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
-                Loading PDF preview...
+            <div id="tailoringWorkspaceModeBody" class="tailoring-workspace-mode-body">
+              <div
+                id="tailoringWorkspaceLiveDraftPreview"
+                class="tailoring-interactive-shell tailoring-workspace-mode-panel hidden"
+              >
+                <div class="tailoring-empty-state">
+                  Loading working draft preview...
+                </div>
               </div>
 
               <div
-                id="tailoringWorkspacePdfPages"
-                class="tailoring-workspace-pdf-pages hidden"
-              ></div>
+                class="tailoring-workspace-pdf-scroller tailoring-workspace-mode-panel"
+                id="tailoringWorkspacePdfScroller"
+              >
+                <div class="resume-choice-empty" id="tailoringWorkspacePreviewEmpty">
+                  Loading PDF preview...
+                </div>
+
+                <div
+                  id="tailoringWorkspacePdfPages"
+                  class="tailoring-workspace-pdf-pages hidden"
+                ></div>
+              </div>
             </div>
           </div>
         </div>

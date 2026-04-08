@@ -4839,8 +4839,9 @@ th.sortable-col {
   white-space: nowrap;
 }
 
-.tailoring-workspace-selection-status-hidden {
-  display: none;
+.tailoring-workspace-selection-status {
+  display: block;
+  color: var(--muted);
 }
 
 .tailoring-workspace-preview-header .tailoring-workspace-action-tooltip::before,

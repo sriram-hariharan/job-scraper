@@ -771,7 +771,7 @@ def tailoring_workspace(
                 </div>
 
                 <div
-                  class="subtext tailoring-workspace-selection-status-hidden"
+                  class="subtext tailoring-workspace-selection-status"
                   id="tailoringWorkspaceSelectionStatus"
                   aria-live="polite"
                 >

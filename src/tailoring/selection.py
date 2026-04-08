@@ -217,6 +217,7 @@ def _build_rewrite_candidates(
                 "Use this as adjacent support only if it keeps the same story truthful and consistent."
             )
 
+        focused_evidence = str(row.get("clause_text") or row.get("text", "") or "").strip()
         candidates.append(
             {
                 "source": source,
@@ -225,6 +226,8 @@ def _build_rewrite_candidates(
                 "supported_terms": supported_terms[:6],
                 "action": action,
                 "bullet_excerpt": _row_evidence_excerpt(row),
+                "current_evidence": focused_evidence,
+                "focused_clause_text": str(row.get("clause_text", "") or "").strip(),
                 "parent_bullet": row.get("parent_bullet", ""),
                 "entry_id": row.get("entry_id", ""),
                 "entry_index": row.get("entry_index", -1),
@@ -329,6 +332,8 @@ def _rewrite_candidate_from_plan_unit(
         "supported_terms": supported_terms[:6],
         "action": action,
         "bullet_excerpt": _short_bullet(evidence_unit, 220),
+        "current_evidence": evidence_unit,
+        "focused_clause_text": evidence_unit,
         "parent_bullet": parent_bullet,
         "entry_id": unit.get("entry_id", ""),
         "entry_index": unit.get("entry_index", -1),

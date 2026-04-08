@@ -11,6 +11,7 @@ from src.config.consts import (
     TAILORING_FACET_PATTERNS,
     _SKILL_ALIASES,
     CONTEXT_TOKEN_STOPWORDS,
+    _CLAUSE_SPLIT_ACTION_VERBS, 
 )
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
@@ -1316,12 +1317,47 @@ def _split_bullet_into_clauses(text: str) -> List[str]:
         raw,
     )
 
+    action_verbs = _unique_preserve_order(
+        [str(v).strip() for v in (_CLAUSE_SPLIT_ACTION_VERBS or []) if str(v).strip()]
+        + [str(v).strip().capitalize() for v in (_CLAUSE_SPLIT_ACTION_VERBS or []) if str(v).strip()]
+    )
+
+    split_patterns: List[str] = []
+
+    if action_verbs:
+        verb_alternation = "|".join(re.escape(v) for v in action_verbs)
+        split_patterns.append(
+            rf"(?<!^)\s+(?=(?:{verb_alternation})\b)"
+        )
+
+    # Generic fallback for merged bullets like:
+    # "... campaigns Improved ..."
+    # "... strategies Identified ..."
+    # "... deliverables Implemented ..."
+    split_patterns.append(
+        r"(?<!^)\s+(?=(?:[A-Z][a-z]{2,}(?:ed|ing))\b)"
+    )
+
     clauses: List[str] = []
+
     for part in primary_parts:
-        cleaned = part.strip(" -•\t")
-        if not cleaned:
-            continue
-        clauses.append(cleaned)
+        subparts = [part]
+
+        for pattern in split_patterns:
+            next_parts: List[str] = []
+            for chunk in subparts:
+                pieces = [
+                    item.strip(" -•\t")
+                    for item in re.split(pattern, chunk)
+                    if str(item or "").strip(" -•\t")
+                ]
+                next_parts.extend(pieces or [chunk.strip(" -•\t")])
+            subparts = next_parts
+
+        for subpart in subparts:
+            cleaned = subpart.strip(" -•\t")
+            if cleaned:
+                clauses.append(cleaned)
 
     return _unique_preserve_order(clauses)
 

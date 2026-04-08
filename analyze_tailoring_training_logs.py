@@ -6,6 +6,9 @@ from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+DEFAULT_REVIEWER_EVAL_BUNDLE_OUTPUT_DIR = Path(
+    "outputs/application_planning_archive/reviewer_eval"
+)
 
 def _load_csv_rows(path: Path) -> List[Dict[str, Any]]:
     with path.open("r", encoding="utf-8", newline="") as handle:
@@ -1896,7 +1899,10 @@ def main() -> None:
     parser.add_argument(
         "--bundle-output-dir",
         default="",
-        help="Output directory for bundled reviewer evaluation artifacts.",
+        help=(
+            "Output directory for bundled reviewer evaluation artifacts. "
+            "Defaults to outputs/application_planning_archive/reviewer_eval."
+        ),
     )
     parser.add_argument(
         "--bundle-name",
@@ -1949,9 +1955,10 @@ def main() -> None:
             raise ValueError(f"No rows found in reviewer CSV: {reviewer_csv_path}")
         
         if args.run_reviewer_eval_bundle:
-            bundle_output_dir = Path(
-                args.bundle_output_dir.strip()
-                or "outputs/application_planning/training_logs"
+            bundle_output_dir = (
+                Path(args.bundle_output_dir.strip())
+                if args.bundle_output_dir.strip()
+                else DEFAULT_REVIEWER_EVAL_BUNDLE_OUTPUT_DIR
             )
             bundle_name = (
                 args.bundle_name.strip()

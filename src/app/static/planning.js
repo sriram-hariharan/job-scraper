@@ -4608,16 +4608,6 @@ function renderReplacementDecisionSection({
             : "";
 
           const reasonText = String(item.why_selected || "").trim();
-          const compactReasonHtml = reasonText
-            ? `
-              <div
-                class="tailoring-edit-inline-reason"
-                title="${escapeHtml(reasonText)}"
-              >
-                ${escapeHtml(reasonText)}
-              </div>
-            `
-            : "";
 
           const compactImpactHtml = impactLabels.length
             ? `
@@ -4626,6 +4616,77 @@ function renderReplacementDecisionSection({
                   .slice(0, 3)
                   .map((label) => buildTailoringTonePill(label, "neutral"))
                   .join("")}
+              </div>
+            `
+            : "";
+          
+          const trustLabel =
+            item.replacement_status === "direct_apply_ready"
+              ? "Export-safe"
+              : item.replacement_status === "direct_apply_optional"
+                ? "Low-risk"
+                : "Review-only";
+
+          const trustTone =
+            item.replacement_status === "direct_apply_ready"
+              ? "safe"
+              : item.replacement_status === "direct_apply_optional"
+                ? "neutral"
+                : "caution";
+
+          const claimSafetyValue = String(item.claim_safety || "").trim();
+          const claimSafetyLabel = claimSafetyValue
+            ? humanizeUnderscoreLabel(claimSafetyValue)
+            : "";
+
+          const claimSafetyTone =
+            claimSafetyValue === "safe_strengthen"
+              ? "safe"
+              : claimSafetyValue === "adjacent_only"
+                ? "caution"
+                : claimSafetyValue
+                  ? "danger"
+                  : "";
+
+          const trustReasonText = String(
+            item.direction_only_reason ||
+            item.why_not_material ||
+            item.materiality_reason ||
+            item.rewrite_instruction ||
+            ""
+          ).trim();
+
+          const compactTrustHtml =
+            trustLabel || claimSafetyLabel || trustReasonText
+              ? `
+                <div class="tailoring-edit-inline-summary tailoring-edit-inline-summary--trust">
+                  <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
+                    ${trustLabel ? buildTailoringTonePill(trustLabel, trustTone) : ""}
+                    ${claimSafetyLabel ? buildTailoringTonePill(claimSafetyLabel, claimSafetyTone) : ""}
+                  </div>
+                  ${trustReasonText ? `
+                    <div
+                      class="tailoring-edit-inline-reason tailoring-edit-inline-reason--trust"
+                      title="${escapeHtml(trustReasonText)}"
+                    >
+                      ${escapeHtml(trustReasonText)}
+                    </div>
+                  ` : ""}
+                </div>
+              `
+              : "";
+          
+          const shouldShowCompactReason =
+            reasonText &&
+            (!trustReasonText || reasonText !== trustReasonText);
+
+          const compactReasonHtml = shouldShowCompactReason
+            ? `
+              <div
+                class="tailoring-edit-inline-reason"
+                title="${escapeHtml(reasonText)}"
+              >
+                ${escapeHtml(reasonText)}
               </div>
             `
             : "";
@@ -4661,7 +4722,9 @@ function renderReplacementDecisionSection({
                   <div class="tailoring-quote-block">${escapeHtml(displayCurrentBullet)}</div>
                 </div>
               ` : ""}
-
+              
+              ${compactTrustHtml}
+              
               ${mode !== "direction_only" && item.final_replacement_text ? `
                 <div class="tailoring-info-block tailoring-info-block--compact">
                   <div class="tailoring-info-label">Suggested edit</div>

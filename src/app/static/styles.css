@@ -4119,20 +4119,20 @@ th.sortable-col {
 .tailoring-edit-inline-summary {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: flex-start;
   gap: 8px 10px;
   margin-top: 8px;
 }
 
 .tailoring-edit-inline-reason {
   min-width: 0;
-  flex: 1 1 260px;
-  color: #dce6ff;
-  font-size: 13px;
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 12px;
   line-height: 1.45;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .tailoring-edit-impact-chips {
@@ -5786,4 +5786,21 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
   border-color: transparent;
   box-shadow: none;
   transform: none;
+}
+
+.tailoring-edit-inline-summary--trust {
+  margin-top: 6px;
+  padding-top: 0;
+  align-items: flex-start;
+}
+
+.tailoring-edit-inline-reason--trust {
+  min-width: 0;
+  flex: 1 1 100%;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
 }

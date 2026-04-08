@@ -4280,18 +4280,35 @@ function updateTailoringWorkspaceSelectionActionBar() {
     payload
   );
 
+  const currentReviewDecisions = getTailoringWorkspaceCurrentReviewDecisionMap();
+  const savedReviewDecisions = getTailoringWorkspaceSavedReviewDecisionMap();
+  const reviewMatchesSaved =
+    JSON.stringify(currentReviewDecisions) === JSON.stringify(savedReviewDecisions);
+
   const hasManualEdits = Object.keys(currentManualEdits).length > 0;
   const hasSavedManualEdits = Object.keys(savedManualEdits).length > 0;
+  const hasSavedReviewDecisions = Object.keys(savedReviewDecisions).length > 0;
+
   const manualDraftChanged = !manualMatchesSaved;
+  const reviewDraftChanged = !reviewMatchesSaved;
   const isFreeEditTab = tailoringWorkspaceState.selectedTab === "free_edit";
 
-  const hasAnySavedState = hasSavedSelection || hasSavedManualEdits;
+  const hasAnySavedState =
+    hasSavedSelection || hasSavedManualEdits || hasSavedReviewDecisions;
+
   const hasUnsavedSelectionChange =
     hasSavedSelection ? !matchesSavedSelection : hasSelection;
-  const hasUnsavedManualChange =
-    hasAnySavedState ? manualDraftChanged : hasManualEdits;
 
-  const hasUnsavedWorkspaceChanges = hasUnsavedSelectionChange || hasUnsavedManualChange;
+  const hasUnsavedManualChange =
+    hasSavedManualEdits ? manualDraftChanged : hasManualEdits;
+
+  const hasUnsavedReviewChange =
+    hasSavedReviewDecisions
+      ? reviewDraftChanged
+      : Object.keys(currentReviewDecisions).length > 0;
+
+  const hasUnsavedWorkspaceChanges =
+    hasUnsavedSelectionChange || hasUnsavedManualChange || hasUnsavedReviewChange;
 
   const context = getTailoringWorkspaceContext();
   const hasResume = Boolean(context && String(context.resumeName || "").trim());
@@ -4301,10 +4318,6 @@ function updateTailoringWorkspaceSelectionActionBar() {
   const saveTooltip = saveBtn.closest(".tailoring-workspace-action-tooltip");
   const discardIcon = discardBtn.querySelector(".tailoring-workspace-icon");
 
-  if (saveTooltip) {
-    saveTooltip.classList.toggle("hidden", isFreeEditTab);
-  }
-
   if (tailoringWorkspaceState.isSaving) {
     statusEl.textContent = isFreeEditTab
       ? "Saving current draft..."
@@ -4313,17 +4326,19 @@ function updateTailoringWorkspaceSelectionActionBar() {
     statusEl.textContent = isFreeEditTab
       ? "Scoring current draft..."
       : "Previewing score impact for the current workspace draft...";
-  } else if (hasUnsavedManualChange && !hasUnsavedSelectionChange) {
+  } else if (hasUnsavedManualChange && !hasUnsavedSelectionChange && !hasUnsavedReviewChange) {
     statusEl.textContent = hasManualEdits
       ? `Free Edit has unsaved changes across ${Object.keys(currentManualEdits).length} bullet${Object.keys(currentManualEdits).length === 1 ? "" : "s"}.`
       : "Free Edit reverted to the original text. Save to clear the previously saved manual edits.";
+  } else if (hasUnsavedReviewChange && !hasUnsavedSelectionChange && !hasUnsavedManualChange) {
+    statusEl.textContent = "Review decisions changed. Save to update the workspace draft.";
   } else if (hasSelection && hasUnsavedSelectionChange) {
     statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. Save to update the workspace draft.`;
-  } else if (!hasSelection && !hasManualEdits) {
+  } else if (!hasSelection && !hasManualEdits && !Object.keys(currentReviewDecisions).length) {
     statusEl.textContent = hasAnySavedState
       ? "No active unsaved changes. A saved workspace draft exists for this row."
       : "No actionable suggestions selected yet.";
-  } else if (hasSavedSelection && matchesSavedSelection && !hasUnsavedManualChange) {
+  } else if (hasSavedSelection && matchesSavedSelection && !hasUnsavedManualChange && !hasUnsavedReviewChange) {
     statusEl.textContent = `${selectedIds.length} suggestion${selectedIds.length === 1 ? "" : "s"} selected. This matches the current saved selection.`;
   } else {
     statusEl.textContent = "Workspace draft loaded.";
@@ -4345,7 +4360,10 @@ function updateTailoringWorkspaceSelectionActionBar() {
       discardIcon.classList.add("tailoring-workspace-icon--revert");
     }
   } else {
-    discardBtn.disabled = tailoringWorkspaceState.isSaving || (!hasSelection && !hasManualEdits);
+    discardBtn.disabled =
+      tailoringWorkspaceState.isSaving ||
+      (!hasSelection && !hasManualEdits && !Object.keys(currentReviewDecisions).length);
+
     discardBtn.setAttribute("aria-label", "Discard changes");
 
     if (discardTooltip) {
@@ -5163,9 +5181,20 @@ function bindTailoringWorkspaceActionBar() {
   discardBtn.dataset.bound = "true";
 
   discardBtn.addEventListener("click", () => {
+    const payload = getTailoringWorkspacePayload();
     const savedIds = getTailoringWorkspaceSavedCandidateIds();
+    const savedManualEdits = normalizeTailoringWorkspaceManualBulletEdits(
+      getTailoringWorkspaceSavedManualBulletEdits(),
+      payload
+    );
+    const savedReviewDecisions = getTailoringWorkspaceSavedReviewDecisionMap();
 
-    if (savedIds.length || Object.keys(getTailoringWorkspaceSavedManualBulletEdits()).length) {
+    const hasAnySavedState =
+      savedIds.length > 0 ||
+      Object.keys(savedManualEdits).length > 0 ||
+      Object.keys(savedReviewDecisions).length > 0;
+
+    if (hasAnySavedState) {
       revertTailoringWorkspaceSelectionToSaved();
     } else {
       clearTailoringWorkspaceSelection();

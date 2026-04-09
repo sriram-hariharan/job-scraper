@@ -5352,6 +5352,23 @@ def _build_workspace_export_pdf(
         text = re.sub(r"\s+([,.;:])", r"\1", text)
         return text
 
+    def _split_inline_label_prefix(text: str) -> Tuple[str, str]:
+        clean = _clean_text(text)
+        if ":" not in clean:
+            return "", clean
+
+        prefix, suffix = clean.split(":", 1)
+        prefix = prefix.strip()
+        suffix = suffix.lstrip()
+
+        if not prefix:
+            return "", clean
+
+        if len(prefix) > 48:
+            return "", clean
+
+        return f"{prefix}:", suffix
+    
     def _estimate_paragraph_block_height(
         paragraph: Dict[str, Any],
         *,
@@ -5386,24 +5403,58 @@ def _build_workspace_export_pdf(
         )
         tail_gap = 1.0 if is_header_line else 1.5
 
+        is_label_value_line = (
+            alignment == "left"
+            and not bool(paragraph.get("is_heading"))
+            and not bool(paragraph.get("is_bullet"))
+            and ":" in text
+        )
+
         if bool(paragraph.get("is_bullet")):
             body_text = _workspace_export_strip_leading_bullet_text(text).strip()
             content_x = _left_content_x(paragraph, width)
-            body_x = content_x + 8.0
+            body_x = content_x + 13.0
             available_width = max(120.0, width - body_x - 36.0)
             wrapped_lines = simpleSplit(body_text, font_name, font_size, available_width) or [body_text]
-            line_height = font_size * 1.0
-            bullet_tail_gap = 0.4
+            line_height = font_size * 1.18
+            bullet_tail_gap = 0.45
             return gap_before + (len(wrapped_lines) * line_height) + bullet_tail_gap
 
         if alignment in {"center", "right"}:
             available_width = max(120.0, width - 72.0)
         else:
             left_x = _left_content_x(paragraph, width)
-            available_width = max(120.0, width - left_x - 36.0)
+            right_padding = 16.0 if is_label_value_line else 36.0
+            available_width = max(120.0, width - left_x - right_padding)
+
+        inline_label_prefix, inline_label_suffix = _split_inline_label_prefix(text)
+        should_estimate_inline_label = (
+            alignment == "left"
+            and not bool(paragraph.get("is_heading"))
+            and not bool(paragraph.get("is_bullet"))
+            and bool(inline_label_prefix)
+        )
+
+        if should_estimate_inline_label:
+            bold_style = dict(style)
+            bold_style["bold"] = True
+            prefix_font_name = _workspace_export_pdf_font_name(bold_style)
+            prefix_text = inline_label_prefix + " "
+            prefix_width = stringWidth(prefix_text, prefix_font_name, font_size)
+
+            suffix_lines = _workspace_export_wrap_inline_label_value_text(
+                inline_label_suffix,
+                font_name=font_name,
+                font_size=font_size,
+                first_line_width=max(72.0, available_width - prefix_width),
+                continuation_width=available_width,
+            ) or [inline_label_suffix]
+
+            line_height = font_size * 1.20
+            return gap_before + (len(suffix_lines) * line_height) + tail_gap
 
         wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
-        line_height = font_size * line_spacing
+        line_height = font_size * (1.20 if is_label_value_line else line_spacing)
         extra_rule_space = 2.0 if _workspace_export_is_section_heading_text(text) else 0.0
         return gap_before + (len(wrapped_lines) * line_height) + extra_rule_space + tail_gap
     
@@ -5495,35 +5546,41 @@ def _build_workspace_export_pdf(
                 page_emitted_paragraph_count=page_emitted_paragraph_count + (scan - start_idx),
             )
             scan += 1
+            break
 
         return total
 
     c = canvas.Canvas(str(output_path))
     header_link_items = _workspace_export_extract_pdf_header_link_items(resume_pdf_path)
 
-    for page_index, page in enumerate(exported_pages):
-        width = max(612.0, float(page.get("width") or 0))
-        height = max(792.0, float(page.get("height") or 0))
-        c.setPageSize((width, height))
+    first_page = exported_pages[0] if exported_pages else {"width": 612.0, "height": 792.0}
+    width = max(612.0, float(first_page.get("width") or 0))
+    height = max(792.0, float(first_page.get("height") or 0))
+    c.setPageSize((width, height))
 
-        y = height - 42.0
-        page_emitted_paragraph_count = 0
+    y = height - 42.0
+    page_emitted_paragraph_count = 0
+    page_index = 0
 
-        page_paragraphs: List[Dict[str, Any]] = []
+    page_paragraphs: List[Dict[str, Any]] = []
+    for source_page_index, page in enumerate(exported_pages):
         for block in list(page.get("blocks", []) or []):
             for paragraph in list(block.get("paragraphs", []) or []):
-                page_paragraphs.append(paragraph)
+                paragraph_copy = dict(paragraph)
+                paragraph_copy["_source_page_index"] = source_page_index
+                page_paragraphs.append(paragraph_copy)
 
-        page_paragraphs.sort(
-            key=lambda paragraph: (
-                round(float(paragraph.get("top", 0.0) or 0.0), 2),
-                round(float(paragraph.get("left", 0.0) or 0.0), 2),
-                0 if _clean_text(paragraph.get("row_side")) == "left" else 1,
-            )
+    page_paragraphs.sort(
+        key=lambda paragraph: (
+            int(paragraph.get("_source_page_index", 0) or 0),
+            round(float(paragraph.get("top", 0.0) or 0.0), 2),
+            round(float(paragraph.get("left", 0.0) or 0.0), 2),
+            0 if _clean_text(paragraph.get("row_side")) == "left" else 1,
         )
+    )
 
-        idx = 0
-        while idx < len(page_paragraphs):
+    idx = 0
+    while idx < len(page_paragraphs):
             paragraph = page_paragraphs[idx]
             text = _paragraph_text(paragraph)
             if not text:
@@ -5650,15 +5707,22 @@ def _build_workspace_export_pdf(
             )
             tail_gap = 1.0 if is_header_line else 1.5
 
+            is_label_value_line = (
+                alignment == "left"
+                and not bool(paragraph.get("is_heading"))
+                and not bool(paragraph.get("is_bullet"))
+                and ":" in text
+            )
+
             if bool(paragraph.get("is_bullet")):
                 body_text = _workspace_export_strip_leading_bullet_text(text).strip()
                 content_x = _left_content_x(paragraph, width)
-                body_x = content_x + 8.0
-                bullet_center_x = content_x + 2.1
+                body_x = content_x + 13.0
+                bullet_center_x = content_x + 3.1
                 available_width = max(120.0, width - body_x - 36.0)
                 wrapped_lines = simpleSplit(body_text, font_name, font_size, available_width) or [body_text]
-                line_height = font_size * 1.0
-                bullet_tail_gap = 0.4
+                line_height = font_size * 1.18
+                bullet_tail_gap = 0.45
                 block_height = gap_before + (len(wrapped_lines) * line_height) + bullet_tail_gap
 
                 if y - block_height < 42.0:
@@ -5670,8 +5734,8 @@ def _build_workspace_export_pdf(
 
                 c.circle(
                     bullet_center_x,
-                    y - (font_size * 0.24),
-                    2.35,
+                    y + (font_size * 0.27),
+                    2.2,
                     stroke=0,
                     fill=1,
                 )
@@ -5696,7 +5760,7 @@ def _build_workspace_export_pdf(
             if is_centered_contact_line:
                 gap_before = min(gap_before, 0.5)
                 line_height = font_size * line_spacing
-                block_height = gap_before + line_height + tail_gap
+                block_height = gap_before + line_height + 7.0
 
                 if y - block_height < 42.0:
                     c.showPage()
@@ -5716,7 +5780,10 @@ def _build_workspace_export_pdf(
                 )
 
                 y -= line_height
-                y -= tail_gap
+                divider_y = y - 1.0
+                c.setLineWidth(2.2)
+                c.line(36.0, divider_y, width - 36.0, divider_y)
+                y = divider_y - 5.0
                 page_emitted_paragraph_count += 1
                 idx += 1
                 continue
@@ -5727,7 +5794,61 @@ def _build_workspace_export_pdf(
                 available_width = max(120.0, width - 72.0)
             else:
                 left_x = _left_content_x(paragraph, width)
-                available_width = max(120.0, width - left_x - 36.0)
+                right_padding = 16.0 if is_label_value_line else 36.0
+                available_width = max(120.0, width - left_x - right_padding)
+
+            inline_label_prefix, inline_label_suffix = _split_inline_label_prefix(text)
+            should_draw_inline_label = (
+                alignment == "left"
+                and not bool(paragraph.get("is_heading"))
+                and not bool(paragraph.get("is_bullet"))
+                and bool(inline_label_prefix)
+            )
+
+            if should_draw_inline_label:
+                bold_style = dict(style)
+                bold_style["bold"] = True
+                prefix_font_name = _workspace_export_pdf_font_name(bold_style)
+                prefix_text = inline_label_prefix + " "
+                prefix_width = stringWidth(prefix_text, prefix_font_name, font_size)
+
+                suffix_lines = _workspace_export_wrap_inline_label_value_text(
+                    inline_label_suffix,
+                    font_name=font_name,
+                    font_size=font_size,
+                    first_line_width=max(72.0, available_width - prefix_width),
+                    continuation_width=available_width,
+                ) or [inline_label_suffix]
+
+                line_height = font_size * 1.20
+                block_height = gap_before + (len(suffix_lines) * line_height) + tail_gap
+
+                if y - block_height < 42.0:
+                    c.showPage()
+                    c.setPageSize((width, height))
+                    y = height - 42.0
+
+                y -= gap_before
+
+                x = _left_content_x(paragraph, width)
+                c.setFont(prefix_font_name, font_size)
+                c.drawString(x, y, inline_label_prefix)
+
+                c.setFont(font_name, font_size)
+                first_suffix = suffix_lines[0] if suffix_lines else ""
+                if first_suffix:
+                    c.drawString(x + prefix_width, y, first_suffix)
+
+                y -= line_height
+
+                for line in suffix_lines[1:]:
+                    c.drawString(x, y, line)
+                    y -= line_height
+
+                y -= tail_gap
+                page_emitted_paragraph_count += 1
+                idx += 1
+                continue
 
             wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
             line_height = font_size * line_spacing
@@ -5763,9 +5884,6 @@ def _build_workspace_export_pdf(
             y -= tail_gap
             page_emitted_paragraph_count += 1
             idx += 1
-
-        if page_index < len(exported_pages) - 1:
-            c.showPage()
 
     c.save()
 
@@ -6588,6 +6706,67 @@ def _workspace_export_strip_leading_bullet_text(text: str) -> str:
     value = re.sub(r"^[\s\u200b\u200c\u200d\ufeff]+", "", value)
 
     return value
+
+def _workspace_export_wrap_inline_label_value_text(
+    text: str,
+    *,
+    font_name: str,
+    font_size: float,
+    first_line_width: float,
+    continuation_width: float,
+) -> List[str]:
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    clean = _clean_text(text)
+    if not clean:
+        return []
+
+    words = clean.split()
+    if not words:
+        return [clean]
+
+    def _wrap_words(source_words: List[str], max_width: float) -> Tuple[str, List[str]]:
+        if not source_words:
+            return "", []
+
+        line_words: List[str] = []
+        idx = 0
+
+        while idx < len(source_words):
+            candidate_words = [*line_words, source_words[idx]]
+            candidate_text = " ".join(candidate_words)
+            candidate_width = stringWidth(candidate_text, font_name, font_size)
+
+            if line_words and candidate_width > max_width:
+                break
+
+            line_words = candidate_words
+            idx += 1
+
+            if candidate_width > max_width:
+                break
+
+        if not line_words:
+            return source_words[0], source_words[1:]
+
+        return " ".join(line_words), source_words[idx:]
+
+    lines: List[str] = []
+
+    first_width = max(72.0, float(first_line_width or 0.0))
+    continuation_width = max(72.0, float(continuation_width or 0.0))
+
+    first_line, remaining_words = _wrap_words(words, first_width)
+    if first_line:
+        lines.append(first_line)
+
+    while remaining_words:
+        next_line, remaining_words = _wrap_words(remaining_words, continuation_width)
+        if not next_line:
+            break
+        lines.append(next_line)
+
+    return lines or [clean]
 
 def _workspace_export_restore_original_lead_word(
     original_text: str,

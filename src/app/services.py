@@ -11,6 +11,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import shutil
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 
@@ -6448,6 +6449,136 @@ def _build_workspace_export_docx_with_pdf2docx_bootstrap(
             except Exception:
                 pass
 
+def _workspace_export_find_soffice_binary() -> str:
+    candidates = [
+        _clean_text(os.environ.get("SOFFICE_BIN")),
+        "soffice",
+        "libreoffice",
+        "/Applications/LibreOffice.app/Contents/MacOS/soffice",
+        r"C:\Program Files\LibreOffice\program\soffice.exe",
+        r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
+    ]
+
+    for candidate in candidates:
+        if not candidate:
+            continue
+
+        candidate_path = Path(candidate)
+        if candidate_path.exists():
+            return str(candidate_path)
+
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+
+    raise ValueError(
+        "LibreOffice 'soffice' binary was not found. Install LibreOffice or set SOFFICE_BIN."
+    )
+
+
+def _build_workspace_export_finalized_docx(
+    *,
+    resume_pdf_path: Path,
+    exported_pages: List[Dict[str, Any]],
+    patch_specs: List[Dict[str, Any]],
+    output_path: Path,
+    base_patch_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    patch_result = {
+        "applied_candidate_ids": list(base_patch_result.get("applied_candidate_ids", []) or []),
+        "unresolved_candidate_ids": list(base_patch_result.get("unresolved_candidate_ids", []) or []),
+    }
+
+    export_strategy = "native_docx"
+    export_strategy_note = ""
+
+    try:
+        bootstrap_patch_result = _build_workspace_export_docx_with_pdf2docx_bootstrap(
+            resume_pdf_path=resume_pdf_path,
+            patch_specs=patch_specs,
+            output_path=output_path,
+        )
+        patch_result = {
+            "applied_candidate_ids": list(
+                bootstrap_patch_result.get("applied_candidate_ids", []) or []
+            ),
+            "unresolved_candidate_ids": list(
+                bootstrap_patch_result.get("unresolved_candidate_ids", []) or []
+            ),
+        }
+        export_strategy = str(
+            bootstrap_patch_result.get("strategy", "pdf2docx_bootstrap")
+        )
+    except Exception as exc:
+        _build_workspace_export_docx(exported_pages, output_path)
+        export_strategy = "native_docx_fallback"
+        export_strategy_note = f"{exc.__class__.__name__}: {exc}"
+
+    _workspace_export_normalize_docx_bootstrap_header(
+        output_path,
+        resume_pdf_path=resume_pdf_path,
+    )
+    _workspace_export_normalize_docx_first_bullet_indent(output_path)
+
+    return {
+        "patch_result": patch_result,
+        "export_strategy": export_strategy,
+        "export_strategy_note": export_strategy_note,
+    }
+
+
+def _convert_workspace_docx_to_pdf_with_soffice(
+    *,
+    docx_path: Path,
+    output_path: Path,
+) -> None:
+    soffice_bin = _workspace_export_find_soffice_binary()
+
+    with tempfile.TemporaryDirectory(
+        prefix="workspace_export_pdf_convert_",
+        dir=str(output_path.parent),
+    ) as temp_dir_raw:
+        temp_dir = Path(temp_dir_raw)
+        profile_dir = temp_dir / "lo_profile"
+        profile_dir.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            soffice_bin,
+            "--headless",
+            f"-env:UserInstallation={profile_dir.resolve().as_uri()}",
+            "--convert-to",
+            "pdf:writer_pdf_Export",
+            "--outdir",
+            str(temp_dir),
+            str(docx_path),
+        ]
+
+        completed = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+        if completed.returncode != 0:
+            stderr = _clean_text(completed.stderr)
+            stdout = _clean_text(completed.stdout)
+            detail = stderr or stdout or "unknown soffice conversion failure"
+            raise ValueError(f"LibreOffice PDF conversion failed: {detail}")
+
+        converted_path = temp_dir / f"{docx_path.stem}.pdf"
+        if not converted_path.exists():
+            pdf_matches = list(temp_dir.glob("*.pdf"))
+            if len(pdf_matches) == 1:
+                converted_path = pdf_matches[0]
+            else:
+                raise ValueError("LibreOffice reported success but no converted PDF was found.")
+
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        if output_path.exists():
+            output_path.unlink()
+        converted_path.replace(output_path)
+
 def export_tailoring_workspace_draft_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
@@ -6521,35 +6652,20 @@ def export_tailoring_workspace_draft_payload(
     export_strategy_note = ""
 
     if export_format == "word":
-        try:
-            bootstrap_patch_result = _build_workspace_export_docx_with_pdf2docx_bootstrap(
-                resume_pdf_path=resume_pdf_path,
-                patch_specs=patch_specs,
-                output_path=output_path,
-            )
-            patch_result = {
-                "applied_candidate_ids": list(
-                    bootstrap_patch_result.get("applied_candidate_ids", []) or []
-                ),
-                "unresolved_candidate_ids": list(
-                    bootstrap_patch_result.get("unresolved_candidate_ids", []) or []
-                ),
-            }
-            export_strategy = str(
-                bootstrap_patch_result.get("strategy", "pdf2docx_bootstrap")
-            )
-        except Exception as exc:
-            _build_workspace_export_docx(exported_pages, output_path)
-            export_strategy = "native_docx_fallback"
-            export_strategy_note = f"{exc.__class__.__name__}: {exc}"
-
-        _workspace_export_normalize_docx_bootstrap_header(
-            output_path,
+        docx_build_result = _build_workspace_export_finalized_docx(
             resume_pdf_path=resume_pdf_path,
+            exported_pages=exported_pages,
+            patch_specs=patch_specs,
+            output_path=output_path,
+            base_patch_result=patch_result,
         )
-        _workspace_export_normalize_docx_first_bullet_indent(output_path)
+        patch_result = dict(docx_build_result.get("patch_result", {}) or {})
+        export_strategy = _clean_text(docx_build_result.get("export_strategy"))
+        export_strategy_note = _clean_text(docx_build_result.get("export_strategy_note"))
     else:
         _build_workspace_export_pdf(exported_pages, output_path)
+        export_strategy = "native_pdf"
+        export_strategy_note = ""
 
     unresolved_candidate_ids = list(patch_result.get("unresolved_candidate_ids", []) or [])
     unresolved_manual_edit_keys = list(unresolved_manual_keys or [])

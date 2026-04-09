@@ -5186,15 +5186,320 @@ def _workspace_export_apply_docx_section_rule(paragraph) -> None:
     bottom.set(qn("w:color"), "000000")
     existing_p_bdr.append(bottom)
 
+def _workspace_export_pdf_contact_segments(
+    contact_text: str,
+    link_items: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    segments: List[Dict[str, str]] = []
+    normalized_links: List[Tuple[int, str, str]] = []
+
+    for item in list(link_items or []):
+        label = _clean_text(item.get("label"))
+        uri = _clean_text(item.get("uri"))
+        if not label or not uri:
+            continue
+
+        pos = contact_text.find(label)
+        if pos < 0:
+            continue
+
+        normalized_links.append((pos, label, uri))
+
+    normalized_links.sort(key=lambda item: item[0])
+
+    if not normalized_links:
+        return [{"kind": "text", "text": contact_text, "url": ""}]
+
+    last_end = 0
+    for pos, label, uri in normalized_links:
+        if pos < last_end:
+            continue
+
+        prefix = contact_text[last_end:pos]
+        if prefix:
+            segments.append({"kind": "text", "text": prefix, "url": ""})
+
+        segments.append({"kind": "link", "text": label, "url": uri})
+        last_end = pos + len(label)
+
+    suffix = contact_text[last_end:]
+    if suffix:
+        segments.append({"kind": "text", "text": suffix, "url": ""})
+
+    return segments
+
+
+def _workspace_export_draw_centered_pdf_contact_line(
+    c,
+    *,
+    width: float,
+    y: float,
+    text: str,
+    font_name: str,
+    font_size: float,
+    link_items: List[Dict[str, str]],
+) -> float:
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    segments = _workspace_export_pdf_contact_segments(text, link_items)
+
+    total_width = 0.0
+    for segment in segments:
+        total_width += stringWidth(
+            str(segment.get("text", "") or ""),
+            font_name,
+            font_size,
+        )
+
+    x = max(36.0, (width - total_width) / 2.0)
+    current_x = x
+
+    for segment in segments:
+        segment_text = str(segment.get("text", "") or "")
+        if not segment_text:
+            continue
+
+        segment_width = stringWidth(segment_text, font_name, font_size)
+        is_link = str(segment.get("kind", "")) == "link"
+        url = _clean_text(segment.get("url"))
+
+        if is_link and url:
+            c.setFillColorRGB(5 / 255.0, 99 / 255.0, 193 / 255.0)
+            c.setFont(font_name, font_size)
+            c.drawString(current_x, y, segment_text)
+
+            underline_y = y - 1.2
+            c.setLineWidth(0.7)
+            c.line(current_x, underline_y, current_x + segment_width, underline_y)
+
+            c.linkURL(
+                url,
+                (
+                    current_x,
+                    y - (font_size * 0.35),
+                    current_x + segment_width,
+                    y + (font_size * 0.95),
+                ),
+                relative=0,
+                thickness=0,
+            )
+            c.setFillColorRGB(0.0, 0.0, 0.0)
+        else:
+            c.setFont(font_name, font_size)
+            c.drawString(current_x, y, segment_text)
+
+        current_x += segment_width
+
+    return total_width
+
 def _build_workspace_export_pdf(
     exported_pages: List[Dict[str, Any]],
     output_path: Path,
+    *,
+    resume_pdf_path: Path | None = None,
 ) -> None:
     from reportlab.lib.utils import simpleSplit
     from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen import canvas
 
+    def _effective_font_size(
+        paragraph: Dict[str, Any],
+        *,
+        page_index: int,
+        page_emitted_paragraph_count: int,
+        is_paired_row: bool = False,
+    ) -> float:
+        source_size = float(
+            paragraph.get("font_size")
+            or dict(paragraph.get("style", {}) or {}).get("font_size")
+            or 11.0
+        )
+
+        alignment = _clean_text(paragraph.get("alignment")).lower()
+
+        is_name_line = (
+            page_index == 0
+            and page_emitted_paragraph_count == 0
+            and alignment == "center"
+        )
+        is_contact_line = (
+            page_index == 0
+            and page_emitted_paragraph_count == 1
+            and alignment == "center"
+        )
+
+        return _workspace_export_docx_effective_font_size(
+            source_size=source_size,
+            is_name=is_name_line,
+            is_contact=is_contact_line,
+            is_heading=bool(paragraph.get("is_heading", False)),
+            is_paired_row=is_paired_row,
+        )
+
+    def _left_content_x(paragraph: Dict[str, Any], width: float) -> float:
+        return max(
+            36.0,
+            min(
+                36.0 + float(paragraph.get("left_indent_pt") or 0.0),
+                width - 144.0,
+            ),
+        )
+
+    def _paragraph_text(paragraph: Dict[str, Any]) -> str:
+        text = _workspace_export_clean_docx_text(
+            _clean_text(paragraph.get("text"))
+        )
+        text = re.sub(r"\s+([,.;:])", r"\1", text)
+        return text
+
+    def _estimate_paragraph_block_height(
+        paragraph: Dict[str, Any],
+        *,
+        width: float,
+        page_index: int,
+        page_emitted_paragraph_count: int,
+    ) -> float:
+        text = _paragraph_text(paragraph)
+        if not text:
+            return 0.0
+
+        style = dict(paragraph.get("style", {}) or {})
+        font_name = _workspace_export_pdf_font_name(style)
+        font_size = _effective_font_size(
+            paragraph,
+            page_index=page_index,
+            page_emitted_paragraph_count=page_emitted_paragraph_count,
+            is_paired_row=False,
+        )
+        gap_before = max(0.0, min(float(paragraph.get("gap_before") or 0.0), 14.0))
+        line_spacing = 1.0 if (
+            page_index == 0
+            and page_emitted_paragraph_count in {0, 1}
+            and _clean_text(paragraph.get("alignment")).lower() == "center"
+        ) else 1.08
+
+        alignment = _clean_text(paragraph.get("alignment")).lower()
+        is_header_line = (
+            page_index == 0
+            and page_emitted_paragraph_count in {0, 1}
+            and alignment == "center"
+        )
+        tail_gap = 1.0 if is_header_line else 1.5
+
+        if bool(paragraph.get("is_bullet")):
+            body_text = _workspace_export_strip_leading_bullet_text(text).strip()
+            content_x = _left_content_x(paragraph, width)
+            body_x = content_x + 8.0
+            available_width = max(120.0, width - body_x - 36.0)
+            wrapped_lines = simpleSplit(body_text, font_name, font_size, available_width) or [body_text]
+            line_height = font_size * 1.0
+            bullet_tail_gap = 0.4
+            return gap_before + (len(wrapped_lines) * line_height) + bullet_tail_gap
+
+        if alignment in {"center", "right"}:
+            available_width = max(120.0, width - 72.0)
+        else:
+            left_x = _left_content_x(paragraph, width)
+            available_width = max(120.0, width - left_x - 36.0)
+
+        wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
+        line_height = font_size * line_spacing
+        extra_rule_space = 2.0 if _workspace_export_is_section_heading_text(text) else 0.0
+        return gap_before + (len(wrapped_lines) * line_height) + extra_rule_space + tail_gap
+    
+    def _estimate_paired_row_height(
+        left_item: Dict[str, Any],
+        right_item: Dict[str, Any],
+        *,
+        page_index: int,
+        page_emitted_paragraph_count: int,
+    ) -> float:
+        left_font_size = _effective_font_size(
+            left_item,
+            page_index=page_index,
+            page_emitted_paragraph_count=page_emitted_paragraph_count,
+            is_paired_row=True,
+        )
+        right_font_size = _effective_font_size(
+            right_item,
+            page_index=page_index,
+            page_emitted_paragraph_count=page_emitted_paragraph_count,
+            is_paired_row=True,
+        )
+        line_height = max(left_font_size, right_font_size) * 1.08
+        gap_before = max(
+            0.0,
+            min(
+                max(
+                    float(left_item.get("gap_before") or 0.0),
+                    float(right_item.get("gap_before") or 0.0),
+                ),
+                14.0,
+            ),
+        )
+        paired_row_tail_gap = 1.0
+        return gap_before + line_height + paired_row_tail_gap
+
+    def _estimate_role_group_height(
+        page_paragraphs: List[Dict[str, Any]],
+        start_idx: int,
+        *,
+        width: float,
+        page_index: int,
+        page_emitted_paragraph_count: int,
+    ) -> float:
+        first = page_paragraphs[start_idx]
+        row_group_id = _clean_text(first.get("row_group_id"))
+
+        row_items = [first]
+        scan = start_idx + 1
+        while scan < len(page_paragraphs):
+            candidate = page_paragraphs[scan]
+            if _clean_text(candidate.get("row_group_id")) != row_group_id:
+                break
+            row_items.append(candidate)
+            scan += 1
+
+        left_item = next(
+            (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
+            row_items[0],
+        )
+        right_item = next(
+            (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
+            row_items[-1],
+        )
+
+        total = _estimate_paired_row_height(
+            left_item,
+            right_item,
+            page_index=page_index,
+            page_emitted_paragraph_count=page_emitted_paragraph_count,
+        )
+
+        while scan < len(page_paragraphs):
+            candidate = page_paragraphs[scan]
+            candidate_text = _paragraph_text(candidate)
+            candidate_row_kind = _clean_text(candidate.get("row_kind"))
+
+            if candidate_row_kind == "paired_row":
+                break
+            if _workspace_export_is_section_heading_text(candidate_text):
+                break
+            if not bool(candidate.get("is_bullet")):
+                break
+
+            total += _estimate_paragraph_block_height(
+                candidate,
+                width=width,
+                page_index=page_index,
+                page_emitted_paragraph_count=page_emitted_paragraph_count + (scan - start_idx),
+            )
+            scan += 1
+
+        return total
+
     c = canvas.Canvas(str(output_path))
+    header_link_items = _workspace_export_extract_pdf_header_link_items(resume_pdf_path)
 
     for page_index, page in enumerate(exported_pages):
         width = max(612.0, float(page.get("width") or 0))
@@ -5202,114 +5507,159 @@ def _build_workspace_export_pdf(
         c.setPageSize((width, height))
 
         y = height - 42.0
-        blocks = list(page.get("blocks", []) or [])
+        page_emitted_paragraph_count = 0
 
-        for block in blocks:
-            block_paragraphs = list(block.get("paragraphs", []) or [])
-            idx = 0
+        page_paragraphs: List[Dict[str, Any]] = []
+        for block in list(page.get("blocks", []) or []):
+            for paragraph in list(block.get("paragraphs", []) or []):
+                page_paragraphs.append(paragraph)
 
-            while idx < len(block_paragraphs):
-                paragraph = block_paragraphs[idx]
-                text = _clean_text(paragraph.get("text"))
-                if not text:
-                    idx += 1
-                    continue
+        page_paragraphs.sort(
+            key=lambda paragraph: (
+                round(float(paragraph.get("top", 0.0) or 0.0), 2),
+                round(float(paragraph.get("left", 0.0) or 0.0), 2),
+                0 if _clean_text(paragraph.get("row_side")) == "left" else 1,
+            )
+        )
 
-                row_kind = _clean_text(paragraph.get("row_kind"))
-                row_group_id = _clean_text(paragraph.get("row_group_id"))
+        idx = 0
+        while idx < len(page_paragraphs):
+            paragraph = page_paragraphs[idx]
+            text = _paragraph_text(paragraph)
+            if not text:
+                idx += 1
+                continue
 
-                if row_kind == "paired_row" and row_group_id:
-                    row_items = [paragraph]
-                    scan = idx + 1
+            row_kind = _clean_text(paragraph.get("row_kind"))
+            row_group_id = _clean_text(paragraph.get("row_group_id"))
 
-                    while scan < len(block_paragraphs):
-                        candidate = block_paragraphs[scan]
-                        if _clean_text(candidate.get("row_group_id")) != row_group_id:
-                            break
-                        row_items.append(candidate)
-                        scan += 1
-
-                    left_item = next(
-                        (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
-                        row_items[0],
-                    )
-                    right_item = next(
-                        (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
-                        row_items[-1],
-                    )
-
-                    left_style = dict(left_item.get("style", {}) or {})
-                    right_style = dict(right_item.get("style", {}) or {})
-
-                    left_font = _workspace_export_pdf_font_name(left_style)
-                    right_font = _workspace_export_pdf_font_name(right_style)
-
-                    left_font_size = max(
-                        9.5,
-                        min(float(left_style.get("font_size", left_item.get("font_size", 11.0)) or 11.0), 15.5),
-                    )
-                    right_font_size = max(
-                        9.5,
-                        min(float(right_style.get("font_size", right_item.get("font_size", 11.0)) or 11.0), 15.5),
-                    )
-
-                    line_height = max(left_font_size, right_font_size) * 1.18
-                    gap_before = max(
-                        0.0,
-                        min(
-                            max(
-                                float(left_item.get("gap_before") or 0.0),
-                                float(right_item.get("gap_before") or 0.0),
-                            ),
-                            22.0,
-                        ),
-                    )
-
-                    if y - (gap_before + line_height + 3.0) < 42.0:
-                        c.showPage()
-                        c.setPageSize((width, height))
-                        y = height - 42.0
-
-                    y -= gap_before
-
-                    left_text = _clean_text(left_item.get("text"))
-                    right_text = _clean_text(right_item.get("text"))
-
-                    left_x = max(36.0, min(float(left_item.get("left") or 36.0), width - 180.0))
-                    right_text_width = stringWidth(right_text, right_font, right_font_size)
-                    right_x = max(left_x + 120.0, width - 36.0 - right_text_width)
-
-                    c.setFont(left_font, left_font_size)
-                    c.drawString(left_x, y, left_text)
-
-                    c.setFont(right_font, right_font_size)
-                    c.drawString(right_x, y, right_text)
-
-                    y -= line_height + 3.0
-                    idx = scan
-                    continue
-
-                style = dict(paragraph.get("style", {}) or {})
-                font_name = _workspace_export_pdf_font_name(style)
-                font_size = max(
-                    9.5,
-                    min(float(style.get("font_size", paragraph.get("font_size", 11.0)) or 11.0), 15.5),
+            if row_kind == "paired_row" and row_group_id:
+                role_group_height = _estimate_role_group_height(
+                    page_paragraphs,
+                    idx,
+                    width=width,
+                    page_index=page_index,
+                    page_emitted_paragraph_count=page_emitted_paragraph_count,
                 )
-                gap_before = max(0.0, min(float(paragraph.get("gap_before") or 0.0), 22.0))
-                line_spacing = max(1.05, min(float(paragraph.get("line_spacing") or 1.18), 1.45))
-                alignment = _clean_text(paragraph.get("alignment")).lower()
+                fresh_page_capacity = height - 84.0
 
-                if alignment == "center":
-                    available_width = max(120.0, width - 72.0)
-                elif alignment == "right":
-                    available_width = max(120.0, width - 72.0)
-                else:
-                    left = max(36.0, min(float(paragraph.get("left") or 36.0), width - 144.0))
-                    available_width = max(120.0, width - left - 36.0)
+                if (
+                    role_group_height <= fresh_page_capacity
+                    and y - role_group_height < 42.0
+                ):
+                    c.showPage()
+                    c.setPageSize((width, height))
+                    y = height - 42.0
 
-                wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
-                line_height = font_size * line_spacing
-                block_height = gap_before + (len(wrapped_lines) * line_height) + 3.0
+                row_items = [paragraph]
+                scan = idx + 1
+
+                while scan < len(page_paragraphs):
+                    candidate = page_paragraphs[scan]
+                    if _clean_text(candidate.get("row_group_id")) != row_group_id:
+                        break
+                    row_items.append(candidate)
+                    scan += 1
+
+                left_item = next(
+                    (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
+                    row_items[0],
+                )
+                right_item = next(
+                    (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
+                    row_items[-1],
+                )
+
+                left_style = dict(left_item.get("style", {}) or {})
+                right_style = dict(right_item.get("style", {}) or {})
+
+                left_font = _workspace_export_pdf_font_name(left_style)
+                right_font = _workspace_export_pdf_font_name(right_style)
+
+                left_font_size = _effective_font_size(
+                    left_item,
+                    page_index=page_index,
+                    page_emitted_paragraph_count=page_emitted_paragraph_count,
+                    is_paired_row=True,
+                )
+                right_font_size = _effective_font_size(
+                    right_item,
+                    page_index=page_index,
+                    page_emitted_paragraph_count=page_emitted_paragraph_count,
+                    is_paired_row=True,
+                )
+
+                line_height = max(left_font_size, right_font_size) * 1.08
+                gap_before = max(
+                    0.0,
+                    min(
+                        max(
+                            float(left_item.get("gap_before") or 0.0),
+                            float(right_item.get("gap_before") or 0.0),
+                        ),
+                        14.0,
+                    ),
+                )
+
+                paired_row_tail_gap = 1.0
+                if y - (gap_before + line_height + paired_row_tail_gap) < 42.0:
+                    c.showPage()
+                    c.setPageSize((width, height))
+                    y = height - 42.0
+
+                y -= gap_before
+
+                left_text = _paragraph_text(left_item)
+                right_text = _paragraph_text(right_item)
+
+                left_x = _left_content_x(left_item, width)
+                right_text_width = stringWidth(right_text, right_font, right_font_size)
+                right_x = max(left_x + 120.0, width - 36.0 - right_text_width)
+
+                c.setFont(left_font, left_font_size)
+                c.drawString(left_x, y, left_text)
+
+                c.setFont(right_font, right_font_size)
+                c.drawString(right_x, y, right_text)
+
+                paired_row_tail_gap = 1.0
+                y -= line_height + paired_row_tail_gap
+                page_emitted_paragraph_count += 1
+                idx = scan
+                continue
+
+            style = dict(paragraph.get("style", {}) or {})
+            font_name = _workspace_export_pdf_font_name(style)
+            font_size = _effective_font_size(
+                paragraph,
+                page_index=page_index,
+                page_emitted_paragraph_count=page_emitted_paragraph_count,
+            )
+            gap_before = max(0.0, min(float(paragraph.get("gap_before") or 0.0), 14.0))
+            line_spacing = 1.0 if (
+                page_index == 0
+                and page_emitted_paragraph_count in {0, 1}
+                and _clean_text(paragraph.get("alignment")).lower() == "center"
+            ) else 1.08
+
+            alignment = _clean_text(paragraph.get("alignment")).lower()
+            is_header_line = (
+                page_index == 0
+                and page_emitted_paragraph_count in {0, 1}
+                and alignment == "center"
+            )
+            tail_gap = 1.0 if is_header_line else 1.5
+
+            if bool(paragraph.get("is_bullet")):
+                body_text = _workspace_export_strip_leading_bullet_text(text).strip()
+                content_x = _left_content_x(paragraph, width)
+                body_x = content_x + 8.0
+                bullet_center_x = content_x + 2.1
+                available_width = max(120.0, width - body_x - 36.0)
+                wrapped_lines = simpleSplit(body_text, font_name, font_size, available_width) or [body_text]
+                line_height = font_size * 1.0
+                bullet_tail_gap = 0.4
+                block_height = gap_before + (len(wrapped_lines) * line_height) + bullet_tail_gap
 
                 if y - block_height < 42.0:
                     c.showPage()
@@ -5318,28 +5668,101 @@ def _build_workspace_export_pdf(
 
                 y -= gap_before
 
+                c.circle(
+                    bullet_center_x,
+                    y - (font_size * 0.24),
+                    2.35,
+                    stroke=0,
+                    fill=1,
+                )
+
+                c.setFont(font_name, font_size)
                 for line in wrapped_lines:
-                    line_width = stringWidth(line, font_name, font_size)
-
-                    if alignment == "center":
-                        x = max(36.0, (width - line_width) / 2.0)
-                    elif alignment == "right":
-                        x = max(36.0, width - 36.0 - line_width)
-                    else:
-                        x = max(36.0, min(float(paragraph.get("left") or 36.0), width - 144.0))
-
-                    c.setFont(font_name, font_size)
-                    c.drawString(x, y, line)
+                    c.drawString(body_x, y, line)
                     y -= line_height
 
-                if _workspace_export_is_section_heading_text(text):
-                    rule_y = y + 2.0
-                    c.setLineWidth(0.9)
-                    c.line(36.0, rule_y, width - 36.0, rule_y)
-                    y -= 2.0
-
-                y -= 3.0
+                y -= bullet_tail_gap
+                page_emitted_paragraph_count += 1
                 idx += 1
+                continue
+
+            is_centered_contact_line = (
+                page_index == 0
+                and page_emitted_paragraph_count == 1
+                and alignment == "center"
+                and _workspace_export_is_likely_contact_line(text)
+            )
+
+            if is_centered_contact_line:
+                gap_before = min(gap_before, 0.5)
+                line_height = font_size * line_spacing
+                block_height = gap_before + line_height + tail_gap
+
+                if y - block_height < 42.0:
+                    c.showPage()
+                    c.setPageSize((width, height))
+                    y = height - 42.0
+
+                y -= gap_before
+
+                _workspace_export_draw_centered_pdf_contact_line(
+                    c,
+                    width=width,
+                    y=y,
+                    text=text,
+                    font_name=font_name,
+                    font_size=font_size,
+                    link_items=header_link_items,
+                )
+
+                y -= line_height
+                y -= tail_gap
+                page_emitted_paragraph_count += 1
+                idx += 1
+                continue
+
+            if alignment == "center":
+                available_width = max(120.0, width - 72.0)
+            elif alignment == "right":
+                available_width = max(120.0, width - 72.0)
+            else:
+                left_x = _left_content_x(paragraph, width)
+                available_width = max(120.0, width - left_x - 36.0)
+
+            wrapped_lines = simpleSplit(text, font_name, font_size, available_width) or [text]
+            line_height = font_size * line_spacing
+            block_height = gap_before + (len(wrapped_lines) * line_height) + tail_gap
+
+            if y - block_height < 42.0:
+                c.showPage()
+                c.setPageSize((width, height))
+                y = height - 42.0
+
+            y -= gap_before
+
+            for line in wrapped_lines:
+                line_width = stringWidth(line, font_name, font_size)
+
+                if alignment == "center":
+                    x = max(36.0, (width - line_width) / 2.0)
+                elif alignment == "right":
+                    x = max(36.0, width - 36.0 - line_width)
+                else:
+                    x = _left_content_x(paragraph, width)
+
+                c.setFont(font_name, font_size)
+                c.drawString(x, y, line)
+                y -= line_height
+
+            if _workspace_export_is_section_heading_text(text):
+                rule_y = y + 2.0
+                c.setLineWidth(1.35)
+                c.line(36.0, rule_y, width - 36.0, rule_y)
+                y -= 2.0
+
+            y -= tail_gap
+            page_emitted_paragraph_count += 1
+            idx += 1
 
         if page_index < len(exported_pages) - 1:
             c.showPage()
@@ -5370,7 +5793,7 @@ def _workspace_export_docx_effective_font_size(
     if is_name:
         return 14.0
     if is_contact:
-        return 9.5
+        return 10.5
     if is_heading:
         return 10.5
     if is_paired_row:
@@ -5394,7 +5817,7 @@ def _workspace_export_configure_docx_document_defaults(document) -> None:
 
     normal_style = document.styles["Normal"]
     normal_style.font.name = "Arial"
-    normal_style.font.size = Pt(10.0)
+    normal_style.font.size = Pt(11.0)
 
     for section in list(document.sections):
         _workspace_export_configure_docx_section(section)
@@ -6663,7 +7086,11 @@ def export_tailoring_workspace_draft_payload(
         export_strategy = _clean_text(docx_build_result.get("export_strategy"))
         export_strategy_note = _clean_text(docx_build_result.get("export_strategy_note"))
     else:
-        _build_workspace_export_pdf(exported_pages, output_path)
+        _build_workspace_export_pdf(
+            exported_pages,
+            output_path,
+            resume_pdf_path=resume_pdf_path,
+        )
         export_strategy = "native_pdf"
         export_strategy_note = ""
 

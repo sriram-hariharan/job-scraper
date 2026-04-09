@@ -4707,7 +4707,10 @@ def _workspace_export_annotate_page_layout(
                 left_item["row_group_id"] = row_group_id
                 left_item["row_side"] = "left"
                 left_item["alignment"] = "left"
-                left_item["left_indent_pt"] = 0.0
+                left_item["left_indent_pt"] = max(
+                    0.0,
+                    min(float(left_item.get("left", 0.0) or 0.0) - 36.0, 220.0),
+                )
 
                 right_item["row_kind"] = "paired_row"
                 right_item["row_group_id"] = row_group_id
@@ -5144,6 +5147,43 @@ def _apply_workspace_export_patch_specs(
         "unresolved_candidate_ids": unresolved_candidate_ids,
     }
 
+def _workspace_export_is_section_heading_text(text: str) -> bool:
+    clean = _clean_text(text)
+    if not clean or len(clean) > 64:
+        return False
+
+    if clean.startswith(("●", "•", "▪", "◦", "·", "-")):
+        return False
+
+    letters_only = re.sub(r"[^A-Za-z]+", "", clean)
+    if not letters_only:
+        return False
+
+    return clean == clean.upper()
+
+
+def _workspace_export_apply_docx_section_rule(paragraph) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    paragraph_xml = paragraph._p
+    p_pr = paragraph_xml.get_or_add_pPr()
+
+    existing_p_bdr = p_pr.find(qn("w:pBdr"))
+    if existing_p_bdr is None:
+        existing_p_bdr = OxmlElement("w:pBdr")
+        p_pr.append(existing_p_bdr)
+
+    for child in list(existing_p_bdr):
+        if child.tag == qn("w:bottom"):
+            existing_p_bdr.remove(child)
+
+    bottom = OxmlElement("w:bottom")
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), "16")
+    bottom.set(qn("w:space"), "2")
+    bottom.set(qn("w:color"), "000000")
+    existing_p_bdr.append(bottom)
 
 def _build_workspace_export_pdf(
     exported_pages: List[Dict[str, Any]],
@@ -5291,6 +5331,12 @@ def _build_workspace_export_pdf(
                     c.drawString(x, y, line)
                     y -= line_height
 
+                if _workspace_export_is_section_heading_text(text):
+                    rule_y = y + 2.0
+                    c.setLineWidth(0.9)
+                    c.line(36.0, rule_y, width - 36.0, rule_y)
+                    y -= 2.0
+
                 y -= 3.0
                 idx += 1
 
@@ -5368,11 +5414,18 @@ def _build_workspace_export_docx(
         is_contact: bool = False,
         is_heading: bool = False,
         is_paired_row: bool = False,
+        trim_leading_whitespace: bool = False,
     ) -> None:
+        first_visible_run = True
+
         for run_data in list(runs or []):
             run_text = _workspace_export_clean_docx_text(
                 str(run_data.get("text", "") or "")
             )
+
+            if trim_leading_whitespace and first_visible_run:
+                run_text = run_text.lstrip()
+
             if not run_text.strip():
                 continue
 
@@ -5392,14 +5445,21 @@ def _build_workspace_export_docx(
             )
             font.bold = bool(run_data.get("bold", False)) or is_name
             font.italic = bool(run_data.get("italic", False)) and not is_contact
+            first_visible_run = False
 
     document = Document()
     _workspace_export_configure_docx_document_defaults(document)
     use_seed_paragraph = True
 
+    section = document.sections[0]
+    usable_width_pt = float(
+        section.page_width.pt - section.left_margin.pt - section.right_margin.pt
+    )
+    previous_emitted_row_kind = ""
+    previous_paired_row_left_indent_pt = 0.0
+
     for page_index, page in enumerate(exported_pages):
-        page_width_pt = max(612.0, float(page.get("width") or 612.0))
-        right_tab_stop_pt = max(360.0, page_width_pt - 92.0)
+        right_tab_stop_pt = max(360.0, usable_width_pt)
         page_emitted_paragraph_count = 0
 
         for block in list(page.get("blocks", []) or []):
@@ -5443,7 +5503,12 @@ def _build_workspace_export_docx(
                         paragraph = document.add_paragraph()
 
                     paragraph_format = paragraph.paragraph_format
-                    paragraph_format.left_indent = Pt(0.0)
+                    paired_row_left_indent_pt = max(
+                        0.0,
+                        min(float(left_item.get("left_indent_pt") or 0.0), 220.0),
+                    )
+                    paragraph_format.left_indent = Pt(paired_row_left_indent_pt)
+                    paragraph_format.right_indent = Pt(0.0)
                     paragraph_format.first_line_indent = Pt(0.0)
                     paragraph_format.space_before = Pt(
                         max(
@@ -5470,15 +5535,19 @@ def _build_workspace_export_docx(
                         paragraph,
                         list(left_item.get("runs", []) or []),
                         is_paired_row=True,
+                        trim_leading_whitespace=True,
                     )
                     paragraph.add_run("\t")
                     _append_runs(
                         paragraph,
                         list(right_item.get("runs", []) or []),
                         is_paired_row=True,
+                        trim_leading_whitespace=True,
                     )
 
+                    previous_paired_row_left_indent_pt = paired_row_left_indent_pt
                     page_emitted_paragraph_count += 1
+                    previous_emitted_row_kind = "paired_row"
                     idx = scan
                     continue
 
@@ -5491,20 +5560,41 @@ def _build_workspace_export_docx(
                 paragraph_format = paragraph.paragraph_format
                 alignment = _clean_text(paragraph_data.get("alignment")).lower()
 
+                followup_subline_after_paired_row = (
+                    previous_emitted_row_kind == "paired_row"
+                    and alignment == "left"
+                    and not bool(paragraph_data.get("is_bullet"))
+                    and not bool(paragraph_data.get("is_heading"))
+                    and int(paragraph_data.get("line_count", 0) or 0) == 1
+                )
+                bullet_after_paired_row = (
+                    previous_emitted_row_kind == "paired_row"
+                    and alignment == "left"
+                    and bool(paragraph_data.get("is_bullet"))
+                )
+
                 if alignment == "center":
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     paragraph_format.left_indent = Pt(0.0)
+                    paragraph_format.right_indent = Pt(0.0)
                 elif alignment == "right":
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
                     paragraph_format.left_indent = Pt(0.0)
+                    paragraph_format.right_indent = Pt(0.0)
                 else:
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    paragraph_format.left_indent = Pt(
-                        max(0.0, min(float(paragraph_data.get("left_indent_pt") or 0.0), 220.0))
-                    )
+                    paragraph_format.right_indent = Pt(0.0)
+                    if followup_subline_after_paired_row or bullet_after_paired_row:
+                        paragraph_format.left_indent = Pt(previous_paired_row_left_indent_pt)
+                    else:
+                        paragraph_format.left_indent = Pt(
+                            max(0.0, min(float(paragraph_data.get("left_indent_pt") or 0.0), 220.0))
+                        )
 
                 paragraph_format.space_before = Pt(
-                    max(0.0, min(float(paragraph_data.get("gap_before") or 0.0), 14.0))
+                    0.0
+                    if followup_subline_after_paired_row
+                    else max(0.0, min(float(paragraph_data.get("gap_before") or 0.0), 14.0))
                 )
                 paragraph_format.space_after = Pt(1.0 if paragraph_data.get("is_heading") else 0.0)
                 paragraph_format.line_spacing = 1.08
@@ -5544,9 +5634,15 @@ def _build_workspace_export_docx(
                     is_name=is_name_line,
                     is_contact=is_contact_line,
                     is_heading=bool(paragraph_data.get("is_heading", False)),
+                    trim_leading_whitespace=True,
                 )
 
+                if _workspace_export_is_section_heading_text(text):
+                    paragraph.paragraph_format.space_after = Pt(2.0)
+                    _workspace_export_apply_docx_section_rule(paragraph)
+
                 page_emitted_paragraph_count += 1
+                previous_emitted_row_kind = row_kind or "paragraph"
                 idx += 1
 
     document.save(str(output_path))
@@ -5639,8 +5735,306 @@ def _workspace_export_split_merged_header_contact_text(text: str) -> Tuple[str, 
 
     return left, right
 
+def _workspace_export_is_bullet_paragraph_text(text: str) -> bool:
+    return str(text or "").lstrip().startswith(("●", "•", "▪", "◦", "·"))
 
-def _workspace_export_normalize_docx_bootstrap_header(docx_path: Path) -> bool:
+
+def _workspace_export_extract_pdf_header_link_items(
+    resume_pdf_path: Path | None,
+) -> List[Dict[str, str]]:
+    import pymupdf as fitz
+
+    if resume_pdf_path is None or not Path(resume_pdf_path).exists():
+        return []
+
+    doc = fitz.open(str(resume_pdf_path))
+    try:
+        if len(doc) == 0:
+            return []
+
+        page = doc[0]
+        words = sorted(
+            list(page.get_text("words") or []),
+            key=lambda item: (round(float(item[1]), 2), round(float(item[0]), 2)),
+        )
+
+        out: List[Dict[str, str]] = []
+        seen = set()
+
+        for link in list(page.get_links() or []):
+            uri = _clean_text(link.get("uri"))
+            rect_raw = link.get("from")
+            if not uri or rect_raw is None:
+                continue
+
+            rect = fitz.Rect(rect_raw)
+            label_words: List[Tuple[float, str]] = []
+
+            for word in words:
+                word_rect = fitz.Rect(word[:4])
+                if not word_rect.intersects(rect):
+                    continue
+                label_words.append((float(word[0]), str(word[4] or "")))
+
+            label = " ".join(text for _, text in sorted(label_words)).strip()
+            if not label:
+                continue
+
+            key = (label.lower(), uri)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            out.append(
+                {
+                    "label": label,
+                    "uri": uri,
+                }
+            )
+
+        return out
+    finally:
+        doc.close()
+
+
+def _workspace_export_append_plain_docx_run(
+    paragraph,
+    text: str,
+    *,
+    font_name: str,
+    font_size_pt: float,
+    bold: bool = False,
+    italic: bool = False,
+    underline: bool = False,
+) -> None:
+    from docx.shared import Pt
+
+    if not text:
+        return
+
+    run = paragraph.add_run(text)
+    font = run.font
+    font.name = _workspace_export_docx_font_name(font_name)
+    font.size = Pt(font_size_pt)
+    font.bold = bool(bold)
+    font.italic = bool(italic)
+    run.underline = bool(underline)
+
+
+def _workspace_export_add_docx_hyperlink(
+    paragraph,
+    text: str,
+    url: str,
+    *,
+    font_name: str,
+    font_size_pt: float,
+    bold: bool = False,
+    italic: bool = False,
+) -> None:
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    if not text or not url:
+        return
+
+    relationship_type = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink"
+    r_id = paragraph.part.relate_to(url, relationship_type, is_external=True)
+
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+
+    run = OxmlElement("w:r")
+    r_pr = OxmlElement("w:rPr")
+
+    resolved_font_name = _workspace_export_docx_font_name(font_name)
+
+    r_fonts = OxmlElement("w:rFonts")
+    r_fonts.set(qn("w:ascii"), resolved_font_name)
+    r_fonts.set(qn("w:hAnsi"), resolved_font_name)
+    r_fonts.set(qn("w:cs"), resolved_font_name)
+    r_pr.append(r_fonts)
+
+    half_points = str(int(round(float(font_size_pt) * 2.0)))
+
+    sz = OxmlElement("w:sz")
+    sz.set(qn("w:val"), half_points)
+    r_pr.append(sz)
+
+    sz_cs = OxmlElement("w:szCs")
+    sz_cs.set(qn("w:val"), half_points)
+    r_pr.append(sz_cs)
+
+    r_style = OxmlElement("w:rStyle")
+    r_style.set(qn("w:val"), "Hyperlink")
+    r_pr.append(r_style)
+
+    color = OxmlElement("w:color")
+    color.set(qn("w:val"), "0563C1")
+    r_pr.append(color)
+
+    underline = OxmlElement("w:u")
+    underline.set(qn("w:val"), "single")
+    r_pr.append(underline)
+
+    if bold:
+        b = OxmlElement("w:b")
+        r_pr.append(b)
+
+    if italic:
+        i = OxmlElement("w:i")
+        r_pr.append(i)
+
+    run.append(r_pr)
+
+    text_node = OxmlElement("w:t")
+    text_node.text = text
+    run.append(text_node)
+
+    hyperlink.append(run)
+    paragraph._p.append(hyperlink)
+
+
+def _workspace_export_rebuild_docx_contact_paragraph(
+    paragraph,
+    contact_text: str,
+    *,
+    font_name: str,
+    font_size_pt: float,
+    link_items: List[Dict[str, str]],
+) -> None:
+    _workspace_export_clear_docx_paragraph_content(paragraph)
+
+    normalized_links: List[Tuple[int, str, str]] = []
+    for item in list(link_items or []):
+        label = _clean_text(item.get("label"))
+        uri = _clean_text(item.get("uri"))
+        if not label or not uri:
+            continue
+
+        pos = contact_text.find(label)
+        if pos < 0:
+            continue
+
+        normalized_links.append((pos, label, uri))
+
+    normalized_links.sort(key=lambda item: item[0])
+
+    if not normalized_links:
+        _workspace_export_append_plain_docx_run(
+            paragraph,
+            contact_text,
+            font_name=font_name,
+            font_size_pt=font_size_pt,
+            bold=False,
+            italic=False,
+            underline=False,
+        )
+        return
+
+    last_end = 0
+    for pos, label, uri in normalized_links:
+        if pos < last_end:
+            continue
+
+        prefix = contact_text[last_end:pos]
+        if prefix:
+            _workspace_export_append_plain_docx_run(
+                paragraph,
+                prefix,
+                font_name=font_name,
+                font_size_pt=font_size_pt,
+                bold=False,
+                italic=False,
+                underline=False,
+            )
+
+        _workspace_export_add_docx_hyperlink(
+            paragraph,
+            label,
+            uri,
+            font_name=font_name,
+            font_size_pt=font_size_pt,
+            bold=False,
+            italic=False,
+        )
+        last_end = pos + len(label)
+
+    suffix = contact_text[last_end:]
+    if suffix:
+        _workspace_export_append_plain_docx_run(
+            paragraph,
+            suffix,
+            font_name=font_name,
+            font_size_pt=font_size_pt,
+            bold=False,
+            italic=False,
+            underline=False,
+        )
+
+
+def _workspace_export_normalize_docx_first_bullet_indent(docx_path: Path) -> bool:
+    from docx import Document
+    from docx.shared import Pt
+
+    document = Document(str(docx_path))
+    paragraphs = [
+        paragraph
+        for paragraph in list(document.paragraphs)
+        if _clean_text(paragraph.text)
+    ]
+
+    changed = False
+
+    for idx in range(len(paragraphs) - 2):
+        lead = paragraphs[idx]
+        first_bullet = paragraphs[idx + 1]
+        second_bullet = paragraphs[idx + 2]
+
+        if _workspace_export_is_bullet_paragraph_text(lead.text):
+            continue
+        if not _workspace_export_is_bullet_paragraph_text(first_bullet.text):
+            continue
+        if not _workspace_export_is_bullet_paragraph_text(second_bullet.text):
+            continue
+
+        first_left = (
+            float(first_bullet.paragraph_format.left_indent.pt)
+            if first_bullet.paragraph_format.left_indent is not None
+            else 0.0
+        )
+        second_left = (
+            float(second_bullet.paragraph_format.left_indent.pt)
+            if second_bullet.paragraph_format.left_indent is not None
+            else 0.0
+        )
+
+        if second_left - first_left < 4.0:
+            continue
+
+        first_bullet.paragraph_format.left_indent = Pt(second_left)
+
+        if second_bullet.paragraph_format.first_line_indent is not None:
+            first_bullet.paragraph_format.first_line_indent = Pt(
+                float(second_bullet.paragraph_format.first_line_indent.pt)
+            )
+
+        if second_bullet.paragraph_format.right_indent is not None:
+            first_bullet.paragraph_format.right_indent = Pt(
+                float(second_bullet.paragraph_format.right_indent.pt)
+            )
+
+        changed = True
+
+    if changed:
+        document.save(str(docx_path))
+
+    return changed
+
+def _workspace_export_normalize_docx_bootstrap_header(
+    docx_path: Path,
+    *,
+    resume_pdf_path: Path | None = None,
+) -> bool:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.shared import Pt
@@ -5655,40 +6049,67 @@ def _workspace_export_normalize_docx_bootstrap_header(docx_path: Path) -> bool:
     if not non_empty_paragraphs:
         return False
 
-    merged_paragraph = non_empty_paragraphs[0]
-    name_text, contact_text = _workspace_export_split_merged_header_contact_text(
-        merged_paragraph.text
-    )
-    if not name_text or not contact_text:
-        return False
+    style_source = non_empty_paragraphs[0]
 
-    style = _workspace_export_docx_first_run_style(merged_paragraph)
+    if (
+        len(non_empty_paragraphs) >= 2
+        and _workspace_export_is_likely_name_line(non_empty_paragraphs[0].text)
+        and _workspace_export_is_likely_contact_line(non_empty_paragraphs[1].text)
+    ):
+        name_paragraph = non_empty_paragraphs[0]
+        contact_paragraph = non_empty_paragraphs[1]
+        name_text = _clean_text(name_paragraph.text)
+        contact_text = _clean_text(contact_paragraph.text)
+    else:
+        merged_paragraph = non_empty_paragraphs[0]
+        name_text, contact_text = _workspace_export_split_merged_header_contact_text(
+            merged_paragraph.text
+        )
+        if not name_text or not contact_text:
+            return False
 
-    name_paragraph = merged_paragraph.insert_paragraph_before("")
+        name_paragraph = merged_paragraph.insert_paragraph_before("")
+        contact_paragraph = merged_paragraph
+
+    style = _workspace_export_docx_first_run_style(style_source)
+    resolved_font_name = str(style.get("font_name", "") or "")
+
     _workspace_export_clear_docx_paragraph_content(name_paragraph)
-    _workspace_export_clear_docx_paragraph_content(merged_paragraph)
-
-    name_run = name_paragraph.add_run(
-        _workspace_export_clean_docx_text(name_text)
+    _workspace_export_append_plain_docx_run(
+        name_paragraph,
+        _workspace_export_clean_docx_text(name_text),
+        font_name=resolved_font_name,
+        font_size_pt=14.0,
+        bold=True,
+        italic=False,
+        underline=False,
     )
-    name_font = name_run.font
-    name_font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
-    name_font.size = Pt(14.0)
-    name_font.bold = bool(style.get("bold", False))
-    name_font.italic = bool(style.get("italic", False))
-    name_run.underline = bool(style.get("underline", False))
     name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name_format = name_paragraph.paragraph_format
+    name_format.left_indent = Pt(0.0)
+    name_format.right_indent = Pt(0.0)
+    name_format.first_line_indent = Pt(0.0)
+    name_format.space_before = Pt(0.0)
+    name_format.space_after = Pt(2.0)
+    name_format.line_spacing = 1.0
 
-    contact_run = merged_paragraph.add_run(
-        _workspace_export_clean_docx_text(contact_text)
+    contact_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    contact_format = contact_paragraph.paragraph_format
+    contact_format.left_indent = Pt(0.0)
+    contact_format.right_indent = Pt(0.0)
+    contact_format.first_line_indent = Pt(0.0)
+    contact_format.space_before = Pt(0.0)
+    contact_format.space_after = Pt(8.0)
+    contact_format.line_spacing = 1.0
+
+    link_items = _workspace_export_extract_pdf_header_link_items(resume_pdf_path)
+    _workspace_export_rebuild_docx_contact_paragraph(
+        contact_paragraph,
+        _workspace_export_clean_docx_text(contact_text),
+        font_name=resolved_font_name,
+        font_size_pt=10.0,
+        link_items=link_items,
     )
-    contact_font = contact_run.font
-    contact_font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
-    contact_font.size = Pt(10.0)
-    contact_font.bold = False
-    contact_font.italic = False
-    contact_run.underline = False
-    merged_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     document.save(str(docx_path))
     return True
@@ -5999,6 +6420,7 @@ def _build_workspace_export_docx_with_pdf2docx_bootstrap(
 
         _workspace_export_normalize_docx_bootstrap_header(
             temp_output_path,
+            resume_pdf_path=resume_pdf_path,
         )
 
         if _workspace_export_docx_has_merged_bullet_paragraphs(temp_output_path):
@@ -6099,11 +6521,33 @@ def export_tailoring_workspace_draft_payload(
     export_strategy_note = ""
 
     if export_format == "word":
-        _build_workspace_export_docx(exported_pages, output_path)
-        _workspace_export_normalize_docx_bootstrap_header(output_path)
-        export_strategy = "native_docx_word_reflow"
-        export_strategy_note = ""
+        try:
+            bootstrap_patch_result = _build_workspace_export_docx_with_pdf2docx_bootstrap(
+                resume_pdf_path=resume_pdf_path,
+                patch_specs=patch_specs,
+                output_path=output_path,
+            )
+            patch_result = {
+                "applied_candidate_ids": list(
+                    bootstrap_patch_result.get("applied_candidate_ids", []) or []
+                ),
+                "unresolved_candidate_ids": list(
+                    bootstrap_patch_result.get("unresolved_candidate_ids", []) or []
+                ),
+            }
+            export_strategy = str(
+                bootstrap_patch_result.get("strategy", "pdf2docx_bootstrap")
+            )
+        except Exception as exc:
+            _build_workspace_export_docx(exported_pages, output_path)
+            export_strategy = "native_docx_fallback"
+            export_strategy_note = f"{exc.__class__.__name__}: {exc}"
 
+        _workspace_export_normalize_docx_bootstrap_header(
+            output_path,
+            resume_pdf_path=resume_pdf_path,
+        )
+        _workspace_export_normalize_docx_first_bullet_indent(output_path)
     else:
         _build_workspace_export_pdf(exported_pages, output_path)
 

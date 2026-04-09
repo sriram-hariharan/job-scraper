@@ -5116,23 +5116,22 @@ def _apply_workspace_export_patch_specs(
         updated = dict(paragraph)
         dominant_style = dict(updated.get("style", {}) or {})
 
-        effective_patch_text = _workspace_export_preserve_bullet_prefix(
+        normalized_patch_text = _workspace_export_restore_original_lead_word(
             _clean_text(paragraph.get("text")),
             patch_text,
+        )
+        effective_patch_text = _workspace_export_preserve_bullet_prefix(
+            _clean_text(paragraph.get("text")),
+            normalized_patch_text,
         )
 
         updated["text"] = effective_patch_text
         updated["patched"] = True
         updated["patch_source"] = _clean_text(patch.get("patch_source"))
-        updated["runs"] = [
-            {
-                "text": effective_patch_text,
-                "font_name": _clean_text(dominant_style.get("font_name")),
-                "font_size": float(dominant_style.get("font_size", updated.get("font_size", 11.0)) or 11.0),
-                "bold": bool(dominant_style.get("bold", updated.get("is_heading", False))),
-                "italic": bool(dominant_style.get("italic", False)),
-            }
-        ]
+        updated["runs"] = _workspace_export_build_patched_runs(
+            list(paragraph.get("runs", []) or []),
+            effective_patch_text,
+        )
 
         exported_pages[page_index]["blocks"][block_index]["paragraphs"][paragraph_index] = updated
         used_targets.add((page_index, block_index, paragraph_index))
@@ -5300,6 +5299,58 @@ def _build_workspace_export_pdf(
 
     c.save()
 
+def _workspace_export_clean_docx_text(value: Any) -> str:
+    text = str(value or "")
+    text = re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
+    text = text.replace("\xa0", " ")
+    text = re.sub(r"\t+", "\t", text)
+    text = re.sub(r" {2,}", " ", text)
+    return text
+
+
+def _workspace_export_docx_safe_font_name(raw_font_name: str = "") -> str:
+    return "Arial"
+
+
+def _workspace_export_docx_effective_font_size(
+    *,
+    source_size: float,
+    is_name: bool = False,
+    is_contact: bool = False,
+    is_heading: bool = False,
+    is_paired_row: bool = False,
+) -> float:
+    if is_name:
+        return 14.0
+    if is_contact:
+        return 9.5
+    if is_heading:
+        return 10.5
+    if is_paired_row:
+        return 10.0
+    return 10.0
+
+
+def _workspace_export_configure_docx_section(section) -> None:
+    from docx.shared import Inches
+
+    section.top_margin = Inches(0.42)
+    section.bottom_margin = Inches(0.42)
+    section.left_margin = Inches(0.42)
+    section.right_margin = Inches(0.42)
+    section.header_distance = Inches(0.2)
+    section.footer_distance = Inches(0.2)
+
+
+def _workspace_export_configure_docx_document_defaults(document) -> None:
+    from docx.shared import Pt
+
+    normal_style = document.styles["Normal"]
+    normal_style.font.name = "Arial"
+    normal_style.font.size = Pt(10.0)
+
+    for section in list(document.sections):
+        _workspace_export_configure_docx_section(section)
 
 def _build_workspace_export_docx(
     exported_pages: List[Dict[str, Any]],
@@ -5309,32 +5360,47 @@ def _build_workspace_export_docx(
     from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_TAB_ALIGNMENT, WD_TAB_LEADER
     from docx.shared import Pt
 
-    def _append_runs(paragraph, runs: List[Dict[str, Any]]) -> None:
+    def _append_runs(
+        paragraph,
+        runs: List[Dict[str, Any]],
+        *,
+        is_name: bool = False,
+        is_contact: bool = False,
+        is_heading: bool = False,
+        is_paired_row: bool = False,
+    ) -> None:
         for run_data in list(runs or []):
-            run_text = str(run_data.get("text", "") or "")
-            if not run_text:
+            run_text = _workspace_export_clean_docx_text(
+                str(run_data.get("text", "") or "")
+            )
+            if not run_text.strip():
                 continue
 
             run = paragraph.add_run(run_text)
             font = run.font
-            font.name = _workspace_export_docx_font_name(
+            font.name = _workspace_export_docx_safe_font_name(
                 str(run_data.get("font_name", ""))
             )
             font.size = Pt(
-                max(9.5, min(float(run_data.get("font_size", 11.0) or 11.0), 15.5))
+                _workspace_export_docx_effective_font_size(
+                    source_size=float(run_data.get("font_size", 11.0) or 11.0),
+                    is_name=is_name,
+                    is_contact=is_contact,
+                    is_heading=is_heading,
+                    is_paired_row=is_paired_row,
+                )
             )
-            font.bold = bool(run_data.get("bold", False))
-            font.italic = bool(run_data.get("italic", False))
+            font.bold = bool(run_data.get("bold", False)) or is_name
+            font.italic = bool(run_data.get("italic", False)) and not is_contact
 
     document = Document()
+    _workspace_export_configure_docx_document_defaults(document)
     use_seed_paragraph = True
 
     for page_index, page in enumerate(exported_pages):
-        if page_index > 0:
-            document.add_page_break()
-
         page_width_pt = max(612.0, float(page.get("width") or 612.0))
         right_tab_stop_pt = max(360.0, page_width_pt - 92.0)
+        page_emitted_paragraph_count = 0
 
         for block in list(page.get("blocks", []) or []):
             block_paragraphs = list(block.get("paragraphs", []) or [])
@@ -5387,21 +5453,12 @@ def _build_workspace_export_docx(
                                     float(left_item.get("gap_before") or 0.0),
                                     float(right_item.get("gap_before") or 0.0),
                                 ),
-                                18.0,
+                                14.0,
                             ),
                         )
                     )
                     paragraph_format.space_after = Pt(0.0)
-                    paragraph_format.line_spacing = max(
-                        1.0,
-                        min(
-                            max(
-                                float(left_item.get("line_spacing") or 1.12),
-                                float(right_item.get("line_spacing") or 1.12),
-                            ),
-                            1.35,
-                        ),
-                    )
+                    paragraph_format.line_spacing = 1.08
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
                     paragraph_format.tab_stops.add_tab_stop(
                         Pt(right_tab_stop_pt),
@@ -5409,10 +5466,19 @@ def _build_workspace_export_docx(
                         WD_TAB_LEADER.SPACES,
                     )
 
-                    _append_runs(paragraph, list(left_item.get("runs", []) or []))
+                    _append_runs(
+                        paragraph,
+                        list(left_item.get("runs", []) or []),
+                        is_paired_row=True,
+                    )
                     paragraph.add_run("\t")
-                    _append_runs(paragraph, list(right_item.get("runs", []) or []))
+                    _append_runs(
+                        paragraph,
+                        list(right_item.get("runs", []) or []),
+                        is_paired_row=True,
+                    )
 
+                    page_emitted_paragraph_count += 1
                     idx = scan
                     continue
 
@@ -5438,13 +5504,10 @@ def _build_workspace_export_docx(
                     )
 
                 paragraph_format.space_before = Pt(
-                    max(0.0, min(float(paragraph_data.get("gap_before") or 0.0), 18.0))
+                    max(0.0, min(float(paragraph_data.get("gap_before") or 0.0), 14.0))
                 )
-                paragraph_format.space_after = Pt(1.5 if paragraph_data.get("is_heading") else 0.0)
-                paragraph_format.line_spacing = max(
-                    1.0,
-                    min(float(paragraph_data.get("line_spacing") or 1.15), 1.4),
-                )
+                paragraph_format.space_after = Pt(1.0 if paragraph_data.get("is_heading") else 0.0)
+                paragraph_format.line_spacing = 1.08
 
                 if paragraph_data.get("is_bullet"):
                     paragraph_format.first_line_indent = Pt(-10.0)
@@ -5464,10 +5527,171 @@ def _build_workspace_export_docx(
                         }
                     ]
 
-                _append_runs(paragraph, runs)
+                is_name_line = (
+                    page_index == 0
+                    and page_emitted_paragraph_count == 0
+                    and alignment == "center"
+                )
+                is_contact_line = (
+                    page_index == 0
+                    and page_emitted_paragraph_count == 1
+                    and alignment == "center"
+                )
+
+                _append_runs(
+                    paragraph,
+                    runs,
+                    is_name=is_name_line,
+                    is_contact=is_contact_line,
+                    is_heading=bool(paragraph_data.get("is_heading", False)),
+                )
+
+                page_emitted_paragraph_count += 1
                 idx += 1
 
     document.save(str(output_path))
+
+def _workspace_export_is_likely_name_line(text: str) -> bool:
+    clean = _clean_text(text)
+    if not clean or len(clean) > 80:
+        return False
+
+    if any(
+        token in clean.lower()
+        for token in ("@", "linkedin", "github", "http://", "https://", ".com", "|")
+    ):
+        return False
+
+    words = [part for part in clean.split() if part]
+    if len(words) < 2 or len(words) > 6:
+        return False
+
+    return all(part[:1].isupper() for part in words if part[:1].isalpha())
+
+
+def _workspace_export_is_likely_contact_line(text: str) -> bool:
+    clean = _clean_text(text).lower()
+    if not clean:
+        return False
+
+    if "|" in clean:
+        return True
+
+    if "@" in clean:
+        return True
+
+    if "linkedin" in clean or "github" in clean or ".com" in clean:
+        return True
+
+    return bool(re.search(r"\+?\d[\d(). \-]{6,}\d", clean))
+
+
+def _workspace_export_split_merged_header_contact_text(text: str) -> Tuple[str, str]:
+    clean = _workspace_export_clean_docx_text(text)
+    clean = _clean_text(clean)
+    if not clean:
+        return "", ""
+
+    pipe_index = clean.find("|")
+    if pipe_index >= 0:
+        prefix = clean[:pipe_index].rstrip()
+
+        for location_pattern in (
+            r"[A-Z][a-z]+ [A-Z][a-z]+ [A-Z][a-z]+,\s*[A-Z]{2}\s*$",
+            r"[A-Z][a-z]+ [A-Z][a-z]+,\s*[A-Z]{2}\s*$",
+            r"[A-Z][a-z]+,\s*[A-Z]{2}\s*$",
+        ):
+            location_match = re.search(location_pattern, prefix)
+            if not location_match:
+                continue
+
+            left = _clean_text(prefix[:location_match.start()])
+            right = _clean_text(clean[location_match.start():])
+
+            if not left or not right:
+                continue
+            if not _workspace_export_is_likely_name_line(left):
+                continue
+            if not _workspace_export_is_likely_contact_line(right):
+                continue
+
+            return left, right
+
+    fallback_match = re.search(
+        r"(?:[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}.*|"
+        r"\+?\d[\d(). \-]{6,}\d.*|"
+        r"linkedin.*|github.*)",
+        clean,
+        flags=re.IGNORECASE,
+    )
+    if not fallback_match:
+        return "", ""
+
+    left = _clean_text(clean[:fallback_match.start()])
+    right = _clean_text(clean[fallback_match.start():])
+
+    if not left or not right:
+        return "", ""
+    if not _workspace_export_is_likely_name_line(left):
+        return "", ""
+    if not _workspace_export_is_likely_contact_line(right):
+        return "", ""
+
+    return left, right
+
+
+def _workspace_export_normalize_docx_bootstrap_header(docx_path: Path) -> bool:
+    from docx import Document
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.shared import Pt
+
+    document = Document(str(docx_path))
+    non_empty_paragraphs = [
+        paragraph
+        for paragraph in list(document.paragraphs)
+        if _clean_text(paragraph.text)
+    ]
+
+    if not non_empty_paragraphs:
+        return False
+
+    merged_paragraph = non_empty_paragraphs[0]
+    name_text, contact_text = _workspace_export_split_merged_header_contact_text(
+        merged_paragraph.text
+    )
+    if not name_text or not contact_text:
+        return False
+
+    style = _workspace_export_docx_first_run_style(merged_paragraph)
+
+    name_paragraph = merged_paragraph.insert_paragraph_before("")
+    _workspace_export_clear_docx_paragraph_content(name_paragraph)
+    _workspace_export_clear_docx_paragraph_content(merged_paragraph)
+
+    name_run = name_paragraph.add_run(
+        _workspace_export_clean_docx_text(name_text)
+    )
+    name_font = name_run.font
+    name_font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
+    name_font.size = Pt(14.0)
+    name_font.bold = bool(style.get("bold", False))
+    name_font.italic = bool(style.get("italic", False))
+    name_run.underline = bool(style.get("underline", False))
+    name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    contact_run = merged_paragraph.add_run(
+        _workspace_export_clean_docx_text(contact_text)
+    )
+    contact_font = contact_run.font
+    contact_font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
+    contact_font.size = Pt(10.0)
+    contact_font.bold = False
+    contact_font.italic = False
+    contact_run.underline = False
+    merged_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+
+    document.save(str(docx_path))
+    return True
 
 def _workspace_export_docx_first_run_style(paragraph) -> Dict[str, Any]:
     for run in list(paragraph.runs):
@@ -5506,19 +5730,75 @@ def _workspace_export_clear_docx_paragraph_content(paragraph) -> None:
             continue
         paragraph_xml.remove(child)
 
+def _workspace_export_is_bullet_only_run_text(text: str) -> bool:
+    compact = re.sub(r"[\s\u200b\u200c\u200d\ufeff]+", "", str(text or ""))
+    return compact in {"●", "•", "▪", "◦", "·"}
 
-def _workspace_export_replace_docx_paragraph_text(paragraph, patch_text: str) -> None:
+
+def _workspace_export_strip_leading_bullet_text(text: str) -> str:
+    value = str(text or "")
+
+    value = re.sub(r"^[\s\u200b\u200c\u200d\ufeff]+", "", value)
+    value = re.sub(r"^[●•▪◦·][\s\u200b\u200c\u200d\ufeff]*", "", value, count=1)
+    value = re.sub(r"^[\s\u200b\u200c\u200d\ufeff]+", "", value)
+
+    return value
+
+def _workspace_export_restore_original_lead_word(
+    original_text: str,
+    patch_text: str,
+) -> str:
+    original_body = _workspace_export_strip_leading_bullet_text(original_text).strip()
+    patch_body = _workspace_export_strip_leading_bullet_text(patch_text).strip()
+
+    if not original_body or not patch_body:
+        return patch_body or str(patch_text or "")
+
+    if not re.match(r"^[a-z]", patch_body):
+        return patch_body
+
+    original_match = re.match(r"^([A-Z][a-z]+)\b", original_body)
+    if not original_match:
+        return patch_body
+
+    original_lead = original_match.group(1)
+
+    patch_match = re.match(r"^([A-Za-z]+)\b", patch_body)
+    if patch_match and patch_match.group(1).lower() == original_lead.lower():
+        return patch_body
+
+    return f"{original_lead} {patch_body}"
+
+def _workspace_export_run_style_payload(run_or_dict: Any) -> Dict[str, Any]:
+    if isinstance(run_or_dict, dict):
+        return {
+            "font_name": _clean_text(run_or_dict.get("font_name")),
+            "font_size": float(run_or_dict.get("font_size", 11.0) or 11.0),
+            "bold": bool(run_or_dict.get("bold", False)),
+            "italic": bool(run_or_dict.get("italic", False)),
+            "underline": bool(run_or_dict.get("underline", False)),
+        }
+
+    font = run_or_dict.font
+    font_size = 11.0
+    if font.size is not None:
+        try:
+            font_size = float(font.size.pt)
+        except Exception:
+            font_size = 11.0
+
+    return {
+        "font_name": _clean_text(font.name),
+        "font_size": font_size,
+        "bold": bool(run_or_dict.bold if run_or_dict.bold is not None else font.bold),
+        "italic": bool(run_or_dict.italic if run_or_dict.italic is not None else font.italic),
+        "underline": bool(run_or_dict.underline) if run_or_dict.underline is not None else False,
+    }
+
+
+def _workspace_export_apply_docx_run_style(run, style: Dict[str, Any]) -> None:
     from docx.shared import Pt
 
-    style = _workspace_export_docx_first_run_style(paragraph)
-    effective_patch_text = _workspace_export_preserve_bullet_prefix(
-        paragraph.text,
-        patch_text,
-    )
-
-    _workspace_export_clear_docx_paragraph_content(paragraph)
-
-    run = paragraph.add_run(str(effective_patch_text or ""))
     font = run.font
     font.name = _workspace_export_docx_font_name(str(style.get("font_name", "")))
     font.size = Pt(
@@ -5527,6 +5807,100 @@ def _workspace_export_replace_docx_paragraph_text(paragraph, patch_text: str) ->
     font.bold = bool(style.get("bold", False))
     font.italic = bool(style.get("italic", False))
     run.underline = bool(style.get("underline", False))
+
+
+def _workspace_export_build_patched_runs(
+    original_runs: List[Dict[str, Any]],
+    effective_patch_text: str,
+) -> List[Dict[str, Any]]:
+    normalized_runs = [
+        {
+            "text": str(run.get("text", "") or ""),
+            "font_name": _clean_text(run.get("font_name")),
+            "font_size": float(run.get("font_size", 11.0) or 11.0),
+            "bold": bool(run.get("bold", False)),
+            "italic": bool(run.get("italic", False)),
+            "underline": bool(run.get("underline", False)),
+        }
+        for run in list(original_runs or [])
+        if str(run.get("text", "") or "")
+    ]
+
+    if not normalized_runs:
+        return [
+            {
+                "text": str(effective_patch_text or ""),
+                "font_name": "",
+                "font_size": 11.0,
+                "bold": False,
+                "italic": False,
+                "underline": False,
+            }
+        ]
+
+    first_run = normalized_runs[0]
+    if not _workspace_export_is_bullet_only_run_text(first_run.get("text", "")):
+        replacement = dict(first_run)
+        replacement["text"] = str(effective_patch_text or "")
+        return [replacement]
+
+    body_style_source = next(
+        (
+            run
+            for run in normalized_runs[1:]
+            if _clean_text(run.get("text"))
+        ),
+        first_run,
+    )
+
+    stripped_patch_text = _workspace_export_strip_leading_bullet_text(
+        effective_patch_text
+    )
+
+    bullet_run = dict(first_run)
+
+    if not stripped_patch_text:
+        return [bullet_run]
+
+    body_run = dict(body_style_source)
+    body_run["text"] = f" {stripped_patch_text}"
+    return [bullet_run, body_run]
+
+def _workspace_export_replace_docx_paragraph_text(paragraph, patch_text: str) -> None:
+    normalized_patch_text = _workspace_export_restore_original_lead_word(
+        paragraph.text,
+        patch_text,
+    )
+    effective_patch_text = _workspace_export_preserve_bullet_prefix(
+        paragraph.text,
+        normalized_patch_text,
+    )
+
+    original_runs = [
+        {
+            "text": str(run.text or ""),
+            **_workspace_export_run_style_payload(run),
+        }
+        for run in list(paragraph.runs)
+        if str(run.text or "")
+    ]
+
+    patched_runs = _workspace_export_build_patched_runs(
+        original_runs,
+        effective_patch_text,
+    )
+
+    _workspace_export_clear_docx_paragraph_content(paragraph)
+
+    for run_payload in patched_runs:
+        run_text = _workspace_export_clean_docx_text(
+            str(run_payload.get("text", "") or "")
+        )
+        if not run_text:
+            continue
+
+        run = paragraph.add_run(run_text)
+        _workspace_export_apply_docx_run_style(run, run_payload)
 
 
 def _apply_workspace_export_patch_specs_to_docx(
@@ -5621,6 +5995,10 @@ def _build_workspace_export_docx_with_pdf2docx_bootstrap(
         patch_result = _apply_workspace_export_patch_specs_to_docx(
             temp_output_path,
             patch_specs,
+        )
+
+        _workspace_export_normalize_docx_bootstrap_header(
+            temp_output_path,
         )
 
         if _workspace_export_docx_has_merged_bullet_paragraphs(temp_output_path):
@@ -5721,27 +6099,11 @@ def export_tailoring_workspace_draft_payload(
     export_strategy_note = ""
 
     if export_format == "word":
-        try:
-            bootstrap_patch_result = _build_workspace_export_docx_with_pdf2docx_bootstrap(
-                resume_pdf_path=resume_pdf_path,
-                patch_specs=patch_specs,
-                output_path=output_path,
-            )
-            patch_result = {
-                "applied_candidate_ids": list(
-                    bootstrap_patch_result.get("applied_candidate_ids", []) or []
-                ),
-                "unresolved_candidate_ids": list(
-                    bootstrap_patch_result.get("unresolved_candidate_ids", []) or []
-                ),
-            }
-            export_strategy = str(
-                bootstrap_patch_result.get("strategy", "pdf2docx_bootstrap")
-            )
-        except Exception as exc:
-            _build_workspace_export_docx(exported_pages, output_path)
-            export_strategy = "native_docx_fallback"
-            export_strategy_note = f"{exc.__class__.__name__}: {exc}"
+        _build_workspace_export_docx(exported_pages, output_path)
+        _workspace_export_normalize_docx_bootstrap_header(output_path)
+        export_strategy = "native_docx_word_reflow"
+        export_strategy_note = ""
+
     else:
         _build_workspace_export_pdf(exported_pages, output_path)
 

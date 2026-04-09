@@ -24,3 +24,4 @@ uvicorn
 pymupdf 
 reportlab 
 python-docx
+pdf2docx

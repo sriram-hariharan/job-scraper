@@ -676,6 +676,9 @@ function setTailoringWorkspacePreviewMode(mode) {
   const pdfScroller = qs("tailoringWorkspacePdfScroller");
   const pdfPages = qs("tailoringWorkspacePdfPages");
   const previewEmpty = qs("tailoringWorkspacePreviewEmpty");
+  const zoomOutBtn = qs("tailoringWorkspaceZoomOutBtn");
+  const zoomResetBtn = qs("tailoringWorkspaceZoomResetBtn");
+  const zoomInBtn = qs("tailoringWorkspaceZoomInBtn");
 
   if (liveDraftRoot) {
     liveDraftRoot.classList.toggle("hidden", nextMode !== "edit");
@@ -684,6 +687,12 @@ function setTailoringWorkspacePreviewMode(mode) {
   if (pdfScroller) {
     pdfScroller.classList.toggle("hidden", nextMode !== "pdf");
   }
+
+  [zoomOutBtn, zoomResetBtn, zoomInBtn].forEach((btn) => {
+    if (!btn) return;
+    btn.classList.toggle("hidden", nextMode === "edit");
+    btn.disabled = nextMode === "edit";
+  });
 
   if (nextMode === "edit") {
     scheduleTailoringWorkspaceDocumentPreview({ immediate: true });
@@ -3669,6 +3678,92 @@ async function loadTailoringWorkspaceDraft() {
   });
 }
 
+function splitTailoringWorkspaceInlineLabelText(text) {
+  const value = String(text || "").trim();
+  const match = value.match(/^([^:]{1,120}:)\s+(.*)$/);
+  if (!match) return null;
+
+  return {
+    label: match[1],
+    value: match[2],
+  };
+}
+
+function buildTailoringWorkspaceDocumentPreviewRequest() {
+  const context = getTailoringWorkspaceContext();
+  const payload = getTailoringWorkspacePayload();
+
+  if (!context || !context.tailoringJsonPath) {
+    return null;
+  }
+
+  return {
+    tailoring_json_path: context.tailoringJsonPath,
+    selected_resume: context.resumeName,
+    selected_patch_candidate_ids: getTailoringWorkspaceSelectedCandidateIds(),
+    manual_bullet_edits: normalizeTailoringWorkspaceManualBulletEdits(
+      tailoringWorkspaceState.manualBulletEdits || {},
+      payload
+    ),
+  };
+}
+
+async function fetchTailoringWorkspaceDocumentPreview() {
+  const requestBody = buildTailoringWorkspaceDocumentPreviewRequest();
+  if (!requestBody) {
+    tailoringWorkspaceState.documentPreviewPayload = null;
+    renderTailoringWorkspaceLiveDraftPreviewInto();
+    return;
+  }
+
+  const requestSeq = ++tailoringWorkspaceState.documentPreviewRequestSeq;
+  tailoringWorkspaceState.isDocumentPreviewLoading = true;
+  renderTailoringWorkspaceLiveDraftPreviewInto();
+
+  try {
+    const response = await postJson(
+      "/planning/render-workspace-draft-preview",
+      requestBody
+    );
+
+    if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
+    tailoringWorkspaceState.documentPreviewPayload = response;
+  } catch (err) {
+    if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
+    tailoringWorkspaceState.documentPreviewPayload = {
+      ok: false,
+      preview_status: "failed",
+      error_message:
+        err instanceof Error
+          ? err.message
+          : "Failed to render working draft preview.",
+      pages: [],
+    };
+  } finally {
+    if (requestSeq === tailoringWorkspaceState.documentPreviewRequestSeq) {
+      tailoringWorkspaceState.isDocumentPreviewLoading = false;
+      renderTailoringWorkspaceLiveDraftPreviewInto();
+    }
+  }
+}
+
+function scheduleTailoringWorkspaceDocumentPreview({ immediate = false } = {}) {
+  if (tailoringWorkspaceState.documentPreviewTimer) {
+    window.clearTimeout(tailoringWorkspaceState.documentPreviewTimer);
+    tailoringWorkspaceState.documentPreviewTimer = null;
+  }
+
+  if (immediate) {
+    void fetchTailoringWorkspaceDocumentPreview();
+    return;
+  }
+
+  tailoringWorkspaceState.documentPreviewTimer = window.setTimeout(() => {
+    tailoringWorkspaceState.documentPreviewTimer = null;
+    void fetchTailoringWorkspaceDocumentPreview();
+  }, 180);
+}
+
 function buildTailoringWorkspaceDocumentPreviewRequest() {
   const context = getTailoringWorkspaceContext();
   const payload = getTailoringWorkspacePayload();
@@ -3941,7 +4036,232 @@ function getTailoringWorkspaceDocumentPreviewMeta() {
 }
 
 function stripTailoringWorkspaceLeadingBullet(text) {
-  return String(text || "").replace(/^[•▪◦·-]\s*/, "").trim();
+  return String(text || "")
+    .replace(/^[\s\u200b\u200c\u200d\ufeff]+/, "")
+    .replace(/^(?:[●•▪◦·-][\s\u200b\u200c\u200d\ufeff]*)+/, "")
+    .replace(/^[\s\u200b\u200c\u200d\ufeff]+/, "")
+    .trim();
+}
+
+function splitTailoringWorkspaceInlineLabelText(text) {
+  const value = String(text || "").trim();
+  const match = value.match(/^([^:]{1,80}:)\s+(.*)$/);
+  if (!match) return null;
+
+  return {
+    label: match[1],
+    value: match[2],
+  };
+}
+
+function normalizeTailoringWorkspaceFlowText(text) {
+  return String(text || "")
+    .replace(/[\u00a0\u200b\u200c\u200d\ufeff]/g, " ")
+    .replace(/\s*[\r\n]+\s*/g, " ")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
+function splitTailoringWorkspaceInlineLabelBlocks(text) {
+  const clean = normalizeTailoringWorkspaceFlowText(text);
+  if (!clean) return [];
+
+  const multiLabelMatches = clean.match(/\b[A-Z][A-Za-z0-9&/,+()\- ]{1,80}:\s+/g) || [];
+  const hasMultipleLabels = multiLabelMatches.length > 1;
+
+  if (!hasMultipleLabels) {
+    const singleBlock = splitTailoringWorkspaceInlineLabelText(clean);
+    if (singleBlock) {
+      return [singleBlock];
+    }
+  }
+
+  const segmented = clean.replace(
+    /\s+(?=[A-Z][A-Za-z0-9&/,+()\- ]{1,80}:\s+)/g,
+    "\n"
+  );
+
+  return segmented
+    .split(/\n+/)
+    .map((block) => block.trim())
+    .filter(Boolean)
+    .map((block) => splitTailoringWorkspaceInlineLabelText(block))
+    .filter(Boolean);
+}
+
+function getTailoringWorkspaceSectionKeyFromRow(row) {
+  if (!row || !row.is_section_heading) return "";
+  return normalizeTailoringWorkspaceFlowText(String(row.text || ""))
+    .replace(/\s+/g, " ")
+    .trim()
+    .toUpperCase();
+}
+
+function isTailoringWorkspaceRenderableTextRow(row) {
+  if (!row) return false;
+  if (String(row.kind || "").trim() === "paired_row") return false;
+  const text = normalizeTailoringWorkspaceFlowText(String(row.text || ""));
+  return Boolean(text);
+}
+
+function isLikelyTailoringWorkspaceBulletContinuation(
+  previousRow,
+  currentRow,
+  currentSection,
+  nextRow
+) {
+  if (!previousRow || !currentRow) return false;
+  if (!previousRow.is_bullet) return false;
+  if (currentRow.is_bullet || currentRow.is_section_heading) return false;
+  if (String(currentRow.kind || "").trim() === "paired_row") return false;
+
+  const sectionKey = String(currentSection || "").trim().toUpperCase();
+  if (!sectionKey) return false;
+  if (sectionKey === "SKILLS" || sectionKey === "ACADEMIC PROJECTS") return false;
+
+  const currentText = normalizeTailoringWorkspaceFlowText(String(currentRow.text || ""));
+  if (!currentText) return false;
+
+  const nextIsBullet = Boolean(nextRow && nextRow.is_bullet);
+  if (nextIsBullet) return false;
+
+  const gapBefore = Number(currentRow.gap_before || 0);
+  if (gapBefore > 10) return false;
+
+  if (/^[A-Z][A-Za-z0-9&/,+()\- ]{1,80}:\s*/.test(currentText)) {
+    return false;
+  }
+
+  return true;
+}
+
+function isLikelyTailoringWorkspaceSkillsContinuation(
+  previousRow,
+  currentRow,
+  currentSection
+) {
+  if (!previousRow || !currentRow) return false;
+  if (String(currentSection || "").trim().toUpperCase() !== "SKILLS") return false;
+  if (String(previousRow.presentation_role || "").trim() !== "skills_line") return false;
+  if (currentRow.is_bullet || currentRow.is_section_heading) return false;
+  if (String(currentRow.kind || "").trim() === "paired_row") return false;
+
+  const currentText = normalizeTailoringWorkspaceFlowText(String(currentRow.text || ""));
+  if (!currentText) return false;
+  if (/:\s*/.test(currentText)) return false;
+
+  const gapBefore = Number(currentRow.gap_before || 0);
+  if (gapBefore > 8) return false;
+
+  return true;
+}
+
+function buildTailoringWorkspacePreviewPresentationRows(rows) {
+  const sourceRows = Array.isArray(rows) ? rows : [];
+  const presentedRows = [];
+  let currentSection = "";
+  let sawFirstSectionHeading = false;
+  let preSectionTextCount = 0;
+
+  for (let index = 0; index < sourceRows.length; index += 1) {
+    const row = sourceRows[index];
+    if (!row || typeof row !== "object") continue;
+
+    const cloned = { ...row };
+    const nextRow = sourceRows[index + 1] || null;
+    const previousPresentedRow =
+      presentedRows.length > 0 ? presentedRows[presentedRows.length - 1] : null;
+
+    const sectionKey = getTailoringWorkspaceSectionKeyFromRow(cloned);
+    if (sectionKey) {
+      currentSection = sectionKey;
+      sawFirstSectionHeading = true;
+      cloned.presentation_role = "";
+      presentedRows.push(cloned);
+      continue;
+    }
+
+    if (
+      isLikelyTailoringWorkspaceSkillsContinuation(
+        previousPresentedRow,
+        cloned,
+        currentSection
+      )
+    ) {
+      const prevText = normalizeTailoringWorkspaceFlowText(
+        String(previousPresentedRow.text || "")
+      );
+      const nextText = normalizeTailoringWorkspaceFlowText(String(cloned.text || ""));
+      previousPresentedRow.text = `${prevText} ${nextText}`.trim();
+      previousPresentedRow.patched = Boolean(
+        previousPresentedRow.patched || cloned.patched
+      );
+      if (!previousPresentedRow.patch_source && cloned.patch_source) {
+        previousPresentedRow.patch_source = cloned.patch_source;
+      }
+      continue;
+    }
+
+    if (
+      isLikelyTailoringWorkspaceBulletContinuation(
+        previousPresentedRow,
+        cloned,
+        currentSection,
+        nextRow
+      )
+    ) {
+      const prevText = normalizeTailoringWorkspaceFlowText(
+        String(previousPresentedRow.text || "")
+      );
+      const nextText = normalizeTailoringWorkspaceFlowText(String(cloned.text || ""));
+      previousPresentedRow.text = `${prevText} ${nextText}`.trim();
+      previousPresentedRow.patched = Boolean(
+        previousPresentedRow.patched || cloned.patched
+      );
+      if (!previousPresentedRow.patch_source && cloned.patch_source) {
+        previousPresentedRow.patch_source = cloned.patch_source;
+      }
+      continue;
+    }
+
+    const isTextRow = isTailoringWorkspaceRenderableTextRow(cloned);
+    const nextIsBullet = Boolean(nextRow && nextRow.is_bullet);
+
+    cloned.presentation_role = "";
+
+    if (!sawFirstSectionHeading && isTextRow && !cloned.is_bullet) {
+      if (preSectionTextCount === 0) {
+        cloned.presentation_role = "header_name";
+        cloned.alignment = "center";
+      } else if (preSectionTextCount === 1) {
+        cloned.presentation_role = "header_contact";
+        cloned.alignment = "center";
+      }
+      preSectionTextCount += 1;
+    } else if (
+      currentSection === "ACADEMIC PROJECTS" &&
+      isTextRow &&
+      !cloned.is_bullet &&
+      !cloned.is_section_heading &&
+      nextIsBullet
+    ) {
+      cloned.presentation_role = "project_title";
+      cloned.alignment = "left";
+    } else if (
+      currentSection === "SKILLS" &&
+      isTextRow &&
+      !cloned.is_bullet &&
+      !cloned.is_section_heading &&
+      /:\s*/.test(normalizeTailoringWorkspaceFlowText(String(cloned.text || "")))
+    ) {
+      cloned.presentation_role = "skills_line";
+      cloned.alignment = "left";
+    }
+
+    presentedRows.push(cloned);
+  }
+
+  return presentedRows;
 }
 
 function renderTailoringWorkspaceStructuredRow(row) {
@@ -3951,22 +4271,32 @@ function renderTailoringWorkspaceStructuredRow(row) {
 
   if (kind === "paired_row") {
     return `
-      <div style="margin-top:${gapBefore}px; padding-left:${indent}px; display:flex; justify-content:space-between; gap:24px; align-items:flex-start; font-weight:600;">
-        <div style="flex:1; min-width:0;">${escapeHtml(String(row.left_text || ""))}</div>
-        <div style="flex:0 0 auto; text-align:right; white-space:nowrap;">${escapeHtml(String(row.right_text || ""))}</div>
+      <div class="tailoring-workspace-doc-paired-row" style="margin-top:${gapBefore}px; padding-left:${indent}px;">
+        <div class="tailoring-workspace-doc-paired-row-left">${escapeHtml(normalizeTailoringWorkspaceFlowText(String(row.left_text || "")))}</div>
+        <div class="tailoring-workspace-doc-paired-row-right">${escapeHtml(normalizeTailoringWorkspaceFlowText(String(row.right_text || "")))}</div>
       </div>
     `;
   }
 
-  const text = String(row?.text || "");
-  const alignment = String(row?.alignment || "left").trim();
+  const rawText = String(row?.text || "");
+  const normalizedText = normalizeTailoringWorkspaceFlowText(rawText);
+  const alignment = String(row?.alignment || "left").trim().toLowerCase();
   const patched = Boolean(row?.patched);
   const patchSource = String(row?.patch_source || "").trim();
   const isHeading = Boolean(row?.is_section_heading);
   const isBullet = Boolean(row?.is_bullet);
+  const presentationRole = String(row?.presentation_role || "").trim();
+
+  const inlineLabelBlocks =
+    !isHeading && !isBullet && alignment === "left"
+      ? splitTailoringWorkspaceInlineLabelBlocks(rawText)
+      : [];
 
   const extraClasses = [
     "tailoring-workspace-doc-line",
+    isHeading ? "tailoring-workspace-doc-line--heading" : "",
+    isBullet ? "tailoring-workspace-doc-line--bullet" : "",
+    presentationRole ? `tailoring-workspace-doc-line--${presentationRole}` : "",
     patched ? "tailoring-workspace-doc-line--changed" : "",
     patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
     patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",
@@ -3979,24 +4309,41 @@ function renderTailoringWorkspaceStructuredRow(row) {
         ? "text-align:right;"
         : "text-align:left;";
 
-  const contentHtml = isBullet
-    ? `
-      <div style="display:flex; align-items:flex-start; gap:8px; padding-left:${indent}px;">
-        <div style="width:10px; flex:0 0 10px; line-height:1.2;">•</div>
-        <div class="tailoring-workspace-doc-line-copy" style="flex:1; min-width:0;">${escapeHtml(stripTailoringWorkspaceLeadingBullet(text))}</div>
+  let contentHtml = "";
+
+  if (isBullet) {
+    contentHtml = `
+      <div class="tailoring-workspace-doc-bullet-row" style="padding-left:${indent}px;">
+        <div class="tailoring-workspace-doc-bullet-marker">•</div>
+        <div class="tailoring-workspace-doc-line-copy tailoring-workspace-doc-bullet-copy">${escapeHtml(normalizeTailoringWorkspaceFlowText(stripTailoringWorkspaceLeadingBullet(rawText)))}</div>
       </div>
-    `
-    : `
+    `;
+  } else if (inlineLabelBlocks.length) {
+    contentHtml = `
+      <div
+        class="tailoring-workspace-doc-line-copy tailoring-workspace-doc-multi-inline-label"
+        style="${alignStyle} padding-left:${alignment === "left" ? indent : 0}px;"
+      >
+        ${inlineLabelBlocks.map((block) => `
+          <div class="tailoring-workspace-doc-inline-label-row">
+            <span class="tailoring-workspace-doc-inline-label-prefix">${escapeHtml(block.label)}</span> ${escapeHtml(normalizeTailoringWorkspaceFlowText(block.value))}
+          </div>
+        `).join("")}
+      </div>
+    `;
+  } else {
+    contentHtml = `
       <div
         class="tailoring-workspace-doc-line-copy"
         style="${alignStyle} padding-left:${alignment === "left" ? indent : 0}px;"
-      >${escapeHtml(text)}</div>
+      >${escapeHtml(normalizedText)}</div>
     `;
+  }
 
   return `
     <div class="${extraClasses}" style="margin-top:${gapBefore}px;">
       ${contentHtml}
-      ${isHeading ? `<div style="margin-top:3px; border-bottom:2px solid rgba(255,255,255,0.16);"></div>` : ""}
+      ${isHeading ? `<div class="tailoring-workspace-doc-section-rule"></div>` : ""}
     </div>
   `;
 }
@@ -4026,11 +4373,16 @@ function renderTailoringWorkspaceDocumentMirror() {
   }
 
   const showPageLabel = pages.length > 1;
-  const changedCount = pages.reduce(
+  const normalizedPages = pages.map((page) => ({
+    ...page,
+    presentation_rows: buildTailoringWorkspacePreviewPresentationRows(page.rows),
+  }));
+
+  const changedCount = normalizedPages.reduce(
     (count, page) =>
       count +
-      (Array.isArray(page.rows)
-        ? page.rows.filter((row) => row && row.patched).length
+      (Array.isArray(page.presentation_rows)
+        ? page.presentation_rows.filter((row) => row && row.patched).length
         : 0),
     0
   );
@@ -4042,18 +4394,8 @@ function renderTailoringWorkspaceDocumentMirror() {
         ${changedCount ? `${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
       </div>
 
-      ${pages.map((page) => `
-        <section
-          class="tailoring-workspace-doc-page"
-          style="
-            width: ${Math.max(420, Math.round(Number(page.width || 760)))}px;
-            min-height: ${Math.max(540, Math.round(Number(page.height || 980)))}px;
-            background: #fff;
-            color: #0f172a;
-            border-radius: 20px;
-            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
-          "
-        >
+      ${normalizedPages.map((page) => `
+        <section class="tailoring-workspace-doc-page">
           ${showPageLabel ? `
             <div class="tailoring-workspace-doc-page-header">
               <span class="tailoring-workspace-doc-page-number">
@@ -4063,7 +4405,7 @@ function renderTailoringWorkspaceDocumentMirror() {
           ` : ""}
 
           <div class="tailoring-workspace-doc-page-body">
-            ${(Array.isArray(page.rows) ? page.rows : [])
+            ${(Array.isArray(page.presentation_rows) ? page.presentation_rows : [])
               .map((row) => renderTailoringWorkspaceStructuredRow(row))
               .join("")}
           </div>

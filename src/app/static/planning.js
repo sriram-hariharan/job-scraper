@@ -55,6 +55,10 @@ const tailoringWorkspaceState = {
   previewReadyKey: "",
   reviewTelemetryFilter: "",
   previewMode: "pdf",
+  documentPreviewPayload: null,
+  documentPreviewRequestSeq: 0,
+  documentPreviewTimer: null,
+  isDocumentPreviewLoading: false,
 };
 
 const tailoringWorkspacePdfState = {
@@ -682,7 +686,7 @@ function setTailoringWorkspacePreviewMode(mode) {
   }
 
   if (nextMode === "edit") {
-    renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+    scheduleTailoringWorkspaceDocumentPreview({ immediate: true });
     setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
     clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
   } else {
@@ -1897,7 +1901,7 @@ async function clearTailoringWorkspacePdfView(emptyText = "Resume preview is not
   tailoringWorkspacePdfState.isFitPage = true;
 
   if (getTailoringWorkspacePreviewMode() === "edit") {
-    renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+    renderTailoringWorkspaceLiveDraftPreviewInto();
   }
 
   setTailoringWorkspacePreviewMeta(emptyText);
@@ -1996,7 +2000,7 @@ async function renderTailoringWorkspacePdfPages() {
   syncTailoringWorkspaceLayoutToFirstPage();
 
   if (getTailoringWorkspacePreviewMode() === "edit") {
-    renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+    scheduleTailoringWorkspaceDocumentPreview({ immediate: true });
     setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
     return;
   }
@@ -3665,6 +3669,78 @@ async function loadTailoringWorkspaceDraft() {
   });
 }
 
+function buildTailoringWorkspaceDocumentPreviewRequest() {
+  const context = getTailoringWorkspaceContext();
+  const payload = getTailoringWorkspacePayload();
+
+  if (!context || !context.tailoringJsonPath) {
+    return null;
+  }
+
+  return {
+    tailoring_json_path: context.tailoringJsonPath,
+    selected_resume: context.resumeName,
+    selected_patch_candidate_ids: getTailoringWorkspaceSelectedCandidateIds(),
+    manual_bullet_edits: normalizeTailoringWorkspaceManualBulletEdits(
+      tailoringWorkspaceState.manualBulletEdits || {},
+      payload
+    ),
+  };
+}
+
+async function fetchTailoringWorkspaceDocumentPreview() {
+  const requestBody = buildTailoringWorkspaceDocumentPreviewRequest();
+  if (!requestBody) {
+    tailoringWorkspaceState.documentPreviewPayload = null;
+    renderTailoringWorkspaceLiveDraftPreviewInto();
+    return;
+  }
+
+  const requestSeq = ++tailoringWorkspaceState.documentPreviewRequestSeq;
+  tailoringWorkspaceState.isDocumentPreviewLoading = true;
+  renderTailoringWorkspaceLiveDraftPreviewInto();
+
+  try {
+    const response = await postJson(
+      "/planning/render-workspace-draft-preview",
+      requestBody
+    );
+
+    if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
+    tailoringWorkspaceState.documentPreviewPayload = response;
+  } catch (err) {
+    if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
+    tailoringWorkspaceState.documentPreviewPayload = {
+      ok: false,
+      preview_status: "failed",
+      error_message: err instanceof Error ? err.message : "Failed to render working draft preview.",
+      pages: [],
+    };
+  } finally {
+    if (requestSeq === tailoringWorkspaceState.documentPreviewRequestSeq) {
+      tailoringWorkspaceState.isDocumentPreviewLoading = false;
+      renderTailoringWorkspaceLiveDraftPreviewInto();
+    }
+  }
+}
+
+function scheduleTailoringWorkspaceDocumentPreview({ immediate = false } = {}) {
+  if (tailoringWorkspaceState.documentPreviewTimer) {
+    window.clearTimeout(tailoringWorkspaceState.documentPreviewTimer);
+    tailoringWorkspaceState.documentPreviewTimer = null;
+  }
+
+  if (immediate) {
+    void fetchTailoringWorkspaceDocumentPreview();
+    return;
+  }
+
+  tailoringWorkspaceState.documentPreviewTimer = window.setTimeout(() => {
+    tailoringWorkspaceState.documentPreviewTimer = null;
+    void fetchTailoringWorkspaceDocumentPreview();
+  }, 180);
+}
+
 function getTailoringWorkspaceSavedCandidateIds() {
   const payload = tailoringWorkspaceState.savedSelectionPayload;
   return normalizeTailoringWorkspaceCandidateIdList(
@@ -3856,87 +3932,114 @@ function buildTailoringWorkspaceWorkingDraftRows(payload) {
 }
 
 function getTailoringWorkspaceDocumentPreviewMeta() {
-  const pageCount = Array.isArray(tailoringWorkspacePdfState.pageTextIndex)
-    ? tailoringWorkspacePdfState.pageTextIndex.length
-    : 0;
+  const preview = tailoringWorkspaceState.documentPreviewPayload;
+  const pageCount = Number(preview?.page_count || 0);
 
   return pageCount
     ? `Read-only reconstructed draft • ${pageCount} page${pageCount === 1 ? "" : "s"}`
     : "Read-only reconstructed draft";
 }
 
-function classifyTailoringWorkspaceDocumentLine(line) {
-  const text = String(line?.text || "").trim();
-  const left = Number(line?.bbox?.left || 0);
-
-  if (!text) return "body";
-  if (/^[•▪◦·]/.test(text)) return "bullet";
-
-  if (
-    (/^[A-Z0-9 /,&().-]{3,}$/.test(text) && text.length <= 64) ||
-    (left <= 36 && text.length <= 52 && !/[.!?:;]$/.test(text))
-  ) {
-    return "heading";
-  }
-
-  return "body";
+function stripTailoringWorkspaceLeadingBullet(text) {
+  return String(text || "").replace(/^[•▪◦·-]\s*/, "").trim();
 }
 
-function buildTailoringWorkspaceDocumentMirrorMatchMap(payload) {
-  const rows = buildTailoringWorkspaceWorkingDraftRows(payload);
-  const replacements = new Map();
+function renderTailoringWorkspaceStructuredRow(row) {
+  const kind = String(row?.kind || "").trim();
+  const gapBefore = Math.max(0, Math.min(28, Number(row?.gap_before || 0)));
+  const indent = Math.max(0, Math.min(240, Number(row?.left_indent_pt || 0)));
 
-  rows.forEach((row) => {
-    const hasVisibleChange =
-      String(row.currentText || "").trim() !== String(row.originalText || "").trim() ||
-      row.hasSelectedPatch ||
-      row.hasManualEdit;
-
-    if (!hasVisibleChange) return;
-
-    const match = findTailoringWorkspaceBestPdfMatch(
-      row.originalText || row.baseText || row.currentText || ""
-    );
-    if (!match) return;
-
-    const matchKey = `${match.pageNumber}:${match.lineId}`;
-    const existing = replacements.get(matchKey);
-
-    if (existing && Number(existing.matchScore || 0) >= Number(match.score || 0)) {
-      return;
-    }
-
-    replacements.set(matchKey, {
-      ...row,
-      matchScore: match.score || 0,
-    });
-  });
-
-  return replacements;
-}
-
-function renderTailoringWorkspaceDocumentMirror(payload) {
-  const pages = Array.isArray(tailoringWorkspacePdfState.pageTextIndex)
-    ? tailoringWorkspacePdfState.pageTextIndex
-    : [];
-
-  if (!pages.length) {
+  if (kind === "paired_row") {
     return `
-      <div class="tailoring-empty-state">
-        Document mirror is still loading from the PDF preview.
+      <div style="margin-top:${gapBefore}px; padding-left:${indent}px; display:flex; justify-content:space-between; gap:24px; align-items:flex-start; font-weight:600;">
+        <div style="flex:1; min-width:0;">${escapeHtml(String(row.left_text || ""))}</div>
+        <div style="flex:0 0 auto; text-align:right; white-space:nowrap;">${escapeHtml(String(row.right_text || ""))}</div>
       </div>
     `;
   }
 
-  const replacements = buildTailoringWorkspaceDocumentMirrorMatchMap(payload);
-  const changedCount = Array.from(replacements.values()).length;
+  const text = String(row?.text || "");
+  const alignment = String(row?.alignment || "left").trim();
+  const patched = Boolean(row?.patched);
+  const patchSource = String(row?.patch_source || "").trim();
+  const isHeading = Boolean(row?.is_section_heading);
+  const isBullet = Boolean(row?.is_bullet);
+
+  const extraClasses = [
+    "tailoring-workspace-doc-line",
+    patched ? "tailoring-workspace-doc-line--changed" : "",
+    patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
+    patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",
+  ].filter(Boolean).join(" ");
+
+  const alignStyle =
+    alignment === "center"
+      ? "text-align:center;"
+      : alignment === "right"
+        ? "text-align:right;"
+        : "text-align:left;";
+
+  const contentHtml = isBullet
+    ? `
+      <div style="display:flex; align-items:flex-start; gap:8px; padding-left:${indent}px;">
+        <div style="width:10px; flex:0 0 10px; line-height:1.2;">•</div>
+        <div class="tailoring-workspace-doc-line-copy" style="flex:1; min-width:0;">${escapeHtml(stripTailoringWorkspaceLeadingBullet(text))}</div>
+      </div>
+    `
+    : `
+      <div
+        class="tailoring-workspace-doc-line-copy"
+        style="${alignStyle} padding-left:${alignment === "left" ? indent : 0}px;"
+      >${escapeHtml(text)}</div>
+    `;
+
+  return `
+    <div class="${extraClasses}" style="margin-top:${gapBefore}px;">
+      ${contentHtml}
+      ${isHeading ? `<div style="margin-top:3px; border-bottom:2px solid rgba(255,255,255,0.16);"></div>` : ""}
+    </div>
+  `;
+}
+
+function renderTailoringWorkspaceDocumentMirror() {
+  if (
+    tailoringWorkspaceState.isDocumentPreviewLoading &&
+    !tailoringWorkspaceState.documentPreviewPayload
+  ) {
+    return `
+      <div class="tailoring-empty-state">
+        Loading reconstructed draft preview...
+      </div>
+    `;
+  }
+
+  const preview = tailoringWorkspaceState.documentPreviewPayload;
+  const pages = Array.isArray(preview?.pages) ? preview.pages : [];
+
+  if (!pages.length) {
+    const errorMessage = String(preview?.error_message || "").trim();
+    return `
+      <div class="tailoring-empty-state">
+        ${escapeHtml(errorMessage || "Working draft preview is not available.")}
+      </div>
+    `;
+  }
+
   const showPageLabel = pages.length > 1;
+  const changedCount = pages.reduce(
+    (count, page) =>
+      count +
+      (Array.isArray(page.rows)
+        ? page.rows.filter((row) => row && row.patched).length
+        : 0),
+    0
+  );
 
   return `
     <div class="tailoring-workspace-doc-mirror">
-      <div class="tailoring-workspace-doc-mirror-note">
-        Read-only reconstructed draft. Changes from the left pane appear here immediately and persist after Save.
-        ${changedCount ? `${changedCount} changed bullet${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
+      <div class="tailoring-workspace-doc-mirror-note" style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
+        Read-only reconstructed draft from the export model. Changes from the left pane appear here immediately and match the downloadable Word/PDF output.
+        ${changedCount ? `${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
       </div>
 
       ${pages.map((page) => `
@@ -3945,55 +4048,24 @@ function renderTailoringWorkspaceDocumentMirror(payload) {
           style="
             width: ${Math.max(420, Math.round(Number(page.width || 760)))}px;
             min-height: ${Math.max(540, Math.round(Number(page.height || 980)))}px;
+            background: #fff;
+            color: #0f172a;
+            border-radius: 20px;
+            box-shadow: 0 18px 48px rgba(15, 23, 42, 0.22);
           "
         >
           ${showPageLabel ? `
             <div class="tailoring-workspace-doc-page-header">
               <span class="tailoring-workspace-doc-page-number">
-                Page ${escapeHtml(String(page.pageNumber || ""))}
+                Page ${escapeHtml(String(page.page_number || ""))}
               </span>
             </div>
           ` : ""}
 
           <div class="tailoring-workspace-doc-page-body">
-            ${(Array.isArray(page.lines) ? page.lines : []).map((line, index, allLines) => {
-              const prevLine = index > 0 ? allLines[index - 1] : null;
-              const rawGap = prevLine
-                ? Number(line?.bbox?.top || 0) -
-                  (Number(prevLine?.bbox?.top || 0) + Number(prevLine?.bbox?.height || 0))
-                : Math.max(0, Number(line?.bbox?.top || 0) - 16);
-
-              const gapBefore = Math.max(0, Math.min(28, Math.round(rawGap)));
-              const indent = Math.max(0, Math.min(240, Math.round(Number(line?.bbox?.left || 0))));
-              const lineRole = classifyTailoringWorkspaceDocumentLine(line);
-              const replacement = replacements.get(`${page.pageNumber}:${line.lineId}`);
-              const displayText = replacement
-                ? String(replacement.currentText || replacement.originalText || line.text || "")
-                : String(line?.text || "");
-
-              const classes = [
-                "tailoring-workspace-doc-line",
-                `tailoring-workspace-doc-line--${lineRole}`,
-              ];
-
-              if (replacement) {
-                classes.push("tailoring-workspace-doc-line--changed");
-                if (replacement.hasManualEdit) {
-                  classes.push("tailoring-workspace-doc-line--manual");
-                } else if (replacement.hasSelectedPatch) {
-                  classes.push("tailoring-workspace-doc-line--selected");
-                }
-              }
-
-              return `
-                <div class="${classes.join(" ")}" style="margin-top: ${gapBefore}px;">
-                  <div
-                    class="tailoring-workspace-doc-line-copy"
-                    style="padding-left: ${indent}px;"
-                  >${escapeHtml(displayText)}</div>
-                </div>
-              `;
-            }).join("")}
+            ${(Array.isArray(page.rows) ? page.rows : [])
+              .map((row) => renderTailoringWorkspaceStructuredRow(row))
+              .join("")}
           </div>
         </section>
       `).join("")}
@@ -4001,33 +4073,11 @@ function renderTailoringWorkspaceDocumentMirror(payload) {
   `;
 }
 
-function renderTailoringWorkspaceLiveDraftPreview(payload) {
-  const safePayload = payload && typeof payload === "object" ? payload : null;
-  if (!safePayload) {
-    return `
-      <div class="tailoring-empty-state">
-        Working draft preview is not available.
-      </div>
-    `;
-  }
-
-  const rows = buildTailoringWorkspaceWorkingDraftRows(safePayload);
-  if (!rows.length) {
-    return `
-      <div class="tailoring-empty-state">
-        No surfaced draft bullets available yet.
-      </div>
-    `;
-  }
-
-  return renderTailoringWorkspaceDocumentMirror(safePayload);
-}
-
-function renderTailoringWorkspaceLiveDraftPreviewInto(payload) {
+function renderTailoringWorkspaceLiveDraftPreviewInto() {
   const root = qs("tailoringWorkspaceLiveDraftPreview");
   if (!root) return;
 
-  root.innerHTML = renderTailoringWorkspaceLiveDraftPreview(payload);
+  root.innerHTML = renderTailoringWorkspaceDocumentMirror();
 }
 
 function getTailoringWorkspaceEditableBulletBaseMap(payload) {
@@ -5040,7 +5090,7 @@ function rerenderTailoringWorkspaceSelectionView() {
     );
   }
 
-  renderTailoringWorkspaceLiveDraftPreviewInto(payload);
+  scheduleTailoringWorkspaceDocumentPreview();
   updateTailoringWorkspaceMetaSummary(payload);
   refreshTailoringWorkspaceSelectionPanels();
 }
@@ -5051,6 +5101,13 @@ function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = nu
   tailoringWorkspaceState.activeInlineScoreKey = "";
   tailoringWorkspaceState.activeReviewEditCandidateId = "";
   tailoringWorkspaceState.previewMode = "pdf";
+  tailoringWorkspaceState.documentPreviewPayload = null;
+  tailoringWorkspaceState.documentPreviewRequestSeq = 0;
+  tailoringWorkspaceState.isDocumentPreviewLoading = false;
+  if (tailoringWorkspaceState.documentPreviewTimer) {
+    window.clearTimeout(tailoringWorkspaceState.documentPreviewTimer);
+    tailoringWorkspaceState.documentPreviewTimer = null;
+  }
 
   const payload =
     artifact && artifact.kind === "json" && artifact.data && typeof artifact.data === "object"
@@ -5235,7 +5292,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
       tailoringWorkspaceState.activeInlineScoreKey = bulletKey;
 
       syncTailoringWorkspaceReviewDecisionFromTextarea(bulletKey);
-      renderTailoringWorkspaceLiveDraftPreviewInto(getTailoringWorkspacePayload());
+      scheduleTailoringWorkspaceDocumentPreview();
       updateTailoringWorkspaceMetaSummary(getTailoringWorkspacePayload());
       refreshTailoringWorkspaceInlineScoreControls();
       updateTailoringWorkspaceSelectionActionBar();

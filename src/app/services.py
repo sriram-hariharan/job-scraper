@@ -7181,26 +7181,172 @@ def _convert_workspace_docx_to_pdf_with_soffice(
             output_path.unlink()
         converted_path.replace(output_path)
 
-def export_tailoring_workspace_draft_payload(
+def _workspace_export_preview_pages_payload(
+    exported_pages: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    pages_out: List[Dict[str, Any]] = []
+
+    for page in list(exported_pages or []):
+        page_width = float(page.get("width") or 612.0)
+        page_height = float(page.get("height") or 792.0)
+
+        page_paragraphs: List[Dict[str, Any]] = []
+        for block in list(page.get("blocks", []) or []):
+            for paragraph in list(block.get("paragraphs", []) or []):
+                page_paragraphs.append(dict(paragraph))
+
+        page_paragraphs.sort(
+            key=lambda paragraph: (
+                round(float(paragraph.get("top", 0.0) or 0.0), 2),
+                round(float(paragraph.get("left", 0.0) or 0.0), 2),
+                0 if _clean_text(paragraph.get("row_side")) == "left" else 1,
+            )
+        )
+
+        rows: List[Dict[str, Any]] = []
+        idx = 0
+
+        while idx < len(page_paragraphs):
+            paragraph = page_paragraphs[idx]
+            text = _workspace_export_clean_docx_text(
+                _clean_text(paragraph.get("text"))
+            )
+            if not text:
+                idx += 1
+                continue
+
+            row_kind = _clean_text(paragraph.get("row_kind"))
+            row_group_id = _clean_text(paragraph.get("row_group_id"))
+
+            if row_kind == "paired_row" and row_group_id:
+                row_items = [paragraph]
+                scan = idx + 1
+                while scan < len(page_paragraphs):
+                    candidate = page_paragraphs[scan]
+                    if _clean_text(candidate.get("row_group_id")) != row_group_id:
+                        break
+                    row_items.append(candidate)
+                    scan += 1
+
+                left_item = next(
+                    (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
+                    row_items[0],
+                )
+                right_item = next(
+                    (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
+                    row_items[-1],
+                )
+
+                rows.append({
+                    "kind": "paired_row",
+                    "gap_before": float(
+                        max(
+                            float(left_item.get("gap_before") or 0.0),
+                            float(right_item.get("gap_before") or 0.0),
+                        )
+                    ),
+                    "left_indent_pt": float(left_item.get("left_indent_pt") or 0.0),
+                    "left_text": _workspace_export_clean_docx_text(
+                        _clean_text(left_item.get("text"))
+                    ),
+                    "right_text": _workspace_export_clean_docx_text(
+                        _clean_text(right_item.get("text"))
+                    ),
+                })
+                idx = scan
+                continue
+
+            alignment = _clean_text(paragraph.get("alignment")).lower() or "left"
+
+            rows.append({
+                "kind": "paragraph",
+                "text": text,
+                "alignment": alignment,
+                "gap_before": float(paragraph.get("gap_before") or 0.0),
+                "left_indent_pt": float(paragraph.get("left_indent_pt") or 0.0),
+                "is_heading": bool(paragraph.get("is_heading")),
+                "is_section_heading": _workspace_export_is_section_heading_text(text),
+                "is_bullet": bool(paragraph.get("is_bullet")),
+                "patched": bool(paragraph.get("patched")),
+                "patch_source": _clean_text(paragraph.get("patch_source")),
+            })
+            idx += 1
+
+        pages_out.append({
+            "page_number": int(page.get("page_number") or len(pages_out) + 1),
+            "width": page_width,
+            "height": page_height,
+            "rows": rows,
+        })
+
+    return pages_out
+
+
+def render_tailoring_workspace_draft_preview_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
     tailoring_json_path: str = "",
     selected_resume: str = "",
-    format: str = "pdf",
+    selected_patch_candidate_ids: Any = None,
+    manual_bullet_edits: Any = None,
 ) -> Dict[str, Any]:
-    export_format = _normalize_workspace_export_format(format)
+    context = _build_tailoring_workspace_export_context(
+        output_dir=output_dir,
+        tailoring_json_path=tailoring_json_path,
+        selected_resume=selected_resume,
+        selected_patch_candidate_ids=selected_patch_candidate_ids,
+        manual_bullet_edits=manual_bullet_edits,
+        require_saved_draft=False,
+    )
 
+    pages_payload = _workspace_export_preview_pages_payload(
+        context["exported_pages"]
+    )
+
+    return {
+        "ok": True,
+        "preview_status": "rendered",
+        "draft_status": _clean_text(
+            context["draft_response"].get("draft_status")
+        ),
+        "has_saved_draft": bool(
+            context["draft_response"].get("has_saved_draft", False)
+        ),
+        "selected_resume": context["selected_resume"],
+        "selected_patch_candidate_ids": list(
+            context["selected_patch_candidate_ids"]
+        ),
+        "workspace_patch_count": len(context["patch_specs"]),
+        "page_count": len(pages_payload),
+        "pages": pages_payload,
+        "unresolved_candidate_ids": list(
+            context["patch_result"].get("unresolved_candidate_ids", []) or []
+        ),
+        "unresolved_manual_edit_keys": list(
+            context["unresolved_manual_edit_keys"]
+        ),
+    }
+
+def _build_tailoring_workspace_export_context(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    selected_patch_candidate_ids: Any = None,
+    manual_bullet_edits: Any = None,
+    require_saved_draft: bool = False,
+) -> Dict[str, Any]:
     draft_response = load_tailoring_workspace_draft_payload(
         output_dir=output_dir,
         tailoring_json_path=tailoring_json_path,
         selected_resume=selected_resume,
     )
 
-    if not bool(draft_response.get("has_saved_draft", False)):
-        raise ValueError("Save a tailored draft before exporting.")
-
-    if _clean_text(draft_response.get("draft_status")) != "saved":
-        raise ValueError("Only a saved tailoring workspace draft can be exported.")
+    if require_saved_draft:
+        if not bool(draft_response.get("has_saved_draft", False)):
+            raise ValueError("Save a tailored draft before exporting.")
+        if _clean_text(draft_response.get("draft_status")) != "saved":
+            raise ValueError("Only a saved tailoring workspace draft can be exported.")
 
     draft = dict(draft_response.get("draft", {}) or {})
     artifact_path = _resolve_planning_artifact_path(
@@ -7226,12 +7372,39 @@ def export_tailoring_workspace_draft_payload(
         or _sanitize_optional_resume_filename(draft.get("selected_resume"))
     )
     if not effective_selected_resume:
-        raise ValueError("Saved workspace draft is missing selected_resume.")
+        raise ValueError("Workspace draft is missing selected_resume.")
+
+    effective_selected_candidate_ids = _normalize_selected_patch_candidate_ids(
+        draft.get("selected_patch_candidate_ids", [])
+        if selected_patch_candidate_ids is None
+        else selected_patch_candidate_ids
+    )
+    if not effective_selected_candidate_ids:
+        effective_selected_candidate_ids = _default_selected_candidate_ids_from_replacement_plan(
+            payload_data
+        )
+
+    effective_manual_bullet_edits = _normalize_workspace_manual_bullet_edits(
+        draft.get("manual_bullet_edits", {})
+        if manual_bullet_edits is None
+        else manual_bullet_edits
+    )
+
+    valid_candidate_ids = set(_tailoring_artifact_candidate_ids(payload_data))
+    unknown_candidate_ids = [
+        candidate_id
+        for candidate_id in effective_selected_candidate_ids
+        if candidate_id not in valid_candidate_ids
+    ]
+    if unknown_candidate_ids:
+        raise ValueError(
+            f"Unknown candidate IDs for this artifact: {', '.join(sorted(unknown_candidate_ids))}"
+        )
 
     patch_specs, unresolved_manual_keys = _build_tailoring_workspace_effective_patch_specs(
         payload_data,
-        selected_candidate_ids=draft.get("selected_patch_candidate_ids", []),
-        manual_bullet_edits=draft.get("manual_bullet_edits", {}),
+        selected_candidate_ids=effective_selected_candidate_ids,
+        manual_bullet_edits=effective_manual_bullet_edits,
     )
 
     resume_pdf_path = planning_resume_preview_path(effective_selected_resume)
@@ -7243,6 +7416,192 @@ def export_tailoring_workspace_draft_payload(
         exported_pages,
         patch_specs,
     )
+
+    return {
+        "draft_response": draft_response,
+        "draft": draft,
+        "artifact_path": artifact_path,
+        "payload_data": payload_data,
+        "selected_resume": effective_selected_resume,
+        "selected_patch_candidate_ids": effective_selected_candidate_ids,
+        "manual_bullet_edits": effective_manual_bullet_edits,
+        "patch_specs": patch_specs,
+        "unresolved_manual_edit_keys": list(unresolved_manual_keys or []),
+        "resume_pdf_path": resume_pdf_path,
+        "exported_pages": exported_pages,
+        "patch_result": patch_result,
+    }
+
+def _workspace_export_preview_pages_payload(
+    exported_pages: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    pages_out: List[Dict[str, Any]] = []
+
+    for page in list(exported_pages or []):
+        page_width = float(page.get("width") or 612.0)
+        page_height = float(page.get("height") or 792.0)
+
+        page_paragraphs: List[Dict[str, Any]] = []
+        for block in list(page.get("blocks", []) or []):
+            for paragraph in list(block.get("paragraphs", []) or []):
+                page_paragraphs.append(dict(paragraph))
+
+        page_paragraphs.sort(
+            key=lambda paragraph: (
+                round(float(paragraph.get("top", 0.0) or 0.0), 2),
+                round(float(paragraph.get("left", 0.0) or 0.0), 2),
+                0 if _clean_text(paragraph.get("row_side")) == "left" else 1,
+            )
+        )
+
+        rows: List[Dict[str, Any]] = []
+        idx = 0
+
+        while idx < len(page_paragraphs):
+            paragraph = page_paragraphs[idx]
+            text = _workspace_export_clean_docx_text(
+                _clean_text(paragraph.get("text"))
+            )
+            if not text:
+                idx += 1
+                continue
+
+            row_kind = _clean_text(paragraph.get("row_kind"))
+            row_group_id = _clean_text(paragraph.get("row_group_id"))
+
+            if row_kind == "paired_row" and row_group_id:
+                row_items = [paragraph]
+                scan = idx + 1
+                while scan < len(page_paragraphs):
+                    candidate = page_paragraphs[scan]
+                    if _clean_text(candidate.get("row_group_id")) != row_group_id:
+                        break
+                    row_items.append(candidate)
+                    scan += 1
+
+                left_item = next(
+                    (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
+                    row_items[0],
+                )
+                right_item = next(
+                    (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
+                    row_items[-1],
+                )
+
+                rows.append({
+                    "kind": "paired_row",
+                    "gap_before": float(
+                        max(
+                            float(left_item.get("gap_before") or 0.0),
+                            float(right_item.get("gap_before") or 0.0),
+                        )
+                    ),
+                    "left_indent_pt": float(left_item.get("left_indent_pt") or 0.0),
+                    "left_text": _workspace_export_clean_docx_text(
+                        _clean_text(left_item.get("text"))
+                    ),
+                    "right_text": _workspace_export_clean_docx_text(
+                        _clean_text(right_item.get("text"))
+                    ),
+                })
+                idx = scan
+                continue
+
+            alignment = _clean_text(paragraph.get("alignment")).lower() or "left"
+
+            rows.append({
+                "kind": "paragraph",
+                "text": text,
+                "alignment": alignment,
+                "gap_before": float(paragraph.get("gap_before") or 0.0),
+                "left_indent_pt": float(paragraph.get("left_indent_pt") or 0.0),
+                "is_heading": bool(paragraph.get("is_heading")),
+                "is_section_heading": _workspace_export_is_section_heading_text(text),
+                "is_bullet": bool(paragraph.get("is_bullet")),
+                "patched": bool(paragraph.get("patched")),
+                "patch_source": _clean_text(paragraph.get("patch_source")),
+            })
+            idx += 1
+
+        pages_out.append({
+            "page_number": int(page.get("page_number") or len(pages_out) + 1),
+            "width": page_width,
+            "height": page_height,
+            "rows": rows,
+        })
+
+    return pages_out
+
+
+def render_tailoring_workspace_draft_preview_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    selected_patch_candidate_ids: Any = None,
+    manual_bullet_edits: Any = None,
+) -> Dict[str, Any]:
+    context = _build_tailoring_workspace_export_context(
+        output_dir=output_dir,
+        tailoring_json_path=tailoring_json_path,
+        selected_resume=selected_resume,
+        selected_patch_candidate_ids=selected_patch_candidate_ids,
+        manual_bullet_edits=manual_bullet_edits,
+        require_saved_draft=False,
+    )
+
+    pages_payload = _workspace_export_preview_pages_payload(
+        context["exported_pages"]
+    )
+
+    return {
+        "ok": True,
+        "preview_status": "rendered",
+        "draft_status": _clean_text(
+            context["draft_response"].get("draft_status")
+        ),
+        "has_saved_draft": bool(
+            context["draft_response"].get("has_saved_draft", False)
+        ),
+        "selected_resume": context["selected_resume"],
+        "selected_patch_candidate_ids": list(
+            context["selected_patch_candidate_ids"]
+        ),
+        "workspace_patch_count": len(context["patch_specs"]),
+        "page_count": len(pages_payload),
+        "pages": pages_payload,
+        "unresolved_candidate_ids": list(
+            context["patch_result"].get("unresolved_candidate_ids", []) or []
+        ),
+        "unresolved_manual_edit_keys": list(
+            context["unresolved_manual_edit_keys"]
+        ),
+    }
+
+def export_tailoring_workspace_draft_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    format: str = "pdf",
+) -> Dict[str, Any]:
+    export_format = _normalize_workspace_export_format(format)
+
+    context = _build_tailoring_workspace_export_context(
+        output_dir=output_dir,
+        tailoring_json_path=tailoring_json_path,
+        selected_resume=selected_resume,
+        require_saved_draft=True,
+    )
+
+    draft_response = dict(context["draft_response"])
+    draft = dict(context["draft"])
+    patch_specs = list(context["patch_specs"])
+    unresolved_manual_keys = list(context["unresolved_manual_edit_keys"])
+    effective_selected_resume = _clean_text(context["selected_resume"])
+    resume_pdf_path = Path(context["resume_pdf_path"])
+    exported_pages = list(context["exported_pages"])
+    patch_result = dict(context["patch_result"])
 
     output_path, filename, media_type = _workspace_export_output_path(
         output_dir,

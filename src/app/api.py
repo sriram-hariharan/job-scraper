@@ -57,6 +57,12 @@ class PlanningWorkspaceDraftPreviewRequest(BaseModel):
     manual_bullet_edits: dict[str, str] | None = None
     rewrite_review_decisions: dict[str, dict[str, str] | str] | None = None
 
+class PlanningWorkspaceDraftRenderRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+    selected_patch_candidate_ids: list[str] | None = None
+    manual_bullet_edits: dict[str, str] | None = None
+
 class PlanningWorkspaceDraftExportRequest(BaseModel):
     tailoring_json_path: str
     selected_resume: str = ""
@@ -630,6 +636,22 @@ def preview_workspace_draft(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+@app.post("/planning/render-workspace-draft-preview")
+def render_workspace_draft_preview(
+    request: PlanningWorkspaceDraftRenderRequest,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
+    try:
+        return services.render_tailoring_workspace_draft_preview_payload(
+            output_dir=Path(output_dir),
+            tailoring_json_path=request.tailoring_json_path,
+            selected_resume=request.selected_resume,
+            selected_patch_candidate_ids=request.selected_patch_candidate_ids,
+            manual_bullet_edits=request.manual_bullet_edits,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.post("/planning/export-workspace-draft")
 def export_workspace_draft(
     request: PlanningWorkspaceDraftExportRequest,

@@ -7135,11 +7135,9 @@ function renderPlanningRows(rows, metaLabel) {
 
 async function loadPlanningTable() {
   const tbody = qs("planningTableBody");
+  if (!tbody) return;
 
-  if (tbody) {
-    tbody.innerHTML = "";
-  }
-
+  tbody.innerHTML = "";
   window.setTableWrapLoading?.(tbody, "Loading planning rows...");
   qs("planningTableMeta").textContent = "Loading...";
 

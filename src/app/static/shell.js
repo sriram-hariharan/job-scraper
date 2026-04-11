@@ -227,6 +227,9 @@ function setTableWrapLoading(target, label = "Loading...") {
   const tableWrap = resolveTableWrap(target);
   if (!tableWrap) return;
 
+  tableWrap.scrollLeft = 0;
+  tableWrap.scrollTop = 0;
+
   const overlay = ensureTableWrapLoadingOverlay(tableWrap);
   const textEl = overlay.querySelector(".loading-text");
   if (textEl) {

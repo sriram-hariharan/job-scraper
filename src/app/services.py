@@ -4745,6 +4745,17 @@ def _workspace_export_line_starts_bullet(text: str) -> bool:
     clean = str(text or "").lstrip()
     return clean.startswith(("●", "•", "▪", "◦", "·", "-"))
 
+def _workspace_export_line_starts_strong_label(text: str) -> bool:
+    clean = _clean_text(text)
+    if not clean or len(clean) > 220:
+        return False
+
+    return bool(
+        re.match(
+            r"^(?:[A-Z0-9][A-Za-z0-9+#/&().-]*)(?:\s+(?:&|[A-Z0-9][A-Za-z0-9+#/&().-]*)){1,6}:\s+\S",
+            clean,
+        )
+    )
 
 def _workspace_export_line_is_contact(text: str) -> bool:
     clean = _clean_text(text).lower()
@@ -4797,8 +4808,13 @@ def _workspace_export_should_start_new_paragraph(
 
     previous_starts_bullet = _workspace_export_line_starts_bullet(previous_text)
     current_starts_bullet = _workspace_export_line_starts_bullet(current_text)
+    previous_starts_strong_label = _workspace_export_line_starts_strong_label(previous_text)
+    current_starts_strong_label = _workspace_export_line_starts_strong_label(current_text)
 
     if current_starts_bullet:
+        return True
+
+    if current_starts_strong_label:
         return True
 
     previous_font_size = float(previous_line.get("font_size", 11.0) or 11.0)
@@ -7181,152 +7197,6 @@ def _convert_workspace_docx_to_pdf_with_soffice(
             output_path.unlink()
         converted_path.replace(output_path)
 
-def _workspace_export_preview_pages_payload(
-    exported_pages: List[Dict[str, Any]],
-) -> List[Dict[str, Any]]:
-    pages_out: List[Dict[str, Any]] = []
-
-    for page in list(exported_pages or []):
-        page_width = float(page.get("width") or 612.0)
-        page_height = float(page.get("height") or 792.0)
-
-        page_paragraphs: List[Dict[str, Any]] = []
-        for block in list(page.get("blocks", []) or []):
-            for paragraph in list(block.get("paragraphs", []) or []):
-                page_paragraphs.append(dict(paragraph))
-
-        page_paragraphs.sort(
-            key=lambda paragraph: (
-                round(float(paragraph.get("top", 0.0) or 0.0), 2),
-                round(float(paragraph.get("left", 0.0) or 0.0), 2),
-                0 if _clean_text(paragraph.get("row_side")) == "left" else 1,
-            )
-        )
-
-        rows: List[Dict[str, Any]] = []
-        idx = 0
-
-        while idx < len(page_paragraphs):
-            paragraph = page_paragraphs[idx]
-            text = _workspace_export_clean_docx_text(
-                _clean_text(paragraph.get("text"))
-            )
-            if not text:
-                idx += 1
-                continue
-
-            row_kind = _clean_text(paragraph.get("row_kind"))
-            row_group_id = _clean_text(paragraph.get("row_group_id"))
-
-            if row_kind == "paired_row" and row_group_id:
-                row_items = [paragraph]
-                scan = idx + 1
-                while scan < len(page_paragraphs):
-                    candidate = page_paragraphs[scan]
-                    if _clean_text(candidate.get("row_group_id")) != row_group_id:
-                        break
-                    row_items.append(candidate)
-                    scan += 1
-
-                left_item = next(
-                    (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
-                    row_items[0],
-                )
-                right_item = next(
-                    (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
-                    row_items[-1],
-                )
-
-                rows.append({
-                    "kind": "paired_row",
-                    "gap_before": float(
-                        max(
-                            float(left_item.get("gap_before") or 0.0),
-                            float(right_item.get("gap_before") or 0.0),
-                        )
-                    ),
-                    "left_indent_pt": float(left_item.get("left_indent_pt") or 0.0),
-                    "left_text": _workspace_export_clean_docx_text(
-                        _clean_text(left_item.get("text"))
-                    ),
-                    "right_text": _workspace_export_clean_docx_text(
-                        _clean_text(right_item.get("text"))
-                    ),
-                })
-                idx = scan
-                continue
-
-            alignment = _clean_text(paragraph.get("alignment")).lower() or "left"
-
-            rows.append({
-                "kind": "paragraph",
-                "text": text,
-                "alignment": alignment,
-                "gap_before": float(paragraph.get("gap_before") or 0.0),
-                "left_indent_pt": float(paragraph.get("left_indent_pt") or 0.0),
-                "is_heading": bool(paragraph.get("is_heading")),
-                "is_section_heading": _workspace_export_is_section_heading_text(text),
-                "is_bullet": bool(paragraph.get("is_bullet")),
-                "patched": bool(paragraph.get("patched")),
-                "patch_source": _clean_text(paragraph.get("patch_source")),
-            })
-            idx += 1
-
-        pages_out.append({
-            "page_number": int(page.get("page_number") or len(pages_out) + 1),
-            "width": page_width,
-            "height": page_height,
-            "rows": rows,
-        })
-
-    return pages_out
-
-
-def render_tailoring_workspace_draft_preview_payload(
-    output_dir: Path = DEFAULT_OUTPUT_DIR,
-    *,
-    tailoring_json_path: str = "",
-    selected_resume: str = "",
-    selected_patch_candidate_ids: Any = None,
-    manual_bullet_edits: Any = None,
-) -> Dict[str, Any]:
-    context = _build_tailoring_workspace_export_context(
-        output_dir=output_dir,
-        tailoring_json_path=tailoring_json_path,
-        selected_resume=selected_resume,
-        selected_patch_candidate_ids=selected_patch_candidate_ids,
-        manual_bullet_edits=manual_bullet_edits,
-        require_saved_draft=False,
-    )
-
-    pages_payload = _workspace_export_preview_pages_payload(
-        context["exported_pages"]
-    )
-
-    return {
-        "ok": True,
-        "preview_status": "rendered",
-        "draft_status": _clean_text(
-            context["draft_response"].get("draft_status")
-        ),
-        "has_saved_draft": bool(
-            context["draft_response"].get("has_saved_draft", False)
-        ),
-        "selected_resume": context["selected_resume"],
-        "selected_patch_candidate_ids": list(
-            context["selected_patch_candidate_ids"]
-        ),
-        "workspace_patch_count": len(context["patch_specs"]),
-        "page_count": len(pages_payload),
-        "pages": pages_payload,
-        "unresolved_candidate_ids": list(
-            context["patch_result"].get("unresolved_candidate_ids", []) or []
-        ),
-        "unresolved_manual_edit_keys": list(
-            context["unresolved_manual_edit_keys"]
-        ),
-    }
-
 def _build_tailoring_workspace_export_context(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
@@ -7432,6 +7302,146 @@ def _build_tailoring_workspace_export_context(
         "patch_result": patch_result,
     }
 
+def _workspace_export_preview_row_from_paragraph(
+    paragraph: Dict[str, Any],
+    *,
+    text: str,
+    gap_before: float | None = None,
+) -> Dict[str, Any]:
+    clean_text = _workspace_export_clean_docx_text(_clean_text(text))
+    alignment = _clean_text(paragraph.get("alignment")).lower() or "left"
+
+    return {
+        "kind": "paragraph",
+        "text": clean_text,
+        "alignment": alignment,
+        "gap_before": float(
+            paragraph.get("gap_before") if gap_before is None else gap_before
+        ),
+        "left_indent_pt": float(paragraph.get("left_indent_pt") or 0.0),
+        "is_heading": bool(paragraph.get("is_heading")),
+        "is_section_heading": _workspace_export_is_section_heading_text(clean_text),
+        "is_bullet": bool(paragraph.get("is_bullet")),
+        "patched": bool(paragraph.get("patched")),
+        "patch_source": _clean_text(paragraph.get("patch_source")),
+    }
+
+
+def _workspace_export_split_skills_preview_rows(
+    paragraph: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    def _build_split_rows(segment_texts: List[str]) -> List[Dict[str, Any]]:
+        split_rows: List[Dict[str, Any]] = []
+
+        for segment_index, segment_text in enumerate(segment_texts):
+            clean_segment_text = _workspace_export_clean_docx_text(
+                _clean_text(segment_text)
+            )
+            if not clean_segment_text or ":" not in clean_segment_text:
+                return []
+
+            split_rows.append(
+                _workspace_export_preview_row_from_paragraph(
+                    paragraph,
+                    text=clean_segment_text,
+                    gap_before=float(paragraph.get("gap_before") or 0.0)
+                    if segment_index == 0
+                    else 6.0,
+                )
+            )
+
+        return split_rows
+
+    raw_runs = list(paragraph.get("runs", []) or [])
+    if raw_runs:
+        merged_runs: List[Dict[str, Any]] = []
+        for run in raw_runs:
+            run_text = _workspace_export_clean_docx_text(
+                str(run.get("text", "") or "")
+            )
+            if not run_text:
+                continue
+
+            is_bold = bool(run.get("bold", False))
+
+            if merged_runs and bool(merged_runs[-1]["bold"]) == is_bold:
+                merged_runs[-1]["text"] = f'{merged_runs[-1]["text"]}{run_text}'
+            else:
+                merged_runs.append({
+                    "text": run_text,
+                    "bold": is_bold,
+                })
+
+        segments: List[List[Dict[str, Any]]] = []
+        current_segment: List[Dict[str, Any]] = []
+        current_segment_has_value_text = False
+
+        for run in merged_runs:
+            run_text = _workspace_export_clean_docx_text(run["text"])
+            is_bold = bool(run["bold"])
+
+            starts_new_label = (
+                is_bold
+                and ":" in run_text
+                and bool(current_segment)
+                and current_segment_has_value_text
+            )
+
+            if starts_new_label:
+                segments.append(current_segment)
+                current_segment = [{
+                    "text": run_text,
+                    "bold": is_bold,
+                }]
+                current_segment_has_value_text = False
+                continue
+
+            current_segment.append({
+                "text": run_text,
+                "bold": is_bold,
+            })
+
+            if not is_bold and _clean_text(run_text):
+                current_segment_has_value_text = True
+
+        if current_segment:
+            segments.append(current_segment)
+
+        if len(segments) > 1:
+            run_based_segment_texts = [
+                _workspace_export_clean_docx_text(
+                    "".join(str(item.get("text", "") or "") for item in segment)
+                )
+                for segment in segments
+            ]
+            run_based_rows = _build_split_rows(run_based_segment_texts)
+            if run_based_rows:
+                return run_based_rows
+
+    clean_text = _workspace_export_clean_docx_text(
+        _clean_text(paragraph.get("text"))
+    )
+    if not clean_text or ":" not in clean_text:
+        return []
+
+    label_pattern = re.compile(
+        r"(?<!\S)([A-Z0-9][A-Za-z0-9+#/&().-]*(?:\s+(?:&|[A-Z0-9][A-Za-z0-9+#/&().-]*)){1,6}:)\s+"
+    )
+    matches = list(label_pattern.finditer(clean_text))
+
+    if len(matches) <= 1:
+        return []
+
+    text_based_segment_texts: List[str] = []
+    for idx, match in enumerate(matches):
+        start = match.start()
+        end = matches[idx + 1].start() if idx + 1 < len(matches) else len(clean_text)
+        segment_text = clean_text[start:end].strip()
+        if segment_text:
+            text_based_segment_texts.append(segment_text)
+
+    return _build_split_rows(text_based_segment_texts)
+
 def _workspace_export_preview_pages_payload(
     exported_pages: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
@@ -7455,6 +7465,7 @@ def _workspace_export_preview_pages_payload(
         )
 
         rows: List[Dict[str, Any]] = []
+        current_section = ""
         idx = 0
 
         while idx < len(page_paragraphs):
@@ -7507,20 +7518,29 @@ def _workspace_export_preview_pages_payload(
                 idx = scan
                 continue
 
-            alignment = _clean_text(paragraph.get("alignment")).lower() or "left"
+            is_section_heading = _workspace_export_is_section_heading_text(text)
 
-            rows.append({
-                "kind": "paragraph",
-                "text": text,
-                "alignment": alignment,
-                "gap_before": float(paragraph.get("gap_before") or 0.0),
-                "left_indent_pt": float(paragraph.get("left_indent_pt") or 0.0),
-                "is_heading": bool(paragraph.get("is_heading")),
-                "is_section_heading": _workspace_export_is_section_heading_text(text),
-                "is_bullet": bool(paragraph.get("is_bullet")),
-                "patched": bool(paragraph.get("patched")),
-                "patch_source": _clean_text(paragraph.get("patch_source")),
-            })
+            if (
+                current_section == "SKILLS"
+                and not is_section_heading
+                and not bool(paragraph.get("is_bullet"))
+            ):
+                split_skill_rows = _workspace_export_split_skills_preview_rows(paragraph)
+                if split_skill_rows:
+                    rows.extend(split_skill_rows)
+                    idx += 1
+                    continue
+
+            rows.append(
+                _workspace_export_preview_row_from_paragraph(
+                    paragraph,
+                    text=text,
+                )
+            )
+
+            if is_section_heading:
+                current_section = text.upper()
+
             idx += 1
 
         pages_out.append({

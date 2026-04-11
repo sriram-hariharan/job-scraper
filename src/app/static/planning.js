@@ -4063,30 +4063,177 @@ function normalizeTailoringWorkspaceFlowText(text) {
 }
 
 function splitTailoringWorkspaceInlineLabelBlocks(text) {
-  const clean = normalizeTailoringWorkspaceFlowText(text);
-  if (!clean) return [];
+  const rawValue = String(text || "");
+  if (!rawValue.trim()) return [];
 
-  const multiLabelMatches = clean.match(/\b[A-Z][A-Za-z0-9&/,+()\- ]{1,80}:\s+/g) || [];
-  const hasMultipleLabels = multiLabelMatches.length > 1;
+  const startLabelPattern =
+    /^([A-Z0-9][A-Za-z0-9&/()+-]*(?:\s+(?:&|[A-Z0-9][A-Za-z0-9&/()+-]*)){0,7}:)\s+(.*)$/;
 
-  if (!hasMultipleLabels) {
-    const singleBlock = splitTailoringWorkspaceInlineLabelText(clean);
-    if (singleBlock) {
-      return [singleBlock];
+  const appendToLastBlock = (blocks, extraText) => {
+    const cleanExtraText = normalizeTailoringWorkspaceFlowText(extraText);
+    if (!cleanExtraText || !blocks.length) return;
+    blocks[blocks.length - 1].value =
+      `${blocks[blocks.length - 1].value} ${cleanExtraText}`.trim();
+  };
+
+  const isLikelyInlineLabelCandidate = (candidate) => {
+    const cleanCandidate = String(candidate || "").trim();
+    if (!cleanCandidate.endsWith(":")) return false;
+
+    const labelBody = cleanCandidate.slice(0, -1).trim();
+    if (!labelBody) return false;
+
+    const tokens = labelBody.split(/\s+/).filter(Boolean);
+    const wordTokens = tokens.filter((token) => token !== "&");
+
+    if (wordTokens.length < 2 || wordTokens.length > 4) return false;
+    if (
+      !tokens.every(
+        (token) => token === "&" || /^[A-Z0-9][A-Za-z0-9/()+-]*$/.test(token)
+      )
+    ) {
+      return false;
     }
+
+    const ampIndex = tokens.indexOf("&");
+    if (ampIndex >= 0) {
+      const beforeAmpCount = tokens
+        .slice(0, ampIndex)
+        .filter((token) => token !== "&").length;
+      const afterAmpCount = tokens
+        .slice(ampIndex + 1)
+        .filter((token) => token !== "&").length;
+
+      if (beforeAmpCount < 1 || beforeAmpCount > 2) return false;
+      if (afterAmpCount < 1 || afterAmpCount > 2) return false;
+    }
+
+    return true;
+  };
+
+  const findNextInlineLabelBoundary = (textValue) => {
+    const normalizedValue = normalizeTailoringWorkspaceFlowText(textValue);
+    if (!normalizedValue) return null;
+
+    let best = null;
+
+    for (let colonIndex = 0; colonIndex < normalizedValue.length; colonIndex += 1) {
+      if (normalizedValue[colonIndex] !== ":") continue;
+      if (
+        colonIndex + 1 < normalizedValue.length &&
+        !/\s/.test(normalizedValue[colonIndex + 1])
+      ) {
+        continue;
+      }
+
+      const windowStart = Math.max(0, colonIndex - 84);
+
+      for (let start = windowStart; start <= colonIndex; start += 1) {
+        if (start > 0 && !/\s/.test(normalizedValue[start - 1])) continue;
+
+        const candidate = normalizedValue.slice(start, colonIndex + 1).trim();
+        if (!isLikelyInlineLabelCandidate(candidate)) continue;
+
+        const wordCount = candidate
+          .slice(0, -1)
+          .split(/\s+/)
+          .filter((token) => token && token !== "&").length;
+        const hasAmpersand = candidate.includes("&");
+        const score = wordCount * 10 + (hasAmpersand ? 4 : 0) - candidate.length * 0.01;
+
+        if (!best || score > best.score || (score === best.score && start > best.start)) {
+          best = {
+            start,
+            label: candidate,
+            score,
+          };
+        }
+      }
+
+      if (best) {
+        return {
+          start: best.start,
+          label: best.label,
+        };
+      }
+    }
+
+    return null;
+  };
+
+  const pushStartLabelLine = (normalizedLine, blocks) => {
+    let remaining = normalizedLine;
+
+    while (remaining) {
+      const startMatch = remaining.match(startLabelPattern);
+      if (!startMatch) {
+        appendToLastBlock(blocks, remaining);
+        return;
+      }
+
+      const currentLabel = startMatch[1];
+      const currentValue = normalizeTailoringWorkspaceFlowText(startMatch[2]);
+      const nextBoundary = findNextInlineLabelBoundary(currentValue);
+
+      if (!nextBoundary) {
+        blocks.push({
+          label: currentLabel,
+          value: currentValue,
+        });
+        return;
+      }
+
+      blocks.push({
+        label: currentLabel,
+        value: normalizeTailoringWorkspaceFlowText(
+          currentValue.slice(0, nextBoundary.start)
+        ),
+      });
+
+      remaining = normalizeTailoringWorkspaceFlowText(
+        currentValue.slice(nextBoundary.start)
+      );
+    }
+  };
+
+  const consumeNormalizedLine = (normalizedLine, blocks) => {
+    if (!normalizedLine) return;
+
+    const startMatch = normalizedLine.match(startLabelPattern);
+    if (startMatch) {
+      pushStartLabelLine(normalizedLine, blocks);
+      return;
+    }
+
+    const boundary = findNextInlineLabelBoundary(normalizedLine);
+    if (!boundary) {
+      appendToLastBlock(blocks, normalizedLine);
+      return;
+    }
+
+    appendToLastBlock(blocks, normalizedLine.slice(0, boundary.start));
+    pushStartLabelLine(
+      normalizeTailoringWorkspaceFlowText(normalizedLine.slice(boundary.start)),
+      blocks
+    );
+  };
+
+  const blocks = [];
+  rawValue
+    .split(/\r?\n+/)
+    .map((line) => normalizeTailoringWorkspaceFlowText(line))
+    .filter(Boolean)
+    .forEach((line) => {
+      consumeNormalizedLine(line, blocks);
+    });
+
+  if (blocks.length > 1) {
+    return blocks.filter((block) => block && block.label);
   }
 
-  const segmented = clean.replace(
-    /\s+(?=[A-Z][A-Za-z0-9&/,+()\- ]{1,80}:\s+)/g,
-    "\n"
-  );
-
-  return segmented
-    .split(/\n+/)
-    .map((block) => block.trim())
-    .filter(Boolean)
-    .map((block) => splitTailoringWorkspaceInlineLabelText(block))
-    .filter(Boolean);
+  const flattenedBlocks = [];
+  consumeNormalizedLine(normalizeTailoringWorkspaceFlowText(rawValue), flattenedBlocks);
+  return flattenedBlocks.filter((block) => block && block.label);
 }
 
 function getTailoringWorkspaceSectionKeyFromRow(row) {
@@ -4150,8 +4297,12 @@ function isLikelyTailoringWorkspaceSkillsContinuation(
   if (!currentText) return false;
   if (/:\s*/.test(currentText)) return false;
 
+  const previousIndent = Number(previousRow.left_indent_pt || 0);
+  const currentIndent = Number(currentRow.left_indent_pt || 0);
   const gapBefore = Number(currentRow.gap_before || 0);
-  if (gapBefore > 8) return false;
+
+  if (currentIndent <= previousIndent + 2) return false;
+  if (gapBefore > 6) return false;
 
   return true;
 }
@@ -4286,17 +4437,20 @@ function renderTailoringWorkspaceStructuredRow(row) {
   const isHeading = Boolean(row?.is_section_heading);
   const isBullet = Boolean(row?.is_bullet);
   const presentationRole = String(row?.presentation_role || "").trim();
+  const normalizedPresentationRole = presentationRole.replace(/_/g, "-");
 
   const inlineLabelBlocks =
     !isHeading && !isBullet && alignment === "left"
-      ? splitTailoringWorkspaceInlineLabelBlocks(rawText)
+      ? [splitTailoringWorkspaceInlineLabelText(rawText)].filter(Boolean)
       : [];
 
   const extraClasses = [
     "tailoring-workspace-doc-line",
     isHeading ? "tailoring-workspace-doc-line--heading" : "",
     isBullet ? "tailoring-workspace-doc-line--bullet" : "",
-    presentationRole ? `tailoring-workspace-doc-line--${presentationRole}` : "",
+    normalizedPresentationRole
+      ? `tailoring-workspace-doc-line--${normalizedPresentationRole}`
+      : "",
     patched ? "tailoring-workspace-doc-line--changed" : "",
     patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
     patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",

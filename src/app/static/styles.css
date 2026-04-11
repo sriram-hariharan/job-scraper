@@ -5493,20 +5493,27 @@ th.sortable-col {
   text-transform: uppercase;
 }
 
-.tailoring-workspace-doc-line--header-name .tailoring-workspace-doc-line-copy {
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--header-name,
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--header-name .tailoring-workspace-doc-line-copy {
   color: #111827;
-  font-size: 14pt;
+  font-size: 16pt;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.12;
   letter-spacing: 0;
 }
 
-.tailoring-workspace-doc-line--header-contact .tailoring-workspace-doc-line-copy {
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--header-contact {
+  margin-bottom: 6pt;
+}
+
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--header-contact,
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--header-contact .tailoring-workspace-doc-line-copy {
   font-size: 10pt;
   line-height: 1.3;
 }
 
-.tailoring-workspace-doc-line--project-title .tailoring-workspace-doc-line-copy {
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--project-title,
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--project-title .tailoring-workspace-doc-line-copy {
   font-size: 10pt;
   font-weight: 800;
   line-height: 1.3;

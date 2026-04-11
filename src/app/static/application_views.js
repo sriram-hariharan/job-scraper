@@ -246,19 +246,6 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
-function renderTableLoading(colspan, label) {
-  return `
-    <tr>
-      <td colspan="${colspan}">
-        <div class="loading-state">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">${escapeHtml(label)}</div>
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
 const APPLICATION_TAB_CONFIG = {
   APPLIED: {
     endpoint: "/applied-jobs",
@@ -460,6 +447,7 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
     if (table) {
       renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
     }
+    window.clearTableWrapLoading?.(tbody);
     return;
   }
 
@@ -488,42 +476,53 @@ function renderApplicationRows(rows, metaLabel, emptyLabel) {
   if (table) {
     renderSortableHeaders(table.id, APPLICATION_SORT_COLUMNS, applicationTableState.sort);
   }
+  window.clearTableWrapLoading?.(tbody);
 }
 
 async function loadApplicationView() {
   const config = getCurrentApplicationConfig();
   const tbody = qs("applicationTableBody");
 
-  tbody.innerHTML = renderTableLoading(7, `Loading ${config.pageLabel.toLowerCase()}...`);
+  window.setTableWrapLoading?.(tbody, `Loading ${config.pageLabel.toLowerCase()}...`);
   qs("applicationTableMeta").textContent = "Loading...";
   qs("applicationTableTitle").textContent = config.pageLabel;
 
-  const url = buildApplicationListUrl();
-  const data = await fetchJson(url);
+  const paginationMeta = qs("applicationPaginationMeta");
+  const paginationActions = qs("applicationPaginationActions");
+  if (paginationMeta) paginationMeta.textContent = "Loading...";
+  if (paginationActions) paginationActions.innerHTML = "";
 
-  const rawPageSize = data.page_size ?? 15;
-  const parsedPageSize = Number(rawPageSize);
-  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
+  try {
+    const url = buildApplicationListUrl();
+    const data = await fetchJson(url);
 
-  const totalCount = Number(data.total_count ?? data.count ?? 0);
-  updateApplicationViewStats(totalCount);
-  const totalPages = Number(data.total_pages ?? 1);
-  const currentPage = Number(data.page ?? applicationTableState.pagination.page ?? 1);
+    const rawPageSize = data.page_size ?? 15;
+    const parsedPageSize = Number(rawPageSize);
+    const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
 
-  applicationTableState.pagination = {
-    page: currentPage,
-    pageSize,
-    totalCount: Number.isFinite(totalCount) ? totalCount : 0,
-    totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
-    hasPrevPage: Boolean(data.has_prev_page),
-    hasNextPage: Boolean(data.has_next_page),
-  };
+    const totalCount = Number(data.total_count ?? data.count ?? 0);
+    updateApplicationViewStats(totalCount);
+    const totalPages = Number(data.total_pages ?? 1);
+    const currentPage = Number(data.page ?? applicationTableState.pagination.page ?? 1);
 
-  renderApplicationRows(
-    data.rows || [],
-    `${config.pageLabel} · ${totalCount} total job${totalCount === 1 ? "" : "s"}`,
-    config.emptyLabel
-  );
+    applicationTableState.pagination = {
+      page: currentPage,
+      pageSize,
+      totalCount: Number.isFinite(totalCount) ? totalCount : 0,
+      totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+      hasPrevPage: Boolean(data.has_prev_page),
+      hasNextPage: Boolean(data.has_next_page),
+    };
+
+    renderApplicationRows(
+      data.rows || [],
+      `${config.pageLabel} · ${totalCount} total job${totalCount === 1 ? "" : "s"}`,
+      config.emptyLabel
+    );
+  } catch (err) {
+    window.clearTableWrapLoading?.(tbody);
+    throw err;
+  }
 }
 
 function clearApplicationFilters() {

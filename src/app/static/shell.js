@@ -200,6 +200,58 @@ async function fetchJson(url, options = {}) {
   return payload;
 }
 
+function resolveTableWrap(target) {
+  if (!target) return null;
+  if (target.classList?.contains("table-wrap")) return target;
+  return target.closest?.(".table-wrap") || null;
+}
+
+function ensureTableWrapLoadingOverlay(tableWrap) {
+  let overlay = tableWrap.querySelector(".table-wrap-loading-overlay");
+  if (overlay) return overlay;
+
+  overlay = document.createElement("div");
+  overlay.className = "table-wrap-loading-overlay hidden";
+  overlay.innerHTML = `
+    <div class="loading-state">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">Loading...</div>
+    </div>
+  `;
+
+  tableWrap.appendChild(overlay);
+  return overlay;
+}
+
+function setTableWrapLoading(target, label = "Loading...") {
+  const tableWrap = resolveTableWrap(target);
+  if (!tableWrap) return;
+
+  const overlay = ensureTableWrapLoadingOverlay(tableWrap);
+  const textEl = overlay.querySelector(".loading-text");
+  if (textEl) {
+    textEl.textContent = label;
+  }
+
+  tableWrap.classList.add("table-wrap--loading");
+  overlay.classList.remove("hidden");
+}
+
+function clearTableWrapLoading(target) {
+  const tableWrap = resolveTableWrap(target);
+  if (!tableWrap) return;
+
+  tableWrap.classList.remove("table-wrap--loading");
+
+  const overlay = tableWrap.querySelector(".table-wrap-loading-overlay");
+  if (overlay) {
+    overlay.classList.add("hidden");
+  }
+}
+
+window.setTableWrapLoading = setTableWrapLoading;
+window.clearTableWrapLoading = clearTableWrapLoading;
+
 window.addEventListener("DOMContentLoaded", () => {
   const menuBtn = qs("appShellMenuBtn");
 

@@ -396,19 +396,6 @@ const DECISIONS_SORT_COLUMNS = [
   { key: "apply", label: "Apply", sortable: false },
 ];
 
-function renderTableLoading(colspan, label) {
-  return `
-    <tr>
-      <td colspan="${colspan}">
-        <div class="loading-state">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">${escapeHtml(label)}</div>
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
 function updateDecisionStats(shownCount, jobsTouched = null) {
   const safeShown = Number.isFinite(Number(shownCount)) ? Number(shownCount) : 0;
   const safeTouched = Number.isFinite(Number(jobsTouched)) ? Number(jobsTouched) : safeShown;
@@ -661,6 +648,7 @@ function renderDecisionRows(rows, metaLabel) {
     updateDecisionStats(0, 0);
     renderDecisionsPagination();
     renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
+    window.clearTableWrapLoading?.(tbody);
     return;
   }
 
@@ -692,30 +680,36 @@ function renderDecisionRows(rows, metaLabel) {
   qs("decisionsTableMeta").textContent = decisionsTableState.metaLabel;
   renderDecisionsPagination();
   renderSortableHeaders("decisionsTable", DECISIONS_SORT_COLUMNS, decisionsTableState.sort);
+  window.clearTableWrapLoading?.(tbody);
 }
 
 async function loadDecisionsTable(pageOverride = null) {
   const tbody = qs("decisionsTableBody");
-  tbody.innerHTML = renderTableLoading(12, "Loading decisions...");
+  window.setTableWrapLoading?.(tbody, "Loading decisions...");
   qs("decisionsTableMeta").textContent = "Loading...";
   const paginationMeta = qs("decisionsPaginationMeta");
   const paginationActions = qs("decisionsPaginationActions");
   if (paginationMeta) paginationMeta.textContent = "Loading...";
   if (paginationActions) paginationActions.innerHTML = "";
 
-  const targetPage = pageOverride ?? decisionsTableState.page ?? 1;
-  const url = buildDecisionsUrl(targetPage);
-  const data = await fetchJson(url);
+  try {
+    const targetPage = pageOverride ?? decisionsTableState.page ?? 1;
+    const url = buildDecisionsUrl(targetPage);
+    const data = await fetchJson(url);
 
-  applyDecisionsPaginationPayload(data);
+    applyDecisionsPaginationPayload(data);
 
-  const totalCount = data.total_count ?? data.count ?? 0;
-  updateDecisionStats(totalCount, totalCount);
+    const totalCount = data.total_count ?? data.count ?? 0;
+    updateDecisionStats(totalCount, totalCount);
 
-  renderDecisionRows(
-    data.rows || [],
-    `Decisions view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
-  );
+    renderDecisionRows(
+      data.rows || [],
+      `Decisions view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
+    );
+  } catch (err) {
+    window.clearTableWrapLoading?.(tbody);
+    throw err;
+  }
 }
 
 function clearDecisionFilters() {

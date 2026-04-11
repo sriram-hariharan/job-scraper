@@ -751,6 +751,37 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
+function renderTableLoading(colspan, label) {
+  return `
+    <tr>
+      <td colspan="${colspan}">
+        <div class="loading-state">
+          <div class="loading-spinner"></div>
+          <div class="loading-text">${escapeHtml(label)}</div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function setQueueLoadingState(label) {
+  const tbody = qs("queueTableBody");
+  if (!tbody) return;
+
+  renderQueueHeaders();
+
+  const colspan = state.executiveViewMode === "simple" ? 4 : 14;
+  tbody.innerHTML = renderTableLoading(colspan, label);
+
+  window.setTableWrapLoading?.(tbody, label);
+  qs("tableMeta").textContent = "Loading...";
+
+  const paginationMeta = qs("queuePaginationMeta");
+  const paginationActions = qs("queuePaginationActions");
+  if (paginationMeta) paginationMeta.textContent = "Loading...";
+  if (paginationActions) paginationActions.innerHTML = "";
+}
+
 async function postJson(url, payload) {
   return fetchJson(url, {
     method: "POST",
@@ -1822,6 +1853,7 @@ function renderQueueRows(rows, metaLabel) {
 
   qs("tableMeta").textContent = `${queueTableState.metaLabel} · ${modeLabel}`;
   renderQueuePagination();
+  window.clearTableWrapLoading?.(tbody);
   initResizableTableColumns("queueTable", "queueTableColumnWidths");
 }
 
@@ -1848,60 +1880,78 @@ async function loadStatus() {
 async function loadBrowse(pageOverride = null) {
   state.currentMode = "browse";
   state.workflowView = null;
+  setQueueLoadingState("Loading executive jobs...");
 
-  const targetPage = pageOverride ?? queueTableState.page ?? 1;
-  const url = buildBrowseUrl(targetPage);
-  const data = await fetchJson(url);
+  try {
+    const targetPage = pageOverride ?? queueTableState.page ?? 1;
+    const url = buildBrowseUrl(targetPage);
+    const data = await fetchJson(url);
 
-  applyQueuePaginationPayload(data);
+    applyQueuePaginationPayload(data);
 
-  const totalCount = data.total_count ?? data.count ?? 0;
+    const totalCount = data.total_count ?? data.count ?? 0;
 
-  renderQueueRows(
-    data.rows || [],
-    `Browse view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
-  );
+    renderQueueRows(
+      data.rows || [],
+      `Browse view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
+    );
+  } catch (err) {
+    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    throw err;
+  }
 }
 
 async function loadWorkflow(view) {
   state.currentMode = "workflow";
   state.workflowView = view;
+  setQueueLoadingState(`Loading ${String(view || "workflow").replaceAll("_", " ")}...`);
 
-  const limit = qs("limitInput").value || "25";
-  const params = new URLSearchParams({
-    view,
-    limit,
-  });
+  try {
+    const limit = qs("limitInput").value || "25";
+    const params = new URLSearchParams({
+      view,
+      limit,
+    });
 
-  const data = await fetchJson(`/workflow?${params.toString()}`);
-  applyQueuePaginationPayload(data);
+    const data = await fetchJson(`/workflow?${params.toString()}`);
+    applyQueuePaginationPayload(data);
 
-  const count = data.count ?? 0;
+    const count = data.count ?? 0;
 
-  renderQueueRows(
-    data.rows || [],
-    `Workflow view: ${view} · ${count} row${count === 1 ? "" : "s"}`
-  );
+    renderQueueRows(
+      data.rows || [],
+      `Workflow view: ${view} · ${count} row${count === 1 ? "" : "s"}`
+    );
+  } catch (err) {
+    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    throw err;
+  }
 }
 
 async function loadAppliedJobs(pageOverride = null) {
   state.currentMode = "applied_jobs";
   state.workflowView = null;
+  setQueueLoadingState("Loading applied jobs...");
 
-  const targetPage = pageOverride ?? queueTableState.page ?? 1;
-  const limit = qs("limitInput").value || "15";
-  const data = await fetchJson(
-    `/applied-jobs?limit=${encodeURIComponent(limit)}&page=${encodeURIComponent(targetPage)}`
-  );
+  try {
+    const targetPage = pageOverride ?? queueTableState.page ?? 1;
+    const limit = qs("limitInput").value || "15";
+    const data = await fetchJson(
+      `/applied-jobs?limit=${encodeURIComponent(limit)}&page=${encodeURIComponent(targetPage)}`
+    );
 
-  applyQueuePaginationPayload(data);
+    applyQueuePaginationPayload(data);
 
-  const totalCount = data.total_count ?? data.count ?? 0;
+    const totalCount = data.total_count ?? data.count ?? 0;
 
-  renderQueueRows(
-    data.rows || [],
-    `Applied jobs · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
-  );
+    renderQueueRows(
+      data.rows || [],
+      `Applied jobs · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
+    );
+  } catch (err) {
+    window.clearTableWrapLoading?.(qs("queueTableBody"));
+    throw err;
+  }
 }
 
 async function reloadCurrentTable(pageOverride = null) {
@@ -2207,6 +2257,8 @@ async function init() {
     bindTableSorting("queueTable", QUEUE_SORT_COLUMNS, queueTableState.sort, () => {
       renderQueueRows(queueTableState.rows, queueTableState.metaLabel);
     });
+
+    setQueueLoadingState("Loading executive jobs...");
 
     await loadStatus();
     await loadPipelineStatus();

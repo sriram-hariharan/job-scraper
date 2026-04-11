@@ -768,11 +768,8 @@ function setQueueLoadingState(label) {
   const tbody = qs("queueTableBody");
   if (!tbody) return;
 
+  tbody.innerHTML = "";
   renderQueueHeaders();
-
-  const colspan = state.executiveViewMode === "simple" ? 4 : 14;
-  tbody.innerHTML = renderTableLoading(colspan, label);
-
   window.setTableWrapLoading?.(tbody, label);
   qs("tableMeta").textContent = "Loading...";
 
@@ -1882,6 +1879,8 @@ async function loadBrowse(pageOverride = null) {
   state.workflowView = null;
   setQueueLoadingState("Loading executive jobs...");
 
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+
   try {
     const targetPage = pageOverride ?? queueTableState.page ?? 1;
     const url = buildBrowseUrl(targetPage);
@@ -1905,6 +1904,8 @@ async function loadWorkflow(view) {
   state.currentMode = "workflow";
   state.workflowView = view;
   setQueueLoadingState(`Loading ${String(view || "workflow").replaceAll("_", " ")}...`);
+
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
   try {
     const limit = qs("limitInput").value || "25";
@@ -1932,6 +1933,8 @@ async function loadAppliedJobs(pageOverride = null) {
   state.currentMode = "applied_jobs";
   state.workflowView = null;
   setQueueLoadingState("Loading applied jobs...");
+
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
   try {
     const targetPage = pageOverride ?? queueTableState.page ?? 1;

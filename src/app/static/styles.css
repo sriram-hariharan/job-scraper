@@ -6661,6 +6661,8 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
 
 .table-wrap.table-wrap--loading {
   min-height: 240px;
+  overflow-x: hidden;
+  overflow-y: hidden;
 }
 
 .table-wrap.table-wrap--loading table {

@@ -1138,19 +1138,6 @@ function countPlanningActiveFilters() {
   return count;
 }
 
-function renderTableLoading(colspan, label) {
-  return `
-    <tr>
-      <td colspan="${colspan}">
-        <div class="loading-state">
-          <div class="loading-spinner"></div>
-          <div class="loading-text">${escapeHtml(label)}</div>
-        </div>
-      </td>
-    </tr>
-  `;
-}
-
 function updatePlanningStats(totalCount) {
   setTextIfPresent("planningJobsShown", totalCount ?? 0);
   setTextIfPresent("planningActiveFilters", countPlanningActiveFilters());
@@ -2813,30 +2800,6 @@ function buildTailoringStatusBadge(label, tone = "muted") {
   `;
 }
 
-function getTailoringWorkspaceEffectiveReviewTelemetry() {
-  const draft = tailoringWorkspaceState.draftPayload;
-  if (
-    draft &&
-    typeof draft === "object" &&
-    draft.rewrite_review_telemetry &&
-    typeof draft.rewrite_review_telemetry === "object"
-  ) {
-    return draft.rewrite_review_telemetry;
-  }
-
-  const payload = getTailoringWorkspacePayload();
-  if (
-    payload &&
-    typeof payload === "object" &&
-    payload.rewrite_review_telemetry &&
-    typeof payload.rewrite_review_telemetry === "object"
-  ) {
-    return payload.rewrite_review_telemetry;
-  }
-
-  return null;
-}
-
 function ensureTailoringWorkspaceReviewTelemetryStrip() {
   const meta = qs("tailoringWorkspaceMeta");
   if (!meta || !meta.parentElement) return null;
@@ -3676,92 +3639,6 @@ async function loadTailoringWorkspaceDraft() {
     tailoring_json_path: context.tailoringJsonPath,
     selected_resume: context.resumeName,
   });
-}
-
-function splitTailoringWorkspaceInlineLabelText(text) {
-  const value = String(text || "").trim();
-  const match = value.match(/^([^:]{1,120}:)\s+(.*)$/);
-  if (!match) return null;
-
-  return {
-    label: match[1],
-    value: match[2],
-  };
-}
-
-function buildTailoringWorkspaceDocumentPreviewRequest() {
-  const context = getTailoringWorkspaceContext();
-  const payload = getTailoringWorkspacePayload();
-
-  if (!context || !context.tailoringJsonPath) {
-    return null;
-  }
-
-  return {
-    tailoring_json_path: context.tailoringJsonPath,
-    selected_resume: context.resumeName,
-    selected_patch_candidate_ids: getTailoringWorkspaceSelectedCandidateIds(),
-    manual_bullet_edits: normalizeTailoringWorkspaceManualBulletEdits(
-      tailoringWorkspaceState.manualBulletEdits || {},
-      payload
-    ),
-  };
-}
-
-async function fetchTailoringWorkspaceDocumentPreview() {
-  const requestBody = buildTailoringWorkspaceDocumentPreviewRequest();
-  if (!requestBody) {
-    tailoringWorkspaceState.documentPreviewPayload = null;
-    renderTailoringWorkspaceLiveDraftPreviewInto();
-    return;
-  }
-
-  const requestSeq = ++tailoringWorkspaceState.documentPreviewRequestSeq;
-  tailoringWorkspaceState.isDocumentPreviewLoading = true;
-  renderTailoringWorkspaceLiveDraftPreviewInto();
-
-  try {
-    const response = await postJson(
-      "/planning/render-workspace-draft-preview",
-      requestBody
-    );
-
-    if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
-    tailoringWorkspaceState.documentPreviewPayload = response;
-  } catch (err) {
-    if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
-    tailoringWorkspaceState.documentPreviewPayload = {
-      ok: false,
-      preview_status: "failed",
-      error_message:
-        err instanceof Error
-          ? err.message
-          : "Failed to render working draft preview.",
-      pages: [],
-    };
-  } finally {
-    if (requestSeq === tailoringWorkspaceState.documentPreviewRequestSeq) {
-      tailoringWorkspaceState.isDocumentPreviewLoading = false;
-      renderTailoringWorkspaceLiveDraftPreviewInto();
-    }
-  }
-}
-
-function scheduleTailoringWorkspaceDocumentPreview({ immediate = false } = {}) {
-  if (tailoringWorkspaceState.documentPreviewTimer) {
-    window.clearTimeout(tailoringWorkspaceState.documentPreviewTimer);
-    tailoringWorkspaceState.documentPreviewTimer = null;
-  }
-
-  if (immediate) {
-    void fetchTailoringWorkspaceDocumentPreview();
-    return;
-  }
-
-  tailoringWorkspaceState.documentPreviewTimer = window.setTimeout(() => {
-    tailoringWorkspaceState.documentPreviewTimer = null;
-    void fetchTailoringWorkspaceDocumentPreview();
-  }, 180);
 }
 
 function buildTailoringWorkspaceDocumentPreviewRequest() {
@@ -7209,6 +7086,7 @@ function renderPlanningRows(rows, metaLabel) {
     updatePlanningStats(0);
     renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
     renderPlanningPagination();
+    window.clearTableWrapLoading?.(tbody);
     return;
   }
 
@@ -7251,38 +7129,56 @@ function renderPlanningRows(rows, metaLabel) {
   qs("planningTableMeta").textContent = planningTableState.metaLabel;
   renderSortableHeaders("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort);
   renderPlanningPagination();
+  window.clearTableWrapLoading?.(tbody);
   initResizableTableColumns("planningTable", "planningTableColumnWidths");
 }
 
 async function loadPlanningTable() {
   const tbody = qs("planningTableBody");
-  tbody.innerHTML = renderTableLoading(21, "Loading planning rows...");
+
+  if (tbody) {
+    tbody.innerHTML = "";
+  }
+
+  window.setTableWrapLoading?.(tbody, "Loading planning rows...");
   qs("planningTableMeta").textContent = "Loading...";
 
-  const url = buildPlanningUrl();
-  const data = await fetchJson(url);
+  const paginationMeta = qs("planningPaginationMeta");
+  const paginationActions = qs("planningPaginationActions");
+  if (paginationMeta) paginationMeta.textContent = "Loading...";
+  if (paginationActions) paginationActions.innerHTML = "";
 
-  const rawPageSize = data.page_size ?? 15;
-  const parsedPageSize = Number(rawPageSize);
-  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
-  const totalCount = Number(data.total_count ?? data.count ?? 0);
-  updatePlanningStats(totalCount);
-  const totalPages = Number(data.total_pages ?? 1);
-  const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
+  await new Promise((resolve) => window.requestAnimationFrame(resolve));
 
-  planningTableState.pagination = {
-    page: currentPage,
-    pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 15,
-    totalCount: Number.isFinite(totalCount) ? totalCount : 0,
-    totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
-    hasPrevPage: Boolean(data.has_prev_page),
-    hasNextPage: Boolean(data.has_next_page),
-  };
+  try {
+    const url = buildPlanningUrl();
+    const data = await fetchJson(url);
 
-  renderPlanningRows(
-    data.rows || [],
-    `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
-  );
+    const rawPageSize = data.page_size ?? 15;
+    const parsedPageSize = Number(rawPageSize);
+    const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
+    const totalCount = Number(data.total_count ?? data.count ?? 0);
+    updatePlanningStats(totalCount);
+    const totalPages = Number(data.total_pages ?? 1);
+    const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
+
+    planningTableState.pagination = {
+      page: currentPage,
+      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 15,
+      totalCount: Number.isFinite(totalCount) ? totalCount : 0,
+      totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+      hasPrevPage: Boolean(data.has_prev_page),
+      hasNextPage: Boolean(data.has_next_page),
+    };
+
+    renderPlanningRows(
+      data.rows || [],
+      `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
+    );
+  } catch (err) {
+    window.clearTableWrapLoading?.(tbody);
+    throw err;
+  }
 }
 
 function clearPlanningFilters() {

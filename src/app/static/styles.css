@@ -6642,12 +6642,6 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
 
 /* === restore sticky apply columns === */
 
-.table-wrap {
-  overflow-x: auto;
-  overflow-y: visible;
-  position: relative;
-}
-
 #queueTable,
 #planningTable,
 #decisionsTable {
@@ -6663,6 +6657,35 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
   border: 1px solid var(--border);
   border-radius: 16px;
   position: relative;
+}
+
+.table-wrap.table-wrap--loading {
+  min-height: 240px;
+}
+
+.table-wrap.table-wrap--loading table {
+  visibility: hidden;
+}
+
+.table-wrap-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  border-radius: inherit;
+  background: rgba(10, 15, 30, 0.78);
+  backdrop-filter: blur(4px);
+}
+
+.table-wrap-loading-overlay.hidden {
+  display: none !important;
+}
+
+.table-wrap-loading-overlay .loading-state {
+  min-height: 0;
 }
 
 table.resizable-table {
@@ -6791,33 +6814,6 @@ body.table-column-resizing * {
 #decisionsTable thead .sticky-apply-col {
   z-index: 7;
   background: rgba(16, 22, 44, 0.99);
-}
-
-#queueTable th.sticky-apply-col,
-#planningTable th.sticky-apply-col,
-#decisionsTable th.sticky-apply-col {
-  text-align: left;
-}
-
-#queueTable th.sticky-apply-col .resizable-col-content,
-#planningTable th.sticky-apply-col .resizable-col-content,
-#decisionsTable th.sticky-apply-col .resizable-col-content {
-  justify-content: flex-start;
-}
-
-#queueTable td.apply-cell,
-#planningTable td.apply-cell,
-#decisionsTable td.apply-cell {
-  width: 140px;
-  min-width: 140px;
-  max-width: 140px;
-  text-align: center;
-}
-
-#queueTable td.apply-cell .job-apply-btn,
-#planningTable td.apply-cell .job-apply-btn,
-#decisionsTable td.apply-cell .job-apply-btn {
-  margin: 0 auto;
 }
 
 .apply-col-fixed,

@@ -5527,11 +5527,17 @@ th.sortable-col {
   line-height: 1.3;
 }
 
-.tailoring-workspace-doc-line.tailoring-workspace-doc-line--project-title,
-.tailoring-workspace-doc-line.tailoring-workspace-doc-line--project-title .tailoring-workspace-doc-line-copy {
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--experience-header,
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--experience-header .tailoring-workspace-doc-line-copy {
+  color: #111827;
   font-size: 10pt;
-  font-weight: 800;
-  line-height: 1.3;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: 0;
+}
+
+.tailoring-workspace-doc-line.tailoring-workspace-doc-line--experience-header {
+  margin-bottom: 2px;
 }
 
 .tailoring-workspace-doc-line--skills-line .tailoring-workspace-doc-inline-label-prefix {

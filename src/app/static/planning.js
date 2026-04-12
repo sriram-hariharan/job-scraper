@@ -1258,6 +1258,31 @@ async function postJson(url, payload) {
   });
 }
 
+async function postJsonWithTimeout(url, payload, timeoutMs = 20000) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => {
+    controller.abort();
+  }, timeoutMs);
+
+  try {
+    return await fetchJson(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    throw err;
+  } finally {
+    window.clearTimeout(timeoutId);
+  }
+}
+
 function buildPlanningUrl() {
   const params = new URLSearchParams();
   const actions = getMultiSelectValues("planningActionFilter");
@@ -3821,9 +3846,10 @@ async function fetchTailoringWorkspaceDocumentPreview() {
   renderTailoringWorkspaceLiveDraftPreviewInto();
 
   try {
-    const response = await postJson(
+    const response = await postJsonWithTimeout(
       "/planning/render-workspace-draft-preview",
-      requestBody
+      requestBody,
+      20000
     );
 
     if (requestSeq !== tailoringWorkspaceState.documentPreviewRequestSeq) return;
@@ -4483,11 +4509,17 @@ function isLikelyTailoringWorkspaceSkillsContinuation(
   return true;
 }
 
-function buildTailoringWorkspacePreviewPresentationRows(rows) {
+function buildTailoringWorkspacePreviewPresentationRows(
+  rows,
+  {
+    initialSection = "",
+    allowDocumentHeaderRoles = true,
+  } = {}
+) {
   const sourceRows = Array.isArray(rows) ? rows : [];
   const presentedRows = [];
-  let currentSection = "";
-  let sawFirstSectionHeading = false;
+  let currentSection = String(initialSection || "").trim().toUpperCase();
+  let sawFirstSectionHeading = Boolean(currentSection);
   let preSectionTextCount = 0;
 
   for (let index = 0; index < sourceRows.length; index += 1) {
@@ -4497,6 +4529,7 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
     const cloned = { ...row };
     const nextRow = sourceRows[index + 1] || null;
     const nextNextRow = sourceRows[index + 2] || null;
+    const nextIsBullet = Boolean(nextRow && nextRow.is_bullet);
     const previousPresentedRow =
       presentedRows.length > 0 ? presentedRows[presentedRows.length - 1] : null;
 
@@ -4576,7 +4609,32 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
     }
 
     if (
+      currentSection === "PROFESSIONAL EXPERIENCE" &&
       isTailoringWorkspaceRenderableTextRow(cloned) &&
+      !cloned.is_bullet &&
+      !cloned.is_section_heading &&
+      nextIsBullet
+    ) {
+      const split = splitTailoringWorkspaceTrailingDateRange(cloned.text || "");
+      if (split) {
+        presentedRows.push({
+          ...cloned,
+          kind: "paired_row",
+          text: "",
+          left_text: split.leftText,
+          right_text: split.rightText,
+          presentation_role: "",
+          alignment: "left",
+        });
+        continue;
+      }
+    }
+
+    const isTextRow = isTailoringWorkspaceRenderableTextRow(cloned);
+    if (
+      currentSection === "EDUCATION" &&
+      isTailoringWorkspaceRenderableTextRow(cloned) &&
+      isTailoringWorkspaceRenderableTextRow(nextRow) &&
       isLikelyTailoringWorkspaceInlineHeaderWithContinuation(
         cloned,
         nextRow,
@@ -4597,10 +4655,6 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
         continue;
       }
     }
-
-    const isTextRow = isTailoringWorkspaceRenderableTextRow(cloned);
-    const nextIsBullet = Boolean(nextRow && nextRow.is_bullet);
-
     cloned.presentation_role = "";
 
     if (!sawFirstSectionHeading && isTextRow && !cloned.is_bullet) {
@@ -4613,13 +4667,22 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
       }
       preSectionTextCount += 1;
     } else if (
+      currentSection === "PROFESSIONAL EXPERIENCE" &&
+      isTextRow &&
+      !cloned.is_bullet &&
+      !cloned.is_section_heading &&
+      nextIsBullet
+    ) {
+      cloned.presentation_role = "experience_header";
+      cloned.alignment = "left";
+    } else if (
       currentSection === "ACADEMIC PROJECTS" &&
       isTextRow &&
       !cloned.is_bullet &&
       !cloned.is_section_heading &&
       nextIsBullet
     ) {
-      cloned.presentation_role = "project_title";
+      cloned.presentation_role = "experience_header";
       cloned.alignment = "left";
     } else if (
       currentSection === "SKILLS" &&
@@ -4754,10 +4817,28 @@ function renderTailoringWorkspaceDocumentMirror() {
   }
 
   const showPageLabel = pages.length > 1;
-  const normalizedPages = pages.map((page) => ({
-    ...page,
-    presentation_rows: buildTailoringWorkspacePreviewPresentationRows(page.rows),
-  }));
+  let carrySection = "";
+  const normalizedPages = pages.map((page, pageIndex) => {
+    const presentationRows = buildTailoringWorkspacePreviewPresentationRows(
+      page.rows,
+      {
+        initialSection: carrySection,
+        allowDocumentHeaderRoles: pageIndex === 0,
+      }
+    );
+
+    presentationRows.forEach((row) => {
+      const sectionKey = getTailoringWorkspaceSectionKeyFromRow(row);
+      if (sectionKey) {
+        carrySection = sectionKey;
+      }
+    });
+
+    return {
+      ...page,
+      presentation_rows: presentationRows,
+    };
+  });
 
   const changedCount = normalizedPages.reduce(
     (count, page) =>

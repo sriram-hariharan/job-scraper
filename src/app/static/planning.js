@@ -59,6 +59,7 @@ const tailoringWorkspaceState = {
   documentPreviewRequestSeq: 0,
   documentPreviewTimer: null,
   isDocumentPreviewLoading: false,
+  focusedBulletKey: "",
 };
 
 const tailoringWorkspacePdfState = {
@@ -1467,6 +1468,80 @@ function buildTailoringWorkspacePdfLineIndex(textContent, viewport) {
     });
 }
 
+function buildTailoringWorkspacePdfBlockIndex(lines) {
+  const safeLines = Array.isArray(lines) ? lines : [];
+  const blocks = [];
+  const bulletStartPattern = /^[•●▪◦·-]\s*/;
+
+  let currentBlock = null;
+
+  safeLines.forEach((line) => {
+    const safeText = String(line?.text || "").trim();
+    if (!safeText) return;
+
+    const startsBullet = bulletStartPattern.test(safeText);
+    const prevLine =
+      currentBlock && currentBlock.lines.length
+        ? currentBlock.lines[currentBlock.lines.length - 1]
+        : null;
+
+    const verticalGap = prevLine
+      ? Math.max(
+          0,
+          Number(line.bbox.top || 0) -
+            (Number(prevLine.bbox.top || 0) + Number(prevLine.bbox.height || 0))
+        )
+      : Number.POSITIVE_INFINITY;
+
+    const canContinueCurrent =
+      Boolean(currentBlock) &&
+      Boolean(prevLine) &&
+      !startsBullet &&
+      verticalGap <= 18 &&
+      Number(line.bbox.left || 0) >= Number(currentBlock.anchorLeft || 0) - 12;
+
+    if (!canContinueCurrent) {
+      currentBlock = {
+        blockId: blocks.length + 1,
+        anchorLeft: Number(line.bbox.left || 0),
+        lines: [],
+      };
+      blocks.push(currentBlock);
+    }
+
+    currentBlock.lines.push(line);
+  });
+
+  return blocks.map((block) => {
+    const left = Math.min(...block.lines.map((line) => Number(line.bbox.left || 0)));
+    const top = Math.min(...block.lines.map((line) => Number(line.bbox.top || 0)));
+    const right = Math.max(
+      ...block.lines.map((line) => Number(line.bbox.left || 0) + Number(line.bbox.width || 0))
+    );
+    const bottom = Math.max(
+      ...block.lines.map((line) => Number(line.bbox.top || 0) + Number(line.bbox.height || 0))
+    );
+
+    const text = block.lines
+      .map((line) => String(line.text || "").trim())
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return {
+      blockId: block.blockId,
+      text,
+      normalizedText: normalizeTailoringWorkspaceText(text),
+      bbox: {
+        left: Math.max(0, left - 8),
+        top: Math.max(0, top - 4),
+        width: Math.max(36, right - left + 16),
+        height: Math.max(22, bottom - top + 8),
+      },
+    };
+  });
+}
+
 function scoreTailoringWorkspaceLineMatch(targetText, lineText) {
   const targetNormalized = normalizeTailoringWorkspaceText(targetText);
   const lineNormalized = normalizeTailoringWorkspaceText(lineText);
@@ -1497,6 +1572,21 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
   let best = null;
 
   tailoringWorkspacePdfState.pageTextIndex.forEach((pageEntry) => {
+    (pageEntry.blocks || []).forEach((block) => {
+      const score = scoreTailoringWorkspaceLineMatch(safeTarget, block.text);
+      if (!score) return;
+
+      if (!best || score > best.score) {
+        best = {
+          pageNumber: pageEntry.pageNumber,
+          blockId: block.blockId,
+          lineText: block.text,
+          bbox: block.bbox,
+          score,
+        };
+      }
+    });
+
     (pageEntry.lines || []).forEach((line) => {
       const score = scoreTailoringWorkspaceLineMatch(safeTarget, line.text);
       if (!score) return;
@@ -1584,14 +1674,46 @@ function applyTailoringWorkspacePdfHighlight(match, candidateId = "") {
   );
 }
 
-function focusTailoringWorkspaceCandidateInPreview(candidateId) {
-  const item = getTailoringWorkspaceCandidateItem(candidateId);
-  if (!item || !tailoringWorkspacePdfState.pdfDoc) return;
+function focusTailoringWorkspaceBulletKeyInPreview(bulletKey, candidateId = "") {
+  const safeBulletKey = String(bulletKey || "").trim();
+  setTailoringWorkspaceFocusedBulletKey(safeBulletKey);
+
+  if (!safeBulletKey) {
+    clearTailoringWorkspacePdfHighlight();
+    if (getTailoringWorkspacePreviewMode() === "edit") {
+      renderTailoringWorkspaceLiveDraftPreviewInto();
+    }
+    return;
+  }
+
+  const row = getTailoringWorkspaceEditableBulletRowByKey(safeBulletKey);
+  if (!row) {
+    syncTailoringWorkspaceFocusedCards();
+    return;
+  }
+
+  if (getTailoringWorkspacePreviewMode() === "edit") {
+    renderTailoringWorkspaceLiveDraftPreviewInto();
+    syncTailoringWorkspaceFocusedCards();
+    setTailoringWorkspacePreviewMeta(getTailoringWorkspaceDocumentPreviewMeta());
+
+    window.requestAnimationFrame(() => {
+      const activeLine = qs("tailoringWorkspaceLiveDraftPreview")
+        ?.querySelector(".tailoring-workspace-doc-line--focused");
+      activeLine?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    });
+    return;
+  }
+
+  if (!tailoringWorkspacePdfState.pdfDoc) return;
 
   const targetText =
-    String(item.current_evidence || "").trim() ||
-    String(item.original_text || "").trim() ||
-    String(item.final_replacement_text || "").trim();
+    String(row.currentText || "").trim() ||
+    String(row.baseText || "").trim() ||
+    String(row.originalText || "").trim();
 
   if (!targetText) {
     clearTailoringWorkspacePdfHighlight();
@@ -1605,18 +1727,64 @@ function focusTailoringWorkspaceCandidateInPreview(candidateId) {
     return;
   }
 
-  applyTailoringWorkspacePdfHighlight(match, candidateId);
+  applyTailoringWorkspacePdfHighlight(
+    match,
+    String(candidateId || row.candidateId || "").trim()
+  );
+}
+
+function focusTailoringWorkspaceCandidateInPreview(candidateId) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId) return;
+
+  const bulletKey = getTailoringWorkspaceBulletKeyForCandidate(safeCandidateId);
+  if (!bulletKey) return;
+
+  focusTailoringWorkspaceBulletKeyInPreview(bulletKey, safeCandidateId);
 }
 
 function syncTailoringWorkspacePreviewHighlight() {
-  const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
+  const focusedBulletKey = String(tailoringWorkspaceState.focusedBulletKey || "").trim();
+  if (focusedBulletKey) {
+    focusTailoringWorkspaceBulletKeyInPreview(focusedBulletKey);
+    return;
+  }
 
+  const selectedIds = getTailoringWorkspaceSelectedCandidateIds();
   if (!selectedIds.length) {
     clearTailoringWorkspacePdfHighlight();
+    if (getTailoringWorkspacePreviewMode() === "edit") {
+      renderTailoringWorkspaceLiveDraftPreviewInto();
+    }
     return;
   }
 
   focusTailoringWorkspaceCandidateInPreview(selectedIds[selectedIds.length - 1]);
+}
+
+function syncTailoringWorkspaceFocusedCards() {
+  const root = qs("tailoringWorkspaceInteractiveSummary");
+  if (!root) return;
+
+  const activeBulletKey = String(tailoringWorkspaceState.focusedBulletKey || "").trim();
+
+  const cards = Array.from(
+    root.querySelectorAll("[data-tailoring-focus-candidate], [data-tailoring-focus-bullet-key]")
+  );
+
+  cards.forEach((card) => {
+    const candidateId = String(card.dataset.tailoringFocusCandidate || "").trim();
+    const bulletKey = String(
+      card.dataset.tailoringFocusBulletKey ||
+        getTailoringWorkspaceBulletKeyForCandidate(candidateId)
+    ).trim();
+
+    const isActive = Boolean(activeBulletKey && bulletKey === activeBulletKey);
+    const shouldMute = Boolean(activeBulletKey && bulletKey && bulletKey !== activeBulletKey);
+
+    card.classList.toggle("tailoring-edit-card--active", isActive);
+    card.classList.toggle("tailoring-edit-card--muted", shouldMute);
+  });
 }
 
 function setTailoringWorkspacePreviewMeta(message) {
@@ -1624,28 +1792,6 @@ function setTailoringWorkspacePreviewMeta(message) {
   if (meta) {
     meta.textContent = message || "";
   }
-}
-
-function syncTailoringWorkspaceFocusedCards() {
-  const root = qs("tailoringWorkspaceInteractiveSummary");
-  if (!root) return;
-
-  const activeCandidateId = String(
-    tailoringWorkspacePdfState.highlightedCandidateId || ""
-  ).trim();
-
-  const cards = Array.from(
-    root.querySelectorAll("[data-tailoring-focus-candidate]")
-  );
-
-  cards.forEach((card) => {
-    const candidateId = String(card.dataset.tailoringFocusCandidate || "").trim();
-    const isActive = Boolean(activeCandidateId && candidateId === activeCandidateId);
-    const shouldMute = Boolean(activeCandidateId && candidateId && candidateId !== activeCandidateId);
-
-    card.classList.toggle("tailoring-edit-card--active", isActive);
-    card.classList.toggle("tailoring-edit-card--muted", shouldMute);
-  });
 }
 
 function updateTailoringWorkspaceZoomLabel() {
@@ -1960,6 +2106,7 @@ async function renderTailoringWorkspacePdfPages() {
 
     const textContent = await page.getTextContent();
     const lineIndex = buildTailoringWorkspacePdfLineIndex(textContent, viewport);
+    const blockIndex = buildTailoringWorkspacePdfBlockIndex(lineIndex);
 
     if (token !== tailoringWorkspacePdfState.renderToken) return;
 
@@ -1981,6 +2128,7 @@ async function renderTailoringWorkspacePdfPages() {
       width: viewport.width,
       height: viewport.height,
       lines: lineIndex,
+      blocks: blockIndex,
     });
   }
 
@@ -4128,6 +4276,157 @@ function isTailoringWorkspaceRenderableTextRow(row) {
   return Boolean(text);
 }
 
+function isTailoringWorkspaceDateRangeText(text) {
+  const clean = normalizeTailoringWorkspaceFlowText(text);
+  if (!clean || clean.length > 48) return false;
+
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?";
+  const year = "(?:19|20)\\d{2}";
+  const point = `(?:${month}\\s+${year}|${year}|Present|Current)`;
+
+  return new RegExp(
+    `^${point}(?:\\s*[\\-–—]\\s*${point})?$`,
+    "i"
+  ).test(clean);
+}
+
+function splitTailoringWorkspaceTrailingDateRange(text) {
+  const clean = normalizeTailoringWorkspaceFlowText(text);
+  if (!clean) return null;
+
+  // A pure date line must never be split again.
+  if (isTailoringWorkspaceDateRangeText(clean)) {
+    return null;
+  }
+
+  const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?";
+  const year = "(?:19|20)\\d{2}";
+  const monthYear = `${month}\\s+${year}`;
+  const point = `(?:${monthYear}|${year}|Present|Current)`;
+
+  const match = clean.match(
+    new RegExp(
+      `^(.*?\\S)\\s+((?:${monthYear}|${year}|Present|Current)(?:\\s*[\\-–—]\\s*${point})?)$`,
+      "i"
+    )
+  );
+
+  if (!match) return null;
+
+  const leftText = normalizeTailoringWorkspaceFlowText(match[1]);
+  const rightText = normalizeTailoringWorkspaceFlowText(match[2]);
+
+  if (!leftText || !rightText) return null;
+  if (isTailoringWorkspaceDateRangeText(leftText)) return null;
+  if (!isTailoringWorkspaceDateRangeText(rightText)) return null;
+
+  return { leftText, rightText };
+}
+
+function isLikelyTailoringWorkspaceInlineHeaderWithContinuation(
+  currentRow,
+  nextRow,
+  currentSection
+) {
+  if (!currentRow || !nextRow) return false;
+
+  const sectionKey = String(currentSection || "").trim().toUpperCase();
+  if (!sectionKey) return false;
+
+  if (
+    sectionKey === "PROFESSIONAL EXPERIENCE" ||
+    sectionKey === "WORK EXPERIENCE"
+  ) {
+    return false;
+  }
+
+  if (currentRow.is_bullet || currentRow.is_section_heading) return false;
+  if (nextRow.is_bullet || nextRow.is_section_heading) return false;
+
+  if (String(currentRow.kind || "").trim() === "paired_row") return false;
+  if (String(nextRow.kind || "").trim() === "paired_row") return false;
+
+  const split = splitTailoringWorkspaceTrailingDateRange(currentRow.text || "");
+  if (!split) return false;
+
+  const nextText = normalizeTailoringWorkspaceFlowText(String(nextRow.text || ""));
+  if (!nextText) return false;
+
+  if (splitTailoringWorkspaceTrailingDateRange(nextText)) return false;
+  if (/:\s*/.test(nextText)) return false;
+
+  const currentIndent = Number(currentRow.left_indent_pt || 0);
+  const nextIndent = Number(nextRow.left_indent_pt || 0);
+  const nextGap = Number(nextRow.gap_before || 0);
+
+  if (Math.abs(nextIndent - currentIndent) > 12) return false;
+  if (nextGap > 10) return false;
+
+  return true;
+}
+
+function isLikelyTailoringWorkspaceSplitHeaderDatePair(
+  currentRow,
+  nextRow,
+  nextNextRow,
+  currentSection
+) {
+  if (!currentRow || !nextRow) return false;
+
+  const sectionKey = String(currentSection || "").trim().toUpperCase();
+  if (!sectionKey) return false;
+
+  if (
+    sectionKey === "PROFESSIONAL EXPERIENCE" ||
+    sectionKey === "WORK EXPERIENCE"
+  ) {
+    return false;
+  }
+
+  if (currentRow.is_bullet || currentRow.is_section_heading) return false;
+  if (nextRow.is_bullet || nextRow.is_section_heading) return false;
+
+  if (String(currentRow.kind || "").trim() === "paired_row") return false;
+  if (String(nextRow.kind || "").trim() === "paired_row") return false;
+
+  const leftText = normalizeTailoringWorkspaceFlowText(String(currentRow.text || ""));
+  const rightText = normalizeTailoringWorkspaceFlowText(String(nextRow.text || ""));
+
+  if (!leftText || !rightText) return false;
+  if (isTailoringWorkspaceDateRangeText(leftText)) return false;
+  if (!isTailoringWorkspaceDateRangeText(rightText)) return false;
+
+  const currentAlign = String(currentRow.alignment || "left").trim().toLowerCase();
+  const nextAlign = String(nextRow.alignment || "left").trim().toLowerCase();
+
+  if (currentAlign !== "left") return false;
+  if (nextAlign !== "right") return false;
+
+  const currentIndent = Number(currentRow.left_indent_pt || 0);
+  const nextIndent = Number(nextRow.left_indent_pt || 0);
+  const nextGap = Number(nextRow.gap_before || 0);
+
+  if (Math.abs(nextIndent - currentIndent) > 12) return false;
+  if (nextGap > 4) return false;
+
+  if (nextNextRow) {
+    if (nextNextRow.is_bullet || nextNextRow.is_section_heading) return false;
+
+    const nextNextText = normalizeTailoringWorkspaceFlowText(
+      String(nextNextRow.text || "")
+    );
+    const nextNextAlign = String(nextNextRow.alignment || "left").trim().toLowerCase();
+    const nextNextIndent = Number(nextNextRow.left_indent_pt || 0);
+
+    if (!nextNextText) return false;
+    if (isTailoringWorkspaceDateRangeText(nextNextText)) return false;
+    if (nextNextAlign !== "left") return false;
+    if (Math.abs(nextNextIndent - currentIndent) > 12) return false;
+  }
+
+  return true;
+}
+
 function isLikelyTailoringWorkspaceBulletContinuation(
   previousRow,
   currentRow,
@@ -4197,6 +4496,7 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
 
     const cloned = { ...row };
     const nextRow = sourceRows[index + 1] || null;
+    const nextNextRow = sourceRows[index + 2] || null;
     const previousPresentedRow =
       presentedRows.length > 0 ? presentedRows[presentedRows.length - 1] : null;
 
@@ -4206,6 +4506,29 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
       sawFirstSectionHeading = true;
       cloned.presentation_role = "";
       presentedRows.push(cloned);
+      continue;
+    }
+
+    if (
+      isTailoringWorkspaceRenderableTextRow(cloned) &&
+      isTailoringWorkspaceRenderableTextRow(nextRow) &&
+      isLikelyTailoringWorkspaceSplitHeaderDatePair(
+        cloned,
+        nextRow,
+        nextNextRow,
+        currentSection
+      )
+    ) {
+      presentedRows.push({
+        ...cloned,
+        kind: "paired_row",
+        text: "",
+        left_text: normalizeTailoringWorkspaceFlowText(String(cloned.text || "")),
+        right_text: normalizeTailoringWorkspaceFlowText(String(nextRow.text || "")),
+        presentation_role: "",
+        alignment: "left",
+      });
+      index += 1;
       continue;
     }
 
@@ -4252,6 +4575,29 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
       continue;
     }
 
+    if (
+      isTailoringWorkspaceRenderableTextRow(cloned) &&
+      isLikelyTailoringWorkspaceInlineHeaderWithContinuation(
+        cloned,
+        nextRow,
+        currentSection
+      )
+    ) {
+      const split = splitTailoringWorkspaceTrailingDateRange(cloned.text || "");
+      if (split) {
+        presentedRows.push({
+          ...cloned,
+          kind: "paired_row",
+          text: "",
+          left_text: split.leftText,
+          right_text: split.rightText,
+          presentation_role: "",
+          alignment: "left",
+        });
+        continue;
+      }
+    }
+
     const isTextRow = isTailoringWorkspaceRenderableTextRow(cloned);
     const nextIsBullet = Boolean(nextRow && nextRow.is_bullet);
 
@@ -4289,7 +4635,10 @@ function buildTailoringWorkspacePreviewPresentationRows(rows) {
     presentedRows.push(cloned);
   }
 
-  return presentedRows;
+  return presentedRows.map((row) => ({
+    ...row,
+    focused: isTailoringWorkspaceFocusedPresentationRow(row),
+  }));
 }
 
 function renderTailoringWorkspaceStructuredRow(row) {
@@ -4331,6 +4680,7 @@ function renderTailoringWorkspaceStructuredRow(row) {
     patched ? "tailoring-workspace-doc-line--changed" : "",
     patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
     patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",
+    row?.focused ? "tailoring-workspace-doc-line--focused" : "",
   ].filter(Boolean).join(" ");
 
   const alignStyle =
@@ -4537,6 +4887,67 @@ function getTailoringWorkspaceBaseTextForCandidate(candidateId) {
     : "";
 
   return selectedPatchText || currentText;
+}
+
+function getTailoringWorkspaceEditableBulletRowByKey(bulletKey) {
+  const safeBulletKey = String(bulletKey || "").trim();
+  if (!safeBulletKey) return null;
+
+  const payload = getTailoringWorkspacePayload();
+  if (!payload) return null;
+
+  return (
+    buildTailoringWorkspaceEditableBulletRows(payload).find(
+      (row) => String(row.bulletKey || "").trim() === safeBulletKey
+    ) || null
+  );
+}
+
+function setTailoringWorkspaceFocusedBulletKey(bulletKey) {
+  tailoringWorkspaceState.focusedBulletKey = String(bulletKey || "").trim();
+}
+
+function getTailoringWorkspaceFocusedPreviewTexts() {
+  const row = getTailoringWorkspaceEditableBulletRowByKey(
+    tailoringWorkspaceState.focusedBulletKey
+  );
+  if (!row) return [];
+
+  return [row.currentText, row.baseText, row.originalText]
+    .map((value) => normalizeTailoringWorkspaceText(value))
+    .filter(Boolean);
+}
+
+function doesTailoringWorkspacePreviewTextMatch(targetText, rowText) {
+  const safeTarget = normalizeTailoringWorkspaceText(targetText);
+  const safeRow = normalizeTailoringWorkspaceText(rowText);
+
+  if (!safeTarget || !safeRow) return false;
+
+  return (
+    safeTarget === safeRow ||
+    safeTarget.includes(safeRow) ||
+    safeRow.includes(safeTarget)
+  );
+}
+
+function isTailoringWorkspaceFocusedPresentationRow(row) {
+  const focusTexts = getTailoringWorkspaceFocusedPreviewTexts();
+  if (!focusTexts.length) return false;
+
+  const rowTexts = [
+    String(row?.text || ""),
+    stripTailoringWorkspaceLeadingBullet(String(row?.text || "")),
+  ]
+    .map((value) => normalizeTailoringWorkspaceFlowText(value))
+    .map((value) => normalizeTailoringWorkspaceText(value))
+    .filter(Boolean);
+
+  return rowTexts.some((rowText) =>
+    focusTexts.some((focusText) =>
+      doesTailoringWorkspacePreviewTextMatch(focusText, rowText)
+    )
+  );
 }
 
 function buildTailoringWorkspaceEffectiveReviewDecisionMap(payload) {
@@ -4920,7 +5331,10 @@ function renderTailoringWorkspaceFreeEditSection(payload) {
               : "muted";
 
           return `
-            <article class="tailoring-edit-card tailoring-edit-card--compact">
+            <article
+              class="tailoring-edit-card tailoring-edit-card--compact tailoring-edit-card--clickable"
+              data-tailoring-focus-bullet-key="${escapeHtml(row.bulletKey)}"
+            >
               <div class="tailoring-card-topline tailoring-card-topline--compact">
                 <div class="tailoring-edit-card-label">Bullet ${index + 1}</div>
 
@@ -5477,6 +5891,8 @@ function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = nu
   tailoringWorkspaceState.documentPreviewPayload = null;
   tailoringWorkspaceState.documentPreviewRequestSeq = 0;
   tailoringWorkspaceState.isDocumentPreviewLoading = false;
+  tailoringWorkspaceState.focusedBulletKey = "";
+
   if (tailoringWorkspaceState.documentPreviewTimer) {
     window.clearTimeout(tailoringWorkspaceState.documentPreviewTimer);
     tailoringWorkspaceState.documentPreviewTimer = null;
@@ -5621,6 +6037,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
 
         const bulletKey = String(actionButton.dataset.tailoringFreeEditAction || "").trim();
         if (!bulletKey) return;
+        focusTailoringWorkspaceBulletKeyInPreview(bulletKey);
 
         const payload = getTailoringWorkspacePayload();
         const manualEdits = normalizeTailoringWorkspaceManualBulletEdits(
@@ -5643,6 +6060,19 @@ function bindTailoringWorkspaceSelectionHandlers() {
         return;
       }
 
+      const focusBulletCard = event.target.closest("[data-tailoring-focus-bullet-key]");
+      if (
+        focusBulletCard &&
+        !event.target.closest("[data-tailoring-free-edit-key]") &&
+        !event.target.closest("[data-tailoring-free-edit-action]")
+      ) {
+        event.preventDefault();
+        focusTailoringWorkspaceBulletKeyInPreview(
+          focusBulletCard.dataset.tailoringFocusBulletKey || ""
+        );
+        return;
+      }
+
       const focusCard = event.target.closest("[data-tailoring-focus-candidate]");
       if (!focusCard) return;
 
@@ -5659,6 +6089,7 @@ function bindTailoringWorkspaceSelectionHandlers() {
       const bulletKey = String(textarea.dataset.tailoringFreeEditKey || "").trim();
       if (!bulletKey) return;
 
+      focusTailoringWorkspaceBulletKeyInPreview(bulletKey);
       tailoringWorkspaceState.manualBulletEdits[bulletKey] = textarea.value;
       tailoringWorkspaceState.previewPayload = null;
       tailoringWorkspaceState.previewReadyKey = "";
@@ -5669,6 +6100,16 @@ function bindTailoringWorkspaceSelectionHandlers() {
       updateTailoringWorkspaceMetaSummary(getTailoringWorkspacePayload());
       refreshTailoringWorkspaceInlineScoreControls();
       updateTailoringWorkspaceSelectionActionBar();
+    });
+
+    root.addEventListener("focusin", (event) => {
+      const textarea = event.target.closest("[data-tailoring-free-edit-key]");
+      if (!textarea) return;
+
+      const bulletKey = String(textarea.dataset.tailoringFreeEditKey || "").trim();
+      if (!bulletKey) return;
+
+      focusTailoringWorkspaceBulletKeyInPreview(bulletKey);
     });
   }
 

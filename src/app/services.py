@@ -4630,6 +4630,135 @@ def _workspace_export_same_row(
         - float(right_paragraph.get("top", 0.0) or 0.0)
     ) <= y_tolerance
 
+def _workspace_export_line_is_date_range(text: str) -> bool:
+    clean = re.sub(r"\s+", " ", _clean_text(text))
+    if not clean or len(clean) > 48:
+        return False
+
+    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+    year = r"(?:19|20)\d{2}"
+    point = rf"(?:{month}\s+{year}|{year}|Present|Current)"
+
+    return bool(
+        re.fullmatch(
+            rf"{point}(?:\s*[-–—]\s*{point})?",
+            clean,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _workspace_export_should_promote_to_paired_row(
+    left_item: Dict[str, Any],
+    right_item: Dict[str, Any],
+    *,
+    page_width: float,
+) -> bool:
+    left_left = float(left_item.get("left", 0.0) or 0.0)
+    right_left = float(right_item.get("left", 0.0) or 0.0)
+    right_edge = float(right_item.get("right", 0.0) or 0.0)
+
+    has_clear_split = (right_left - left_left) >= 120.0
+    right_is_right_aligned = right_edge >= (page_width - 54.0)
+    if has_clear_split and right_is_right_aligned:
+        return True
+
+    right_text = _clean_text(right_item.get("text"))
+    left_text = _clean_text(left_item.get("text"))
+    left_style = dict(left_item.get("style", {}) or {})
+
+    left_looks_like_role_row = (
+        bool(left_item.get("is_heading"))
+        or bool(left_style.get("bold", False))
+        or float(left_item.get("font_size", 0.0) or 0.0) >= 10.5
+    )
+
+    fallback_split = (right_left - left_left) >= 64.0
+    fallback_rightish = right_edge >= (page_width - 90.0)
+    left_not_centered = not _workspace_export_is_centered_paragraph(
+        left_item,
+        page_width=page_width,
+    )
+    right_not_centered = not _workspace_export_is_centered_paragraph(
+        right_item,
+        page_width=page_width,
+    )
+
+    return (
+        _workspace_export_line_is_date_range(right_text)
+        and left_looks_like_role_row
+        and left_not_centered
+        and right_not_centered
+        and fallback_split
+        and fallback_rightish
+        and len(left_text) <= 140
+        and len(right_text) <= 48
+    )
+
+def _workspace_export_line_is_date_range(text: str) -> bool:
+    clean = re.sub(r"\s+", " ", _clean_text(text))
+    if not clean or len(clean) > 48:
+        return False
+
+    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+    year = r"(?:19|20)\d{2}"
+    point = rf"(?:{month}\s+{year}|{year}|Present|Current)"
+
+    return bool(
+        re.fullmatch(
+            rf"{point}(?:\s*[-–—]\s*{point})?",
+            clean,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _workspace_export_should_promote_to_paired_row(
+    left_item: Dict[str, Any],
+    right_item: Dict[str, Any],
+    *,
+    page_width: float,
+) -> bool:
+    left_left = float(left_item.get("left", 0.0) or 0.0)
+    right_left = float(right_item.get("left", 0.0) or 0.0)
+    right_edge = float(right_item.get("right", 0.0) or 0.0)
+
+    has_clear_split = (right_left - left_left) >= 120.0
+    right_is_right_aligned = right_edge >= (page_width - 54.0)
+    if has_clear_split and right_is_right_aligned:
+        return True
+
+    right_text = _clean_text(right_item.get("text"))
+    left_text = _clean_text(left_item.get("text"))
+    left_style = dict(left_item.get("style", {}) or {})
+
+    left_looks_like_role_row = (
+        bool(left_item.get("is_heading"))
+        or bool(left_style.get("bold", False))
+        or float(left_item.get("font_size", 0.0) or 0.0) >= 10.5
+    )
+
+    fallback_split = (right_left - left_left) >= 64.0
+    fallback_rightish = right_edge >= (page_width - 90.0)
+    left_not_centered = not _workspace_export_is_centered_paragraph(
+        left_item,
+        page_width=page_width,
+    )
+    right_not_centered = not _workspace_export_is_centered_paragraph(
+        right_item,
+        page_width=page_width,
+    )
+
+    return (
+        _workspace_export_line_is_date_range(right_text)
+        and left_looks_like_role_row
+        and left_not_centered
+        and right_not_centered
+        and fallback_split
+        and fallback_rightish
+        and len(left_text) <= 140
+        and len(right_text) <= 48
+    )
 
 def _workspace_export_is_centered_paragraph(
     paragraph: Dict[str, Any],
@@ -4693,14 +4822,11 @@ def _workspace_export_annotate_page_layout(
             left_item = row_group[0]
             right_item = row_group[-1]
 
-            left_left = float(left_item.get("left", 0.0) or 0.0)
-            right_left = float(right_item.get("left", 0.0) or 0.0)
-            right_edge = float(right_item.get("right", 0.0) or 0.0)
-
-            has_clear_split = (right_left - left_left) >= 120.0
-            right_is_right_aligned = right_edge >= (page_width - 54.0)
-
-            if has_clear_split and right_is_right_aligned:
+            if _workspace_export_should_promote_to_paired_row(
+                left_item,
+                right_item,
+                page_width=page_width,
+            ):
                 row_group_id = f"row_{row_index}"
                 row_index += 1
 
@@ -6045,69 +6171,77 @@ def _build_workspace_export_docx(
                         row_items.append(candidate)
                         scan += 1
 
-                    left_item = next(
-                        (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
-                        row_items[0],
-                    )
-                    right_item = next(
-                        (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
-                        row_items[-1],
-                    )
+                    left_candidates = [
+                        item for item in row_items
+                        if _clean_text(item.get("row_side")) == "left"
+                    ]
+                    right_candidates = [
+                        item for item in row_items
+                        if _clean_text(item.get("row_side")) == "right"
+                    ]
 
-                    if use_seed_paragraph and document.paragraphs:
-                        paragraph = document.paragraphs[0]
-                        use_seed_paragraph = False
+                    if len(row_items) < 2 or not left_candidates or not right_candidates:
+                        left_item = None
+                        right_item = None
                     else:
-                        paragraph = document.add_paragraph()
+                        left_item = left_candidates[0]
+                        right_item = right_candidates[-1]
 
-                    paragraph_format = paragraph.paragraph_format
-                    paired_row_left_indent_pt = max(
-                        0.0,
-                        min(float(left_item.get("left_indent_pt") or 0.0), 220.0),
-                    )
-                    paragraph_format.left_indent = Pt(paired_row_left_indent_pt)
-                    paragraph_format.right_indent = Pt(0.0)
-                    paragraph_format.first_line_indent = Pt(0.0)
-                    paragraph_format.space_before = Pt(
-                        max(
-                            0.0,
-                            min(
+                        if left_item is not None and right_item is not None:
+                            if use_seed_paragraph and document.paragraphs:
+                                paragraph = document.paragraphs[0]
+                                use_seed_paragraph = False
+                            else:
+                                paragraph = document.add_paragraph()
+
+                            paragraph_format = paragraph.paragraph_format
+                            paired_row_left_indent_pt = max(
+                                0.0,
+                                min(float(left_item.get("left_indent_pt") or 0.0), 220.0),
+                            )
+                            paragraph_format.left_indent = Pt(paired_row_left_indent_pt)
+                            paragraph_format.right_indent = Pt(0.0)
+                            paragraph_format.first_line_indent = Pt(0.0)
+                            paragraph_format.space_before = Pt(
                                 max(
-                                    float(left_item.get("gap_before") or 0.0),
-                                    float(right_item.get("gap_before") or 0.0),
-                                ),
-                                14.0,
-                            ),
-                        )
-                    )
-                    paragraph_format.space_after = Pt(0.0)
-                    paragraph_format.line_spacing = 1.08
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                    paragraph_format.tab_stops.add_tab_stop(
-                        Pt(right_tab_stop_pt),
-                        WD_TAB_ALIGNMENT.RIGHT,
-                        WD_TAB_LEADER.SPACES,
-                    )
+                                    0.0,
+                                    min(
+                                        max(
+                                            float(left_item.get("gap_before") or 0.0),
+                                            float(right_item.get("gap_before") or 0.0),
+                                        ),
+                                        14.0,
+                                    ),
+                                )
+                            )
+                            paragraph_format.space_after = Pt(0.0)
+                            paragraph_format.line_spacing = 1.08
+                            paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                            paragraph_format.tab_stops.add_tab_stop(
+                                Pt(right_tab_stop_pt),
+                                WD_TAB_ALIGNMENT.RIGHT,
+                                WD_TAB_LEADER.SPACES,
+                            )
 
-                    _append_runs(
-                        paragraph,
-                        list(left_item.get("runs", []) or []),
-                        is_paired_row=True,
-                        trim_leading_whitespace=True,
-                    )
-                    paragraph.add_run("\t")
-                    _append_runs(
-                        paragraph,
-                        list(right_item.get("runs", []) or []),
-                        is_paired_row=True,
-                        trim_leading_whitespace=True,
-                    )
+                            _append_runs(
+                                paragraph,
+                                list(left_item.get("runs", []) or []),
+                                is_paired_row=True,
+                                trim_leading_whitespace=True,
+                            )
+                            paragraph.add_run("\t")
+                            _append_runs(
+                                paragraph,
+                                list(right_item.get("runs", []) or []),
+                                is_paired_row=True,
+                                trim_leading_whitespace=True,
+                            )
 
-                    previous_paired_row_left_indent_pt = paired_row_left_indent_pt
-                    page_emitted_paragraph_count += 1
-                    previous_emitted_row_kind = "paired_row"
-                    idx = scan
-                    continue
+                            previous_paired_row_left_indent_pt = paired_row_left_indent_pt
+                            page_emitted_paragraph_count += 1
+                            previous_emitted_row_kind = "paired_row"
+                            idx = scan
+                            continue
 
                 if use_seed_paragraph and document.paragraphs:
                     paragraph = document.paragraphs[0]
@@ -7442,10 +7576,198 @@ def _workspace_export_split_skills_preview_rows(
 
     return _build_split_rows(text_based_segment_texts)
 
+def _workspace_export_split_header_like_preview_row(
+    paragraph: Dict[str, Any],
+) -> Dict[str, Any] | None:
+    text = _workspace_export_clean_docx_text(
+        _clean_text(paragraph.get("text"))
+    )
+    if not text:
+        return None
+
+    if bool(paragraph.get("is_bullet")):
+        return None
+
+    clean = re.sub(r"\s+", " ", text).strip()
+    if len(clean) < 18:
+        return None
+
+    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+    year = r"(?:19|20)\d{2}"
+    point = rf"(?:{month}\s+{year}|{year}|Present|Current)"
+    date_range_pattern = re.compile(
+        rf"^(?P<left>.+?)\s+(?P<right>{point}(?:\s*[-–—]\s*{point})?)$",
+        flags=re.IGNORECASE,
+    )
+
+    match = date_range_pattern.match(clean)
+    if not match:
+        return None
+
+    left_text = _workspace_export_clean_docx_text(match.group("left"))
+    right_text = _workspace_export_clean_docx_text(match.group("right"))
+
+    if not left_text or not right_text:
+        return None
+
+    if len(right_text) > 48 or len(left_text) > 160:
+        return None
+
+    if ":" in left_text:
+        return None
+
+    if left_text.upper() == left_text and len(left_text) <= 40:
+        return None
+
+    paragraph_style = dict(paragraph.get("style", {}) or {})
+    left_looks_like_header = (
+        bool(paragraph.get("is_heading"))
+        or bool(paragraph_style.get("bold", False))
+        or float(paragraph.get("font_size", 0.0) or 0.0) >= 10.5
+    )
+
+    if not left_looks_like_header:
+        return None
+
+    return {
+        "kind": "paired_row",
+        "gap_before": float(paragraph.get("gap_before") or 0.0),
+        "left_indent_pt": float(paragraph.get("left_indent_pt") or 0.0),
+        "left_text": left_text,
+        "right_text": right_text,
+    }
+
+
+def _workspace_export_section_supports_header_row_split(section_name: str) -> bool:
+    normalized = _clean_text(section_name).upper()
+    return normalized in {
+        "PROFESSIONAL EXPERIENCE",
+        "WORK EXPERIENCE",
+        "EXPERIENCE",
+        "EMPLOYMENT HISTORY",
+        "EMPLOYMENT",
+    }
+
+
+
+def _workspace_export_line_is_date_range(text: str) -> bool:
+    clean = re.sub(r"\s+", " ", _clean_text(text))
+    if not clean or len(clean) > 48:
+        return False
+
+    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?"
+    year = r"(?:19|20)\\d{2}"
+    point = rf"(?:{month}\\s+{year}|{year}|Present|Current)"
+
+    return bool(
+        re.fullmatch(
+            rf"{point}(?:\\s*[-–—]\\s*{point})?",
+            clean,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def _workspace_export_should_render_paired_row_inline(
+    left_item: Dict[str, Any],
+    right_item: Dict[str, Any],
+    continuation_items: List[Dict[str, Any]],
+    next_paragraph: Dict[str, Any] | None,
+    *,
+    current_section: str,
+) -> bool:
+    right_text = _clean_text(right_item.get("text"))
+    if not _workspace_export_line_is_date_range(right_text):
+        return False
+
+    if _workspace_export_section_supports_header_row_split(current_section):
+        return False
+
+    left_text = _workspace_export_clean_docx_text(
+        _clean_text(left_item.get("text"))
+    )
+    if not left_text:
+        return False
+
+    left_left = float(left_item.get("left", 0.0) or 0.0)
+    left_font_size = float(left_item.get("font_size", 0.0) or 0.0)
+
+    def _is_body_like_continuation(item: Dict[str, Any] | None) -> bool:
+        if not item:
+            return False
+
+        if bool(item.get("is_bullet")):
+            return False
+
+        text = _workspace_export_clean_docx_text(
+            _clean_text(item.get("text"))
+        )
+        if not text or _workspace_export_is_section_heading_text(text):
+            return False
+
+        style = dict(item.get("style", {}) or {})
+        font_size = float(item.get("font_size", 0.0) or 0.0)
+
+        if bool(item.get("is_heading")) or bool(style.get("bold", False)):
+            return False
+
+        if abs(float(item.get("left", 0.0) or 0.0) - left_left) > 96.0:
+            return False
+
+        if font_size > max(12.0, left_font_size + 0.5):
+            return False
+
+        return True
+
+    grouped_continuation_exists = any(
+        _is_body_like_continuation(item) for item in continuation_items
+    )
+    if grouped_continuation_exists:
+        return True
+
+    if next_paragraph is None:
+        return False
+
+    if not _is_body_like_continuation(next_paragraph):
+        return False
+
+    row_bottom = max(
+        float(left_item.get("bottom", 0.0) or 0.0),
+        float(right_item.get("bottom", 0.0) or 0.0),
+    )
+    next_top = float(next_paragraph.get("top", 0.0) or 0.0)
+    gap_after_row = next_top - row_bottom
+
+    return -2.0 <= gap_after_row <= 56.0
+
 def _workspace_export_preview_pages_payload(
     exported_pages: List[Dict[str, Any]],
 ) -> List[Dict[str, Any]]:
     pages_out: List[Dict[str, Any]] = []
+
+    def _append_continuation_rows(
+        rows: List[Dict[str, Any]],
+        continuation_items: List[Dict[str, Any]],
+    ) -> None:
+        for extra in sorted(
+            continuation_items,
+            key=lambda item: (
+                round(float(item.get("top", 0.0) or 0.0), 2),
+                round(float(item.get("left", 0.0) or 0.0), 2),
+            ),
+        ):
+            extra_text = _workspace_export_clean_docx_text(
+                _clean_text(extra.get("text"))
+            )
+            if not extra_text:
+                continue
+
+            rows.append(
+                _workspace_export_preview_row_from_paragraph(
+                    extra,
+                    text=extra_text,
+                )
+            )
 
     for page in list(exported_pages or []):
         page_width = float(page.get("width") or 612.0)
@@ -7490,14 +7812,65 @@ def _workspace_export_preview_pages_payload(
                     row_items.append(candidate)
                     scan += 1
 
-                left_item = next(
-                    (item for item in row_items if _clean_text(item.get("row_side")) == "left"),
-                    row_items[0],
+                left_candidates = [
+                    item for item in row_items
+                    if _clean_text(item.get("row_side")) == "left"
+                ]
+                right_candidates = [
+                    item for item in row_items
+                    if _clean_text(item.get("row_side")) == "right"
+                ]
+                continuation_items = [
+                    item for item in row_items
+                    if _clean_text(item.get("row_side")) not in {"left", "right"}
+                ]
+
+                if len(row_items) < 2 or not left_candidates or not right_candidates:
+                    rows.append(
+                        _workspace_export_preview_row_from_paragraph(
+                            paragraph,
+                            text=text,
+                        )
+                    )
+                    idx += 1
+                    continue
+
+                left_item = left_candidates[0]
+                right_item = right_candidates[-1]
+
+                left_text = _workspace_export_clean_docx_text(
+                    _clean_text(left_item.get("text"))
                 )
-                right_item = next(
-                    (item for item in row_items if _clean_text(item.get("row_side")) == "right"),
-                    row_items[-1],
+                right_text = _workspace_export_clean_docx_text(
+                    _clean_text(right_item.get("text"))
                 )
+
+                keep_as_paired = (
+                    _workspace_export_section_supports_header_row_split(current_section)
+                    and _workspace_export_line_is_date_range(right_text)
+                )
+
+                if not keep_as_paired:
+                    combined_text = _workspace_export_clean_docx_text(
+                        f"{left_text} {right_text}"
+                    )
+
+                    rows.append(
+                        _workspace_export_preview_row_from_paragraph(
+                            left_item,
+                            text=combined_text,
+                            gap_before=float(
+                                max(
+                                    float(left_item.get("gap_before") or 0.0),
+                                    float(right_item.get("gap_before") or 0.0),
+                                )
+                            ),
+                        )
+                    )
+
+                    _append_continuation_rows(rows, continuation_items)
+                    idx = scan
+                    continue
 
                 rows.append({
                     "kind": "paired_row",
@@ -7508,13 +7881,11 @@ def _workspace_export_preview_pages_payload(
                         )
                     ),
                     "left_indent_pt": float(left_item.get("left_indent_pt") or 0.0),
-                    "left_text": _workspace_export_clean_docx_text(
-                        _clean_text(left_item.get("text"))
-                    ),
-                    "right_text": _workspace_export_clean_docx_text(
-                        _clean_text(right_item.get("text"))
-                    ),
+                    "left_text": left_text,
+                    "right_text": right_text,
                 })
+
+                _append_continuation_rows(rows, continuation_items)
                 idx = scan
                 continue
 
@@ -7530,6 +7901,19 @@ def _workspace_export_preview_pages_payload(
                     rows.extend(split_skill_rows)
                     idx += 1
                     continue
+
+            split_header_row = None
+            if _workspace_export_section_supports_header_row_split(current_section):
+                split_header_row = _workspace_export_split_header_like_preview_row(
+                    paragraph
+                )
+
+            if split_header_row:
+                rows.append(split_header_row)
+                if is_section_heading:
+                    current_section = text.upper()
+                idx += 1
+                continue
 
             rows.append(
                 _workspace_export_preview_row_from_paragraph(
@@ -7551,7 +7935,6 @@ def _workspace_export_preview_pages_payload(
         })
 
     return pages_out
-
 
 def render_tailoring_workspace_draft_preview_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,

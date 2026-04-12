@@ -5435,11 +5435,17 @@ th.sortable-col {
   position: relative;
 }
 
+.tailoring-workspace-doc-paired-row-left,
+.tailoring-workspace-doc-paired-row-right {
+  color: #111827;
+  font-size: 10pt;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
 .tailoring-workspace-doc-paired-row-left {
   min-width: 0;
-  font-size: 10pt;
-  font-weight: 700;
-  line-height: 1.3;
   word-break: break-word;
 }
 
@@ -5447,9 +5453,18 @@ th.sortable-col {
   flex: 0 0 auto;
   white-space: nowrap;
   text-align: right;
+}
+
+.tailoring-workspace-doc-paired-row + .tailoring-workspace-doc-line:not(.tailoring-workspace-doc-line--bullet) {
+  margin-top: 2px !important;
+}
+
+.tailoring-workspace-doc-paired-row + .tailoring-workspace-doc-line:not(.tailoring-workspace-doc-line--bullet) .tailoring-workspace-doc-line-copy {
+  color: #111827;
   font-size: 10pt;
-  font-weight: 700;
-  line-height: 1.3;
+  font-weight: 400;
+  line-height: 1.12;
+  letter-spacing: 0;
 }
 
 .tailoring-workspace-doc-bullet-row {
@@ -5545,6 +5560,18 @@ th.sortable-col {
 .tailoring-workspace-doc-line--selected {
   border-color: rgba(34, 197, 94, 0.22);
   background: rgba(34, 197, 94, 0.09);
+}
+
+.tailoring-workspace-doc-line--focused {
+  margin-left: -12px;
+  margin-right: -12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(34, 197, 94, 0.58);
+  background: rgba(34, 197, 94, 0.2);
+  box-shadow:
+    0 0 0 2px rgba(34, 197, 94, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
 @media (max-width: 900px) {
@@ -5787,12 +5814,12 @@ th.sortable-col {
 
 .tailoring-workspace-pdf-highlight {
   position: absolute;
-  border-radius: 10px;
-  background: rgba(64, 224, 128, 0.26);
-  border: 2px solid rgba(64, 224, 128, 0.96);
+  border-radius: 12px;
+  background: rgba(34, 197, 94, 0.24);
+  border: 3px solid rgba(34, 197, 94, 0.96);
   box-shadow:
-    0 0 0 3px rgba(64, 224, 128, 0.22),
-    0 0 24px rgba(64, 224, 128, 0.28),
+    0 0 0 4px rgba(34, 197, 94, 0.18),
+    0 0 28px rgba(34, 197, 94, 0.3),
     0 12px 28px rgba(0, 0, 0, 0.18);
   animation: tailoring-pdf-highlight-pulse-strong 1.35s ease-out 1;
 }

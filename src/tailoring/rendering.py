@@ -1625,7 +1625,38 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             **common_fields,
         }
+    
+    if reason == "deterministic_patch_not_available":
+        directional_text = rewrite_instruction or (
+            f"Lead with {lead} in this opening clause, then keep the remaining parent-bullet context only if it preserves the same story truthfully."
+            if supported_terms
+            else "Review this bullet manually and bring the strongest supported JD signal earlier without changing the claim."
+        )
 
+        return {
+            "edit_type": "rewrite",
+            "claim_safety": "safe_strengthen" if supported_terms else "keep_visible",
+            "recommended_rewrite": directional_text,
+            "why_current_is_weak": (
+                f"The evidence is relevant, but {lead} is not yet leading the bullet clearly."
+                if supported_terms
+                else "The evidence is relevant, but the JD-aligned language is not yet leading the bullet clearly."
+            ),
+            "why_rewrite_is_better": (
+                "No deterministic text patch survived, but this is still the right grounded rewrite direction for manual review."
+            ),
+            "why_it_matters": (
+                f"This remains a grounded directional rewrite candidate for {lead}, but it should stay review-only instead of auto-applying a deterministic patch."
+                if supported_terms
+                else "This remains a grounded directional rewrite candidate, but it should stay review-only instead of auto-applying a deterministic patch."
+            ),
+            "placement_guidance": (
+                str(replacement_candidate.get("placement_guidance", "") or "").strip()
+                or "Review this bullet manually before changing lower-priority sections."
+            ),
+            **common_fields,
+        }
+    
     if rewrite_instruction:
         return {
             "edit_type": "keep_visible",

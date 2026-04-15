@@ -4577,6 +4577,47 @@ function isLikelyTailoringWorkspaceInlineHeaderWithContinuation(
   return true;
 }
 
+function isLikelyTailoringWorkspaceExperiencePairedRowContinuation(
+  previousRow,
+  currentRow,
+  currentSection,
+  nextRow
+) {
+  if (!previousRow || !currentRow) return false;
+
+  const sectionKey = String(currentSection || "").trim().toUpperCase();
+  if (
+    sectionKey !== "PROFESSIONAL EXPERIENCE" &&
+    sectionKey !== "WORK EXPERIENCE"
+  ) {
+    return false;
+  }
+
+  if (String(previousRow.kind || "").trim() !== "paired_row") return false;
+  if (currentRow.is_bullet || currentRow.is_section_heading) return false;
+  if (String(currentRow.kind || "").trim() === "paired_row") return false;
+
+  const currentText = normalizeTailoringWorkspaceFlowText(
+    String(currentRow.text || "")
+  );
+  if (!currentText) return false;
+  if (isTailoringWorkspaceDateRangeText(currentText)) return false;
+  if (/:\s*/.test(currentText)) return false;
+
+  const previousIndent = Number(previousRow.left_indent_pt || 0);
+  const currentIndent = Number(currentRow.left_indent_pt || 0);
+  const gapBefore = Number(currentRow.gap_before || 0);
+
+  if (Math.abs(currentIndent - previousIndent) > 12) return false;
+  if (gapBefore > 10) return false;
+
+  if (nextRow && !nextRow.is_bullet && !nextRow.is_section_heading) {
+    return false;
+  }
+
+  return true;
+}
+
 function isLikelyTailoringWorkspaceSplitHeaderDatePair(
   currentRow,
   nextRow,
@@ -4725,6 +4766,33 @@ function buildTailoringWorkspacePreviewPresentationRows(
       sawFirstSectionHeading = true;
       cloned.presentation_role = "";
       presentedRows.push(cloned);
+      continue;
+    }
+
+    if (
+      isLikelyTailoringWorkspaceExperiencePairedRowContinuation(
+        previousPresentedRow,
+        cloned,
+        currentSection,
+        nextRow
+      )
+    ) {
+      const previousLeftText = normalizeTailoringWorkspaceFlowText(
+        String(previousPresentedRow.left_text || "")
+      );
+      const continuationText = normalizeTailoringWorkspaceFlowText(
+        String(cloned.text || "")
+      );
+
+      previousPresentedRow.left_text = `${previousLeftText} ${continuationText}`.trim();
+      previousPresentedRow.patched = Boolean(
+        previousPresentedRow.patched || cloned.patched
+      );
+
+      if (!previousPresentedRow.patch_source && cloned.patch_source) {
+        previousPresentedRow.patch_source = cloned.patch_source;
+      }
+
       continue;
     }
 
@@ -5205,6 +5273,8 @@ function isTailoringWorkspaceFocusedPresentationRow(row) {
   const rowTexts = [
     String(row?.text || ""),
     stripTailoringWorkspaceLeadingBullet(String(row?.text || "")),
+    String(row?.left_text || ""),
+    String(row?.right_text || ""),
   ]
     .map((value) => normalizeTailoringWorkspaceFlowText(value))
     .map((value) => normalizeTailoringWorkspaceText(value))

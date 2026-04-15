@@ -199,13 +199,31 @@ def build_final_replacement_plan(
         card = card_by_bullet_id.get(bullet_id, {})
         resolved_bullet_id = _candidate_bullet_id(best_candidate) or bullet_id
 
-        original_text = _text(best_candidate.get("original_text", "")) or _text(card.get("current_evidence", ""))
+        parent_bullet = (
+            _text(best_candidate.get("parent_bullet", ""))
+            or _text(card.get("parent_bullet", ""))
+        )
+
+        original_text = (
+            _text(best_candidate.get("original_text", ""))
+            or _text(card.get("original_text", ""))
+            or _text(best_candidate.get("current_evidence", ""))
+            or _text(card.get("current_evidence", ""))
+            or parent_bullet
+        )
+
         current_evidence = (
             _text(best_candidate.get("current_evidence", ""))
             or _text(card.get("current_evidence", ""))
-            or original_text
+            or _text(best_candidate.get("original_text", ""))
+            or _text(card.get("original_text", ""))
+            or parent_bullet
         )
-        rewrite_direction = _text(best_candidate.get("rewrite_instruction", "")) or _text(card.get("recommended_rewrite", ""))
+
+        rewrite_direction = (
+            _text(card.get("recommended_rewrite", ""))
+            or _text(best_candidate.get("rewrite_instruction", ""))
+        )
 
         if _is_direct_apply_ready(best_candidate):
             decisions.append(
@@ -225,6 +243,7 @@ def build_final_replacement_plan(
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
+                    "parent_bullet": parent_bullet,
                     "final_replacement_text": _text(best_candidate.get("patch_text", "")),
                     "rewrite_direction": rewrite_direction,
                     "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
@@ -253,6 +272,7 @@ def build_final_replacement_plan(
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
+                    "parent_bullet": parent_bullet,
                     "final_replacement_text": _text(best_candidate.get("patch_text", "")),
                     "rewrite_direction": rewrite_direction,
                     "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
@@ -281,6 +301,7 @@ def build_final_replacement_plan(
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
+                    "parent_bullet": parent_bullet,
                     "final_replacement_text": "",
                     "rewrite_direction": rewrite_direction,
                     "why_selected": _text(best_candidate.get("why_this_improves_match", "")),

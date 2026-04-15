@@ -1236,16 +1236,26 @@ def _structural_clause_edit_card_from_reuse(
         "focused_clause_text": clause_text,
     }
 
-def _replacement_candidate_lookup_key(item: Dict[str, Any]) -> tuple:
+def _replacement_candidate_lookup_keys(item: Dict[str, Any]) -> List[tuple]:
     source_bullet_id = str(
         item.get("source_bullet_id", "") or item.get("bullet_id", "") or ""
     ).strip()
-    if source_bullet_id:
-        return ("bullet", source_bullet_id)
 
     source_entry_id = str(
         item.get("source_entry_id", "") or item.get("entry_id", "") or ""
     ).strip()
+    section = str(item.get("section", "") or "").strip()
+    source = str(item.get("source", "") or "").strip()
+
+    supported_terms = tuple(sorted({
+        _diagnosis_normalize_term(str(term))
+        for term in (
+            list(item.get("supported_jd_signals", []) or [])
+            + list(item.get("supported_terms", []) or [])
+            + list(item.get("jd_signal_terms", []) or [])
+        )
+        if _diagnosis_normalize_term(str(term))
+    }))
 
     current_evidence = (
         str(item.get("current_evidence", "") or "").strip()
@@ -1256,15 +1266,34 @@ def _replacement_candidate_lookup_key(item: Dict[str, Any]) -> tuple:
         or str(item.get("original_text", "") or "").strip()
     )
 
-    if source_entry_id and current_evidence:
-        return ("entry_evidence", source_entry_id, current_evidence)
+    keys: List[tuple] = []
 
-    return (
-        "fallback",
-        str(item.get("section", "") or "").strip(),
-        str(item.get("source", "") or "").strip(),
-        current_evidence,
-    )
+    if source_bullet_id:
+        keys.append(("bullet", source_bullet_id))
+
+    if source_entry_id and supported_terms:
+        keys.append(("entry_terms", source_entry_id, section, source, supported_terms))
+
+    if source_entry_id and current_evidence:
+        keys.append(("entry_evidence", source_entry_id, current_evidence))
+
+    if current_evidence:
+        keys.append(("fallback", section, source, current_evidence))
+
+    seen = set()
+    unique_keys: List[tuple] = []
+    for key in keys:
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_keys.append(key)
+
+    return unique_keys
+
+
+def _replacement_candidate_lookup_key(item: Dict[str, Any]) -> tuple:
+    keys = _replacement_candidate_lookup_keys(item)
+    return keys[0] if keys else ("fallback", "", "", "")
 
 
 def _patch_ready_rewrite_lookup(
@@ -1282,9 +1311,6 @@ def _patch_ready_rewrite_lookup(
         if not patch_text:
             continue
 
-        key = _replacement_candidate_lookup_key(candidate)
-        existing = lookup.get(key)
-
         def _rank(row: Dict[str, Any]) -> tuple:
             status = str(row.get("materiality_validation_status", "") or "").strip()
             return (
@@ -1293,8 +1319,10 @@ def _patch_ready_rewrite_lookup(
                 len(str(row.get("patch_text", "") or "").strip()),
             )
 
-        if existing is None or _rank(candidate) > _rank(existing):
-            lookup[key] = candidate
+        for key in _replacement_candidate_lookup_keys(candidate):
+            existing = lookup.get(key)
+            if existing is None or _rank(candidate) > _rank(existing):
+                lookup[key] = candidate
 
     return lookup
 
@@ -1309,9 +1337,6 @@ def _directional_rewrite_lookup(
         if str(candidate.get("proposal_status", "") or "").strip() != "direction_only":
             continue
 
-        key = _replacement_candidate_lookup_key(candidate)
-        existing = lookup.get(key)
-
         def _rank(row: Dict[str, Any]) -> tuple:
             reason = str(row.get("direction_only_reason", "") or "").strip()
             return (
@@ -1321,8 +1346,10 @@ def _directional_rewrite_lookup(
                 len(str(row.get("rewrite_instruction", "") or "").strip()),
             )
 
-        if existing is None or _rank(candidate) > _rank(existing):
-            lookup[key] = candidate
+        for key in _replacement_candidate_lookup_keys(candidate):
+            existing = lookup.get(key)
+            if existing is None or _rank(candidate) > _rank(existing):
+                lookup[key] = candidate
 
     return lookup
 
@@ -1346,14 +1373,32 @@ def _rewrite_outcome_label_from_candidate(candidate: Dict[str, Any]) -> str:
     return proposal_status or "unknown"
 
 def _rendered_candidate_current_evidence(replacement_candidate: Dict[str, Any]) -> str:
-    return (
-        str(replacement_candidate.get("current_evidence", "") or "").strip()
-        or str(replacement_candidate.get("bullet_excerpt", "") or "").strip()
-        or str(replacement_candidate.get("focused_clause_text", "") or "").strip()
-        or str(replacement_candidate.get("structural_clause_text", "") or "").strip()
-        or str(replacement_candidate.get("parent_bullet", "") or "").strip()
-        or str(replacement_candidate.get("original_text", "") or "").strip()
+    parent_bullet = str(replacement_candidate.get("parent_bullet", "") or "").strip()
+    original_text = str(replacement_candidate.get("original_text", "") or "").strip()
+    current_evidence = str(replacement_candidate.get("current_evidence", "") or "").strip()
+    focused_clause_text = str(replacement_candidate.get("focused_clause_text", "") or "").strip()
+    structural_clause_text = str(replacement_candidate.get("structural_clause_text", "") or "").strip()
+
+    full_bullet = max(
+        [value for value in [parent_bullet, original_text, current_evidence] if value],
+        key=len,
+        default="",
     )
+    if full_bullet:
+        return full_bullet
+
+    return focused_clause_text or structural_clause_text
+
+def _display_candidate_current_bullet(candidate: Dict[str, Any]) -> str:
+    parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    current_evidence = _rendered_candidate_current_evidence(candidate)
+
+    values = [value for value in [parent_bullet, original_text, current_evidence] if value]
+    if not values:
+        return ""
+
+    return max(values, key=len)
 
 def _rewrite_card_fields_from_patch_ready_candidate(
     replacement_candidate: Dict[str, Any],
@@ -1362,7 +1407,11 @@ def _rewrite_card_fields_from_patch_ready_candidate(
     patch_text = str(replacement_candidate.get("patch_text", "") or "").strip()
     status = str(replacement_candidate.get("materiality_validation_status", "") or "").strip()
     patch_method = str(replacement_candidate.get("patch_generation_method", "") or "").strip()
-    current_evidence = _rendered_candidate_current_evidence(replacement_candidate)
+
+    current_evidence = _display_candidate_current_bullet(replacement_candidate)
+    parent_bullet = str(
+        replacement_candidate.get("parent_bullet", "") or current_evidence
+    ).strip()
 
     if status == "material_candidate":
         why_it_matters = (
@@ -1398,13 +1447,14 @@ def _rewrite_card_fields_from_patch_ready_candidate(
         "replacement_materiality_validation_note": str(
             replacement_candidate.get("materiality_validation_note", "") or ""
         ).strip(),
-        "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+        "original_text": current_evidence,
+        "current_evidence": current_evidence,
+        "parent_bullet": parent_bullet,
         "supported_jd_signals": list(supported_terms or []),
         "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
         "outcome_reason": str(
             replacement_candidate.get("materiality_validation_note", "") or ""
         ).strip(),
-        "current_evidence": current_evidence,
     }
 
 
@@ -1414,13 +1464,18 @@ def _rewrite_card_fields_from_directional_candidate(
 ) -> Dict[str, Any]:
     reason = str(replacement_candidate.get("direction_only_reason", "") or "").strip()
     rewrite_instruction = str(replacement_candidate.get("rewrite_instruction", "") or "").strip()
-    current_evidence = _rendered_candidate_current_evidence(replacement_candidate)
+
+    current_evidence = _display_candidate_current_bullet(replacement_candidate)
+    parent_bullet = str(
+        replacement_candidate.get("parent_bullet", "") or current_evidence
+    ).strip()
 
     common_fields = {
         "direction_only_reason": reason,
         "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
-        "original_text": str(replacement_candidate.get("original_text", "") or "").strip(),
+        "original_text": current_evidence,
         "current_evidence": current_evidence,
+        "parent_bullet": parent_bullet,
         "supported_jd_signals": list(supported_terms or []),
         "outcome_label": _rewrite_outcome_label_from_candidate(replacement_candidate),
         "outcome_reason": str(
@@ -1428,7 +1483,7 @@ def _rewrite_card_fields_from_directional_candidate(
         ).strip()
         or str(replacement_candidate.get("direction_only_reason", "") or "").strip(),
     }
-    
+
     lead = ", ".join(_truncate_list(supported_terms, 4)) if supported_terms else "the supported JD signals"
 
     if reason == "multi_signal_already_explicit_reorder_preferred":
@@ -1450,7 +1505,7 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             **common_fields,
         }
-    
+
     if reason == "single_signal_already_explicit_reorder_preferred":
         return {
             "edit_type": "keep_visible",
@@ -1470,7 +1525,7 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             **common_fields,
         }
-    
+
     if reason == "supported_terms_too_generic_to_front":
         return {
             "edit_type": "support",
@@ -1550,7 +1605,7 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             **common_fields,
         }
-    
+
     if reason == "cosmetic_patch_not_exportable":
         return {
             "edit_type": "keep_visible",
@@ -1570,7 +1625,7 @@ def _rewrite_card_fields_from_directional_candidate(
             ),
             **common_fields,
         }
-    
+
     if rewrite_instruction:
         return {
             "edit_type": "keep_visible",
@@ -1608,6 +1663,63 @@ def _rewrite_card_fields_from_directional_candidate(
         **common_fields,
     }
 
+def _edit_card_dedupe_rank(card: Dict[str, Any]) -> tuple:
+    priority = str(card.get("priority", "") or "").strip().lower()
+    edit_type = str(card.get("edit_type", "") or "").strip().lower()
+    claim_safety = str(card.get("claim_safety", "") or "").strip().lower()
+    recommended_rewrite = str(card.get("recommended_rewrite", "") or "").strip()
+    current_evidence = str(card.get("current_evidence", "") or "").strip()
+
+    priority_rank = 3 if priority == "high" else 2 if priority == "medium" else 1 if priority == "low" else 0
+    edit_type_rank = 3 if edit_type == "rewrite" else 2 if edit_type == "reinforce" else 1 if edit_type == "support" else 0
+    claim_safety_rank = 2 if claim_safety == "safe_strengthen" else 1 if claim_safety == "adjacent_only" else 0
+
+    return (
+        1 if recommended_rewrite else 0,
+        edit_type_rank,
+        claim_safety_rank,
+        priority_rank,
+        len(recommended_rewrite),
+        len(current_evidence),
+    )
+
+
+def _dedupe_edit_cards_by_candidate_id(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    best_by_candidate_id: Dict[str, Dict[str, Any]] = {}
+    ordered_keys: List[tuple] = []
+
+    for index, card in enumerate(cards):
+        candidate_id = str(card.get("replacement_candidate_id", "") or "").strip()
+
+        if not candidate_id:
+            ordered_keys.append(("free", index))
+            best_by_candidate_id[f"__free__{index}"] = card
+            continue
+
+        key = ("candidate", candidate_id)
+        existing = best_by_candidate_id.get(candidate_id)
+
+        if existing is None:
+            best_by_candidate_id[candidate_id] = card
+            ordered_keys.append(key)
+            continue
+
+        if _edit_card_dedupe_rank(card) > _edit_card_dedupe_rank(existing):
+            best_by_candidate_id[candidate_id] = card
+
+    deduped: List[Dict[str, Any]] = []
+    for key_type, key_value in ordered_keys:
+        if key_type == "free":
+            free_card = best_by_candidate_id.get(f"__free__{key_value}")
+            if free_card is not None:
+                deduped.append(free_card)
+            continue
+
+        candidate_card = best_by_candidate_id.get(key_value)
+        if candidate_card is not None:
+            deduped.append(candidate_card)
+
+    return deduped
 
 def _build_edit_cards(
     payload: Dict[str, Any],
@@ -1675,8 +1787,8 @@ def _build_edit_cards(
             for term in (candidate.get("supported_terms", []) or [])
             if str(term).strip()
         ]
-        current_evidence = _rendered_candidate_current_evidence(candidate)
         parent_bullet = str(candidate.get("parent_bullet", "") or "").strip()
+        current_evidence = _display_candidate_current_bullet(candidate)
         source_text = current_evidence or parent_bullet
 
         signal_match = supported_signal_match_in_text(
@@ -1696,22 +1808,35 @@ def _build_edit_cards(
             source_text,
         )
 
-        candidate_lookup_key = _replacement_candidate_lookup_key(
-            {
-                "bullet_id": candidate.get("bullet_id", ""),
-                "source_bullet_id": candidate.get("source_bullet_id", ""),
-                "entry_id": candidate.get("entry_id", ""),
-                "source_entry_id": candidate.get("source_entry_id", ""),
-                "section": candidate.get("section", ""),
-                "source": candidate.get("source", ""),
-                "current_evidence": current_evidence,
-                "parent_bullet": parent_bullet,
-                "bullet_excerpt": current_evidence,
-                "original_text": source_text,
-            }
+        candidate_lookup_payload = {
+            "bullet_id": candidate.get("bullet_id", ""),
+            "source_bullet_id": candidate.get("source_bullet_id", ""),
+            "entry_id": candidate.get("entry_id", ""),
+            "source_entry_id": candidate.get("source_entry_id", ""),
+            "section": candidate.get("section", ""),
+            "source": candidate.get("source", ""),
+            "current_evidence": current_evidence,
+            "parent_bullet": parent_bullet,
+            "bullet_excerpt": current_evidence,
+            "original_text": source_text,
+            "supported_terms": supported_terms,
+            "supported_jd_signals": supported_terms,
+            "jd_signal_terms": supported_terms,
+        }
+
+        candidate_lookup_keys = _replacement_candidate_lookup_keys(candidate_lookup_payload)
+
+        patch_ready_candidate = next(
+            (patch_ready_lookup.get(key) for key in candidate_lookup_keys if patch_ready_lookup.get(key) is not None),
+            None,
         )
-        patch_ready_candidate = patch_ready_lookup.get(candidate_lookup_key)
-        directional_candidate = directional_lookup.get(candidate_lookup_key)
+
+        directional_candidate = None
+        if patch_ready_candidate is None:
+            directional_candidate = next(
+                (directional_lookup.get(key) for key in candidate_lookup_keys if directional_lookup.get(key) is not None),
+                None,
+            )
 
         recommended_rewrite = _recommended_rewrite_text(
             preferred_rewrite_directions,
@@ -1782,7 +1907,9 @@ def _build_edit_cards(
         limit,
     )
 
-    return cards
+    cards = _dedupe_edit_cards_by_candidate_id(cards)
+
+    return cards[:limit]
 
 
 def _build_top_edit_priorities(
@@ -1965,8 +2092,9 @@ def _edit_card_to_bullet_diagnosis(
         "entry_index": card.get("entry_index", -1),
         "bullet_id": str(card.get("bullet_id", "") or "").strip(),
         "bullet_index": card.get("bullet_index", -1),
-        "original_text": parent_bullet or current_evidence,
-        "current_evidence": current_evidence,
+        "parent_bullet": parent_bullet,
+        "original_text": current_evidence or parent_bullet,
+        "current_evidence": current_evidence or parent_bullet,
         "evidence_type": str(card.get("evidence_type", "") or "").strip(),
         "jd_signal_terms": jd_signal_terms,
         "likely_impacted_dimensions": _likely_impacted_dimensions(
@@ -2293,6 +2421,7 @@ def _diagnosis_to_replacement_candidate(
         "direction_only_reason": directional_only_reason,
         "original_text": str(diagnosis.get("original_text", "") or "").strip(),
         "current_evidence": str(diagnosis.get("current_evidence", "") or "").strip(),
+        "parent_bullet": str(diagnosis.get("parent_bullet", "") or "").strip(),
         "rewrite_instruction": rewrite_instruction,
         "proposed_text": patch_text,
         "patch_text": patch_text,
@@ -4178,6 +4307,7 @@ def _split_result_clause(text: str) -> Tuple[str, str]:
         ", informing ",
         ", improving ",
         ", enabling ",
+        ", achieving ",
         ", resulting in ",
         ", leading to ",
         ", reducing ",
@@ -4732,7 +4862,7 @@ def _using_phrase_match_for_supported_term(
             .*?
         )
         (?=
-            ,\s+(?:informing|enhancing|improving|ensuring|reducing|leveraging|driving|leading|resulting|enabling|revealing|uncovering|which|that)\b
+            ,\s+(?:informing|enhancing|improving|ensuring|reducing|leveraging|driving|leading|resulting|enabling|achieving|revealing|uncovering|which|that)\b
             |[.;]
             |$
         )
@@ -4782,7 +4912,7 @@ def _deterministic_front_supported_phrase_patch(
     if not supported_targets:
         return None
 
-    lead_match = re.match(r"^(?P<verb>[A-Z][A-Za-z-]+)\s+(?P<body>.+)$", original_text)
+    lead_match = re.match(r"^(?P<verb>[A-Za-z][A-Za-z-]+)\s+(?P<body>.+)$", original_text)
     if not lead_match:
         return None
 
@@ -4791,86 +4921,106 @@ def _deterministic_front_supported_phrase_patch(
     if not verb or not body:
         return None
 
+    verb = verb[:1].upper() + verb[1:]
+
     tail_match = re.match(
-        r"^(?P<head>.+?)(?P<tail>\s+(?:to|for|on|in|with|by|under|across|within|against)\b.*)?$",
+        r"^(?P<head>.+?)(?P<tail>\s+(?:to|for|on|in|with|by|under|across|within|against|of)\b.*)?$",
         body,
         flags=re.IGNORECASE,
     )
-    if not tail_match:
+    if tail_match:
+        head = str(tail_match.group("head") or "").strip()
+        tail = str(tail_match.group("tail") or "").rstrip()
+
+        if head:
+            parts = re.split(r"\s+and\s+", head, maxsplit=1, flags=re.IGNORECASE)
+            if len(parts) == 2:
+                left = str(parts[0] or "").strip()
+                right = str(parts[1] or "").strip()
+
+                if left and right:
+                    left_tokens = left.split()
+                    right_tokens = right.split()
+
+                    blocked_phrase_markers = {
+                        "using",
+                        "with",
+                        "to",
+                        "for",
+                        "on",
+                        "in",
+                        "by",
+                        "under",
+                        "across",
+                        "within",
+                        "against",
+                        "of",
+                    }
+
+                    if (
+                        len(left_tokens) >= 2
+                        and len(right_tokens) >= 2
+                        and not any(token.lower() in blocked_phrase_markers for token in left_tokens)
+                        and not any(token.lower() in blocked_phrase_markers for token in right_tokens)
+                    ):
+                        left_last = left_tokens[-1].lower()
+                        right_last = right_tokens[-1].lower()
+
+                        generic_heads = {
+                            "experiment",
+                            "experiments",
+                            "test",
+                            "tests",
+                            "assessment",
+                            "assessments",
+                            "analysis",
+                            "analyses",
+                            "model",
+                            "models",
+                            "rule",
+                            "rules",
+                            "policy",
+                            "policies",
+                            "risk",
+                            "risks",
+                        }
+
+                        left_norm = _diagnosis_normalize_term(left)
+                        right_norm = _diagnosis_normalize_term(right)
+
+                        left_has_supported = any(term in left_norm for term in supported_targets)
+                        right_has_supported = any(term in right_norm for term in supported_targets)
+
+                        if (
+                            right_has_supported
+                            and not left_has_supported
+                            and left_last != right_last
+                            and not (left_last in generic_heads and right_last in generic_heads)
+                        ):
+                            reordered_head = f"{right} and {left}".strip()
+                            patch_text = f"{verb} {reordered_head}{tail}".strip()
+
+                            if _diagnosis_normalize_term(patch_text) != _diagnosis_normalize_term(original_text):
+                                return patch_text
+
+    using_match = _using_phrase_match_for_supported_term(
+        original_text,
+        list(supported_targets),
+    )
+    if not using_match:
         return None
 
-    head = str(tail_match.group("head") or "").strip()
-    tail = str(tail_match.group("tail") or "").rstrip()
-    if not head:
+    phrase = re.sub(r"\s+", " ", str(using_match.group("phrase") or "").strip())
+    if not phrase:
         return None
 
-    if "," in head or ";" in head or ":" in head:
-        return None
-
-    parts = re.split(r"\s+and\s+", head, maxsplit=1, flags=re.IGNORECASE)
+    parts = re.split(r"\s+and\s+", phrase, maxsplit=1, flags=re.IGNORECASE)
     if len(parts) != 2:
         return None
 
-    left = str(parts[0] or "").strip()
-    right = str(parts[1] or "").strip()
+    left = str(parts[0] or "").strip(" ,")
+    right = str(parts[1] or "").strip(" ,")
     if not left or not right:
-        return None
-    
-    left_tokens = left.split()
-    right_tokens = right.split()
-
-    # Keep this builder narrow. It should only fire for simple coordinated
-    # noun-phrase style openings like "parameterized SQL queries and Python scripts",
-    # not for shared-head constructions like "lapse and retention risk assessments"
-    # or near-synonym reshuffles like "experiments and A/B tests".
-    if len(left_tokens) < 2 or len(right_tokens) < 2:
-        return None
-
-    blocked_phrase_markers = {
-        "using",
-        "with",
-        "to",
-        "for",
-        "on",
-        "in",
-        "by",
-        "under",
-        "across",
-        "within",
-        "against",
-    }
-    if any(token.lower() in blocked_phrase_markers for token in left_tokens):
-        return None
-    if any(token.lower() in blocked_phrase_markers for token in right_tokens):
-        return None
-
-    left_last = left_tokens[-1].lower()
-    right_last = right_tokens[-1].lower()
-
-    # Reject likely shared-head / category-shuffle cases. These tend to produce
-    # broken rewrites like "retention risk assessments ... and lapse ..."
-    if left_last == right_last:
-        return None
-
-    generic_heads = {
-        "experiment",
-        "experiments",
-        "test",
-        "tests",
-        "assessment",
-        "assessments",
-        "analysis",
-        "analyses",
-        "model",
-        "models",
-        "rule",
-        "rules",
-        "policy",
-        "policies",
-        "risk",
-        "risks",
-    }
-    if left_last in generic_heads and right_last in generic_heads:
         return None
 
     left_norm = _diagnosis_normalize_term(left)
@@ -4879,14 +5029,20 @@ def _deterministic_front_supported_phrase_patch(
     left_has_supported = any(term in left_norm for term in supported_targets)
     right_has_supported = any(term in right_norm for term in supported_targets)
 
-    if left_has_supported:
+    if left_has_supported or not right_has_supported:
         return None
 
-    if not right_has_supported:
+    if len(left.split()) > 4 or len(right.split()) > 4:
         return None
 
-    reordered_head = f"{right} and {left}".strip()
-    patch_text = f"{verb} {reordered_head}{tail}".strip()
+    reordered_phrase = f"{right} and {left}"
+    patch_text = (
+        original_text[: using_match.start("phrase")]
+        + reordered_phrase
+        + original_text[using_match.end("phrase") :]
+    )
+    patch_text = re.sub(r"\s+", " ", patch_text).strip()
+    patch_text = re.sub(r"\s+,", ",", patch_text)
 
     if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
         return None
@@ -5102,7 +5258,7 @@ def _deterministic_patch_text_from_diagnosis(
         if parent_signal_patch:
             _, patch_text = parent_signal_patch
             return "patch_ready", patch_text, "deterministic_parent_signal_label", ""
-        
+
         if _supported_term_already_salient_early(original_text, supported_terms):
             return "direction_only", "", "", "single_signal_already_explicit_reorder_preferred"
 
@@ -5148,7 +5304,6 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
     signal_fronting_methods = {
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
-        "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
         "deterministic_family_alias_expansion",
@@ -5179,7 +5334,7 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
     return patch_generation_method_base in {
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
-        "deterministic_front_supported_phrase",
+
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
         "deterministic_parent_signal_label",
@@ -5284,7 +5439,6 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_parent_signal_label",
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
-        "deterministic_front_supported_phrase",
         "deterministic_family_alias_expansion",
         "deterministic_fronted_using_phrase"
     }
@@ -5518,13 +5672,11 @@ def _build_replacement_candidates(
 def _is_parent_signal_material_rewrite_diagnosis(
     diagnosis: Dict[str, Any],
 ) -> bool:
-    if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
-        return False
-
     return any([
         _deterministic_clause_extract_patch(diagnosis) is not None,
         _deterministic_exact_signal_variant_patch(diagnosis) is not None,
         _deterministic_parent_signal_label_patch(diagnosis) is not None,
+        _deterministic_front_supported_phrase_patch(diagnosis) is not None,
     ])
 
 
@@ -6346,10 +6498,10 @@ def _rewrite_idea_card_lookup(payload: Dict[str, Any]) -> Dict[tuple, Dict[str, 
                 "source_entry_id": card.get("source_entry_id", ""),
                 "section": card.get("section", ""),
                 "source": card.get("source", ""),
-                "current_evidence": card.get("parent_bullet", "") or card.get("current_evidence", ""),
+                "current_evidence": card.get("current_evidence", "") or card.get("parent_bullet", ""),
                 "parent_bullet": card.get("parent_bullet", ""),
-                "bullet_excerpt": card.get("current_evidence", ""),
-                "original_text": card.get("parent_bullet", "") or card.get("current_evidence", ""),
+                "bullet_excerpt": card.get("current_evidence", "") or card.get("parent_bullet", ""),
+                "original_text": card.get("original_text", "") or card.get("current_evidence", "") or card.get("parent_bullet", ""),
             }
         )
 
@@ -6382,10 +6534,10 @@ def _rewrite_idea_override_card(
             "source_entry_id": rewrite_candidate.get("source_entry_id", ""),
             "section": rewrite_candidate.get("section", ""),
             "source": rewrite_candidate.get("source", ""),
-            "current_evidence": rewrite_candidate.get("parent_bullet", "") or rewrite_candidate.get("bullet_excerpt", ""),
+            "current_evidence": rewrite_candidate.get("bullet_excerpt", "") or rewrite_candidate.get("current_evidence", "") or rewrite_candidate.get("parent_bullet", ""), 
             "parent_bullet": rewrite_candidate.get("parent_bullet", ""),
             "bullet_excerpt": rewrite_candidate.get("bullet_excerpt", ""),
-            "original_text": rewrite_candidate.get("parent_bullet", "") or rewrite_candidate.get("bullet_excerpt", ""),
+            "original_text": rewrite_candidate.get("original_text", "") or rewrite_candidate.get("bullet_excerpt", "") or rewrite_candidate.get("current_evidence", "") or rewrite_candidate.get("parent_bullet", ""),
         }
     )
 
@@ -6396,23 +6548,73 @@ def _rewrite_review_card_lookup_by_candidate_id(
 ) -> Dict[str, Dict[str, Any]]:
     lookup: Dict[str, Dict[str, Any]] = {}
 
+    def _text(value: Any) -> str:
+        return str(value or "").strip()
+
+    def _norm(value: Any) -> str:
+        return _diagnosis_normalize_term(_text(value))
+
+    def _canonical_bullet(item: Dict[str, Any]) -> str:
+        values = [
+            _text(item.get("parent_bullet", "")),
+            _text(item.get("current_evidence", "")),
+            _text(item.get("original_text", "")),
+        ]
+        values = [value for value in values if value]
+        if not values:
+            return ""
+        return max(values, key=len)
+
+    def _rank(item: Dict[str, Any]) -> tuple:
+        parent_bullet = _text(item.get("parent_bullet", ""))
+        current_evidence = _text(item.get("current_evidence", ""))
+        original_text = _text(item.get("original_text", ""))
+        canonical_bullet = _canonical_bullet(item)
+
+        parent_norm = _norm(parent_bullet)
+        current_norm = _norm(current_evidence)
+        original_norm = _norm(original_text)
+        canonical_norm = _norm(canonical_bullet)
+
+        # Prefer cards whose bullet provenance is internally consistent.
+        current_matches_canonical = 1 if canonical_norm and current_norm == canonical_norm else 0
+        original_matches_canonical = 1 if canonical_norm and original_norm == canonical_norm else 0
+        parent_matches_canonical = 1 if canonical_norm and parent_norm == canonical_norm else 0
+
+        # Penalize obviously conflicting rows like:
+        # original/current = bullet A, parent_bullet = unrelated bullet B
+        conflicting_parent = (
+            1
+            if parent_norm
+            and canonical_norm
+            and parent_norm != canonical_norm
+            and (current_norm == canonical_norm or original_norm == canonical_norm)
+            else 0
+        )
+
+        return (
+            1 if canonical_bullet else 0,
+            parent_matches_canonical,
+            current_matches_canonical,
+            original_matches_canonical,
+            0 if conflicting_parent else 1,
+            len(canonical_bullet),
+            1 if _text(item.get("replacement_candidate_id", "")) else 0,
+            1 if _text(item.get("patch_generation_method", "")) else 0,
+            1 if _text(item.get("outcome_label", "")) else 0,
+            1 if _text(item.get("claim_safety", "")) else 0,
+            1 if _text(item.get("placement_guidance", "")) else 0,
+            len(_text(item.get("recommended_rewrite", ""))),
+        )
+
     for card in (payload.get("edit_cards", []) or []):
-        candidate_id = str(card.get("replacement_candidate_id", "") or "").strip()
+        candidate_id = _text(card.get("replacement_candidate_id", ""))
         if not candidate_id:
             continue
 
         existing = lookup.get(candidate_id)
-
-        def _rank(item: Dict[str, Any]) -> tuple:
-            return (
-                1 if str(item.get("outcome_label", "") or "").strip() else 0,
-                1 if str(item.get("claim_safety", "") or "").strip() else 0,
-                1 if str(item.get("placement_guidance", "") or "").strip() else 0,
-                len(str(item.get("recommended_rewrite", "") or "").strip()),
-            )
-
         if existing is None or _rank(card) > _rank(existing):
-            lookup[candidate_id] = card
+            lookup[candidate_id] = dict(card)
 
     return lookup
 
@@ -6923,20 +7125,32 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
             ""
         ).strip()
 
+        parent_bullet = str(
+            override_card.get("parent_bullet", "") or
+            row.get("parent_bullet", "") or
+            ""
+        ).strip()
+
         original_text = str(
-            row.get("original_text", "") or
             override_card.get("original_text", "") or
-            ""
-        ).strip()
-        current_evidence = str(
-            row.get("current_evidence", "") or
+            row.get("original_text", "") or
             override_card.get("current_evidence", "") or
-            ""
+            row.get("current_evidence", "") or
+            parent_bullet
         ).strip()
+
+        current_evidence = str(
+            override_card.get("current_evidence", "") or
+            row.get("current_evidence", "") or
+            override_card.get("original_text", "") or
+            row.get("original_text", "") or
+            parent_bullet
+        ).strip()
+
         recommended_rewrite = str(
             row.get("final_replacement_text", "") or
-            row.get("rewrite_direction", "") or
             override_card.get("recommended_rewrite", "") or
+            row.get("rewrite_direction", "") or
             ""
         ).strip()
 
@@ -6947,6 +7161,7 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
             "source": str(row.get("source", "") or "").strip(),
             "original_text": original_text,
             "current_evidence": current_evidence,
+            "parent_bullet": parent_bullet,
             "recommended_rewrite": recommended_rewrite,
             "supported_jd_signals": supported_jd_signals,
             "outcome_label": outcome_label,

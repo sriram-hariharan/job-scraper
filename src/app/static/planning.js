@@ -480,6 +480,27 @@ function clearMultiSelect(id) {
   updateMultiSelectLabel(root);
 }
 
+function setMultiSelectValues(id, values) {
+  const root = getMultiSelectRoot(id);
+  if (!root) return;
+
+  const selectedValues = new Set(
+    (Array.isArray(values) ? values : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
+  root.querySelectorAll(".multi-select-option").forEach((option) => {
+    const optionValue = String(option.dataset.value || "").trim();
+    const isSelected = selectedValues.has(optionValue);
+
+    option.classList.toggle("is-selected", isSelected);
+    option.setAttribute("aria-checked", isSelected ? "true" : "false");
+  });
+
+  updateMultiSelectLabel(root);
+}
+
 function initMultiSelect(id) {
   const root = getMultiSelectRoot(id);
   if (!root || root.dataset.bound === "true") return;
@@ -1302,6 +1323,108 @@ function buildPlanningUrl() {
   return `/browse?${params.toString()}`;
 }
 
+function isValidPlanningSortKey(key) {
+  return PLANNING_SORT_COLUMNS.some(
+    (column) => column.sortable !== false && column.key === key
+  );
+}
+
+function readPlanningUrlState(search = window.location.search) {
+  const params = search instanceof URLSearchParams
+    ? search
+    : new URLSearchParams(String(search || ""));
+
+  const parsedPage = Number(params.get("page") || "1");
+  const page = Number.isFinite(parsedPage) && parsedPage > 0 ? parsedPage : 1;
+
+  const limitValue = String(params.get("limit") || "15").trim();
+  const limit = limitValue || "15";
+
+  const rawSortKey = String(params.get("sort_key") || "").trim();
+  const sortKey = isValidPlanningSortKey(rawSortKey) ? rawSortKey : "";
+
+  return {
+    actions: params.getAll("action").map((value) => String(value || "").trim()).filter(Boolean),
+    winnerBuckets: params.getAll("winner_bucket").map((value) => String(value || "").trim()).filter(Boolean),
+    tailoringStates: params.getAll("tailoring_state").map((value) => String(value || "").trim()).filter(Boolean),
+    undecidedOnly: params.get("undecided_only") === "true",
+    limit,
+    page,
+    sortKey,
+    sortDirection: params.get("sort_dir") === "desc" ? "desc" : "asc",
+  };
+}
+
+function applyPlanningUrlState(search = window.location.search) {
+  const state = readPlanningUrlState(search);
+
+  setMultiSelectValues("planningActionFilter", state.actions);
+  setMultiSelectValues("planningWinnerBucket", state.winnerBuckets);
+  setMultiSelectValues("planningTailoringFilter", state.tailoringStates);
+
+  const undecidedYes = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='yes']");
+  const undecidedNo = document.querySelector("input[name='planningUndecidedOnlyToggle'][value='no']");
+
+  if (state.undecidedOnly && undecidedYes) {
+    undecidedYes.checked = true;
+  } else if (undecidedNo) {
+    undecidedNo.checked = true;
+  }
+
+  const limitInput = qs("planningLimitInput");
+  if (limitInput) {
+    limitInput.value = state.limit;
+  }
+
+  planningTableState.sort.key = state.sortKey;
+  planningTableState.sort.direction = state.sortDirection;
+  setPlanningRequestedPage(state.page);
+
+  return state;
+}
+
+function buildPlanningBrowserUrl() {
+  const params = new URLSearchParams();
+  const actions = getMultiSelectValues("planningActionFilter");
+  const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
+  const tailoringStates = getMultiSelectValues("planningTailoringFilter");
+  const undecidedOnly = planningUndecidedOnlyEnabled();
+  const limit = String(qs("planningLimitInput")?.value || "15").trim() || "15";
+  const page = Number(planningTableState.pagination.page || 1);
+
+  appendMultiValueParams(params, "action", actions);
+  appendMultiValueParams(params, "winner_bucket", winnerBuckets);
+  appendMultiValueParams(params, "tailoring_state", tailoringStates);
+
+  if (undecidedOnly) params.set("undecided_only", "true");
+  if (limit !== "15") params.set("limit", limit);
+  if (Number.isFinite(page) && page > 1) params.set("page", String(page));
+
+  if (isValidPlanningSortKey(planningTableState.sort.key)) {
+    params.set("sort_key", planningTableState.sort.key);
+    params.set(
+      "sort_dir",
+      planningTableState.sort.direction === "desc" ? "desc" : "asc"
+    );
+  }
+
+  const query = params.toString();
+  return query ? `${window.location.pathname}?${query}` : window.location.pathname;
+}
+
+function syncPlanningBrowserUrl({ mode = "replace" } = {}) {
+  const nextUrl = buildPlanningBrowserUrl();
+  const currentUrl = `${window.location.pathname}${window.location.search}`;
+
+  if (currentUrl === nextUrl) return;
+
+  window.history[mode === "push" ? "pushState" : "replaceState"](
+    { planningDashboard: true },
+    "",
+    nextUrl
+  );
+}
+
 function buildApplicationPayloadFromRow(row) {
   return {
     job_doc_id: row.job_doc_id || "",
@@ -1390,14 +1513,22 @@ function normalizeTailoringWorkspaceText(value) {
     .trim();
 }
 
-function getTailoringWorkspaceDisplayBulletText(item, mode = "") {
+function getTailoringWorkspaceCanonicalBulletText(item, mode = "") {
   const normalizedMode = String(mode || "").trim().toLowerCase();
 
   if (normalizedMode === "direction_only") {
-    return String(item?.current_evidence || item?.original_text || "").trim();
+    return String(
+      item?.current_evidence || item?.original_text || item?.parent_bullet || ""
+    ).trim();
   }
 
-  return String(item?.original_text || item?.current_evidence || "").trim();
+  return String(
+    item?.current_evidence || item?.original_text || item?.parent_bullet || ""
+  ).trim();
+}
+
+function getTailoringWorkspaceDisplayBulletText(item, mode = "") {
+  return getTailoringWorkspaceCanonicalBulletText(item, mode);
 }
 
 function extractTailoringWorkspaceAnchorText(value, maxWords = 12) {
@@ -3546,83 +3677,92 @@ function renderEditCards(items) {
     <section class="tailoring-section-block">
       <div class="tailoring-section-title">Bullet-Level Edit Cards</div>
       <div class="tailoring-edit-card-list">
-        ${safeItems.map((item, index) => `
-          <article class="tailoring-edit-card">
-            <div class="tailoring-card-topline">
-              <div class="tailoring-edit-card-label">Card ${index + 1}</div>
-              <div class="tailoring-chip-group">
-                ${buildTailoringTonePill(String(item.priority || "priority").toUpperCase(), item.priority || "muted")}
-                ${buildTailoringTonePill(
-                  String(item.claim_safety || "claim_safety").replaceAll("_", " "),
-                  item.claim_safety === "safe_strengthen" ? "safe" : item.claim_safety === "adjacent_only" ? "caution" : "danger"
-                )}
-              </div>
-            </div>
+        ${safeItems.map((item, index) => {
+          const displayCurrentBullet = getTailoringWorkspaceDisplayBulletText(item);
+          const displayParentBullet = String(item?.parent_bullet || "").trim();
+          const showParentBullet =
+            displayParentBullet &&
+            normalizeTailoringWorkspaceBulletText(displayParentBullet) !==
+              normalizeTailoringWorkspaceBulletText(displayCurrentBullet);
 
-            ${item.jd_signal_terms?.length ? `
-              <div class="tailoring-info-row">
-                <span class="tailoring-info-label">JD signal</span>
-                <span class="tailoring-info-value">${escapeHtml(item.jd_signal_terms.join(", "))}</span>
+          return `
+            <article class="tailoring-edit-card">
+              <div class="tailoring-card-topline">
+                <div class="tailoring-edit-card-label">Card ${index + 1}</div>
+                <div class="tailoring-chip-group">
+                  ${buildTailoringTonePill(String(item.priority || "priority").toUpperCase(), item.priority || "muted")}
+                  ${buildTailoringTonePill(
+                    String(item.claim_safety || "claim_safety").replaceAll("_", " "),
+                    item.claim_safety === "safe_strengthen" ? "safe" : item.claim_safety === "adjacent_only" ? "caution" : "danger"
+                  )}
+                </div>
               </div>
-            ` : ""}
 
-            ${item.section ? `
-              <div class="tailoring-info-row">
-                <span class="tailoring-info-label">Section</span>
-                <span class="tailoring-info-value">${escapeHtml(item.section)}</span>
-              </div>
-            ` : ""}
+              ${item.jd_signal_terms?.length ? `
+                <div class="tailoring-info-row">
+                  <span class="tailoring-info-label">JD signal</span>
+                  <span class="tailoring-info-value">${escapeHtml(item.jd_signal_terms.join(", "))}</span>
+                </div>
+              ` : ""}
 
-            ${item.source ? `
-              <div class="tailoring-info-row">
-                <span class="tailoring-info-label">Evidence source</span>
-                <span class="tailoring-info-value">${escapeHtml(item.source)}</span>
-              </div>
-            ` : ""}
+              ${item.section ? `
+                <div class="tailoring-info-row">
+                  <span class="tailoring-info-label">Section</span>
+                  <span class="tailoring-info-value">${escapeHtml(item.section)}</span>
+                </div>
+              ` : ""}
 
-            ${item.current_evidence ? `
-              <div class="tailoring-info-block">
-                <div class="tailoring-info-label">Current evidence</div>
-                <div class="tailoring-quote-block">${escapeHtml(item.current_evidence)}</div>
-              </div>
-            ` : ""}
+              ${item.source ? `
+                <div class="tailoring-info-row">
+                  <span class="tailoring-info-label">Evidence source</span>
+                  <span class="tailoring-info-value">${escapeHtml(item.source)}</span>
+                </div>
+              ` : ""}
 
-            ${item.parent_bullet ? `
-              <div class="tailoring-info-block">
-                <div class="tailoring-info-label">Parent bullet</div>
-                <div class="tailoring-quote-block">${escapeHtml(item.parent_bullet)}</div>
-              </div>
-            ` : ""}
+              ${displayCurrentBullet ? `
+                <div class="tailoring-info-block">
+                  <div class="tailoring-info-label">Current evidence</div>
+                  <div class="tailoring-quote-block">${escapeHtml(displayCurrentBullet)}</div>
+                </div>
+              ` : ""}
 
-            ${item.recommended_rewrite ? `
-              <div class="tailoring-info-block">
-                <div class="tailoring-info-label">Recommended rewrite direction</div>
-                <div class="tailoring-rewrite-callout">${escapeHtml(item.recommended_rewrite)}</div>
-              </div>
-            ` : ""}
+              ${showParentBullet ? `
+                <div class="tailoring-info-block">
+                  <div class="tailoring-info-label">Parent bullet</div>
+                  <div class="tailoring-quote-block">${escapeHtml(displayParentBullet)}</div>
+                </div>
+              ` : ""}
 
-            ${item.why_current_is_weak ? `
-              <div class="tailoring-info-row">
-                <span class="tailoring-info-label">Why current wording is weak</span>
-                <span class="tailoring-info-value">${escapeHtml(item.why_current_is_weak)}</span>
-              </div>
-            ` : ""}
+              ${item.recommended_rewrite ? `
+                <div class="tailoring-info-block">
+                  <div class="tailoring-info-label">Recommended rewrite direction</div>
+                  <div class="tailoring-rewrite-callout">${escapeHtml(item.recommended_rewrite)}</div>
+                </div>
+              ` : ""}
 
-            ${item.why_rewrite_is_better ? `
-              <div class="tailoring-info-row">
-                <span class="tailoring-info-label">Why this rewrite is better</span>
-                <span class="tailoring-info-value">${escapeHtml(item.why_rewrite_is_better)}</span>
-              </div>
-            ` : ""}
+              ${item.why_current_is_weak ? `
+                <div class="tailoring-info-row">
+                  <span class="tailoring-info-label">Why current wording is weak</span>
+                  <span class="tailoring-info-value">${escapeHtml(item.why_current_is_weak)}</span>
+                </div>
+              ` : ""}
 
-            ${item.placement_guidance ? `
-              <div class="tailoring-info-row">
-                <span class="tailoring-info-label">Placement guidance</span>
-                <span class="tailoring-info-value">${escapeHtml(item.placement_guidance)}</span>
-              </div>
-            ` : ""}
-          </article>
-        `).join("")}
+              ${item.why_rewrite_is_better ? `
+                <div class="tailoring-info-row">
+                  <span class="tailoring-info-label">Why this rewrite is better</span>
+                  <span class="tailoring-info-value">${escapeHtml(item.why_rewrite_is_better)}</span>
+                </div>
+              ` : ""}
+
+              ${item.placement_guidance ? `
+                <div class="tailoring-info-row">
+                  <span class="tailoring-info-label">Placement guidance</span>
+                  <span class="tailoring-info-value">${escapeHtml(item.placement_guidance)}</span>
+                </div>
+              ` : ""}
+            </article>
+          `;
+        }).join("")}
       </div>
     </section>
   `;
@@ -3970,7 +4110,7 @@ function buildTailoringWorkspaceEditableBulletKey(item) {
     return `candidate:${candidateId}`;
   }
 
-  const originalText = String(item?.current_evidence || item?.original_text || "").trim();
+  const originalText = getTailoringWorkspaceCanonicalBulletText(item);
   if (!originalText) return "";
 
   return `text:${normalizeTailoringWorkspaceText(originalText)}`;
@@ -3991,7 +4131,7 @@ function collectTailoringWorkspaceEditableBullets(payload) {
   const seen = new Set();
 
   buckets.forEach((item) => {
-    const originalText = String(item?.current_evidence || item?.original_text || "").trim();
+    const originalText = getTailoringWorkspaceCanonicalBulletText(item);
     if (!originalText) return;
 
     const bulletKey = buildTailoringWorkspaceEditableBulletKey(item);
@@ -4962,7 +5102,7 @@ function getTailoringWorkspaceBaseTextForCandidate(candidateId) {
   if (!item) return "";
 
   const selectedIds = new Set(getTailoringWorkspaceSelectedCandidateIds());
-  const currentText = String(item.current_evidence || item.original_text || "").trim();
+  const currentText = getTailoringWorkspaceCanonicalBulletText(item);
   const selectedPatchText = selectedIds.has(candidateId)
     ? String(item.final_replacement_text || "").trim()
     : "";
@@ -6014,23 +6154,47 @@ function initializeTailoringWorkspaceSelectionState(artifact, draftResponse = nu
       ? buildTailoringWorkspaceSavedSelectionPayloadFromDraft(loadedDraft)
       : null;
 
-  tailoringWorkspaceState.savedSelectionPayload = draftSavedSelection || artifactSavedSelection;
-
-  const artifactSelectionStatus = String(payload.selected_patch_selection_status || "").trim().toLowerCase();
-  const artifactSelectedIds =
-    artifactSelectionStatus === "applied"
+  const artifactSelectedIds = normalizeTailoringWorkspaceCandidateIdList(
+    String(payload.selected_patch_selection_status || "").trim().toLowerCase() === "applied"
       ? (Array.isArray(payload.selected_patch_candidate_ids) ? payload.selected_patch_candidate_ids : [])
-      : [];
+      : []
+  );
 
   const draftSelectedIds = loadedDraft
     ? normalizeTailoringWorkspaceCandidateIdList(loadedDraft.selected_patch_candidate_ids || [])
     : [];
 
-  const initialSelectedIds = draftSelectedIds.length ? draftSelectedIds : artifactSelectedIds;
+  const draftManualEditCount =
+    loadedDraft && loadedDraft.manual_bullet_edits && typeof loadedDraft.manual_bullet_edits === "object"
+      ? Object.keys(normalizeTailoringWorkspaceManualBulletEdits(loadedDraft.manual_bullet_edits)).length
+      : 0;
+
+  const draftReviewDecisionCount =
+    loadedDraft && loadedDraft.rewrite_review_decisions && typeof loadedDraft.rewrite_review_decisions === "object"
+      ? Object.keys(normalizeTailoringWorkspaceReviewDecisionMap(loadedDraft.rewrite_review_decisions)).length
+      : 0;
+
+  const hasDraftSelectionDelta =
+    draftSelectedIds.join("|") !== artifactSelectedIds.join("|");
+
+  const shouldPreferDraftState = Boolean(
+    draftResponse &&
+    draftResponse.has_saved_draft &&
+    (
+      hasDraftSelectionDelta ||
+      draftManualEditCount > 0 ||
+      draftReviewDecisionCount > 0
+    )
+  );
+
+  tailoringWorkspaceState.savedSelectionPayload =
+    shouldPreferDraftState && draftSavedSelection
+      ? draftSavedSelection
+      : artifactSavedSelection;
 
   tailoringWorkspaceState.selectedCandidateIds = normalizeTailoringWorkspaceSelectedCandidateIds(
     payload,
-    initialSelectedIds
+    shouldPreferDraftState ? draftSelectedIds : artifactSelectedIds
   );
 }
 
@@ -7691,6 +7855,8 @@ async function loadPlanningTable() {
       hasNextPage: Boolean(data.has_next_page),
     };
 
+    syncPlanningBrowserUrl({ mode: "replace" });
+
     renderPlanningRows(
       data.rows || [],
       `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
@@ -7723,6 +7889,7 @@ function attachPlanningHandlers() {
 
   qs("planningApplyFiltersBtn").addEventListener("click", async () => {
     setPlanningRequestedPage(1);
+    syncPlanningBrowserUrl({ mode: "push" });
     try {
       await loadPlanningTable();
     } catch (err) {
@@ -7732,6 +7899,7 @@ function attachPlanningHandlers() {
 
   qs("planningClearFiltersBtn").addEventListener("click", async () => {
     clearPlanningFilters();
+    syncPlanningBrowserUrl({ mode: "push" });
     try {
       await loadPlanningTable();
     } catch (err) {
@@ -7747,6 +7915,7 @@ function attachPlanningHandlers() {
     if (!Number.isFinite(nextPage) || nextPage < 1) return;
 
     setPlanningRequestedPage(nextPage);
+    syncPlanningBrowserUrl({ mode: "push" });
 
     try {
       await loadPlanningTable();
@@ -7884,6 +8053,16 @@ function attachPlanningHandlers() {
     if (!pending || !getApplicationModal().classList.contains("hidden")) return;
     openApplicationModal(pending);
   });
+
+  window.addEventListener("popstate", async () => {
+    applyPlanningUrlState(window.location.search);
+
+    try {
+      await loadPlanningTable();
+    } catch (err) {
+      showAppError("Failed to restore planning dashboard state", err);
+    }
+  });
 }
 
 window.addEventListener("DOMContentLoaded", async () => {
@@ -7892,8 +8071,10 @@ window.addEventListener("DOMContentLoaded", async () => {
 
   if (isPlanningPage) {
     bindAppErrorModal();
+    applyPlanningUrlState(window.location.search);
     attachPlanningHandlers();
     bindTableSorting("planningTable", PLANNING_SORT_COLUMNS, planningTableState.sort, () => {
+      syncPlanningBrowserUrl({ mode: "push" });
       renderPlanningRows(planningTableState.rows, planningTableState.metaLabel);
     });
 

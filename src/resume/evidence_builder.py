@@ -433,6 +433,17 @@ def _looks_like_unmarked_bullet_start(line: str) -> bool:
 
     return False
 
+def _looks_like_orphan_action_verb_fragment(text: str) -> bool:
+    value = str(text or "").strip()
+    if not value or " " in value:
+        return False
+
+    lower = value.lower()
+    if lower in {str(verb).strip().lower() for verb in ACTION_VERB_HINTS if str(verb).strip()}:
+        return True
+
+    return bool(re.fullmatch(r"[A-Z][a-z]+(?:ed|ing)", value))
+
 def _split_inline_action_verb_fragments(text: str) -> List[str]:
     value = str(text or "").strip()
     if not value:
@@ -450,10 +461,9 @@ def _split_inline_action_verb_fragments(text: str) -> List[str]:
 
     verb_variants = sorted(
         {
-            variant
+            str(verb).strip().title()
             for verb in action_verbs
-            for variant in {verb, verb.lower(), verb.title()}
-            if str(variant).strip()
+            if str(verb).strip()
         },
         key=len,
         reverse=True,
@@ -505,6 +515,16 @@ def _consolidate_role_bullets(lines: List[str]) -> List[str]:
             pending_new_bullet = False
             continue
 
+        if (
+            current_bullet
+            and not is_bullet_line
+            and not pending_new_bullet
+            and _looks_like_orphan_action_verb_fragment(current_bullet)
+            and (clean_line[:1].islower() or clean_line[:1].isdigit())
+        ):
+            current_bullet = f"{current_bullet} {clean_line}".strip()
+            continue
+
         # If we already have a bullet and the next non-bulleted line starts like a fresh
         # action-verb bullet, treat it as a new bullet even if the previous wrapped line
         # did not end with punctuation.
@@ -529,9 +549,23 @@ def _consolidate_role_bullets(lines: List[str]) -> List[str]:
             force_new_bullet = frag_index > 0
 
             if fragment_is_bullet_line:
-                if current_bullet:
-                    bullets.append(current_bullet.strip())
-                current_bullet = fragment
+                if (
+                    current_bullet
+                    and (
+                        fragment[:1].islower()
+                        or fragment[:1].isdigit()
+                        or (
+                            _looks_like_orphan_action_verb_fragment(current_bullet)
+                            and not _looks_like_unmarked_bullet_start(fragment)
+                        )
+                    )
+                ):
+                    current_bullet = f"{current_bullet} {fragment}".strip()
+                else:
+                    if current_bullet:
+                        bullets.append(current_bullet.strip())
+                    current_bullet = fragment
+
                 pending_new_bullet = False
                 continue
 

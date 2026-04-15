@@ -218,6 +218,9 @@ def _build_rewrite_candidates(
             )
 
         focused_evidence = str(row.get("clause_text") or row.get("text", "") or "").strip()
+        parent_bullet = str(row.get("parent_bullet", "") or "").strip()
+        full_evidence = parent_bullet or focused_evidence
+
         candidates.append(
             {
                 "source": source,
@@ -226,9 +229,10 @@ def _build_rewrite_candidates(
                 "supported_terms": supported_terms[:6],
                 "action": action,
                 "bullet_excerpt": _row_evidence_excerpt(row),
-                "current_evidence": focused_evidence,
-                "focused_clause_text": str(row.get("clause_text", "") or "").strip(),
-                "parent_bullet": row.get("parent_bullet", ""),
+                "current_evidence": full_evidence,
+                "original_text": full_evidence,
+                "focused_clause_text": focused_evidence,
+                "parent_bullet": parent_bullet or full_evidence,
                 "entry_id": row.get("entry_id", ""),
                 "entry_index": row.get("entry_index", -1),
                 "bullet_id": row.get("bullet_id", ""),
@@ -325,16 +329,19 @@ def _rewrite_candidate_from_plan_unit(
                 "not as the main ownership claim."
             )
 
+    full_evidence = parent_bullet or evidence_unit
+
     return {
         "source": source,
         "section": unit.get("section", ""),
-        "evidence_type": unit.get("evidence_type", ""),
+        "evidence_type": "direct_overlap" if primary else "same_source_context",
         "supported_terms": supported_terms[:6],
         "action": action,
         "bullet_excerpt": _short_bullet(evidence_unit, 220),
-        "current_evidence": evidence_unit,
+        "current_evidence": full_evidence,
+        "original_text": full_evidence,
         "focused_clause_text": evidence_unit,
-        "parent_bullet": parent_bullet,
+        "parent_bullet": parent_bullet or full_evidence,
         "entry_id": unit.get("entry_id", ""),
         "entry_index": unit.get("entry_index", -1),
         "bullet_id": unit.get("bullet_id", ""),

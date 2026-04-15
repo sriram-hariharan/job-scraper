@@ -30,11 +30,23 @@ from src.tailoring.planner import (
     _fallback_rewrite_directions_from_payload,
 )
 
+
+def _is_experience_section_row(row: Dict[str, Any]) -> bool:
+    return str((row or {}).get("section", "") or "").strip() == "experience"
+
+
+def _experience_only_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [
+        row
+        for row in (rows or [])
+        if _is_experience_section_row(row)
+    ]
+
 def _build_bullet_reuse_from_plan_units(
     tailoring_plan: Dict[str, Any],
     limit: int = 6,
 ) -> List[Dict[str, Any]]:
-    rows = (
+    rows = _experience_only_rows(
         list(tailoring_plan.get("primary_anchor_units", []) or [])
         + list(tailoring_plan.get("secondary_support_units", []) or [])
     )[:limit]
@@ -83,7 +95,7 @@ def _build_bullet_reuse(
     limit: int = 6,
 ) -> List[Dict[str, Any]]:
     tailoring_plan = tailoring_plan or {}
-    rows = _rewrite_source_rows(packet)
+    rows = _experience_only_rows(_rewrite_source_rows(packet))
 
     if not rows:
         return _build_bullet_reuse_from_plan_units(
@@ -153,8 +165,12 @@ def _build_rewrite_candidates(
     candidates: List[Dict[str, Any]] = []
     used_keys = set()
 
-    primary_units = tailoring_plan.get("primary_anchor_units", []) or []
-    secondary_units = tailoring_plan.get("secondary_support_units", []) or []
+    primary_units = _experience_only_rows(
+        tailoring_plan.get("primary_anchor_units", []) or []
+    )
+    secondary_units = _experience_only_rows(
+        tailoring_plan.get("secondary_support_units", []) or []
+    )
 
     for unit in primary_units:
         key = _plan_unit_key(unit)
@@ -174,7 +190,7 @@ def _build_rewrite_candidates(
         if len(candidates) >= limit:
             return candidates
 
-    rows = _rewrite_source_rows(packet)
+    rows = _experience_only_rows(_rewrite_source_rows(packet))
 
     for row in rows:
         supported_terms = _row_supported_terms(row)
@@ -252,10 +268,14 @@ def _build_evidence_layers(
     limit_per_group: int = 4,
 ) -> Dict[str, List[Dict[str, Any]]]:
     tailoring_plan = tailoring_plan or {}
-    rows = _rewrite_source_rows(packet)
+    rows = _experience_only_rows(_rewrite_source_rows(packet))
 
-    primary_units = tailoring_plan.get("primary_anchor_units", []) or []
-    secondary_units = tailoring_plan.get("secondary_support_units", []) or []
+    primary_units = _experience_only_rows(
+        tailoring_plan.get("primary_anchor_units", []) or []
+    )
+    secondary_units = _experience_only_rows(
+        tailoring_plan.get("secondary_support_units", []) or []
+    )
 
     if primary_units or secondary_units:
         anchors = [

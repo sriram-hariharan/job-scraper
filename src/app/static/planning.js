@@ -1624,6 +1624,42 @@ function buildTailoringWorkspacePdfLineIndex(textContent, viewport) {
     });
 }
 
+function isTailoringWorkspacePdfSectionHeading(text) {
+  const safeText = String(text || "").replace(/\s+/g, " ").trim();
+  if (!safeText) return false;
+  if (safeText.length > 48) return false;
+  if (/[a-z]/.test(safeText)) return false;
+
+  const alphaChars = safeText.replace(/[^A-Z]/g, "");
+  if (alphaChars.length < 4) return false;
+
+  return true;
+}
+
+function getTailoringWorkspacePdfMatchArea(bbox) {
+  const width = Math.max(0, Number(bbox?.width || 0));
+  const height = Math.max(0, Number(bbox?.height || 0));
+  return width * height;
+}
+
+function shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, best) {
+  if (!best) return true;
+
+  const candidateScore = Number(candidate?.score || 0);
+  const bestScore = Number(best?.score || 0);
+  if (candidateScore !== bestScore) {
+    return candidateScore > bestScore;
+  }
+
+  const candidateArea = getTailoringWorkspacePdfMatchArea(candidate?.bbox);
+  const bestArea = getTailoringWorkspacePdfMatchArea(best?.bbox);
+  if (candidateArea !== bestArea) {
+    return candidateArea < bestArea;
+  }
+
+  return String(candidate?.lineText || "").length < String(best?.lineText || "").length;
+}
+
 function buildTailoringWorkspacePdfBlockIndex(lines) {
   const safeLines = Array.isArray(lines) ? lines : [];
   const blocks = [];
@@ -1636,10 +1672,14 @@ function buildTailoringWorkspacePdfBlockIndex(lines) {
     if (!safeText) return;
 
     const startsBullet = bulletStartPattern.test(safeText);
+    const isSectionHeading = isTailoringWorkspacePdfSectionHeading(safeText);
     const prevLine =
       currentBlock && currentBlock.lines.length
         ? currentBlock.lines[currentBlock.lines.length - 1]
         : null;
+    const prevIsSectionHeading = prevLine
+      ? isTailoringWorkspacePdfSectionHeading(prevLine.text)
+      : false;
 
     const verticalGap = prevLine
       ? Math.max(
@@ -1653,6 +1693,8 @@ function buildTailoringWorkspacePdfBlockIndex(lines) {
       Boolean(currentBlock) &&
       Boolean(prevLine) &&
       !startsBullet &&
+      !isSectionHeading &&
+      !prevIsSectionHeading &&
       verticalGap <= 18 &&
       Number(line.bbox.left || 0) >= Number(currentBlock.anchorLeft || 0) - 12;
 
@@ -1732,14 +1774,16 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
       const score = scoreTailoringWorkspaceLineMatch(safeTarget, block.text);
       if (!score) return;
 
-      if (!best || score > best.score) {
-        best = {
-          pageNumber: pageEntry.pageNumber,
-          blockId: block.blockId,
-          lineText: block.text,
-          bbox: block.bbox,
-          score,
-        };
+      const candidate = {
+        pageNumber: pageEntry.pageNumber,
+        blockId: block.blockId,
+        lineText: block.text,
+        bbox: block.bbox,
+        score,
+      };
+
+      if (shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, best)) {
+        best = candidate;
       }
     });
 
@@ -1747,14 +1791,16 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
       const score = scoreTailoringWorkspaceLineMatch(safeTarget, line.text);
       if (!score) return;
 
-      if (!best || score > best.score) {
-        best = {
-          pageNumber: pageEntry.pageNumber,
-          lineId: line.lineId,
-          lineText: line.text,
-          bbox: line.bbox,
-          score,
-        };
+      const candidate = {
+        pageNumber: pageEntry.pageNumber,
+        lineId: line.lineId,
+        lineText: line.text,
+        bbox: line.bbox,
+        score,
+      };
+
+      if (shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, best)) {
+        best = candidate;
       }
     });
   });

@@ -183,6 +183,104 @@ def _append_diverse_plan_rows(
             used_keys.add(key)
             units.append(_plan_unit_row(row))
 
+def _unit_lower_supported_terms(unit: Dict[str, Any]) -> List[str]:
+    return [
+        str(term).strip().lower()
+        for term in (unit.get("supported_terms", []) or [])
+        if str(term).strip()
+    ]
+
+
+def _row_lower_anchor_terms(row: Dict[str, Any]) -> List[str]:
+    return [
+        str(term).strip().lower()
+        for term in _row_anchor_supported_terms(row)
+        if str(term).strip()
+    ]
+
+
+def _primary_anchor_backfill_sort_key(
+    row: Dict[str, Any],
+    covered_direct_terms: set[str],
+    required_direct_terms: set[str],
+    preferred_direct_terms: set[str],
+) -> tuple:
+    row_terms = _row_lower_anchor_terms(row)
+
+    new_required_terms = [
+        term for term in row_terms
+        if term in required_direct_terms and term not in covered_direct_terms
+    ]
+    new_preferred_terms = [
+        term for term in row_terms
+        if term in preferred_direct_terms and term not in covered_direct_terms
+    ]
+
+    required_hits = [term for term in row_terms if term in required_direct_terms]
+    preferred_hits = [term for term in row_terms if term in preferred_direct_terms]
+
+    return (
+        -len(new_required_terms),
+        -len(new_preferred_terms),
+        -len(required_hits),
+        -len(preferred_hits),
+        -len(row_terms),
+        _source_label(row).strip().lower(),
+        str(row.get("clause_text") or row.get("text") or "").strip().lower(),
+    )
+
+
+def _prioritized_primary_anchor_backfill_rows(
+    packet: Dict[str, Any],
+    rows: List[Dict[str, Any]],
+    existing_units: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    covered_direct_terms = {
+        term
+        for unit in (existing_units or [])
+        for term in _unit_lower_supported_terms(unit)
+    }
+
+    required_direct_terms = {
+        str(term).strip().lower()
+        for term in _direct_terms(packet, "required")
+        if str(term).strip()
+    }
+    preferred_direct_terms = {
+        str(term).strip().lower()
+        for term in _direct_terms(packet, "preferred")
+        if str(term).strip()
+    }
+
+    return sorted(
+        rows,
+        key=lambda row: _primary_anchor_backfill_sort_key(
+            row,
+            covered_direct_terms,
+            required_direct_terms,
+            preferred_direct_terms,
+        ),
+    )
+
+def _row_anchor_term_key(row: Dict[str, Any]) -> tuple:
+    return tuple(_row_lower_anchor_terms(row))
+
+
+def _desired_primary_anchor_limit(rows: List[Dict[str, Any]]) -> int:
+    term_keys = {
+        _row_anchor_term_key(row)
+        for row in rows or []
+        if _row_anchor_term_key(row)
+    }
+
+    if len(term_keys) >= 3:
+        return 3
+    if len(term_keys) == 2:
+        return 2
+    if len(term_keys) == 1:
+        return 2 if len(rows or []) > 1 else 1
+    return 0
+
 
 def _facet_evidence_texts(facet_row: Dict[str, Any]) -> List[str]:
     texts: List[str] = []
@@ -476,6 +574,9 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         row for row in rows
         if str(row.get("evidence_type", "") or "").strip() == "direct_overlap"
     ]
+
+    primary_anchor_limit = _desired_primary_anchor_limit(direct_anchor_rows)
+    
     support_rows = [
         row for row in rows
         if str(row.get("evidence_type", "") or "").strip()
@@ -496,6 +597,9 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
 
     # Step 1: guarantee one primary anchor per top direct facet where possible
     for facet_row in direct_facets[:2]:
+        if len(primary_anchor_units) >= primary_anchor_limit:
+            break
+
         selected = _select_plan_rows_for_facet(
             direct_anchor_rows,
             facet_row,
@@ -507,12 +611,17 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
             primary_anchor_units.extend(selected)
 
     # Step 2: backfill remaining primary anchors from strongest direct-overlap rows,
-    # but prefer source/term diversity instead of repeating the same anchor family.
-    _append_diverse_plan_rows(
+    # preferring uncovered direct terms before repeated term coverage.
+    prioritized_direct_anchor_rows = _prioritized_primary_anchor_backfill_rows(
+        packet,
         direct_anchor_rows,
         primary_anchor_units,
+    )
+    _append_diverse_plan_rows(
+        prioritized_direct_anchor_rows,
+        primary_anchor_units,
         used_keys,
-        limit=3,
+        limit=primary_anchor_limit,
     )
 
     primary_facet_coverage = _covered_facet_names_for_plan_units(
@@ -680,11 +789,17 @@ def _build_compatibility_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
     if not anchor_candidates:
         anchor_candidates = supported_rows[:]
 
-    _append_diverse_plan_rows(
+    primary_anchor_limit = _desired_primary_anchor_limit(anchor_candidates)
+    prioritized_anchor_candidates = _prioritized_primary_anchor_backfill_rows(
+        packet,
         anchor_candidates,
         primary_anchor_units,
+    )
+    _append_diverse_plan_rows(
+        prioritized_anchor_candidates,
+        primary_anchor_units,
         used_keys,
-        limit=3,
+        limit=primary_anchor_limit,
     )
 
     _append_diverse_plan_rows(

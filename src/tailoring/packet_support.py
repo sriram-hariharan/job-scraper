@@ -268,9 +268,29 @@ def _candidate_eligible_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, A
         if _is_experience_section_row(row)
     ]
 
-def _row_supported_terms(row: Dict[str, Any]) -> List[str]:
+def _row_direct_supported_terms(row: Dict[str, Any]) -> List[str]:
     return _unique_preserve_order(
-        list(row.get("overlaps", []) or []) + list(row.get("context_terms", []) or [])
+        list(row.get("overlaps", []) or [])
+    )
+
+
+def _row_context_supported_terms(row: Dict[str, Any]) -> List[str]:
+    return _unique_preserve_order(
+        list(row.get("context_terms", []) or [])
+    )
+
+
+def _row_anchor_supported_terms(row: Dict[str, Any]) -> List[str]:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    if evidence_type == "direct_overlap":
+        return _row_direct_supported_terms(row)
+    return []
+
+
+def _row_supported_terms(row: Dict[str, Any]) -> List[str]:
+    # Backward-compatible union for display-oriented callers only.
+    return _unique_preserve_order(
+        _row_direct_supported_terms(row) + _row_context_supported_terms(row)
     )
 
 

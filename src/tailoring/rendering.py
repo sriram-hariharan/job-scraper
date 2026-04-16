@@ -773,6 +773,48 @@ def _reuse_row_rank(
 
     return (family_rank, evidence_rank, text_rank)
 
+def _direct_reuse_jd_signal_terms(
+    row: Dict[str, Any],
+    canonical_supported_signal: str,
+) -> List[str]:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    if evidence_type != "direct_overlap":
+        return []
+
+    if canonical_supported_signal:
+        return [canonical_supported_signal]
+
+    return [
+        str(item).strip()
+        for item in (row.get("overlaps", []) or [])
+        if str(item).strip()
+    ]
+
+
+def _context_reuse_signal_terms(
+    row: Dict[str, Any],
+    canonical_supported_signal: str,
+) -> List[str]:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    if evidence_type == "direct_overlap":
+        return []
+
+    context_terms = [
+        str(item).strip()
+        for item in (row.get("context_terms", []) or [])
+        if str(item).strip()
+    ]
+    if context_terms:
+        return context_terms
+
+    if canonical_supported_signal:
+        return [canonical_supported_signal]
+
+    return []
+
+
 def _reuse_candidate_to_edit_card(
     payload: Dict[str, Any],
     row: Dict[str, Any],
@@ -785,14 +827,25 @@ def _reuse_candidate_to_edit_card(
     matched_surface_signal = str(signal_match.get("matched_term", "") or "").strip()
     canonical_supported_signal = str(signal_match.get("supported_term", "") or "").strip()
 
-    jd_signal_terms = [canonical_supported_signal] if canonical_supported_signal else list(row.get("overlaps", []) or [])
+    jd_signal_terms = _direct_reuse_jd_signal_terms(
+        row,
+        canonical_supported_signal,
+    )
+    context_signal_terms = _context_reuse_signal_terms(
+        row,
+        canonical_supported_signal,
+    )
 
     evidence_type = _resolved_edit_card_evidence_type(
         row,
         jd_signal_terms,
         evidence,
     )
-    claim_safety = "safe_strengthen" if evidence_type == "direct_overlap" and jd_signal_terms else _fallback_claim_safety_from_reuse(row)
+    claim_safety = (
+        "safe_strengthen"
+        if evidence_type == "direct_overlap" and jd_signal_terms
+        else _fallback_claim_safety_from_reuse(row)
+    )
 
     return {
         "card_id": f"edit_card_reuse_{index}",
@@ -802,6 +855,7 @@ def _reuse_candidate_to_edit_card(
         "section": row.get("section", ""),
         "source": row.get("source", ""),
         "jd_signal_terms": jd_signal_terms,
+        "context_signal_terms": context_signal_terms,
         "current_evidence": evidence,
         "parent_bullet": row.get("parent_bullet", ""),
         "recommended_rewrite": _fallback_recommended_rewrite_from_reuse(

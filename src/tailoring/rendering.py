@@ -644,33 +644,23 @@ def _fallback_recommended_rewrite_from_reuse(
     preferred_rewrite_directions: List[str],
     row: Dict[str, Any],
 ) -> str:
-    overlaps = [
-        str(item or "").strip().lower()
-        for item in (row.get("overlaps", []) or [])
-        if str(item or "").strip()
-    ]
-    source = str(row.get("source", "") or "").strip().lower()
     reuse_note = str(row.get("reuse_note", "") or "").strip()
-
-    for direction in preferred_rewrite_directions or []:
-        direction_text = str(direction or "").strip()
-        direction_lower = direction_text.lower()
-
-        if overlaps and any(term in direction_lower for term in overlaps):
-            return direction_text
-        if source and source in direction_lower:
-            return direction_text
-
     if reuse_note:
         return reuse_note
 
+    overlaps = [
+        str(item or "").strip()
+        for item in (row.get("overlaps", []) or [])
+        if str(item or "").strip()
+    ]
+
     if overlaps:
         return (
-            f"Keep this bullet, but tighten the wording so "
+            f"Keep this bullet visible and, if needed, tighten the wording so "
             f"{', '.join(_truncate_list(overlaps, 4))} shows up earlier and more clearly."
         )
 
-    return "Keep this bullet, but sharpen the wording around the strongest JD-aligned evidence already present."
+    return "Keep this bullet visible and tighten wording only if it improves JD alignment without changing the claim."
 
 
 def _fallback_why_current_is_weak_from_reuse(row: Dict[str, Any]) -> str:
@@ -851,14 +841,14 @@ def _reuse_candidate_to_edit_card(
         "card_id": f"edit_card_reuse_{index}",
         "evidence_type": evidence_type,
         "priority": _fallback_priority_from_reuse(index - 1, row),
-        "edit_type": "rewrite" if jd_signal_terms and evidence_type == "direct_overlap" else _fallback_edit_type_from_reuse(row),
+        "edit_type": "keep_visible" if evidence_type == "direct_overlap" else _fallback_edit_type_from_reuse(row),
         "section": row.get("section", ""),
         "source": row.get("source", ""),
         "jd_signal_terms": jd_signal_terms,
         "context_signal_terms": context_signal_terms,
         "current_evidence": evidence,
         "parent_bullet": row.get("parent_bullet", ""),
-        "recommended_rewrite": _fallback_recommended_rewrite_from_reuse(
+        "recommended_rewrite": "" if evidence_type == "direct_overlap" else _fallback_recommended_rewrite_from_reuse(
             preferred_rewrite_directions,
             row,
         ),
@@ -1454,6 +1444,39 @@ def _display_candidate_current_bullet(candidate: Dict[str, Any]) -> str:
 
     return max(values, key=len)
 
+def _looks_like_directional_instruction_text(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+
+    normalized = re.sub(r"\s+", " ", raw).strip().lower()
+
+    instruction_prefixes = (
+        "lead with ",
+        "support with ",
+        "keep this bullet",
+        "move this bullet",
+        "do not rewrite ",
+        "review this bullet",
+        "treat this as ",
+        "if space is tight, ",
+        "if you want a tighter one-bullet story, ",
+        "replace the original bullet with ",
+        "only merge if ",
+        "keep gap explicit ",
+    )
+
+    if normalized.startswith(instruction_prefixes):
+        return True
+
+    if normalized.endswith(" truthfully.") and (
+        normalized.startswith("lead with ")
+        or normalized.startswith("support with ")
+    ):
+        return True
+
+    return False
+
 def _rewrite_card_fields_from_patch_ready_candidate(
     replacement_candidate: Dict[str, Any],
     supported_terms: List[str],
@@ -1466,6 +1489,43 @@ def _rewrite_card_fields_from_patch_ready_candidate(
     parent_bullet = str(
         replacement_candidate.get("parent_bullet", "") or current_evidence
     ).strip()
+
+    if _looks_like_directional_instruction_text(patch_text):
+        directional_text = (
+            patch_text
+            or str(replacement_candidate.get("rewrite_instruction", "") or "").strip()
+        )
+
+        return {
+            "edit_type": "keep_visible",
+            "claim_safety": "keep_visible",
+            "recommended_rewrite": "",
+            "why_current_is_weak": (
+                f"The evidence is relevant, but {', '.join(_truncate_list(supported_terms, 4))} is not yet leading the bullet clearly."
+                if supported_terms
+                else "The evidence is relevant, but the JD-aligned language is not yet leading the bullet clearly."
+            ),
+            "why_rewrite_is_better": (
+                "This surfaced text is directional guidance, not a literal replacement bullet, so it should stay in review instead of the rewrite lane."
+            ),
+            "why_it_matters": directional_text,
+            "patch_generation_method": patch_method,
+            "replacement_candidate_id": str(replacement_candidate.get("candidate_id", "") or "").strip(),
+            "replacement_materiality_validation_status": status,
+            "replacement_materiality_validation_note": str(
+                replacement_candidate.get("materiality_validation_note", "") or ""
+            ).strip(),
+            "original_text": current_evidence,
+            "current_evidence": current_evidence,
+            "parent_bullet": parent_bullet,
+            "supported_jd_signals": list(supported_terms or []),
+            "outcome_label": "directional_only",
+            "outcome_reason": "instructional_patch_text_not_literal_bullet",
+            "placement_guidance": (
+                str(replacement_candidate.get("placement_guidance", "") or "").strip()
+                or "Treat this as review guidance only unless a literal replacement bullet is generated."
+            ),
+        }
 
     if status == "material_candidate":
         why_it_matters = (
@@ -1802,6 +1862,179 @@ def _dedupe_edit_cards_by_candidate_id(cards: List[Dict[str, Any]]) -> List[Dict
 
     return deduped
 
+def _is_low_value_keep_visible_card(card: Dict[str, Any]) -> bool:
+    edit_type = str(card.get("edit_type", "") or "").strip()
+    if edit_type != "keep_visible":
+        return False
+
+    jd_signal_terms = [
+        str(item).strip()
+        for item in (card.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+    if jd_signal_terms:
+        return False
+
+    evidence_type = str(card.get("evidence_type", "") or "").strip()
+    if evidence_type not in {"same_source_context", "semantic_similarity", "adjacent_context", ""}:
+        return False
+
+    why_it_matters = str(card.get("why_it_matters", "") or "").strip()
+
+    generic_keep_visible_messages = {
+        "This is one of the stronger existing bullets to tighten before editing weaker sections.",
+        "This can help support the JD story, but it is not the strongest anchor.",
+    }
+
+    return not why_it_matters or why_it_matters in generic_keep_visible_messages
+
+
+def _edit_card_operator_rank(card: Dict[str, Any]) -> tuple:
+    priority = str(card.get("priority", "") or "").strip().lower()
+    evidence_type = str(card.get("evidence_type", "") or "").strip()
+    edit_type = str(card.get("edit_type", "") or "").strip()
+    jd_signal_terms = [
+        str(item).strip()
+        for item in (card.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+
+    priority_rank = 3 if priority == "high" else 2 if priority == "medium" else 1 if priority == "low" else 0
+    evidence_rank = 2 if evidence_type == "direct_overlap" else 1 if evidence_type == "same_source_context" else 0
+
+    if edit_type == "rewrite":
+        edit_rank = 5
+    elif edit_type == "keep_visible" and jd_signal_terms:
+        edit_rank = 4
+    elif edit_type == "reinforce":
+        edit_rank = 3
+    elif edit_type == "support":
+        edit_rank = 2
+    else:
+        edit_rank = 1
+
+    return (
+        priority_rank,
+        edit_rank,
+        evidence_rank,
+        len(jd_signal_terms),
+        len(str(card.get("why_it_matters", "") or "").strip()),
+    )
+
+
+def _rank_and_suppress_edit_cards(
+    cards: List[Dict[str, Any]],
+    limit: int,
+) -> List[Dict[str, Any]]:
+    meaningful_cards = [card for card in cards if not _is_low_value_keep_visible_card(card)]
+    low_value_cards = [card for card in cards if _is_low_value_keep_visible_card(card)]
+
+    meaningful_cards = sorted(
+        meaningful_cards,
+        key=_edit_card_operator_rank,
+        reverse=True,
+    )
+
+    if len(meaningful_cards) >= 2:
+        return meaningful_cards[:limit]
+
+    if meaningful_cards:
+        return (meaningful_cards + low_value_cards[:1])[:limit]
+
+    return cards[:limit]
+
+def _is_actionable_edit_card(card: Dict[str, Any]) -> bool:
+    edit_type = str(card.get("edit_type", "") or "").strip()
+    recommended_rewrite = str(card.get("recommended_rewrite", "") or "").strip()
+    outcome_label = str(card.get("outcome_label", "") or "").strip()
+
+    if edit_type == "rewrite" and recommended_rewrite:
+        return True
+
+    if outcome_label in {
+        "material_candidate",
+        "export_safe_no_score_lift",
+    }:
+        return True
+
+    return False
+
+
+def _anchor_card_rank(card: Dict[str, Any]) -> tuple:
+    priority = str(card.get("priority", "") or "").strip().lower()
+    evidence_type = str(card.get("evidence_type", "") or "").strip()
+    jd_signal_terms = [
+        str(item).strip()
+        for item in (card.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
+    why_it_matters = str(card.get("why_it_matters", "") or "").strip()
+
+    priority_rank = 3 if priority == "high" else 2 if priority == "medium" else 1 if priority == "low" else 0
+    evidence_rank = 2 if evidence_type == "direct_overlap" else 1 if evidence_type == "same_source_context" else 0
+
+    return (
+        priority_rank,
+        evidence_rank,
+        len(jd_signal_terms),
+        len(why_it_matters),
+    )
+
+
+def _dedupe_anchor_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    best_by_key: Dict[tuple, Dict[str, Any]] = {}
+    order: List[tuple] = []
+
+    for card in cards or []:
+        key = (
+            str(card.get("section", "") or "").strip().lower(),
+            str(card.get("source", "") or "").strip().lower(),
+            tuple(
+                sorted(
+                    str(item).strip().lower()
+                    for item in (card.get("jd_signal_terms", []) or [])
+                    if str(item).strip()
+                )
+            ),
+            str(card.get("current_evidence", "") or "").strip().lower(),
+        )
+
+        existing = best_by_key.get(key)
+        if existing is None:
+            best_by_key[key] = card
+            order.append(key)
+            continue
+
+        if _anchor_card_rank(card) > _anchor_card_rank(existing):
+            best_by_key[key] = card
+
+    return [best_by_key[key] for key in order if key in best_by_key]
+
+
+def _split_actionable_and_anchor_cards(
+    cards: List[Dict[str, Any]],
+    action_limit: int = 5,
+    anchor_limit: int = 5,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    actionable_cards = [
+        card for card in (cards or [])
+        if _is_actionable_edit_card(card)
+    ]
+    anchor_cards = [
+        card for card in (cards or [])
+        if not _is_actionable_edit_card(card)
+    ]
+
+    actionable_cards = _rank_and_suppress_edit_cards(actionable_cards, action_limit)
+    anchor_cards = sorted(
+        _dedupe_anchor_cards(anchor_cards),
+        key=_anchor_card_rank,
+        reverse=True,
+    )[:anchor_limit]
+
+    return actionable_cards[:action_limit], anchor_cards[:anchor_limit]
+
+
 def _build_edit_cards(
     payload: Dict[str, Any],
     preferred_rewrite_directions: List[str],
@@ -1968,6 +2201,24 @@ def _build_edit_cards(
                     supported_terms,
                 )
             )
+        elif _looks_like_directional_instruction_text(
+            str(card.get("recommended_rewrite", "") or "")
+        ):
+            directional_text = str(card.get("recommended_rewrite", "") or "").strip()
+
+            card.update(
+                {
+                    "edit_type": "keep_visible",
+                    "claim_safety": "keep_visible",
+                    "recommended_rewrite": "",
+                    "why_rewrite_is_better": (
+                        "No grounded deterministic replacement candidate survived for this bullet, so this should remain directional guidance instead of a surfaced rewrite card."
+                    ),
+                    "why_it_matters": directional_text or str(card.get("why_it_matters", "") or "").strip(),
+                    "outcome_label": "directional_only",
+                    "outcome_reason": "instructional_rewrite_without_grounded_candidate",
+                }
+            )
 
         family_key = _edit_card_family_dedup_key(card)
         if family_key and family_key in seen_family_keys:
@@ -1989,6 +2240,7 @@ def _build_edit_cards(
     )
 
     cards = _dedupe_edit_cards_by_candidate_id(cards)
+    cards = _rank_and_suppress_edit_cards(cards, limit)
 
     return cards[:limit]
 
@@ -6121,14 +6373,26 @@ def _build_operator_markdown_payload(
         bullet_diagnoses,
     )
 
-    operator_payload["edit_cards"] = _apply_rewrite_review_state_to_edit_cards(
+    edit_cards = _rank_and_suppress_edit_cards(
         edit_cards,
+        limit=5,
+    )
+
+    actionable_edit_cards, anchor_cards = _split_actionable_and_anchor_cards(
+        edit_cards,
+        action_limit=5,
+        anchor_limit=5,
+    )
+
+    operator_payload["edit_cards"] = _apply_rewrite_review_state_to_edit_cards(
+        actionable_edit_cards,
         operator_payload,
     )
+    operator_payload["anchor_cards"] = anchor_cards
 
     final_bullet_diagnoses = _build_bullet_diagnoses(
         operator_payload,
-        edit_cards,
+        actionable_edit_cards,
         operator_payload.get("keep_as_is", []) or [],
     )
     operator_payload["bullet_diagnoses"] = final_bullet_diagnoses
@@ -6137,7 +6401,7 @@ def _build_operator_markdown_payload(
 
     final_replacement_plan = build_final_replacement_plan(
         operator_payload.get("replacement_candidates", []) or [],
-        edit_cards,
+        actionable_edit_cards,
     )
 
     operator_payload["final_replacement_decisions"] = final_replacement_plan.get("decisions", [])
@@ -6167,7 +6431,8 @@ def _build_operator_markdown_payload(
         operator_payload.get("rewrite_review_filters", {}) or {},
         operator_payload.get("rewrite_review_presets", []) or [],
     )
-    operator_payload["top_edit_priorities"] = _build_top_edit_priorities(edit_cards)
+    operator_payload["top_edit_priorities"] = _build_top_edit_priorities(actionable_edit_cards)
+    operator_payload["top_anchor_priorities"] = _build_top_edit_priorities(anchor_cards)
 
     operator_payload["patch_set_counterfactual_preview"] = _apply_patch_set_counterfactual_preview(
         operator_payload,

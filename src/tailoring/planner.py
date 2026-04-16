@@ -4,6 +4,7 @@ from src.tailoring.packet_support import (
     _source_label,
     _row_anchor_supported_terms,
     _row_context_supported_terms,
+    _row_supported_terms,
     _short_bullet,
     _unique_preserve_order,
     _truncate_list,
@@ -84,6 +85,103 @@ def _plan_row_key(row: Dict[str, Any]) -> tuple:
         str(row.get("evidence_type", "") or "").strip(),
         str(row.get("clause_text") or row.get("text") or "").strip(),
     )
+
+def _plan_unit_source_key(unit: Dict[str, Any]) -> tuple:
+    return (
+        str(unit.get("section", "") or "").strip().lower(),
+        str(unit.get("source", "") or "").strip().lower(),
+    )
+
+
+def _plan_unit_supported_term_key(unit: Dict[str, Any]) -> tuple:
+    return tuple(
+        str(term).strip().lower()
+        for term in (unit.get("supported_terms", []) or [])
+        if str(term).strip()
+    )
+
+
+def _plan_row_source_key(row: Dict[str, Any]) -> tuple:
+    return (
+        str(row.get("section", "") or "").strip().lower(),
+        _source_label(row).strip().lower(),
+    )
+
+
+def _plan_row_supported_term_key(row: Dict[str, Any]) -> tuple:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+    if evidence_type == "direct_overlap":
+        terms = _row_anchor_supported_terms(row)
+    else:
+        terms = _row_context_supported_terms(row)
+
+    return tuple(
+        str(term).strip().lower()
+        for term in terms
+        if str(term).strip()
+    )
+
+
+def _append_diverse_plan_rows(
+    rows: List[Dict[str, Any]],
+    units: List[Dict[str, Any]],
+    used_keys: set,
+    *,
+    limit: int,
+) -> None:
+    def existing_source_keys() -> set:
+        return {
+            _plan_unit_source_key(unit)
+            for unit in units
+        }
+
+    def existing_term_keys() -> set:
+        return {
+            _plan_unit_supported_term_key(unit)
+            for unit in units
+            if _plan_unit_supported_term_key(unit)
+        }
+
+    selection_stages = [
+        # Prefer rows that add both a new source and a new supported-term profile.
+        lambda row, sources, terms: (
+            _plan_row_source_key(row) not in sources
+            and _plan_row_supported_term_key(row)
+            and _plan_row_supported_term_key(row) not in terms
+        ),
+        # Then prefer rows from a new source.
+        lambda row, sources, terms: (
+            _plan_row_source_key(row) not in sources
+        ),
+        # Then prefer rows with a new supported-term profile.
+        lambda row, sources, terms: (
+            _plan_row_supported_term_key(row)
+            and _plan_row_supported_term_key(row) not in terms
+        ),
+        # Finally, allow any remaining row if we still need to fill slots.
+        lambda row, sources, terms: True,
+    ]
+
+    for predicate in selection_stages:
+        if len(units) >= limit:
+            return
+
+        for row in rows:
+            if len(units) >= limit:
+                return
+
+            key = _plan_row_key(row)
+            if key in used_keys:
+                continue
+
+            sources = existing_source_keys()
+            terms = existing_term_keys()
+
+            if not predicate(row, sources, terms):
+                continue
+
+            used_keys.add(key)
+            units.append(_plan_unit_row(row))
 
 
 def _facet_evidence_texts(facet_row: Dict[str, Any]) -> List[str]:
@@ -408,17 +506,14 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         if selected:
             primary_anchor_units.extend(selected)
 
-    # Step 2: backfill remaining primary anchors from strongest direct-overlap rows
-    for row in direct_anchor_rows:
-        if len(primary_anchor_units) >= 3:
-            break
-
-        key = _plan_row_key(row)
-        if key in used_keys:
-            continue
-
-        used_keys.add(key)
-        primary_anchor_units.append(_plan_unit_row(row))
+    # Step 2: backfill remaining primary anchors from strongest direct-overlap rows,
+    # but prefer source/term diversity instead of repeating the same anchor family.
+    _append_diverse_plan_rows(
+        direct_anchor_rows,
+        primary_anchor_units,
+        used_keys,
+        limit=3,
+    )
 
     primary_facet_coverage = _covered_facet_names_for_plan_units(
         primary_anchor_units,
@@ -454,17 +549,14 @@ def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
         if selected:
             secondary_support_units.extend(selected)
 
-    # Step 5: backfill remaining secondary support slots
-    for row in secondary_only_rows:
-        if len(secondary_support_units) >= 3:
-            break
-
-        key = _plan_row_key(row)
-        if key in used_keys:
-            continue
-
-        used_keys.add(key)
-        secondary_support_units.append(_plan_unit_row(row))
+    # Step 5: backfill remaining secondary support slots,
+    # again preferring source diversity before repetition.
+    _append_diverse_plan_rows(
+        secondary_only_rows,
+        secondary_support_units,
+        used_keys,
+        limit=3,
+    )
 
     primary_facet_coverage = _covered_facet_names_for_plan_units(
         primary_anchor_units,
@@ -588,33 +680,28 @@ def _build_compatibility_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
     if not anchor_candidates:
         anchor_candidates = supported_rows[:]
 
-    for row in anchor_candidates:
-        key = _plan_row_key(row)
-        if key in used_keys:
-            continue
-        used_keys.add(key)
-        primary_anchor_units.append(_plan_unit_row(row))
-        if len(primary_anchor_units) >= 3:
-            break
+    _append_diverse_plan_rows(
+        anchor_candidates,
+        primary_anchor_units,
+        used_keys,
+        limit=3,
+    )
 
-    for row in support_candidates:
-        key = _plan_row_key(row)
-        if key in used_keys:
-            continue
-        used_keys.add(key)
-        secondary_support_units.append(_plan_unit_row(row))
-        if len(secondary_support_units) >= 1:
-            break
+    _append_diverse_plan_rows(
+        support_candidates,
+        secondary_support_units,
+        used_keys,
+        limit=1,
+    )
 
     # If no explicit support row exists, preserve one additional supported row as secondary evidence.
     if not secondary_support_units:
-        for row in supported_rows:
-            key = _plan_row_key(row)
-            if key in used_keys:
-                continue
-            used_keys.add(key)
-            secondary_support_units.append(_plan_unit_row(row))
-            break
+        _append_diverse_plan_rows(
+            supported_rows,
+            secondary_support_units,
+            used_keys,
+            limit=1,
+        )
 
     primary_facet_coverage = (
         _covered_facet_names_for_plan_units(primary_anchor_units, direct_facets)

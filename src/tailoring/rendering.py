@@ -2259,9 +2259,42 @@ def _keep_as_is_to_bullet_diagnosis(
         "placement_guidance": "Keep this bullet visible before editing lower-value evidence.",
     }
 
+def _diagnosis_direct_signal_terms(diagnosis: Dict[str, Any]) -> List[str]:
+    evidence_type = str(diagnosis.get("evidence_type", "") or "").strip()
+    if evidence_type != "direct_overlap":
+        return []
+
+    direct_terms = _unique_preserve_order(
+        list(diagnosis.get("jd_signal_terms", []) or [])
+        + [str(diagnosis.get("canonical_supported_signal", "") or "").strip()]
+    )
+    return [term for term in direct_terms if str(term or "").strip()]
+
+
+def _diagnosis_context_signal_terms(diagnosis: Dict[str, Any]) -> List[str]:
+    evidence_type = str(diagnosis.get("evidence_type", "") or "").strip()
+    if evidence_type == "direct_overlap":
+        return []
+
+    context_terms = _unique_preserve_order(
+        list(diagnosis.get("context_signal_terms", []) or [])
+        + list(diagnosis.get("jd_signal_terms", []) or [])
+        + [str(diagnosis.get("canonical_supported_signal", "") or "").strip()]
+    )
+    return [term for term in context_terms if str(term or "").strip()]
+
+
+def _normalize_diagnosis_signal_fields(diagnosis: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(diagnosis)
+    normalized["jd_signal_terms"] = _diagnosis_direct_signal_terms(diagnosis)
+    normalized["context_signal_terms"] = _diagnosis_context_signal_terms(diagnosis)
+    return normalized
+
 def _normalize_reinforce_context_diagnosis(
     diagnosis: Dict[str, Any],
 ) -> Dict[str, Any]:
+    diagnosis = _normalize_diagnosis_signal_fields(diagnosis)
+
     if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
         return diagnosis
 
@@ -2288,6 +2321,8 @@ def _normalize_reinforce_context_diagnosis(
     normalized["diagnosis_reason_type"] = "keep_context_anchor"
     normalized["claim_safety"] = "keep_visible"
     normalized["recommended_rewrite"] = ""
+    normalized["jd_signal_terms"] = []
+    normalized["context_signal_terms"] = _diagnosis_context_signal_terms(diagnosis)
     normalized["why"] = (
         str(normalized.get("why", "") or "").strip()
         or "This bullet is reinforcing context for the main story and should stay visible instead of entering the rewrite lane."
@@ -2318,6 +2353,8 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     packet: Dict[str, Any],
     diagnosis: Dict[str, Any],
 ) -> Dict[str, Any]:
+    diagnosis = _normalize_diagnosis_signal_fields(diagnosis)
+
     if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
         return diagnosis
 
@@ -2327,12 +2364,7 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     if str(diagnosis.get("claim_safety", "") or "").strip() != "safe_strengthen":
         return diagnosis
 
-    supported_terms = _unique_preserve_order(
-        list(diagnosis.get("jd_signal_terms", []) or [])
-        + [str(diagnosis.get("canonical_supported_signal", "") or "").strip()]
-    )
-    supported_terms = [term for term in supported_terms if str(term or "").strip()]
-
+    supported_terms = _diagnosis_direct_signal_terms(diagnosis)
     original_text = str(diagnosis.get("original_text", "") or "").strip()
 
     risks = _replacement_candidate_risks(packet, diagnosis)
@@ -2344,6 +2376,8 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     )
 
     normalized = dict(diagnosis)
+    normalized["jd_signal_terms"] = supported_terms
+    normalized["context_signal_terms"] = []
     normalized["precomputed_patch_generation_method"] = patch_generation_method
 
     # If the deterministic patch builder can make a real patch, keep this in rewrite lane.
@@ -2404,11 +2438,7 @@ def _replacement_candidate_risks(
 ) -> Dict[str, List[str]]:
     claim_safety_notes = payload.get("claim_safety_notes", {}) or {}
 
-    jd_terms_raw = [
-        str(item or "").strip()
-        for item in (diagnosis.get("jd_signal_terms", []) or [])
-        if str(item or "").strip()
-    ]
+    jd_terms_raw = _diagnosis_direct_signal_terms(diagnosis)
     jd_terms_norm = {_diagnosis_normalize_term(item) for item in jd_terms_raw}
 
     frame_terms_raw = [

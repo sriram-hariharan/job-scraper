@@ -62,6 +62,19 @@ def _candidate_delta_rank(candidate: Dict[str, Any]) -> float:
     except Exception:
         return -999.0
 
+def _candidate_projected_delta(candidate: Dict[str, Any]) -> Optional[float]:
+    value = candidate.get("projected_overall_delta", None)
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _has_non_negative_projected_delta(candidate: Dict[str, Any]) -> bool:
+    delta = _candidate_projected_delta(candidate)
+    return delta is not None and delta >= 0.0
 
 def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
     proposal_status = _text(candidate.get("proposal_status", ""))
@@ -91,6 +104,9 @@ def _passes_direct_apply_safety(candidate: Dict[str, Any]) -> bool:
 
     counterfactual_status = _text(candidate.get("counterfactual_status", ""))
     if counterfactual_status in _BAD_COUNTERFACTUAL_STATUSES:
+        return False
+
+    if not _has_non_negative_projected_delta(candidate):
         return False
 
     return True

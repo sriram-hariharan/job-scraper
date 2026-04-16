@@ -257,6 +257,16 @@ def _rewrite_source_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
         return unit_rows
     return packet.get("top_relevant_bullets", []) or []
 
+def _is_experience_section_row(row: Dict[str, Any]) -> bool:
+    return str((row or {}).get("section", "") or "").strip().lower() == "experience"
+
+
+def _candidate_eligible_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [
+        row
+        for row in _rewrite_source_rows(packet)
+        if _is_experience_section_row(row)
+    ]
 
 def _row_supported_terms(row: Dict[str, Any]) -> List[str]:
     return _unique_preserve_order(

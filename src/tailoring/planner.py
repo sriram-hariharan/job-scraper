@@ -2,7 +2,8 @@ from typing import List, Dict, Any, Optional
 
 from src.tailoring.packet_support import (
     _source_label,
-    _row_supported_terms,
+    _row_anchor_supported_terms,
+    _row_context_supported_terms,
     _short_bullet,
     _unique_preserve_order,
     _truncate_list,
@@ -55,11 +56,18 @@ def _find_rewrite_row_for_plan_unit(
     }
 
 def _plan_unit_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    if evidence_type == "direct_overlap":
+        supported_terms = _row_anchor_supported_terms(row)[:6]
+    else:
+        supported_terms = _row_context_supported_terms(row)[:6]
+
     return {
         "section": row.get("section", ""),
         "source": _source_label(row),
-        "evidence_type": row.get("evidence_type", ""),
-        "supported_terms": _row_supported_terms(row)[:6],
+        "evidence_type": evidence_type,
+        "supported_terms": supported_terms,
         "evidence_unit": row.get("clause_text") or row.get("text", ""),
         "parent_bullet": row.get("parent_bullet", ""),
         "entry_id": row.get("entry_id", ""),
@@ -130,29 +138,38 @@ def _facet_evidence_texts(facet_row: Dict[str, Any]) -> List[str]:
 
 
 def _row_matches_facet(row: Dict[str, Any], facet_row: Dict[str, Any]) -> bool:
-    row_terms = _row_supported_terms(row)
+    row_direct_terms = _row_anchor_supported_terms(row)
+    row_context_terms = _row_context_supported_terms(row)
     row_text = str(row.get("clause_text") or row.get("text") or "").strip()
     parent_text = str(row.get("parent_bullet", "") or "").strip()
 
-    facet_terms = _unique_preserve_order(
+    facet_direct_terms = _unique_preserve_order(
         list(facet_row.get("direct_terms", []) or [])
-        + list(facet_row.get("context_terms", []) or [])
-        + list(facet_row.get("skills_only_terms", []) or [])
-        + list(facet_row.get("facet_context_terms", []) or [])
         + list(facet_row.get("job_terms", []) or [])
     )
+    facet_context_terms = _unique_preserve_order(
+        list(facet_row.get("context_terms", []) or [])
+        + list(facet_row.get("facet_context_terms", []) or [])
+        + list(facet_row.get("skills_only_terms", []) or [])
+    )
+
+    facet_text_terms = _unique_preserve_order(facet_direct_terms + facet_context_terms)
     facet_evidence_texts = _facet_evidence_texts(facet_row)
 
-    # 1) explicit term overlap on the selected row itself
-    if any(term in row_terms for term in facet_terms):
+    # 1) direct anchor-quality term overlap on the row itself
+    if row_direct_terms and any(term in row_direct_terms for term in facet_direct_terms):
         return True
 
-    # 2) facet language actually appears in the selected clause or its parent bullet
+    # 2) contextual overlap stays contextual
+    if row_context_terms and any(term in row_context_terms for term in facet_context_terms):
+        return True
+
+    # 3) facet language actually appears in the selected clause or its parent bullet
     for candidate_text in (row_text, parent_text):
-        if candidate_text and _direction_mentions_any(candidate_text, facet_terms):
+        if candidate_text and _direction_mentions_any(candidate_text, facet_text_terms):
             return True
 
-    # 3) the selected clause/parent bullet actually corresponds to one of the facet evidence texts
+    # 4) the selected clause/parent bullet actually corresponds to one of the facet evidence texts
     for candidate_text in (row_text, parent_text):
         if not candidate_text:
             continue

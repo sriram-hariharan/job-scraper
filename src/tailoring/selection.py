@@ -12,7 +12,8 @@ from src.tailoring.family_matcher import (
 from src.tailoring.packet_support import (
     _candidate_eligible_rewrite_rows,
     _source_label,
-    _row_supported_terms,
+    _row_anchor_supported_terms,
+    _row_context_supported_terms,
     _is_clause_unit,
     _row_evidence_excerpt,
     _short_bullet,
@@ -108,8 +109,11 @@ def _build_bullet_reuse(
     reuse_rows = []
     for row in selected:
         source = _source_label(row)
-        overlaps = _row_supported_terms(row)
         evidence_type = row.get("evidence_type", "direct_overlap")
+        if evidence_type == "direct_overlap":
+            overlaps = _row_anchor_supported_terms(row)
+        else:
+            overlaps = _row_context_supported_terms(row)
         is_clause = _is_clause_unit(row)
 
         if evidence_type == "direct_overlap":
@@ -222,7 +226,11 @@ def _build_rewrite_candidates(
     rows = _candidate_eligible_rewrite_rows(packet)
 
     for row in rows:
-        supported_terms = _row_supported_terms(row)
+        evidence_type = row.get("evidence_type", "direct_overlap")
+        if evidence_type == "direct_overlap":
+            supported_terms = _row_anchor_supported_terms(row)
+        else:
+            supported_terms = _row_context_supported_terms(row)
         if not supported_terms:
             continue
 

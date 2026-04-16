@@ -3081,6 +3081,71 @@ def _load_job_record_by_doc_id(
 
     return None
 
+_COUNTERFACTUAL_JOB_IDENTITY_KEYS = {
+    "job_doc_id",
+    "company",
+    "title",
+    "link",
+    "url",
+    "job_url",
+}
+
+
+def _job_record_has_substantive_context(value: Any, *, top_level: bool = True) -> bool:
+    if isinstance(value, dict):
+        for raw_key, child in value.items():
+            key = str(raw_key or "").strip().lower()
+            if top_level and key in _COUNTERFACTUAL_JOB_IDENTITY_KEYS:
+                continue
+            if _job_record_has_substantive_context(child, top_level=False):
+                return True
+        return False
+
+    if isinstance(value, (list, tuple, set)):
+        return any(
+            _job_record_has_substantive_context(item, top_level=False)
+            for item in value
+        )
+
+    if isinstance(value, str):
+        text = str(value or "").strip()
+        if not text:
+            return False
+        if re.fullmatch(r"https?://\S+", text):
+            return False
+        return True
+
+    return False
+
+
+def _counterfactual_job_doc_id(
+    job: Dict[str, Any],
+    job_snapshot: Dict[str, Any],
+) -> str:
+    return str(
+        (job_snapshot.get("job_doc_id", "") if isinstance(job_snapshot, dict) else "")
+        or (job.get("job_doc_id", "") if isinstance(job, dict) else "")
+        or ""
+    ).strip()
+
+
+def _resolve_counterfactual_job_record(
+    job: Dict[str, Any],
+    job_snapshot: Dict[str, Any],
+    job_doc_id: str,
+) -> Tuple[Optional[Dict[str, Any]], str]:
+    if isinstance(job_snapshot, dict) and _job_record_has_substantive_context(job_snapshot):
+        return dict(job_snapshot), "job_snapshot"
+
+    if job_doc_id:
+        corpus_record = _load_job_record_by_doc_id(job_doc_id)
+        if isinstance(corpus_record, dict) and _job_record_has_substantive_context(corpus_record):
+            return corpus_record, "job_corpus"
+
+    if isinstance(job, dict) and _job_record_has_substantive_context(job):
+        return dict(job), "payload_job"
+
+    return None, "job_record_insufficient_context"
 
 def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
     selection = payload.get("selection", {}) or {}
@@ -3088,7 +3153,7 @@ def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Dict[str, A
     job_snapshot = payload.get("job_snapshot", {}) or {}
 
     selected_resume_name = str(selection.get("selected_resume", "") or "").strip()
-    job_doc_id = str(job.get("job_doc_id", "") or "").strip()
+    job_doc_id = _counterfactual_job_doc_id(job, job_snapshot)
 
     if not selected_resume_name:
         return {
@@ -3111,21 +3176,16 @@ def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Dict[str, A
             "job_doc_id": job_doc_id,
         }
 
-    job_record = None
-
-    if isinstance(job_snapshot, dict) and job_snapshot:
-        job_record = dict(job_snapshot)
-
-    if job_record is None and isinstance(job, dict) and job:
-        job_record = dict(job)
-
-    if job_record is None:
-        job_record = _load_job_record_by_doc_id(job_doc_id)
+    job_record, job_record_source = _resolve_counterfactual_job_record(
+        job,
+        job_snapshot,
+        job_doc_id,
+    )
 
     if job_record is None:
         return {
             "ok": False,
-            "reason": "job_record_not_found",
+            "reason": job_record_source or "job_record_not_found",
             "selected_resume_name": selected_resume_name,
             "job_doc_id": job_doc_id,
         }
@@ -3144,6 +3204,7 @@ def _counterfactual_context_from_payload(payload: Dict[str, Any]) -> Dict[str, A
         "original_result": original_result,
         "selected_resume_name": selected_resume_name,
         "job_doc_id": job_doc_id,
+        "job_record_source": job_record_source,
     }
 
 def _sorted_unique_strings(values: List[Any]) -> List[str]:
@@ -6041,6 +6102,7 @@ def _build_payload(
 
     return {
         "job": packet.get("job", {}),
+        "job_snapshot": dict(packet.get("job_snapshot", {}) or {}),
         "selection": packet.get("selection", {}),
         "summary": packet.get("summary", {}),
         "recruiter_summary": recruiter_summary,

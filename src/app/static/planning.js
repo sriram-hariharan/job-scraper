@@ -5539,6 +5539,51 @@ function haveSameTailoringWorkspaceManualBulletEdits(left, right, payload) {
   });
 }
 
+function getTailoringWorkspaceResolvedScorePreview({
+  originalScore = null,
+  projectedScore = null,
+  projectedDelta = null,
+} = {}) {
+  const hasOriginal = isFinitePreviewNumber(originalScore);
+  const hasProjected = isFinitePreviewNumber(projectedScore);
+  const hasDelta = isFinitePreviewNumber(projectedDelta);
+
+  if (!hasOriginal && !hasProjected) {
+    return null;
+  }
+
+  const resolvedNewScore = hasProjected ? projectedScore : originalScore;
+  const resolvedDelta = hasDelta ? projectedDelta : 0;
+
+  return {
+    newScore: resolvedNewScore,
+    delta: resolvedDelta,
+    deltaNumber: Number(String(resolvedDelta).replaceAll(",", "").trim()),
+  };
+}
+
+function renderTailoringWorkspaceScorePills({
+  originalScore = null,
+  projectedScore = null,
+  projectedDelta = null,
+} = {}) {
+  const resolved = getTailoringWorkspaceResolvedScorePreview({
+    originalScore,
+    projectedScore,
+    projectedDelta,
+  });
+
+  if (!resolved) return "";
+
+  return `
+    ${buildTailoringTonePill(`New ${formatScore100(resolved.newScore)}`, "neutral")}
+    ${buildTailoringTonePill(
+      `Δ ${formatSignedScore100(resolved.delta)}`,
+      getTailoringWorkspaceInlineDeltaTone(resolved.deltaNumber)
+    )}
+  `;
+}
+
 function getTailoringWorkspaceInlineScorePreview() {
   const payload = tailoringWorkspaceState.previewPayload;
   if (!payload || typeof payload !== "object") return null;
@@ -5549,20 +5594,11 @@ function getTailoringWorkspaceInlineScorePreview() {
       ? payload.selected_patch_set_counterfactual_preview
       : null;
 
-  const newScore = preview?.projected_final_score ?? payload.projected_score;
-  const delta = preview?.projected_overall_delta ?? payload.projected_delta;
-
-  if (!isFinitePreviewNumber(newScore) || !isFinitePreviewNumber(delta)) {
-    return null;
-  }
-
-  const deltaNumber = Number(String(delta).replaceAll(",", "").trim());
-
-  return {
-    newScore,
-    delta,
-    deltaNumber,
-  };
+  return getTailoringWorkspaceResolvedScorePreview({
+    originalScore: preview?.original_final_score ?? payload.original_score,
+    projectedScore: preview?.projected_final_score ?? payload.projected_score,
+    projectedDelta: preview?.projected_overall_delta ?? payload.projected_delta,
+  });
 }
 
 function getTailoringWorkspaceInlineDeltaTone(deltaNumber) {
@@ -7157,6 +7193,15 @@ function renderReplacementDecisionSection({
             `
             : "";
 
+          const compactScoreHtml =
+            mode !== "direction_only"
+              ? renderTailoringWorkspaceScorePills({
+                  originalScore: item.original_final_score,
+                  projectedScore: item.projected_final_score,
+                  projectedDelta: item.projected_overall_delta,
+                })
+              : "";
+
           return `
             <article
               class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
@@ -7246,6 +7291,13 @@ function renderReplacementDecisionSection({
                 </div>
               ` : isSelectable ? `
                 <div class="tailoring-card-actions tailoring-card-actions--compact">
+                  <div
+                    class="tailoring-chip-group"
+                    data-tailoring-free-edit-score="${escapeHtml(candidateId)}"
+                  >
+                    ${compactScoreHtml}
+                  </div>
+
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"

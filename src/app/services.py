@@ -3991,6 +3991,66 @@ def _load_job_record_for_workspace_preview(
 
     raise ValueError(f"Could not find job_doc_id in corpus: {clean_job_doc_id}")
 
+_WORKSPACE_JOB_IDENTITY_KEYS = {
+    "job_doc_id",
+    "company",
+    "title",
+    "link",
+    "url",
+    "job_url",
+}
+
+
+def _workspace_job_record_has_substantive_context(value: Any, *, top_level: bool = True) -> bool:
+    if isinstance(value, dict):
+        for raw_key, child in value.items():
+            key = _clean_text(raw_key).lower()
+            if top_level and key in _WORKSPACE_JOB_IDENTITY_KEYS:
+                continue
+            if _workspace_job_record_has_substantive_context(child, top_level=False):
+                return True
+        return False
+
+    if isinstance(value, (list, tuple, set)):
+        return any(
+            _workspace_job_record_has_substantive_context(item, top_level=False)
+            for item in value
+        )
+
+    if isinstance(value, str):
+        text = _clean_text(value)
+        if not text:
+            return False
+        if re.fullmatch(r"https?://\S+", text):
+            return False
+        return True
+
+    return False
+
+
+def _resolve_workspace_preview_job_record(
+    job: Dict[str, Any],
+    job_snapshot: Dict[str, Any],
+) -> Dict[str, Any]:
+    job_doc_id = _clean_text(
+        (job_snapshot.get("job_doc_id", "") if isinstance(job_snapshot, dict) else "")
+        or (job.get("job_doc_id", "") if isinstance(job, dict) else "")
+    )
+
+    if isinstance(job_snapshot, dict) and _workspace_job_record_has_substantive_context(job_snapshot):
+        return dict(job_snapshot)
+
+    if job_doc_id:
+        corpus_record = _load_job_record_for_workspace_preview(job_doc_id)
+        if _workspace_job_record_has_substantive_context(corpus_record):
+            return corpus_record
+
+    if isinstance(job, dict) and _workspace_job_record_has_substantive_context(job):
+        return dict(job)
+
+    raise ValueError(
+        f"Workspace draft preview could not resolve a job record with substantive scoring context for job_doc_id: {job_doc_id or '<missing>'}"
+    )
 
 def _load_resume_evidence_for_workspace_preview(resume_name: str):
     from src.resume.document_store import load_resume_documents_by_name
@@ -4179,14 +4239,10 @@ def preview_tailoring_workspace_draft_payload(
     try:
         original_resume = _load_resume_evidence_for_workspace_preview(effective_selected_resume)
 
-        if isinstance(job_snapshot, dict) and job_snapshot:
-            job_record = dict(job_snapshot)
-        elif isinstance(job, dict) and job:
-            job_record = dict(job)
-        else:
-            job_record = _load_job_record_for_workspace_preview(
-                _clean_text(job.get("job_doc_id"))
-            )
+        job_record = _resolve_workspace_preview_job_record(
+            job,
+            job_snapshot,
+        )
 
         job_evidence = build_job_evidence(job_record)
 

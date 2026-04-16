@@ -1085,7 +1085,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=tailoring_workspace_20260408_7"></script>
+  <script src="/static/planning.js?v=tailoring_workspace_20260415_score_pills_1"></script>
 </body>
 </html>
     """.strip()

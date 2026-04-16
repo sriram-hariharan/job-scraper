@@ -5421,21 +5421,6 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
     patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
 
-    if overall_delta < 0.0:
-        candidate["proposal_status"] = "direction_only"
-        candidate["proposal_type"] = "directional_rewrite"
-        candidate["direction_only_reason"] = (
-            str(candidate.get("direction_only_reason", "") or "").strip()
-            or "negative_projected_score_delta"
-        )
-        candidate["patch_ready"] = False
-        candidate["material_delta_found"] = False
-        candidate["materiality_validation_status"] = "negative_projected_score_delta"
-        candidate["materiality_validation_note"] = (
-            "Deterministic rewrite reduced the projected frozen score during counterfactual pre-validation, so it cannot remain patch-ready."
-        )
-        return candidate
-
     signal_fronting_methods = {
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",

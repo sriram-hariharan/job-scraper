@@ -78,7 +78,12 @@ def _has_non_negative_projected_delta(candidate: Dict[str, Any]) -> bool:
 
 def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
     proposal_status = _text(candidate.get("proposal_status", ""))
-    patch_ready = 1 if proposal_status == "patch_ready" and _text(candidate.get("patch_text", "")) else 0
+    patch_text = _text(candidate.get("patch_text", ""))
+    patch_ready = 1 if (
+        proposal_status == "patch_ready"
+        and patch_text
+        and not _looks_like_directional_instruction_text(patch_text)
+    ) else 0
     llm_used = 1 if bool(candidate.get("llm_refinement_used", False)) else 0
 
     return (
@@ -87,16 +92,52 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
         _candidate_confidence_rank(candidate),
         llm_used,
         _candidate_delta_rank(candidate),
-        len(_text(candidate.get("patch_text", ""))),
+        len(patch_text),
     )
 
+def _looks_like_directional_instruction_text(text: str) -> bool:
+    raw = _text(text)
+    if not raw:
+        return False
+
+    normalized = " ".join(raw.split()).strip().lower()
+
+    instruction_prefixes = (
+        "lead with ",
+        "support with ",
+        "keep this bullet",
+        "move this bullet",
+        "do not rewrite ",
+        "review this bullet",
+        "treat this as ",
+        "if space is tight, ",
+        "if you want a tighter one-bullet story, ",
+        "replace the original bullet with ",
+        "only merge if ",
+        "keep gap explicit ",
+    )
+
+    if normalized.startswith(instruction_prefixes):
+        return True
+
+    if normalized.endswith(" truthfully.") and (
+        normalized.startswith("lead with ")
+        or normalized.startswith("support with ")
+    ):
+        return True
+
+    return False
 
 def _passes_direct_apply_safety(candidate: Dict[str, Any]) -> bool:
     if _text(candidate.get("operation_type", "")) != "rewrite":
         return False
     if _text(candidate.get("proposal_status", "")) != "patch_ready":
         return False
-    if not _text(candidate.get("patch_text", "")):
+
+    patch_text = _text(candidate.get("patch_text", ""))
+    if not patch_text:
+        return False
+    if _looks_like_directional_instruction_text(patch_text):
         return False
 
     if list(candidate.get("unsupported_risk_signals", []) or []):
@@ -104,9 +145,6 @@ def _passes_direct_apply_safety(candidate: Dict[str, Any]) -> bool:
 
     counterfactual_status = _text(candidate.get("counterfactual_status", ""))
     if counterfactual_status in _BAD_COUNTERFACTUAL_STATUSES:
-        return False
-
-    if not _has_non_negative_projected_delta(candidate):
         return False
 
     return True

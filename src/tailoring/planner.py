@@ -7,7 +7,7 @@ from src.tailoring.packet_support import (
     _unique_preserve_order,
     _truncate_list,
     _facet_display_name,
-    _rewrite_source_rows,
+    _candidate_eligible_rewrite_rows,
     _top_direct_facets,
     _top_adjacent_facets,
     _top_gap_facets,
@@ -355,7 +355,7 @@ def _build_narrative_angle(packet: Dict[str, Any]) -> str:
 
 
 def _build_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
-    rows = _rewrite_source_rows(packet)
+    rows = _candidate_eligible_rewrite_rows(packet)
 
     direct_anchor_rows = [
         row for row in rows
@@ -504,7 +504,7 @@ def _build_gap_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 def _build_compatibility_anchor_plan(packet: Dict[str, Any]) -> Dict[str, Any]:
-    rows = _rewrite_source_rows(packet)
+    rows = _candidate_eligible_rewrite_rows(packet)
 
     direct_facets = _top_direct_facets(packet, limit=3)
     adjacent_facets = _top_adjacent_facets(packet, limit=3)

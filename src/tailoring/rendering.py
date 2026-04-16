@@ -2025,6 +2025,34 @@ def _bullet_diagnosis_key(item: Dict[str, Any]) -> tuple:
         str(item.get("current_evidence", "") or item.get("evidence", "") or "").strip(),
     )
 
+def _curated_rewrite_candidate_key(row: Dict[str, Any]) -> tuple:
+    return (
+        str(row.get("bullet_id", "") or "").strip(),
+        str(row.get("section", "") or "").strip(),
+        str(row.get("source", "") or "").strip(),
+        str(row.get("parent_bullet", "") or row.get("current_evidence", "") or row.get("original_text", "") or "").strip(),
+    )
+
+
+def _curated_rewrite_candidate_key_from_diagnosis(diagnosis: Dict[str, Any]) -> tuple:
+    return (
+        str(diagnosis.get("bullet_id", "") or "").strip(),
+        str(diagnosis.get("section", "") or "").strip(),
+        str(diagnosis.get("source", "") or "").strip(),
+        str(diagnosis.get("original_text", "") or "").strip(),
+    )
+
+
+def _curated_rewrite_candidate_key_set(payload: Dict[str, Any]) -> set[tuple]:
+    keys = set()
+
+    for row in list(payload.get("rewrite_candidates", []) or []):
+        key = _curated_rewrite_candidate_key(row)
+        if any(key):
+            keys.add(key)
+
+    return keys
+
 def _bullet_diagnosis_dedupe_key(item: Dict[str, Any]) -> tuple:
     bullet_id = str(item.get("bullet_id", "") or "").strip()
     if bullet_id:
@@ -5393,6 +5421,21 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
     patch_generation_method = str(candidate.get("patch_generation_method", "") or "").strip()
     patch_generation_method_base = patch_generation_method.split("+", 1)[0].strip()
 
+    if overall_delta < 0.0:
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["direction_only_reason"] = (
+            str(candidate.get("direction_only_reason", "") or "").strip()
+            or "negative_projected_score_delta"
+        )
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = "negative_projected_score_delta"
+        candidate["materiality_validation_note"] = (
+            "Deterministic rewrite reduced the projected frozen score during counterfactual pre-validation, so it cannot remain patch-ready."
+        )
+        return candidate
+
     signal_fronting_methods = {
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
@@ -5535,6 +5578,21 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_fronted_using_phrase"
     }
 
+    if overall_delta < 0.0:
+        candidate["proposal_status"] = "direction_only"
+        candidate["proposal_type"] = "directional_rewrite"
+        candidate["direction_only_reason"] = (
+            str(candidate.get("direction_only_reason", "") or "").strip()
+            or "negative_projected_score_delta"
+        )
+        candidate["patch_ready"] = False
+        candidate["material_delta_found"] = False
+        candidate["materiality_validation_status"] = "negative_projected_score_delta"
+        candidate["materiality_validation_note"] = (
+            "Deterministic rewrite reduced the projected frozen score during counterfactual pre-validation, so it cannot remain patch-ready."
+        )
+        return candidate
+
     if overall_delta == 0.0 and not evidence_changed:
         if _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(candidate):
             candidate["material_delta_found"] = False
@@ -5652,13 +5710,19 @@ def _build_replacement_candidates(
     candidates: List[Dict[str, Any]] = []
     seen_keys = set()
     counterfactual_context = _counterfactual_context_from_payload(payload)
-
+    curated_rewrite_keys = _curated_rewrite_candidate_key_set(payload)
+    
     # Pass 1: primary candidates from diagnoses
     for index, diagnosis in enumerate(bullet_diagnoses, start=1):
         action = str(diagnosis.get("diagnosis_action", "") or "").strip()
         key = _bullet_diagnosis_key(diagnosis)
 
         if action == "rewrite":
+            if curated_rewrite_keys:
+                curated_key = _curated_rewrite_candidate_key_from_diagnosis(diagnosis)
+                if curated_key not in curated_rewrite_keys:
+                    continue
+
             if key in seen_keys:
                 continue
             seen_keys.add(key)

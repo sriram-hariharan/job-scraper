@@ -10,7 +10,7 @@ from src.tailoring.family_matcher import (
 )
 
 from src.tailoring.packet_support import (
-    _rewrite_source_rows,
+    _candidate_eligible_rewrite_rows,
     _source_label,
     _row_supported_terms,
     _is_clause_unit,
@@ -95,7 +95,7 @@ def _build_bullet_reuse(
     limit: int = 6,
 ) -> List[Dict[str, Any]]:
     tailoring_plan = tailoring_plan or {}
-    rows = _experience_only_rows(_rewrite_source_rows(packet))
+    rows = _candidate_eligible_rewrite_rows(packet)
 
     if not rows:
         return _build_bullet_reuse_from_plan_units(
@@ -172,33 +172,65 @@ def _build_rewrite_candidates(
         tailoring_plan.get("secondary_support_units", []) or []
     )
 
-    for unit in primary_units:
+    def _append_plan_unit(unit: Dict[str, Any], *, primary: bool) -> bool:
         key = _plan_unit_key(unit)
         if key in used_keys:
-            continue
+            return False
         used_keys.add(key)
-        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=True))
-        if len(candidates) >= limit:
+        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=primary))
+        return True
+
+    # Step 1: only the strongest primary anchors should become rewrite candidates.
+    # The planner already orders primary anchors by facet/coverage priority, and the
+    # third anchor is typically just backfill. Keeping this capped at two produces
+    # fewer but stronger rewrite candidates.
+    for unit in primary_units[:2]:
+        if _append_plan_unit(unit, primary=True) and len(candidates) >= limit:
             return candidates
 
+    # Step 2: allow at most one secondary rewrite candidate, and only when it is
+    # itself a strong direct-overlap unit with multiple supported JD terms.
+    secondary_added = 0
     for unit in secondary_units:
-        key = _plan_unit_key(unit)
-        if key in used_keys:
+        evidence_type = str(unit.get("evidence_type", "") or "").strip()
+        supported_terms = [
+            str(term).strip()
+            for term in (unit.get("supported_terms", []) or [])
+            if str(term).strip()
+        ]
+        evidence_unit = str(unit.get("evidence_unit", "") or "").strip()
+
+        if evidence_type != "direct_overlap":
             continue
-        used_keys.add(key)
-        candidates.append(_rewrite_candidate_from_plan_unit(unit, primary=False))
-        if len(candidates) >= limit:
+        if len(supported_terms) < 2:
+            continue
+        if not evidence_unit:
+            continue
+
+        if _append_plan_unit(unit, primary=False):
+            secondary_added += 1
+
+        if len(candidates) >= limit or secondary_added >= 1:
             return candidates
 
-    rows = _experience_only_rows(_rewrite_source_rows(packet))
+    # Step 3: do not widen candidate birth with arbitrary eligible rows when the
+    # plan already produced candidates. Raw-row fallback is only for compatibility
+    # cases where the plan yields nothing.
+    if candidates:
+        return candidates
+
+    rows = _candidate_eligible_rewrite_rows(packet)
 
     for row in rows:
         supported_terms = _row_supported_terms(row)
         if not supported_terms:
             continue
 
+        evidence_type = str(row.get("evidence_type", "") or "").strip()
+        if evidence_type != "direct_overlap":
+            continue
+
         source = _source_label(row)
-        evidence_type = row.get("evidence_type", "direct_overlap")
         source_key = (
             row.get("bullet_id", ""),
             row.get("section", ""),
@@ -212,25 +244,15 @@ def _build_rewrite_candidates(
 
         is_clause = _is_clause_unit(row)
 
-        if evidence_type == "direct_overlap":
-            if is_clause:
-                action = (
-                    f"Lead with {', '.join(supported_terms[:4])} in this opening clause, "
-                    "then keep the remaining parent-bullet context only if it preserves a clean story."
-                )
-            else:
-                action = (
-                    f"Lead with {', '.join(supported_terms[:4])} in the opening clause of this bullet, "
-                    "then keep the outcome/impact at the end."
-                )
-        elif evidence_type == "same_source_context":
+        if is_clause:
             action = (
-                "Use this as a second supporting line under the same role so the stronger anchor evidence "
-                "looks backed by related work."
+                f"Lead with {', '.join(supported_terms[:4])} in this opening clause, "
+                "then keep the remaining parent-bullet context only if it preserves a clean story."
             )
         else:
             action = (
-                "Use this as adjacent support only if it keeps the same story truthful and consistent."
+                f"Lead with {', '.join(supported_terms[:4])} in the opening clause of this bullet, "
+                "then keep the outcome/impact at the end."
             )
 
         focused_evidence = str(row.get("clause_text") or row.get("text", "") or "").strip()
@@ -257,7 +279,7 @@ def _build_rewrite_candidates(
         )
         used_keys.add(source_key)
 
-        if len(candidates) >= limit:
+        if len(candidates) >= min(limit, 2):
             break
 
     return candidates
@@ -268,7 +290,7 @@ def _build_evidence_layers(
     limit_per_group: int = 4,
 ) -> Dict[str, List[Dict[str, Any]]]:
     tailoring_plan = tailoring_plan or {}
-    rows = _experience_only_rows(_rewrite_source_rows(packet))
+    rows = _candidate_eligible_rewrite_rows(packet)
 
     primary_units = _experience_only_rows(
         tailoring_plan.get("primary_anchor_units", []) or []

@@ -1481,17 +1481,28 @@ def _infer_packet_json_path_from_tailoring_artifact(artifact_path: Path) -> Path
 
 def _artifact_needs_operator_rehydration(payload_data: Dict[str, Any]) -> bool:
     replacement_candidates = list(payload_data.get("replacement_candidates", []) or [])
-    if replacement_candidates:
+
+    has_current_operator_fields = any(
+        [
+            list(payload_data.get("app_ready_replacements", []) or []),
+            list(payload_data.get("direct_apply_optional_replacements", []) or []),
+            list(payload_data.get("direction_only_replacements", []) or []),
+            list(payload_data.get("final_replacement_decisions", []) or []),
+            list(payload_data.get("anchor_cards", []) or []),
+            list(payload_data.get("top_anchor_priorities", []) or []),
+        ]
+    )
+
+    if has_current_operator_fields:
         return False
 
-    return any(
-        [
-            list(payload_data.get("rewrite_candidates", []) or []),
-            list(payload_data.get("bullet_reuse_candidates", []) or []),
-            list(payload_data.get("edit_cards", []) or []),
-            list(payload_data.get("top_edit_priorities", []) or []),
-            list(payload_data.get("bullet_diagnoses", []) or []),
-        ]
+    return bool(
+        replacement_candidates
+        or list(payload_data.get("rewrite_candidates", []) or [])
+        or list(payload_data.get("bullet_reuse_candidates", []) or [])
+        or list(payload_data.get("edit_cards", []) or [])
+        or list(payload_data.get("top_edit_priorities", []) or [])
+        or list(payload_data.get("bullet_diagnoses", []) or [])
     )
 
 
@@ -1658,14 +1669,18 @@ def _tailoring_workspace_button_state(
         direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
         direction_only = list(payload_data.get("direction_only_replacements", []) or [])
         decisions = list(payload_data.get("final_replacement_decisions", []) or [])
+        anchor_cards = list(payload_data.get("anchor_cards", []) or [])
+        top_anchor_priorities = list(payload_data.get("top_anchor_priorities", []) or [])
 
         ready_count = len(app_ready)
         actionable_count = len(app_ready) + len(direct_apply_optional)
         review_count = len(direction_only)
+        anchor_count = len(anchor_cards) or len(top_anchor_priorities)
 
         has_replacement_plan = bool(
             decisions or app_ready or direct_apply_optional or direction_only
         )
+        has_anchor_evidence = bool(anchor_cards or top_anchor_priorities)
 
         if actionable_count > 0:
             workspace_state = "ready"
@@ -1673,15 +1688,17 @@ def _tailoring_workspace_button_state(
             workspace_state = "review"
         elif has_replacement_plan:
             workspace_state = "review"
+        elif has_anchor_evidence:
+            workspace_state = "review"
         else:
             workspace_state = "empty"
 
         result.update({
             "tailoring_ready_replacement_count": ready_count,
             "tailoring_actionable_replacement_count": actionable_count,
-            "tailoring_review_replacement_count": review_count,
+            "tailoring_review_replacement_count": review_count + anchor_count,
             "tailoring_has_ready_replacements": actionable_count > 0,
-            "tailoring_has_review_guidance": review_count > 0,
+            "tailoring_has_review_guidance": (review_count + anchor_count) > 0,
             "tailoring_workspace_state": workspace_state,
         })
     except Exception:

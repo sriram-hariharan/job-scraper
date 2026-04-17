@@ -7745,7 +7745,9 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
     selection = payload.get("selection", {}) or {}
     tailoring_plan = payload.get("tailoring_plan", {}) or {}
     top_edit_priorities = payload.get("top_edit_priorities", []) or []
+    top_anchor_priorities = payload.get("top_anchor_priorities", []) or []
     edit_cards = payload.get("edit_cards", []) or []
+    anchor_cards = payload.get("anchor_cards", []) or []
     keep_as_is = payload.get("keep_as_is", []) or []
     claim_safety_notes = payload.get("claim_safety_notes", {}) or {}
     material_gaps = payload.get("material_gaps", []) or []
@@ -7793,6 +7795,21 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Safer rewrite direction: {item.get('recommended_rewrite', '')}")
             lines.append("")
     
+    if top_anchor_priorities:
+        lines.append("## Highest-Value Anchors")
+        for index, item in enumerate(top_anchor_priorities, start=1):
+            lines.append(
+                f"### {index}. {str(item.get('priority', '')).title()} priority • "
+                f"{str(item.get('edit_type', '')).replace('_', ' ').title()}"
+            )
+            if item.get("jd_signal"):
+                lines.append(f"- JD signal: {item.get('jd_signal', '')}")
+            if item.get("target_section"):
+                lines.append(f"- Where to keep visible: {item.get('target_section', '')}")
+            if item.get("why_it_matters"):
+                lines.append(f"- Why this anchor matters: {item.get('why_it_matters', '')}")
+            lines.append("")
+
     if final_replacement_summary:
         lines.append("## Final Replacement Summary")
         if final_replacement_summary.get("total_rewrite_bullets") is not None:
@@ -8109,6 +8126,35 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
                 lines.append(f"- Why selected: {row.get('why_selected', '')}")
             lines.append("")
 
+    if anchor_cards:
+        lines.append("## Anchor Evidence to Keep Visible")
+        for index, card in enumerate(anchor_cards, start=1):
+            lines.append(
+                f"### Anchor {index} · {str(card.get('priority', '')).title()} priority · "
+                f"{str(card.get('edit_type', '')).replace('_', ' ').title()}"
+            )
+            if card.get("section"):
+                lines.append(f"- Section: {card.get('section', '')}")
+            if card.get("source"):
+                lines.append(f"- Evidence source: {card.get('source', '')}")
+            if card.get("jd_signal_terms"):
+                lines.append(
+                    f"- JD signal terms: {', '.join(card.get('jd_signal_terms', []) or [])}"
+                )
+            if card.get("current_evidence"):
+                lines.append("- Current evidence:")
+                lines.append(f"  > {card.get('current_evidence', '')}")
+            if card.get("parent_bullet"):
+                lines.append("- Parent bullet:")
+                lines.append(f"  > {card.get('parent_bullet', '')}")
+            if card.get("why_it_matters"):
+                lines.append(f"- Why keep it visible: {card.get('why_it_matters', '')}")
+            if card.get("claim_safety"):
+                lines.append(f"- Claim safety: {card.get('claim_safety', '')}")
+            if card.get("placement_guidance"):
+                lines.append(f"- Placement guidance: {card.get('placement_guidance', '')}")
+            lines.append("")
+
     if edit_cards:
         lines.append("## Appendix: Bullet-Level Edit Cards")
         for index, card in enumerate(edit_cards, start=1):
@@ -8263,7 +8309,7 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
 
     empty_state_reason = payload.get("empty_state_reason", {}) or {}
 
-    if not edit_cards and empty_state_reason:
+    if not edit_cards and not anchor_cards and empty_state_reason:
         lines.append("## Why There Are No Edit Cards")
 
         if empty_state_reason.get("title"):

@@ -6030,19 +6030,74 @@ function syncTailoringWorkspaceSavedSelectionIntoArtifact(payload) {
     payload.selected_patch_set_counterfactual_preview || null;
 }
 
+function isDirectionalAnchorGuidanceText(value) {
+  const text = String(value || "").trim();
+  return /^(lead with|support with)\b/i.test(text);
+}
+
+function getCompactTailoringAnchorSignalKey(card) {
+  const signals = Array.isArray(card?.jd_signal_terms) ? card.jd_signal_terms : [];
+  return signals
+    .map((item) => String(item || "").trim().toLowerCase())
+    .filter(Boolean)
+    .sort()
+    .join("|");
+}
+
+function getCompactTailoringAnchorCards(items, limit = 3) {
+  const rows = Array.isArray(items) ? items : [];
+  const bestByKey = new Map();
+
+  for (const card of rows) {
+    const source = String(card?.source || "").trim().toLowerCase();
+    const signalKey = getCompactTailoringAnchorSignalKey(card);
+    const key = `${source}::${signalKey}`;
+
+    const evidence = String(card?.current_evidence || card?.parent_bullet || "").trim();
+    const why = String(card?.why_it_matters || "").trim();
+    const score =
+      (isDirectionalAnchorGuidanceText(why) ? 1000000 : 0) +
+      evidence.length;
+
+    const existing = bestByKey.get(key);
+    if (!existing || score > existing._score) {
+      bestByKey.set(key, {
+        ...card,
+        _score: score,
+      });
+    }
+  }
+
+  return Array.from(bestByKey.values())
+    .sort((a, b) => Number(b._score || 0) - Number(a._score || 0))
+    .slice(0, limit)
+    .map(({ _score, ...card }) => card);
+}
+
 function getTailoringWorkspaceSuggestionBuckets() {
   const payload = getTailoringWorkspacePayload();
 
+  const ready = [
+    ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
+    ...(Array.isArray(payload?.direct_apply_optional_replacements)
+      ? payload.direct_apply_optional_replacements
+      : []),
+  ];
+
+  const reviewGuidance = Array.isArray(payload?.direction_only_replacements)
+    ? payload.direction_only_replacements
+    : [];
+
+  const anchorCards = getCompactTailoringAnchorCards(
+    Array.isArray(payload?.anchor_cards) ? payload.anchor_cards : [],
+    3
+  );
+
   return {
-    ready: [
-      ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
-      ...(Array.isArray(payload?.direct_apply_optional_replacements)
-        ? payload.direct_apply_optional_replacements
-        : []),
-    ],
-    review: Array.isArray(payload?.direction_only_replacements)
-      ? payload.direction_only_replacements
-      : [],
+    ready,
+    review: [...reviewGuidance, ...anchorCards],
+    reviewGuidance,
+    anchorCards,
   };
 }
 
@@ -6131,16 +6186,18 @@ function updateTailoringWorkspaceMetaSummary(payload) {
     return;
   }
 
+  const grouped = getTailoringWorkspaceSuggestionBuckets();
+
   const appReady = Array.isArray(payload.app_ready_replacements) ? payload.app_ready_replacements : [];
   const directApplyOptional = Array.isArray(payload.direct_apply_optional_replacements)
     ? payload.direct_apply_optional_replacements
     : [];
-  const directionOnly = Array.isArray(payload.direction_only_replacements)
-    ? payload.direction_only_replacements
-    : [];
+  const directionOnly = grouped.reviewGuidance;
+  const anchorCards = grouped.anchorCards;
 
   const actionableCount = appReady.length + directApplyOptional.length;
   const reviewCount = directionOnly.length;
+  const anchorCount = anchorCards.length;
   const editableCount = buildTailoringWorkspaceEditableBulletRows(payload).length;
   const selectedCount = getTailoringWorkspaceSelectedCandidateIds().length;
   const activeTab = String(tailoringWorkspaceState.selectedTab || "").trim();
@@ -6181,10 +6238,14 @@ function updateTailoringWorkspaceMetaSummary(payload) {
       meta.textContent = reviewItems.length
         ? `Showing ${reviewItems.length} rejected review suggestion${reviewItems.length === 1 ? "" : "s"}.`
         : "No rejected review suggestions match the current filter.";
+    } else if (reviewCount > 0 && anchorCount > 0) {
+      meta.textContent = `Review guidance loaded. ${reviewCount} review suggestion${reviewCount === 1 ? "" : "s"} and ${anchorCount} grounded anchor${anchorCount === 1 ? "" : "s"} available.`;
+    } else if (reviewCount > 0) {
+      meta.textContent = "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet.";
+    } else if (anchorCount > 0) {
+      meta.textContent = `Anchor evidence loaded. ${anchorCount} grounded anchor${anchorCount === 1 ? "" : "s"} found. Review tab shows strong bullets worth keeping visible.`;
     } else {
-      meta.textContent = reviewCount > 0
-        ? "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet."
-        : "No review guidance is available for this row.";
+      meta.textContent = "No review guidance is available for this row.";
     }
 
     renderTailoringWorkspaceReviewTelemetryStrip();
@@ -6193,21 +6254,23 @@ function updateTailoringWorkspaceMetaSummary(payload) {
 
   if (actionableCount > 0) {
     if (selectedCount > 0) {
-      meta.textContent = `${selectedCount} of ${actionableCount} actionable suggestion${actionableCount === 1 ? "" : "s"} selected. Review-only guidance stays read-only.`;
+      meta.textContent = `${selectedCount} of ${actionableCount} actionable suggestion${actionableCount === 1 ? "" : "s"} selected. Review evidence stays read-only.`;
     } else {
-      meta.textContent = `Actionable suggestions loaded. ${actionableCount} selectable suggestion${actionableCount === 1 ? "" : "s"} available. Review-only guidance stays read-only.`;
+      meta.textContent = `Actionable suggestions loaded. ${actionableCount} selectable suggestion${actionableCount === 1 ? "" : "s"} available. Review evidence stays read-only.`;
     }
     renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
 
-  if (reviewCount > 0) {
-    meta.textContent = "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet.";
+  if (reviewCount > 0 || anchorCount > 0) {
+    meta.textContent = anchorCount > 0 && reviewCount === 0
+      ? `Anchor evidence loaded. ${anchorCount} grounded anchor${anchorCount === 1 ? "" : "s"} found, but no safe selectable rewrites yet.`
+      : "Review guidance loaded. This row has review-only suggestions, but no safe selectable rewrites yet.";
     renderTailoringWorkspaceReviewTelemetryStrip();
     return;
   }
 
-  meta.textContent = "No safe bullet-level rewrites were found for this row.";
+  meta.textContent = "No safe bullet-level rewrites or grounded anchor evidence were found for this row.";
   renderTailoringWorkspaceReviewTelemetryStrip();
 }
 
@@ -6220,6 +6283,8 @@ function rerenderTailoringWorkspaceSelectionView() {
   if (tailoringWorkspaceState.selectedTab === "free_edit") {
     qs("tailoringWorkspaceInteractiveSummary").innerHTML = renderTailoringWorkspaceFreeEditSection(payload);
   } else {
+    const reviewFilterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+
     const reviewFilteredPayload =
       tailoringWorkspaceState.selectedTab === "review" && payload
         ? {
@@ -6227,6 +6292,12 @@ function rerenderTailoringWorkspaceSelectionView() {
             direction_only_replacements: getTailoringWorkspaceFilteredReviewItems(
               payload.direction_only_replacements
             ),
+            anchor_cards:
+              reviewFilterKey && reviewFilterKey !== "selected" && reviewFilterKey !== "manual_edits"
+                ? []
+                : Array.isArray(payload.anchor_cards)
+                  ? payload.anchor_cards
+                  : [],
           }
         : payload;
 
@@ -7027,6 +7098,72 @@ function bindTailoringWorkspaceActionBar() {
   updateTailoringWorkspaceSelectionActionBar();
 }
 
+function renderTailoringAnchorEvidenceSection({
+  title = "Anchor evidence",
+  items = [],
+  emptyLabel = "No anchor evidence for this row.",
+} = {}) {
+  const safeItems = getCompactTailoringAnchorCards(items, 3);
+
+  if (!safeItems.length) {
+    return `
+      <section class="tailoring-section-block">
+        <div class="tailoring-section-title">${escapeHtml(title)}</div>
+        <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">${escapeHtml(title)}</div>
+
+      <div class="tailoring-edit-card-list">
+        ${safeItems.map((item, index) => {
+          const signalTerms = Array.isArray(item.jd_signal_terms)
+            ? item.jd_signal_terms.filter(Boolean)
+            : [];
+          const source = String(item.source || "").trim();
+          const currentEvidence = String(item.current_evidence || item.parent_bullet || "").trim();
+          const whyItMatters = String(item.why_it_matters || "").trim();
+          const reviewNote = isDirectionalAnchorGuidanceText(whyItMatters) ? whyItMatters : "";
+
+          return `
+            <article class="tailoring-edit-card tailoring-edit-card--compact">
+              <div class="tailoring-card-topline tailoring-card-topline--compact">
+                <div class="tailoring-edit-card-label">Anchor ${index + 1}</div>
+
+                <div class="tailoring-chip-group tailoring-chip-group--compact">
+                  ${buildTailoringTonePill("Keep visible", "muted")}
+                  ${signalTerms.slice(0, 2).map((term) => buildTailoringTonePill(term, "neutral")).join("")}
+                </div>
+              </div>
+
+              ${source ? `
+                <div class="tailoring-card-copy">${escapeHtml(source)}</div>
+              ` : ""}
+
+              ${currentEvidence ? `
+                <div class="tailoring-info-block tailoring-info-block--compact">
+                  <div class="tailoring-info-label">Current bullet</div>
+                  <div class="tailoring-quote-block">${escapeHtml(currentEvidence)}</div>
+                </div>
+              ` : ""}
+
+              ${reviewNote ? `
+                <div class="tailoring-info-block tailoring-info-block--compact">
+                  <div class="tailoring-info-label">Review note</div>
+                  <div class="tailoring-card-copy">${escapeHtml(reviewNote)}</div>
+                </div>
+              ` : ""}
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderReplacementDecisionSection({
   title,
   subtitle = "",
@@ -7597,20 +7734,22 @@ function renderTailoringInteractiveSummaryInto(
     ? payload.direct_apply_optional_replacements
     : [];
   const directionOnly = Array.isArray(payload.direction_only_replacements) ? payload.direction_only_replacements : [];
+  const anchorCards = Array.isArray(payload.anchor_cards) ? payload.anchor_cards : [];
   const decisions = Array.isArray(payload.final_replacement_decisions) ? payload.final_replacement_decisions : [];
 
-  const hasReplacementPlan =
+  const hasSuggestionEvidence =
     decisions.length ||
     appReady.length ||
     directApplyOptional.length ||
-    directionOnly.length;
+    directionOnly.length ||
+    anchorCards.length;
 
-  if (!hasReplacementPlan) {
+  if (!hasSuggestionEvidence) {
     root.innerHTML = renderTailoringEmptyState(payload);
     return;
   }
 
-  const recommendedHtml = Array.isArray(directionOnly) && directionOnly.length
+  const recommendedHtml = directionOnly.length
     ? renderReplacementDecisionSection({
         title: "Review guidance",
         subtitle: "These bullets need review, reordering, or manual judgment before any export decision.",
@@ -7622,7 +7761,16 @@ function renderTailoringInteractiveSummaryInto(
       })
     : "";
 
-  const readyHtml = Array.isArray(appReady) && appReady.length
+  const anchorHtml = anchorCards.length
+    ? renderTailoringAnchorEvidenceSection({
+        title: "Anchor evidence",
+        subtitle: "Strong truthful bullets worth keeping visible even when no safe rewrite is available.",
+        items: anchorCards,
+        emptyLabel: "No anchor evidence for this row.",
+      })
+    : "";
+
+  const readyHtml = appReady.length
     ? renderReplacementDecisionSection({
         title: "Ready to use",
         subtitle: "These edits are ready to use as written.",
@@ -7635,7 +7783,7 @@ function renderTailoringInteractiveSummaryInto(
       })
     : "";
 
-  const optionalHtml = Array.isArray(directApplyOptional) && directApplyOptional.length
+  const optionalHtml = directApplyOptional.length
     ? renderReplacementDecisionSection({
         title: "Nice to improve",
         subtitle: "These are safe wording improvements, but not the main fit drivers.",
@@ -7662,19 +7810,18 @@ function renderTailoringInteractiveSummaryInto(
       `;
     }
   } else if (normalizedBucket === "review") {
-    bucketHtml = recommendedHtml;
+    bucketHtml = `${recommendedHtml}${anchorHtml}`;
     if (!bucketHtml.trim()) {
       bucketHtml = `
         <section class="tailoring-section-block">
-          <div class="tailoring-section-title">Review guidance</div>
-          <div class="tailoring-empty-inline">No review suggestions match the current filter.</div>
+          <div class="tailoring-section-title">Review</div>
+          <div class="tailoring-empty-inline">No review guidance or anchor evidence is available for this row.</div>
         </section>
       `;
     }
   } else {
-    bucketHtml = `${recommendedHtml}${readyHtml}${optionalHtml}`;
+    bucketHtml = `${readyHtml}${optionalHtml}${recommendedHtml}${anchorHtml}`;
   }
-
   const diagnosticsHtml =
     includeDiagnostics && !normalizedBucket
       ? renderLegacyDiagnosticDetails(payload)

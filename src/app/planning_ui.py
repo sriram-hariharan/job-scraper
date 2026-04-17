@@ -17,7 +17,7 @@ def planning_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning Detail Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_ui_20260328_1" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_ui_20260417_5" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -662,7 +662,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=tailoring_ui_20260417_4"></script>
+  <script src="/static/planning.js?v=tailoring_ui_20260417_5"></script>
 </body>
 </html>
     """.strip()
@@ -701,7 +701,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260408_7" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260417_5" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -1085,7 +1085,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=tailoring_workspace_20260417_4"></script>
+  <script src="/static/planning.js?v=tailoring_workspace_20260417_5"></script>
 </body>
 </html>
     """.strip()

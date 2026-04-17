@@ -662,6 +662,26 @@ button:hover {
   margin-bottom: 14px;
 }
 
+.tailoring-workspace-pane--left > .section-header {
+  margin-bottom: 20px;
+}
+
+.tailoring-workspace-pane--left > .section-header h2 {
+  margin: 0 0 10px 0;
+  line-height: 1.15;
+}
+
+.tailoring-workspace-pane--left > .section-header #tailoringWorkspaceMeta {
+  display: block;
+  max-width: 860px;
+  line-height: 1.4;
+}
+
+.tailoring-workspace-pane--left > .section-header + .tailoring-workspace-subcard,
+.tailoring-workspace-pane--left > .section-header + #tailoringWorkspaceInteractiveSummary {
+  margin-top: 6px;
+}
+
 .table-wrap {
   overflow-x: auto;
   border: 1px solid var(--border);
@@ -7182,21 +7202,43 @@ body.table-column-resizing * {
 
 .tailoring-workspace-review-telemetry-row {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 2px 0 4px;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 166, 255, 0.26) transparent;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tailoring-workspace-review-telemetry-row::-webkit-scrollbar {
+  height: 6px;
+}
+
+.tailoring-workspace-review-telemetry-row::-webkit-scrollbar-thumb {
+  background: rgba(120, 166, 255, 0.26);
+  border-radius: 999px;
+}
+
+.tailoring-workspace-review-telemetry-row::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .tailoring-review-filter-chip {
+  flex: 0 0 auto;
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 999px;
-  padding: 7px 12px;
+  padding: 5px 10px;
+  min-height: 28px;
   background: rgba(255, 255, 255, 0.03);
   color: var(--text);
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.015em;
   text-transform: uppercase;
   line-height: 1;
   white-space: nowrap;

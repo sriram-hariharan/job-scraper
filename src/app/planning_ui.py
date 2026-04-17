@@ -662,7 +662,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=tailoring_ui_20260417_5"></script>
+  <script src="/static/planning.js?v=tailoring_ui_20260417_8"></script>
 </body>
 </html>
     """.strip()
@@ -1085,7 +1085,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=tailoring_workspace_20260417_5"></script>
+  <script src="/static/planning.js?v=tailoring_workspace_20260417_8"></script>
 </body>
 </html>
     """.strip()

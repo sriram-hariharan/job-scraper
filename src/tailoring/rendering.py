@@ -1959,6 +1959,70 @@ def _is_actionable_edit_card(card: Dict[str, Any]) -> bool:
 
     return False
 
+def _looks_like_fronting_direction(text: str) -> bool:
+    normalized = str(text or "").strip().lower()
+    return normalized.startswith(("lead with ", "support with ", "consider fronting "))
+
+def _anchor_review_case(card: Dict[str, Any]) -> str:
+    why_it_matters = str(card.get("why_it_matters", "") or "").strip()
+    recommended_rewrite = str(card.get("recommended_rewrite", "") or "").strip()
+    edit_type = str(card.get("edit_type", "") or "").strip()
+    claim_safety = str(card.get("claim_safety", "") or "").strip()
+
+    if _looks_like_fronting_direction(why_it_matters) or _looks_like_fronting_direction(recommended_rewrite):
+        return "fronting"
+
+    if edit_type in {"support", "reinforce"} or claim_safety == "adjacent_only":
+        return "support"
+
+    return "preserve"
+
+def _anchor_review_case_rank(card: Dict[str, Any]) -> int:
+    review_case = _anchor_review_case(card)
+    if review_case == "fronting":
+        return 3
+    if review_case == "support":
+        return 2
+    return 1
+
+def _anchor_review_label(card: Dict[str, Any]) -> str:
+    review_case = _anchor_review_case(card)
+    if review_case == "fronting":
+        return "Consider fronting"
+    if review_case == "support":
+        return "Supporting context"
+    return "Preserve evidence"
+
+def _anchor_review_tone(card: Dict[str, Any]) -> str:
+    review_case = _anchor_review_case(card)
+    if review_case == "fronting":
+        return "caution"
+    if review_case == "support":
+        return "neutral"
+    return "muted"
+
+def _anchor_review_note(card: Dict[str, Any]) -> str:
+    why_it_matters = str(card.get("why_it_matters", "") or "").strip()
+    recommended_rewrite = str(card.get("recommended_rewrite", "") or "").strip()
+
+    if _looks_like_fronting_direction(why_it_matters):
+        return why_it_matters
+    if _looks_like_fronting_direction(recommended_rewrite):
+        return recommended_rewrite
+    return ""
+
+def _anchor_editable_in_free_edit(card: Dict[str, Any]) -> bool:
+    return _anchor_review_case(card) != "preserve"
+
+def _annotate_anchor_card(card: Dict[str, Any]) -> Dict[str, Any]:
+    annotated = dict(card)
+    annotated["review_case"] = _anchor_review_case(card)
+    annotated["review_case_rank"] = _anchor_review_case_rank(card)
+    annotated["review_label"] = _anchor_review_label(card)
+    annotated["review_tone"] = _anchor_review_tone(card)
+    annotated["review_note"] = _anchor_review_note(card)
+    annotated["editable_in_free_edit"] = _anchor_editable_in_free_edit(card)
+    return annotated
 
 def _anchor_card_rank(card: Dict[str, Any]) -> tuple:
     priority = str(card.get("priority", "") or "").strip().lower()
@@ -1972,8 +2036,10 @@ def _anchor_card_rank(card: Dict[str, Any]) -> tuple:
 
     priority_rank = 3 if priority == "high" else 2 if priority == "medium" else 1 if priority == "low" else 0
     evidence_rank = 2 if evidence_type == "direct_overlap" else 1 if evidence_type == "same_source_context" else 0
+    review_case_rank = _anchor_review_case_rank(card)
 
     return (
+        review_case_rank,
         priority_rank,
         evidence_rank,
         len(jd_signal_terms),
@@ -2026,11 +2092,14 @@ def _split_actionable_and_anchor_cards(
     ]
 
     actionable_cards = _rank_and_suppress_edit_cards(actionable_cards, action_limit)
-    anchor_cards = sorted(
-        _dedupe_anchor_cards(anchor_cards),
-        key=_anchor_card_rank,
-        reverse=True,
-    )[:anchor_limit]
+    anchor_cards = [
+        _annotate_anchor_card(card)
+        for card in sorted(
+            _dedupe_anchor_cards(anchor_cards),
+            key=_anchor_card_rank,
+            reverse=True,
+        )[:anchor_limit]
+    ]
 
     return actionable_cards[:action_limit], anchor_cards[:anchor_limit]
 

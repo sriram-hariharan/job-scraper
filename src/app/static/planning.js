@@ -4175,7 +4175,7 @@ function collectTailoringWorkspaceEditableBullets(payload) {
     : [];
 
   const anchorEditableItems = (Array.isArray(payload?.anchor_cards) ? payload.anchor_cards : [])
-    .filter(shouldIncludeTailoringAnchorInFreeEdit);
+    .filter((item) => item && item.editable_in_free_edit === true);
 
   const buckets = [
     ...readyItems.map((item) => ({
@@ -6044,110 +6044,38 @@ function syncTailoringWorkspaceSavedSelectionIntoArtifact(payload) {
     payload.selected_patch_set_counterfactual_preview || null;
 }
 
-function isDirectionalAnchorGuidanceText(value) {
-  const text = String(value || "").trim();
-  return /^(lead with|support with|consider fronting)\b/i.test(text);
-}
-
 function getTailoringAnchorReviewCase(card) {
-  const editType = String(card?.edit_type || "").trim().toLowerCase();
-  const claimSafety = String(card?.claim_safety || "").trim().toLowerCase();
-  const whyText = String(card?.why_it_matters || "").trim();
-  const rewriteText = String(card?.recommended_rewrite || "").trim();
-
-  if (isDirectionalAnchorGuidanceText(whyText) || isDirectionalAnchorGuidanceText(rewriteText)) {
-    return "fronting";
-  }
-
-  if (editType === "support" || claimSafety === "adjacent_only") {
-    return "support";
-  }
-
-  return "preserve";
+  const value = String(card?.review_case || "").trim().toLowerCase();
+  return value || "preserve";
 }
 
 function getTailoringAnchorReviewLabel(card) {
-  const reviewCase = getTailoringAnchorReviewCase(card);
+  const backendLabel = String(card?.review_label || "").trim();
+  if (backendLabel) return backendLabel;
 
+  const reviewCase = getTailoringAnchorReviewCase(card);
   if (reviewCase === "fronting") return "Consider fronting";
   if (reviewCase === "support") return "Supporting context";
   return "Preserve evidence";
 }
 
 function getTailoringAnchorReviewTone(card) {
-  const reviewCase = getTailoringAnchorReviewCase(card);
+  const backendTone = String(card?.review_tone || "").trim().toLowerCase();
+  if (backendTone) return backendTone;
 
+  const reviewCase = getTailoringAnchorReviewCase(card);
   if (reviewCase === "fronting") return "caution";
   if (reviewCase === "support") return "neutral";
   return "muted";
 }
 
 function getTailoringAnchorReviewNote(card) {
-  const whyText = String(card?.why_it_matters || "").trim();
-  const rewriteText = String(card?.recommended_rewrite || "").trim();
-
-  if (isDirectionalAnchorGuidanceText(whyText)) {
-    return whyText;
-  }
-
-  if (isDirectionalAnchorGuidanceText(rewriteText)) {
-    return rewriteText;
-  }
-
-  return "";
+  return String(card?.review_note || "").trim();
 }
 
-function shouldIncludeTailoringAnchorInFreeEdit(card) {
-  return getTailoringAnchorReviewCase(card) !== "preserve";
-}
-
-function getCompactTailoringAnchorSignalKey(card) {
-  const signals = Array.isArray(card?.jd_signal_terms) ? card.jd_signal_terms : [];
-  return signals
-    .map((item) => String(item || "").trim().toLowerCase())
-    .filter(Boolean)
-    .sort()
-    .join("|");
-}
-
-function getCompactTailoringAnchorCards(items, limit = 3) {
+function getRenderableTailoringAnchorCards(items, limit = 3) {
   const rows = Array.isArray(items) ? items : [];
-  const bestByKey = new Map();
-
-  for (const card of rows) {
-    const source = String(card?.source || "").trim().toLowerCase();
-    const signalKey = getCompactTailoringAnchorSignalKey(card);
-    const reviewCase = getTailoringAnchorReviewCase(card);
-    const key = `${source}::${signalKey}`;
-
-    const evidence = String(card?.current_evidence || card?.parent_bullet || "").trim();
-    const signalCount = Array.isArray(card?.jd_signal_terms) ? card.jd_signal_terms.filter(Boolean).length : 0;
-
-    const caseRank =
-      reviewCase === "fronting"
-        ? 3
-        : reviewCase === "support"
-          ? 2
-          : 1;
-
-    const score =
-      (caseRank * 1000000) +
-      (signalCount * 10000) +
-      evidence.length;
-
-    const existing = bestByKey.get(key);
-    if (!existing || score > existing._score) {
-      bestByKey.set(key, {
-        ...card,
-        _score: score,
-      });
-    }
-  }
-
-  return Array.from(bestByKey.values())
-    .sort((a, b) => Number(b._score || 0) - Number(a._score || 0))
-    .slice(0, limit)
-    .map(({ _score, ...card }) => card);
+  return rows.slice(0, limit);
 }
 
 function getTailoringWorkspaceSuggestionBuckets() {
@@ -6164,7 +6092,7 @@ function getTailoringWorkspaceSuggestionBuckets() {
     ? payload.direction_only_replacements
     : [];
 
-  const anchorCards = getCompactTailoringAnchorCards(
+  const anchorCards = getRenderableTailoringAnchorCards(
     Array.isArray(payload?.anchor_cards) ? payload.anchor_cards : [],
     3
   );
@@ -7174,81 +7102,6 @@ function bindTailoringWorkspaceActionBar() {
   updateTailoringWorkspaceSelectionActionBar();
 }
 
-function renderTailoringAnchorEvidenceSection({
-  title = "Anchor evidence",
-  items = [],
-  emptyLabel = "No anchor evidence for this row.",
-} = {}) {
-  const safeItems = getCompactTailoringAnchorCards(items, 3);
-
-  if (!safeItems.length) {
-    return `
-      <section class="tailoring-section-block">
-        <div class="tailoring-section-title">${escapeHtml(title)}</div>
-        <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
-      </section>
-    `;
-  }
-
-  return `
-    <section class="tailoring-section-block">
-      <div class="tailoring-section-title">${escapeHtml(title)}</div>
-
-      <div class="tailoring-edit-card-list">
-        ${safeItems.map((item, index) => {
-          const signalTerms = Array.isArray(item.jd_signal_terms)
-            ? item.jd_signal_terms.filter(Boolean)
-            : [];
-          const source = String(item.source || "").trim();
-          const currentEvidence = String(item.current_evidence || item.parent_bullet || "").trim();
-          const reviewCase = getTailoringAnchorReviewCase(item);
-          const reviewLabel = getTailoringAnchorReviewLabel(item);
-          const reviewTone = getTailoringAnchorReviewTone(item);
-          const reviewNote = getTailoringAnchorReviewNote(item);
-
-          const reviewCaseClass =
-            reviewCase === "fronting"
-              ? "tailoring-edit-card--review-fronting"
-              : reviewCase === "support"
-                ? "tailoring-edit-card--review-support"
-                : "tailoring-edit-card--review-preserve";
-
-          return `
-            <article class="tailoring-edit-card tailoring-edit-card--compact ${reviewCaseClass}">
-              <div class="tailoring-card-topline tailoring-card-topline--compact">
-                <div class="tailoring-edit-card-label">Anchor ${index + 1}</div>
-
-                <div class="tailoring-chip-group tailoring-chip-group--compact">
-                  ${buildTailoringTonePill(reviewLabel, reviewTone)}
-                  ${signalTerms.slice(0, 2).map((term) => buildTailoringTonePill(term, "neutral")).join("")}
-                </div>
-              </div>
-
-              ${source ? `
-                <div class="tailoring-card-copy">${escapeHtml(source)}</div>
-              ` : ""}
-
-              ${currentEvidence ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Current bullet</div>
-                  <div class="tailoring-quote-block">${escapeHtml(currentEvidence)}</div>
-                </div>
-              ` : ""}
-
-              ${reviewNote ? `
-                <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Review note</div>
-                  <div class="tailoring-card-copy">${escapeHtml(reviewNote)}</div>
-                </div>
-              ` : ""}
-            </article>
-          `;
-        }).join("")}
-      </div>
-    </section>
-  `;
-}
-
 function renderReplacementDecisionSection({
   title,
   subtitle = "",
@@ -7790,6 +7643,81 @@ function renderTailoringEmptyState(payload) {
   `;
 }
 
+function renderTailoringAnchorEvidenceSection({
+  title = "Anchor evidence",
+  items = [],
+  emptyLabel = "No anchor evidence for this row.",
+} = {}) {
+  const safeItems = getRenderableTailoringAnchorCards(items, 3);
+
+  if (!safeItems.length) {
+    return `
+      <section class="tailoring-section-block">
+        <div class="tailoring-section-title">${escapeHtml(title)}</div>
+        <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">${escapeHtml(title)}</div>
+
+      <div class="tailoring-edit-card-list">
+        ${safeItems.map((item, index) => {
+          const signalTerms = Array.isArray(item.jd_signal_terms)
+            ? item.jd_signal_terms.filter(Boolean)
+            : [];
+          const source = String(item.source || "").trim();
+          const currentEvidence = String(item.current_evidence || item.parent_bullet || "").trim();
+          const reviewCase = getTailoringAnchorReviewCase(item);
+          const reviewLabel = getTailoringAnchorReviewLabel(item);
+          const reviewTone = getTailoringAnchorReviewTone(item);
+          const reviewNote = getTailoringAnchorReviewNote(item);
+
+          const reviewCaseClass =
+            reviewCase === "fronting"
+              ? "tailoring-edit-card--review-fronting"
+              : reviewCase === "support"
+                ? "tailoring-edit-card--review-support"
+                : "tailoring-edit-card--review-preserve";
+
+          return `
+            <article class="tailoring-edit-card tailoring-edit-card--compact ${reviewCaseClass}">
+              <div class="tailoring-card-topline tailoring-card-topline--compact">
+                <div class="tailoring-edit-card-label">Anchor ${index + 1}</div>
+
+                <div class="tailoring-chip-group tailoring-chip-group--compact">
+                  ${buildTailoringTonePill(reviewLabel, reviewTone)}
+                  ${signalTerms.slice(0, 2).map((term) => buildTailoringTonePill(term, "neutral")).join("")}
+                </div>
+              </div>
+
+              ${source ? `
+                <div class="tailoring-card-copy">${escapeHtml(source)}</div>
+              ` : ""}
+
+              ${currentEvidence ? `
+                <div class="tailoring-info-block tailoring-info-block--compact">
+                  <div class="tailoring-info-label">Current bullet</div>
+                  <div class="tailoring-quote-block">${escapeHtml(currentEvidence)}</div>
+                </div>
+              ` : ""}
+
+              ${reviewNote ? `
+                <div class="tailoring-info-block tailoring-info-block--compact">
+                  <div class="tailoring-info-label">Review note</div>
+                  <div class="tailoring-card-copy">${escapeHtml(reviewNote)}</div>
+                </div>
+              ` : ""}
+            </article>
+          `;
+        }).join("")}
+      </div>
+    </section>
+  `;
+}
+
 function renderTailoringInteractiveSummaryInto(
   rootId,
   artifact,
@@ -7849,7 +7777,6 @@ function renderTailoringInteractiveSummaryInto(
   const anchorHtml = anchorCards.length
     ? renderTailoringAnchorEvidenceSection({
         title: "Anchor evidence",
-        subtitle: "Strong truthful bullets worth keeping visible even when no safe rewrite is available.",
         items: anchorCards,
         emptyLabel: "No anchor evidence for this row.",
       })
@@ -7907,8 +7834,9 @@ function renderTailoringInteractiveSummaryInto(
   } else {
     bucketHtml = `${readyHtml}${optionalHtml}${recommendedHtml}${anchorHtml}`;
   }
+
   const diagnosticsHtml =
-    includeDiagnostics && !normalizedBucket
+    includeDiagnostics && !normalizedBucket && !anchorCards.length
       ? renderLegacyDiagnosticDetails(payload)
       : "";
 

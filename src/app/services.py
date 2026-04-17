@@ -1481,28 +1481,17 @@ def _infer_packet_json_path_from_tailoring_artifact(artifact_path: Path) -> Path
 
 def _artifact_needs_operator_rehydration(payload_data: Dict[str, Any]) -> bool:
     replacement_candidates = list(payload_data.get("replacement_candidates", []) or [])
-
-    has_current_operator_fields = any(
-        [
-            list(payload_data.get("app_ready_replacements", []) or []),
-            list(payload_data.get("direct_apply_optional_replacements", []) or []),
-            list(payload_data.get("direction_only_replacements", []) or []),
-            list(payload_data.get("final_replacement_decisions", []) or []),
-            list(payload_data.get("anchor_cards", []) or []),
-            list(payload_data.get("top_anchor_priorities", []) or []),
-        ]
-    )
-
-    if has_current_operator_fields:
+    if replacement_candidates:
         return False
 
-    return bool(
-        replacement_candidates
-        or list(payload_data.get("rewrite_candidates", []) or [])
-        or list(payload_data.get("bullet_reuse_candidates", []) or [])
-        or list(payload_data.get("edit_cards", []) or [])
-        or list(payload_data.get("top_edit_priorities", []) or [])
-        or list(payload_data.get("bullet_diagnoses", []) or [])
+    return any(
+        [
+            list(payload_data.get("rewrite_candidates", []) or []),
+            list(payload_data.get("bullet_reuse_candidates", []) or []),
+            list(payload_data.get("edit_cards", []) or []),
+            list(payload_data.get("top_edit_priorities", []) or []),
+            list(payload_data.get("bullet_diagnoses", []) or []),
+        ]
     )
 
 

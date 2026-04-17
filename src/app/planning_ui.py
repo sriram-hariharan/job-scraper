@@ -701,7 +701,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260417_5" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260417_6" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}

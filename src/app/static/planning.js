@@ -4163,34 +4163,48 @@ function buildTailoringWorkspaceEditableBulletKey(item) {
 }
 
 function collectTailoringWorkspaceEditableBullets(payload) {
-  const buckets = [
+  const readyItems = [
     ...(Array.isArray(payload?.app_ready_replacements) ? payload.app_ready_replacements : []),
     ...(Array.isArray(payload?.direct_apply_optional_replacements)
       ? payload.direct_apply_optional_replacements
       : []),
-    ...(Array.isArray(payload?.direction_only_replacements)
-      ? payload.direction_only_replacements
-      : []),
+  ];
+
+  const reviewItems = Array.isArray(payload?.direction_only_replacements)
+    ? payload.direction_only_replacements
+    : [];
+
+  const anchorEditableItems = (Array.isArray(payload?.anchor_cards) ? payload.anchor_cards : [])
+    .filter(shouldIncludeTailoringAnchorInFreeEdit);
+
+  const buckets = [
+    ...readyItems.map((item) => ({
+      item,
+      bucketLabel:
+        String(item?.replacement_status || "").trim().toLowerCase() === "direct_apply_ready"
+          ? "Ready"
+          : "Optional",
+    })),
+    ...reviewItems.map((item) => ({
+      item,
+      bucketLabel: "Review",
+    })),
+    ...anchorEditableItems.map((item) => ({
+      item,
+      bucketLabel: "Review",
+    })),
   ];
 
   const rows = [];
   const seen = new Set();
 
-  buckets.forEach((item) => {
+  buckets.forEach(({ item, bucketLabel }) => {
     const originalText = getTailoringWorkspaceCanonicalBulletText(item);
     if (!originalText) return;
 
     const bulletKey = buildTailoringWorkspaceEditableBulletKey(item);
     if (!bulletKey || seen.has(bulletKey)) return;
     seen.add(bulletKey);
-
-    const replacementStatus = String(item?.replacement_status || "").trim().toLowerCase();
-    const bucketLabel =
-      replacementStatus === "direct_apply_ready"
-        ? "Ready"
-        : replacementStatus === "direct_apply_optional"
-          ? "Optional"
-          : "Review";
 
     rows.push({
       bulletKey,
@@ -6032,7 +6046,59 @@ function syncTailoringWorkspaceSavedSelectionIntoArtifact(payload) {
 
 function isDirectionalAnchorGuidanceText(value) {
   const text = String(value || "").trim();
-  return /^(lead with|support with)\b/i.test(text);
+  return /^(lead with|support with|consider fronting)\b/i.test(text);
+}
+
+function getTailoringAnchorReviewCase(card) {
+  const editType = String(card?.edit_type || "").trim().toLowerCase();
+  const claimSafety = String(card?.claim_safety || "").trim().toLowerCase();
+  const whyText = String(card?.why_it_matters || "").trim();
+  const rewriteText = String(card?.recommended_rewrite || "").trim();
+
+  if (isDirectionalAnchorGuidanceText(whyText) || isDirectionalAnchorGuidanceText(rewriteText)) {
+    return "fronting";
+  }
+
+  if (editType === "support" || claimSafety === "adjacent_only") {
+    return "support";
+  }
+
+  return "preserve";
+}
+
+function getTailoringAnchorReviewLabel(card) {
+  const reviewCase = getTailoringAnchorReviewCase(card);
+
+  if (reviewCase === "fronting") return "Consider fronting";
+  if (reviewCase === "support") return "Supporting context";
+  return "Preserve evidence";
+}
+
+function getTailoringAnchorReviewTone(card) {
+  const reviewCase = getTailoringAnchorReviewCase(card);
+
+  if (reviewCase === "fronting") return "caution";
+  if (reviewCase === "support") return "neutral";
+  return "muted";
+}
+
+function getTailoringAnchorReviewNote(card) {
+  const whyText = String(card?.why_it_matters || "").trim();
+  const rewriteText = String(card?.recommended_rewrite || "").trim();
+
+  if (isDirectionalAnchorGuidanceText(whyText)) {
+    return whyText;
+  }
+
+  if (isDirectionalAnchorGuidanceText(rewriteText)) {
+    return rewriteText;
+  }
+
+  return "";
+}
+
+function shouldIncludeTailoringAnchorInFreeEdit(card) {
+  return getTailoringAnchorReviewCase(card) !== "preserve";
 }
 
 function getCompactTailoringAnchorSignalKey(card) {
@@ -6051,12 +6117,22 @@ function getCompactTailoringAnchorCards(items, limit = 3) {
   for (const card of rows) {
     const source = String(card?.source || "").trim().toLowerCase();
     const signalKey = getCompactTailoringAnchorSignalKey(card);
+    const reviewCase = getTailoringAnchorReviewCase(card);
     const key = `${source}::${signalKey}`;
 
     const evidence = String(card?.current_evidence || card?.parent_bullet || "").trim();
-    const why = String(card?.why_it_matters || "").trim();
+    const signalCount = Array.isArray(card?.jd_signal_terms) ? card.jd_signal_terms.filter(Boolean).length : 0;
+
+    const caseRank =
+      reviewCase === "fronting"
+        ? 3
+        : reviewCase === "support"
+          ? 2
+          : 1;
+
     const score =
-      (isDirectionalAnchorGuidanceText(why) ? 1000000 : 0) +
+      (caseRank * 1000000) +
+      (signalCount * 10000) +
       evidence.length;
 
     const existing = bestByKey.get(key);
@@ -7125,16 +7201,25 @@ function renderTailoringAnchorEvidenceSection({
             : [];
           const source = String(item.source || "").trim();
           const currentEvidence = String(item.current_evidence || item.parent_bullet || "").trim();
-          const whyItMatters = String(item.why_it_matters || "").trim();
-          const reviewNote = isDirectionalAnchorGuidanceText(whyItMatters) ? whyItMatters : "";
+          const reviewCase = getTailoringAnchorReviewCase(item);
+          const reviewLabel = getTailoringAnchorReviewLabel(item);
+          const reviewTone = getTailoringAnchorReviewTone(item);
+          const reviewNote = getTailoringAnchorReviewNote(item);
+
+          const reviewCaseClass =
+            reviewCase === "fronting"
+              ? "tailoring-edit-card--review-fronting"
+              : reviewCase === "support"
+                ? "tailoring-edit-card--review-support"
+                : "tailoring-edit-card--review-preserve";
 
           return `
-            <article class="tailoring-edit-card tailoring-edit-card--compact">
+            <article class="tailoring-edit-card tailoring-edit-card--compact ${reviewCaseClass}">
               <div class="tailoring-card-topline tailoring-card-topline--compact">
                 <div class="tailoring-edit-card-label">Anchor ${index + 1}</div>
 
                 <div class="tailoring-chip-group tailoring-chip-group--compact">
-                  ${buildTailoringTonePill("Keep visible", "muted")}
+                  ${buildTailoringTonePill(reviewLabel, reviewTone)}
                   ${signalTerms.slice(0, 2).map((term) => buildTailoringTonePill(term, "neutral")).join("")}
                 </div>
               </div>

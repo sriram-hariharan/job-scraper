@@ -43,6 +43,38 @@ def _experience_only_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if _is_experience_section_row(row)
     ]
 
+def _resolved_row_source(row: Dict[str, Any]) -> str:
+    source = _source_label(row)
+    if source:
+        return source
+    return str((row or {}).get("source", "") or "").strip()
+
+
+def _resolved_row_supported_terms(row: Dict[str, Any]) -> List[str]:
+    evidence_type = str((row or {}).get("evidence_type", "") or "").strip()
+
+    if evidence_type == "direct_overlap":
+        terms = _row_anchor_supported_terms(row)
+    else:
+        terms = _row_context_supported_terms(row)
+
+    if terms:
+        return [
+            str(term).strip()
+            for term in terms
+            if str(term).strip()
+        ]
+
+    fallback_terms = (
+        list((row or {}).get("supported_terms", []) or [])
+        or list((row or {}).get("jd_signal_terms", []) or [])
+    )
+    return [
+        str(term).strip()
+        for term in fallback_terms
+        if str(term).strip()
+    ]
+
 def _build_bullet_reuse_from_plan_units(
     tailoring_plan: Dict[str, Any],
     limit: int = 6,
@@ -108,12 +140,9 @@ def _build_bullet_reuse(
 
     reuse_rows = []
     for row in selected:
-        source = _source_label(row)
+        source = _resolved_row_source(row)
         evidence_type = row.get("evidence_type", "direct_overlap")
-        if evidence_type == "direct_overlap":
-            overlaps = _row_anchor_supported_terms(row)
-        else:
-            overlaps = _row_context_supported_terms(row)
+        overlaps = _resolved_row_supported_terms(row)
         is_clause = _is_clause_unit(row)
 
         if evidence_type == "direct_overlap":
@@ -227,10 +256,7 @@ def _build_rewrite_candidates(
 
     for row in rows:
         evidence_type = row.get("evidence_type", "direct_overlap")
-        if evidence_type == "direct_overlap":
-            supported_terms = _row_anchor_supported_terms(row)
-        else:
-            supported_terms = _row_context_supported_terms(row)
+        supported_terms = _resolved_row_supported_terms(row)
         if not supported_terms:
             continue
 
@@ -238,7 +264,7 @@ def _build_rewrite_candidates(
         if evidence_type != "direct_overlap":
             continue
 
-        source = _source_label(row)
+        source = _resolved_row_source(row)
         source_key = (
             row.get("bullet_id", ""),
             row.get("section", ""),

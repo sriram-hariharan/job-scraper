@@ -31,6 +31,10 @@ def _truncate_list(values: List[str], limit: int) -> List[str]:
     return values[:limit]
 
 def _source_label(row: Dict[str, Any]) -> str:
+    explicit_source = str(row.get("source", "") or "").strip()
+    if explicit_source:
+        return explicit_source
+
     source_title = str(row.get("source_title", "") or "").strip()
     source_company = str(row.get("source_company", "") or "").strip()
     return source_title if not source_company else f"{source_title} @ {source_company}"
@@ -260,13 +264,68 @@ def _rewrite_source_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
 def _is_experience_section_row(row: Dict[str, Any]) -> bool:
     return str((row or {}).get("section", "") or "").strip().lower() == "experience"
 
+def _diagnosis_fallback_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for diagnosis in packet.get("bullet_diagnoses", []) or []:
+        if str(diagnosis.get("diagnosis_action", "") or "").strip() != "rewrite":
+            continue
+        if str(diagnosis.get("evidence_type", "") or "").strip() != "direct_overlap":
+            continue
+        if str(diagnosis.get("claim_safety", "") or "").strip() != "safe_strengthen":
+            continue
+        if not _is_experience_section_row(diagnosis):
+            continue
+
+        supported_terms = _unique_preserve_order(
+            [
+                str(term).strip()
+                for term in (diagnosis.get("jd_signal_terms", []) or [])
+                if str(term).strip()
+            ]
+        )
+
+        if not supported_terms:
+            supported_terms = _unique_preserve_order(
+                [
+                    str(diagnosis.get("canonical_supported_signal", "") or "").strip(),
+                    str(diagnosis.get("matched_surface_signal", "") or "").strip(),
+                ]
+            )
+
+        original_text = str(diagnosis.get("original_text", "") or "").strip()
+        if not original_text or not supported_terms:
+            continue
+
+        rows.append(
+            {
+                "section": str(diagnosis.get("section", "") or "").strip(),
+                "source": str(diagnosis.get("source", "") or "").strip(),
+                "evidence_type": "direct_overlap",
+                "text": original_text,
+                "parent_bullet": original_text,
+                "overlaps": supported_terms,
+                "context_terms": [],
+                "entry_id": diagnosis.get("entry_id", ""),
+                "entry_index": diagnosis.get("entry_index", -1),
+                "bullet_id": diagnosis.get("bullet_id", ""),
+                "bullet_index": diagnosis.get("bullet_index", -1),
+                "matched_surface_signal": str(diagnosis.get("matched_surface_signal", "") or "").strip(),
+                "canonical_supported_signal": str(diagnosis.get("canonical_supported_signal", "") or "").strip(),
+            }
+        )
+
+    return rows
 
 def _candidate_eligible_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return [
+    rows = [
         row
         for row in _rewrite_source_rows(packet)
         if _is_experience_section_row(row)
     ]
+    if rows:
+        return rows
+    return _diagnosis_fallback_rewrite_rows(packet)
 
 def _row_direct_supported_terms(row: Dict[str, Any]) -> List[str]:
     return _unique_preserve_order(

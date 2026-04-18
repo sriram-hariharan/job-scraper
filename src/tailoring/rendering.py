@@ -2275,19 +2275,67 @@ def _build_edit_cards(
         ):
             directional_text = str(card.get("recommended_rewrite", "") or "").strip()
 
-            card.update(
-                {
-                    "edit_type": "keep_visible",
-                    "claim_safety": "keep_visible",
-                    "recommended_rewrite": "",
-                    "why_rewrite_is_better": (
-                        "No grounded deterministic replacement candidate survived for this bullet, so this should remain directional guidance instead of a surfaced rewrite card."
-                    ),
-                    "why_it_matters": directional_text or str(card.get("why_it_matters", "") or "").strip(),
-                    "outcome_label": "directional_only",
-                    "outcome_reason": "instructional_rewrite_without_grounded_candidate",
-                }
+            preview_diagnosis = {
+                "diagnosis_action": "rewrite",
+                "diagnosis_reason_type": "rewrite",
+                "priority": str(card.get("priority", "") or "").strip(),
+                "section": str(card.get("section", "") or "").strip(),
+                "source": str(card.get("source", "") or "").strip(),
+                "entry_id": str(card.get("entry_id", "") or "").strip(),
+                "entry_index": card.get("entry_index", -1),
+                "bullet_id": str(card.get("bullet_id", "") or "").strip(),
+                "bullet_index": card.get("bullet_index", -1),
+                "parent_bullet": parent_bullet,
+                "original_text": source_text,
+                "current_evidence": current_evidence or parent_bullet,
+                "evidence_type": evidence_type,
+                "jd_signal_terms": supported_terms,
+                "likely_impacted_dimensions": _likely_impacted_dimensions(
+                    payload,
+                    str(card.get("section", "") or ""),
+                    supported_terms,
+                ),
+                "why": str(card.get("why_it_matters", "") or "").strip(),
+                "recommended_rewrite": directional_text,
+                "claim_safety": claim_safety,
+                "placement_guidance": str(card.get("placement_guidance", "") or "").strip(),
+                "matched_surface_signal": matched_surface_signal,
+                "canonical_supported_signal": canonical_supported_signal,
+                "structural_operation": str(card.get("structural_operation", "") or "").strip(),
+                "structural_clause_text": str(card.get("structural_clause_text", "") or "").strip(),
+            }
+
+            preview_risks = _replacement_candidate_risks(payload, preview_diagnosis)
+            preview_status, preview_patch_text, preview_patch_method, _ = _deterministic_patch_text_from_diagnosis(
+                preview_diagnosis,
+                preview_risks["adjacent_risk_signals"],
+                preview_risks["unsupported_risk_signals"],
             )
+
+            if preview_status == "patch_ready" and preview_patch_text:
+                card.update(
+                    {
+                        "recommended_rewrite": preview_patch_text,
+                        "why_rewrite_is_better": (
+                            "It replaces generic direction-only guidance with a grounded deterministic bullet patch."
+                        ),
+                        "patch_generation_method": preview_patch_method,
+                    }
+                )
+            else:
+                card.update(
+                    {
+                        "edit_type": "keep_visible",
+                        "claim_safety": "keep_visible",
+                        "recommended_rewrite": "",
+                        "why_rewrite_is_better": (
+                            "No grounded deterministic replacement candidate survived for this bullet, so this should remain directional guidance instead of a surfaced rewrite card."
+                        ),
+                        "why_it_matters": directional_text or str(card.get("why_it_matters", "") or "").strip(),
+                        "outcome_label": "directional_only",
+                        "outcome_reason": "instructional_rewrite_without_grounded_candidate",
+                    }
+                )
 
         family_key = _edit_card_family_dedup_key(card)
         if family_key and family_key in seen_family_keys:
@@ -5108,8 +5156,24 @@ def _compression_patch_preserves_evidence(
             if str(token).strip() and str(token).strip().lower() not in _ACTION_VERB_HINTS_LOWER
         ]
     )
+
+    def _protected_token_preserved(term: str) -> bool:
+        term_norm = _diagnosis_normalize_term(term)
+        if not term_norm:
+            return False
+
+        if term_norm in patched_norm:
+            return True
+
+        if term_norm.endswith("-based"):
+            base_term_norm = _diagnosis_normalize_term(term_norm[:-6])
+            if base_term_norm and base_term_norm in patched_norm:
+                return True
+
+        return False
+
     for term in protected_core_terms:
-        if _diagnosis_normalize_term(term) not in patched_norm:
+        if not _protected_token_preserved(term):
             return False
 
     # 4) Preserve the result clause verbatim in normalized form.
@@ -5570,6 +5634,87 @@ def _deterministic_front_supported_phrase_patch(
 
     return patch_text
 
+def _deterministic_based_modifier_head_patch(
+    diagnosis: Dict[str, Any],
+) -> Optional[str]:
+    original_text = str(diagnosis.get("original_text", "") or "").strip()
+    if not original_text:
+        return None
+
+    supported_terms = [
+        _diagnosis_normalize_term(item)
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if _diagnosis_normalize_term(item)
+    ]
+    if len(supported_terms) != 1:
+        return None
+
+    supported_term = supported_terms[0]
+    if _supported_term_already_salient_early(original_text, [supported_term]):
+        return None
+
+    intro, result_clause = _split_result_clause(original_text)
+    if not intro:
+        return None
+
+    lead_match = re.match(
+        r"^(?P<verb>[A-Za-z][A-Za-z-]+)\s+(?P<body>.+)$",
+        intro,
+    )
+    if not lead_match:
+        return None
+
+    verb = str(lead_match.group("verb") or "").strip()
+    body = str(lead_match.group("body") or "").strip()
+    if not verb or not body:
+        return None
+
+    head_noun_pattern = (
+        r"(?:models|model|forecasts|forecast|analyses|analysis|analytics|"
+        r"pipelines|pipeline|frameworks|framework|systems|system|"
+        r"assessments|assessment|strategies|strategy|workflows|workflow)"
+    )
+
+    match = re.search(
+        rf"^(?P<method>[A-Za-z0-9.+/\-]+)-based\s+"
+        rf"(?P<prefix>.*?)\b(?P<term>{re.escape(supported_term)})\b\s+"
+        rf"(?P<head>{head_noun_pattern})(?P<suffix>.*)$",
+        body,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return None
+
+    method = str(match.group("method") or "").strip()
+    prefix = re.sub(r"\s+", " ", str(match.group("prefix") or "").strip())
+    term_surface = str(match.group("term") or "").strip()
+    head = str(match.group("head") or "").strip()
+    suffix = re.sub(r"\s+", " ", str(match.group("suffix") or "").rstrip())
+
+    if not method or not term_surface or not head:
+        return None
+
+    phrase_parts = [part for part in [prefix, term_surface, head] if part]
+    rewritten_head = " ".join(phrase_parts).strip()
+    if not rewritten_head:
+        return None
+
+    patch_intro = f"{verb} {rewritten_head}{suffix}".strip()
+    patch_intro = re.sub(r"\s+", " ", patch_intro).strip()
+
+    patch_text = f"{patch_intro} using {method}".strip()
+    if result_clause:
+        patch_text = f"{patch_text}{result_clause}"
+
+    if _diagnosis_normalize_term(patch_text) == _diagnosis_normalize_term(original_text):
+        return None
+
+    if not _compression_patch_preserves_evidence(diagnosis, patch_text):
+        return None
+
+    return patch_text
+
+
 def _using_phrase_supported_term_count(
     original_text: str,
     supported_terms: List[str],
@@ -5754,6 +5899,14 @@ def _deterministic_patch_text_from_diagnosis(
         if exact_signal_patch:
             _, patch_text = exact_signal_patch
             return "patch_ready", patch_text, "deterministic_exact_signal_variant", ""
+        
+        front_supported_patch = _deterministic_front_supported_phrase_patch(diagnosis)
+        if front_supported_patch:
+            return "patch_ready", front_supported_patch, "deterministic_front_supported_phrase", ""
+        
+        based_modifier_patch = _deterministic_based_modifier_head_patch(diagnosis)
+        if based_modifier_patch:
+            return "patch_ready", based_modifier_patch, "deterministic_based_modifier_head", ""
 
         family_alias_patch = _deterministic_family_alias_expansion_patch(diagnosis)
         if family_alias_patch:
@@ -5825,6 +5978,8 @@ def _fronting_rewrite_counts_as_material_without_score_lift(
     signal_fronting_methods = {
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
+        "deterministic_front_supported_phrase",
+        "deterministic_based_modifier_head",
         "deterministic_clause_extract",
         "deterministic_exact_signal_variant",
         "deterministic_family_alias_expansion",
@@ -5855,8 +6010,9 @@ def _fronting_rewrite_can_remain_patch_ready_without_evidence_delta(
     return patch_generation_method_base in {
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
-
+        "deterministic_front_supported_phrase",
         "deterministic_clause_extract",
+        "deterministic_based_modifier_head",
         "deterministic_exact_signal_variant",
         "deterministic_parent_signal_label",
         "deterministic_fronted_using_phrase",
@@ -5960,8 +6116,10 @@ def _materiality_validate_rewrite_candidate(
         "deterministic_parent_signal_label",
         "deterministic_using_phrase",
         "deterministic_lead_preserving_using_phrase",
+        "deterministic_based_modifier_head",
+        "deterministic_front_supported_phrase",
         "deterministic_family_alias_expansion",
-        "deterministic_fronted_using_phrase"
+        "deterministic_fronted_using_phrase",
     }
 
     if overall_delta < 0.0:

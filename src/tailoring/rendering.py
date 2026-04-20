@@ -344,6 +344,48 @@ def _build_claim_safety_notes(
         ),
     }
 
+def _looks_like_resume_header_metadata(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+
+    normalized = re.sub(r"\s+", " ", raw).strip()
+
+    # Strong signals of entry/header metadata rather than a bullet clause.
+    if "|" in normalized:
+        return True
+
+    if re.search(r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b", normalized, flags=re.IGNORECASE):
+        if re.search(r"\b20\d{2}\b", normalized):
+            return True
+
+    if re.search(r"\b(?:usa|united states|remote)\b", normalized, flags=re.IGNORECASE):
+        return True
+
+    # Header-like noun stacks with no clear action verb.
+    if not re.search(r"\b(?:built|automated|developed|deployed|implemented|performed|designed|created|improved|reduced|increased|identified|partnered|launched|evaluated|trained|optimized|analyzed)\b", normalized, flags=re.IGNORECASE):
+        comma_chunks = [part.strip() for part in normalized.split(",") if part.strip()]
+        if len(comma_chunks) >= 2 and len(normalized.split()) <= 14:
+            return True
+
+    return False
+
+
+def _clause_extract_candidate_is_safe(clause_text: str, original_text: str) -> bool:
+    candidate = str(clause_text or "").strip()
+    original = str(original_text or "").strip()
+
+    if not candidate or not original:
+        return False
+
+    if _looks_like_resume_header_metadata(candidate):
+        return False
+
+    # Reject tiny fragments that are likely labels/headers rather than real clauses.
+    if len(candidate.split()) < 5:
+        return False
+
+    return True
 
 def _build_material_gaps(
     packet: Dict[str, Any],
@@ -4454,6 +4496,9 @@ def _deterministic_clause_extract_patch(
     if not original_text or not clause_text:
         return None
 
+    if not _clause_extract_candidate_is_safe(clause_text, original_text):
+        return None
+    
     normalized_original = _diagnosis_normalize_term(original_text)
     normalized_clause = _diagnosis_normalize_term(clause_text)
 
@@ -4502,6 +4547,9 @@ def _deterministic_clause_extract_patch(
     if not promoted_clean:
         return None
 
+    if _looks_like_resume_header_metadata(promoted_clean):
+        return None
+    
     patch_parts = [promoted_clean] + remaining_clauses
     patch_text = ". ".join(part for part in patch_parts if part).strip()
 

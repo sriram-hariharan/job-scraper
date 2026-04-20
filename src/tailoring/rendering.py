@@ -6293,6 +6293,27 @@ def _apply_post_refinement_export_gate(
 
     return reverted
 
+def _should_emit_reorder_companion(
+    candidate: Dict[str, Any],
+    patch_ready_rewrite_bullet_ids: set[str],
+) -> bool:
+    source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+    operation_type = str(candidate.get("operation_type", "") or "").strip()
+    proposal_status = str(candidate.get("proposal_status", "") or "").strip()
+
+    # If this bullet already has a real exportable rewrite, do not emit a reorder
+    # shadow for the same bullet. Reorder adds no additional export value and only
+    # creates duplicate operator clutter.
+    if (
+        source_bullet_id
+        and operation_type == "rewrite"
+        and proposal_status == "patch_ready"
+        and source_bullet_id in patch_ready_rewrite_bullet_ids
+    ):
+        return False
+
+    return _should_create_reorder_companion(candidate)
+
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
@@ -6396,7 +6417,18 @@ def _build_replacement_candidates(
         if len(candidates) >= limit:
             break
 
-    # Pass 2: reorder companions for strong patch-ready rewrite candidates
+    # Pass 2: reorder companions only when the bullet does not already have a
+    # grounded patch-ready rewrite. Otherwise reorder is just duplicate noise.
+    patch_ready_rewrite_bullet_ids = {
+        str(row.get("source_bullet_id", "") or "").strip()
+        for row in candidates
+        if (
+            str(row.get("operation_type", "") or "").strip() == "rewrite"
+            and str(row.get("proposal_status", "") or "").strip() == "patch_ready"
+            and str(row.get("source_bullet_id", "") or "").strip()
+        )
+    }
+
     expanded: List[Dict[str, Any]] = []
     for candidate in candidates:
         expanded.append(candidate)
@@ -6404,7 +6436,7 @@ def _build_replacement_candidates(
         if len(expanded) >= limit:
             continue
 
-        if _should_create_reorder_companion(candidate):
+        if _should_emit_reorder_companion(candidate, patch_ready_rewrite_bullet_ids):
             reorder_candidate = _rewrite_candidate_to_reorder_companion(candidate)
             reorder_id = str(reorder_candidate.get("candidate_id", "") or "").strip()
 

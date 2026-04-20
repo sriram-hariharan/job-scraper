@@ -1,6 +1,7 @@
 from typing import Dict, List, Any
 import json
 from pathlib import Path
+import re 
 
 def _load_packet(packet_path: Path) -> Dict[str, Any]:
     if not packet_path.exists():
@@ -45,6 +46,66 @@ def _short_bullet(text: str, limit: int = 220) -> str:
     if len(value) <= limit:
         return value
     return value[: limit - 3].rstrip() + "..."
+
+def _looks_like_resume_header_metadata(text: str) -> bool:
+    raw = str(text or "").strip()
+    if not raw:
+        return False
+
+    normalized = re.sub(r"\s+", " ", raw).strip()
+
+    if "|" in normalized:
+        return True
+
+    if re.search(
+        r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)\b",
+        normalized,
+        flags=re.IGNORECASE,
+    ) and re.search(r"\b20\d{2}\b", normalized):
+        return True
+
+    if re.search(r"\b(?:usa|united states|remote)\b", normalized, flags=re.IGNORECASE):
+        return True
+
+    if not re.search(
+        r"\b(?:built|automated|developed|deployed|implemented|performed|designed|created|improved|reduced|increased|identified|partnered|launched|evaluated|trained|optimized|analyzed)\b",
+        normalized,
+        flags=re.IGNORECASE,
+    ):
+        comma_chunks = [part.strip() for part in normalized.split(",") if part.strip()]
+        if len(comma_chunks) >= 2 and len(normalized.split()) <= 14:
+            return True
+
+    return False
+
+
+def _strip_appended_resume_header_metadata(text: str) -> str:
+    raw = str(text or "").strip()
+    if not raw:
+        return ""
+
+    parts = re.split(r"(?<=[.!?])\s+", raw)
+    if len(parts) < 2:
+        return raw
+
+    tail = str(parts[-1] or "").strip()
+    head = " ".join(str(part).strip() for part in parts[:-1] if str(part).strip()).strip()
+
+    if head and _looks_like_resume_header_metadata(tail):
+        return head
+
+    return raw
+
+
+def _sanitize_rewrite_source_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    cleaned = dict(row or {})
+
+    for field in ("text", "clause_text", "parent_bullet"):
+        value = str(cleaned.get(field, "") or "").strip()
+        if value:
+            cleaned[field] = _strip_appended_resume_header_metadata(value)
+
+    return cleaned
 
 def _term_support_rows(packet: Dict[str, Any], bucket: str) -> List[Dict[str, Any]]:
     summary = packet.get("summary", {}) or {}
@@ -256,10 +317,16 @@ def _evidence_unit_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _rewrite_source_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
-    unit_rows = _evidence_unit_rows(packet)
+    unit_rows = [_sanitize_rewrite_source_row(row) for row in _evidence_unit_rows(packet)]
     if unit_rows:
         return unit_rows
-    return packet.get("top_relevant_bullets", []) or []
+
+    bullet_rows = packet.get("top_relevant_bullets", []) or []
+    return [
+        _sanitize_rewrite_source_row(row)
+        for row in bullet_rows
+        if isinstance(row, dict)
+    ]
 
 def _is_experience_section_row(row: Dict[str, Any]) -> bool:
     return str((row or {}).get("section", "") or "").strip().lower() == "experience"
@@ -293,7 +360,9 @@ def _diagnosis_fallback_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, A
                 ]
             )
 
-        original_text = str(diagnosis.get("original_text", "") or "").strip()
+        original_text = _strip_appended_resume_header_metadata(
+            str(diagnosis.get("original_text", "") or "").strip()
+        )
         if not original_text or not supported_terms:
             continue
 

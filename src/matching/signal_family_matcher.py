@@ -26,6 +26,19 @@ FAMILY_PATTERNS: Dict[str, List[str]] = {
 def normalize_signal_text(text: str) -> str:
     return re.sub(r"\s+", " ", str(text or "").strip().lower())
 
+def _signal_variant_present(text: str, term: str) -> bool:
+    text_norm = normalize_signal_text(text)
+    term_norm = normalize_signal_text(term)
+
+    if not text_norm or not term_norm:
+        return False
+
+    # Require token-like boundaries so short signals like "r" do not match
+    # inside normal words like "reporting" or "retention".
+    pattern = re.compile(
+        rf"(?<![a-z0-9]){re.escape(term_norm)}(?![a-z0-9])"
+    )
+    return pattern.search(text_norm) is not None
 
 def _unique_preserve_order(values: Sequence[str]) -> List[str]:
     seen = set()
@@ -60,7 +73,7 @@ def family_hits_from_text(text: str) -> Dict[str, List[str]]:
         matched = [
             term
             for term in registry.get(family, [])
-            if term and term in text_norm
+            if term and _signal_variant_present(text_norm, term)
         ]
         if matched:
             hits[family] = matched
@@ -207,7 +220,7 @@ def supported_signal_match_in_text(
             variant_norm = normalize_signal_text(variant)
             if not variant_norm:
                 continue
-            if variant_norm in text_norm:
+            if _signal_variant_present(text_norm, variant):
                 return {
                     "matched_term": variant,
                     "supported_term": supported_term,

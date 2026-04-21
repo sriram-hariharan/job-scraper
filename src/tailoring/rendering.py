@@ -883,16 +883,27 @@ def _reuse_candidate_to_edit_card(
         "card_id": f"edit_card_reuse_{index}",
         "evidence_type": evidence_type,
         "priority": _fallback_priority_from_reuse(index - 1, row),
-        "edit_type": "keep_visible" if evidence_type == "direct_overlap" else _fallback_edit_type_from_reuse(row),
+        "edit_type": (
+            "rewrite"
+            if evidence_type == "direct_overlap" and jd_signal_terms
+            else _fallback_edit_type_from_reuse(row)
+        ),
         "section": row.get("section", ""),
         "source": row.get("source", ""),
         "jd_signal_terms": jd_signal_terms,
         "context_signal_terms": context_signal_terms,
         "current_evidence": evidence,
         "parent_bullet": row.get("parent_bullet", ""),
-        "recommended_rewrite": "" if evidence_type == "direct_overlap" else _fallback_recommended_rewrite_from_reuse(
-            preferred_rewrite_directions,
-            row,
+        "recommended_rewrite": (
+            _fallback_recommended_rewrite_from_reuse(
+                preferred_rewrite_directions,
+                row,
+            )
+            if evidence_type == "direct_overlap" and jd_signal_terms
+            else _fallback_recommended_rewrite_from_reuse(
+                preferred_rewrite_directions,
+                row,
+            )
         ),
         "why_current_is_weak": _fallback_why_current_is_weak_from_reuse(row),
         "why_rewrite_is_better": _fallback_why_rewrite_is_better_from_reuse(row),
@@ -905,6 +916,26 @@ def _reuse_candidate_to_edit_card(
         "bullet_index": row.get("bullet_index", -1),
         "matched_surface_signal": matched_surface_signal,
         "canonical_supported_signal": canonical_supported_signal,
+        "outcome_label": (
+            "directional_only"
+            if evidence_type == "direct_overlap" and jd_signal_terms
+            else ""
+        ),
+        "outcome_reason": (
+            "direct_overlap_reuse_directional_anchor"
+            if evidence_type == "direct_overlap" and jd_signal_terms
+            else ""
+        ),
+        "final_diagnosis_action": (
+            "rewrite"
+            if evidence_type == "direct_overlap" and jd_signal_terms
+            else ""
+        ),
+        "final_diagnosis_reason_type": (
+            "directional_rewrite"
+            if evidence_type == "direct_overlap" and jd_signal_terms
+            else ""
+        ),
     }
 
 
@@ -1790,40 +1821,44 @@ def _rewrite_card_fields_from_directional_candidate(
         )
 
         return {
-            "edit_type": "keep_visible",
-            "claim_safety": "keep_visible",
-            "recommended_rewrite": "",
+            "edit_type": "rewrite",
+            "claim_safety": "safe_strengthen",
+            "recommended_rewrite": directional_text,
             "why_current_is_weak": (
                 f"The evidence is relevant, but {lead} is not yet leading the bullet clearly."
                 if supported_terms
                 else "The evidence is relevant, but the JD-aligned language is not yet leading the bullet clearly."
             ),
             "why_rewrite_is_better": (
-                "No deterministic text patch survived, so this should remain a manual review direction instead of a surfaced rewrite card."
+                "No deterministic export-safe patch survived, but the evidence still supports a directional rewrite recommendation."
             ),
             "why_it_matters": directional_text,
             "placement_guidance": (
                 str(replacement_candidate.get("placement_guidance", "") or "").strip()
                 or "Treat this as directional-only guidance. Review manually before changing lower-priority sections."
             ),
+            "final_diagnosis_action": "rewrite",
+            "final_diagnosis_reason_type": "directional_rewrite",
             **common_fields,
         }
     
     if rewrite_instruction:
         return {
-            "edit_type": "keep_visible",
-            "claim_safety": "keep_visible",
-            "recommended_rewrite": "",
+            "edit_type": "rewrite",
+            "claim_safety": "safe_strengthen",
+            "recommended_rewrite": rewrite_instruction,
             "why_current_is_weak": (
-                "This candidate does not justify a grounded text rewrite, but it may still deserve directional handling."
+                "This candidate does not justify a grounded deterministic patch yet, but it still carries a valid directional rewrite recommendation."
             ),
             "why_rewrite_is_better": (
-                "The safer action is directional guidance only, not textual rewriting."
+                "The safer action is to preserve it as directional rewrite guidance instead of collapsing it into a keep-only card."
             ),
             "why_it_matters": rewrite_instruction,
             "placement_guidance": (
-                "Treat this as directional-only guidance. Do not convert it into a textual rewrite unless a grounded deterministic patch exists."
+                "Treat this as directional-only guidance. Do not convert it into a literal replacement bullet unless a grounded deterministic patch exists."
             ),
+            "final_diagnosis_action": "rewrite",
+            "final_diagnosis_reason_type": "directional_rewrite",
             **common_fields,
         }
 
@@ -2367,15 +2402,18 @@ def _build_edit_cards(
             else:
                 card.update(
                     {
-                        "edit_type": "keep_visible",
-                        "claim_safety": "keep_visible",
-                        "recommended_rewrite": "",
+                        "edit_type": "rewrite",
+                        "claim_safety": "safe_strengthen",
+                        "recommended_rewrite": directional_text,
                         "why_rewrite_is_better": (
-                            "No grounded deterministic replacement candidate survived for this bullet, so this should remain directional guidance instead of a surfaced rewrite card."
+                            "No grounded deterministic replacement candidate survived for this bullet, "
+                            "but the evidence still supports a directional rewrite recommendation."
                         ),
                         "why_it_matters": directional_text or str(card.get("why_it_matters", "") or "").strip(),
                         "outcome_label": "directional_only",
                         "outcome_reason": "instructional_rewrite_without_grounded_candidate",
+                        "final_diagnosis_action": "rewrite",
+                        "final_diagnosis_reason_type": "directional_rewrite",
                     }
                 )
 
@@ -2800,17 +2838,13 @@ def _normalize_direct_overlap_rewrite_diagnosis(
     if len(supported_terms) >= 2:
         return normalized
 
-    # For single-signal cases, early salience is still enough to downgrade to keep-visible.
+    # For single-signal cases that are already explicit early, do not collapse them to keep-only.
+    # Let the rewrite lane preserve them as directional-only so replacement selection can still
+    # surface grounded operator guidance.
     if _all_supported_terms_already_salient_early(original_text, supported_terms):
-        normalized["diagnosis_action"] = "keep"
-        normalized["diagnosis_reason_type"] = "keep_existing_anchor"
-        normalized["claim_safety"] = "keep_visible"
-        normalized["recommended_rewrite"] = ""
-        normalized["why"] = (
-            str(normalized.get("why", "") or "").strip()
-            or "This bullet already surfaces the supported JD signal early enough to remain the visible anchor without forcing a rewrite."
-        )
-        normalized["placement_guidance"] = "Keep this bullet visible before editing lower-value evidence."
+        normalized["diagnosis_action"] = "rewrite"
+        normalized["diagnosis_reason_type"] = "directional_rewrite"
+        normalized["claim_safety"] = "safe_strengthen"
         return normalized
 
     # Otherwise, keep it in rewrite lane even if the signal is already explicit somewhere later.
@@ -3024,7 +3058,11 @@ def _should_create_reorder_candidate(diagnosis: Dict[str, Any]) -> bool:
     if section not in {"experience", "project"}:
         return False
 
-    jd_signal_terms = list(diagnosis.get("jd_signal_terms", []) or [])
+    jd_signal_terms = [
+        str(item).strip()
+        for item in (diagnosis.get("jd_signal_terms", []) or [])
+        if str(item).strip()
+    ]
     if not jd_signal_terms:
         return False
 
@@ -3035,6 +3073,16 @@ def _should_create_reorder_candidate(diagnosis: Dict[str, Any]) -> bool:
     claim_safety = str(diagnosis.get("claim_safety", "") or "").strip()
     if claim_safety not in {"keep_visible", "safe_strengthen"}:
         return False
+
+    # Reorder companions are useful for stronger anchors, but single-signal tooling
+    # anchors are currently over-produced and create a lot of low-value noise
+    # (for example python/sql/tableau-only keeps). Keep multi-signal anchors eligible,
+    # and keep single-signal non-tooling anchors eligible.
+    normalized_terms = _unique_preserve_order(jd_signal_terms)
+    if len(normalized_terms) == 1:
+        family = str(family_for_term(normalized_terms[0]) or "").strip()
+        if family == "tooling":
+            return False
 
     return True
 
@@ -6314,6 +6362,45 @@ def _should_emit_reorder_companion(
 
     return _should_create_reorder_companion(candidate)
 
+def _has_concrete_keep_anchor(candidate: Dict[str, Any]) -> bool:
+    source_bullet_id = str(candidate.get("source_bullet_id", "") or "").strip()
+    original_text = str(candidate.get("original_text", "") or "").strip()
+    current_evidence = str(candidate.get("current_evidence", "") or "").strip()
+    source = str(candidate.get("source", "") or "").strip()
+    section = str(candidate.get("section", "") or "").strip()
+
+    if not source_bullet_id:
+        return False
+    if not (original_text or current_evidence):
+        return False
+    if not (source or section):
+        return False
+
+    supported_terms = [
+        str(item).strip()
+        for item in (candidate.get("supported_jd_signals", []) or [])
+        if str(item).strip()
+    ]
+    claim_safety = str(candidate.get("claim_safety", "") or "").strip()
+    confidence = str(candidate.get("confidence", "") or "").strip()
+
+    evidence_text = current_evidence or original_text
+    word_count = len(re.findall(r"\S+", evidence_text))
+
+    # Strong surfaced anchors should stay.
+    if supported_terms:
+        return True
+
+    # Zero-signal adjacent-only low-confidence keeps are operator noise, not real anchors.
+    if claim_safety == "adjacent_only" and confidence == "low":
+        return False
+
+    # Drop obvious fragment/noise rows even if metadata exists.
+    if word_count < 6:
+        return False
+
+    return True
+
 def _build_replacement_candidates(
     payload: Dict[str, Any],
     bullet_diagnoses: List[Dict[str, Any]],
@@ -6407,12 +6494,26 @@ def _build_replacement_candidates(
         elif action == "keep":
             keep_key = ("keep",) + key
             if keep_key not in seen_keys:
-                seen_keys.add(keep_key)
                 keep_candidate = _diagnosis_to_keep_candidate(diagnosis, index)
                 keep_candidate = _normalize_keep_candidate_for_existing_anchor(
                     keep_candidate
                 )
+
+                if not _has_concrete_keep_anchor(keep_candidate):
+                    continue
+
+                seen_keys.add(keep_key)
                 candidates.append(keep_candidate)
+
+                reorder_key = ("reorder",) + key
+                if (
+                    len(candidates) < limit
+                    and reorder_key not in seen_keys
+                    and _should_create_reorder_candidate(diagnosis)
+                ):
+                    reorder_candidate = _diagnosis_to_reorder_candidate(diagnosis, index)
+                    seen_keys.add(reorder_key)
+                    candidates.append(reorder_candidate)
 
         if len(candidates) >= limit:
             break
@@ -6647,9 +6748,16 @@ def _build_operator_markdown_payload(
     )
     operator_payload["preferred_rewrite_selection_audit"] = preferred_rewrite_selection_audit
 
+    backend_edit_card_limit = max(
+        12,
+        len(operator_payload.get("rewrite_candidates", []) or []),
+        len(operator_payload.get("bullet_reuse_candidates", []) or []),
+    )
+
     initial_edit_cards = _build_edit_cards(
         operator_payload,
         preferred_rewrite_directions,
+        limit=backend_edit_card_limit,
     )
 
     bullet_diagnoses = _build_bullet_diagnoses(
@@ -6673,6 +6781,7 @@ def _build_operator_markdown_payload(
     edit_cards = _build_edit_cards(
         operator_payload,
         preferred_rewrite_directions,
+        limit=backend_edit_card_limit,
     )
 
     edit_cards = _align_edit_cards_with_final_diagnoses(

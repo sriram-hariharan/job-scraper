@@ -386,15 +386,46 @@ def _diagnosis_fallback_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, A
 
     return rows
 
+def _rewrite_row_dedupe_key(row: Dict[str, Any]) -> tuple:
+    bullet_id = str(row.get("bullet_id", "") or "").strip()
+    entry_id = str(row.get("entry_id", "") or "").strip()
+    section = str(row.get("section", "") or "").strip()
+    source = str(row.get("source", "") or "").strip()
+    text = str(
+        row.get("clause_text", "")
+        or row.get("text", "")
+        or row.get("parent_bullet", "")
+        or ""
+    ).strip()
+    evidence_type = str(row.get("evidence_type", "") or "").strip()
+
+    if bullet_id:
+        return ("bullet", bullet_id, evidence_type)
+
+    if entry_id and text:
+        return ("entry_text", entry_id, evidence_type, text)
+
+    return ("fallback", section, source, evidence_type, text)
+
 def _candidate_eligible_rewrite_rows(packet: Dict[str, Any]) -> List[Dict[str, Any]]:
-    rows = [
+    primary_rows = [
         row
         for row in _rewrite_source_rows(packet)
         if _is_experience_section_row(row)
     ]
-    if rows:
-        return rows
-    return _diagnosis_fallback_rewrite_rows(packet)
+    fallback_rows = _diagnosis_fallback_rewrite_rows(packet)
+
+    combined: List[Dict[str, Any]] = []
+    seen = set()
+
+    for row in primary_rows + fallback_rows:
+        key = _rewrite_row_dedupe_key(row)
+        if key in seen:
+            continue
+        seen.add(key)
+        combined.append(row)
+
+    return combined
 
 def _row_direct_supported_terms(row: Dict[str, Any]) -> List[str]:
     return _unique_preserve_order(

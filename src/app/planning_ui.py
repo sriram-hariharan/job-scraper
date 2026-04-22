@@ -2,6 +2,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 from html import escape
 from pathlib import Path
+from urllib.parse import urlencode
 
 from src.app.ui_shell import render_top_shell
 
@@ -694,6 +695,22 @@ def tailoring_workspace(
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
 
+    scan_query = urlencode(
+        {
+            "company": company or "",
+            "title": title or "",
+            "resume": raw_resume_name or "",
+            "status": status or "",
+            "job_doc_id": job_doc_id or "",
+            "tailoring_json": tailoring_json or "",
+            "tailoring_md": tailoring_md or "",
+            "tailoring_llm_json": tailoring_llm_json or "",
+            "packet_json": packet_json or "",
+        }
+    )
+    scan_href_safe = escape(f"/scan-workspace?{scan_query}", quote=True)
+
+
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -758,6 +775,16 @@ def tailoring_workspace(
             <div class="subtext" id="tailoringWorkspaceMeta">
               Loading suggestion set...
             </div>
+          </div>
+
+          <div class="section-header-actions">
+            <a
+              id="tailoringWorkspaceOpenScanBtn"
+              class="ghost-btn"
+              href="{scan_href_safe}"
+            >
+              Optimize with AI
+            </a>
           </div>
         </div>
 
@@ -1086,6 +1113,160 @@ def tailoring_workspace(
     </div>
   </section>
   <script src="/static/planning.js?v=tailoring_workspace_20260417_8"></script>
+</body>
+</html>
+    """.strip()
+
+@router.get("/scan-workspace", response_class=HTMLResponse)
+def scan_workspace(
+    company: str = "",
+    title: str = "",
+    resume: str = "",
+    status: str = "",
+    job_doc_id: str = "",
+    tailoring_json: str = "",
+    tailoring_md: str = "",
+    tailoring_llm_json: str = "",
+    packet_json: str = "",
+) -> str:
+    company_safe = escape(company or "-")
+    title_safe = escape(title or "-")
+    raw_resume_name = resume or ""
+    resume_safe = escape(raw_resume_name)
+    resume_display_safe = escape(
+        Path(raw_resume_name).stem.replace("_", " ") if raw_resume_name else "-"
+    )
+    status_safe = escape(status or "Scan preload available")
+
+    job_doc_id_safe = escape(job_doc_id or "")
+    tailoring_json_safe = escape(tailoring_json or "")
+    tailoring_md_safe = escape(tailoring_md or "")
+    tailoring_llm_json_safe = escape(tailoring_llm_json or "")
+    packet_json_safe = escape(packet_json or "")
+
+    back_query = urlencode(
+        {
+            "company": company or "",
+            "title": title or "",
+            "resume": raw_resume_name or "",
+            "status": status or "",
+            "job_doc_id": job_doc_id or "",
+            "tailoring_json": tailoring_json or "",
+            "tailoring_md": tailoring_md or "",
+            "tailoring_llm_json": tailoring_llm_json or "",
+            "packet_json": packet_json or "",
+        }
+    )
+    back_href_safe = escape(f"/tailoring-workspace?{back_query}", quote=True)
+
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Optimize Scan</title>
+  <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_1" />
+</head>
+<body>
+{render_top_shell("/scan-workspace")}
+  <div
+    class="page scan-workspace-page"
+    data-job-doc-id="{job_doc_id_safe}"
+    data-job-company="{company_safe}"
+    data-job-title="{title_safe}"
+    data-resume-name="{resume_safe}"
+    data-tailoring-status="{status_safe}"
+    data-tailoring-json-path="{tailoring_json_safe}"
+    data-tailoring-md-path="{tailoring_md_safe}"
+    data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
+    data-packet-json-path="{packet_json_safe}"
+  >
+    <header class="page-header tailoring-workspace-header">
+      <div>
+        <h1>AI Optimize Scan</h1>
+        <p class="subtext">
+          Dedicated scan workspace for optional AI optimization suggestions, separate from trusted tailoring suggestions.
+        </p>
+      </div>
+
+      <div class="section-header-actions">
+        <a class="ghost-btn" href="{back_href_safe}">Back to Tailoring</a>
+      </div>
+    </header>
+
+    <section class="card tailoring-workspace-hero">
+      <div class="tailoring-workspace-hero-grid">
+        <div class="info-pair">
+          <span class="label">Company</span>
+          <span>{company_safe}</span>
+        </div>
+
+        <div class="info-pair">
+          <span class="label">Role</span>
+          <span>{title_safe}</span>
+        </div>
+
+        <div class="info-pair">
+          <span class="label">Resume Variant</span>
+          <span>{resume_display_safe}</span>
+        </div>
+
+        <div class="info-pair">
+          <span class="label">Status</span>
+          <span>{status_safe}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="tailoring-workspace-layout">
+      <section class="card tailoring-workspace-pane tailoring-workspace-pane--left">
+        <div class="section-header">
+          <div>
+            <h2>Scan suggestions</h2>
+            <div class="subtext" id="scanWorkspaceMeta">
+              Loading preloaded scan...
+            </div>
+          </div>
+        </div>
+
+        <div
+          id="scanWorkspaceShell"
+          class="tailoring-interactive-shell tailoring-workspace-content"
+        >
+          <div class="tailoring-empty-state">
+            Loading scan suggestions...
+          </div>
+        </div>
+      </section>
+
+      <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
+        <div class="section-header">
+          <div>
+            <h2>Resume preview</h2>
+            <div class="subtext" id="scanWorkspacePreviewMeta">
+              Loading preview...
+            </div>
+          </div>
+        </div>
+
+        <div class="tailoring-preview-shell">
+          <div class="resume-choice-empty" id="scanWorkspacePreviewEmpty">
+            Loading PDF preview...
+          </div>
+
+          <iframe
+            id="scanWorkspaceResumePreviewFrame"
+            class="resume-choice-preview-frame hidden"
+            title="Scan resume preview"
+          ></iframe>
+        </div>
+      </section>
+    </section>
+  </div>
+
+  <script src="/static/shell.js"></script>
+  <script src="/static/planning.js?v=scan_workspace_20260422_1"></script>
 </body>
 </html>
     """.strip()

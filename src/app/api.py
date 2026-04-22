@@ -68,6 +68,10 @@ class PlanningWorkspaceDraftExportRequest(BaseModel):
     selected_resume: str = ""
     format: str = "pdf"
 
+class PlanningScanPreloadRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -486,6 +490,20 @@ def planning_artifact(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+@app.post("/planning/scan-preload")
+def planning_scan_preload(
+    request: PlanningScanPreloadRequest,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
+    try:
+        return services.tailoring_scan_preload_payload(
+            output_dir=Path(output_dir),
+            tailoring_json_path=request.tailoring_json_path,
+            selected_resume=request.selected_resume,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    
 @app.get("/planning/resume-preview")
 def planning_resume_preview(
     resume_name: str = Query(..., min_length=1),

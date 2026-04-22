@@ -3979,6 +3979,21 @@ function getTailoringWorkspacePage() {
   return document.querySelector(".tailoring-workspace-page");
 }
 
+function getScanWorkspacePage() {
+  return document.querySelector(".scan-workspace-page");
+}
+
+function getScanWorkspaceContext() {
+  const page = getScanWorkspacePage();
+  if (!page) return null;
+
+  return {
+    jobDocId: String(page.dataset.jobDocId || "").trim(),
+    tailoringJsonPath: String(page.dataset.tailoringJsonPath || "").trim(),
+    resumeName: String(page.dataset.resumeName || "").trim(),
+  };
+}
+
 function getTailoringWorkspaceContext() {
   const page = getTailoringWorkspacePage();
   if (!page) return null;
@@ -7939,6 +7954,232 @@ async function initTailoringWorkspacePage() {
   return true;
 }
 
+async function loadScanWorkspacePreload() {
+  const context = getScanWorkspaceContext();
+  if (!context || !context.tailoringJsonPath) return null;
+
+  return postJson("/planning/scan-preload", {
+    tailoring_json_path: context.tailoringJsonPath,
+    selected_resume: context.resumeName,
+  });
+}
+
+function setScanWorkspaceResumePreview(resumeName) {
+  const safeName = normalizeResumeName(resumeName || "");
+  const frame = qs("scanWorkspaceResumePreviewFrame");
+  const empty = qs("scanWorkspacePreviewEmpty");
+  const meta = qs("scanWorkspacePreviewMeta");
+
+  if (!frame || !empty || !meta) return;
+
+  if (!safeName) {
+    frame.src = "about:blank";
+    frame.classList.add("hidden");
+    empty.textContent = "No resume preview is available for this scan.";
+    empty.classList.remove("hidden");
+    meta.textContent = "No resume selected.";
+    return;
+  }
+
+  frame.src = `/planning/resume-preview?resume_name=${encodeURIComponent(safeName)}`;
+  frame.classList.remove("hidden");
+  empty.classList.add("hidden");
+  meta.textContent = safeName;
+}
+
+function renderScanSuggestionSection(title, items, tone, emptyLabel) {
+  const safeItems = Array.isArray(items) ? items : [];
+  if (!safeItems.length) {
+    return `
+      <section class="tailoring-section-block">
+        <div class="tailoring-section-title">${escapeHtml(title)}</div>
+        <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
+      </section>
+    `;
+  }
+
+  const cardsHtml = safeItems.map((item) => {
+    const originalText = String(item?.original_text || item?.current_evidence || "").trim();
+    const suggestedText = String(item?.final_replacement_text || item?.rewrite_direction || "").trim();
+    const whySelected = String(item?.why_selected || "").trim();
+    const materiality = humanizeUnderscoreLabel(item?.materiality_validation_status || "", "");
+    const delta = item?.projected_overall_delta;
+
+    return `
+      <section class="tailoring-section-block">
+        <div class="tailoring-card-topline">
+          <div class="tailoring-chip-group">
+            ${buildTailoringTonePill(escapeHtml(title), tone)}
+            ${materiality ? buildTailoringTonePill(escapeHtml(materiality), "neutral") : ""}
+            ${delta === null || delta === undefined ? "" : buildTailoringTonePill(`Δ ${formatSignedScore100(delta)}`, "neutral")}
+          </div>
+        </div>
+
+        ${originalText ? `
+          <div class="tailoring-info-block">
+            <div class="tailoring-info-label">Original</div>
+            <div class="tailoring-card-copy">${escapeHtml(originalText)}</div>
+          </div>
+        ` : ""}
+
+        ${suggestedText ? `
+          <div class="tailoring-info-block">
+            <div class="tailoring-info-label">Suggested</div>
+            <div class="tailoring-card-copy">${escapeHtml(suggestedText)}</div>
+          </div>
+        ` : ""}
+
+        ${whySelected ? `
+          <div class="tailoring-info-block">
+            <div class="tailoring-info-label">Reason</div>
+            <div class="tailoring-card-copy">${escapeHtml(whySelected)}</div>
+          </div>
+        ` : ""}
+      </section>
+    `;
+  }).join("");
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">${escapeHtml(title)}</div>
+    </section>
+    ${cardsHtml}
+  `;
+}
+
+function renderScanWorkspacePayload(payload) {
+  const root = qs("scanWorkspaceShell");
+  const meta = qs("scanWorkspaceMeta");
+  if (!root || !payload) return;
+
+  const trustedSuggestions = payload?.trusted_suggestions || {};
+  const trustedReady = Array.isArray(trustedSuggestions.direct_apply_ready)
+    ? trustedSuggestions.direct_apply_ready
+    : [];
+  const trustedOptional = Array.isArray(trustedSuggestions.direct_apply_optional)
+    ? trustedSuggestions.direct_apply_optional
+    : [];
+  const aiOptional = Array.isArray(payload?.ai_optimize_suggestions)
+    ? payload.ai_optimize_suggestions
+    : [];
+  const directional = Array.isArray(payload?.directional_guidance)
+    ? payload.directional_guidance
+    : [];
+
+  const laneCounts = payload?.lane_counts || {};
+  const scoreSnapshot = payload?.score_snapshot || {};
+  const summary = payload?.final_replacement_summary || {};
+
+  if (meta) {
+    meta.textContent = [
+      payload?.selected_resume || "Resume",
+      `${Number(laneCounts.direct_apply_ready || 0)} ready`,
+      `${Number(laneCounts.ai_optimize_optional || 0)} AI optional`,
+      `${Number(laneCounts.direction_only || 0)} guidance`,
+    ].join(" • ");
+  }
+
+  root.innerHTML = `
+    ${renderReplacementPlanSummary(summary)}
+
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Scan summary</div>
+
+      <div class="tailoring-meta-grid">
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Original score</span>
+          <span>${escapeHtml(formatScore100(scoreSnapshot.original_score))}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Projected score</span>
+          <span>${escapeHtml(formatScore100(scoreSnapshot.projected_score))}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Projected delta</span>
+          <span>${escapeHtml(formatSignedScore100(scoreSnapshot.projected_delta))}</span>
+        </div>
+
+        <div class="info-pair tailoring-meta-item">
+          <span class="label">Draft state</span>
+          <span>${escapeHtml(humanizeUnderscoreLabel(payload?.draft_status || "", "-"))}</span>
+        </div>
+      </div>
+    </section>
+
+    ${renderScanSuggestionSection(
+      "Trusted suggestions",
+      [...trustedReady, ...trustedOptional],
+      "success",
+      "No trusted suggestions are available for this scan."
+    )}
+
+    ${renderScanSuggestionSection(
+      "AI optimize suggestions",
+      aiOptional,
+      "caution",
+      "No AI optimize suggestions are available for this scan."
+    )}
+
+    ${renderScanSuggestionSection(
+      "Directional guidance",
+      directional,
+      "muted",
+      "No directional guidance is available for this scan."
+    )}
+  `;
+}
+
+async function initScanWorkspacePage() {
+  const page = getScanWorkspacePage();
+  if (!page) return false;
+
+  const context = getScanWorkspaceContext();
+  const root = qs("scanWorkspaceShell");
+  const meta = qs("scanWorkspaceMeta");
+
+  setScanWorkspaceResumePreview(context?.resumeName || "");
+
+  if (!root) return true;
+
+  if (!context?.tailoringJsonPath) {
+    if (meta) {
+      meta.textContent = "No preloaded scan payload was provided.";
+    }
+
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        This scan route is ready for preloaded job/resume pairs, but no tailoring artifact was provided.
+      </div>
+    `;
+    return true;
+  }
+
+  try {
+    if (meta) {
+      meta.textContent = "Loading preloaded scan...";
+    }
+
+    const payload = await loadScanWorkspacePreload();
+    renderScanWorkspacePayload(payload);
+  } catch (err) {
+    if (meta) {
+      meta.textContent = "Failed to load scan.";
+    }
+
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        Failed to load the preloaded scan payload for this job/resume pair.
+      </div>
+    `;
+
+    console.error("Failed to initialize scan workspace", err);
+  }
+
+  return true;
+}
+
 function buildTailoringWorkspaceUrl(row) {
   const params = new URLSearchParams();
 
@@ -8396,6 +8637,7 @@ function attachPlanningHandlers() {
 window.addEventListener("DOMContentLoaded", async () => {
   const isPlanningPage = Boolean(qs("planningTable"));
   const isTailoringWorkspacePage = Boolean(document.querySelector(".tailoring-workspace-page"));
+  const isScanWorkspacePage = Boolean(document.querySelector(".scan-workspace-page"));
 
   if (isPlanningPage) {
     bindAppErrorModal();
@@ -8421,5 +8663,10 @@ window.addEventListener("DOMContentLoaded", async () => {
     bindTailoringWorkspaceExportModal();
     bindTailoringWorkspaceDivider();
     await initTailoringWorkspacePage();
+  }
+
+  if (isScanWorkspacePage) {
+    await initScanWorkspacePage();
+    return;
   }
 });

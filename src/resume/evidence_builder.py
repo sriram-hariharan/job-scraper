@@ -934,6 +934,7 @@ def rebuild_resume_evidence_from_structured_entries(
     project_entries: Optional[List[ResumeProjectEntry]] = None,
     education_entries: Optional[List[ResumeEducationEntry]] = None,
     certifications: Optional[List[str]] = None,
+    skills: Optional[List[str]] = None,
 ) -> ResumeEvidence:
     refreshed_experience_entries = copy.deepcopy(list(experience_entries or []))
     refreshed_project_entries = copy.deepcopy(list(project_entries or []))
@@ -982,8 +983,6 @@ def rebuild_resume_evidence_from_structured_entries(
         if education_text:
             structured_text_parts.append(education_text)
 
-    structured_text = "\n".join(part for part in structured_text_parts if part).strip()
-
     companies = _unique_preserve_order(
         [entry.company for entry in refreshed_experience_entries if entry.company]
     )
@@ -999,7 +998,7 @@ def rebuild_resume_evidence_from_structured_entries(
         ]
     )
 
-    skills = _unique_preserve_order(
+    derived_skills = _unique_preserve_order(
         [
             skill
             for entry in refreshed_experience_entries
@@ -1011,6 +1010,19 @@ def rebuild_resume_evidence_from_structured_entries(
             for skill in list(entry.normalized_skills or [])
         ]
     )
+
+    preserved_skills = _unique_preserve_order(
+        [
+            str(skill).strip()
+            for skill in (skills if skills is not None else derived_skills)
+            if str(skill).strip()
+        ]
+    )
+
+    if preserved_skills:
+        structured_text_parts.append("Skills: " + ", ".join(preserved_skills))
+
+    structured_text = "\n".join(part for part in structured_text_parts if part).strip()
 
     (
         methods,
@@ -1031,7 +1043,7 @@ def rebuild_resume_evidence_from_structured_entries(
         titles=titles,
         companies=companies,
         locations=locations,
-        skills=skills,
+        skills=preserved_skills,
         certifications=refreshed_certifications,
         education_entries=refreshed_education_entries,
         experience_entries=refreshed_experience_entries,
@@ -1180,7 +1192,29 @@ def build_counterfactual_resume_evidence_for_patches(
         project_entries=patched_project_entries,
         education_entries=list(getattr(original_resume, "education_entries", []) or []),
         certifications=list(getattr(original_resume, "certifications", []) or []),
+        skills=copy.deepcopy(list(getattr(original_resume, "skills", []) or [])),
     )
+    rebuilt_resume.skills = copy.deepcopy(
+        list(getattr(original_resume, "skills", []) or [])
+    )
+
+    original_experience_entries = list(getattr(original_resume, "experience_entries", []) or [])
+    rebuilt_experience_entries = list(getattr(rebuilt_resume, "experience_entries", []) or [])
+    for idx, entry in enumerate(rebuilt_experience_entries):
+        if idx >= len(original_experience_entries):
+            continue
+        entry.normalized_skills = copy.deepcopy(
+            list(getattr(original_experience_entries[idx], "normalized_skills", []) or [])
+        )
+
+    original_project_entries = list(getattr(original_resume, "project_entries", []) or [])
+    rebuilt_project_entries = list(getattr(rebuilt_resume, "project_entries", []) or [])
+    for idx, entry in enumerate(rebuilt_project_entries):
+        if idx >= len(original_project_entries):
+            continue
+        entry.normalized_skills = copy.deepcopy(
+            list(getattr(original_project_entries[idx], "normalized_skills", []) or [])
+        )
     return rebuilt_resume, "ok"
 
 def _bullet_text_by_id(

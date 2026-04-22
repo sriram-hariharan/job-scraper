@@ -1372,14 +1372,62 @@ def scan_workspace(
         data-scan-mode-panel="processing"
         hidden
       >
-        <section class="card scan-workspace-placeholder-card scan-workspace-placeholder-card--processing">
+        <section class="card scan-workspace-processing-card">
+          <div class="scan-workspace-processing-topline">
+            <div
+              class="scan-workspace-processing-badge"
+              id="scanWorkspaceProcessingBadge"
+            >
+              Preparing scan
+            </div>
+
+            <button
+              type="button"
+              class="ghost-btn scan-workspace-processing-back-btn"
+              id="scanWorkspaceProcessingBackBtn"
+            >
+              Back
+            </button>
+          </div>
+
           <div class="scan-workspace-processing-shell">
-            <div class="scan-workspace-processing-title">Structuring your content with AI</div>
-            <div class="scan-workspace-processing-bar">
+            <div
+              class="scan-workspace-processing-title"
+              id="scanWorkspaceProcessingTitle"
+            >
+              Structuring your content with AI
+            </div>
+
+            <div
+              class="subtext scan-workspace-processing-subtitle"
+              id="scanWorkspaceProcessingSubtitle"
+            >
+              Preparing scan request...
+            </div>
+
+            <div
+              class="scan-workspace-processing-summary"
+              id="scanWorkspaceProcessingSummary"
+            ></div>
+
+            <div
+              class="scan-workspace-processing-bar"
+              id="scanWorkspaceProcessingBar"
+              aria-hidden="true"
+            >
               <div class="scan-workspace-processing-bar-fill"></div>
             </div>
-            <div class="subtext">
-              Phase 3 will connect this to real scan stage updates from the backend.
+
+            <div
+              class="scan-workspace-processing-step-list"
+              id="scanWorkspaceProcessingStepList"
+            ></div>
+
+            <div
+              class="scan-workspace-processing-note"
+              id="scanWorkspaceProcessingNote"
+            >
+              Waiting for the real scan runner. This phase adds the processing shell and stage model only.
             </div>
           </div>
         </section>
@@ -1390,18 +1438,29 @@ def scan_workspace(
         data-scan-mode-panel="review"
         hidden
       >
-        <section class="tailoring-workspace-layout">
-          <section class="card tailoring-workspace-pane tailoring-workspace-pane--left">
-            <div class="section-header">
-              <div>
-                <h2>Scan suggestions</h2>
-                <div class="subtext" id="scanWorkspaceMeta">
-                  Loading scan preload...
+        <section class="scan-workspace-review-shell">
+          <aside class="card scan-workspace-review-rail">
+            <div class="scan-workspace-review-rail-header">
+              <div class="scan-workspace-review-score-card">
+                <div class="scan-workspace-review-score-ring">AI</div>
+
+                <div class="scan-workspace-review-score-copy">
+                  <div class="scan-workspace-review-score-title">Optimization review</div>
+                  <div class="subtext" id="scanWorkspaceMeta">
+                    Loading scan preload...
+                  </div>
                 </div>
+              </div>
+
+              <div class="scan-workspace-review-rail-note">
+                Review grouped scan suggestions on the left while keeping the active resume surface visible on the right.
               </div>
             </div>
 
-            <section class="card tailoring-workspace-subcard" id="scanWorkspaceControlsShell">
+            <section
+              class="card tailoring-workspace-subcard scan-workspace-review-controls"
+              id="scanWorkspaceControlsShell"
+            >
               <div class="scheduler-table-tabs">
                 <div class="scheduler-tab-row" id="scanWorkspaceTabRow">
                   <button
@@ -1477,113 +1536,238 @@ def scan_workspace(
               </div>
             </section>
 
+            <div class="scan-workspace-review-rail-body">
+              <div
+                id="scanWorkspaceInteractiveSummary"
+                class="tailoring-interactive-shell tailoring-workspace-content"
+              >
+                <div class="tailoring-empty-state">
+                  Loading scan suggestions...
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          <section class="card scan-workspace-review-main">
+  <div class="scan-workspace-review-main-header">
+    <div
+      class="scan-workspace-review-surface-tabs"
+      role="tablist"
+      aria-label="Optimization surfaces"
+    >
+      <button
+        type="button"
+        class="scan-workspace-surface-tab is-active"
+        aria-pressed="true"
+      >
+        Resume
+      </button>
+
+      <button
+        type="button"
+        class="scan-workspace-surface-tab"
+        disabled
+      >
+        Cover Letter
+      </button>
+
+      <button
+        type="button"
+        class="scan-workspace-surface-tab"
+        disabled
+      >
+        Job Description
+      </button>
+    </div>
+
+    <div class="scan-workspace-review-main-actions">
+      <button
+        type="button"
+        class="ghost-btn btn-sm"
+        data-scan-switch-mode="compare"
+      >
+        Compare
+      </button>
+    </div>
+  </div>
+
+  <div class="scan-workspace-review-step-row">
+    <div class="scan-workspace-review-step-badge">1</div>
+
+    <div class="scan-workspace-review-step-copy">
+      <div class="scan-workspace-review-step-title">AI Suggestions Review</div>
+      <div class="subtext">
+        Review current scan suggestions against the active resume surface before moving to compare.
+      </div>
+    </div>
+  </div>
+
+  <section class="scan-workspace-annotation-shell">
+    <div class="scan-workspace-annotation-topbar">
+      <div class="scan-workspace-annotation-legend">
+        <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--add">
+          Suggested add
+        </span>
+        <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--replace">
+          Suggested replace
+        </span>
+        <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--focus">
+          Active anchor
+        </span>
+      </div>
+
+      <div
+        class="subtext scan-workspace-annotation-status"
+        id="scanWorkspaceAnnotationStatus"
+        aria-live="polite"
+      >
+        Annotation layer ready. Awaiting suggestion anchors.
+      </div>
+    </div>
+
+    <div class="scan-workspace-annotation-stage" id="scanWorkspaceAnnotationStage">
+      <div
+        class="scan-workspace-annotation-overlay"
+        id="scanWorkspaceAnnotationOverlay"
+        aria-hidden="true"
+      ></div>
+
+      <div class="tailoring-preview-shell scan-workspace-review-preview-shell">
+        <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
+          <div class="tailoring-workspace-preview-header">
+            <div class="tailoring-workspace-preview-header-main">
+              <div class="subtext">Current resume preview</div>
+
+              <div class="tailoring-workspace-preview-title-row">
+                <div
+                  class="tailoring-workspace-preview-name"
+                  id="scanWorkspacePreviewName"
+                >
+                  {resume_display_safe}
+                </div>
+              </div>
+
+              <div
+                class="subtext tailoring-workspace-selection-status"
+                id="scanWorkspacePreviewStatus"
+                aria-live="polite"
+              >
+                Scan preview loaded from the selected resume variant.
+              </div>
+            </div>
+          </div>
+
+          <div class="tailoring-workspace-preview-toolbar">
+            <div class="tailoring-workspace-preview-toolbar-left">
+              <button
+                type="button"
+                class="ghost-btn btn-sm"
+                id="scanWorkspaceZoomOutBtn"
+                aria-label="Zoom out"
+              >
+                −
+              </button>
+
+              <button
+                type="button"
+                class="ghost-btn btn-sm tailoring-workspace-zoom-value"
+                id="scanWorkspaceZoomResetBtn"
+                aria-label="Reset zoom"
+              >
+                100%
+              </button>
+
+              <button
+                type="button"
+                class="ghost-btn btn-sm"
+                id="scanWorkspaceZoomInBtn"
+                aria-label="Zoom in"
+              >
+                +
+              </button>
+            </div>
+
+            <div class="subtext" id="scanWorkspacePreviewMeta">
+              Loading PDF preview...
+            </div>
+          </div>
+
+          <div class="tailoring-workspace-mode-body">
             <div
-              id="scanWorkspaceInteractiveSummary"
-              class="tailoring-interactive-shell tailoring-workspace-content"
+              class="tailoring-workspace-pdf-scroller"
+              id="scanWorkspacePdfScroller"
             >
-              <div class="tailoring-empty-state">
-                Loading scan suggestions...
+              <div class="resume-choice-empty" id="scanWorkspacePreviewEmpty">
+                Loading PDF preview...
               </div>
+
+              <div
+                id="scanWorkspacePdfPages"
+                class="tailoring-workspace-pdf-pages hidden"
+              ></div>
             </div>
-          </section>
+          </div>
+        </div>
+      </div>
 
-          <div
-            class="tailoring-workspace-divider"
-            id="tailoringWorkspaceDivider"
-            role="separator"
-            aria-orientation="vertical"
-            aria-label="Resize workspace panes"
-            tabindex="0"
-          ></div>
+      <div
+        class="scan-workspace-suggestion-popover hidden"
+        id="scanWorkspaceSuggestionPopover"
+        role="dialog"
+        aria-live="polite"
+        aria-label="AI suggestion details"
+      >
+        <div class="scan-workspace-suggestion-popover-topline">
+          <div class="scan-workspace-suggestion-popover-kicker">
+            AI suggested change
+          </div>
 
-          <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
-            <div class="section-header">
-              <div>
-                <h2>Resume preview</h2>
-                <div class="subtext">
-                  Review the selected resume variant here while checking scan suggestions on the left.
-                </div>
-              </div>
-            </div>
+          <button
+            type="button"
+            class="ghost-btn btn-sm scan-workspace-suggestion-popover-close"
+            id="scanWorkspaceSuggestionPopoverCloseBtn"
+          >
+            Close
+          </button>
+        </div>
 
-            <div class="tailoring-preview-shell">
-              <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
-                <div class="tailoring-workspace-preview-header">
-                  <div class="tailoring-workspace-preview-header-main">
-                    <div class="subtext">Current resume preview</div>
+        <div
+          class="scan-workspace-suggestion-popover-title"
+          id="scanWorkspaceSuggestionPopoverTitle"
+        >
+          Select a suggestion anchor to inspect it here.
+        </div>
 
-                    <div class="tailoring-workspace-preview-title-row">
-                      <div
-                        class="tailoring-workspace-preview-name"
-                        id="scanWorkspacePreviewName"
-                      >
-                        {resume_display_safe}
-                      </div>
-                    </div>
+        <div
+          class="scan-workspace-suggestion-popover-copy"
+          id="scanWorkspaceSuggestionPopoverCopy"
+        >
+          This shell is now ready for anchored AI suggestion details. Real suggestion positioning and accept/reject state wiring come in the next phase.
+        </div>
 
-                    <div
-                      class="subtext tailoring-workspace-selection-status"
-                      id="scanWorkspacePreviewStatus"
-                      aria-live="polite"
-                    >
-                      Scan preview loaded from the selected resume variant.
-                    </div>
-                  </div>
-                </div>
+        <div class="scan-workspace-suggestion-popover-actions">
+          <button
+            type="button"
+            class="ghost-btn btn-sm"
+            id="scanWorkspaceSuggestionRejectBtn"
+            disabled
+          >
+            Reject
+          </button>
 
-                <div class="tailoring-workspace-preview-toolbar">
-                  <div class="tailoring-workspace-preview-toolbar-left">
-                    <button
-                      type="button"
-                      class="ghost-btn btn-sm"
-                      id="scanWorkspaceZoomOutBtn"
-                      aria-label="Zoom out"
-                    >
-                      −
-                    </button>
-
-                    <button
-                      type="button"
-                      class="ghost-btn btn-sm tailoring-workspace-zoom-value"
-                      id="scanWorkspaceZoomResetBtn"
-                      aria-label="Reset zoom"
-                    >
-                      100%
-                    </button>
-
-                    <button
-                      type="button"
-                      class="ghost-btn btn-sm"
-                      id="scanWorkspaceZoomInBtn"
-                      aria-label="Zoom in"
-                    >
-                      +
-                    </button>
-                  </div>
-
-                  <div class="subtext" id="scanWorkspacePreviewMeta">
-                    Loading PDF preview...
-                  </div>
-                </div>
-
-                <div class="tailoring-workspace-mode-body">
-                  <div
-                    class="tailoring-workspace-pdf-scroller"
-                    id="scanWorkspacePdfScroller"
-                  >
-                    <div class="resume-choice-empty" id="scanWorkspacePreviewEmpty">
-                      Loading PDF preview...
-                    </div>
-
-                    <div
-                      id="scanWorkspacePdfPages"
-                      class="tailoring-workspace-pdf-pages hidden"
-                    ></div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
+          <button
+            type="button"
+            class="btn-sm"
+            id="scanWorkspaceSuggestionAcceptBtn"
+            disabled
+          >
+            Accept
+          </button>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
         </section>
       </section>
 

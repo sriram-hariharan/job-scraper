@@ -41,11 +41,20 @@ const scanWorkspacePreviewState = {
   documentPreviewPayload: null,
   isDocumentPreviewLoading: false,
   documentPreviewRequestSeq: 0,
+  candidateSignature: "",
 };
 
 const scanWorkspaceAnnotationState = {
   markers: [],
   activeMarkerId: "",
+};
+
+const scanWorkspaceCompareState = {
+  beforePayload: null,
+  afterPayload: null,
+  isLoading: false,
+  requestSeq: 0,
+  acceptedSignature: "",
 };
 
 function getScanWorkspacePageRoot() {
@@ -117,6 +126,11 @@ function setScanWorkspaceMode(nextMode) {
   if (normalizedMode === "review") {
     renderScanWorkspaceAnnotationShell();
     ensureScanWorkspaceDocumentPreviewLoaded();
+  }
+
+  if (normalizedMode === "compare") {
+    renderScanWorkspaceCompareShell();
+    ensureScanWorkspaceCompareLoaded();
   }
 }
 
@@ -300,25 +314,11 @@ function updateScanWorkspaceProcessingView() {
   const stage = getScanWorkspaceProcessingStage(scanWorkspaceProcessingState.currentStageKey);
   const draft = scanWorkspaceProcessingState.intakeDraft;
 
-  if (badge) {
-    badge.textContent = stage.title;
-  }
-
-  if (title) {
-    title.textContent = "Structuring your content with AI";
-  }
-
-  if (subtitle) {
-    subtitle.textContent = stage.description;
-  }
-
-  if (summary) {
-    summary.innerHTML = buildScanWorkspaceProcessingSummaryHtml(draft);
-  }
-
-  if (stepList) {
-    stepList.innerHTML = buildScanWorkspaceProcessingStepsHtml(stage.key);
-  }
+  if (badge) badge.textContent = stage.title;
+  if (title) title.textContent = "Structuring your content with AI";
+  if (subtitle) subtitle.textContent = stage.description;
+  if (summary) summary.innerHTML = buildScanWorkspaceProcessingSummaryHtml(draft);
+  if (stepList) stepList.innerHTML = buildScanWorkspaceProcessingStepsHtml(stage.key);
 
   if (note) {
     note.textContent =
@@ -349,7 +349,146 @@ function bindScanWorkspaceProcessingShell() {
   }
 }
 
-function buildScanWorkspaceDocumentPreviewRequest() {
+function normalizeScanWorkspaceAnnotationDecision(decision) {
+  const safeDecision = String(decision || "").trim().toLowerCase();
+  return safeDecision === "accepted" || safeDecision === "rejected" ? safeDecision : "pending";
+}
+
+function collectScanWorkspaceMarkerCandidateIds(marker) {
+  const directValues = [
+    marker?.candidateId,
+    marker?.patchCandidateId,
+    marker?.candidate_id,
+    marker?.patch_candidate_id,
+  ];
+
+  const listValues = [
+    marker?.candidateIds,
+    marker?.patchCandidateIds,
+    marker?.candidate_ids,
+    marker?.patch_candidate_ids,
+  ];
+
+  const ids = [];
+
+  directValues.forEach((value) => {
+    const safeValue = String(value || "").trim();
+    if (safeValue) ids.push(safeValue);
+  });
+
+  listValues.forEach((list) => {
+    if (!Array.isArray(list)) return;
+    list.forEach((value) => {
+      const safeValue = String(value || "").trim();
+      if (safeValue) ids.push(safeValue);
+    });
+  });
+
+  return Array.from(new Set(ids));
+}
+
+function normalizeScanWorkspaceAnnotationMarker(marker, index) {
+  const tone = String(marker?.tone || "replace").trim().toLowerCase();
+  const safeTone =
+    tone === "add" || tone === "replace" || tone === "focus" ? tone : "replace";
+
+  const id = String(marker?.id || `marker_${index + 1}`).trim();
+  const topPercent = Number(marker?.topPercent);
+  const leftPercent = Number(marker?.leftPercent);
+
+  return {
+    id,
+    tone: safeTone,
+    decision: normalizeScanWorkspaceAnnotationDecision(marker?.decision),
+    title: String(marker?.title || "AI suggested change").trim(),
+    copy: String(marker?.copy || "Review this anchored suggestion.").trim(),
+    topPercent: Number.isFinite(topPercent) ? Math.max(2, Math.min(98, topPercent)) : 50,
+    leftPercent: Number.isFinite(leftPercent) ? Math.max(2, Math.min(98, leftPercent)) : 50,
+    candidateIds: collectScanWorkspaceMarkerCandidateIds(marker),
+  };
+}
+
+function getScanWorkspaceAnnotationMarkerById(markerId) {
+  return scanWorkspaceAnnotationState.markers.find((marker) => marker.id === markerId) || null;
+}
+
+function getScanWorkspaceAnnotationDecisionCounts() {
+  return scanWorkspaceAnnotationState.markers.reduce(
+    (acc, marker) => {
+      const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
+      acc.total += 1;
+      if (decision === "accepted") acc.accepted += 1;
+      else if (decision === "rejected") acc.rejected += 1;
+      else acc.pending += 1;
+      return acc;
+    },
+    { total: 0, accepted: 0, rejected: 0, pending: 0 }
+  );
+}
+
+function getAcceptedCompareCandidateIds() {
+  const ids = [];
+
+  scanWorkspaceAnnotationState.markers.forEach((marker) => {
+    if (normalizeScanWorkspaceAnnotationDecision(marker?.decision) !== "accepted") return;
+    const markerIds = Array.isArray(marker?.candidateIds) ? marker.candidateIds : [];
+    markerIds.forEach((value) => {
+      const safeValue = String(value || "").trim();
+      if (safeValue) ids.push(safeValue);
+    });
+  });
+
+  return Array.from(new Set(ids));
+}
+
+function setScanWorkspaceMarkerDecision(markerId, decision) {
+  const safeDecision = normalizeScanWorkspaceAnnotationDecision(decision);
+  let updatedMarker = null;
+
+  scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => {
+    if (marker.id !== markerId) return marker;
+    updatedMarker = { ...marker, decision: safeDecision };
+    return updatedMarker;
+  });
+
+  return updatedMarker;
+}
+
+function updateScanWorkspaceDecisionSummaryUi() {
+  const counts = getScanWorkspaceAnnotationDecisionCounts();
+  const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
+  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
+  const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
+  const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
+
+  if (selectionStatus) {
+    selectionStatus.textContent =
+      counts.total > 0
+        ? `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`
+        : "No scan actions selected yet.";
+  }
+
+  if (previewStatus) {
+    previewStatus.textContent =
+      counts.accepted > 0
+        ? `${counts.accepted} accepted linked suggestion(s) are currently reflected in the scan decision set.`
+        : "Live draft preview is ready for scan decisions.";
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = counts.accepted === 0 && counts.rejected === 0;
+  }
+
+  if (acceptAllBtn) {
+    acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
+  }
+}
+
+function getAcceptedCandidateSignature() {
+  return getAcceptedCompareCandidateIds().join("|");
+}
+
+function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []) {
   const context = getScanWorkspaceContext();
   if (!context || !context.tailoringJsonPath || !context.resumeName) {
     return null;
@@ -358,9 +497,61 @@ function buildScanWorkspaceDocumentPreviewRequest() {
   return {
     tailoring_json_path: context.tailoringJsonPath,
     selected_resume: context.resumeName,
-    selected_patch_candidate_ids: [],
+    selected_patch_candidate_ids: Array.from(
+      new Set(
+        (Array.isArray(selectedPatchCandidateIds) ? selectedPatchCandidateIds : [])
+          .map((value) => String(value || "").trim())
+          .filter(Boolean)
+      )
+    ),
     manual_bullet_edits: {},
   };
+}
+
+async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = []) {
+  const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds);
+
+  if (!requestBody) {
+    return {
+      ok: false,
+      error_message: "Scan preload is not available for this route.",
+      pages: [],
+    };
+  }
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout(
+            "/planning/render-workspace-draft-preview",
+            requestBody,
+            20000
+          )
+        : await fetch("/planning/render-workspace-draft-preview", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {}
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    return response;
+  } catch (err) {
+    return {
+      ok: false,
+      error_message:
+        err instanceof Error ? err.message : "Failed to render draft preview.",
+      pages: [],
+    };
+  }
 }
 
 function fallbackRenderScanWorkspaceStructuredRow(row) {
@@ -411,11 +602,47 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
   `;
 }
 
-function renderScanWorkspaceDocumentMirror() {
-  if (
-    scanWorkspacePreviewState.isDocumentPreviewLoading &&
-    !scanWorkspacePreviewState.documentPreviewPayload
-  ) {
+function normalizeScanWorkspacePreviewPages(preview) {
+  const pages = Array.isArray(preview?.pages) ? preview.pages : [];
+  const buildPresentationRowsFn =
+    typeof buildTailoringWorkspacePreviewPresentationRows === "function"
+      ? buildTailoringWorkspacePreviewPresentationRows
+      : (rows) => (Array.isArray(rows) ? rows : []);
+
+  const getSectionKeyFn =
+    typeof getTailoringWorkspaceSectionKeyFromRow === "function"
+      ? getTailoringWorkspaceSectionKeyFromRow
+      : () => "";
+
+  let carrySection = "";
+
+  return pages.map((page, pageIndex) => {
+    const presentationRows = buildPresentationRowsFn(page.rows, {
+      initialSection: carrySection,
+      allowDocumentHeaderRoles: pageIndex === 0,
+    });
+
+    presentationRows.forEach((row) => {
+      const sectionKey = getSectionKeyFn(row);
+      if (sectionKey) carrySection = sectionKey;
+    });
+
+    return {
+      ...page,
+      presentation_rows: presentationRows,
+    };
+  });
+}
+
+function renderScanWorkspaceDocumentMirrorFromPayload(
+  preview,
+  {
+    isLoading = false,
+    emptyMessage = "Draft preview is not available.",
+    noteText = "",
+  } = {}
+) {
+  if (isLoading && !preview) {
     return `
       <div class="tailoring-empty-state">
         Loading reconstructed draft preview...
@@ -423,14 +650,12 @@ function renderScanWorkspaceDocumentMirror() {
     `;
   }
 
-  const preview = scanWorkspacePreviewState.documentPreviewPayload;
-  const pages = Array.isArray(preview?.pages) ? preview.pages : [];
-
+  const pages = normalizeScanWorkspacePreviewPages(preview);
   if (!pages.length) {
     const errorMessage = String(preview?.error_message || "").trim();
     return `
       <div class="tailoring-empty-state">
-        ${scanWorkspaceEscapeHtml(errorMessage || "Live draft preview is not available for this scan.")}
+        ${scanWorkspaceEscapeHtml(errorMessage || emptyMessage)}
       </div>
     `;
   }
@@ -443,39 +668,7 @@ function renderScanWorkspaceDocumentMirror() {
       ? renderTailoringWorkspaceStructuredRow
       : fallbackRenderScanWorkspaceStructuredRow;
 
-  const buildPresentationRowsFn =
-    typeof buildTailoringWorkspacePreviewPresentationRows === "function"
-      ? buildTailoringWorkspacePreviewPresentationRows
-      : (rows) => (Array.isArray(rows) ? rows : []);
-
-  const getSectionKeyFn =
-    typeof getTailoringWorkspaceSectionKeyFromRow === "function"
-      ? getTailoringWorkspaceSectionKeyFromRow
-      : () => "";
-
-  const showPageLabel = pages.length > 1;
-  let carrySection = "";
-
-  const normalizedPages = pages.map((page, pageIndex) => {
-    const presentationRows = buildPresentationRowsFn(page.rows, {
-      initialSection: carrySection,
-      allowDocumentHeaderRoles: pageIndex === 0,
-    });
-
-    presentationRows.forEach((row) => {
-      const sectionKey = getSectionKeyFn(row);
-      if (sectionKey) {
-        carrySection = sectionKey;
-      }
-    });
-
-    return {
-      ...page,
-      presentation_rows: presentationRows,
-    };
-  });
-
-  const changedCount = normalizedPages.reduce(
+  const changedCount = pages.reduce(
     (count, page) =>
       count +
       (Array.isArray(page.presentation_rows)
@@ -487,15 +680,15 @@ function renderScanWorkspaceDocumentMirror() {
   return `
     <div class="tailoring-workspace-doc-mirror">
       <div class="tailoring-workspace-doc-mirror-note" style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
-        Read-only reconstructed draft from the export model. Accepted scan changes will appear here first.
-        ${changedCount ? `${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
+        ${scanWorkspaceEscapeHtml(noteText)}
+        ${changedCount ? ` ${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
       </div>
 
-      ${normalizedPages
+      ${pages
         .map(
           (page) => `
         <section class="tailoring-workspace-doc-page">
-          ${showPageLabel ? `
+          ${pages.length > 1 ? `
             <div class="tailoring-workspace-doc-page-header">
               <span class="tailoring-workspace-doc-page-number">
                 Page ${escapeFn(String(page.page_number || ""))}
@@ -519,202 +712,65 @@ function renderScanWorkspaceDocumentMirror() {
 function renderScanWorkspaceLiveDraftPreviewInto() {
   const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
   if (!root) return;
-  root.innerHTML = renderScanWorkspaceDocumentMirror();
+
+  const acceptedIds = getAcceptedCompareCandidateIds();
+  const noteText = acceptedIds.length
+    ? `Read-only reconstructed draft from the export model using ${acceptedIds.length} accepted linked suggestion(s).`
+    : "Read-only reconstructed draft from the export model. Accepted scan changes will appear here first.";
+
+  root.innerHTML = renderScanWorkspaceDocumentMirrorFromPayload(
+    scanWorkspacePreviewState.documentPreviewPayload,
+    {
+      isLoading: scanWorkspacePreviewState.isDocumentPreviewLoading,
+      emptyMessage: "Live draft preview is not available for this scan.",
+      noteText,
+    }
+  );
 }
 
 async function fetchScanWorkspaceDocumentPreview() {
-  const requestBody = buildScanWorkspaceDocumentPreviewRequest();
-  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
   const previewMeta = getScanWorkspaceInput("scanWorkspacePreviewMeta");
-
-  if (!requestBody) {
-    scanWorkspacePreviewState.documentPreviewPayload = {
-      ok: false,
-      error_message: "Scan preload is not available for this route.",
-      pages: [],
-    };
-    renderScanWorkspaceLiveDraftPreviewInto();
-    if (previewStatus) {
-      previewStatus.textContent = "Live draft preview is unavailable for this scan.";
-    }
-    if (previewMeta) {
-      previewMeta.textContent = "Live draft preview unavailable";
-    }
-    return;
-  }
-
+  const acceptedIds = getAcceptedCompareCandidateIds();
+  const currentSignature = acceptedIds.join("|");
   const requestSeq = ++scanWorkspacePreviewState.documentPreviewRequestSeq;
-  scanWorkspacePreviewState.isDocumentPreviewLoading = true;
-  renderScanWorkspaceLiveDraftPreviewInto();
 
-  if (previewStatus) {
-    previewStatus.textContent = "Loading reconstructed draft preview for this resume.";
-  }
+  scanWorkspacePreviewState.isDocumentPreviewLoading = true;
+  scanWorkspacePreviewState.candidateSignature = currentSignature;
+
   if (previewMeta) {
     previewMeta.textContent = "Loading live draft preview...";
   }
 
-  try {
-    const response =
-      typeof postJsonWithTimeout === "function"
-        ? await postJsonWithTimeout(
-            "/planning/render-workspace-draft-preview",
-            requestBody,
-            20000
-          )
-        : await fetch("/planning/render-workspace-draft-preview", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody),
-          }).then(async (res) => {
-            if (!res.ok) {
-              let message = `Request failed (${res.status})`;
-              try {
-                const data = await res.json();
-                message = String(data?.detail || data?.error_message || message);
-              } catch {}
-              throw new Error(message);
-            }
-            return res.json();
-          });
+  renderScanWorkspaceLiveDraftPreviewInto();
 
-    if (requestSeq !== scanWorkspacePreviewState.documentPreviewRequestSeq) return;
+  const response = await requestScanWorkspaceDocumentPreview(acceptedIds);
+  if (requestSeq !== scanWorkspacePreviewState.documentPreviewRequestSeq) return;
 
-    scanWorkspacePreviewState.documentPreviewPayload = response;
+  scanWorkspacePreviewState.documentPreviewPayload = response;
+  scanWorkspacePreviewState.isDocumentPreviewLoading = false;
 
-    if (previewStatus) {
-      previewStatus.textContent = "Live draft preview is ready.";
-    }
-    if (previewMeta) {
-      previewMeta.textContent = "Live draft preview";
-    }
-  } catch (err) {
-    if (requestSeq !== scanWorkspacePreviewState.documentPreviewRequestSeq) return;
-
-    scanWorkspacePreviewState.documentPreviewPayload = {
-      ok: false,
-      error_message:
-        err instanceof Error ? err.message : "Failed to render live draft preview.",
-      pages: [],
-    };
-
-    if (previewStatus) {
-      previewStatus.textContent = "Live draft preview failed to load.";
-    }
-    if (previewMeta) {
-      previewMeta.textContent = "Live draft preview failed";
-    }
-  } finally {
-    if (requestSeq === scanWorkspacePreviewState.documentPreviewRequestSeq) {
-      scanWorkspacePreviewState.isDocumentPreviewLoading = false;
-      renderScanWorkspaceLiveDraftPreviewInto();
-    }
+  if (previewMeta) {
+    previewMeta.textContent = response?.pages?.length
+      ? "Live draft preview"
+      : "Live draft preview unavailable";
   }
+
+  renderScanWorkspaceLiveDraftPreviewInto();
 }
 
 function ensureScanWorkspaceDocumentPreviewLoaded({ force = false } = {}) {
-  if (!force && scanWorkspacePreviewState.documentPreviewPayload) {
+  const acceptedSignature = getAcceptedCandidateSignature();
+
+  if (
+    !force &&
+    scanWorkspacePreviewState.documentPreviewPayload &&
+    scanWorkspacePreviewState.candidateSignature === acceptedSignature
+  ) {
     renderScanWorkspaceLiveDraftPreviewInto();
     return;
   }
 
   fetchScanWorkspaceDocumentPreview();
-}
-
-function normalizeScanWorkspaceAnnotationDecision(decision) {
-  const safeDecision = String(decision || "").trim().toLowerCase();
-  return safeDecision === "accepted" || safeDecision === "rejected" ? safeDecision : "pending";
-}
-
-function normalizeScanWorkspaceAnnotationMarker(marker, index) {
-  const tone = String(marker?.tone || "replace").trim().toLowerCase();
-  const safeTone =
-    tone === "add" || tone === "replace" || tone === "focus" ? tone : "replace";
-
-  const id = String(marker?.id || `marker_${index + 1}`).trim();
-  const topPercent = Number(marker?.topPercent);
-  const leftPercent = Number(marker?.leftPercent);
-
-  return {
-    id,
-    tone: safeTone,
-    decision: normalizeScanWorkspaceAnnotationDecision(marker?.decision),
-    title: String(marker?.title || "AI suggested change").trim(),
-    copy: String(marker?.copy || "Review this anchored suggestion.").trim(),
-    topPercent: Number.isFinite(topPercent) ? Math.max(2, Math.min(98, topPercent)) : 50,
-    leftPercent: Number.isFinite(leftPercent) ? Math.max(2, Math.min(98, leftPercent)) : 50,
-  };
-}
-
-function getScanWorkspaceAnnotationMarkerById(markerId) {
-  return scanWorkspaceAnnotationState.markers.find((marker) => marker.id === markerId) || null;
-}
-
-function getScanWorkspaceAnnotationDecisionCounts() {
-  return scanWorkspaceAnnotationState.markers.reduce(
-    (acc, marker) => {
-      const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
-      acc.total += 1;
-      if (decision === "accepted") acc.accepted += 1;
-      else if (decision === "rejected") acc.rejected += 1;
-      else acc.pending += 1;
-      return acc;
-    },
-    { total: 0, accepted: 0, rejected: 0, pending: 0 }
-  );
-}
-
-function setScanWorkspaceMarkerDecision(markerId, decision) {
-  const safeDecision = normalizeScanWorkspaceAnnotationDecision(decision);
-  let updatedMarker = null;
-
-  scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => {
-    if (marker.id !== markerId) return marker;
-    updatedMarker = { ...marker, decision: safeDecision };
-    return updatedMarker;
-  });
-
-  return updatedMarker;
-}
-
-function updateScanWorkspaceDecisionSummaryUi() {
-  const counts = getScanWorkspaceAnnotationDecisionCounts();
-  const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
-  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
-  const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
-  const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
-
-  if (selectionStatus) {
-    selectionStatus.textContent =
-      counts.total > 0
-        ? `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`
-        : "No scan actions selected yet.";
-  }
-
-  if (previewStatus && counts.total > 0) {
-    previewStatus.textContent =
-      counts.accepted > 0
-        ? `${counts.accepted} suggestion(s) accepted into the current scan decision set.`
-        : "Live draft preview is ready for scan decisions.";
-  }
-
-  if (saveBtn) {
-    saveBtn.disabled = counts.accepted === 0 && counts.rejected === 0;
-  }
-
-  if (acceptAllBtn) {
-    acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
-  }
-}
-
-function applyScanWorkspaceDecisionToActiveMarker(decision) {
-  const activeMarker = getScanWorkspaceAnnotationMarkerById(
-    scanWorkspaceAnnotationState.activeMarkerId
-  );
-  if (!activeMarker) return;
-
-  setScanWorkspaceMarkerDecision(activeMarker.id, decision);
-  renderScanWorkspaceAnnotationShell();
 }
 
 function closeScanWorkspaceSuggestionPopover() {
@@ -832,7 +888,9 @@ function renderScanWorkspaceSuggestionPopover() {
     decisionPill.textContent = "Accepted";
     decisionPill.className =
       "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--accepted";
-    decisionMeta.textContent = "This suggestion is currently accepted into the scan decision set.";
+    decisionMeta.textContent = marker.candidateIds.length
+      ? "This suggestion is accepted and linked into the compare/apply decision set."
+      : "This suggestion is accepted, but it does not yet carry a linked compare candidate id.";
   } else if (decision === "rejected") {
     decisionPill.textContent = "Rejected";
     decisionPill.className =
@@ -888,7 +946,30 @@ function setScanWorkspaceAnnotationMarkers(markers) {
     scanWorkspaceAnnotationState.activeMarkerId = "";
   }
 
+  scanWorkspacePreviewState.documentPreviewPayload = null;
+  scanWorkspaceCompareState.beforePayload = null;
+  scanWorkspaceCompareState.afterPayload = null;
   renderScanWorkspaceAnnotationShell();
+  renderScanWorkspaceCompareShell();
+}
+
+function applyScanWorkspaceDecisionToActiveMarker(decision) {
+  const activeMarker = getScanWorkspaceAnnotationMarkerById(
+    scanWorkspaceAnnotationState.activeMarkerId
+  );
+  if (!activeMarker) return;
+
+  setScanWorkspaceMarkerDecision(activeMarker.id, decision);
+  scanWorkspacePreviewState.documentPreviewPayload = null;
+  scanWorkspaceCompareState.beforePayload = null;
+  scanWorkspaceCompareState.afterPayload = null;
+
+  renderScanWorkspaceAnnotationShell();
+  ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+    ensureScanWorkspaceCompareLoaded({ force: true });
+  }
 }
 
 function bindScanWorkspaceAnnotationShell() {
@@ -949,11 +1030,146 @@ function bindScanWorkspaceAnnotationShell() {
         decision: "accepted",
       }));
 
+      scanWorkspacePreviewState.documentPreviewPayload = null;
+      scanWorkspaceCompareState.beforePayload = null;
+      scanWorkspaceCompareState.afterPayload = null;
+
       renderScanWorkspaceAnnotationShell();
+      ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+
+      if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+        ensureScanWorkspaceCompareLoaded({ force: true });
+      }
     });
   }
 
   renderScanWorkspaceAnnotationShell();
+}
+
+function buildScanWorkspaceCompareSummaryHtml() {
+  const counts = getScanWorkspaceAnnotationDecisionCounts();
+  const linkedAcceptedIds = getAcceptedCompareCandidateIds();
+
+  const cards = [
+    { label: "Accepted", value: String(counts.accepted) },
+    { label: "Rejected", value: String(counts.rejected) },
+    { label: "Pending", value: String(counts.pending) },
+    { label: "Linked compare ids", value: String(linkedAcceptedIds.length) },
+  ];
+
+  return cards
+    .map(
+      (item) => `
+        <div class="scan-workspace-compare-summary-card">
+          <div class="scan-workspace-compare-summary-label">${scanWorkspaceEscapeHtml(item.label)}</div>
+          <div class="scan-workspace-compare-summary-value">${scanWorkspaceEscapeHtml(item.value)}</div>
+        </div>
+      `
+    )
+    .join("");
+}
+
+function renderScanWorkspaceCompareShell() {
+  const summary = getScanWorkspaceInput("scanWorkspaceCompareSummary");
+  const status = getScanWorkspaceInput("scanWorkspaceCompareStatus");
+  const beforeMeta = getScanWorkspaceInput("scanWorkspaceCompareBeforeMeta");
+  const afterMeta = getScanWorkspaceInput("scanWorkspaceCompareAfterMeta");
+  const beforePane = getScanWorkspaceInput("scanWorkspaceCompareBeforePane");
+  const afterPane = getScanWorkspaceInput("scanWorkspaceCompareAfterPane");
+
+  if (!summary || !status || !beforeMeta || !afterMeta || !beforePane || !afterPane) return;
+
+  const acceptedIds = getAcceptedCompareCandidateIds();
+  summary.innerHTML = buildScanWorkspaceCompareSummaryHtml();
+
+  status.textContent = scanWorkspaceCompareState.isLoading
+    ? "Refreshing compare surfaces..."
+    : acceptedIds.length
+      ? `Comparing the baseline draft against ${acceptedIds.length} accepted linked suggestion(s).`
+      : "Compare the baseline draft against the current accepted AI decision set.";
+
+  beforeMeta.textContent = scanWorkspaceCompareState.isLoading
+    ? "Loading baseline preview..."
+    : "Baseline draft with no accepted AI suggestions.";
+
+  beforePane.innerHTML = renderScanWorkspaceDocumentMirrorFromPayload(
+    scanWorkspaceCompareState.beforePayload,
+    {
+      isLoading: scanWorkspaceCompareState.isLoading,
+      emptyMessage: "Baseline compare preview is not available for this scan.",
+      noteText: "Baseline reconstructed draft from the export model with no accepted AI suggestions.",
+    }
+  );
+
+  if (!acceptedIds.length) {
+    afterMeta.textContent = "Accept at least one linked suggestion to generate the after preview.";
+    afterPane.innerHTML = `
+      <div class="tailoring-empty-state">
+        Accept at least one linked suggestion to generate the after preview.
+      </div>
+    `;
+    return;
+  }
+
+  afterMeta.textContent = scanWorkspaceCompareState.isLoading
+    ? "Loading accepted decision preview..."
+    : `${acceptedIds.length} linked accepted suggestion(s) applied to the after preview.`;
+
+  afterPane.innerHTML = renderScanWorkspaceDocumentMirrorFromPayload(
+    scanWorkspaceCompareState.afterPayload,
+    {
+      isLoading: scanWorkspaceCompareState.isLoading,
+      emptyMessage: "After compare preview is not available for this scan.",
+      noteText: `Reconstructed draft preview using ${acceptedIds.length} accepted linked suggestion(s).`,
+    }
+  );
+}
+
+async function ensureScanWorkspaceCompareLoaded({ force = false } = {}) {
+  const acceptedIds = getAcceptedCompareCandidateIds();
+  const acceptedSignature = acceptedIds.join("|");
+
+  if (
+    !force &&
+    scanWorkspaceCompareState.beforePayload &&
+    scanWorkspaceCompareState.acceptedSignature === acceptedSignature &&
+    (acceptedIds.length === 0 || scanWorkspaceCompareState.afterPayload)
+  ) {
+    renderScanWorkspaceCompareShell();
+    return;
+  }
+
+  scanWorkspaceCompareState.isLoading = true;
+  scanWorkspaceCompareState.acceptedSignature = acceptedSignature;
+  renderScanWorkspaceCompareShell();
+
+  const requestSeq = ++scanWorkspaceCompareState.requestSeq;
+
+  const [beforePayload, afterPayload] = await Promise.all([
+    requestScanWorkspaceDocumentPreview([]),
+    acceptedIds.length
+      ? requestScanWorkspaceDocumentPreview(acceptedIds)
+      : Promise.resolve(null),
+  ]);
+
+  if (requestSeq !== scanWorkspaceCompareState.requestSeq) return;
+
+  scanWorkspaceCompareState.beforePayload = beforePayload;
+  scanWorkspaceCompareState.afterPayload = afterPayload;
+  scanWorkspaceCompareState.isLoading = false;
+  renderScanWorkspaceCompareShell();
+}
+
+function bindScanWorkspaceCompareShell() {
+  const refreshBtn = getScanWorkspaceInput("scanWorkspaceCompareRefreshBtn");
+  if (refreshBtn && refreshBtn.dataset.bound !== "true") {
+    refreshBtn.dataset.bound = "true";
+    refreshBtn.addEventListener("click", () => {
+      ensureScanWorkspaceCompareLoaded({ force: true });
+    });
+  }
+
+  renderScanWorkspaceCompareShell();
 }
 
 window.addEventListener("DOMContentLoaded", () => {
@@ -964,6 +1180,7 @@ window.addEventListener("DOMContentLoaded", () => {
   bindScanWorkspaceIntakeForm();
   bindScanWorkspaceProcessingShell();
   bindScanWorkspaceAnnotationShell();
+  bindScanWorkspaceCompareShell();
   updateScanWorkspaceProcessingView();
 
   setScanWorkspaceMode(getScanWorkspaceInitialMode());
@@ -974,21 +1191,23 @@ window.addEventListener("DOMContentLoaded", () => {
     getIntakeDraft: () => ({ ...scanWorkspaceIntakeState }),
     getProcessingState: () => ({ ...scanWorkspaceProcessingState }),
     setProcessingStage: (stageKey, note = "") => {
-        scanWorkspaceProcessingState.currentStageKey = stageKey;
-        scanWorkspaceProcessingState.note = String(note || "").trim();
-        updateScanWorkspaceProcessingView();
+      scanWorkspaceProcessingState.currentStageKey = stageKey;
+      scanWorkspaceProcessingState.note = String(note || "").trim();
+      updateScanWorkspaceProcessingView();
     },
     refreshLiveDraftPreview: () => ensureScanWorkspaceDocumentPreviewLoaded({ force: true }),
+    refreshCompare: () => ensureScanWorkspaceCompareLoaded({ force: true }),
     setAnnotationMarkers: (markers) => {
-        setScanWorkspaceAnnotationMarkers(markers);
+      setScanWorkspaceAnnotationMarkers(markers);
     },
     clearAnnotationMarkers: () => {
-        setScanWorkspaceAnnotationMarkers([]);
+      setScanWorkspaceAnnotationMarkers([]);
     },
     getAnnotationState: () => ({
-        markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
-        activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,
-        counts: getScanWorkspaceAnnotationDecisionCounts(),
+      markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
+      activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,
+      counts: getScanWorkspaceAnnotationDecisionCounts(),
+      acceptedCandidateIds: getAcceptedCompareCandidateIds(),
     }),
-    };
+  };
 });

@@ -1548,221 +1548,221 @@ def scan_workspace(
             </div>
           </aside>
 
-  <section class="card scan-workspace-review-main">
-    <div class="scan-workspace-review-main-header">
-      <div
-        class="scan-workspace-review-surface-tabs"
-        role="tablist"
-        aria-label="Optimization surfaces"
-      >
-        <button
-          type="button"
-          class="scan-workspace-surface-tab is-active"
-          aria-pressed="true"
-        >
-          Resume
-        </button>
+          <section class="card scan-workspace-review-main">
+            <div class="scan-workspace-review-main-header">
+              <div
+                class="scan-workspace-review-surface-tabs"
+                role="tablist"
+                aria-label="Optimization surfaces"
+              >
+                <button
+                  type="button"
+                  class="scan-workspace-surface-tab is-active"
+                  aria-pressed="true"
+                >
+                  Resume
+                </button>
 
-        <button
-          type="button"
-          class="scan-workspace-surface-tab"
-          disabled
-        >
-          Cover Letter
-        </button>
+                <button
+                  type="button"
+                  class="scan-workspace-surface-tab"
+                  disabled
+                >
+                  Cover Letter
+                </button>
 
-        <button
-          type="button"
-          class="scan-workspace-surface-tab"
-          disabled
-        >
-          Job Description
-        </button>
-      </div>
+                <button
+                  type="button"
+                  class="scan-workspace-surface-tab"
+                  disabled
+                >
+                  Job Description
+                </button>
+              </div>
 
-      <div class="scan-workspace-review-main-actions">
-        <button
-          type="button"
-          class="ghost-btn btn-sm"
-          data-scan-switch-mode="compare"
-        >
-          Compare
-        </button>
-      </div>
-    </div>
+              <div class="scan-workspace-review-main-actions">
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm"
+                  data-scan-switch-mode="compare"
+                >
+                  Compare
+                </button>
+              </div>
+            </div>
 
-    <div class="scan-workspace-review-step-row">
-      <div class="scan-workspace-review-step-badge">1</div>
+            <div class="scan-workspace-review-step-row">
+              <div class="scan-workspace-review-step-badge">1</div>
 
-      <div class="scan-workspace-review-step-copy">
-        <div class="scan-workspace-review-step-title">AI Suggestions Review</div>
-        <div class="subtext">
-          Review current scan suggestions against the active resume surface before moving to compare.
-        </div>
-      </div>
-    </div>
+              <div class="scan-workspace-review-step-copy">
+                <div class="scan-workspace-review-step-title">AI Suggestions Review</div>
+                <div class="subtext">
+                  Review current scan suggestions against the active resume surface before moving to compare.
+                </div>
+              </div>
+            </div>
 
-    <section class="scan-workspace-annotation-shell">
-      <div class="scan-workspace-annotation-topbar">
-        <div class="scan-workspace-annotation-legend">
-          <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--add">
-            Suggested add
-          </span>
-          <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--replace">
-            Suggested replace
-          </span>
-          <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--focus">
-            Active anchor
-          </span>
-        </div>
+            <section class="scan-workspace-annotation-shell">
+              <div class="scan-workspace-annotation-topbar">
+                <div class="scan-workspace-annotation-legend">
+                  <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--add">
+                    Suggested add
+                  </span>
+                  <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--replace">
+                    Suggested replace
+                  </span>
+                  <span class="scan-workspace-annotation-chip scan-workspace-annotation-chip--focus">
+                    Active anchor
+                  </span>
+                </div>
 
-        <div
-          class="subtext scan-workspace-annotation-status"
-          id="scanWorkspaceAnnotationStatus"
-          aria-live="polite"
-        >
-          Annotation layer ready. Awaiting suggestion anchors.
-        </div>
-      </div>
+                <div
+                  class="subtext scan-workspace-annotation-status"
+                  id="scanWorkspaceAnnotationStatus"
+                  aria-live="polite"
+                >
+                  Annotation layer ready. Awaiting suggestion anchors.
+                </div>
+              </div>
 
-      <div class="scan-workspace-annotation-stage" id="scanWorkspaceAnnotationStage">
-        <div
-          class="scan-workspace-annotation-overlay"
-          id="scanWorkspaceAnnotationOverlay"
-          aria-hidden="true"
-        ></div>
+              <div class="scan-workspace-annotation-stage" id="scanWorkspaceAnnotationStage">
+                <div
+                  class="scan-workspace-annotation-overlay"
+                  id="scanWorkspaceAnnotationOverlay"
+                  aria-hidden="true"
+                ></div>
 
-        <div class="tailoring-preview-shell scan-workspace-review-preview-shell">
-          <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
-            <div class="tailoring-workspace-preview-header">
-              <div class="tailoring-workspace-preview-header-main">
-                <div class="subtext">Current resume surface</div>
+                <div class="tailoring-preview-shell scan-workspace-review-preview-shell">
+                  <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
+                    <div class="tailoring-workspace-preview-header">
+                      <div class="tailoring-workspace-preview-header-main">
+                        <div class="subtext">Current resume surface</div>
 
-                <div class="tailoring-workspace-preview-title-row">
-                  <div
-                    class="tailoring-workspace-preview-name"
-                    id="scanWorkspacePreviewName"
-                  >
-                    {resume_display_safe}
+                        <div class="tailoring-workspace-preview-title-row">
+                          <div
+                            class="tailoring-workspace-preview-name"
+                            id="scanWorkspacePreviewName"
+                          >
+                            {resume_display_safe}
+                          </div>
+                        </div>
+
+                        <div
+                          class="subtext tailoring-workspace-selection-status"
+                          id="scanWorkspacePreviewStatus"
+                          aria-live="polite"
+                        >
+                          Live draft preview is loading for this resume.
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="scan-workspace-live-draft-toolbar">
+                      <div class="subtext" id="scanWorkspacePreviewMeta">
+                        Loading live draft preview...
+                      </div>
+                    </div>
+
+                    <div class="tailoring-workspace-mode-body">
+                      <div
+                        id="scanWorkspaceLiveDraftPreview"
+                        class="scan-workspace-live-draft-preview"
+                      >
+                        <div class="tailoring-empty-state">
+                          Loading reconstructed draft preview...
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div
-                  class="subtext tailoring-workspace-selection-status"
-                  id="scanWorkspacePreviewStatus"
+                  class="scan-workspace-suggestion-popover hidden"
+                  id="scanWorkspaceSuggestionPopover"
+                  role="dialog"
                   aria-live="polite"
+                  aria-label="AI suggestion details"
                 >
-                  Live draft preview is loading for this resume.
+                  <div class="scan-workspace-suggestion-popover-topline">
+                    <div class="scan-workspace-suggestion-popover-kicker">
+                      AI suggested change
+                    </div>
+
+                    <button
+                      type="button"
+                      class="ghost-btn btn-sm scan-workspace-suggestion-popover-close"
+                      id="scanWorkspaceSuggestionPopoverCloseBtn"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  <div
+                    class="scan-workspace-suggestion-popover-title"
+                    id="scanWorkspaceSuggestionPopoverTitle"
+                  >
+                    Select a suggestion anchor to inspect it here.
+                  </div>
+
+                  <div
+                    class="scan-workspace-suggestion-popover-copy"
+                    id="scanWorkspaceSuggestionPopoverCopy"
+                  >
+                    This shell is now ready for anchored AI suggestion details. Real suggestion positioning and accept/reject state wiring come in the next phase.
+                  </div>
+
+                  <div class="scan-workspace-suggestion-popover-meta">
+                    <span
+                      class="scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending"
+                      id="scanWorkspaceSuggestionDecisionPill"
+                    >
+                      Pending
+                    </span>
+
+                    <span
+                      class="subtext scan-workspace-suggestion-decision-meta"
+                      id="scanWorkspaceSuggestionDecisionMeta"
+                    >
+                      No decision recorded yet.
+                    </span>
+                  </div>
+
+                  <div class="scan-workspace-suggestion-popover-actions">
+                    <button
+                      type="button"
+                      class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
+                      id="scanWorkspaceSuggestionRejectBtn"
+                      data-scan-decision-action="reject"
+                      disabled
+                    >
+                      Reject
+                    </button>
+
+                    <button
+                      type="button"
+                      class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
+                      id="scanWorkspaceSuggestionResetBtn"
+                      data-scan-decision-action="reset"
+                      disabled
+                    >
+                      Reset
+                    </button>
+
+                    <button
+                      type="button"
+                      class="btn-sm scan-workspace-suggestion-action-btn"
+                      id="scanWorkspaceSuggestionAcceptBtn"
+                      data-scan-decision-action="accept"
+                      disabled
+                    >
+                      Accept
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
-
-            <div class="scan-workspace-live-draft-toolbar">
-              <div class="subtext" id="scanWorkspacePreviewMeta">
-                Loading live draft preview...
-              </div>
-            </div>
-
-            <div class="tailoring-workspace-mode-body">
-              <div
-                id="scanWorkspaceLiveDraftPreview"
-                class="scan-workspace-live-draft-preview"
-              >
-                <div class="tailoring-empty-state">
-                  Loading reconstructed draft preview...
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div
-          class="scan-workspace-suggestion-popover hidden"
-          id="scanWorkspaceSuggestionPopover"
-          role="dialog"
-          aria-live="polite"
-          aria-label="AI suggestion details"
-        >
-          <div class="scan-workspace-suggestion-popover-topline">
-            <div class="scan-workspace-suggestion-popover-kicker">
-              AI suggested change
-            </div>
-
-            <button
-              type="button"
-              class="ghost-btn btn-sm scan-workspace-suggestion-popover-close"
-              id="scanWorkspaceSuggestionPopoverCloseBtn"
-            >
-              Close
-            </button>
-          </div>
-
-          <div
-            class="scan-workspace-suggestion-popover-title"
-            id="scanWorkspaceSuggestionPopoverTitle"
-          >
-            Select a suggestion anchor to inspect it here.
-          </div>
-
-          <div
-            class="scan-workspace-suggestion-popover-copy"
-            id="scanWorkspaceSuggestionPopoverCopy"
-          >
-            This shell is now ready for anchored AI suggestion details. Real suggestion positioning and accept/reject state wiring come in the next phase.
-          </div>
-
-          <div class="scan-workspace-suggestion-popover-meta">
-            <span
-              class="scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending"
-              id="scanWorkspaceSuggestionDecisionPill"
-            >
-              Pending
-            </span>
-
-            <span
-              class="subtext scan-workspace-suggestion-decision-meta"
-              id="scanWorkspaceSuggestionDecisionMeta"
-            >
-              No decision recorded yet.
-            </span>
-          </div>
-
-          <div class="scan-workspace-suggestion-popover-actions">
-            <button
-              type="button"
-              class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
-              id="scanWorkspaceSuggestionRejectBtn"
-              data-scan-decision-action="reject"
-              disabled
-            >
-              Reject
-            </button>
-
-            <button
-              type="button"
-              class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
-              id="scanWorkspaceSuggestionResetBtn"
-              data-scan-decision-action="reset"
-              disabled
-            >
-              Reset
-            </button>
-
-            <button
-              type="button"
-              class="btn-sm scan-workspace-suggestion-action-btn"
-              id="scanWorkspaceSuggestionAcceptBtn"
-              data-scan-decision-action="accept"
-              disabled
-            >
-              Accept
-            </button>
-          </div>
-        </div>
-      </div>
-    </section>
-  </section>
-  </section>
+            </section>
+          </section>
+          </section>
         </section>
       </section>
 
@@ -1771,38 +1771,85 @@ def scan_workspace(
         data-scan-mode-panel="compare"
         hidden
       >
-        <section class="card scan-workspace-placeholder-card">
-          <div class="scan-workspace-placeholder-header">
+        <section class="card scan-workspace-compare-shell">
+          <div class="scan-workspace-compare-header">
             <div>
               <h2>Compare</h2>
-              <div class="subtext">
-                Phase 8 will replace this placeholder with the before/after compare view.
+              <div class="subtext" id="scanWorkspaceCompareStatus">
+                Compare the baseline draft against the current accepted AI decision set.
               </div>
             </div>
 
-            <button
-              type="button"
-              class="ghost-btn"
-              data-scan-switch-mode="review"
-            >
-              Back to review
-            </button>
+            <div class="scan-workspace-compare-header-actions">
+              <button
+                type="button"
+                class="ghost-btn btn-sm"
+                id="scanWorkspaceCompareRefreshBtn"
+              >
+                Refresh compare
+              </button>
+
+              <button
+                type="button"
+                class="ghost-btn btn-sm"
+                data-scan-switch-mode="review"
+              >
+                Back to review
+              </button>
+            </div>
           </div>
 
-          <div class="scan-workspace-compare-placeholder-grid">
-            <div class="scan-workspace-placeholder-box">
-              <div class="scan-workspace-placeholder-title">Before</div>
-              <div class="scan-workspace-placeholder-copy">
-                Original resume render will appear here.
-              </div>
+          <div class="scan-workspace-compare-summary" id="scanWorkspaceCompareSummary">
+            <div class="scan-workspace-compare-summary-card">
+              <div class="scan-workspace-compare-summary-label">Compare</div>
+              <div class="scan-workspace-compare-summary-value">Loading…</div>
             </div>
+          </div>
 
-            <div class="scan-workspace-placeholder-box">
-              <div class="scan-workspace-placeholder-title">After</div>
-              <div class="scan-workspace-placeholder-copy">
-                Optimized resume render will appear here.
+          <div class="scan-workspace-compare-grid">
+            <section class="scan-workspace-compare-pane">
+              <div class="scan-workspace-compare-pane-header">
+                <div>
+                  <div class="scan-workspace-compare-pane-kicker">Before</div>
+                  <div class="scan-workspace-compare-pane-title">Baseline draft</div>
+                </div>
+
+                <div class="subtext" id="scanWorkspaceCompareBeforeMeta">
+                  Loading baseline preview...
+                </div>
               </div>
-            </div>
+
+              <div
+                class="scan-workspace-compare-pane-body"
+                id="scanWorkspaceCompareBeforePane"
+              >
+                <div class="tailoring-empty-state">
+                  Loading baseline preview...
+                </div>
+              </div>
+            </section>
+
+            <section class="scan-workspace-compare-pane scan-workspace-compare-pane--after">
+              <div class="scan-workspace-compare-pane-header">
+                <div>
+                  <div class="scan-workspace-compare-pane-kicker">After</div>
+                  <div class="scan-workspace-compare-pane-title">Accepted AI decision set</div>
+                </div>
+
+                <div class="subtext" id="scanWorkspaceCompareAfterMeta">
+                  Waiting for accepted linked suggestions...
+                </div>
+              </div>
+
+              <div
+                class="scan-workspace-compare-pane-body"
+                id="scanWorkspaceCompareAfterPane"
+              >
+                <div class="tailoring-empty-state">
+                  Accept at least one linked suggestion to generate the after preview.
+                </div>
+              </div>
+            </section>
           </div>
         </section>
       </section>

@@ -372,7 +372,6 @@ def _patch_refinement_protected_phrases(candidate: Dict[str, Any]) -> List[str]:
         r"\busing ([^.,;]+)",
         r"\bwith ([^.,;]+)",
         r"\bvia ([^.,;]+)",
-        r"\bfor ([^.,;]+)",
     ]:
         for match in re.findall(pattern, original_text, flags=re.IGNORECASE):
             value = re.sub(r"\s+", " ", str(match or "").strip())
@@ -2654,16 +2653,12 @@ def _substantive_multisignal_reorder_likely_awkward(
     if len(supported_terms) < 2 or not original_text:
         return False
 
-    # Pattern: "using X and Y, leveraging Z ..."
+    # Still quarantine the genuinely messy chained pattern.
     if "using " in original_text and " leveraging " in original_text:
         return True
 
-    # Pattern: "using Python for ..., SQL for ..., and Power BI for ..."
-    if original_text.count(" for ") >= 2:
-        return True
-
-    # Pattern: tightly paired multi-tool phrase already doing real work
-    if re.search(r"\busing [^.,;]+?\bfor\b", original_text):
+    # Three-or-more task assignments is usually too tangled for bounded local surgery.
+    if original_text.count(" for ") >= 3:
         return True
 
     return False
@@ -2745,10 +2740,10 @@ def _maybe_promote_multisignal_directional_candidate(
         return candidate
 
     direction_only_reason = str(candidate.get("direction_only_reason", "") or "").strip()
-    if direction_only_reason not in {
-        "multi_signal_already_explicit_reorder_preferred",
-        "deterministic_patch_not_available",
-    }:
+    if direction_only_reason != "deterministic_patch_not_available":
+        return candidate
+
+    if str(candidate.get("confidence", "") or "").strip() != "high":
         return candidate
 
     if str(candidate.get("evidence_type", "") or "").strip() != "direct_overlap":
@@ -2843,6 +2838,10 @@ OPTION_2: <single rewritten bullet>
         unchanged["llm_substantive_rewrite_requested_model"] = str(writer_metadata.get("requested_model", "") or "").strip()
         unchanged["llm_writer_invalid_options"] = invalid_options
         return unchanged
+
+    for idx, option in enumerate(valid_options, start=1):
+        option["original_option_id"] = str(option.get("option_id", "") or "").strip()
+        option["option_id"] = f"writer_option_{idx}"
 
     judge_system_prompt = """
 You are the final quality gate for one bounded resume-bullet rewrite.

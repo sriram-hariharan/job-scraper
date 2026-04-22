@@ -1711,11 +1711,28 @@ def scan_workspace(
             This shell is now ready for anchored AI suggestion details. Real suggestion positioning and accept/reject state wiring come in the next phase.
           </div>
 
+          <div class="scan-workspace-suggestion-popover-meta">
+            <span
+              class="scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending"
+              id="scanWorkspaceSuggestionDecisionPill"
+            >
+              Pending
+            </span>
+
+            <span
+              class="subtext scan-workspace-suggestion-decision-meta"
+              id="scanWorkspaceSuggestionDecisionMeta"
+            >
+              No decision recorded yet.
+            </span>
+          </div>
+
           <div class="scan-workspace-suggestion-popover-actions">
             <button
               type="button"
-              class="ghost-btn btn-sm"
+              class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
               id="scanWorkspaceSuggestionRejectBtn"
+              data-scan-decision-action="reject"
               disabled
             >
               Reject
@@ -1723,8 +1740,19 @@ def scan_workspace(
 
             <button
               type="button"
-              class="btn-sm"
+              class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
+              id="scanWorkspaceSuggestionResetBtn"
+              data-scan-decision-action="reset"
+              disabled
+            >
+              Reset
+            </button>
+
+            <button
+              type="button"
+              class="btn-sm scan-workspace-suggestion-action-btn"
               id="scanWorkspaceSuggestionAcceptBtn"
+              data-scan-decision-action="accept"
               disabled
             >
               Accept

@@ -621,6 +621,11 @@ function ensureScanWorkspaceDocumentPreviewLoaded({ force = false } = {}) {
   fetchScanWorkspaceDocumentPreview();
 }
 
+function normalizeScanWorkspaceAnnotationDecision(decision) {
+  const safeDecision = String(decision || "").trim().toLowerCase();
+  return safeDecision === "accepted" || safeDecision === "rejected" ? safeDecision : "pending";
+}
+
 function normalizeScanWorkspaceAnnotationMarker(marker, index) {
   const tone = String(marker?.tone || "replace").trim().toLowerCase();
   const safeTone =
@@ -633,6 +638,7 @@ function normalizeScanWorkspaceAnnotationMarker(marker, index) {
   return {
     id,
     tone: safeTone,
+    decision: normalizeScanWorkspaceAnnotationDecision(marker?.decision),
     title: String(marker?.title || "AI suggested change").trim(),
     copy: String(marker?.copy || "Review this anchored suggestion.").trim(),
     topPercent: Number.isFinite(topPercent) ? Math.max(2, Math.min(98, topPercent)) : 50,
@@ -642,6 +648,73 @@ function normalizeScanWorkspaceAnnotationMarker(marker, index) {
 
 function getScanWorkspaceAnnotationMarkerById(markerId) {
   return scanWorkspaceAnnotationState.markers.find((marker) => marker.id === markerId) || null;
+}
+
+function getScanWorkspaceAnnotationDecisionCounts() {
+  return scanWorkspaceAnnotationState.markers.reduce(
+    (acc, marker) => {
+      const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
+      acc.total += 1;
+      if (decision === "accepted") acc.accepted += 1;
+      else if (decision === "rejected") acc.rejected += 1;
+      else acc.pending += 1;
+      return acc;
+    },
+    { total: 0, accepted: 0, rejected: 0, pending: 0 }
+  );
+}
+
+function setScanWorkspaceMarkerDecision(markerId, decision) {
+  const safeDecision = normalizeScanWorkspaceAnnotationDecision(decision);
+  let updatedMarker = null;
+
+  scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => {
+    if (marker.id !== markerId) return marker;
+    updatedMarker = { ...marker, decision: safeDecision };
+    return updatedMarker;
+  });
+
+  return updatedMarker;
+}
+
+function updateScanWorkspaceDecisionSummaryUi() {
+  const counts = getScanWorkspaceAnnotationDecisionCounts();
+  const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
+  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
+  const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
+  const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
+
+  if (selectionStatus) {
+    selectionStatus.textContent =
+      counts.total > 0
+        ? `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`
+        : "No scan actions selected yet.";
+  }
+
+  if (previewStatus && counts.total > 0) {
+    previewStatus.textContent =
+      counts.accepted > 0
+        ? `${counts.accepted} suggestion(s) accepted into the current scan decision set.`
+        : "Live draft preview is ready for scan decisions.";
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = counts.accepted === 0 && counts.rejected === 0;
+  }
+
+  if (acceptAllBtn) {
+    acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
+  }
+}
+
+function applyScanWorkspaceDecisionToActiveMarker(decision) {
+  const activeMarker = getScanWorkspaceAnnotationMarkerById(
+    scanWorkspaceAnnotationState.activeMarkerId
+  );
+  if (!activeMarker) return;
+
+  setScanWorkspaceMarkerDecision(activeMarker.id, decision);
+  renderScanWorkspaceAnnotationShell();
 }
 
 function closeScanWorkspaceSuggestionPopover() {
@@ -662,6 +735,8 @@ function renderScanWorkspaceAnnotationOverlay() {
   const status = getScanWorkspaceInput("scanWorkspaceAnnotationStatus");
   if (!overlay || !status) return;
 
+  const counts = getScanWorkspaceAnnotationDecisionCounts();
+
   if (!scanWorkspaceAnnotationState.markers.length) {
     overlay.innerHTML = "";
     status.textContent = "Annotation layer ready. Awaiting suggestion anchors.";
@@ -678,10 +753,17 @@ function renderScanWorkspaceAnnotationOverlay() {
             ? "scan-workspace-annotation-marker--focus"
             : "scan-workspace-annotation-marker--replace";
 
+      const decisionClass =
+        marker.decision === "accepted"
+          ? "is-accepted"
+          : marker.decision === "rejected"
+            ? "is-rejected"
+            : "";
+
       return `
         <button
           type="button"
-          class="scan-workspace-annotation-marker ${toneClass}"
+          class="scan-workspace-annotation-marker ${toneClass} ${decisionClass} ${isActive ? "is-active" : ""}"
           data-scan-annotation-marker="${scanWorkspaceEscapeHtml(marker.id)}"
           aria-label="${scanWorkspaceEscapeHtml(marker.title)}"
           aria-pressed="${isActive ? "true" : "false"}"
@@ -691,17 +773,33 @@ function renderScanWorkspaceAnnotationOverlay() {
     })
     .join("");
 
-  status.textContent = `${scanWorkspaceAnnotationState.markers.length} suggestion anchor(s) loaded.`;
+  status.textContent =
+    `${counts.total} suggestion anchor(s) loaded. ` +
+    `${counts.accepted} accepted, ${counts.rejected} rejected, ${counts.pending} pending.`;
 }
 
 function renderScanWorkspaceSuggestionPopover() {
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
   const title = getScanWorkspaceInput("scanWorkspaceSuggestionPopoverTitle");
   const copy = getScanWorkspaceInput("scanWorkspaceSuggestionPopoverCopy");
+  const decisionPill = getScanWorkspaceInput("scanWorkspaceSuggestionDecisionPill");
+  const decisionMeta = getScanWorkspaceInput("scanWorkspaceSuggestionDecisionMeta");
   const acceptBtn = getScanWorkspaceInput("scanWorkspaceSuggestionAcceptBtn");
   const rejectBtn = getScanWorkspaceInput("scanWorkspaceSuggestionRejectBtn");
+  const resetBtn = getScanWorkspaceInput("scanWorkspaceSuggestionResetBtn");
 
-  if (!popover || !title || !copy || !acceptBtn || !rejectBtn) return;
+  if (
+    !popover ||
+    !title ||
+    !copy ||
+    !decisionPill ||
+    !decisionMeta ||
+    !acceptBtn ||
+    !rejectBtn ||
+    !resetBtn
+  ) {
+    return;
+  }
 
   const marker = getScanWorkspaceAnnotationMarkerById(
     scanWorkspaceAnnotationState.activeMarkerId
@@ -712,27 +810,76 @@ function renderScanWorkspaceSuggestionPopover() {
     title.textContent = "Select a suggestion anchor to inspect it here.";
     copy.textContent =
       "This shell is now ready for anchored AI suggestion details. Real suggestion positioning and accept/reject state wiring come in the next phase.";
+    decisionPill.textContent = "Pending";
+    decisionPill.className =
+      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending";
+    decisionMeta.textContent = "No decision recorded yet.";
     acceptBtn.disabled = true;
     rejectBtn.disabled = true;
+    resetBtn.disabled = true;
+    acceptBtn.classList.remove("is-active");
+    rejectBtn.classList.remove("is-active");
     return;
   }
 
   popover.classList.remove("hidden");
   title.textContent = marker.title;
   copy.textContent = marker.copy;
+
+  const decision = normalizeScanWorkspaceAnnotationDecision(marker.decision);
+
+  if (decision === "accepted") {
+    decisionPill.textContent = "Accepted";
+    decisionPill.className =
+      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--accepted";
+    decisionMeta.textContent = "This suggestion is currently accepted into the scan decision set.";
+  } else if (decision === "rejected") {
+    decisionPill.textContent = "Rejected";
+    decisionPill.className =
+      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--rejected";
+    decisionMeta.textContent = "This suggestion is currently rejected from the scan decision set.";
+  } else {
+    decisionPill.textContent = "Pending";
+    decisionPill.className =
+      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending";
+    decisionMeta.textContent = "No decision recorded yet.";
+  }
+
   acceptBtn.disabled = false;
   rejectBtn.disabled = false;
+  resetBtn.disabled = decision === "pending";
+
+  acceptBtn.classList.toggle("is-active", decision === "accepted");
+  rejectBtn.classList.toggle("is-active", decision === "rejected");
 }
 
 function renderScanWorkspaceAnnotationShell() {
   renderScanWorkspaceAnnotationOverlay();
   renderScanWorkspaceSuggestionPopover();
+  updateScanWorkspaceDecisionSummaryUi();
 }
 
 function setScanWorkspaceAnnotationMarkers(markers) {
+  const existingDecisionById = new Map(
+    scanWorkspaceAnnotationState.markers.map((marker) => [
+      marker.id,
+      normalizeScanWorkspaceAnnotationDecision(marker.decision),
+    ])
+  );
+
   scanWorkspaceAnnotationState.markers = (Array.isArray(markers) ? markers : [])
-    .map((marker, index) => normalizeScanWorkspaceAnnotationMarker(marker, index))
-    .filter((marker) => marker.id);
+    .map((marker, index) => {
+      const normalized = normalizeScanWorkspaceAnnotationMarker(marker, index);
+      if (!normalized.id) return null;
+
+      return {
+        ...normalized,
+        decision: normalizeScanWorkspaceAnnotationDecision(
+          marker?.decision || existingDecisionById.get(normalized.id)
+        ),
+      };
+    })
+    .filter((marker) => marker && marker.id);
 
   if (
     scanWorkspaceAnnotationState.activeMarkerId &&
@@ -771,15 +918,7 @@ function bindScanWorkspaceAnnotationShell() {
   if (acceptBtn && acceptBtn.dataset.bound !== "true") {
     acceptBtn.dataset.bound = "true";
     acceptBtn.addEventListener("click", () => {
-      const marker = getScanWorkspaceAnnotationMarkerById(
-        scanWorkspaceAnnotationState.activeMarkerId
-      );
-      if (!marker) return;
-
-      const status = getScanWorkspaceInput("scanWorkspaceAnnotationStatus");
-      if (status) {
-        status.textContent = `Accepted anchor: ${marker.title}`;
-      }
+      applyScanWorkspaceDecisionToActiveMarker("accepted");
     });
   }
 
@@ -787,15 +926,30 @@ function bindScanWorkspaceAnnotationShell() {
   if (rejectBtn && rejectBtn.dataset.bound !== "true") {
     rejectBtn.dataset.bound = "true";
     rejectBtn.addEventListener("click", () => {
-      const marker = getScanWorkspaceAnnotationMarkerById(
-        scanWorkspaceAnnotationState.activeMarkerId
-      );
-      if (!marker) return;
+      applyScanWorkspaceDecisionToActiveMarker("rejected");
+    });
+  }
 
-      const status = getScanWorkspaceInput("scanWorkspaceAnnotationStatus");
-      if (status) {
-        status.textContent = `Rejected anchor: ${marker.title}`;
-      }
+  const resetBtn = getScanWorkspaceInput("scanWorkspaceSuggestionResetBtn");
+  if (resetBtn && resetBtn.dataset.bound !== "true") {
+    resetBtn.dataset.bound = "true";
+    resetBtn.addEventListener("click", () => {
+      applyScanWorkspaceDecisionToActiveMarker("pending");
+    });
+  }
+
+  const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
+  if (acceptAllBtn && acceptAllBtn.dataset.bound !== "true") {
+    acceptAllBtn.dataset.bound = "true";
+    acceptAllBtn.addEventListener("click", () => {
+      if (!scanWorkspaceAnnotationState.markers.length) return;
+
+      scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => ({
+        ...marker,
+        decision: "accepted",
+      }));
+
+      renderScanWorkspaceAnnotationShell();
     });
   }
 
@@ -820,16 +974,21 @@ window.addEventListener("DOMContentLoaded", () => {
     getIntakeDraft: () => ({ ...scanWorkspaceIntakeState }),
     getProcessingState: () => ({ ...scanWorkspaceProcessingState }),
     setProcessingStage: (stageKey, note = "") => {
-      scanWorkspaceProcessingState.currentStageKey = stageKey;
-      scanWorkspaceProcessingState.note = String(note || "").trim();
-      updateScanWorkspaceProcessingView();
+        scanWorkspaceProcessingState.currentStageKey = stageKey;
+        scanWorkspaceProcessingState.note = String(note || "").trim();
+        updateScanWorkspaceProcessingView();
     },
     refreshLiveDraftPreview: () => ensureScanWorkspaceDocumentPreviewLoaded({ force: true }),
     setAnnotationMarkers: (markers) => {
-      setScanWorkspaceAnnotationMarkers(markers);
+        setScanWorkspaceAnnotationMarkers(markers);
     },
     clearAnnotationMarkers: () => {
-      setScanWorkspaceAnnotationMarkers([]);
+        setScanWorkspaceAnnotationMarkers([]);
     },
-  };
+    getAnnotationState: () => ({
+        markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
+        activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,
+        counts: getScanWorkspaceAnnotationDecisionCounts(),
+    }),
+    };
 });

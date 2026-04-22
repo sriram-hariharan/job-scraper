@@ -75,6 +75,27 @@ const tailoringWorkspacePdfState = {
   highlightedCandidateId: "",
 };
 
+const scanWorkspaceState = {
+  preloadPayload: null,
+  selectedCandidateIds: [],
+  rewriteReviewDecisions: {},
+  selectedTab: "trusted",
+  previewPayload: null,
+  isPreviewing: false,
+  isSaving: false,
+};
+
+const scanWorkspacePdfState = {
+  pdfDoc: null,
+  pdfjsPromise: null,
+  renderToken: 0,
+  scale: 1,
+  fitScale: 1,
+  isFitPage: true,
+  resizeTimer: null,
+  resumeName: "",
+};
+
 function escapeHtml(value) {
   if (value === null || value === undefined) return "";
   return String(value)
@@ -3894,8 +3915,28 @@ function renderKeepAsIs(items) {
   `;
 }
 
-function renderReplacementPlanSummary() {
-  return "";
+function renderReplacementPlanSummary(summary = {}) {
+  const readyCount = Number(summary.direct_apply_ready_count || 0);
+  const trustedOptionalCount = Number(summary.direct_apply_optional_count || 0);
+  const aiOptionalCount = Number(summary.ai_optimize_optional_count || 0);
+  const guidanceCount = Number(summary.direction_only_count || 0);
+
+  if (!readyCount && !trustedOptionalCount && !aiOptionalCount && !guidanceCount) {
+    return "";
+  }
+
+  return `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">Suggestion summary</div>
+
+      <div class="tailoring-chip-group">
+        ${buildTailoringTonePill(`Ready ${readyCount}`, "safe")}
+        ${buildTailoringTonePill(`Trusted optional ${trustedOptionalCount}`, "neutral")}
+        ${buildTailoringTonePill(`AI optional ${aiOptionalCount}`, "caution")}
+        ${buildTailoringTonePill(`Guidance ${guidanceCount}`, "muted")}
+      </div>
+    </section>
+  `;
 }
 
 function getTailoringReplacementCandidateId(item) {
@@ -3991,6 +4032,12 @@ function getScanWorkspaceContext() {
     jobDocId: String(page.dataset.jobDocId || "").trim(),
     tailoringJsonPath: String(page.dataset.tailoringJsonPath || "").trim(),
     resumeName: String(page.dataset.resumeName || "").trim(),
+    company: String(page.dataset.jobCompany || "").trim(),
+    title: String(page.dataset.jobTitle || "").trim(),
+    status: String(page.dataset.tailoringStatus || "").trim(),
+    tailoringMdPath: String(page.dataset.tailoringMdPath || "").trim(),
+    tailoringLlmJsonPath: String(page.dataset.tailoringLlmJsonPath || "").trim(),
+    packetJsonPath: String(page.dataset.packetJsonPath || "").trim(),
   };
 }
 
@@ -5456,6 +5503,21 @@ function getTailoringWorkspaceReviewDecisionLabel(state) {
   if (state === "edited_after_accept") return "Edited after accept";
   if (state === "rejected") return "Rejected";
   return "Pending";
+}
+
+function getReplacementReviewState(item, reviewDecisionMap = {}) {
+  const candidateId = getTailoringReplacementCandidateId(item);
+  if (!candidateId) return "pending";
+
+  const decision = reviewDecisionMap && typeof reviewDecisionMap === "object"
+    ? reviewDecisionMap[candidateId]
+    : null;
+
+  const state = decision && typeof decision === "object"
+    ? String(decision.state || "").trim().toLowerCase()
+    : String(decision || "").trim().toLowerCase();
+
+  return state || "pending";
 }
 
 function setTailoringWorkspaceReviewDecision(candidateId, state, note = "") {
@@ -7127,6 +7189,8 @@ function renderReplacementDecisionSection({
   selectionEnabled = false,
   selectedCandidateIds = [],
   reviewActionsEnabled = false,
+  reviewDecisionMap = null,
+  actionPrefix = "tailoring",
 }) {
   const safeItems = Array.isArray(items) ? items : [];
   const selectedSet = new Set(
@@ -7134,6 +7198,13 @@ function renderReplacementDecisionSection({
       .map((value) => String(value || "").trim())
       .filter(Boolean)
   );
+
+  const effectiveReviewDecisionMap =
+    reviewDecisionMap && typeof reviewDecisionMap === "object"
+      ? reviewDecisionMap
+      : actionPrefix === "tailoring"
+        ? getTailoringWorkspaceCurrentReviewDecisionMap()
+        : {};
 
   const orderedItems = selectionEnabled
     ? safeItems.slice().sort((left, right) => {
@@ -7189,7 +7260,7 @@ function renderReplacementDecisionSection({
 
           const reviewState =
             reviewActionsEnabled && mode === "direction_only"
-              ? getTailoringWorkspaceEffectiveReviewState(item)
+              ? getReplacementReviewState(item, effectiveReviewDecisionMap)
               : "";
           const reviewStatusChip =
             reviewActionsEnabled && candidateId
@@ -7203,11 +7274,13 @@ function renderReplacementDecisionSection({
             item.replacement_status === "direct_apply_ready"
               ? "Ready to use"
               : item.replacement_status === "direct_apply_optional"
-                ? "Nice to improve"
-                : "Review only";
+                ? "Trusted optional"
+                : item.replacement_status === "ai_optimize_optional"
+                  ? "AI optimize optional"
+                  : "Review only";
 
-          const focusAttrs = isFocusable
-            ? `data-tailoring-focus-candidate="${escapeHtml(candidateId)}"`
+          const focusAttr = isFocusable
+            ? `data-${actionPrefix}-focus-candidate="${escapeHtml(candidateId)}"`
             : "";
 
           const reasonText = String(item.why_selected || "").trim();
@@ -7295,7 +7368,7 @@ function renderReplacementDecisionSection({
           return `
             <article
               class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
-              ${focusAttrs}
+              ${focusAttr}
             >
               <div class="tailoring-card-topline tailoring-card-topline--compact">
                 <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
@@ -7353,9 +7426,9 @@ function renderReplacementDecisionSection({
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "accepted" ? "is-active" : ""}"
-                    data-review-state="accepted"
-                    data-tailoring-review-action="accepted"
-                    data-tailoring-review-candidate="${escapeHtml(candidateId)}"
+                    data-${actionPrefix}-review-state="accepted"
+                    data-${actionPrefix}-review-action="accepted"
+                    data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
                   >
                     Accept as-is
                   </button>
@@ -7363,9 +7436,9 @@ function renderReplacementDecisionSection({
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "rejected" ? "is-active" : ""}"
-                    data-review-state="rejected"
-                    data-tailoring-review-action="rejected"
-                    data-tailoring-review-candidate="${escapeHtml(candidateId)}"
+                    data-${actionPrefix}-review-state="rejected"
+                    data-${actionPrefix}-review-action="rejected"
+                    data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
                   >
                     Reject
                   </button>
@@ -7373,25 +7446,21 @@ function renderReplacementDecisionSection({
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "edited_after_accept" ? "is-active" : ""}"
-                    data-review-state="edited_after_accept"
-                    data-tailoring-review-edit="${escapeHtml(candidateId)}"
+                    data-${actionPrefix}-review-edit="${escapeHtml(candidateId)}"
                   >
                     Edit manually
                   </button>
                 </div>
               ` : isSelectable ? `
                 <div class="tailoring-card-actions tailoring-card-actions--compact">
-                  <div
-                    class="tailoring-chip-group"
-                    data-tailoring-free-edit-score="${escapeHtml(candidateId)}"
-                  >
+                  <div class="tailoring-chip-group">
                     ${compactScoreHtml}
                   </div>
 
                   <button
                     type="button"
                     class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
-                    data-tailoring-select-candidate="${escapeHtml(candidateId)}"
+                    data-${actionPrefix}-select-candidate="${escapeHtml(candidateId)}"
                   >
                     ${isSelected ? "Remove" : "Add"}
                   </button>
@@ -7954,6 +8023,24 @@ async function initTailoringWorkspacePage() {
   return true;
 }
 
+function buildScanWorkspaceBackToTailoringUrl() {
+  const context = getScanWorkspaceContext();
+  if (!context) return "/tailoring-workspace";
+
+  const params = new URLSearchParams();
+  params.set("company", context.company || "");
+  params.set("title", context.title || "");
+  params.set("resume", context.resumeName || "");
+  params.set("status", context.status || "");
+  if (context.jobDocId) params.set("job_doc_id", context.jobDocId);
+  if (context.tailoringJsonPath) params.set("tailoring_json", context.tailoringJsonPath);
+  if (context.tailoringMdPath) params.set("tailoring_md", context.tailoringMdPath);
+  if (context.tailoringLlmJsonPath) params.set("tailoring_llm_json", context.tailoringLlmJsonPath);
+  if (context.packetJsonPath) params.set("packet_json", context.packetJsonPath);
+
+  return `/tailoring-workspace?${params.toString()}`;
+}
+
 async function loadScanWorkspacePreload() {
   const context = getScanWorkspaceContext();
   if (!context || !context.tailoringJsonPath) return null;
@@ -7964,193 +8051,797 @@ async function loadScanWorkspacePreload() {
   });
 }
 
-function setScanWorkspaceResumePreview(resumeName) {
-  const safeName = normalizeResumeName(resumeName || "");
-  const frame = qs("scanWorkspaceResumePreviewFrame");
+function updateScanWorkspaceZoomLabel() {
+  const label = qs("scanWorkspaceZoomResetBtn");
+  if (!label) return;
+  const percent = Math.round((scanWorkspacePdfState.scale || 1) * 100);
+  label.textContent = `${percent}%`;
+}
+
+function getScanWorkspacePdfScrollerMetrics() {
+  const scroller = qs("scanWorkspacePdfScroller");
+  if (!scroller) return null;
+
+  const styles = window.getComputedStyle(scroller);
+  const horizontalPadding =
+    parseFloat(styles.paddingLeft || "0") + parseFloat(styles.paddingRight || "0");
+
+  return {
+    scroller,
+    availableWidth: Math.max(240, scroller.clientWidth - horizontalPadding - 4),
+  };
+}
+
+async function getScanWorkspacePdfJs() {
+  if (!scanWorkspacePdfState.pdfjsPromise) {
+    scanWorkspacePdfState.pdfjsPromise = import("/static/vendor/pdfjs/pdf.mjs").then((pdfjsLib) => {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "/static/vendor/pdfjs/pdf.worker.mjs";
+      return pdfjsLib;
+    });
+  }
+
+  return scanWorkspacePdfState.pdfjsPromise;
+}
+
+async function clearScanWorkspacePdfView(emptyText = "Resume preview is not available for this scan.") {
   const empty = qs("scanWorkspacePreviewEmpty");
+  const pages = qs("scanWorkspacePdfPages");
   const meta = qs("scanWorkspacePreviewMeta");
 
-  if (!frame || !empty || !meta) return;
+  if (scanWorkspacePdfState.resizeTimer) {
+    window.clearTimeout(scanWorkspacePdfState.resizeTimer);
+    scanWorkspacePdfState.resizeTimer = null;
+  }
+
+  if (pages) {
+    pages.innerHTML = "";
+    pages.classList.add("hidden");
+  }
+
+  if (empty) {
+    empty.textContent = emptyText;
+    empty.classList.remove("hidden");
+  }
+
+  if (meta) {
+    meta.textContent = emptyText;
+  }
+
+  if (scanWorkspacePdfState.pdfDoc) {
+    try {
+      await scanWorkspacePdfState.pdfDoc.destroy();
+    } catch (err) {
+      console.warn("Failed to destroy previous scan PDF document", err);
+    }
+  }
+
+  scanWorkspacePdfState.pdfDoc = null;
+  scanWorkspacePdfState.resumeName = "";
+  scanWorkspacePdfState.scale = 1;
+  scanWorkspacePdfState.fitScale = 1;
+  scanWorkspacePdfState.isFitPage = true;
+  updateScanWorkspaceZoomLabel();
+}
+
+async function computeScanWorkspaceFitPageScale() {
+  const pdfDoc = scanWorkspacePdfState.pdfDoc;
+  const metrics = getScanWorkspacePdfScrollerMetrics();
+
+  if (!pdfDoc || !metrics) {
+    return 1;
+  }
+
+  const firstPage = await pdfDoc.getPage(1);
+  const baseViewport = firstPage.getViewport({ scale: 1 });
+
+  const fitWidthScale = metrics.availableWidth / baseViewport.width;
+
+  if (!Number.isFinite(fitWidthScale) || fitWidthScale <= 0) {
+    return 1;
+  }
+
+  return Math.max(0.45, Math.min(2.5, fitWidthScale));
+}
+
+async function renderScanWorkspacePdfPages() {
+  const pagesRoot = qs("scanWorkspacePdfPages");
+  const empty = qs("scanWorkspacePreviewEmpty");
+  const meta = qs("scanWorkspacePreviewMeta");
+  const pdfDoc = scanWorkspacePdfState.pdfDoc;
+
+  if (!pagesRoot || !empty || !pdfDoc) return;
+
+  const token = ++scanWorkspacePdfState.renderToken;
+  const scale = scanWorkspacePdfState.scale;
+  const pageCount = pdfDoc.numPages;
+  const deviceScale = window.devicePixelRatio || 1;
+
+  pagesRoot.innerHTML = "";
+  pagesRoot.classList.add("hidden");
+  empty.classList.remove("hidden");
+  empty.textContent = `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}...`;
+  if (meta) {
+    meta.textContent = `Rendering ${pageCount} page${pageCount === 1 ? "" : "s"}...`;
+  }
+  updateScanWorkspaceZoomLabel();
+
+  const fragment = document.createDocumentFragment();
+
+  for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+    if (token !== scanWorkspacePdfState.renderToken) return;
+
+    const page = await pdfDoc.getPage(pageNumber);
+    const viewport = page.getViewport({ scale });
+
+    const canvas = document.createElement("canvas");
+    canvas.className = "tailoring-workspace-pdf-canvas";
+
+    const context = canvas.getContext("2d", { alpha: false });
+
+    canvas.width = Math.floor(viewport.width * deviceScale);
+    canvas.height = Math.floor(viewport.height * deviceScale);
+    canvas.style.width = `${viewport.width}px`;
+    canvas.style.height = `${viewport.height}px`;
+
+    const renderContext =
+      deviceScale === 1
+        ? { canvasContext: context, viewport }
+        : {
+            canvasContext: context,
+            viewport,
+            transform: [deviceScale, 0, 0, deviceScale, 0, 0],
+          };
+
+    await page.render(renderContext).promise;
+
+    const pageShell = document.createElement("div");
+    pageShell.className = "tailoring-workspace-pdf-page";
+    pageShell.dataset.pageNumber = String(pageNumber);
+    pageShell.style.width = `${viewport.width}px`;
+    pageShell.style.height = `${viewport.height}px`;
+    pageShell.appendChild(canvas);
+    fragment.appendChild(pageShell);
+  }
+
+  if (token !== scanWorkspacePdfState.renderToken) return;
+
+  pagesRoot.innerHTML = "";
+  pagesRoot.appendChild(fragment);
+  pagesRoot.classList.remove("hidden");
+  empty.classList.add("hidden");
+
+  if (meta) {
+    meta.textContent = humanizeResumeDisplayName(scanWorkspacePdfState.resumeName || "");
+  }
+}
+
+async function applyScanWorkspaceFitPageScale({ rerender = true } = {}) {
+  if (!scanWorkspacePdfState.pdfDoc) return;
+
+  await new Promise((resolve) => {
+    window.requestAnimationFrame(() => resolve());
+  });
+
+  const fitScale = await computeScanWorkspaceFitPageScale();
+  scanWorkspacePdfState.fitScale = fitScale;
+  scanWorkspacePdfState.scale = fitScale;
+  scanWorkspacePdfState.isFitPage = true;
+  updateScanWorkspaceZoomLabel();
+
+  if (rerender) {
+    await renderScanWorkspacePdfPages();
+  }
+}
+
+async function setScanWorkspaceResumePreview(resumeName) {
+  const safeName = normalizeResumeName(resumeName || "");
+  const nameEl = qs("scanWorkspacePreviewName");
+
+  scanWorkspacePdfState.resumeName = safeName;
+  if (nameEl) {
+    nameEl.textContent = humanizeResumeDisplayName(safeName || "");
+  }
 
   if (!safeName) {
-    frame.src = "about:blank";
-    frame.classList.add("hidden");
-    empty.textContent = "No resume preview is available for this scan.";
-    empty.classList.remove("hidden");
-    meta.textContent = "No resume selected.";
+    await clearScanWorkspacePdfView("No resume selected for this scan.");
     return;
   }
 
-  frame.src = `/planning/resume-preview?resume_name=${encodeURIComponent(safeName)}`;
-  frame.classList.remove("hidden");
-  empty.classList.add("hidden");
-  meta.textContent = safeName;
+  try {
+    const pdfjsLib = await getScanWorkspacePdfJs();
+    const pdfUrl = buildResumePdfFileUrl(safeName);
+    const loadToken = ++scanWorkspacePdfState.renderToken;
+
+    const empty = qs("scanWorkspacePreviewEmpty");
+    const pages = qs("scanWorkspacePdfPages");
+    const meta = qs("scanWorkspacePreviewMeta");
+
+    if (pages) {
+      pages.innerHTML = "";
+      pages.classList.add("hidden");
+    }
+
+    if (empty) {
+      empty.textContent = "Loading PDF preview...";
+      empty.classList.remove("hidden");
+    }
+
+    if (meta) {
+      meta.textContent = "Loading PDF preview...";
+    }
+
+    updateScanWorkspaceZoomLabel();
+
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdfDoc = await loadingTask.promise;
+
+    if (loadToken !== scanWorkspacePdfState.renderToken) {
+      try {
+        await pdfDoc.destroy();
+      } catch {}
+      return;
+    }
+
+    if (scanWorkspacePdfState.pdfDoc && scanWorkspacePdfState.pdfDoc !== pdfDoc) {
+      try {
+        await scanWorkspacePdfState.pdfDoc.destroy();
+      } catch (err) {
+        console.warn("Failed to destroy stale scan PDF document", err);
+      }
+    }
+
+    scanWorkspacePdfState.pdfDoc = pdfDoc;
+    scanWorkspacePdfState.scale = 1;
+    scanWorkspacePdfState.fitScale = 1;
+    scanWorkspacePdfState.isFitPage = true;
+
+    await applyScanWorkspaceFitPageScale();
+  } catch (err) {
+    console.error("Failed to load scan PDF preview", err);
+    await clearScanWorkspacePdfView("Failed to load PDF preview.");
+  }
 }
 
-function renderScanSuggestionSection(title, items, tone, emptyLabel) {
-  const safeItems = Array.isArray(items) ? items : [];
-  if (!safeItems.length) {
-    return `
-      <section class="tailoring-section-block">
-        <div class="tailoring-section-title">${escapeHtml(title)}</div>
-        <div class="tailoring-empty-inline">${escapeHtml(emptyLabel)}</div>
-      </section>
-    `;
+function getScanWorkspacePayload() {
+  return scanWorkspaceState.preloadPayload && typeof scanWorkspaceState.preloadPayload === "object"
+    ? scanWorkspaceState.preloadPayload
+    : null;
+}
+
+function getScanWorkspaceTrustedSuggestions(payload = getScanWorkspacePayload()) {
+  const trusted = payload && payload.trusted_suggestions && typeof payload.trusted_suggestions === "object"
+    ? payload.trusted_suggestions
+    : {};
+
+  return {
+    directApplyReady: Array.isArray(trusted.direct_apply_ready) ? trusted.direct_apply_ready : [],
+    directApplyOptional: Array.isArray(trusted.direct_apply_optional) ? trusted.direct_apply_optional : [],
+  };
+}
+
+function getScanWorkspaceAiSuggestions(payload = getScanWorkspacePayload()) {
+  return Array.isArray(payload?.ai_optimize_suggestions) ? payload.ai_optimize_suggestions : [];
+}
+
+function getScanWorkspaceGuidance(payload = getScanWorkspacePayload()) {
+  return Array.isArray(payload?.directional_guidance) ? payload.directional_guidance : [];
+}
+
+function collectScanWorkspaceSelectableCandidateIds(payload = getScanWorkspacePayload()) {
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+
+  const ids = [];
+  const seen = new Set();
+
+  [
+    ...trusted.directApplyReady,
+    ...trusted.directApplyOptional,
+    ...aiSuggestions,
+  ].forEach((item) => {
+    const candidateId = getTailoringReplacementCandidateId(item);
+    if (!candidateId || seen.has(candidateId)) return;
+    seen.add(candidateId);
+    ids.push(candidateId);
+  });
+
+  return ids;
+}
+
+function normalizeScanWorkspaceSelectedCandidateIds(payload, candidateIds) {
+  const validIds = new Set(collectScanWorkspaceSelectableCandidateIds(payload));
+  const normalized = [];
+  const seen = new Set();
+
+  (Array.isArray(candidateIds) ? candidateIds : []).forEach((value) => {
+    const candidateId = String(value || "").trim();
+    if (!candidateId || seen.has(candidateId) || !validIds.has(candidateId)) return;
+    seen.add(candidateId);
+    normalized.push(candidateId);
+  });
+
+  return normalized;
+}
+
+function getScanWorkspaceSelectedCandidateIds() {
+  return Array.isArray(scanWorkspaceState.selectedCandidateIds)
+    ? scanWorkspaceState.selectedCandidateIds.slice()
+    : [];
+}
+
+function getScanWorkspaceCurrentReviewDecisionMap() {
+  return normalizeTailoringWorkspaceReviewDecisionMap(
+    scanWorkspaceState.rewriteReviewDecisions || {}
+  );
+}
+
+function toggleScanWorkspaceCandidateSelection(candidateId) {
+  const payload = getScanWorkspacePayload();
+  if (!payload) return;
+
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId) return;
+
+  const current = new Set(getScanWorkspaceSelectedCandidateIds());
+  if (current.has(safeCandidateId)) {
+    current.delete(safeCandidateId);
+  } else {
+    current.add(safeCandidateId);
   }
 
-  const cardsHtml = safeItems.map((item) => {
-    const originalText = String(item?.original_text || item?.current_evidence || "").trim();
-    const suggestedText = String(item?.final_replacement_text || item?.rewrite_direction || "").trim();
-    const whySelected = String(item?.why_selected || "").trim();
-    const materiality = humanizeUnderscoreLabel(item?.materiality_validation_status || "", "");
-    const delta = item?.projected_overall_delta;
+  scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+    payload,
+    Array.from(current)
+  );
+  scanWorkspaceState.previewPayload = null;
+  renderScanWorkspaceView();
+}
 
-    return `
-      <section class="tailoring-section-block">
-        <div class="tailoring-card-topline">
-          <div class="tailoring-chip-group">
-            ${buildTailoringTonePill(escapeHtml(title), tone)}
-            ${materiality ? buildTailoringTonePill(escapeHtml(materiality), "neutral") : ""}
-            ${delta === null || delta === undefined ? "" : buildTailoringTonePill(`Δ ${formatSignedScore100(delta)}`, "neutral")}
-          </div>
-        </div>
+function setScanWorkspaceReviewDecision(candidateId, state, note = "") {
+  const safeCandidateId = String(candidateId || "").trim();
+  const safeState = String(state || "").trim().toLowerCase();
+  if (!safeCandidateId || !safeState) return;
 
-        ${originalText ? `
-          <div class="tailoring-info-block">
-            <div class="tailoring-info-label">Original</div>
-            <div class="tailoring-card-copy">${escapeHtml(originalText)}</div>
-          </div>
-        ` : ""}
+  const next = {
+    ...getScanWorkspaceCurrentReviewDecisionMap(),
+  };
 
-        ${suggestedText ? `
-          <div class="tailoring-info-block">
-            <div class="tailoring-info-label">Suggested</div>
-            <div class="tailoring-card-copy">${escapeHtml(suggestedText)}</div>
-          </div>
-        ` : ""}
+  next[safeCandidateId] = {
+    state: safeState,
+    note: String(note || "").trim(),
+  };
 
-        ${whySelected ? `
-          <div class="tailoring-info-block">
-            <div class="tailoring-info-label">Reason</div>
-            <div class="tailoring-card-copy">${escapeHtml(whySelected)}</div>
-          </div>
-        ` : ""}
-      </section>
-    `;
-  }).join("");
+  scanWorkspaceState.rewriteReviewDecisions = next;
+  scanWorkspaceState.previewPayload = null;
+  renderScanWorkspaceView();
+}
+
+function buildScanWorkspaceScoreSummary() {
+  const payload = getScanWorkspacePayload();
+  const preview = scanWorkspaceState.previewPayload;
+  const base = payload?.score_snapshot || {};
+
+  const originalScore = preview?.original_score ?? base.original_score;
+  const projectedScore = preview?.projected_score ?? base.projected_score;
+  const projectedDelta = preview?.projected_delta ?? base.projected_delta;
+  const previewStatus = String(preview?.preview_status || base.draft_preview_status || "").trim();
+  const previewNote = String(preview?.preview_note || base.draft_preview_note || "").trim();
 
   return `
     <section class="tailoring-section-block">
-      <div class="tailoring-section-title">${escapeHtml(title)}</div>
+      <div class="tailoring-section-title">Score preview</div>
+
+      <div class="tailoring-chip-group">
+        ${buildTailoringTonePill(`Original ${formatScore100(originalScore)}`, "neutral")}
+        ${buildTailoringTonePill(`Projected ${formatScore100(projectedScore)}`, "safe")}
+        ${buildTailoringTonePill(
+          `Delta ${formatSignedScore100(projectedDelta)}`,
+          projectedDelta > 0 ? "safe" : projectedDelta < 0 ? "danger" : "muted"
+        )}
+      </div>
+
+      ${previewStatus || previewNote ? `
+        <div class="tailoring-card-copy">
+          ${escapeHtml([previewStatus ? humanizeUnderscoreLabel(previewStatus) : "", previewNote].filter(Boolean).join(" — "))}
+        </div>
+      ` : ""}
     </section>
-    ${cardsHtml}
   `;
 }
 
-function renderScanWorkspacePayload(payload) {
-  const root = qs("scanWorkspaceShell");
+function updateScanWorkspaceMeta() {
+  const payload = getScanWorkspacePayload();
   const meta = qs("scanWorkspaceMeta");
-  if (!root || !payload) return;
+  if (!meta) return;
 
-  const trustedSuggestions = payload?.trusted_suggestions || {};
-  const trustedReady = Array.isArray(trustedSuggestions.direct_apply_ready)
-    ? trustedSuggestions.direct_apply_ready
-    : [];
-  const trustedOptional = Array.isArray(trustedSuggestions.direct_apply_optional)
-    ? trustedSuggestions.direct_apply_optional
-    : [];
-  const aiOptional = Array.isArray(payload?.ai_optimize_suggestions)
-    ? payload.ai_optimize_suggestions
-    : [];
-  const directional = Array.isArray(payload?.directional_guidance)
-    ? payload.directional_guidance
-    : [];
+  if (!payload) {
+    meta.textContent = "Scan preload is not available for this route.";
+    return;
+  }
 
-  const laneCounts = payload?.lane_counts || {};
-  const scoreSnapshot = payload?.score_snapshot || {};
-  const summary = payload?.final_replacement_summary || {};
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+  const guidance = getScanWorkspaceGuidance(payload);
 
-  if (meta) {
-    meta.textContent = [
-      payload?.selected_resume || "Resume",
-      `${Number(laneCounts.direct_apply_ready || 0)} ready`,
-      `${Number(laneCounts.ai_optimize_optional || 0)} AI optional`,
-      `${Number(laneCounts.direction_only || 0)} guidance`,
-    ].join(" • ");
+  meta.textContent = [
+    `${trusted.directApplyReady.length + trusted.directApplyOptional.length} trusted`,
+    `${aiSuggestions.length} AI optional`,
+    `${guidance.length} guidance`,
+  ].join(" • ");
+}
+
+function updateScanWorkspaceActionBar() {
+  const payload = getScanWorkspacePayload();
+  const selectionStatus = qs("scanWorkspaceSelectionStatus");
+  const acceptAllBtn = qs("scanWorkspaceAcceptAllAiBtn");
+  const previewBtn = qs("scanWorkspacePreviewBtn");
+  const saveBtn = qs("scanWorkspaceSaveBtn");
+
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+  const selectedIds = getScanWorkspaceSelectedCandidateIds();
+  const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
+
+  const aiCandidateIds = aiSuggestions
+    .map((item) => getTailoringReplacementCandidateId(item))
+    .filter(Boolean);
+
+  const selectedAiCount = aiCandidateIds.filter((id) => selectedIds.includes(id)).length;
+  const reviewCount = Object.keys(reviewDecisionMap).length;
+  const hasChanges = selectedIds.length > 0 || reviewCount > 0;
+
+  if (selectionStatus) {
+    selectionStatus.textContent =
+      `${selectedAiCount} AI suggestion${selectedAiCount === 1 ? "" : "s"} selected • ` +
+      `${reviewCount} guidance decision${reviewCount === 1 ? "" : "s"} recorded`;
+  }
+
+  if (acceptAllBtn) {
+    acceptAllBtn.disabled = scanWorkspaceState.isSaving || scanWorkspaceState.isPreviewing || !aiCandidateIds.length;
+  }
+
+  if (previewBtn) {
+    previewBtn.disabled = scanWorkspaceState.isSaving || scanWorkspaceState.isPreviewing || !hasChanges;
+    previewBtn.textContent = scanWorkspaceState.isPreviewing ? "Previewing..." : "Preview Score";
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled = scanWorkspaceState.isSaving || scanWorkspaceState.isPreviewing || !hasChanges;
+    saveBtn.textContent = scanWorkspaceState.isSaving ? "Saving..." : "Save Scan State";
+  }
+}
+
+function renderScanWorkspaceTabs() {
+  const trustedTab = qs("scanWorkspaceTrustedTab");
+  const aiTab = qs("scanWorkspaceAiTab");
+  const guidanceTab = qs("scanWorkspaceGuidanceTab");
+  const payload = getScanWorkspacePayload();
+
+  if (!trustedTab || !aiTab || !guidanceTab || !payload) return;
+
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+  const guidance = getScanWorkspaceGuidance(payload);
+
+  const trustedCount = trusted.directApplyReady.length + trusted.directApplyOptional.length;
+
+  trustedTab.classList.toggle("active", scanWorkspaceState.selectedTab === "trusted");
+  aiTab.classList.toggle("active", scanWorkspaceState.selectedTab === "ai_optimize");
+  guidanceTab.classList.toggle("active", scanWorkspaceState.selectedTab === "guidance");
+
+  trustedTab.innerHTML = `Trusted <span class="tailoring-selected-tab-count">${trustedCount}</span>`;
+  aiTab.innerHTML = `AI Suggestions <span class="tailoring-selected-tab-count">${aiSuggestions.length}</span>`;
+  guidanceTab.innerHTML = `Guidance <span class="tailoring-selected-tab-count">${guidance.length}</span>`;
+}
+
+function renderScanWorkspaceView() {
+  const payload = getScanWorkspacePayload();
+  const root = qs("scanWorkspaceInteractiveSummary");
+  if (!root) return;
+
+  if (!payload) {
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        No preloaded scan payload is available for this route.
+      </div>
+    `;
+    updateScanWorkspaceMeta();
+    updateScanWorkspaceActionBar();
+    return;
+  }
+
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+  const guidance = getScanWorkspaceGuidance(payload);
+  const selectedIds = getScanWorkspaceSelectedCandidateIds();
+  const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
+
+  const trustedHtml = renderReplacementDecisionSection({
+    title: "Trusted suggestions",
+    subtitle: "Strict trusted suggestions remain separate from exploratory AI suggestions.",
+    items: [...trusted.directApplyReady, ...trusted.directApplyOptional],
+    emptyLabel: "No trusted suggestions are available for this scan.",
+    tone: "safe",
+    mode: "replacement",
+    selectionEnabled: false,
+    actionPrefix: "scan",
+  });
+
+  const aiHtml = renderReplacementDecisionSection({
+    title: "AI optimize suggestions",
+    subtitle: "Optional AI-generated suggestions. These stay separate from the trusted lane.",
+    items: aiSuggestions,
+    emptyLabel: "No AI optimize suggestions are available for this scan.",
+    tone: "caution",
+    mode: "replacement",
+    selectionEnabled: true,
+    selectedCandidateIds: selectedIds,
+    actionPrefix: "scan",
+  });
+
+  const guidanceHtml = renderReplacementDecisionSection({
+    title: "Directional guidance",
+    subtitle: "Review-only guidance. Accept or reject it here, or edit manually back in the tailoring workspace.",
+    items: guidance,
+    emptyLabel: "No review guidance is available for this scan.",
+    tone: "muted",
+    mode: "direction_only",
+    reviewActionsEnabled: true,
+    reviewDecisionMap,
+    actionPrefix: "scan",
+  });
+
+  let bodyHtml = "";
+  if (scanWorkspaceState.selectedTab === "trusted") {
+    bodyHtml = trustedHtml;
+  } else if (scanWorkspaceState.selectedTab === "guidance") {
+    bodyHtml = guidanceHtml;
+  } else {
+    bodyHtml = aiHtml;
   }
 
   root.innerHTML = `
-    ${renderReplacementPlanSummary(summary)}
-
-    <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Scan summary</div>
-
-      <div class="tailoring-meta-grid">
-        <div class="info-pair tailoring-meta-item">
-          <span class="label">Original score</span>
-          <span>${escapeHtml(formatScore100(scoreSnapshot.original_score))}</span>
-        </div>
-
-        <div class="info-pair tailoring-meta-item">
-          <span class="label">Projected score</span>
-          <span>${escapeHtml(formatScore100(scoreSnapshot.projected_score))}</span>
-        </div>
-
-        <div class="info-pair tailoring-meta-item">
-          <span class="label">Projected delta</span>
-          <span>${escapeHtml(formatSignedScore100(scoreSnapshot.projected_delta))}</span>
-        </div>
-
-        <div class="info-pair tailoring-meta-item">
-          <span class="label">Draft state</span>
-          <span>${escapeHtml(humanizeUnderscoreLabel(payload?.draft_status || "", "-"))}</span>
-        </div>
-      </div>
-    </section>
-
-    ${renderScanSuggestionSection(
-      "Trusted suggestions",
-      [...trustedReady, ...trustedOptional],
-      "success",
-      "No trusted suggestions are available for this scan."
-    )}
-
-    ${renderScanSuggestionSection(
-      "AI optimize suggestions",
-      aiOptional,
-      "caution",
-      "No AI optimize suggestions are available for this scan."
-    )}
-
-    ${renderScanSuggestionSection(
-      "Directional guidance",
-      directional,
-      "muted",
-      "No directional guidance is available for this scan."
-    )}
+    ${renderReplacementPlanSummary(payload.final_replacement_summary || {})}
+    ${buildScanWorkspaceScoreSummary()}
+    ${bodyHtml}
   `;
+
+  renderScanWorkspaceTabs();
+  updateScanWorkspaceMeta();
+  updateScanWorkspaceActionBar();
+}
+
+async function previewScanWorkspaceState() {
+  const context = getScanWorkspaceContext();
+  if (!context || !context.tailoringJsonPath) return;
+
+  const selectedIds = getScanWorkspaceSelectedCandidateIds();
+  const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
+  if (!selectedIds.length && !Object.keys(reviewDecisionMap).length) return;
+
+  scanWorkspaceState.isPreviewing = true;
+  updateScanWorkspaceActionBar();
+
+  try {
+    const response = await postJson("/planning/preview-workspace-draft", {
+      tailoring_json_path: context.tailoringJsonPath,
+      selected_resume: context.resumeName,
+      selected_patch_candidate_ids: selectedIds,
+      manual_bullet_edits: {},
+      rewrite_review_decisions: reviewDecisionMap,
+    });
+
+    scanWorkspaceState.previewPayload = {
+      preview_status: String(response.preview_status || "").trim(),
+      preview_note: String(response.preview_note || "").trim(),
+      original_score: response.original_score,
+      projected_score: response.projected_score,
+      projected_delta: response.projected_delta,
+      selected_patch_set_counterfactual_preview: response.selected_patch_set_counterfactual_preview || null,
+    };
+
+    renderScanWorkspaceView();
+  } catch (err) {
+    showAppError("Failed to preview scan state", err);
+  } finally {
+    scanWorkspaceState.isPreviewing = false;
+    updateScanWorkspaceActionBar();
+  }
+}
+
+async function saveScanWorkspaceState() {
+  const context = getScanWorkspaceContext();
+  if (!context || !context.tailoringJsonPath) return;
+
+  scanWorkspaceState.isSaving = true;
+  updateScanWorkspaceActionBar();
+
+  try {
+    const response = await postJson("/planning/save-workspace-draft", {
+      tailoring_json_path: context.tailoringJsonPath,
+      selected_resume: context.resumeName,
+      selected_patch_candidate_ids: getScanWorkspaceSelectedCandidateIds(),
+      manual_bullet_edits: {},
+      rewrite_review_decisions: getScanWorkspaceCurrentReviewDecisionMap(),
+      note: "Saved from scan workspace.",
+    });
+
+    const draft = response && response.draft && typeof response.draft === "object"
+      ? response.draft
+      : {};
+
+    scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+      getScanWorkspacePayload(),
+      draft.selected_patch_candidate_ids || []
+    );
+    scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
+      draft.rewrite_review_decisions || {}
+    );
+    scanWorkspaceState.previewPayload = null;
+
+    renderScanWorkspaceView();
+  } catch (err) {
+    showAppError("Failed to save scan state", err);
+  } finally {
+    scanWorkspaceState.isSaving = false;
+    updateScanWorkspaceActionBar();
+  }
+}
+
+function bindScanWorkspaceHandlers() {
+  const root = qs("scanWorkspaceInteractiveSummary");
+  if (root && root.dataset.bound !== "true") {
+    root.dataset.bound = "true";
+
+    root.addEventListener("click", (event) => {
+      const reviewActionButton = event.target.closest("[data-scan-review-action]");
+      if (reviewActionButton) {
+        event.preventDefault();
+        const candidateId = String(reviewActionButton.dataset.scanReviewCandidate || "").trim();
+        const nextState = String(reviewActionButton.dataset.scanReviewAction || "").trim().toLowerCase();
+        if (!candidateId || !nextState) return;
+        setScanWorkspaceReviewDecision(candidateId, nextState);
+        return;
+      }
+
+      const reviewEditButton = event.target.closest("[data-scan-review-edit]");
+      if (reviewEditButton) {
+        event.preventDefault();
+        window.location.href = buildScanWorkspaceBackToTailoringUrl();
+        return;
+      }
+
+      const selectButton = event.target.closest("[data-scan-select-candidate]");
+      if (selectButton) {
+        event.preventDefault();
+        const candidateId = String(selectButton.dataset.scanSelectCandidate || "").trim();
+        if (!candidateId) return;
+        toggleScanWorkspaceCandidateSelection(candidateId);
+      }
+    });
+  }
+
+  const tabRow = qs("scanWorkspaceTabRow");
+  if (tabRow && tabRow.dataset.bound !== "true") {
+    tabRow.dataset.bound = "true";
+
+    tabRow.addEventListener("click", (event) => {
+      const tabButton = event.target.closest("[data-scan-selected-tab]");
+      if (!tabButton) return;
+
+      const nextTab = String(tabButton.dataset.scanSelectedTab || "").trim();
+      if (!nextTab) return;
+
+      scanWorkspaceState.selectedTab = nextTab;
+      renderScanWorkspaceView();
+    });
+  }
+
+  const acceptAllBtn = qs("scanWorkspaceAcceptAllAiBtn");
+  if (acceptAllBtn && acceptAllBtn.dataset.bound !== "true") {
+    acceptAllBtn.dataset.bound = "true";
+    acceptAllBtn.addEventListener("click", () => {
+      const payload = getScanWorkspacePayload();
+      const current = new Set(getScanWorkspaceSelectedCandidateIds());
+
+      getScanWorkspaceAiSuggestions(payload).forEach((item) => {
+        const candidateId = getTailoringReplacementCandidateId(item);
+        if (candidateId) current.add(candidateId);
+      });
+
+      scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+        payload,
+        Array.from(current)
+      );
+      scanWorkspaceState.previewPayload = null;
+      renderScanWorkspaceView();
+    });
+  }
+
+  const previewBtn = qs("scanWorkspacePreviewBtn");
+  if (previewBtn && previewBtn.dataset.bound !== "true") {
+    previewBtn.dataset.bound = "true";
+    previewBtn.addEventListener("click", async () => {
+      await previewScanWorkspaceState();
+    });
+  }
+
+  const saveBtn = qs("scanWorkspaceSaveBtn");
+  if (saveBtn && saveBtn.dataset.bound !== "true") {
+    saveBtn.dataset.bound = "true";
+    saveBtn.addEventListener("click", async () => {
+      await saveScanWorkspaceState();
+    });
+  }
+}
+
+function bindScanWorkspacePreviewControls() {
+  const zoomOutBtn = qs("scanWorkspaceZoomOutBtn");
+  const zoomResetBtn = qs("scanWorkspaceZoomResetBtn");
+  const zoomInBtn = qs("scanWorkspaceZoomInBtn");
+
+  if (!zoomOutBtn || !zoomResetBtn || !zoomInBtn) return;
+  if (zoomOutBtn.dataset.bound === "true") return;
+
+  zoomOutBtn.dataset.bound = "true";
+  updateScanWorkspaceZoomLabel();
+
+  zoomOutBtn.addEventListener("click", async () => {
+    if (!scanWorkspacePdfState.pdfDoc) return;
+    scanWorkspacePdfState.isFitPage = false;
+    scanWorkspacePdfState.scale = Math.max(0.45, scanWorkspacePdfState.scale - 0.08);
+    updateScanWorkspaceZoomLabel();
+    await renderScanWorkspacePdfPages();
+  });
+
+  zoomResetBtn.addEventListener("click", async () => {
+    if (!scanWorkspacePdfState.pdfDoc) return;
+    await applyScanWorkspaceFitPageScale();
+  });
+
+  zoomInBtn.addEventListener("click", async () => {
+    if (!scanWorkspacePdfState.pdfDoc) return;
+    scanWorkspacePdfState.isFitPage = false;
+    scanWorkspacePdfState.scale = Math.min(1.8, scanWorkspacePdfState.scale + 0.08);
+    updateScanWorkspaceZoomLabel();
+    await renderScanWorkspacePdfPages();
+  });
+
+  window.addEventListener("resize", async () => {
+    if (!scanWorkspacePdfState.pdfDoc || !scanWorkspacePdfState.isFitPage) return;
+
+    if (scanWorkspacePdfState.resizeTimer) {
+      window.clearTimeout(scanWorkspacePdfState.resizeTimer);
+    }
+
+    scanWorkspacePdfState.resizeTimer = window.setTimeout(async () => {
+      scanWorkspacePdfState.resizeTimer = null;
+      await applyScanWorkspaceFitPageScale();
+    }, 80);
+  });
 }
 
 async function initScanWorkspacePage() {
   const page = getScanWorkspacePage();
   if (!page) return false;
 
-  const context = getScanWorkspaceContext();
-  const root = qs("scanWorkspaceShell");
+  const root = qs("scanWorkspaceInteractiveSummary");
   const meta = qs("scanWorkspaceMeta");
-
-  setScanWorkspaceResumePreview(context?.resumeName || "");
+  const context = getScanWorkspaceContext();
 
   if (!root) return true;
 
-  if (!context?.tailoringJsonPath) {
+  setScanWorkspaceResumePreview(context?.resumeName || "");
+  bindScanWorkspaceHandlers();
+  bindScanWorkspacePreviewControls();
+
+  if (!context || !context.tailoringJsonPath) {
     if (meta) {
-      meta.textContent = "No preloaded scan payload was provided.";
+      meta.textContent = "No tailoring artifact was provided for this scan route.";
     }
 
     root.innerHTML = `
       <div class="tailoring-empty-state">
-        This scan route is ready for preloaded job/resume pairs, but no tailoring artifact was provided.
+        This scan page is ready, but no preloaded tailoring artifact was provided.
       </div>
     `;
     return true;
@@ -8162,15 +8853,45 @@ async function initScanWorkspacePage() {
     }
 
     const payload = await loadScanWorkspacePreload();
-    renderScanWorkspacePayload(payload);
+    scanWorkspaceState.preloadPayload = payload;
+
+    const savedDraft = payload && payload.draft && typeof payload.draft === "object"
+      ? payload.draft
+      : {};
+
+    scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+      payload,
+      savedDraft.selected_patch_candidate_ids || []
+    );
+    scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
+      savedDraft.rewrite_review_decisions || {}
+    );
+    scanWorkspaceState.previewPayload = null;
+
+    const aiCount = getScanWorkspaceAiSuggestions(payload).length;
+    const trustedCount =
+      getScanWorkspaceTrustedSuggestions(payload).directApplyReady.length +
+      getScanWorkspaceTrustedSuggestions(payload).directApplyOptional.length;
+    const guidanceCount = getScanWorkspaceGuidance(payload).length;
+
+    scanWorkspaceState.selectedTab =
+      aiCount > 0
+        ? "ai_optimize"
+        : trustedCount > 0
+          ? "trusted"
+          : guidanceCount > 0
+            ? "guidance"
+            : "trusted";
+
+    renderScanWorkspaceView();
   } catch (err) {
     if (meta) {
-      meta.textContent = "Failed to load scan.";
+      meta.textContent = "Failed to load scan preload.";
     }
 
     root.innerHTML = `
       <div class="tailoring-empty-state">
-        Failed to load the preloaded scan payload for this job/resume pair.
+        Failed to load the scan preload payload for this job/resume pair.
       </div>
     `;
 
@@ -8179,6 +8900,7 @@ async function initScanWorkspacePage() {
 
   return true;
 }
+
 
 function buildTailoringWorkspaceUrl(row) {
   const params = new URLSearchParams();
@@ -8663,6 +9385,7 @@ window.addEventListener("DOMContentLoaded", async () => {
     bindTailoringWorkspaceExportModal();
     bindTailoringWorkspaceDivider();
     await initTailoringWorkspacePage();
+    return;
   }
 
   if (isScanWorkspacePage) {

@@ -771,20 +771,30 @@ def tailoring_workspace(
       <section class="card tailoring-workspace-pane tailoring-workspace-pane--left">
         <div class="section-header">
           <div>
-            <h2>Suggested changes</h2>
+            <div class="tailoring-section-title-row">
+              <h2>Suggested changes</h2>
+
+              <a
+                id="tailoringWorkspaceOpenScanBtn"
+                class="ghost-btn tailoring-ai-optimize-btn"
+                href="{scan_href_safe}"
+              >
+                <span class="tailoring-ai-optimize-btn-icon-wrap" aria-hidden="true">
+                  <img
+                    class="tailoring-ai-optimize-btn-icon"
+                    src="/static/media/ai-img.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </span>
+
+                <span class="tailoring-ai-optimize-btn-label">AI optimize</span>
+              </a>
+            </div>
+
             <div class="subtext" id="tailoringWorkspaceMeta">
               Loading suggestion set...
             </div>
-          </div>
-
-          <div class="section-header-actions">
-            <a
-              id="tailoringWorkspaceOpenScanBtn"
-              class="ghost-btn"
-              href="{scan_href_safe}"
-            >
-              Optimize with AI
-            </a>
           </div>
         </div>
 
@@ -1166,7 +1176,7 @@ def scan_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
-  <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_1" />
+  <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1183,15 +1193,17 @@ def scan_workspace(
     data-packet-json-path="{packet_json_safe}"
   >
     <header class="page-header tailoring-workspace-header">
-      <div>
+      <div class="page-header-main">
         <h1>AI Optimize Scan</h1>
         <p class="subtext">
           Dedicated scan workspace for optional AI optimization suggestions, separate from trusted tailoring suggestions.
         </p>
-      </div>
 
-      <div class="section-header-actions">
-        <a class="ghost-btn" href="{back_href_safe}">Back to Tailoring</a>
+        <div class="tailoring-scan-header-actions">
+          <a class="ghost-btn tailoring-scan-back-btn" href="{back_href_safe}">
+            Back to Tailoring
+          </a>
+        </div>
       </div>
     </header>
 
@@ -1225,13 +1237,89 @@ def scan_workspace(
           <div>
             <h2>Scan suggestions</h2>
             <div class="subtext" id="scanWorkspaceMeta">
-              Loading preloaded scan...
+              Loading scan preload...
             </div>
           </div>
         </div>
 
+        <section class="card tailoring-workspace-subcard" id="scanWorkspaceControlsShell">
+          <div class="scheduler-table-tabs">
+            <div class="scheduler-tab-row" id="scanWorkspaceTabRow">
+              <button
+                type="button"
+                class="scheduler-tab-btn active"
+                data-scan-selected-tab="trusted"
+                id="scanWorkspaceTrustedTab"
+              >
+                Trusted
+              </button>
+
+              <button
+                type="button"
+                class="scheduler-tab-btn"
+                data-scan-selected-tab="ai_optimize"
+                id="scanWorkspaceAiTab"
+              >
+                AI Suggestions
+              </button>
+
+              <button
+                type="button"
+                class="scheduler-tab-btn"
+                data-scan-selected-tab="guidance"
+                id="scanWorkspaceGuidanceTab"
+              >
+                Guidance
+              </button>
+            </div>
+          </div>
+
+          <div class="tailoring-selection-action-bar">
+            <div
+              class="subtext tailoring-workspace-selection-status"
+              id="scanWorkspaceSelectionStatus"
+            >
+              No scan actions selected yet.
+            </div>
+
+            <div class="section-header-actions">
+              <button
+                type="button"
+                class="ghost-btn btn-sm"
+                id="scanWorkspaceAcceptAllAiBtn"
+              >
+                Accept All AI
+              </button>
+
+              <button
+                type="button"
+                class="ghost-btn btn-sm"
+                id="scanWorkspacePreviewBtn"
+              >
+                Preview Score
+              </button>
+
+              <button
+                type="button"
+                class="btn-sm"
+                id="scanWorkspaceSaveBtn"
+              >
+                Save Scan State
+              </button>
+
+              <a
+                class="ghost-btn btn-sm"
+                id="scanWorkspaceContinueBtn"
+                href="{back_href_safe}"
+              >
+                Continue
+              </a>
+            </div>
+          </div>
+        </section>
+
         <div
-          id="scanWorkspaceShell"
+          id="scanWorkspaceInteractiveSummary"
           class="tailoring-interactive-shell tailoring-workspace-content"
         >
           <div class="tailoring-empty-state">
@@ -1244,29 +1332,95 @@ def scan_workspace(
         <div class="section-header">
           <div>
             <h2>Resume preview</h2>
-            <div class="subtext" id="scanWorkspacePreviewMeta">
-              Loading preview...
+            <div class="subtext">
+              Review the selected resume variant here while checking scan suggestions on the left.
             </div>
           </div>
         </div>
 
         <div class="tailoring-preview-shell">
-          <div class="resume-choice-empty" id="scanWorkspacePreviewEmpty">
-            Loading PDF preview...
-          </div>
+          <div class="tailoring-preview-canvas tailoring-preview-canvas--pdfjs">
+            <div class="tailoring-workspace-preview-header">
+              <div class="tailoring-workspace-preview-header-main">
+                <div class="subtext">Current resume preview</div>
 
-          <iframe
-            id="scanWorkspaceResumePreviewFrame"
-            class="resume-choice-preview-frame hidden"
-            title="Scan resume preview"
-          ></iframe>
+                <div class="tailoring-workspace-preview-title-row">
+                  <div
+                    class="tailoring-workspace-preview-name"
+                    id="scanWorkspacePreviewName"
+                  >
+                    {resume_display_safe}
+                  </div>
+                </div>
+
+                <div
+                  class="subtext tailoring-workspace-selection-status"
+                  id="scanWorkspacePreviewStatus"
+                  aria-live="polite"
+                >
+                  Scan preview loaded from the selected resume variant.
+                </div>
+              </div>
+            </div>
+
+            <div class="tailoring-workspace-preview-toolbar">
+              <div class="tailoring-workspace-preview-toolbar-left">
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm"
+                  id="scanWorkspaceZoomOutBtn"
+                  aria-label="Zoom out"
+                >
+                  −
+                </button>
+
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm tailoring-workspace-zoom-value"
+                  id="scanWorkspaceZoomResetBtn"
+                  aria-label="Reset zoom"
+                >
+                  100%
+                </button>
+
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm"
+                  id="scanWorkspaceZoomInBtn"
+                  aria-label="Zoom in"
+                >
+                  +
+                </button>
+              </div>
+
+              <div class="subtext" id="scanWorkspacePreviewMeta">
+                Loading PDF preview...
+              </div>
+            </div>
+
+            <div class="tailoring-workspace-mode-body">
+              <div
+                class="tailoring-workspace-pdf-scroller"
+                id="scanWorkspacePdfScroller"
+              >
+                <div class="resume-choice-empty" id="scanWorkspacePreviewEmpty">
+                  Loading PDF preview...
+                </div>
+
+                <div
+                  id="scanWorkspacePdfPages"
+                  class="tailoring-workspace-pdf-pages hidden"
+                ></div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
     </section>
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=scan_workspace_20260422_1"></script>
+  <script src="/static/planning.js?v=scan_workspace_20260422_2"></script>
 </body>
 </html>
     """.strip()

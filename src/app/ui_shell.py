@@ -141,6 +141,21 @@ def render_top_shell(active_href: str) -> str:
     </div>
   </div>
 
+  <a
+    class="app-shell-primary-link"
+    href="/scan-workspace"
+    aria-label="New Scan"
+    title="New Scan"
+  >
+    <img
+      class="app-shell-primary-link-icon"
+      src="/static/media/plus.svg"
+      alt=""
+      aria-hidden="true"
+    />
+    <span class="app-shell-primary-link-label">New Scan</span>
+  </a>
+
   <div class="profile-menu-shell" id="profileMenuShell">
     <button
       type="button"

@@ -168,6 +168,11 @@ def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
 
     return _candidate_confidence_rank(candidate) >= 2
 
+def _is_ai_optimize_optional(candidate: Dict[str, Any]) -> bool:
+    if not _passes_direct_apply_safety(candidate):
+        return False
+
+    return bool(candidate.get("llm_refinement_used", False))
 
 def _apply_priority(candidate: Dict[str, Any]) -> str:
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
@@ -279,6 +284,37 @@ def build_final_replacement_plan(
             or _text(best_candidate.get("rewrite_instruction", ""))
         )
 
+        if _is_ai_optimize_optional(best_candidate):
+            decisions.append(
+                {
+                    "decision_id": f"final_replacement:{bullet_id}",
+                    "replacement_status": "ai_optimize_optional",
+                    "apply_priority": _apply_priority(best_candidate),
+                    "source_bullet_id": resolved_bullet_id,
+                    "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
+                    "section": _text(best_candidate.get("section", "")),
+                    "source": _text(best_candidate.get("source", "")),
+                    "replacement_candidate_id": _text(best_candidate.get("candidate_id", "")),
+                    "replacement_source": _replacement_source(best_candidate),
+                    "patch_generation_method": _text(best_candidate.get("patch_generation_method", "")),
+                    "materiality_validation_status": _text(best_candidate.get("materiality_validation_status", "")),
+                    "original_final_score": best_candidate.get("original_final_score", None),
+                    "projected_final_score": best_candidate.get("projected_final_score", None),
+                    "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                    "confidence": _text(best_candidate.get("confidence", "")),
+                    "original_text": original_text,
+                    "current_evidence": current_evidence,
+                    "parent_bullet": parent_bullet,
+                    "final_replacement_text": _text(best_candidate.get("patch_text", "")),
+                    "rewrite_direction": rewrite_direction,
+                    "why_selected": _text(best_candidate.get("why_this_improves_match", "")),
+                    "adjacent_risk_signals": list(best_candidate.get("adjacent_risk_signals", []) or []),
+                    "unsupported_risk_signals": list(best_candidate.get("unsupported_risk_signals", []) or []),
+                    "likely_impacted_dimensions": list(best_candidate.get("likely_impacted_dimensions", []) or []),
+                }
+            )
+            continue
+    
         if _is_direct_apply_ready(best_candidate):
             decisions.append(
                 {
@@ -311,10 +347,16 @@ def build_final_replacement_plan(
             continue
 
         if _is_direct_apply_optional(best_candidate):
+            replacement_status = (
+                "ai_optimize_optional"
+                if bool(best_candidate.get("llm_refinement_used", False))
+                else "direct_apply_optional"
+            )
+
             decisions.append(
                 {
                     "decision_id": f"final_replacement:{bullet_id}",
-                    "replacement_status": "direct_apply_optional",
+                    "replacement_status": replacement_status,
                     "apply_priority": _apply_priority(best_candidate),
                     "source_bullet_id": resolved_bullet_id,
                     "source_entry_id": _text(best_candidate.get("source_entry_id", "")),
@@ -325,7 +367,7 @@ def build_final_replacement_plan(
                     "patch_generation_method": _text(best_candidate.get("patch_generation_method", "")),
                     "materiality_validation_status": _text(best_candidate.get("materiality_validation_status", "")),
                     "original_final_score": best_candidate.get("original_final_score", None),
-                    "projected_final_score": best_candidate.get("projected_final_score", None), 
+                    "projected_final_score": best_candidate.get("projected_final_score", None),
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
@@ -403,8 +445,9 @@ def build_final_replacement_plan(
     decisions = sorted(
         decisions,
         key=lambda item: (
-            3 if _text(item.get("replacement_status", "")) == "direct_apply_ready"
-            else 2 if _text(item.get("replacement_status", "")) == "direct_apply_optional"
+            4 if _text(item.get("replacement_status", "")) == "direct_apply_ready"
+            else 3 if _text(item.get("replacement_status", "")) == "direct_apply_optional"
+            else 2 if _text(item.get("replacement_status", "")) == "ai_optimize_optional"
             else 1 if _text(item.get("replacement_status", "")) == "direction_only"
             else 0,
             1 if _text(item.get("apply_priority", "")) == "high" else 0,
@@ -422,6 +465,10 @@ def build_final_replacement_plan(
         row for row in decisions
         if _text(row.get("replacement_status", "")) == "direct_apply_optional"
     ]
+    ai_optimize_optional_replacements = [
+        row for row in decisions
+        if _text(row.get("replacement_status", "")) == "ai_optimize_optional"
+    ]
     direction_only_replacements = [
         row for row in decisions
         if _text(row.get("replacement_status", "")) == "direction_only"
@@ -431,6 +478,7 @@ def build_final_replacement_plan(
         "total_rewrite_bullets": len(decisions),
         "direct_apply_ready_count": len(app_ready_replacements),
         "direct_apply_optional_count": len(direct_apply_optional_replacements),
+        "ai_optimize_optional_count": len(ai_optimize_optional_replacements),
         "direction_only_count": len(direction_only_replacements),
         "keep_original_count": len(
             [row for row in decisions if _text(row.get("replacement_status", "")) == "keep_original"]
@@ -438,8 +486,15 @@ def build_final_replacement_plan(
         "selected_candidate_ids": _unique_preserve_order(
             [_text(row.get("replacement_candidate_id", "")) for row in app_ready_replacements]
         ),
+        "direct_apply_optional_candidate_ids": _unique_preserve_order(
+            [_text(row.get("replacement_candidate_id", "")) for row in direct_apply_optional_replacements]
+        ),
+        "ai_optimize_optional_candidate_ids": _unique_preserve_order(
+            [_text(row.get("replacement_candidate_id", "")) for row in ai_optimize_optional_replacements]
+        ),
         "optional_candidate_ids": _unique_preserve_order(
             [_text(row.get("replacement_candidate_id", "")) for row in direct_apply_optional_replacements]
+            + [_text(row.get("replacement_candidate_id", "")) for row in ai_optimize_optional_replacements]
         ),
     }
 
@@ -447,6 +502,7 @@ def build_final_replacement_plan(
         "decisions": decisions,
         "app_ready_replacements": app_ready_replacements,
         "direct_apply_optional_replacements": direct_apply_optional_replacements,
+        "ai_optimize_optional_replacements": ai_optimize_optional_replacements,
         "direction_only_replacements": direction_only_replacements,
         "summary": summary,
     }

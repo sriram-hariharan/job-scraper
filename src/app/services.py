@@ -3026,6 +3026,111 @@ def planning_artifact_payload(
 
     return payload
 
+def tailoring_scan_preload_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Scan preload requires a tailoring JSON artifact.")
+
+    artifact_response = planning_artifact_payload(
+        str(artifact_path),
+        output_dir=output_dir,
+    )
+    payload_data = dict(artifact_response.get("data", {}) or {})
+
+    if not payload_data:
+        raise ValueError("Scan preload could not load tailoring artifact payload.")
+
+    draft_response = load_tailoring_workspace_draft_payload(
+        output_dir=output_dir,
+        tailoring_json_path=str(artifact_path),
+        selected_resume=selected_resume,
+    )
+    draft = dict(draft_response.get("draft", {}) or {})
+
+    preview_response = preview_tailoring_workspace_draft_payload(
+        output_dir=output_dir,
+        tailoring_json_path=str(artifact_path),
+        selected_resume=selected_resume,
+    )
+
+    selection = dict(payload_data.get("selection", {}) or {})
+    job = dict(payload_data.get("job", {}) or {})
+    job_snapshot = dict(payload_data.get("job_snapshot", {}) or {})
+
+    effective_selected_resume = (
+        _sanitize_optional_resume_filename(selected_resume)
+        or _sanitize_optional_resume_filename(draft.get("selected_resume"))
+        or _sanitize_optional_resume_filename(selection.get("selected_resume"))
+    )
+    if not effective_selected_resume:
+        raise ValueError("Scan preload requires a selected resume.")
+
+    packet_path = _infer_packet_json_path_from_tailoring_artifact(artifact_path)
+
+    trusted_ready = list(payload_data.get("app_ready_replacements", []) or [])
+    trusted_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
+    ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
+    directional_guidance = list(payload_data.get("direction_only_replacements", []) or [])
+
+    final_replacement_summary = dict(payload_data.get("final_replacement_summary", {}) or {})
+    rewrite_review_summary = dict(payload_data.get("rewrite_review_summary", {}) or {})
+    rewrite_review_groups = list(payload_data.get("rewrite_review_groups", []) or [])
+
+    selected_jd_record = dict(job_snapshot or job)
+
+    return {
+        "ok": True,
+        "preload_mode": "tailoring_artifact",
+        "scan_entry_source": "tailoring_suggestions",
+        "artifact_references": {
+            "tailoring_json_path": str(artifact_path),
+            "packet_json_path": str(packet_path) if packet_path and packet_path.exists() else "",
+        },
+        "selected_resume": effective_selected_resume,
+        "selected_jd_record": selected_jd_record,
+        "job": job,
+        "job_snapshot": job_snapshot,
+        "selection": selection,
+        "score_snapshot": {
+            "artifact_selected_score": selection.get("selected_score", None),
+            "draft_preview_status": _clean_text(preview_response.get("preview_status")),
+            "draft_preview_note": _clean_text(preview_response.get("preview_note")),
+            "original_score": preview_response.get("original_score"),
+            "projected_score": preview_response.get("projected_score"),
+            "projected_delta": preview_response.get("projected_delta"),
+            "selected_patch_set_counterfactual_preview": preview_response.get(
+                "selected_patch_set_counterfactual_preview"
+            ),
+        },
+        "trusted_suggestions": {
+            "direct_apply_ready": trusted_ready,
+            "direct_apply_optional": trusted_optional,
+        },
+        "ai_optimize_suggestions": ai_optimize_optional,
+        "directional_guidance": directional_guidance,
+        "lane_counts": {
+            "direct_apply_ready": len(trusted_ready),
+            "direct_apply_optional": len(trusted_optional),
+            "ai_optimize_optional": len(ai_optimize_optional),
+            "direction_only": len(directional_guidance),
+        },
+        "final_replacement_summary": final_replacement_summary,
+        "rewrite_review_summary": rewrite_review_summary,
+        "rewrite_review_groups": rewrite_review_groups,
+        "draft_status": _clean_text(draft_response.get("draft_status")),
+        "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
+        "draft": draft,
+    }
+
 def _operator_decision_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
     normalized = operator_decision_db_row(dict(row))
     return (

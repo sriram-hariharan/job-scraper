@@ -1481,18 +1481,39 @@ def _infer_packet_json_path_from_tailoring_artifact(artifact_path: Path) -> Path
 
 def _artifact_needs_operator_rehydration(payload_data: Dict[str, Any]) -> bool:
     replacement_candidates = list(payload_data.get("replacement_candidates", []) or [])
-    if replacement_candidates:
-        return False
+    if not replacement_candidates:
+        return any(
+            [
+                list(payload_data.get("rewrite_candidates", []) or []),
+                list(payload_data.get("bullet_reuse_candidates", []) or []),
+                list(payload_data.get("edit_cards", []) or []),
+                list(payload_data.get("top_edit_priorities", []) or []),
+                list(payload_data.get("bullet_diagnoses", []) or []),
+            ]
+        )
 
-    return any(
-        [
-            list(payload_data.get("rewrite_candidates", []) or []),
-            list(payload_data.get("bullet_reuse_candidates", []) or []),
-            list(payload_data.get("edit_cards", []) or []),
-            list(payload_data.get("top_edit_priorities", []) or []),
-            list(payload_data.get("bullet_diagnoses", []) or []),
-        ]
-    )
+    final_replacement_summary = dict(payload_data.get("final_replacement_summary", {}) or {})
+    rewrite_review_groups = list(payload_data.get("rewrite_review_groups", []) or [])
+
+    if "ai_optimize_optional_count" not in final_replacement_summary:
+        return True
+
+    if payload_data.get("ai_optimize_optional_replacements") is None:
+        return True
+
+    group_ids = {
+        _clean_text(row.get("group_id"))
+        for row in rewrite_review_groups
+        if isinstance(row, dict)
+    }
+
+    has_ai_optimize_group = "ai_optimize_optional" in group_ids
+    has_any_optional_ai_rows = bool(list(payload_data.get("ai_optimize_optional_replacements", []) or []))
+
+    if has_any_optional_ai_rows and not has_ai_optimize_group:
+        return True
+
+    return False
 
 
 def _rehydrate_legacy_tailoring_operator_payload(

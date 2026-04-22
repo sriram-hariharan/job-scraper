@@ -6823,6 +6823,7 @@ def _build_operator_markdown_payload(
     operator_payload["final_replacement_decisions"] = final_replacement_plan.get("decisions", [])
     operator_payload["app_ready_replacements"] = final_replacement_plan.get("app_ready_replacements", [])
     operator_payload["direct_apply_optional_replacements"] = final_replacement_plan.get("direct_apply_optional_replacements", [])
+    operator_payload["ai_optimize_optional_replacements"] = final_replacement_plan.get("ai_optimize_optional_replacements", [])
     operator_payload["direction_only_replacements"] = final_replacement_plan.get("direction_only_replacements", [])
     operator_payload["final_replacement_summary"] = final_replacement_plan.get("summary", {})
     operator_payload["rewrite_review_decisions"] = dict(
@@ -7979,6 +7980,7 @@ def _rewrite_review_decisions_by_candidate_id(
 def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
     app_ready_replacements = list(payload.get("app_ready_replacements", []) or [])
     direct_apply_optional_replacements = list(payload.get("direct_apply_optional_replacements", []) or [])
+    ai_optimize_optional_replacements = list(payload.get("ai_optimize_optional_replacements", []) or [])
     direction_only_replacements = list(payload.get("direction_only_replacements", []) or [])
     card_lookup = _rewrite_review_card_lookup_by_candidate_id(payload)
     decision_lookup = _rewrite_review_decisions_by_candidate_id(payload)
@@ -8093,6 +8095,22 @@ def _build_rewrite_review_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]
                     [
                         _rewrite_group_item(row, "high_confidence_rewrites")
                         for row in app_ready_replacements
+                    ],
+                    key=_rewrite_review_item_sort_key,
+                ),
+            }
+        )
+
+    if ai_optimize_optional_replacements:
+        groups.append(
+            {
+                "group_id": "ai_optimize_optional",
+                "title": "AI-Optimize Optional",
+                "description": "AI-augmented exploratory rewrites that should stay optional and must not be treated like trusted Ready patches.",
+                "items": sorted(
+                    [
+                        _rewrite_group_item(row, "ai_optimize_optional")
+                        for row in ai_optimize_optional_replacements
                     ],
                     key=_rewrite_review_item_sort_key,
                 ),
@@ -8239,6 +8257,9 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             f"- Direct apply optional: {final_replacement_summary.get('direct_apply_optional_count', 0)}"
         )
         lines.append(
+            f"- AI-optimize optional: {final_replacement_summary.get('ai_optimize_optional_count', 0)}"
+        )
+        lines.append(
             f"- Direction only: {final_replacement_summary.get('direction_only_count', 0)}"
         )
         lines.append(
@@ -8293,6 +8314,9 @@ def _markdown_from_payload(payload: Dict[str, Any]) -> str:
             )
             lines.append(
                 f"- Export-safe rewrites: {group_counts.get('export_safe_rewrites', 0)}"
+            )
+            lines.append(
+                f"- AI-optimize optional: {group_counts.get('ai_optimize_optional', 0)}"
             )
             lines.append(
                 f"- Directional only: {group_counts.get('directional_only', 0)}"

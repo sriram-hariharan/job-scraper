@@ -1656,18 +1656,19 @@ def _tailoring_workspace_button_state(
 
         app_ready = list(payload_data.get("app_ready_replacements", []) or [])
         direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
+        ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
         direction_only = list(payload_data.get("direction_only_replacements", []) or [])
         decisions = list(payload_data.get("final_replacement_decisions", []) or [])
         anchor_cards = list(payload_data.get("anchor_cards", []) or [])
         top_anchor_priorities = list(payload_data.get("top_anchor_priorities", []) or [])
 
         ready_count = len(app_ready)
-        actionable_count = len(app_ready) + len(direct_apply_optional)
+        actionable_count = len(app_ready) + len(direct_apply_optional) + len(ai_optimize_optional)
         review_count = len(direction_only)
         anchor_count = len(anchor_cards) or len(top_anchor_priorities)
 
         has_replacement_plan = bool(
-            decisions or app_ready or direct_apply_optional or direction_only
+            decisions or app_ready or direct_apply_optional or ai_optimize_optional or direction_only
         )
         has_anchor_evidence = bool(anchor_cards or top_anchor_priorities)
 
@@ -3769,6 +3770,7 @@ def _tailoring_workspace_surfaced_items(payload_data: Dict[str, Any]) -> List[Di
     return [
         *list(payload_data.get("app_ready_replacements", []) or []),
         *list(payload_data.get("direct_apply_optional_replacements", []) or []),
+        *list(payload_data.get("ai_optimize_optional_replacements", []) or []),
         *list(payload_data.get("direction_only_replacements", []) or []),
     ]
 

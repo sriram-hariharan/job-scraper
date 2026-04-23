@@ -724,6 +724,23 @@
   color: #ffe7e7;
 }
 
+.scan-workspace-persist-status {
+  min-width: 0;
+  line-height: 1.45;
+}
+
+.scan-workspace-persist-status.is-warning {
+  color: #ffe9a8;
+}
+
+.scan-workspace-persist-status.is-success {
+  color: #d7f8ea;
+}
+
+.scan-workspace-persist-status.is-danger {
+  color: #ffd7d7;
+}
+
 .scan-workspace-compare-shell {
   min-height: calc(100vh - 280px);
   display: flex;

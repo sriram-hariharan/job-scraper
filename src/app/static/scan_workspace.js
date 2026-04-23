@@ -57,6 +57,14 @@ const scanWorkspaceCompareState = {
   acceptedSignature: "",
 };
 
+const scanWorkspacePersistenceState = {
+  loadResponse: null,
+  isLoading: false,
+  isSaving: false,
+  lastError: "",
+  hydratedSignature: "",
+};
+
 function getScanWorkspacePageRoot() {
   return document.querySelector(".scan-workspace-page");
 }
@@ -441,6 +449,30 @@ function getAcceptedCompareCandidateIds() {
   return Array.from(new Set(ids));
 }
 
+function getSavedSelectedPatchCandidateIds() {
+  const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  return Array.from(
+    new Set(
+      (Array.isArray(draft.selected_patch_candidate_ids)
+        ? draft.selected_patch_candidate_ids
+        : []
+      )
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+function getEffectiveAcceptedCompareCandidateIds() {
+  const liveIds = getAcceptedCompareCandidateIds();
+
+  if (scanWorkspaceAnnotationState.markers.length > 0) {
+    return liveIds;
+  }
+
+  return getSavedSelectedPatchCandidateIds();
+}
+
 function setScanWorkspaceMarkerDecision(markerId, decision) {
   const safeDecision = normalizeScanWorkspaceAnnotationDecision(decision);
   let updatedMarker = null;
@@ -458,34 +490,377 @@ function updateScanWorkspaceDecisionSummaryUi() {
   const counts = getScanWorkspaceAnnotationDecisionCounts();
   const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
   const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
-  const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
   const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
 
+  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
+  const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
+
   if (selectionStatus) {
-    selectionStatus.textContent =
-      counts.total > 0
-        ? `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`
-        : "No scan actions selected yet.";
+    if (counts.total > 0) {
+      selectionStatus.textContent =
+        `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`;
+    } else if (savedAcceptedIds.length > 0) {
+      selectionStatus.textContent =
+        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded. Waiting for scan markers.`;
+    } else {
+      selectionStatus.textContent = "No scan actions selected yet.";
+    }
   }
 
   if (previewStatus) {
-    previewStatus.textContent =
-      counts.accepted > 0
-        ? `${counts.accepted} accepted linked suggestion(s) are currently reflected in the scan decision set.`
-        : "Live draft preview is ready for scan decisions.";
-  }
-
-  if (saveBtn) {
-    saveBtn.disabled = counts.accepted === 0 && counts.rejected === 0;
+    if (counts.accepted > 0) {
+      previewStatus.textContent =
+        `${counts.accepted} accepted linked suggestion(s) are currently reflected in the scan decision set.`;
+    } else if (!hasMarkers && savedAcceptedIds.length > 0) {
+      previewStatus.textContent =
+        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded from the workspace draft.`;
+    } else {
+      previewStatus.textContent = "Live draft preview is ready for scan decisions.";
+    }
   }
 
   if (acceptAllBtn) {
     acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
   }
+
+  renderScanWorkspacePersistenceStatus();
 }
 
 function getAcceptedCandidateSignature() {
-  return getAcceptedCompareCandidateIds().join("|");
+  return getEffectiveAcceptedCompareCandidateIds().join("|");
+}
+
+function normalizeScanWorkspacePersistenceDecisionState(state) {
+  const safeState = String(state || "").trim().toLowerCase();
+  if (safeState === "accepted" || safeState === "edited_after_accept") return "accepted";
+  if (safeState === "rejected") return "rejected";
+  return "pending";
+}
+
+function buildScanWorkspaceRewriteReviewDecisionsPayload() {
+  const decisionMap = {};
+
+  scanWorkspaceAnnotationState.markers.forEach((marker) => {
+    const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
+    if (decision === "pending") return;
+
+    const candidateIds = Array.isArray(marker?.candidateIds) ? marker.candidateIds : [];
+    candidateIds.forEach((candidateId) => {
+      const safeCandidateId = String(candidateId || "").trim();
+      if (!safeCandidateId) return;
+
+      decisionMap[safeCandidateId] = {
+        state: decision,
+        note:
+          decision === "accepted"
+            ? "Accepted in AI Optimize scan."
+            : "Rejected in AI Optimize scan.",
+      };
+    });
+  });
+
+  return decisionMap;
+}
+
+function buildScanWorkspacePersistencePayload() {
+  const context = getScanWorkspaceContext();
+  if (!context || !context.tailoringJsonPath || !context.resumeName) {
+    return null;
+  }
+
+  return {
+    tailoring_json_path: context.tailoringJsonPath,
+    selected_resume: context.resumeName,
+    selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
+    manual_bullet_edits: {},
+    rewrite_review_decisions: buildScanWorkspaceRewriteReviewDecisionsPayload(),
+    note: "Saved from AI Optimize scan.",
+  };
+}
+
+function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewriteReviewDecisions) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(selectedPatchCandidateIds) ? selectedPatchCandidateIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  ).sort();
+
+  const normalizedDecisions = Object.entries(
+    rewriteReviewDecisions && typeof rewriteReviewDecisions === "object"
+      ? rewriteReviewDecisions
+      : {}
+  )
+    .map(([candidateId, row]) => {
+      const safeCandidateId = String(candidateId || "").trim();
+      if (!safeCandidateId) return null;
+
+      const rawState =
+        row && typeof row === "object" ? row.state : row;
+      const state = normalizeScanWorkspacePersistenceDecisionState(rawState);
+      if (state === "pending") return null;
+
+      return [safeCandidateId, state];
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+  return JSON.stringify({
+    selected_patch_candidate_ids: normalizedIds,
+    rewrite_review_decisions: normalizedDecisions,
+  });
+}
+
+function getCurrentScanWorkspacePersistenceSignature() {
+  const payload = buildScanWorkspacePersistencePayload();
+  if (!payload) return "";
+
+  return buildScanWorkspacePersistenceSignature(
+    payload.selected_patch_candidate_ids,
+    payload.rewrite_review_decisions
+  );
+}
+
+function getSavedScanWorkspacePersistenceSignature() {
+  const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  return buildScanWorkspacePersistenceSignature(
+    draft.selected_patch_candidate_ids || [],
+    draft.rewrite_review_decisions || {}
+  );
+}
+
+function applySavedDraftStateToScanMarkers() {
+  const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  const selectedSet = new Set(
+    Array.isArray(draft.selected_patch_candidate_ids)
+      ? draft.selected_patch_candidate_ids.map((value) => String(value || "").trim()).filter(Boolean)
+      : []
+  );
+
+  const decisionMap =
+    draft.rewrite_review_decisions && typeof draft.rewrite_review_decisions === "object"
+      ? draft.rewrite_review_decisions
+      : {};
+
+  if (!scanWorkspaceAnnotationState.markers.length) return;
+
+  scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => {
+    const candidateIds = Array.isArray(marker?.candidateIds) ? marker.candidateIds : [];
+    if (!candidateIds.length) return marker;
+
+    const hasSelected = candidateIds.some((candidateId) => selectedSet.has(String(candidateId || "").trim()));
+    if (hasSelected) {
+      return { ...marker, decision: "accepted" };
+    }
+
+    let nextDecision = "pending";
+    for (const candidateId of candidateIds) {
+      const safeCandidateId = String(candidateId || "").trim();
+      if (!safeCandidateId) continue;
+
+      const savedRow = decisionMap[safeCandidateId];
+      const savedState = normalizeScanWorkspacePersistenceDecisionState(
+        savedRow && typeof savedRow === "object" ? savedRow.state : savedRow
+      );
+
+      if (savedState === "rejected") {
+        nextDecision = "rejected";
+        break;
+      }
+
+      if (savedState === "accepted") {
+        nextDecision = "accepted";
+      }
+    }
+
+    return { ...marker, decision: nextDecision };
+  });
+}
+
+function renderScanWorkspacePersistenceStatus() {
+  const statusNode = getScanWorkspaceInput("scanWorkspacePersistStatus");
+  const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
+  const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
+
+  if (!statusNode) return;
+
+  const context = getScanWorkspaceContext();
+  const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
+  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
+  const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+  const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+  const isDirty = Boolean(hasContext && hasMarkers && currentSignature !== savedSignature);
+
+  statusNode.classList.remove("is-warning", "is-success", "is-danger");
+
+  if (!hasContext) {
+    statusNode.textContent = "Workspace-draft persistence is unavailable for this scan.";
+    statusNode.classList.add("is-danger");
+  } else if (scanWorkspacePersistenceState.isLoading) {
+    statusNode.textContent = "Loading saved scan decisions from the workspace draft...";
+  } else if (scanWorkspacePersistenceState.isSaving) {
+    statusNode.textContent = "Saving scan decisions into the workspace draft...";
+  } else if (scanWorkspacePersistenceState.lastError) {
+    statusNode.textContent = scanWorkspacePersistenceState.lastError;
+    statusNode.classList.add("is-danger");
+  } else if (!hasMarkers && scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
+    statusNode.textContent =
+      "Saved scan decisions loaded from the workspace draft. Waiting for scan markers.";
+    statusNode.classList.add("is-success");
+  } else if (isDirty) {
+    statusNode.textContent = "You have unsaved scan decisions.";
+    statusNode.classList.add("is-warning");
+  } else if (scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
+    const savedAt = String(scanWorkspacePersistenceState.loadResponse?.draft?.saved_at || "").trim();
+    statusNode.textContent = savedAt
+      ? `Scan decisions saved into the workspace draft. Saved at ${savedAt}.`
+      : "Scan decisions are saved into the workspace draft.";
+    statusNode.classList.add("is-success");
+  } else {
+    statusNode.textContent = "Scan decisions are not saved yet.";
+  }
+
+  if (saveBtn) {
+    saveBtn.disabled =
+      !hasContext ||
+      scanWorkspacePersistenceState.isLoading ||
+      scanWorkspacePersistenceState.isSaving ||
+      !isDirty;
+    saveBtn.textContent = scanWorkspacePersistenceState.isSaving
+      ? "Saving..."
+      : "Save Scan State";
+  }
+
+  if (continueBtn) {
+    continueBtn.setAttribute("aria-busy", scanWorkspacePersistenceState.isSaving ? "true" : "false");
+  }
+}
+
+async function loadScanWorkspaceDraftState() {
+  const payload = buildScanWorkspacePersistencePayload();
+  if (!payload) {
+    renderScanWorkspacePersistenceStatus();
+    return;
+  }
+
+  scanWorkspacePersistenceState.isLoading = true;
+  scanWorkspacePersistenceState.lastError = "";
+  renderScanWorkspacePersistenceStatus();
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout(
+            "/planning/load-workspace-draft",
+            {
+              tailoring_json_path: payload.tailoring_json_path,
+              selected_resume: payload.selected_resume,
+            },
+            15000
+          )
+        : await fetch("/planning/load-workspace-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tailoring_json_path: payload.tailoring_json_path,
+              selected_resume: payload.selected_resume,
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {}
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    scanWorkspacePersistenceState.loadResponse = response;
+    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
+
+    applySavedDraftStateToScanMarkers();
+
+    scanWorkspacePreviewState.documentPreviewPayload = null;
+    scanWorkspaceCompareState.beforePayload = null;
+    scanWorkspaceCompareState.afterPayload = null;
+
+    renderScanWorkspaceAnnotationShell();
+    renderScanWorkspaceCompareShell();
+
+    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+      ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+    }
+
+    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+      ensureScanWorkspaceCompareLoaded({ force: true });
+    }
+  } catch (err) {
+    scanWorkspacePersistenceState.lastError =
+      err instanceof Error ? err.message : "Failed to load saved scan decisions.";
+  } finally {
+    scanWorkspacePersistenceState.isLoading = false;
+    renderScanWorkspacePersistenceStatus();
+  }
+}
+
+async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
+  const payload = buildScanWorkspacePersistencePayload();
+  if (!payload) {
+    scanWorkspacePersistenceState.lastError =
+      "Workspace-draft persistence is unavailable for this scan.";
+    renderScanWorkspacePersistenceStatus();
+    return false;
+  }
+
+  scanWorkspacePersistenceState.isSaving = true;
+  scanWorkspacePersistenceState.lastError = "";
+  renderScanWorkspacePersistenceStatus();
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout("/planning/save-workspace-draft", payload, 20000)
+        : await fetch("/planning/save-workspace-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {}
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    scanWorkspacePersistenceState.loadResponse = response;
+    scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
+    renderScanWorkspacePersistenceStatus();
+
+    if (navigateAfterSave) {
+      const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
+      const href = String(continueBtn?.getAttribute("href") || "").trim();
+      if (href) {
+        window.location.assign(href);
+      }
+    }
+
+    return true;
+  } catch (err) {
+    scanWorkspacePersistenceState.lastError =
+      err instanceof Error ? err.message : "Failed to save scan decisions.";
+    renderScanWorkspacePersistenceStatus();
+    return false;
+  } finally {
+    scanWorkspacePersistenceState.isSaving = false;
+    renderScanWorkspacePersistenceStatus();
+  }
 }
 
 function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []) {
@@ -713,7 +1088,7 @@ function renderScanWorkspaceLiveDraftPreviewInto() {
   const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
   if (!root) return;
 
-  const acceptedIds = getAcceptedCompareCandidateIds();
+  const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const noteText = acceptedIds.length
     ? `Read-only reconstructed draft from the export model using ${acceptedIds.length} accepted linked suggestion(s).`
     : "Read-only reconstructed draft from the export model. Accepted scan changes will appear here first.";
@@ -730,7 +1105,7 @@ function renderScanWorkspaceLiveDraftPreviewInto() {
 
 async function fetchScanWorkspaceDocumentPreview() {
   const previewMeta = getScanWorkspaceInput("scanWorkspacePreviewMeta");
-  const acceptedIds = getAcceptedCompareCandidateIds();
+  const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const currentSignature = acceptedIds.join("|");
   const requestSeq = ++scanWorkspacePreviewState.documentPreviewRequestSeq;
 
@@ -946,11 +1321,22 @@ function setScanWorkspaceAnnotationMarkers(markers) {
     scanWorkspaceAnnotationState.activeMarkerId = "";
   }
 
+  applySavedDraftStateToScanMarkers();
+
   scanWorkspacePreviewState.documentPreviewPayload = null;
   scanWorkspaceCompareState.beforePayload = null;
   scanWorkspaceCompareState.afterPayload = null;
+
   renderScanWorkspaceAnnotationShell();
   renderScanWorkspaceCompareShell();
+
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+    ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+  }
+
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+    ensureScanWorkspaceCompareLoaded({ force: true });
+  }
 }
 
 function applyScanWorkspaceDecisionToActiveMarker(decision) {
@@ -1079,7 +1465,7 @@ function renderScanWorkspaceCompareShell() {
 
   if (!summary || !status || !beforeMeta || !afterMeta || !beforePane || !afterPane) return;
 
-  const acceptedIds = getAcceptedCompareCandidateIds();
+  const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   summary.innerHTML = buildScanWorkspaceCompareSummaryHtml();
 
   status.textContent = scanWorkspaceCompareState.isLoading
@@ -1126,7 +1512,7 @@ function renderScanWorkspaceCompareShell() {
 }
 
 async function ensureScanWorkspaceCompareLoaded({ force = false } = {}) {
-  const acceptedIds = getAcceptedCompareCandidateIds();
+  const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const acceptedSignature = acceptedIds.join("|");
 
   if (
@@ -1172,6 +1558,37 @@ function bindScanWorkspaceCompareShell() {
   renderScanWorkspaceCompareShell();
 }
 
+function bindScanWorkspacePersistenceControls() {
+  const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
+  if (saveBtn && saveBtn.dataset.bound !== "true") {
+    saveBtn.dataset.bound = "true";
+    saveBtn.addEventListener("click", async () => {
+      await saveScanWorkspaceDraftState();
+    });
+  }
+
+  const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
+  if (continueBtn && continueBtn.dataset.bound !== "true") {
+    continueBtn.dataset.bound = "true";
+    continueBtn.addEventListener("click", async (event) => {
+      const context = getScanWorkspaceContext();
+      const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
+      const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+      const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+      const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
+
+      if (!hasContext || !isDirty) {
+        return;
+      }
+
+      event.preventDefault();
+      await saveScanWorkspaceDraftState({ navigateAfterSave: true });
+    });
+  }
+
+  renderScanWorkspacePersistenceStatus();
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   const root = getScanWorkspacePageRoot();
   if (!root) return;
@@ -1181,9 +1598,11 @@ window.addEventListener("DOMContentLoaded", () => {
   bindScanWorkspaceProcessingShell();
   bindScanWorkspaceAnnotationShell();
   bindScanWorkspaceCompareShell();
+  bindScanWorkspacePersistenceControls();
   updateScanWorkspaceProcessingView();
 
   setScanWorkspaceMode(getScanWorkspaceInitialMode());
+  loadScanWorkspaceDraftState();
 
   window.scanWorkspacePhase1 = {
     setMode: setScanWorkspaceMode,
@@ -1203,6 +1622,8 @@ window.addEventListener("DOMContentLoaded", () => {
     clearAnnotationMarkers: () => {
       setScanWorkspaceAnnotationMarkers([]);
     },
+    saveDraftState: () => saveScanWorkspaceDraftState(),
+    reloadDraftState: () => loadScanWorkspaceDraftState(),
     getAnnotationState: () => ({
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
       activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,

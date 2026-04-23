@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase1_1" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase9_1" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1533,6 +1533,14 @@ def scan_workspace(
                     Continue
                   </a>
                 </div>
+
+                <div
+                  class="subtext scan-workspace-persist-status"
+                  id="scanWorkspacePersistStatus"
+                  aria-live="polite"
+                >
+                  Scan decisions are not saved yet.
+                </div>
               </div>
             </section>
 
@@ -1857,7 +1865,7 @@ def scan_workspace(
 
   <script src="/static/shell.js"></script>
   <script src="/static/planning.js?v=scan_workspace_20260422_2"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase1_1"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase9_1"></script>
 </body>
 </html>
     """.strip()

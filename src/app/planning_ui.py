@@ -386,11 +386,11 @@ def planning_dashboard() -> str:
               Select a resume on the left to load its PDF preview.
             </div>
 
-            <iframe
-              id="resumeChoicePreviewFrame"
-              class="resume-choice-preview-frame hidden"
-              title="Resume quick preview"
-            ></iframe>
+            <div
+              id="resumeChoicePreviewPages"
+              class="resume-choice-preview-pages hidden"
+              aria-label="Resume quick preview"
+            ></div>
 
             <div class="resume-choice-loading-overlay hidden" id="resumeChoiceLoadingOverlay">
               <div class="resume-choice-loading-card">

@@ -1753,13 +1753,21 @@ function resetResumeChoicePreviewSurface({
   clearSelection = false,
 } = {}) {
   const previewFrame = qs("resumeChoicePreviewFrame");
+  const previewPages = qs("resumeChoicePreviewPages");
   const previewEmpty = qs("resumeChoicePreviewEmpty");
   const previewName = qs("resumeChoicePreviewName");
   const selectBtn = qs("resumeChoiceSelectBtn");
   const llmBtn = qs("resumeChoiceGenerateLlmBtn");
 
-  previewFrame.src = "about:blank";
-  previewFrame.classList.add("hidden");
+  if (previewFrame) {
+    previewFrame.src = "about:blank";
+    previewFrame.classList.add("hidden");
+  }
+
+  if (previewPages) {
+    previewPages.innerHTML = "";
+    previewPages.classList.add("hidden");
+  }
 
   previewEmpty.textContent = placeholderText;
   previewEmpty.classList.remove("hidden");
@@ -2946,10 +2954,12 @@ function renderResumeChoiceCards() {
 async function setResumeChoicePreview(resumeName) {
   const safeName = normalizeResumeName(resumeName);
   const previewFrame = qs("resumeChoicePreviewFrame");
+  const previewPages = qs("resumeChoicePreviewPages");
   const previewEmpty = qs("resumeChoicePreviewEmpty");
   const previewName = qs("resumeChoicePreviewName");
   const selectBtn = qs("resumeChoiceSelectBtn");
   const llmBtn = qs("resumeChoiceGenerateLlmBtn");
+  const previewWrap = previewPages?.parentElement || qs("resumeChoicePreviewFrameWrap");
 
   if (!safeName) {
     clearResumeChoicePreviewResources();
@@ -2957,18 +2967,27 @@ async function setResumeChoicePreview(resumeName) {
     return;
   }
 
-  const requestSeq = resumeChoiceState.previewRequestSeq + 1;
-  resumeChoiceState.previewRequestSeq = requestSeq;
-
+  const loadToken = ++resumeChoiceState.previewRequestSeq;
   clearResumeChoicePreviewResources();
 
-  const controller = new AbortController();
-  resumeChoiceState.previewAbortController = controller;
   resumeChoiceState.selectedResume = safeName;
-
   previewName.textContent = humanizeResumeDisplayName(safeName);
-  previewFrame.src = "about:blank";
-  previewFrame.classList.add("hidden");
+
+  if (previewFrame) {
+    previewFrame.src = "about:blank";
+    previewFrame.classList.add("hidden");
+  }
+
+  if (previewPages) {
+    previewPages.innerHTML = "";
+    previewPages.classList.add("hidden");
+  }
+
+  if (previewWrap) {
+    previewWrap.scrollTop = 0;
+    previewWrap.scrollLeft = 0;
+  }
+
   previewEmpty.textContent = "Loading PDF preview...";
   previewEmpty.classList.remove("hidden");
 
@@ -2981,56 +3000,80 @@ async function setResumeChoicePreview(resumeName) {
   renderResumeChoiceCards();
 
   try {
-    const response = await fetch(buildResumePdfFileUrl(safeName), {
-      signal: controller.signal,
-      credentials: "same-origin",
-    });
+    const pdfjsLib = await getScanWorkspacePdfJs();
+    if (loadToken !== resumeChoiceState.previewRequestSeq) return;
 
-    if (!response.ok) {
-      const text = await response.text();
-      throw new Error(`HTTP ${response.status}: ${text}`);
-    }
+    const pdfUrl = buildResumePdfFileUrl(safeName);
+    const loadingTask = pdfjsLib.getDocument(pdfUrl);
+    const pdf = await loadingTask.promise;
 
-    const blob = await response.blob();
-
-    if (requestSeq !== resumeChoiceState.previewRequestSeq) {
+    if (loadToken !== resumeChoiceState.previewRequestSeq) {
+      try {
+        await loadingTask.destroy();
+      } catch {
+        // ignore stale preview cleanup failure
+      }
       return;
     }
 
-    const contentType = String(
-      response.headers.get("Content-Type") || blob.type || "application/pdf"
-    ).trim();
+    const pageCount = Math.max(pdf.numPages || 1, 1);
+    const previewInnerWidth = Math.max(
+      (previewWrap?.clientWidth || previewPages?.clientWidth || 720) - 36,
+      320
+    );
 
-    const previewBlob =
-      blob.type && String(blob.type).trim()
-        ? blob
-        : new Blob([blob], {
-            type: contentType.toLowerCase().includes("pdf")
-              ? contentType
-              : "application/pdf",
-          });
+    previewPages.innerHTML = "";
 
-    const objectUrl = URL.createObjectURL(previewBlob);
-    resumeChoiceState.previewAbortController = null;
-    resumeChoiceState.previewObjectUrl = objectUrl;
+    for (let pageNumber = 1; pageNumber <= pageCount; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      if (loadToken !== resumeChoiceState.previewRequestSeq) return;
 
-    previewFrame.src = buildResumePreviewFrameUrl(objectUrl);
-    previewFrame.classList.remove("hidden");
+      const baseViewport = page.getViewport({ scale: 1 });
+      const renderScale = previewInnerWidth / baseViewport.width;
+      const viewport = page.getViewport({ scale: renderScale });
+      const outputScale = Math.max(window.devicePixelRatio || 1, 1);
+
+      const pageWrap = document.createElement("div");
+      pageWrap.className = "resume-choice-preview-page";
+
+      const canvas = document.createElement("canvas");
+      canvas.className = "resume-choice-preview-canvas";
+      canvas.width = Math.ceil(viewport.width * outputScale);
+      canvas.height = Math.ceil(viewport.height * outputScale);
+      canvas.style.width = `${Math.ceil(viewport.width)}px`;
+      canvas.style.height = `${Math.ceil(viewport.height)}px`;
+
+      pageWrap.appendChild(canvas);
+      previewPages.appendChild(pageWrap);
+
+      const context = canvas.getContext("2d", { alpha: false });
+      await page.render({
+        canvasContext: context,
+        viewport,
+        transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null,
+      }).promise;
+    }
+
+    if (loadToken !== resumeChoiceState.previewRequestSeq) return;
+
+    previewPages.classList.remove("hidden");
     previewEmpty.classList.add("hidden");
-  } catch (err) {
-    if (err && err.name === "AbortError") {
-      return;
+
+    if (previewWrap) {
+      previewWrap.scrollTop = 0;
+      previewWrap.scrollLeft = 0;
+    }
+  } catch (error) {
+    if (loadToken !== resumeChoiceState.previewRequestSeq) return;
+
+    if (previewPages) {
+      previewPages.innerHTML = "";
+      previewPages.classList.add("hidden");
     }
 
-    if (requestSeq !== resumeChoiceState.previewRequestSeq) {
-      return;
-    }
-
-    clearResumeChoicePreviewResources({ abortRequest: false });
-    previewFrame.src = "about:blank";
-    previewFrame.classList.add("hidden");
-    previewEmpty.textContent = "Failed to load PDF preview.";
+    previewEmpty.textContent = "Could not load PDF preview.";
     previewEmpty.classList.remove("hidden");
+    console.error("Resume choice PDF preview failed", error);
   }
 }
 

@@ -2866,6 +2866,20 @@ function setResumeChoiceBusyState(isBusy, statusText = "") {
   const closeBtn = qs("closeResumeChoiceModalBtn");
   const selectedResume = normalizeResumeName(resumeChoiceState.selectedResume);
 
+  const previewWrap = modal?.querySelector(".resume-choice-preview-frame-wrap");
+  const previewPages = qs("resumeChoicePreviewPages");
+
+  if (resumeChoiceState.isBusy) {
+    if (previewPages) {
+      previewPages.scrollTop = 0;
+      previewPages.scrollLeft = 0;
+    }
+    if (previewWrap) {
+      previewWrap.scrollTop = 0;
+      previewWrap.scrollLeft = 0;
+    }
+  }
+
   modal.classList.toggle("is-busy", resumeChoiceState.isBusy);
   overlay.classList.toggle("hidden", !resumeChoiceState.isBusy);
 

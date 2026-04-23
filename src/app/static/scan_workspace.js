@@ -362,6 +362,13 @@ function normalizeScanWorkspaceAnnotationDecision(decision) {
   return safeDecision === "accepted" || safeDecision === "rejected" ? safeDecision : "pending";
 }
 
+function normalizeScanWorkspacePersistenceDecisionState(state) {
+  const safeState = String(state || "").trim().toLowerCase();
+  if (safeState === "accepted" || safeState === "edited_after_accept") return "accepted";
+  if (safeState === "rejected") return "rejected";
+  return "pending";
+}
+
 function collectScanWorkspaceMarkerCandidateIds(marker) {
   const directValues = [
     marker?.candidateId,
@@ -413,7 +420,7 @@ function normalizeScanWorkspaceAnnotationMarker(marker, index) {
     topPercent: Number.isFinite(topPercent) ? Math.max(2, Math.min(98, topPercent)) : 50,
     leftPercent: Number.isFinite(leftPercent) ? Math.max(2, Math.min(98, leftPercent)) : 50,
     candidateIds: collectScanWorkspaceMarkerCandidateIds(marker),
-  };
+      };
 }
 
 function getScanWorkspaceAnnotationMarkerById(markerId) {
@@ -465,11 +472,9 @@ function getSavedSelectedPatchCandidateIds() {
 
 function getEffectiveAcceptedCompareCandidateIds() {
   const liveIds = getAcceptedCompareCandidateIds();
-
   if (scanWorkspaceAnnotationState.markers.length > 0) {
     return liveIds;
   }
-
   return getSavedSelectedPatchCandidateIds();
 }
 
@@ -484,57 +489,6 @@ function setScanWorkspaceMarkerDecision(markerId, decision) {
   });
 
   return updatedMarker;
-}
-
-function updateScanWorkspaceDecisionSummaryUi() {
-  const counts = getScanWorkspaceAnnotationDecisionCounts();
-  const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
-  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
-  const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
-
-  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
-  const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
-
-  if (selectionStatus) {
-    if (counts.total > 0) {
-      selectionStatus.textContent =
-        `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`;
-    } else if (savedAcceptedIds.length > 0) {
-      selectionStatus.textContent =
-        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded. Waiting for scan markers.`;
-    } else {
-      selectionStatus.textContent = "No scan actions selected yet.";
-    }
-  }
-
-  if (previewStatus) {
-    if (counts.accepted > 0) {
-      previewStatus.textContent =
-        `${counts.accepted} accepted linked suggestion(s) are currently reflected in the scan decision set.`;
-    } else if (!hasMarkers && savedAcceptedIds.length > 0) {
-      previewStatus.textContent =
-        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded from the workspace draft.`;
-    } else {
-      previewStatus.textContent = "Live draft preview is ready for scan decisions.";
-    }
-  }
-
-  if (acceptAllBtn) {
-    acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
-  }
-
-  renderScanWorkspacePersistenceStatus();
-}
-
-function getAcceptedCandidateSignature() {
-  return getEffectiveAcceptedCompareCandidateIds().join("|");
-}
-
-function normalizeScanWorkspacePersistenceDecisionState(state) {
-  const safeState = String(state || "").trim().toLowerCase();
-  if (safeState === "accepted" || safeState === "edited_after_accept") return "accepted";
-  if (safeState === "rejected") return "rejected";
-  return "pending";
 }
 
 function buildScanWorkspaceRewriteReviewDecisionsPayload() {
@@ -596,8 +550,7 @@ function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewri
       const safeCandidateId = String(candidateId || "").trim();
       if (!safeCandidateId) return null;
 
-      const rawState =
-        row && typeof row === "object" ? row.state : row;
+      const rawState = row && typeof row === "object" ? row.state : row;
       const state = normalizeScanWorkspacePersistenceDecisionState(rawState);
       if (state === "pending") return null;
 
@@ -737,130 +690,48 @@ function renderScanWorkspacePersistenceStatus() {
   }
 }
 
-async function loadScanWorkspaceDraftState() {
-  const payload = buildScanWorkspacePersistencePayload();
-  if (!payload) {
-    renderScanWorkspacePersistenceStatus();
-    return;
+function updateScanWorkspaceDecisionSummaryUi() {
+  const counts = getScanWorkspaceAnnotationDecisionCounts();
+  const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
+  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
+  const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
+
+  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
+  const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
+
+  if (selectionStatus) {
+    if (counts.total > 0) {
+      selectionStatus.textContent =
+        `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`;
+    } else if (savedAcceptedIds.length > 0) {
+      selectionStatus.textContent =
+        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded. Waiting for scan markers.`;
+    } else {
+      selectionStatus.textContent = "No scan actions selected yet.";
+    }
   }
 
-  scanWorkspacePersistenceState.isLoading = true;
-  scanWorkspacePersistenceState.lastError = "";
+  if (previewStatus) {
+    if (counts.accepted > 0) {
+      previewStatus.textContent =
+        `${counts.accepted} accepted linked suggestion(s) are currently reflected in the scan decision set.`;
+    } else if (!hasMarkers && savedAcceptedIds.length > 0) {
+      previewStatus.textContent =
+        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded from the workspace draft.`;
+    } else {
+      previewStatus.textContent = "Live draft preview is ready for scan decisions.";
+    }
+  }
+
+  if (acceptAllBtn) {
+    acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
+  }
+
   renderScanWorkspacePersistenceStatus();
-
-  try {
-    const response =
-      typeof postJsonWithTimeout === "function"
-        ? await postJsonWithTimeout(
-            "/planning/load-workspace-draft",
-            {
-              tailoring_json_path: payload.tailoring_json_path,
-              selected_resume: payload.selected_resume,
-            },
-            15000
-          )
-        : await fetch("/planning/load-workspace-draft", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tailoring_json_path: payload.tailoring_json_path,
-              selected_resume: payload.selected_resume,
-            }),
-          }).then(async (res) => {
-            if (!res.ok) {
-              let message = `Request failed (${res.status})`;
-              try {
-                const data = await res.json();
-                message = String(data?.detail || data?.error_message || message);
-              } catch {}
-              throw new Error(message);
-            }
-            return res.json();
-          });
-
-    scanWorkspacePersistenceState.loadResponse = response;
-    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
-
-    applySavedDraftStateToScanMarkers();
-
-    scanWorkspacePreviewState.documentPreviewPayload = null;
-    scanWorkspaceCompareState.beforePayload = null;
-    scanWorkspaceCompareState.afterPayload = null;
-
-    renderScanWorkspaceAnnotationShell();
-    renderScanWorkspaceCompareShell();
-
-    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
-      ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
-    }
-
-    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
-      ensureScanWorkspaceCompareLoaded({ force: true });
-    }
-  } catch (err) {
-    scanWorkspacePersistenceState.lastError =
-      err instanceof Error ? err.message : "Failed to load saved scan decisions.";
-  } finally {
-    scanWorkspacePersistenceState.isLoading = false;
-    renderScanWorkspacePersistenceStatus();
-  }
 }
 
-async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
-  const payload = buildScanWorkspacePersistencePayload();
-  if (!payload) {
-    scanWorkspacePersistenceState.lastError =
-      "Workspace-draft persistence is unavailable for this scan.";
-    renderScanWorkspacePersistenceStatus();
-    return false;
-  }
-
-  scanWorkspacePersistenceState.isSaving = true;
-  scanWorkspacePersistenceState.lastError = "";
-  renderScanWorkspacePersistenceStatus();
-
-  try {
-    const response =
-      typeof postJsonWithTimeout === "function"
-        ? await postJsonWithTimeout("/planning/save-workspace-draft", payload, 20000)
-        : await fetch("/planning/save-workspace-draft", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          }).then(async (res) => {
-            if (!res.ok) {
-              let message = `Request failed (${res.status})`;
-              try {
-                const data = await res.json();
-                message = String(data?.detail || data?.error_message || message);
-              } catch {}
-              throw new Error(message);
-            }
-            return res.json();
-          });
-
-    scanWorkspacePersistenceState.loadResponse = response;
-    scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
-    renderScanWorkspacePersistenceStatus();
-
-    if (navigateAfterSave) {
-      const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
-      const href = String(continueBtn?.getAttribute("href") || "").trim();
-      if (href) {
-        window.location.assign(href);
-      }
-    }
-
-    return true;
-  } catch (err) {
-    scanWorkspacePersistenceState.lastError =
-      err instanceof Error ? err.message : "Failed to save scan decisions.";
-    renderScanWorkspacePersistenceStatus();
-    return false;
-  } finally {
-    scanWorkspacePersistenceState.isSaving = false;
-    renderScanWorkspacePersistenceStatus();
-  }
+function getAcceptedCandidateSignature() {
+  return getEffectiveAcceptedCompareCandidateIds().join("|");
 }
 
 function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []) {
@@ -912,7 +783,9 @@ async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [
               try {
                 const data = await res.json();
                 message = String(data?.detail || data?.error_message || message);
-              } catch {}
+              } catch {
+                // ignore secondary parse error
+              }
               throw new Error(message);
             }
             return res.json();
@@ -954,9 +827,7 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
     patched ? "tailoring-workspace-doc-line--changed" : "",
     patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
     patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
+  ].filter(Boolean).join(" ");
 
   if (isBullet) {
     return `
@@ -971,7 +842,7 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
 
   return `
     <div class="${extraClasses}" style="margin-top:${gapBefore}px;">
-      <div class="tailoring-workspace-doc-line-copy" style="padding-left:${indent}px;">${scanWorkspaceEscapeHtml(rawText)}</div>
+          <div class="tailoring-workspace-doc-line-copy" style="padding-left:${indent}px;">${scanWorkspaceEscapeHtml(rawText)}</div>
       ${isHeading ? `<div class="tailoring-workspace-doc-section-rule"></div>` : ""}
     </div>
   `;
@@ -1148,6 +1019,137 @@ function ensureScanWorkspaceDocumentPreviewLoaded({ force = false } = {}) {
   fetchScanWorkspaceDocumentPreview();
 }
 
+async function loadScanWorkspaceDraftState() {
+  const payload = buildScanWorkspacePersistencePayload();
+  if (!payload) {
+    renderScanWorkspacePersistenceStatus();
+    return;
+  }
+
+  scanWorkspacePersistenceState.isLoading = true;
+  scanWorkspacePersistenceState.lastError = "";
+  renderScanWorkspacePersistenceStatus();
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout(
+            "/planning/load-workspace-draft",
+            {
+              tailoring_json_path: payload.tailoring_json_path,
+              selected_resume: payload.selected_resume,
+            },
+            15000
+          )
+        : await fetch("/planning/load-workspace-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              tailoring_json_path: payload.tailoring_json_path,
+              selected_resume: payload.selected_resume,
+            }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {
+                // ignore secondary parse error
+              }
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    scanWorkspacePersistenceState.loadResponse = response;
+    scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
+
+    applySavedDraftStateToScanMarkers();
+
+    scanWorkspacePreviewState.documentPreviewPayload = null;
+    scanWorkspaceCompareState.beforePayload = null;
+    scanWorkspaceCompareState.afterPayload = null;
+
+    renderScanWorkspaceAnnotationShell();
+    renderScanWorkspaceCompareShell();
+
+    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+      ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+    }
+
+    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+      ensureScanWorkspaceCompareLoaded({ force: true });
+    }
+  } catch (err) {
+    scanWorkspacePersistenceState.lastError =
+      err instanceof Error ? err.message : "Failed to load saved scan decisions.";
+  } finally {
+    scanWorkspacePersistenceState.isLoading = false;
+    renderScanWorkspacePersistenceStatus();
+  }
+}
+
+async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
+  const payload = buildScanWorkspacePersistencePayload();
+  if (!payload) {
+    scanWorkspacePersistenceState.lastError =
+      "Workspace-draft persistence is unavailable for this scan.";
+    renderScanWorkspacePersistenceStatus();
+    return false;
+  }
+
+  scanWorkspacePersistenceState.isSaving = true;
+  scanWorkspacePersistenceState.lastError = "";
+  renderScanWorkspacePersistenceStatus();
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout("/planning/save-workspace-draft", payload, 20000)
+        : await fetch("/planning/save-workspace-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {
+                // ignore secondary parse error
+              }
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    scanWorkspacePersistenceState.loadResponse = response;
+    scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
+    scanWorkspacePersistenceState.lastError = "";
+    renderScanWorkspacePersistenceStatus();
+
+    if (navigateAfterSave) {
+      const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
+      const href = String(continueBtn?.getAttribute("href") || "").trim();
+      if (href) {
+        window.location.assign(href);
+      }
+    }
+
+    return true;
+  } catch (err) {
+    scanWorkspacePersistenceState.lastError =
+      err instanceof Error ? err.message : "Failed to save scan decisions.";
+    renderScanWorkspacePersistenceStatus();
+    return false;
+  } finally {
+    scanWorkspacePersistenceState.isSaving = false;
+    renderScanWorkspacePersistenceStatus();
+  }
+}
+
 function closeScanWorkspaceSuggestionPopover() {
   scanWorkspaceAnnotationState.activeMarkerId = "";
   renderScanWorkspaceAnnotationShell();
@@ -1261,8 +1263,7 @@ function renderScanWorkspaceSuggestionPopover() {
 
   if (decision === "accepted") {
     decisionPill.textContent = "Accepted";
-    decisionPill.className =
-      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--accepted";
+    decisionPill.className = "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--accepted";
     decisionMeta.textContent = marker.candidateIds.length
       ? "This suggestion is accepted and linked into the compare/apply decision set."
       : "This suggestion is accepted, but it does not yet carry a linked compare candidate id.";
@@ -1434,7 +1435,7 @@ function bindScanWorkspaceAnnotationShell() {
 
 function buildScanWorkspaceCompareSummaryHtml() {
   const counts = getScanWorkspaceAnnotationDecisionCounts();
-  const linkedAcceptedIds = getAcceptedCompareCandidateIds();
+  const linkedAcceptedIds = getEffectiveAcceptedCompareCandidateIds();
 
   const cards = [
     { label: "Accepted", value: String(counts.accepted) },
@@ -1555,6 +1556,15 @@ function bindScanWorkspaceCompareShell() {
     });
   }
 
+  const previewBtn = getScanWorkspaceInput("scanWorkspacePreviewBtn");
+  if (previewBtn && previewBtn.dataset.bound !== "true") {
+    previewBtn.dataset.bound = "true";
+    previewBtn.addEventListener("click", async () => {
+      setScanWorkspaceMode("compare");
+      await ensureScanWorkspaceCompareLoaded({ force: true });
+    });
+  }
+
   renderScanWorkspaceCompareShell();
 }
 
@@ -1573,9 +1583,10 @@ function bindScanWorkspacePersistenceControls() {
     continueBtn.addEventListener("click", async (event) => {
       const context = getScanWorkspaceContext();
       const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
+      const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
       const currentSignature = getCurrentScanWorkspacePersistenceSignature();
       const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-      const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
+      const isDirty = Boolean(hasContext && hasMarkers && currentSignature !== savedSignature);
 
       if (!hasContext || !isDirty) {
         return;
@@ -1589,6 +1600,47 @@ function bindScanWorkspacePersistenceControls() {
   renderScanWorkspacePersistenceStatus();
 }
 
+function maybeWarnBeforeUnload(event) {
+  const context = getScanWorkspaceContext();
+  const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
+  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
+  const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+  const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+  const isDirty = Boolean(hasContext && hasMarkers && currentSignature !== savedSignature);
+
+  if (!isDirty || scanWorkspacePersistenceState.isSaving) {
+    return;
+  }
+
+  event.preventDefault();
+  event.returnValue = "";
+}
+
+function bindScanWorkspaceGlobalShortcuts() {
+  if (document.body.dataset.scanWorkspaceGlobalBound === "true") return;
+  document.body.dataset.scanWorkspaceGlobalBound = "true";
+
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeScanWorkspaceSuggestionPopover();
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+    if (!popover || popover.classList.contains("hidden")) return;
+
+    const clickedInsidePopover = event.target instanceof Element && event.target.closest("#scanWorkspaceSuggestionPopover");
+    const clickedMarker = event.target instanceof Element && event.target.closest("[data-scan-annotation-marker]");
+
+    if (!clickedInsidePopover && !clickedMarker) {
+      closeScanWorkspaceSuggestionPopover();
+    }
+  });
+
+  window.addEventListener("beforeunload", maybeWarnBeforeUnload);
+}
+
 window.addEventListener("DOMContentLoaded", () => {
   const root = getScanWorkspacePageRoot();
   if (!root) return;
@@ -1599,6 +1651,7 @@ window.addEventListener("DOMContentLoaded", () => {
   bindScanWorkspaceAnnotationShell();
   bindScanWorkspaceCompareShell();
   bindScanWorkspacePersistenceControls();
+  bindScanWorkspaceGlobalShortcuts();
   updateScanWorkspaceProcessingView();
 
   setScanWorkspaceMode(getScanWorkspaceInitialMode());
@@ -1628,7 +1681,7 @@ window.addEventListener("DOMContentLoaded", () => {
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
       activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,
       counts: getScanWorkspaceAnnotationDecisionCounts(),
-      acceptedCandidateIds: getAcceptedCompareCandidateIds(),
+      acceptedCandidateIds: getEffectiveAcceptedCompareCandidateIds(),
     }),
   };
 });

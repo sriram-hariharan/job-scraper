@@ -8,18 +8,14 @@ let resumeChoiceState = {
   candidates: [],
   selectedResume: "",
   isBusy: false,
+  previewRequestSeq: 0,
+  previewAbortController: null,
+  previewObjectUrl: "",
 };
 
-let currentTailoringState = {
-  row: null,
-  tailoringJsonPath: "",
-  artifactData: null,
-  selectedCandidateIds: [],
-  livePreview: null,
-  previewRequestSeq: 0,
-  isPreviewing: false,
-  isSaving: false,
-};
+const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
+const PLANNING_TABLE_REQUEST_TIMEOUT_MS = 0;
+const PLANNING_TABLE_PREFETCH_TIMEOUT_MS = 12000;
 
 const planningTableState = {
   rows: [],
@@ -36,6 +32,23 @@ const planningTableState = {
     hasPrevPage: false,
     hasNextPage: false,
   },
+  isLoading: false,
+  requestSeq: 0,
+  activeController: null,
+  responseCache: new Map(),
+  prefetchInFlight: new Set(),
+  prefetchVisibleTimer: null,
+};
+
+let currentTailoringState = {
+  row: null,
+  tailoringJsonPath: "",
+  artifactData: null,
+  selectedCandidateIds: [],
+  livePreview: null,
+  previewRequestSeq: 0,
+  isPreviewing: false,
+  isSaving: false,
 };
 
 const tailoringWorkspaceState = {
@@ -1279,15 +1292,64 @@ function renderPlanningPagination() {
       Next
     </button>
   `;
+
 }
 
 async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`HTTP ${response.status}: ${text}`);
+  const {
+    timeoutMs = PLANNING_TABLE_REQUEST_TIMEOUT_MS,
+    signal: externalSignal,
+    ...fetchOptions
+  } = options || {};
+
+  const controller = new AbortController();
+  let timedOut = false;
+  let timeoutId = null;
+
+  const handleExternalAbort = () => {
+    controller.abort();
+  };
+
+  if (externalSignal) {
+    if (externalSignal.aborted) {
+      controller.abort();
+    } else {
+      externalSignal.addEventListener("abort", handleExternalAbort, { once: true });
+    }
   }
-  return response.json();
+
+  if (Number.isFinite(timeoutMs) && timeoutMs > 0) {
+    timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+  }
+
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    return response.json();
+  } catch (err) {
+    if (err && err.name === "AbortError" && timedOut) {
+      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s.`);
+    }
+    throw err;
+  } finally {
+    if (timeoutId !== null) {
+      window.clearTimeout(timeoutId);
+    }
+    if (externalSignal) {
+      externalSignal.removeEventListener("abort", handleExternalAbort);
+    }
+  }
 }
 
 async function postJson(url, payload) {
@@ -1301,38 +1363,27 @@ async function postJson(url, payload) {
 }
 
 async function postJsonWithTimeout(url, payload, timeoutMs = 20000) {
-  const controller = new AbortController();
-  const timeoutId = window.setTimeout(() => {
-    controller.abort();
-  }, timeoutMs);
-
-  try {
-    return await fetchJson(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    });
-  } catch (err) {
-    if (err && err.name === "AbortError") {
-      throw new Error(`Request timed out after ${Math.round(timeoutMs / 1000)}s.`);
-    }
-    throw err;
-  } finally {
-    window.clearTimeout(timeoutId);
-  }
+  return fetchJson(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+    timeoutMs,
+  });
 }
 
-function buildPlanningUrl() {
+function buildPlanningUrl(pageOverride = null) {
   const params = new URLSearchParams();
   const actions = getMultiSelectValues("planningActionFilter");
   const winnerBuckets = getMultiSelectValues("planningWinnerBucket");
   const tailoringStates = getMultiSelectValues("planningTailoringFilter");
   const undecidedOnly = planningUndecidedOnlyEnabled() ? "true" : "";
   const limit = qs("planningLimitInput").value || "15";
-  const page = planningTableState.pagination.page || 1;
+  const page =
+    Number.isFinite(Number(pageOverride)) && Number(pageOverride) > 0
+      ? Math.floor(Number(pageOverride))
+      : planningTableState.pagination.page || 1;
 
   appendMultiValueParams(params, "action", actions);
   appendMultiValueParams(params, "winner_bucket", winnerBuckets);
@@ -1342,6 +1393,156 @@ function buildPlanningUrl() {
   params.set("page", String(page));
 
   return `/browse?${params.toString()}`;
+}
+
+function readPlanningTableLastResponse(url) {
+  const cached = planningTableState.responseCache.get(url);
+  if (cached) return cached;
+
+  try {
+    const raw = window.sessionStorage.getItem(PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || parsed.url !== url || !parsed.data) return null;
+
+    planningTableState.responseCache.set(url, parsed.data);
+    return parsed.data;
+  } catch {
+    return null;
+  }
+}
+
+function writePlanningTableLastResponse(url, data, { persistToSession = false } = {}) {
+  planningTableState.responseCache.set(url, data);
+
+  if (!persistToSession) return;
+
+  try {
+    window.sessionStorage.setItem(
+      PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY,
+      JSON.stringify({
+        url,
+        savedAt: Date.now(),
+        data,
+      })
+    );
+  } catch {
+    // ignore session cache write failure
+  }
+}
+
+function capturePlanningTableSnapshot() {
+  if (!planningTableState.rows.length && !planningTableState.pagination.totalCount) {
+    return null;
+  }
+
+  return {
+    rows: planningTableState.rows.slice(),
+    metaLabel: planningTableState.metaLabel,
+    pagination: {
+      ...planningTableState.pagination,
+    },
+  };
+}
+
+function restorePlanningTableSnapshot(snapshot, { note = "" } = {}) {
+  if (!snapshot) return false;
+
+  planningTableState.pagination = {
+    ...snapshot.pagination,
+  };
+
+  renderPlanningRows(snapshot.rows, snapshot.metaLabel);
+
+  const tableMeta = qs("planningTableMeta");
+  if (tableMeta && note) {
+    tableMeta.textContent = `${snapshot.metaLabel} · ${note}`;
+  }
+
+  syncPlanningBrowserUrl({ mode: "replace" });
+  return true;
+}
+
+function applyPlanningTableResponse(data, { historyMode = "replace" } = {}) {
+  const rawPageSize = data.page_size ?? 15;
+  const parsedPageSize = Number(rawPageSize);
+  const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
+  const totalCount = Number(data.total_count ?? data.count ?? 0);
+  const totalPages = Number(data.total_pages ?? 1);
+  const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
+
+  updatePlanningStats(totalCount);
+
+  planningTableState.pagination = {
+    page: currentPage,
+    pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 15,
+    totalCount: Number.isFinite(totalCount) ? totalCount : 0,
+    totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
+    hasPrevPage: Boolean(data.has_prev_page),
+    hasNextPage: Boolean(data.has_next_page),
+  };
+
+  syncPlanningBrowserUrl({ mode: historyMode });
+
+  renderPlanningRows(
+    data.rows || [],
+    `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
+  );
+}
+
+function prefetchPlanningTablePage(pageNumber) {
+  const parsedPage = Number(pageNumber);
+  if (!Number.isFinite(parsedPage) || parsedPage < 1) return;
+  if (parsedPage === Number(planningTableState.pagination.page || 1)) return;
+
+  const totalPages = Number(planningTableState.pagination.totalPages || 1);
+  if (parsedPage > totalPages) return;
+
+  const url = buildPlanningUrl(parsedPage);
+
+  if (planningTableState.responseCache.has(url)) return;
+  if (planningTableState.prefetchInFlight.has(url)) return;
+
+  planningTableState.prefetchInFlight.add(url);
+
+  fetchJson(url, { timeoutMs: PLANNING_TABLE_PREFETCH_TIMEOUT_MS })
+    .then((data) => {
+      writePlanningTableLastResponse(url, data, { persistToSession: false });
+    })
+    .catch(() => {
+      // ignore background prefetch failure
+    })
+    .finally(() => {
+      planningTableState.prefetchInFlight.delete(url);
+    });
+}
+
+function prefetchPlanningTableNeighbors() {
+  const currentPage = Number(planningTableState.pagination.page || 1);
+  prefetchPlanningTablePage(currentPage + 1);
+  prefetchPlanningTablePage(currentPage - 1);
+}
+
+function prefetchVisiblePlanningPages() {
+  const actionsEl = qs("planningPaginationActions");
+  if (!actionsEl) return;
+
+  const currentPage = Number(planningTableState.pagination.page || 1);
+
+  const candidatePages = Array.from(
+    actionsEl.querySelectorAll("[data-planning-page]")
+  )
+    .map((button) => Number(button.dataset.planningPage || ""))
+    .filter((page) => {
+      if (!Number.isFinite(page) || page < 1) return false;
+      if (page === currentPage) return false;
+      return Math.abs(page - currentPage) <= 2;
+    });
+
+  Array.from(new Set(candidatePages)).forEach((page) => {
+    prefetchPlanningTablePage(page);
+  });
 }
 
 function isValidPlanningSortKey(key) {
@@ -1520,8 +1721,56 @@ function buildResumePdfFileUrl(resumeName) {
   return `/planning/resume-preview?${params.toString()}`;
 }
 
-function buildResumePreviewUrl(resumeName) {
-  return `${buildResumePdfFileUrl(resumeName)}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+function buildResumePreviewFrameUrl(rawUrl) {
+  return `${rawUrl}#toolbar=0&navpanes=0&scrollbar=1&view=FitH`;
+}
+
+function clearResumeChoicePreviewResources({
+  revokeObjectUrl = true,
+  abortRequest = true,
+} = {}) {
+  if (abortRequest && resumeChoiceState.previewAbortController) {
+    try {
+      resumeChoiceState.previewAbortController.abort();
+    } catch {
+      // ignore abort cleanup failure
+    }
+  }
+  resumeChoiceState.previewAbortController = null;
+
+  if (revokeObjectUrl && resumeChoiceState.previewObjectUrl) {
+    try {
+      URL.revokeObjectURL(resumeChoiceState.previewObjectUrl);
+    } catch {
+      // ignore revoke cleanup failure
+    }
+    resumeChoiceState.previewObjectUrl = "";
+  }
+}
+
+function resetResumeChoicePreviewSurface({
+  placeholderText = "Select a resume on the left to load its PDF preview.",
+  clearSelection = false,
+} = {}) {
+  const previewFrame = qs("resumeChoicePreviewFrame");
+  const previewEmpty = qs("resumeChoicePreviewEmpty");
+  const previewName = qs("resumeChoicePreviewName");
+  const selectBtn = qs("resumeChoiceSelectBtn");
+  const llmBtn = qs("resumeChoiceGenerateLlmBtn");
+
+  previewFrame.src = "about:blank";
+  previewFrame.classList.add("hidden");
+
+  previewEmpty.textContent = placeholderText;
+  previewEmpty.classList.remove("hidden");
+
+  if (clearSelection) {
+    previewName.textContent = "Select a resume to preview";
+    selectBtn.disabled = true;
+    if (llmBtn) {
+      llmBtn.disabled = true;
+    }
+  }
 }
 
 function normalizeTailoringWorkspaceText(value) {
@@ -2631,38 +2880,30 @@ function setResumeChoiceBusyState(isBusy, statusText = "") {
 }
 
 function resetResumeChoiceModal() {
+  clearResumeChoicePreviewResources();
+
   resumeChoiceState = {
     row: null,
     candidates: [],
     selectedResume: "",
     isBusy: false,
+    previewRequestSeq: 0,
+    previewAbortController: null,
+    previewObjectUrl: "",
   };
 
   qs("resumeChoiceCompany").textContent = "-";
   qs("resumeChoiceTitle").textContent = "-";
   qs("resumeChoiceAction").textContent = "-";
   qs("resumeChoiceGap").textContent = "-";
-  qs("resumeChoicePreviewName").textContent = "Select a resume to preview";
   qs("resumeChoiceSaveStatus").textContent = "No resume selected yet.";
   qs("resumeChoiceList").innerHTML = `<div class="resume-choice-empty">No resume choices available.</div>`;
 
-  const previewFrame = qs("resumeChoicePreviewFrame");
-  const previewEmpty = qs("resumeChoicePreviewEmpty");
-  const selectBtn = qs("resumeChoiceSelectBtn");
-  const llmBtn = qs("resumeChoiceGenerateLlmBtn");
-
-  previewFrame.src = "about:blank";
-  previewFrame.classList.add("hidden");
-  previewEmpty.classList.remove("hidden");
+  resetResumeChoicePreviewSurface({ clearSelection: true });
 
   qs("resumeChoiceLoadingOverlay").classList.add("hidden");
   qs("resumeChoiceCancelBtn").disabled = false;
   qs("closeResumeChoiceModalBtn").disabled = false;
-
-  selectBtn.disabled = true;
-  if (llmBtn) {
-    llmBtn.disabled = true;
-  }
 
   resetResumeChoiceLoadingContent();
 }
@@ -2702,7 +2943,7 @@ function renderResumeChoiceCards() {
   }).join("");
 }
 
-function setResumeChoicePreview(resumeName) {
+async function setResumeChoicePreview(resumeName) {
   const safeName = normalizeResumeName(resumeName);
   const previewFrame = qs("resumeChoicePreviewFrame");
   const previewEmpty = qs("resumeChoicePreviewEmpty");
@@ -2711,32 +2952,86 @@ function setResumeChoicePreview(resumeName) {
   const llmBtn = qs("resumeChoiceGenerateLlmBtn");
 
   if (!safeName) {
-    previewFrame.src = "about:blank";
-    previewFrame.classList.add("hidden");
-    previewEmpty.classList.remove("hidden");
-    previewName.textContent = "Select a resume to preview";
-    selectBtn.disabled = true;
-    if (llmBtn) {
-      llmBtn.disabled = true;
-    }
+    clearResumeChoicePreviewResources();
+    resetResumeChoicePreviewSurface({ clearSelection: true });
     return;
   }
 
-  const previewUrl = buildResumePreviewUrl(safeName);
+  const requestSeq = resumeChoiceState.previewRequestSeq + 1;
+  resumeChoiceState.previewRequestSeq = requestSeq;
 
+  clearResumeChoicePreviewResources();
+
+  const controller = new AbortController();
+  resumeChoiceState.previewAbortController = controller;
   resumeChoiceState.selectedResume = safeName;
+
   previewName.textContent = humanizeResumeDisplayName(safeName);
-  previewFrame.src = previewUrl;
-  previewFrame.classList.remove("hidden");
-  previewEmpty.classList.add("hidden");
+  previewFrame.src = "about:blank";
+  previewFrame.classList.add("hidden");
+  previewEmpty.textContent = "Loading PDF preview...";
+  previewEmpty.classList.remove("hidden");
 
   selectBtn.disabled = resumeChoiceState.isBusy ? true : false;
   if (llmBtn) {
     llmBtn.disabled = resumeChoiceState.isBusy ? true : false;
   }
-  qs("resumeChoiceSaveStatus").textContent = `Selected: ${humanizeResumeDisplayName(safeName)}`;
 
+  qs("resumeChoiceSaveStatus").textContent = `Selected: ${humanizeResumeDisplayName(safeName)}`;
   renderResumeChoiceCards();
+
+  try {
+    const response = await fetch(buildResumePdfFileUrl(safeName), {
+      signal: controller.signal,
+      credentials: "same-origin",
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`HTTP ${response.status}: ${text}`);
+    }
+
+    const blob = await response.blob();
+
+    if (requestSeq !== resumeChoiceState.previewRequestSeq) {
+      return;
+    }
+
+    const contentType = String(
+      response.headers.get("Content-Type") || blob.type || "application/pdf"
+    ).trim();
+
+    const previewBlob =
+      blob.type && String(blob.type).trim()
+        ? blob
+        : new Blob([blob], {
+            type: contentType.toLowerCase().includes("pdf")
+              ? contentType
+              : "application/pdf",
+          });
+
+    const objectUrl = URL.createObjectURL(previewBlob);
+    resumeChoiceState.previewAbortController = null;
+    resumeChoiceState.previewObjectUrl = objectUrl;
+
+    previewFrame.src = buildResumePreviewFrameUrl(objectUrl);
+    previewFrame.classList.remove("hidden");
+    previewEmpty.classList.add("hidden");
+  } catch (err) {
+    if (err && err.name === "AbortError") {
+      return;
+    }
+
+    if (requestSeq !== resumeChoiceState.previewRequestSeq) {
+      return;
+    }
+
+    clearResumeChoicePreviewResources({ abortRequest: false });
+    previewFrame.src = "about:blank";
+    previewFrame.classList.add("hidden");
+    previewEmpty.textContent = "Failed to load PDF preview.";
+    previewEmpty.classList.remove("hidden");
+  }
 }
 
 function openResumeChoiceModal(row) {
@@ -2766,7 +3061,7 @@ function openResumeChoiceModal(row) {
     normalizedRow.runner_up_resume;
 
   if (defaultResume) {
-    setResumeChoicePreview(defaultResume);
+    void setResumeChoicePreview(defaultResume);
   }
 }
 
@@ -9110,51 +9405,102 @@ function renderPlanningRows(rows, metaLabel) {
   initResizableTableColumns("planningTable", "planningTableColumnWidths");
 }
 
-async function loadPlanningTable() {
+async function loadPlanningTable({
+  forceNetwork = false,
+  requestedPage = null,
+  historyMode = "replace",
+} = {}) {
   const tbody = qs("planningTableBody");
   if (!tbody) return;
 
-  tbody.innerHTML = "";
-  window.setTableWrapLoading?.(tbody, "Loading planning rows...");
-  qs("planningTableMeta").textContent = "Loading...";
-
   const paginationMeta = qs("planningPaginationMeta");
-  const paginationActions = qs("planningPaginationActions");
-  if (paginationMeta) paginationMeta.textContent = "Loading...";
-  if (paginationActions) paginationActions.innerHTML = "";
+  const tableMeta = qs("planningTableMeta");
 
-  await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  const resolvedPage =
+    Number.isFinite(Number(requestedPage)) && Number(requestedPage) > 0
+      ? Math.floor(Number(requestedPage))
+      : planningTableState.pagination.page || 1;
+
+  const url = buildPlanningUrl(resolvedPage);
+  const cachedData = forceNetwork ? null : readPlanningTableLastResponse(url);
+  const stableSnapshot = capturePlanningTableSnapshot();
+
+  planningTableState.requestSeq += 1;
+  const requestSeq = planningTableState.requestSeq;
+
+  if (cachedData) {
+    applyPlanningTableResponse(cachedData, { historyMode });
+    if (tableMeta) {
+      tableMeta.textContent = "Showing cached rows while refreshing...";
+    }
+  } else if (stableSnapshot) {
+    window.setTableWrapLoading?.(tbody, "Loading planning rows...");
+    if (tableMeta) {
+      tableMeta.textContent = `${stableSnapshot.metaLabel} · Loading...`;
+    }
+    if (paginationMeta) {
+      paginationMeta.textContent = "Loading...";
+    }
+  } else {
+    tbody.innerHTML = "";
+    window.setTableWrapLoading?.(tbody, "Loading planning rows...");
+    if (tableMeta) tableMeta.textContent = "Loading...";
+    if (paginationMeta) paginationMeta.textContent = "Loading...";
+    await new Promise((resolve) => window.requestAnimationFrame(resolve));
+  }
+
+  if (planningTableState.activeController) {
+    try {
+      planningTableState.activeController.abort();
+    } catch {
+      // ignore abort failure
+    }
+  }
+
+  const controller = new AbortController();
+  planningTableState.activeController = controller;
+  planningTableState.isLoading = true;
 
   try {
-    const url = buildPlanningUrl();
-    const data = await fetchJson(url);
+    const data = await fetchJson(url, {
+      signal: controller.signal,
+      timeoutMs: PLANNING_TABLE_REQUEST_TIMEOUT_MS,
+    });
 
-    const rawPageSize = data.page_size ?? 15;
-    const parsedPageSize = Number(rawPageSize);
-    const pageSize = Number.isFinite(parsedPageSize) && parsedPageSize > 0 ? parsedPageSize : 15;
-    const totalCount = Number(data.total_count ?? data.count ?? 0);
-    updatePlanningStats(totalCount);
-    const totalPages = Number(data.total_pages ?? 1);
-    const currentPage = Number(data.page ?? planningTableState.pagination.page ?? 1);
+    if (requestSeq !== planningTableState.requestSeq) {
+      return;
+    }
 
-    planningTableState.pagination = {
-      page: currentPage,
-      pageSize: Number.isFinite(pageSize) && pageSize > 0 ? pageSize : 15,
-      totalCount: Number.isFinite(totalCount) ? totalCount : 0,
-      totalPages: Number.isFinite(totalPages) && totalPages > 0 ? totalPages : 1,
-      hasPrevPage: Boolean(data.has_prev_page),
-      hasNextPage: Boolean(data.has_next_page),
-    };
-
-    syncPlanningBrowserUrl({ mode: "replace" });
-
-    renderPlanningRows(
-      data.rows || [],
-      `Planning detail view · ${totalCount} total job${totalCount === 1 ? "" : "s"}`
-    );
+    writePlanningTableLastResponse(url, data, { persistToSession: true });
+    applyPlanningTableResponse(data, { historyMode });
   } catch (err) {
-    window.clearTableWrapLoading?.(tbody);
+    if (err && err.name === "AbortError") {
+      return;
+    }
+
+    if (cachedData) {
+      if (tableMeta) {
+        tableMeta.textContent = `${planningTableState.metaLabel} · refresh failed`;
+      }
+      return;
+    }
+
+    const note =
+      err instanceof Error && err.message
+        ? err.message
+        : "refresh failed";
+
+    if (restorePlanningTableSnapshot(stableSnapshot, { note })) {
+      return;
+    }
+
     throw err;
+  } finally {
+    if (planningTableState.activeController === controller) {
+      planningTableState.activeController = null;
+    }
+    planningTableState.isLoading = false;
+    window.clearTableWrapLoading?.(tbody);
   }
 }
 
@@ -9169,7 +9515,6 @@ function clearPlanningFilters() {
   }
 
   qs("planningLimitInput").value = "15";
-  setPlanningRequestedPage(1);
   updatePlanningStats(0);
 }
 
@@ -9179,10 +9524,11 @@ function attachPlanningHandlers() {
   initMultiSelect("planningTailoringFilter");
 
   qs("planningApplyFiltersBtn").addEventListener("click", async () => {
-    setPlanningRequestedPage(1);
-    syncPlanningBrowserUrl({ mode: "push" });
     try {
-      await loadPlanningTable();
+      await loadPlanningTable({
+        requestedPage: 1,
+        historyMode: "push",
+      });
     } catch (err) {
       showAppError("Failed to load planning table", err);
     }
@@ -9190,9 +9536,11 @@ function attachPlanningHandlers() {
 
   qs("planningClearFiltersBtn").addEventListener("click", async () => {
     clearPlanningFilters();
-    syncPlanningBrowserUrl({ mode: "push" });
     try {
-      await loadPlanningTable();
+      await loadPlanningTable({
+        requestedPage: 1,
+        historyMode: "push",
+      });
     } catch (err) {
       showAppError("Failed to reload planning table", err);
     }
@@ -9205,11 +9553,11 @@ function attachPlanningHandlers() {
     const nextPage = Number(button.dataset.planningPage || "");
     if (!Number.isFinite(nextPage) || nextPage < 1) return;
 
-    setPlanningRequestedPage(nextPage);
-    syncPlanningBrowserUrl({ mode: "push" });
-
     try {
-      await loadPlanningTable();
+      await loadPlanningTable({
+        requestedPage: nextPage,
+        historyMode: "push",
+      });
     } catch (err) {
       showAppError("Failed to change planning page", err);
     }
@@ -9266,7 +9614,7 @@ function attachPlanningHandlers() {
   qs("resumeChoiceList").addEventListener("click", (event) => {
     const choiceButton = event.target.closest("[data-resume-choice='true']");
     if (!choiceButton) return;
-    setResumeChoicePreview(choiceButton.dataset.resumeName || "");
+    void setResumeChoicePreview(choiceButton.dataset.resumeName || "");
   });
 
   qs("resumeChoiceSelectBtn").addEventListener("click", async () => {

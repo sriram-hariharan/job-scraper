@@ -12,6 +12,9 @@ import subprocess
 import sys
 import tempfile
 import shutil
+import time
+
+from src.utils.logging import get_logger
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 
@@ -123,6 +126,61 @@ ALLOWED_OPERATOR_DECISIONS = {
 }
 
 _RESUME_PREVIEW_PATH_CACHE: Dict[str, str] = {}
+
+_PATCH_SELECTION_OVERLAY_CACHE: Dict[str, Any] = {
+    "version": 0,
+    "data": None,
+}
+_JOB_METADATA_OVERLAY_CACHE: Dict[Tuple[str, int, int], Dict[str, Dict[str, Any]]] = {}
+_TAILORING_WORKSPACE_BUTTON_STATE_CACHE: Dict[
+    Tuple[str, int, int, int, int],
+    Dict[str, Any],
+] = {}
+
+logger = get_logger("app.services")
+
+def _invalidate_patch_selection_overlay_cache() -> None:
+    _PATCH_SELECTION_OVERLAY_CACHE["version"] = int(
+        _PATCH_SELECTION_OVERLAY_CACHE.get("version", 0) or 0
+    ) + 1
+    _PATCH_SELECTION_OVERLAY_CACHE["data"] = None
+
+
+def _patch_selection_overlay_cache_version() -> int:
+    return int(_PATCH_SELECTION_OVERLAY_CACHE.get("version", 0) or 0)
+
+
+def _job_metadata_overlay_cache_key(job_corpus: Path) -> Tuple[str, int, int]:
+    resolved = Path(job_corpus).expanduser().resolve()
+    if not resolved.exists():
+        return (str(resolved), 0, 0)
+
+    stat = resolved.stat()
+    return (str(resolved), int(stat.st_mtime_ns), int(stat.st_size))
+
+
+def _tailoring_workspace_button_state_cache_key(
+    artifact_path: Path,
+) -> Tuple[str, int, int, int, int]:
+    resolved = artifact_path.expanduser().resolve()
+    artifact_stat = resolved.stat()
+
+    packet_path = _infer_packet_json_path_from_tailoring_artifact(resolved)
+    packet_mtime_ns = 0
+    packet_size = 0
+
+    if packet_path and packet_path.exists() and packet_path.is_file():
+        packet_stat = packet_path.stat()
+        packet_mtime_ns = int(packet_stat.st_mtime_ns)
+        packet_size = int(packet_stat.st_size)
+
+    return (
+        str(resolved),
+        int(artifact_stat.st_mtime_ns),
+        int(artifact_stat.st_size),
+        packet_mtime_ns,
+        packet_size,
+    )
 
 def _get_resume_dir() -> Path:
     resume_dir = DEFAULT_PROFILE_RESUME_DIR
@@ -1584,6 +1642,10 @@ def _tailoring_artifact_signature(payload: Dict[str, Any]) -> str:
     return hashlib.sha1(blob.encode("utf-8")).hexdigest()[:16]
 
 def _load_latest_patch_selection_overlay() -> Dict[str, Dict[str, Any]]:
+    cached = _PATCH_SELECTION_OVERLAY_CACHE.get("data")
+    if isinstance(cached, dict):
+        return dict(cached)
+
     meta_payload = get_patch_selections_postgres_status_payload(
         limit=1,
         database_url="",
@@ -1623,7 +1685,8 @@ def _load_latest_patch_selection_overlay() -> Dict[str, Dict[str, Any]]:
             "note": _clean_text(row.get("note")),
         }
 
-    return latest_by_path
+    _PATCH_SELECTION_OVERLAY_CACHE["data"] = dict(latest_by_path)
+    return dict(latest_by_path)
 
 def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, Any]:
     from src.tailoring.rendering import build_selected_patch_set_counterfactual_preview
@@ -1642,6 +1705,116 @@ def _ensure_tailoring_preview_fields(payload_data: Dict[str, Any]) -> Dict[str, 
 
     return data
 
+def _derive_workspace_button_state_from_raw_payload(
+    payload_data: Dict[str, Any],
+) -> Dict[str, Any]:
+    def _as_int(value: Any) -> int:
+        try:
+            return max(int(value or 0), 0)
+        except (TypeError, ValueError):
+            return 0
+
+    app_ready = list(payload_data.get("app_ready_replacements", []) or [])
+    direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
+    ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
+    direction_only = list(payload_data.get("direction_only_replacements", []) or [])
+    final_replacement_decisions = list(payload_data.get("final_replacement_decisions", []) or [])
+    anchor_cards = list(payload_data.get("anchor_cards", []) or [])
+    top_anchor_priorities = list(payload_data.get("top_anchor_priorities", []) or [])
+
+    # Fast modern path: use explicit operator payload lanes if they already exist.
+    if any(
+        [
+            app_ready,
+            direct_apply_optional,
+            ai_optimize_optional,
+            direction_only,
+            final_replacement_decisions,
+            anchor_cards,
+            top_anchor_priorities,
+        ]
+    ):
+        ready_count = len(app_ready)
+        actionable_count = len(app_ready) + len(direct_apply_optional) + len(ai_optimize_optional)
+        review_count = len(direction_only)
+        anchor_count = len(anchor_cards) or len(top_anchor_priorities)
+
+        has_replacement_plan = bool(
+            final_replacement_decisions
+            or app_ready
+            or direct_apply_optional
+            or ai_optimize_optional
+            or direction_only
+        )
+        has_anchor_evidence = bool(anchor_cards or top_anchor_priorities)
+
+        if actionable_count > 0:
+            workspace_state = "ready"
+        elif review_count > 0 or has_replacement_plan or has_anchor_evidence:
+            workspace_state = "review"
+        else:
+            workspace_state = "empty"
+
+        return {
+            "tailoring_ready_replacement_count": ready_count,
+            "tailoring_actionable_replacement_count": actionable_count,
+            "tailoring_review_replacement_count": review_count + anchor_count,
+            "tailoring_has_ready_replacements": actionable_count > 0,
+            "tailoring_has_review_guidance": (review_count + anchor_count) > 0,
+            "tailoring_workspace_state": workspace_state,
+        }
+
+    # Cheap strict fallback for legacy artifacts:
+    # only trust explicit summary counts for ready/actionable; otherwise degrade to review.
+    final_replacement_summary = dict(payload_data.get("final_replacement_summary", {}) or {})
+
+    ready_count = max(
+        _as_int(final_replacement_summary.get("app_ready_count")),
+        _as_int(final_replacement_summary.get("direct_apply_ready_count")),
+    )
+    direct_apply_optional_count = _as_int(
+        final_replacement_summary.get("direct_apply_optional_count")
+    )
+    ai_optimize_optional_count = _as_int(
+        final_replacement_summary.get("ai_optimize_optional_count")
+    )
+    direction_only_count = _as_int(
+        final_replacement_summary.get("direction_only_count")
+    )
+
+    actionable_count = ready_count + direct_apply_optional_count + ai_optimize_optional_count
+
+    legacy_review_count = max(
+        len(list(payload_data.get("top_edit_priorities", []) or [])),
+        len(list(payload_data.get("edit_cards", []) or [])),
+        len(list(payload_data.get("rewrite_candidates", []) or [])),
+        len(list(payload_data.get("bullet_reuse_candidates", []) or [])),
+        len(list(payload_data.get("bullet_diagnoses", []) or [])),
+    )
+    anchor_count = max(
+        len(list(payload_data.get("anchor_cards", []) or [])),
+        len(list(payload_data.get("top_anchor_priorities", []) or [])),
+    )
+
+    review_count = max(direction_only_count, legacy_review_count)
+
+    if actionable_count > 0:
+        workspace_state = "ready"
+    elif review_count > 0 or anchor_count > 0:
+        workspace_state = "review"
+    else:
+        workspace_state = "empty"
+
+    return {
+        "tailoring_ready_replacement_count": ready_count,
+        "tailoring_actionable_replacement_count": actionable_count,
+        "tailoring_review_replacement_count": review_count + anchor_count,
+        "tailoring_has_ready_replacements": actionable_count > 0,
+        "tailoring_has_review_guidance": (review_count + anchor_count) > 0,
+        "tailoring_workspace_state": workspace_state,
+    }
+
+
 def _tailoring_workspace_button_state(
     row: Dict[str, Any],
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -1659,60 +1832,45 @@ def _tailoring_workspace_button_state(
     if not raw_path:
         return result
 
+    started_at = time.perf_counter()
+
     try:
         artifact_path = _resolve_planning_artifact_path(raw_path, output_dir=output_dir)
+        cache_key = _tailoring_workspace_button_state_cache_key(artifact_path)
+        cached = _TAILORING_WORKSPACE_BUTTON_STATE_CACHE.get(cache_key)
+        if cached is not None:
+            return dict(cached)
+
         payload_data = _load_tailoring_json_artifact(artifact_path)
 
-        if artifact_path.name.endswith("__tailoring.json"):
-            payload_data = _rehydrate_legacy_tailoring_operator_payload(
-                artifact_path,
-                payload_data,
+        result.update(_derive_workspace_button_state_from_raw_payload(payload_data))
+
+        elapsed = time.perf_counter() - started_at
+        if elapsed >= 0.25:
+            logger.info(
+                "tailoring_workspace_button_state slow elapsed=%.3f job_doc_id=%r company=%r title=%r tailoring_json=%r ready=%s actionable=%s review=%s state=%s",
+                elapsed,
+                _clean_text(row.get("job_doc_id")),
+                _clean_text(row.get("job_company")),
+                _clean_text(row.get("job_title")),
+                raw_path,
+                result.get("tailoring_ready_replacement_count", 0),
+                result.get("tailoring_actionable_replacement_count", 0),
+                result.get("tailoring_review_replacement_count", 0),
+                result.get("tailoring_workspace_state", ""),
             )
 
-        if payload_data.get("replacement_candidates") is not None:
-            payload_data = _apply_saved_patch_selection_overlay(
-                artifact_path,
-                payload_data,
-            )
-
-        app_ready = list(payload_data.get("app_ready_replacements", []) or [])
-        direct_apply_optional = list(payload_data.get("direct_apply_optional_replacements", []) or [])
-        ai_optimize_optional = list(payload_data.get("ai_optimize_optional_replacements", []) or [])
-        direction_only = list(payload_data.get("direction_only_replacements", []) or [])
-        decisions = list(payload_data.get("final_replacement_decisions", []) or [])
-        anchor_cards = list(payload_data.get("anchor_cards", []) or [])
-        top_anchor_priorities = list(payload_data.get("top_anchor_priorities", []) or [])
-
-        ready_count = len(app_ready)
-        actionable_count = len(app_ready) + len(direct_apply_optional) + len(ai_optimize_optional)
-        review_count = len(direction_only)
-        anchor_count = len(anchor_cards) or len(top_anchor_priorities)
-
-        has_replacement_plan = bool(
-            decisions or app_ready or direct_apply_optional or ai_optimize_optional or direction_only
-        )
-        has_anchor_evidence = bool(anchor_cards or top_anchor_priorities)
-
-        if actionable_count > 0:
-            workspace_state = "ready"
-        elif review_count > 0:
-            workspace_state = "review"
-        elif has_replacement_plan:
-            workspace_state = "review"
-        elif has_anchor_evidence:
-            workspace_state = "review"
-        else:
-            workspace_state = "empty"
-
-        result.update({
-            "tailoring_ready_replacement_count": ready_count,
-            "tailoring_actionable_replacement_count": actionable_count,
-            "tailoring_review_replacement_count": review_count + anchor_count,
-            "tailoring_has_ready_replacements": actionable_count > 0,
-            "tailoring_has_review_guidance": (review_count + anchor_count) > 0,
-            "tailoring_workspace_state": workspace_state,
-        })
+        _TAILORING_WORKSPACE_BUTTON_STATE_CACHE[cache_key] = dict(result)
     except Exception:
+        elapsed = time.perf_counter() - started_at
+        logger.exception(
+            "tailoring_workspace_button_state failed elapsed=%.3f job_doc_id=%r company=%r title=%r tailoring_json=%r",
+            elapsed,
+            _clean_text(row.get("job_doc_id")),
+            _clean_text(row.get("job_company")),
+            _clean_text(row.get("job_title")),
+            raw_path,
+        )
         return result
 
     return result
@@ -2586,12 +2744,18 @@ def _exclude_applied_rows(
 def _load_job_metadata_overlay_from_corpus(
     job_corpus: Path = DEFAULT_CORPUS_PATH,
 ) -> Dict[str, Dict[str, Any]]:
-    latest_by_key: Dict[str, Dict[str, Any]] = {}
+    cache_key = _job_metadata_overlay_cache_key(job_corpus)
+    cached = _JOB_METADATA_OVERLAY_CACHE.get(cache_key)
+    if cached is not None:
+        return cached
 
-    if not job_corpus.exists():
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+    resolved_corpus = Path(job_corpus).expanduser().resolve()
+
+    if not resolved_corpus.exists():
         return latest_by_key
 
-    with job_corpus.open("r", encoding="utf-8") as f:
+    with resolved_corpus.open("r", encoding="utf-8") as f:
         for line in f:
             raw = line.strip()
             if not raw:
@@ -2652,6 +2816,8 @@ def _load_job_metadata_overlay_from_corpus(
                 if key:
                     latest_by_key[key] = overlay
 
+    _JOB_METADATA_OVERLAY_CACHE.clear()
+    _JOB_METADATA_OVERLAY_CACHE[cache_key] = latest_by_key
     return latest_by_key
 
 def _overlay_job_metadata(
@@ -2819,7 +2985,15 @@ def browse_payload(
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._build_job_index(output_dir)
+    started_at = time.perf_counter()
+    stage_timings: List[Tuple[str, float]] = []
+    last_mark = started_at
+
+    def mark(label: str) -> None:
+        nonlocal last_mark
+        now = time.perf_counter()
+        stage_timings.append((label, round(now - last_mark, 3)))
+        last_mark = now
 
     resolved_filters = {
         "action": "",
@@ -2840,64 +3014,129 @@ def browse_payload(
     current_page = max(int(resolved_filters.get("page", 1) or 1), 1)
     page_size = 15
 
-    selection_filters = dict(resolved_filters)
-    selection_filters["limit"] = max(len(rows), 1)
-    selection_filters.pop("page", None)
-    selection_filters.pop("tailoring_state", None)
-
-    args = _make_args(**selection_filters)
-    selected = ja._select_browse_rows(rows, args)
-    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-    selected = _overlay_application_actions(selected)
-    selected = _exclude_applied_rows(selected)
-
     requested_tailoring_states = _normalize_tailoring_state_filter_values(
         resolved_filters.get("tailoring_state", [])
     )
 
-    enriched_selected: List[Dict[str, Any]] = []
-    for row in selected:
-        matches, enriched_row = _row_matches_tailoring_state_filter(
-            row,
-            requested_tailoring_states,
-            output_dir=output_dir,
-        )
-        if matches:
-            enriched_selected.append(enriched_row)
+    logger.info(
+        "browse_payload start output_dir=%s page=%s limit=%s action=%s fallback_status=%s winner_bucket=%s tailoring_state=%s company_contains=%r title_contains=%r undecided_only=%r",
+        str(output_dir),
+        current_page,
+        requested_limit,
+        resolved_filters.get("action", ""),
+        resolved_filters.get("fallback_status", ""),
+        resolved_filters.get("winner_bucket", ""),
+        requested_tailoring_states,
+        resolved_filters.get("company_contains", ""),
+        resolved_filters.get("title_contains", ""),
+        resolved_filters.get("undecided_only", ""),
+    )
 
-    selected = enriched_selected[:requested_limit]
+    try:
+        rows = ja._build_job_index(output_dir)
+        mark("build_job_index")
 
-    total_count = len(selected)
-    total_pages = max((total_count + page_size - 1) // page_size, 1)
-    current_page = min(current_page, total_pages)
+        selection_filters = dict(resolved_filters)
+        selection_filters["limit"] = max(len(rows), 1)
+        selection_filters.pop("page", None)
+        selection_filters.pop("tailoring_state", None)
 
-    start = (current_page - 1) * page_size
-    end = start + page_size
-    page_rows = selected[start:end]
+        args = _make_args(**selection_filters)
+        selected = ja._select_browse_rows(rows, args)
+        mark("select_browse_rows")
 
-    return {
-        "filters": {
-            "action": resolved_filters.get("action", ""),
-            "needs_review": resolved_filters.get("needs_review", ""),
-            "is_tie": resolved_filters.get("is_tie", ""),
-            "fallback_status": resolved_filters.get("fallback_status", ""),
-            "winner_bucket": resolved_filters.get("winner_bucket", ""),
-            "tailoring_state": requested_tailoring_states,
-            "company_contains": resolved_filters.get("company_contains", ""),
-            "title_contains": resolved_filters.get("title_contains", ""),
-            "limit": requested_limit,
-            "undecided_only": resolved_filters.get("undecided_only", ""),
+        selected = _overlay_application_actions(selected)
+        mark("overlay_application_actions")
+
+        selected = _exclude_applied_rows(selected)
+        mark("exclude_applied_rows")
+
+        if requested_tailoring_states:
+            enriched_selected: List[Dict[str, Any]] = []
+            for row in selected:
+                matches, enriched_row = _row_matches_tailoring_state_filter(
+                    row,
+                    requested_tailoring_states,
+                    output_dir=output_dir,
+                )
+                if matches:
+                    enriched_selected.append(enriched_row)
+            selected = enriched_selected
+        mark("tailoring_state_filter")
+
+        selected = selected[:requested_limit]
+        mark("apply_limit_cap")
+
+        total_count = len(selected)
+        total_pages = max((total_count + page_size - 1) // page_size, 1)
+        current_page = min(current_page, total_pages)
+
+        start = (current_page - 1) * page_size
+        end = start + page_size
+        page_rows = selected[start:end]
+        mark("slice_page_rows")
+
+        page_rows = _overlay_job_metadata(page_rows, job_corpus=DEFAULT_CORPUS_PATH)
+        mark("overlay_job_metadata")
+
+        finalized_page_rows: List[Dict[str, Any]] = []
+        for row in page_rows:
+            if requested_tailoring_states:
+                finalized_page_rows.append(row)
+                continue
+
+            _, enriched_row = _row_matches_tailoring_state_filter(
+                row,
+                [],
+                output_dir=output_dir,
+            )
+            finalized_page_rows.append(enriched_row)
+        mark("finalize_page_rows")
+
+        payload = {
+            "filters": {
+                "action": resolved_filters.get("action", ""),
+                "needs_review": resolved_filters.get("needs_review", ""),
+                "is_tie": resolved_filters.get("is_tie", ""),
+                "fallback_status": resolved_filters.get("fallback_status", ""),
+                "winner_bucket": resolved_filters.get("winner_bucket", ""),
+                "tailoring_state": requested_tailoring_states,
+                "company_contains": resolved_filters.get("company_contains", ""),
+                "title_contains": resolved_filters.get("title_contains", ""),
+                "limit": requested_limit,
+                "undecided_only": resolved_filters.get("undecided_only", ""),
+                "page": current_page,
+            },
+            "rows": finalized_page_rows,
+            "count": len(finalized_page_rows),
+            "total_count": total_count,
             "page": current_page,
-        },
-        "rows": page_rows,
-        "count": len(page_rows),
-        "total_count": total_count,
-        "page": current_page,
-        "page_size": page_size,
-        "total_pages": total_pages,
-        "has_prev_page": current_page > 1,
-        "has_next_page": current_page < total_pages,
-    }
+            "page_size": page_size,
+            "total_pages": total_pages,
+            "has_prev_page": current_page > 1,
+            "has_next_page": current_page < total_pages,
+        }
+
+        logger.info(
+            "browse_payload ok page=%s limit=%s total_count=%s count=%s total_elapsed=%.3f stage_timings=%s",
+            current_page,
+            requested_limit,
+            total_count,
+            len(finalized_page_rows),
+            time.perf_counter() - started_at,
+            stage_timings,
+        )
+        return payload
+
+    except Exception:
+        logger.exception(
+            "browse_payload failed page=%s limit=%s total_elapsed=%.3f stage_timings=%s",
+            current_page,
+            requested_limit,
+            time.perf_counter() - started_at,
+            stage_timings,
+        )
+        raise
 
 def review_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -3509,6 +3748,9 @@ def record_planning_patch_selection_payload(
         payload_data,
         selected_candidate_ids=normalized_ids,
     )
+
+    if bool(postgres_write.get("ok", False)):
+        _invalidate_patch_selection_overlay_cache()
 
     return {
         "ok": True,

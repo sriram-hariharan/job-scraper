@@ -663,7 +663,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=tailoring_ui_20260417_8"></script>
+  <script src="/static/planning.js?v=planning_ui_20260423_4"></script>
 </body>
 </html>
     """.strip()
@@ -1122,7 +1122,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=tailoring_workspace_20260417_8"></script>
+  <script src="/static/planning.js?v=planning_ui_20260423_4"></script>
 </body>
 </html>
     """.strip()
@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase9_1" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_1" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1864,8 +1864,8 @@ def scan_workspace(
     </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=scan_workspace_20260422_2"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase9_1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260423_4"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_1"></script>
 </body>
 </html>
     """.strip()

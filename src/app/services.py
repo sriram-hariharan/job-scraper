@@ -12,9 +12,6 @@ import subprocess
 import sys
 import tempfile
 import shutil
-import time
-
-from src.utils.logging import get_logger
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 
@@ -136,8 +133,6 @@ _TAILORING_WORKSPACE_BUTTON_STATE_CACHE: Dict[
     Tuple[str, int, int, int, int],
     Dict[str, Any],
 ] = {}
-
-logger = get_logger("app.services")
 
 def _invalidate_patch_selection_overlay_cache() -> None:
     _PATCH_SELECTION_OVERLAY_CACHE["version"] = int(
@@ -1832,8 +1827,6 @@ def _tailoring_workspace_button_state(
     if not raw_path:
         return result
 
-    started_at = time.perf_counter()
-
     try:
         artifact_path = _resolve_planning_artifact_path(raw_path, output_dir=output_dir)
         cache_key = _tailoring_workspace_button_state_cache_key(artifact_path)
@@ -1845,32 +1838,8 @@ def _tailoring_workspace_button_state(
 
         result.update(_derive_workspace_button_state_from_raw_payload(payload_data))
 
-        elapsed = time.perf_counter() - started_at
-        if elapsed >= 0.25:
-            logger.info(
-                "tailoring_workspace_button_state slow elapsed=%.3f job_doc_id=%r company=%r title=%r tailoring_json=%r ready=%s actionable=%s review=%s state=%s",
-                elapsed,
-                _clean_text(row.get("job_doc_id")),
-                _clean_text(row.get("job_company")),
-                _clean_text(row.get("job_title")),
-                raw_path,
-                result.get("tailoring_ready_replacement_count", 0),
-                result.get("tailoring_actionable_replacement_count", 0),
-                result.get("tailoring_review_replacement_count", 0),
-                result.get("tailoring_workspace_state", ""),
-            )
-
         _TAILORING_WORKSPACE_BUTTON_STATE_CACHE[cache_key] = dict(result)
     except Exception:
-        elapsed = time.perf_counter() - started_at
-        logger.exception(
-            "tailoring_workspace_button_state failed elapsed=%.3f job_doc_id=%r company=%r title=%r tailoring_json=%r",
-            elapsed,
-            _clean_text(row.get("job_doc_id")),
-            _clean_text(row.get("job_company")),
-            _clean_text(row.get("job_title")),
-            raw_path,
-        )
         return result
 
     return result
@@ -2985,15 +2954,6 @@ def browse_payload(
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    started_at = time.perf_counter()
-    stage_timings: List[Tuple[str, float]] = []
-    last_mark = started_at
-
-    def mark(label: str) -> None:
-        nonlocal last_mark
-        now = time.perf_counter()
-        stage_timings.append((label, round(now - last_mark, 3)))
-        last_mark = now
 
     resolved_filters = {
         "action": "",
@@ -3018,23 +2978,8 @@ def browse_payload(
         resolved_filters.get("tailoring_state", [])
     )
 
-    logger.info(
-        "browse_payload start output_dir=%s page=%s limit=%s action=%s fallback_status=%s winner_bucket=%s tailoring_state=%s company_contains=%r title_contains=%r undecided_only=%r",
-        str(output_dir),
-        current_page,
-        requested_limit,
-        resolved_filters.get("action", ""),
-        resolved_filters.get("fallback_status", ""),
-        resolved_filters.get("winner_bucket", ""),
-        requested_tailoring_states,
-        resolved_filters.get("company_contains", ""),
-        resolved_filters.get("title_contains", ""),
-        resolved_filters.get("undecided_only", ""),
-    )
-
     try:
         rows = ja._build_job_index(output_dir)
-        mark("build_job_index")
 
         selection_filters = dict(resolved_filters)
         selection_filters["limit"] = max(len(rows), 1)
@@ -3043,13 +2988,10 @@ def browse_payload(
 
         args = _make_args(**selection_filters)
         selected = ja._select_browse_rows(rows, args)
-        mark("select_browse_rows")
 
         selected = _overlay_application_actions(selected)
-        mark("overlay_application_actions")
 
         selected = _exclude_applied_rows(selected)
-        mark("exclude_applied_rows")
 
         if requested_tailoring_states:
             enriched_selected: List[Dict[str, Any]] = []
@@ -3062,10 +3004,8 @@ def browse_payload(
                 if matches:
                     enriched_selected.append(enriched_row)
             selected = enriched_selected
-        mark("tailoring_state_filter")
 
         selected = selected[:requested_limit]
-        mark("apply_limit_cap")
 
         total_count = len(selected)
         total_pages = max((total_count + page_size - 1) // page_size, 1)
@@ -3074,10 +3014,8 @@ def browse_payload(
         start = (current_page - 1) * page_size
         end = start + page_size
         page_rows = selected[start:end]
-        mark("slice_page_rows")
 
         page_rows = _overlay_job_metadata(page_rows, job_corpus=DEFAULT_CORPUS_PATH)
-        mark("overlay_job_metadata")
 
         finalized_page_rows: List[Dict[str, Any]] = []
         for row in page_rows:
@@ -3091,7 +3029,6 @@ def browse_payload(
                 output_dir=output_dir,
             )
             finalized_page_rows.append(enriched_row)
-        mark("finalize_page_rows")
 
         payload = {
             "filters": {
@@ -3117,25 +3054,9 @@ def browse_payload(
             "has_next_page": current_page < total_pages,
         }
 
-        logger.info(
-            "browse_payload ok page=%s limit=%s total_count=%s count=%s total_elapsed=%.3f stage_timings=%s",
-            current_page,
-            requested_limit,
-            total_count,
-            len(finalized_page_rows),
-            time.perf_counter() - started_at,
-            stage_timings,
-        )
         return payload
 
     except Exception:
-        logger.exception(
-            "browse_payload failed page=%s limit=%s total_elapsed=%.3f stage_timings=%s",
-            current_page,
-            requested_limit,
-            time.perf_counter() - started_at,
-            stage_timings,
-        )
         raise
 
 def review_payload(

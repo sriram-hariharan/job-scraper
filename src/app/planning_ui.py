@@ -1599,9 +1599,7 @@ def scan_workspace(
                 class="subtext scan-workspace-annotation-status"
                 id="scanWorkspaceAnnotationStatus"
                 aria-live="polite"
-              >
-                Awaiting suggestion anchors.
-              </div>
+              ></div>
             </div>
 
             <div class="scan-workspace-annotation-stage" id="scanWorkspaceAnnotationStage">

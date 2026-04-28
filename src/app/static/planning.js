@@ -7552,6 +7552,7 @@ function renderReplacementDecisionSection({
     : safeItems;
 
   const selectedCount = selectionEnabled ? selectedSet.size : 0;
+  const isScan = actionPrefix === "scan";
 
   if (!safeItems.length) {
     return `
@@ -7604,18 +7605,44 @@ function renderReplacementDecisionSection({
 
           const statusLabel =
             item.replacement_status === "direct_apply_ready"
-              ? "Ready to use"
+              ? (isScan ? "Ready" : "Ready to use")
               : item.replacement_status === "direct_apply_optional"
-                ? "Trusted optional"
+                ? (isScan ? "Trusted" : "Trusted optional")
                 : item.replacement_status === "ai_optimize_optional"
-                  ? "AI optimize optional"
-                  : "Review only";
+                  ? (isScan ? "AI optional" : "AI optimize optional")
+                  : (isScan ? "Review" : "Review only");
 
           const focusAttr = isFocusable
             ? `data-${actionPrefix}-focus-candidate="${escapeHtml(candidateId)}"`
             : "";
 
           const reasonText = String(item.why_selected || "").trim();
+
+          const showCurrentBulletBlock =
+            Boolean(displayCurrentBullet) && (!isScan || mode === "direction_only");
+
+          const replacementLabel =
+            mode === "direction_only"
+              ? (isScan ? "Direction" : "Suggested change")
+              : (isScan ? "Suggestion" : "Suggested edit");
+
+          const currentBulletLabel = isScan ? "Original" : "Current bullet";
+
+          const priorityChip =
+            !isScan || priority === "high"
+              ? buildTailoringTonePill(
+                  priority === "high"
+                    ? "High priority"
+                    : priority === "medium"
+                      ? "Medium priority"
+                      : "Low priority",
+                  priority === "high"
+                    ? "safe"
+                    : priority === "medium"
+                      ? "caution"
+                      : "muted"
+                )
+              : "";
 
           const compactImpactHtml = impactLabels.length
             ? `
@@ -7689,7 +7716,7 @@ function renderReplacementDecisionSection({
             : "";
 
           const compactScoreHtml =
-            mode !== "direction_only"
+            mode !== "direction_only" && !isScan
               ? renderTailoringWorkspaceScorePills({
                   originalScore: item.original_final_score,
                   projectedScore: item.projected_final_score,
@@ -7702,30 +7729,19 @@ function renderReplacementDecisionSection({
               class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
               ${focusAttr}
             >
-              <div class="tailoring-card-topline tailoring-card-topline--compact">
-                <div class="tailoring-edit-card-label">Suggestion ${index + 1}</div>
+              <div class="tailoring-card-topline tailoring-card-topline--compact ${isScan ? "tailoring-card-topline--scan" : ""}">
+                <div class="tailoring-edit-card-label">${isScan ? `Item ${index + 1}` : `Suggestion ${index + 1}`}</div>
 
                 <div class="tailoring-chip-group tailoring-chip-group--compact">
                   ${buildTailoringTonePill(statusLabel, tone)}
-                  ${buildTailoringTonePill(
-                    priority === "high"
-                      ? "High priority"
-                      : priority === "medium"
-                        ? "Medium priority"
-                        : "Low priority",
-                    priority === "high"
-                      ? "safe"
-                      : priority === "medium"
-                        ? "caution"
-                        : "muted"
-                  )}
+                  ${priorityChip}
                   ${reviewStatusChip}
                 </div>
               </div>
 
-              ${displayCurrentBullet ? `
+              ${showCurrentBulletBlock ? `
                 <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Current bullet</div>
+                  <div class="tailoring-info-label">${currentBulletLabel}</div>
                   <div class="tailoring-quote-block">${escapeHtml(displayCurrentBullet)}</div>
                 </div>
               ` : ""}
@@ -7734,14 +7750,14 @@ function renderReplacementDecisionSection({
 
               ${mode !== "direction_only" && item.final_replacement_text ? `
                 <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Suggested edit</div>
+                  <div class="tailoring-info-label">${replacementLabel}</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.final_replacement_text)}</div>
                 </div>
               ` : ""}
 
               ${mode === "direction_only" && item.rewrite_direction ? `
                 <div class="tailoring-info-block tailoring-info-block--compact">
-                  <div class="tailoring-info-label">Suggested change</div>
+                  <div class="tailoring-info-label">${replacementLabel}</div>
                   <div class="tailoring-rewrite-callout">${escapeHtml(item.rewrite_direction)}</div>
                 </div>
               ` : ""}
@@ -7762,7 +7778,7 @@ function renderReplacementDecisionSection({
                     data-${actionPrefix}-review-action="accepted"
                     data-${actionPrefix}-review-candidate="${escapeHtml(candidateId)}"
                   >
-                    Accept as-is
+                    ${isScan ? "Accept" : "Accept as-is"}
                   </button>
 
                   <button
@@ -7780,7 +7796,7 @@ function renderReplacementDecisionSection({
                     class="ghost-btn btn-sm tailoring-review-action-btn ${reviewState === "edited_after_accept" ? "is-active" : ""}"
                     data-${actionPrefix}-review-edit="${escapeHtml(candidateId)}"
                   >
-                    Edit manually
+                    ${isScan ? "Edit" : "Edit manually"}
                   </button>
                 </div>
               ` : isSelectable ? `
@@ -8892,17 +8908,12 @@ function renderScanWorkspaceTabs() {
   trustedTab.title = `${trustedCount} trusted suggestions`;
   aiTab.title = `${aiCount} AI suggestions`;
   guidanceTab.title = `${guidanceCount} guidance items`;
-
-  trustedTab.setAttribute("aria-label", `${trustedCount} trusted suggestions`);
-  aiTab.setAttribute("aria-label", `${aiCount} AI suggestions`);
-  guidanceTab.setAttribute("aria-label", `${guidanceCount} guidance items`);
 }
 
 function renderScanWorkspaceView() {
   const payload = getScanWorkspacePayload();
   const root = qs("scanWorkspaceInteractiveSummary");
   if (!root) return;
-  updateScanWorkspaceContextLine(payload);
 
   if (!payload) {
     root.innerHTML = `

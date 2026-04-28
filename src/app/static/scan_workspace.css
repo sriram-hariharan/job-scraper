@@ -279,8 +279,8 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
   border: 1px solid rgba(120, 166, 255, 0.14);
   background: rgba(255, 255, 255, 0.025);
 }
@@ -300,35 +300,35 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
 }
 
 .scan-workspace-review-score-title {
   color: #eef4ff;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
-  line-height: 1.15;
+  line-height: 1.12;
 }
 
 .scan-workspace-review-context-line {
   color: #dbe6ff;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.28;
   font-weight: 700;
 }
 
 .scan-workspace-review-inline-metrics {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 4px;
 }
 
 .scan-workspace-review-inline-metric {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 22px;
-  padding: 0 7px;
+  min-height: 20px;
+  padding: 0 6px;
   border-radius: 999px;
   border: 1px solid rgba(42, 53, 99, 0.64);
   background: rgba(255, 255, 255, 0.02);
@@ -423,35 +423,7 @@
   min-height: 620px;
 }
 
-.scan-workspace-toolbar-btn,
-.scan-workspace-toolbar-link {
-  min-height: 34px;
-  padding: 0 14px;
-  border-radius: 10px;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 1;
-}
 
-.scan-workspace-toolbar-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  text-decoration: none;
-}
-
-.scan-workspace-toolbar-link--primary {
-  background: linear-gradient(180deg, #7ea9ff 0%, #6f97eb 100%);
-  border: 1px solid rgba(120, 166, 255, 0.34);
-  color: #08101f;
-  box-shadow: 0 10px 26px rgba(120, 166, 255, 0.18);
-}
-
-.scan-workspace-toolbar-link--primary:hover {
-  opacity: 1;
-  transform: translateY(-1px);
-  color: #08101f;
-}
 
 .scan-workspace-review-controls {
   flex: 0 0 auto;
@@ -532,7 +504,7 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-top: 8px;
+  padding-top: 12px;
   padding-right: 4px;
   margin-right: -4px;
 }
@@ -597,9 +569,12 @@
 }
 
 .scan-workspace-review-main-actions {
-  margin-left: auto;
+  display: flex;
   align-items: center;
+  justify-content: flex-end;
+  margin-left: auto;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .scan-workspace-review-preview-shell {
@@ -778,94 +753,25 @@
   line-height: 1.2;
 }
 
+#scanWorkspaceInteractiveSummary .tailoring-section-title:empty,
+#scanWorkspaceInteractiveSummary .tailoring-card-copy:empty,
+#scanWorkspaceInteractiveSummary .tailoring-section-meta {
+  display: none;
+}
+
 #scanWorkspaceInteractiveSummary .tailoring-chip-group {
   gap: 6px;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-chip-group--compact .tailoring-tone-pill {
+  min-height: 22px;
+  padding: 0 8px;
+  font-size: 10px;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-tone-pill {
   padding: 4px 8px;
   font-size: 10px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-card-copy,
-#scanWorkspaceInteractiveSummary .tailoring-card-meta {
-  font-size: 13px;
-  line-height: 1.45;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-card-rewrite,
-#scanWorkspaceInteractiveSummary .tailoring-rewrite-callout {
-  margin-top: 8px;
-  padding: 10px 12px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-card-topline {
-  margin-bottom: 8px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-section-title:empty,
-#scanWorkspaceInteractiveSummary .tailoring-card-copy:empty,
-#scanWorkspaceInteractiveSummary .tailoring-section-meta {
-  display: none;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-edit-card-list {
-  gap: 10px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-edit-card {
-  padding: 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(42, 53, 99, 0.56);
-  box-shadow: none;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-card-topline--compact {
-  margin-bottom: 8px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-info-block--compact {
-  gap: 4px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-info-label {
-  font-size: 10px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-quote-block,
-#scanWorkspaceInteractiveSummary .tailoring-rewrite-callout {
-  padding: 10px 12px;
-  border-radius: 10px;
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-edit-inline-summary {
-  gap: 6px;
-  margin-top: 8px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-card-actions--compact {
-  margin-top: 10px;
-  gap: 8px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-select-btn {
-  min-width: 72px;
-  padding: 6px 10px;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-section-title:empty,
-#scanWorkspaceInteractiveSummary .tailoring-card-copy:empty,
-#scanWorkspaceInteractiveSummary .tailoring-section-meta {
-  display: none;
-}
-
-#scanWorkspaceInteractiveSummary .tailoring-section-block {
-  gap: 8px;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-edit-card-list {
@@ -880,8 +786,28 @@
   box-shadow: none;
 }
 
+#scanWorkspaceInteractiveSummary .tailoring-card-topline {
+  margin-bottom: 8px;
+}
+
 #scanWorkspaceInteractiveSummary .tailoring-card-topline--compact {
   margin-bottom: 8px;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-card-topline--scan {
+  align-items: flex-start;
+  gap: 8px;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-edit-card-label {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-card-copy,
+#scanWorkspaceInteractiveSummary .tailoring-card-meta {
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-info-block--compact {
@@ -890,6 +816,8 @@
 
 #scanWorkspaceInteractiveSummary .tailoring-info-label {
   font-size: 10px;
+  margin-bottom: 4px;
+  opacity: 0.82;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-quote-block,
@@ -898,16 +826,45 @@
   border-radius: 10px;
   font-size: 13px;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-quote-block {
+  -webkit-line-clamp: 4;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-rewrite-callout {
+  -webkit-line-clamp: 5;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-edit-inline-summary {
+  gap: 6px;
+  margin-top: 8px;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-edit-inline-reason {
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-card-actions--compact {
   margin-top: 10px;
   gap: 8px;
+  justify-content: flex-end;
+}
+
+#scanWorkspaceInteractiveSummary .tailoring-review-action-btn,
+#scanWorkspaceInteractiveSummary .tailoring-select-btn {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 12px;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-select-btn {
   min-width: 72px;
-  padding: 6px 10px;
 }
 
 .scan-workspace-suggestion-popover {
@@ -1157,20 +1114,6 @@
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
-}
-
-.scan-workspace-review-score-card {
-  padding: 12px 14px;
-  border-radius: 16px;
-}
-
-.scan-workspace-review-inline-metrics {
-  gap: 4px;
-}
-
-.scan-workspace-review-inline-metric {
-  min-height: 20px;
-  padding: 0 6px;
 }
 
 .scan-workspace-compare-pane-body::-webkit-scrollbar {

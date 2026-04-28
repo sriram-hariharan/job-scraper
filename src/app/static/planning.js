@@ -4267,7 +4267,7 @@ function renderKeepAsIs(items) {
   `;
 }
 
-function renderReplacementPlanSummary(summary = {}) {
+function buildScanWorkspaceScoreSummary() {
   return "";
 }
 

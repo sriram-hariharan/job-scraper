@@ -826,18 +826,16 @@
   border-radius: 10px;
   font-size: 13px;
   line-height: 1.5;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-quote-block {
-  -webkit-line-clamp: 4;
+  max-height: calc(1.5em * 4);
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-rewrite-callout {
-  -webkit-line-clamp: 5;
+  max-height: calc(1.5em * 5);
 }
 
 #scanWorkspaceInteractiveSummary .tailoring-edit-inline-summary {

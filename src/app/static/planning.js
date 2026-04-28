@@ -4268,27 +4268,7 @@ function renderKeepAsIs(items) {
 }
 
 function renderReplacementPlanSummary(summary = {}) {
-  const readyCount = Number(summary.direct_apply_ready_count || 0);
-  const trustedOptionalCount = Number(summary.direct_apply_optional_count || 0);
-  const aiOptionalCount = Number(summary.ai_optimize_optional_count || 0);
-  const guidanceCount = Number(summary.direction_only_count || 0);
-
-  if (!readyCount && !trustedOptionalCount && !aiOptionalCount && !guidanceCount) {
-    return "";
-  }
-
-  return `
-    <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Suggestion summary</div>
-
-      <div class="tailoring-chip-group">
-        ${buildTailoringTonePill(`Ready ${readyCount}`, "safe")}
-        ${buildTailoringTonePill(`Trusted optional ${trustedOptionalCount}`, "neutral")}
-        ${buildTailoringTonePill(`AI optional ${aiOptionalCount}`, "caution")}
-        ${buildTailoringTonePill(`Guidance ${guidanceCount}`, "muted")}
-      </div>
-    </section>
-  `;
+  return "";
 }
 
 function getTailoringReplacementCandidateId(item) {
@@ -8769,57 +8749,79 @@ function setScanWorkspaceReviewDecision(candidateId, state, note = "") {
 }
 
 function buildScanWorkspaceScoreSummary() {
-  const payload = getScanWorkspacePayload();
-  const preview = scanWorkspaceState.previewPayload;
-  const base = payload?.score_snapshot || {};
+  return "";
+}
 
-  const originalScore = preview?.original_score ?? base.original_score;
-  const projectedScore = preview?.projected_score ?? base.projected_score;
-  const projectedDelta = preview?.projected_delta ?? base.projected_delta;
-  const previewStatus = String(preview?.preview_status || base.draft_preview_status || "").trim();
-  const previewNote = String(preview?.preview_note || base.draft_preview_note || "").trim();
+function normalizeScanWorkspaceDisplayValue(value) {
+  const text = String(value || "").trim();
+  return text && text !== "-" ? text : "";
+}
 
-  return `
-    <section class="tailoring-section-block">
-      <div class="tailoring-section-title">Score preview</div>
+function firstNonEmptyScanWorkspaceValue(...values) {
+  for (const value of values) {
+    const normalized = normalizeScanWorkspaceDisplayValue(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
 
-      <div class="tailoring-chip-group">
-        ${buildTailoringTonePill(`Original ${formatScore100(originalScore)}`, "neutral")}
-        ${buildTailoringTonePill(`Projected ${formatScore100(projectedScore)}`, "safe")}
-        ${buildTailoringTonePill(
-          `Delta ${formatSignedScore100(projectedDelta)}`,
-          projectedDelta > 0 ? "safe" : projectedDelta < 0 ? "danger" : "muted"
-        )}
-      </div>
+function resolveScanWorkspaceHeaderContext(payload = null) {
+  const page = getScanWorkspacePage();
+  const context = getScanWorkspaceContext() || {};
 
-      ${previewStatus || previewNote ? `
-        <div class="tailoring-card-copy">
-          ${escapeHtml([previewStatus ? humanizeUnderscoreLabel(previewStatus) : "", previewNote].filter(Boolean).join(" — "))}
-        </div>
-      ` : ""}
-    </section>
-  `;
+  const selectedJd = payload?.selected_jd_record || {};
+  const jobSnapshot = payload?.job_snapshot || {};
+  const job = payload?.job || {};
+  const selection = payload?.selection || {};
+
+  const company = firstNonEmptyScanWorkspaceValue(
+    page?.dataset?.jobCompany,
+    context.company,
+    payload?.job_company,
+    selectedJd.company,
+    selectedJd.job_company,
+    job.company,
+    job.job_company,
+    jobSnapshot.company,
+    jobSnapshot.job_company,
+    selection.company,
+  );
+
+  const title = firstNonEmptyScanWorkspaceValue(
+    page?.dataset?.jobTitle,
+    context.title,
+    payload?.job_title,
+    selectedJd.title,
+    selectedJd.job_title,
+    job.title,
+    job.job_title,
+    jobSnapshot.title,
+    jobSnapshot.job_title,
+    selection.title,
+  );
+
+  return {
+    company: company || "-",
+    title: title || "-",
+  };
+}
+
+function updateScanWorkspaceContextLine(payload = getScanWorkspacePayload()) {
+  const line = qs("scanWorkspaceContextLine");
+  if (!line) return;
+
+  const { company, title } = resolveScanWorkspaceHeaderContext(payload);
+  line.textContent = `${company} / ${title}`;
 }
 
 function updateScanWorkspaceMeta() {
-  const payload = getScanWorkspacePayload();
   const meta = qs("scanWorkspaceMeta");
+  const context = getScanWorkspaceContext();
+
   if (!meta) return;
 
-  if (!payload) {
-    meta.textContent = "Scan preload is not available for this route.";
-    return;
-  }
-
-  const trusted = getScanWorkspaceTrustedSuggestions(payload);
-  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
-  const guidance = getScanWorkspaceGuidance(payload);
-
-  meta.textContent = [
-    `${trusted.directApplyReady.length + trusted.directApplyOptional.length} trusted`,
-    `${aiSuggestions.length} AI optional`,
-    `${guidance.length} guidance`,
-  ].join(" • ");
+  const displayName = humanizeResumeDisplayName(context?.resumeName || "");
+  meta.textContent = displayName || "Preloaded resume";
 }
 
 function updateScanWorkspaceActionBar() {
@@ -8840,25 +8842,26 @@ function updateScanWorkspaceActionBar() {
   const selectedAiCount = aiCandidateIds.filter((id) => selectedIds.includes(id)).length;
   const reviewCount = Object.keys(reviewDecisionMap).length;
   const hasChanges = selectedIds.length > 0 || reviewCount > 0;
+  const showAcceptAll = scanWorkspaceState.selectedTab === "ai_optimize" && aiCandidateIds.length > 0;
 
   if (selectionStatus) {
-    selectionStatus.textContent =
-      `${selectedAiCount} AI suggestion${selectedAiCount === 1 ? "" : "s"} selected • ` +
-      `${reviewCount} guidance decision${reviewCount === 1 ? "" : "s"} recorded`;
+    selectionStatus.textContent = hasChanges
+      ? `${selectedAiCount} selected · ${reviewCount} reviewed`
+      : "No changes selected yet.";
   }
 
   if (acceptAllBtn) {
-    acceptAllBtn.disabled = scanWorkspaceState.isSaving || scanWorkspaceState.isPreviewing || !aiCandidateIds.length;
+    acceptAllBtn.hidden = !showAcceptAll;
+    acceptAllBtn.disabled = scanWorkspaceState.isSaving || !showAcceptAll;
   }
 
   if (previewBtn) {
-    previewBtn.disabled = scanWorkspaceState.isSaving || scanWorkspaceState.isPreviewing || !hasChanges;
-    previewBtn.textContent = scanWorkspaceState.isPreviewing ? "Previewing..." : "Preview Score";
+    previewBtn.hidden = true;
   }
 
   if (saveBtn) {
-    saveBtn.disabled = scanWorkspaceState.isSaving || scanWorkspaceState.isPreviewing || !hasChanges;
-    saveBtn.textContent = scanWorkspaceState.isSaving ? "Saving..." : "Save Scan State";
+    saveBtn.disabled = scanWorkspaceState.isSaving || !hasChanges;
+    saveBtn.textContent = scanWorkspaceState.isSaving ? "Saving..." : "Save";
   }
 }
 
@@ -8875,20 +8878,31 @@ function renderScanWorkspaceTabs() {
   const guidance = getScanWorkspaceGuidance(payload);
 
   const trustedCount = trusted.directApplyReady.length + trusted.directApplyOptional.length;
+  const aiCount = aiSuggestions.length;
+  const guidanceCount = guidance.length;
 
   trustedTab.classList.toggle("active", scanWorkspaceState.selectedTab === "trusted");
   aiTab.classList.toggle("active", scanWorkspaceState.selectedTab === "ai_optimize");
   guidanceTab.classList.toggle("active", scanWorkspaceState.selectedTab === "guidance");
 
-  trustedTab.innerHTML = `Trusted <span class="tailoring-selected-tab-count">${trustedCount}</span>`;
-  aiTab.innerHTML = `AI Suggestions <span class="tailoring-selected-tab-count">${aiSuggestions.length}</span>`;
-  guidanceTab.innerHTML = `Guidance <span class="tailoring-selected-tab-count">${guidance.length}</span>`;
+  trustedTab.textContent = "Trusted";
+  aiTab.textContent = "AI";
+  guidanceTab.textContent = "Guide";
+
+  trustedTab.title = `${trustedCount} trusted suggestions`;
+  aiTab.title = `${aiCount} AI suggestions`;
+  guidanceTab.title = `${guidanceCount} guidance items`;
+
+  trustedTab.setAttribute("aria-label", `${trustedCount} trusted suggestions`);
+  aiTab.setAttribute("aria-label", `${aiCount} AI suggestions`);
+  guidanceTab.setAttribute("aria-label", `${guidanceCount} guidance items`);
 }
 
 function renderScanWorkspaceView() {
   const payload = getScanWorkspacePayload();
   const root = qs("scanWorkspaceInteractiveSummary");
   if (!root) return;
+  updateScanWorkspaceContextLine(payload);
 
   if (!payload) {
     root.innerHTML = `
@@ -8908,10 +8922,10 @@ function renderScanWorkspaceView() {
   const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
 
   const trustedHtml = renderReplacementDecisionSection({
-    title: "Trusted suggestions",
-    subtitle: "Strict trusted suggestions remain separate from exploratory AI suggestions.",
+    title: "",
+    subtitle: "",
     items: [...trusted.directApplyReady, ...trusted.directApplyOptional],
-    emptyLabel: "No trusted suggestions are available for this scan.",
+    emptyLabel: "No trusted suggestions.",
     tone: "safe",
     mode: "replacement",
     selectionEnabled: false,
@@ -8919,10 +8933,10 @@ function renderScanWorkspaceView() {
   });
 
   const aiHtml = renderReplacementDecisionSection({
-    title: "AI optimize suggestions",
-    subtitle: "Optional AI-generated suggestions. These stay separate from the trusted lane.",
+    title: "",
+    subtitle: "",
     items: aiSuggestions,
-    emptyLabel: "No AI optimize suggestions are available for this scan.",
+    emptyLabel: "No AI suggestions.",
     tone: "caution",
     mode: "replacement",
     selectionEnabled: true,
@@ -8931,10 +8945,10 @@ function renderScanWorkspaceView() {
   });
 
   const guidanceHtml = renderReplacementDecisionSection({
-    title: "Directional guidance",
-    subtitle: "Review-only guidance. Accept or reject it here, or edit manually back in the tailoring workspace.",
+    title: "",
+    subtitle: "",
     items: guidance,
-    emptyLabel: "No review guidance is available for this scan.",
+    emptyLabel: "No guidance items.",
     tone: "muted",
     mode: "direction_only",
     reviewActionsEnabled: true,
@@ -8942,20 +8956,14 @@ function renderScanWorkspaceView() {
     actionPrefix: "scan",
   });
 
-  let bodyHtml = "";
+  let bodyHtml = aiHtml;
   if (scanWorkspaceState.selectedTab === "trusted") {
     bodyHtml = trustedHtml;
   } else if (scanWorkspaceState.selectedTab === "guidance") {
     bodyHtml = guidanceHtml;
-  } else {
-    bodyHtml = aiHtml;
   }
 
-  root.innerHTML = `
-    ${renderReplacementPlanSummary(payload.final_replacement_summary || {})}
-    ${buildScanWorkspaceScoreSummary()}
-    ${bodyHtml}
-  `;
+  root.innerHTML = bodyHtml;
 
   renderScanWorkspaceTabs();
   updateScanWorkspaceMeta();
@@ -9180,6 +9188,7 @@ async function initScanWorkspacePage() {
   const meta = qs("scanWorkspaceMeta");
   const context = getScanWorkspaceContext();
 
+  updateScanWorkspaceContextLine(null);
   if (!root) return true;
 
   setScanWorkspaceResumePreview(context?.resumeName || "");
@@ -9206,6 +9215,7 @@ async function initScanWorkspacePage() {
 
     const payload = await loadScanWorkspacePreload();
     scanWorkspaceState.preloadPayload = payload;
+    updateScanWorkspaceContextLine(payload);
 
     const savedDraft = payload && payload.draft && typeof payload.draft === "object"
       ? payload.draft

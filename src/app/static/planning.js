@@ -93,6 +93,7 @@ const scanWorkspaceState = {
   selectedCandidateIds: [],
   rewriteReviewDecisions: {},
   selectedTab: "trusted",
+  activeCandidateId: "",
   previewPayload: null,
   isPreviewing: false,
   isSaving: false,
@@ -4267,10 +4268,6 @@ function renderKeepAsIs(items) {
   `;
 }
 
-function buildScanWorkspaceScoreSummary() {
-  return "";
-}
-
 function getTailoringReplacementCandidateId(item) {
   return String(
     item?.replacement_candidate_id ||
@@ -7618,6 +7615,19 @@ function renderReplacementDecisionSection({
 
           const reasonText = String(item.why_selected || "").trim();
 
+          const isActiveScanCard =
+            isScan &&
+            candidateId &&
+            scanWorkspaceState.activeCandidateId &&
+            scanWorkspaceState.activeCandidateId === candidateId;
+
+          const summarySourceText =
+            mode === "direction_only"
+              ? (item.rewrite_direction || reasonText || displayCurrentBullet || "")
+              : (item.final_replacement_text || displayCurrentBullet || reasonText || "");
+
+          const summaryText = String(summarySourceText || "").trim();
+
           const showCurrentBulletBlock =
             Boolean(displayCurrentBullet) && (!isScan || mode === "direction_only");
 
@@ -7726,7 +7736,7 @@ function renderReplacementDecisionSection({
 
           return `
             <article
-              class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
+              class="tailoring-edit-card tailoring-edit-card--compact ${isFocusable ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""} ${isScan ? "scan-workspace-inventory-card" : ""} ${isActiveScanCard ? "is-active" : ""}"
               ${focusAttr}
             >
               <div class="tailoring-card-topline tailoring-card-topline--compact ${isScan ? "tailoring-card-topline--scan" : ""}">
@@ -7738,6 +7748,20 @@ function renderReplacementDecisionSection({
                   ${reviewStatusChip}
                 </div>
               </div>
+
+              ${isScan ? `
+                <button
+                  type="button"
+                  class="scan-workspace-inventory-row ${isActiveScanCard ? "is-active" : ""}"
+                  data-scan-focus-candidate="${escapeHtml(candidateId)}"
+                >
+                  <span class="scan-workspace-inventory-row-text">
+                    ${escapeHtml(summaryText || "Open suggestion")}
+                  </span>
+                </button>
+              ` : ""}
+              
+              ${isScan ? `<div class="scan-workspace-inventory-details ${isActiveScanCard ? "is-open" : ""}">` : ""}
 
               ${showCurrentBulletBlock ? `
                 <div class="tailoring-info-block tailoring-info-block--compact">
@@ -7816,6 +7840,7 @@ function renderReplacementDecisionSection({
               ` : ""}
 
               ${isSelected ? buildTailoringTonePill("Selected", "safe") : ""}
+              ${isScan ? `</div>` : ""}
             </article>
           `;
         }).join("")}
@@ -8910,6 +8935,45 @@ function renderScanWorkspaceTabs() {
   guidanceTab.title = `${guidanceCount} guidance items`;
 }
 
+function getScanWorkspaceItemsForSelectedTab(payload) {
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+  const guidance = getScanWorkspaceGuidance(payload);
+
+  if (scanWorkspaceState.selectedTab === "trusted") {
+    return [...trusted.directApplyReady, ...trusted.directApplyOptional];
+  }
+  if (scanWorkspaceState.selectedTab === "guidance") {
+    return guidance;
+  }
+  return aiSuggestions;
+}
+
+function ensureScanWorkspaceActiveCandidate(payload) {
+  const items = getScanWorkspaceItemsForSelectedTab(payload);
+  const candidateIds = items
+    .map((item) => getTailoringReplacementCandidateId(item))
+    .filter(Boolean);
+
+  if (!candidateIds.length) {
+    scanWorkspaceState.activeCandidateId = "";
+    return "";
+  }
+
+  if (!candidateIds.includes(scanWorkspaceState.activeCandidateId)) {
+    scanWorkspaceState.activeCandidateId = candidateIds[0];
+  }
+
+  return scanWorkspaceState.activeCandidateId;
+}
+
+function setScanWorkspaceActiveCandidate(candidateId) {
+  const nextId = String(candidateId || "").trim();
+  if (!nextId || scanWorkspaceState.activeCandidateId === nextId) return;
+  scanWorkspaceState.activeCandidateId = nextId;
+  renderScanWorkspaceView();
+}
+
 function renderScanWorkspaceView() {
   const payload = getScanWorkspacePayload();
   const root = qs("scanWorkspaceInteractiveSummary");
@@ -8926,6 +8990,8 @@ function renderScanWorkspaceView() {
     return;
   }
 
+  ensureScanWorkspaceActiveCandidate(payload);
+  
   const trusted = getScanWorkspaceTrustedSuggestions(payload);
   const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
   const guidance = getScanWorkspaceGuidance(payload);
@@ -9088,6 +9154,15 @@ function bindScanWorkspaceHandlers() {
         if (!candidateId) return;
         toggleScanWorkspaceCandidateSelection(candidateId);
       }
+
+      const focusCard = event.target.closest("[data-scan-focus-candidate]");
+      if (focusCard) {
+        const candidateId = String(focusCard.dataset.scanFocusCandidate || "").trim();
+        if (candidateId) {
+          setScanWorkspaceActiveCandidate(candidateId);
+        }
+      }
+
     });
   }
 
@@ -9103,6 +9178,7 @@ function bindScanWorkspaceHandlers() {
       if (!nextTab) return;
 
       scanWorkspaceState.selectedTab = nextTab;
+      scanWorkspaceState.activeCandidateId = "";
       renderScanWorkspaceView();
     });
   }

@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_2" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_3" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}

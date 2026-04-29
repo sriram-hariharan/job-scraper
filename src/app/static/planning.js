@@ -92,6 +92,7 @@ const scanWorkspaceState = {
   preloadPayload: null,
   selectedCandidateIds: [],
   rewriteReviewDecisions: {},
+  suggestionDecisionOverrides: {},
   selectedTab: "trusted",
   activeCandidateId: "",
   previewPayload: null,
@@ -8766,6 +8767,13 @@ function toggleScanWorkspaceCandidateSelection(candidateId) {
     payload,
     Array.from(current)
   );
+
+  const nextOverrides = {
+    ...(scanWorkspaceState.suggestionDecisionOverrides || {}),
+  };
+  delete nextOverrides[safeCandidateId];
+  scanWorkspaceState.suggestionDecisionOverrides = nextOverrides;
+
   scanWorkspaceState.previewPayload = null;
   renderScanWorkspaceView();
 }
@@ -8866,44 +8874,8 @@ function updateScanWorkspaceMeta() {
 }
 
 function updateScanWorkspaceActionBar() {
-  const payload = getScanWorkspacePayload();
-  const selectionStatus = qs("scanWorkspaceSelectionStatus");
-  const acceptAllBtn = qs("scanWorkspaceAcceptAllAiBtn");
-  const previewBtn = qs("scanWorkspacePreviewBtn");
-  const saveBtn = qs("scanWorkspaceSaveBtn");
-
-  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
-  const selectedIds = getScanWorkspaceSelectedCandidateIds();
-  const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
-
-  const aiCandidateIds = aiSuggestions
-    .map((item) => getTailoringReplacementCandidateId(item))
-    .filter(Boolean);
-
-  const selectedAiCount = aiCandidateIds.filter((id) => selectedIds.includes(id)).length;
-  const reviewCount = Object.keys(reviewDecisionMap).length;
-  const hasChanges = selectedIds.length > 0 || reviewCount > 0;
-  const showAcceptAll = scanWorkspaceState.selectedTab === "ai_optimize" && aiCandidateIds.length > 0;
-
-  if (selectionStatus) {
-    selectionStatus.textContent = hasChanges
-      ? `${selectedAiCount} selected · ${reviewCount} reviewed`
-      : "No changes selected yet.";
-  }
-
-  if (acceptAllBtn) {
-    acceptAllBtn.hidden = !showAcceptAll;
-    acceptAllBtn.disabled = scanWorkspaceState.isSaving || !showAcceptAll;
-  }
-
-  if (previewBtn) {
-    previewBtn.hidden = true;
-  }
-
-  if (saveBtn) {
-    saveBtn.disabled = scanWorkspaceState.isSaving || !hasChanges;
-    saveBtn.textContent = scanWorkspaceState.isSaving ? "Saving..." : "Save";
-  }
+  // The scan page action bar is owned by scan_workspace.js.
+  // planning.js only renders the left inventory rail and tab selection.
 }
 
 function renderScanWorkspaceTabs() {
@@ -8949,6 +8921,160 @@ function getScanWorkspaceItemsForSelectedTab(payload) {
   return aiSuggestions;
 }
 
+function findScanWorkspaceCandidateById(candidateId, payload = getScanWorkspacePayload()) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId || !payload) return null;
+
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+
+  const groups = [
+    {
+      tab: "trusted",
+      lane: "direct_apply_ready",
+      label: "Trusted suggestion",
+      eligibleForDecision: false,
+      items: trusted.directApplyReady,
+    },
+    {
+      tab: "trusted",
+      lane: "direct_apply_optional",
+      label: "Trusted optional",
+      eligibleForDecision: false,
+      items: trusted.directApplyOptional,
+    },
+    {
+      tab: "ai_optimize",
+      lane: "ai_optimize_optional",
+      label: "AI suggestion",
+      eligibleForDecision: true,
+      items: getScanWorkspaceAiSuggestions(payload),
+    },
+    {
+      tab: "guidance",
+      lane: "direction_only",
+      label: "Guidance",
+      eligibleForDecision: false,
+      items: getScanWorkspaceGuidance(payload),
+    },
+  ];
+
+  for (const group of groups) {
+    const item = group.items.find(
+      (candidate) => getTailoringReplacementCandidateId(candidate) === safeCandidateId
+    );
+
+    if (item) {
+      return {
+        ...group,
+        candidateId: safeCandidateId,
+        item,
+      };
+    }
+  }
+
+  return null;
+}
+
+function getScanWorkspaceCandidateOriginalText(item) {
+  return String(
+    item?.current_text ||
+    item?.original_text ||
+    item?.source_bullet_text ||
+    item?.bullet_text ||
+    ""
+  ).trim();
+}
+
+function getScanWorkspaceCandidateSuggestedText(item) {
+  return String(
+    item?.final_replacement_text ||
+    item?.rewrite_direction ||
+    item?.rewrite_instruction ||
+    item?.why_selected ||
+    ""
+  ).trim();
+}
+
+function getScanWorkspaceCandidateReasonText(item) {
+  return String(
+    item?.why_selected ||
+    item?.materiality_reason ||
+    item?.why_not_material ||
+    item?.direction_only_reason ||
+    item?.rewrite_instruction ||
+    ""
+  ).trim();
+}
+
+function getScanWorkspaceCandidateSummaryText(item) {
+  return String(
+    item?.final_replacement_text ||
+    item?.rewrite_direction ||
+    item?.rewrite_instruction ||
+    item?.why_selected ||
+    item?.original_text ||
+    item?.current_text ||
+    "Selected scan item"
+  ).trim();
+}
+
+function getScanWorkspaceCandidateDecisionState(candidateId) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId) return "pending";
+
+  if (getScanWorkspaceSelectedCandidateIds().includes(safeCandidateId)) {
+    return "accepted";
+  }
+
+  const override = String(
+    scanWorkspaceState.suggestionDecisionOverrides?.[safeCandidateId] || ""
+  ).trim().toLowerCase();
+
+  return override === "rejected" ? "rejected" : "pending";
+}
+
+function setScanWorkspaceSuggestionDecision(candidateId, action) {
+  const safeCandidateId = String(candidateId || "").trim();
+  const safeAction = String(action || "").trim().toLowerCase();
+  if (!safeCandidateId || !safeAction) return;
+
+  const payload = getScanWorkspacePayload();
+  const found = findScanWorkspaceCandidateById(safeCandidateId, payload);
+  if (!found || !found.eligibleForDecision) return;
+
+  const current = new Set(getScanWorkspaceSelectedCandidateIds());
+  const nextOverrides = {
+    ...(scanWorkspaceState.suggestionDecisionOverrides || {}),
+  };
+
+  if (safeAction === "accept") {
+    current.add(safeCandidateId);
+    delete nextOverrides[safeCandidateId];
+  } else if (safeAction === "reject") {
+    current.delete(safeCandidateId);
+    nextOverrides[safeCandidateId] = "rejected";
+  } else if (safeAction === "reset") {
+    current.delete(safeCandidateId);
+    delete nextOverrides[safeCandidateId];
+  } else {
+    return;
+  }
+
+  scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
+    payload,
+    Array.from(current)
+  );
+  scanWorkspaceState.suggestionDecisionOverrides = nextOverrides;
+  scanWorkspaceState.previewPayload = null;
+
+  renderScanWorkspaceView();
+}
+
+function renderScanWorkspaceActiveInspector(payload = getScanWorkspacePayload()) {
+  // Keep active rail focus local to the left inventory.
+  // The right-side resume mirror, annotation popover, and scan decisions are owned by scan_workspace.js.
+}
+
 function ensureScanWorkspaceActiveCandidate(payload) {
   const items = getScanWorkspaceItemsForSelectedTab(payload);
   const candidateIds = items
@@ -8969,7 +9095,13 @@ function ensureScanWorkspaceActiveCandidate(payload) {
 
 function setScanWorkspaceActiveCandidate(candidateId) {
   const nextId = String(candidateId || "").trim();
-  if (!nextId || scanWorkspaceState.activeCandidateId === nextId) return;
+  if (!nextId) return;
+
+  if (scanWorkspaceState.activeCandidateId === nextId) {
+    renderScanWorkspaceActiveInspector();
+    return;
+  }
+
   scanWorkspaceState.activeCandidateId = nextId;
   renderScanWorkspaceView();
 }
@@ -8987,11 +9119,12 @@ function renderScanWorkspaceView() {
     `;
     updateScanWorkspaceMeta();
     updateScanWorkspaceActionBar();
+    renderScanWorkspaceActiveInspector(null);
     return;
   }
 
   ensureScanWorkspaceActiveCandidate(payload);
-  
+
   const trusted = getScanWorkspaceTrustedSuggestions(payload);
   const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
   const guidance = getScanWorkspaceGuidance(payload);
@@ -9045,6 +9178,7 @@ function renderScanWorkspaceView() {
   renderScanWorkspaceTabs();
   updateScanWorkspaceMeta();
   updateScanWorkspaceActionBar();
+  renderScanWorkspaceActiveInspector(payload);
 }
 
 async function previewScanWorkspaceState() {
@@ -9153,6 +9287,7 @@ function bindScanWorkspaceHandlers() {
         const candidateId = String(selectButton.dataset.scanSelectCandidate || "").trim();
         if (!candidateId) return;
         toggleScanWorkspaceCandidateSelection(candidateId);
+        return;
       }
 
       const focusCard = event.target.closest("[data-scan-focus-candidate]");
@@ -9162,7 +9297,6 @@ function bindScanWorkspaceHandlers() {
           setScanWorkspaceActiveCandidate(candidateId);
         }
       }
-
     });
   }
 
@@ -9180,43 +9314,6 @@ function bindScanWorkspaceHandlers() {
       scanWorkspaceState.selectedTab = nextTab;
       scanWorkspaceState.activeCandidateId = "";
       renderScanWorkspaceView();
-    });
-  }
-
-  const acceptAllBtn = qs("scanWorkspaceAcceptAllAiBtn");
-  if (acceptAllBtn && acceptAllBtn.dataset.bound !== "true") {
-    acceptAllBtn.dataset.bound = "true";
-    acceptAllBtn.addEventListener("click", () => {
-      const payload = getScanWorkspacePayload();
-      const current = new Set(getScanWorkspaceSelectedCandidateIds());
-
-      getScanWorkspaceAiSuggestions(payload).forEach((item) => {
-        const candidateId = getTailoringReplacementCandidateId(item);
-        if (candidateId) current.add(candidateId);
-      });
-
-      scanWorkspaceState.selectedCandidateIds = normalizeScanWorkspaceSelectedCandidateIds(
-        payload,
-        Array.from(current)
-      );
-      scanWorkspaceState.previewPayload = null;
-      renderScanWorkspaceView();
-    });
-  }
-
-  const previewBtn = qs("scanWorkspacePreviewBtn");
-  if (previewBtn && previewBtn.dataset.bound !== "true") {
-    previewBtn.dataset.bound = "true";
-    previewBtn.addEventListener("click", async () => {
-      await previewScanWorkspaceState();
-    });
-  }
-
-  const saveBtn = qs("scanWorkspaceSaveBtn");
-  if (saveBtn && saveBtn.dataset.bound !== "true") {
-    saveBtn.dataset.bound = "true";
-    saveBtn.addEventListener("click", async () => {
-      await saveScanWorkspaceState();
     });
   }
 }
@@ -9315,6 +9412,7 @@ async function initScanWorkspacePage() {
     scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
       savedDraft.rewrite_review_decisions || {}
     );
+    scanWorkspaceState.suggestionDecisionOverrides = {};
     scanWorkspaceState.previewPayload = null;
 
     const aiCount = getScanWorkspaceAiSuggestions(payload).length;

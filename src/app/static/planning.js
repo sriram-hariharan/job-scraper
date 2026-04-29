@@ -93,7 +93,7 @@ const scanWorkspaceState = {
   selectedCandidateIds: [],
   rewriteReviewDecisions: {},
   suggestionDecisionOverrides: {},
-  selectedTab: "trusted",
+  selectedTab: "skills",
   activeCandidateId: "",
   annotationMarkerSignature: "",
   previewPayload: null,
@@ -5420,7 +5420,9 @@ function renderTailoringWorkspaceStructuredRow(row) {
     contentHtml = `
       <div class="tailoring-workspace-doc-bullet-row" style="padding-left:${indent}px;">
         <div class="tailoring-workspace-doc-bullet-marker">•</div>
-        <div class="tailoring-workspace-doc-line-copy tailoring-workspace-doc-bullet-copy">${escapeHtml(normalizeTailoringWorkspaceFlowText(stripTailoringWorkspaceLeadingBullet(rawText)))}</div>
+        <div class="tailoring-workspace-doc-line-copy tailoring-workspace-doc-bullet-copy">
+          <span class="scan-workspace-preview-line-text">${escapeHtml(normalizeTailoringWorkspaceFlowText(stripTailoringWorkspaceLeadingBullet(rawText)))}</span>
+        </div>
       </div>
     `;
   } else if (inlineLabelBlocks.length) {
@@ -5431,7 +5433,9 @@ function renderTailoringWorkspaceStructuredRow(row) {
       >
         ${inlineLabelBlocks.map((block) => `
           <div class="tailoring-workspace-doc-inline-label-row">
-            <span class="tailoring-workspace-doc-inline-label-prefix">${escapeHtml(block.label)}</span> ${escapeHtml(normalizeTailoringWorkspaceFlowText(block.value))}
+            <span class="scan-workspace-preview-line-text">
+              <span class="tailoring-workspace-doc-inline-label-prefix">${escapeHtml(block.label)}</span> ${escapeHtml(normalizeTailoringWorkspaceFlowText(block.value))}
+            </span>
           </div>
         `).join("")}
       </div>
@@ -5441,7 +5445,9 @@ function renderTailoringWorkspaceStructuredRow(row) {
       <div
         class="tailoring-workspace-doc-line-copy"
         style="${alignStyle} padding-left:${alignment === "left" ? indent : 0}px;"
-      >${escapeHtml(normalizedText)}</div>
+      >
+        <span class="scan-workspace-preview-line-text">${escapeHtml(normalizedText)}</span>
+      </div>
     `;
   }
 
@@ -8880,46 +8886,203 @@ function updateScanWorkspaceActionBar() {
 }
 
 function renderScanWorkspaceTabs() {
-  const trustedTab = qs("scanWorkspaceTrustedTab");
-  const aiTab = qs("scanWorkspaceAiTab");
-  const guidanceTab = qs("scanWorkspaceGuidanceTab");
+  const skillsTab = qs("scanWorkspaceTrustedTab");
+  const searchabilityTab = qs("scanWorkspaceAiTab");
+  const recruiterTipsTab = qs("scanWorkspaceGuidanceTab");
   const payload = getScanWorkspacePayload();
 
-  if (!trustedTab || !aiTab || !guidanceTab || !payload) return;
+  if (!skillsTab || !searchabilityTab || !recruiterTipsTab || !payload) return;
 
+  const taxonomy = buildScanWorkspaceTaxonomy(payload);
+
+  skillsTab.dataset.scanSelectedTab = "skills";
+  searchabilityTab.dataset.scanSelectedTab = "searchability";
+  recruiterTipsTab.dataset.scanSelectedTab = "recruiter_tips";
+
+  skillsTab.classList.toggle("active", scanWorkspaceState.selectedTab === "skills");
+  searchabilityTab.classList.toggle("active", scanWorkspaceState.selectedTab === "searchability");
+  recruiterTipsTab.classList.toggle("active", scanWorkspaceState.selectedTab === "recruiter_tips");
+
+  skillsTab.textContent = "Skills";
+  searchabilityTab.textContent = "Searchability";
+  recruiterTipsTab.textContent = "Recruiter Tips";
+
+  skillsTab.title = `${taxonomy.skills.totalCount} skill scan item(s)`;
+  searchabilityTab.title = `${taxonomy.searchability.totalCount} searchability item(s)`;
+  recruiterTipsTab.title = `${taxonomy.recruiter_tips.totalCount} recruiter tip item(s)`;
+}
+
+function buildScanWorkspaceTaxonomy(payload = getScanWorkspacePayload()) {
   const trusted = getScanWorkspaceTrustedSuggestions(payload);
-  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
-  const guidance = getScanWorkspaceGuidance(payload);
+  const trustedItems = [
+    ...trusted.directApplyReady,
+    ...trusted.directApplyOptional,
+  ];
 
-  const trustedCount = trusted.directApplyReady.length + trusted.directApplyOptional.length;
-  const aiCount = aiSuggestions.length;
-  const guidanceCount = guidance.length;
+  const aiItems = getScanWorkspaceAiSuggestions(payload);
+  const guidanceItems = getScanWorkspaceGuidance(payload);
 
-  trustedTab.classList.toggle("active", scanWorkspaceState.selectedTab === "trusted");
-  aiTab.classList.toggle("active", scanWorkspaceState.selectedTab === "ai_optimize");
-  guidanceTab.classList.toggle("active", scanWorkspaceState.selectedTab === "guidance");
+  const skillsMissingItems = [
+    ...aiItems,
+    ...guidanceItems,
+  ];
 
-  trustedTab.textContent = "Trusted";
-  aiTab.textContent = "AI";
-  guidanceTab.textContent = "Guide";
+  const searchabilityItems = aiItems.length
+    ? aiItems
+    : trustedItems;
 
-  trustedTab.title = `${trustedCount} trusted suggestions`;
-  aiTab.title = `${aiCount} AI suggestions`;
-  guidanceTab.title = `${guidanceCount} guidance items`;
+  const recruiterTipItems = guidanceItems.length
+    ? guidanceItems
+    : trustedItems;
+
+  return {
+    skills: {
+      key: "skills",
+      label: "Skills",
+      title: "Hard skills",
+      matchedCount: trustedItems.length,
+      missingCount: skillsMissingItems.length,
+      aiCount: aiItems.length,
+      totalCount: trustedItems.length + skillsMissingItems.length,
+      groups: [
+        {
+          title: "Matched skills",
+          summary: `${trustedItems.length} ready item(s) already backed by the resume.`,
+          bucket: "trusted",
+          items: trustedItems,
+        },
+        {
+          title: "Missing / optimization opportunities",
+          summary: `${skillsMissingItems.length} item(s) can improve JD signal coverage.`,
+          bucket: "ai_optimize",
+          items: skillsMissingItems,
+        },
+      ],
+    },
+
+    searchability: {
+      key: "searchability",
+      label: "Searchability",
+      title: "Searchability",
+      matchedCount: trustedItems.length,
+      missingCount: aiItems.length,
+      aiCount: aiItems.length,
+      totalCount: searchabilityItems.length,
+      groups: [
+        {
+          title: "Keyword placement",
+          summary: "Suggestions that improve where JD language appears in the resume.",
+          bucket: aiItems.length ? "ai_optimize" : "trusted",
+          items: searchabilityItems,
+        },
+      ],
+    },
+
+    recruiter_tips: {
+      key: "recruiter_tips",
+      label: "Recruiter Tips",
+      title: "Recruiter tips",
+      matchedCount: trustedItems.length,
+      missingCount: guidanceItems.length,
+      aiCount: aiItems.length,
+      totalCount: recruiterTipItems.length,
+      groups: [
+        {
+          title: "Recruiter review notes",
+          summary: "Items that improve clarity, salience, and review confidence.",
+          bucket: guidanceItems.length ? "guidance" : "trusted",
+          items: recruiterTipItems,
+        },
+      ],
+    },
+  };
+}
+
+function getScanWorkspaceActiveTaxonomyPanel(payload = getScanWorkspacePayload()) {
+  const taxonomy = buildScanWorkspaceTaxonomy(payload);
+  const selected = String(scanWorkspaceState.selectedTab || "").trim();
+
+  return taxonomy[selected] || taxonomy.skills;
 }
 
 function getScanWorkspaceItemsForSelectedTab(payload) {
-  const trusted = getScanWorkspaceTrustedSuggestions(payload);
-  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
-  const guidance = getScanWorkspaceGuidance(payload);
+  const panel = getScanWorkspaceActiveTaxonomyPanel(payload);
 
-  if (scanWorkspaceState.selectedTab === "trusted") {
-    return [...trusted.directApplyReady, ...trusted.directApplyOptional];
-  }
-  if (scanWorkspaceState.selectedTab === "guidance") {
-    return guidance;
-  }
-  return aiSuggestions;
+  return panel.groups.flatMap((group) =>
+    Array.isArray(group.items) ? group.items : []
+  );
+}
+
+function renderScanWorkspaceTaxonomySummary(panel) {
+  return `
+    <div class="scan-workspace-taxonomy-summary">
+      <div>
+        <div class="scan-workspace-taxonomy-kicker">
+          ${escapeHtml(panel.label)}
+        </div>
+
+        <div class="scan-workspace-taxonomy-title">
+          ${escapeHtml(panel.title)}
+        </div>
+      </div>
+
+      <div class="scan-workspace-taxonomy-counts">
+        <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--matched">
+          Matched ${panel.matchedCount}
+        </span>
+
+        <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--missing">
+          Missing ${panel.missingCount}
+        </span>
+
+        <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--ai">
+          AI ${panel.aiCount}
+        </span>
+      </div>
+    </div>
+  `;
+}
+
+function renderScanWorkspaceTaxonomyGroup(group) {
+  const items = Array.isArray(group.items) ? group.items : [];
+
+  return `
+    <section class="scan-workspace-taxonomy-group">
+      <div class="scan-workspace-taxonomy-group-header">
+        <div>
+          <div class="scan-workspace-taxonomy-group-title">
+            ${escapeHtml(group.title || "Scan items")}
+          </div>
+
+          ${
+            group.summary
+              ? `
+                <div class="scan-workspace-taxonomy-group-summary">
+                  ${escapeHtml(group.summary)}
+                </div>
+              `
+              : ""
+          }
+        </div>
+
+        <div class="scan-workspace-taxonomy-group-count">
+          ${items.length}
+        </div>
+      </div>
+
+      ${renderScanWorkspaceIssueInventory(items, group.bucket || "ai_optimize")}
+    </section>
+  `;
+}
+
+function renderScanWorkspaceTaxonomyPanel(panel) {
+  return `
+    <div class="scan-workspace-taxonomy-panel">
+      ${renderScanWorkspaceTaxonomySummary(panel)}
+
+      ${panel.groups.map((group) => renderScanWorkspaceTaxonomyGroup(group)).join("")}
+    </div>
+  `;
 }
 
 function getScanWorkspaceIssueSignals(item) {
@@ -9144,6 +9307,7 @@ function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
         copy: buildScanWorkspaceAnnotationMarkerCopy(item),
         topPercent: Math.min(88, 24 + index * 9),
         leftPercent: 91,
+        previewRowIndex: index,
         candidateIds: [candidateId],
         originalText: String(
           item?.current_text ||
@@ -9182,6 +9346,7 @@ function getScanWorkspaceAnnotationMarkerSignature(markers) {
       title: marker.title,
       topPercent: marker.topPercent,
       leftPercent: marker.leftPercent,
+      previewRowIndex: marker.previewRowIndex,
       candidateIds: marker.candidateIds,
       originalText: marker.originalText,
       suggestedText: marker.suggestedText,
@@ -9192,21 +9357,40 @@ function getScanWorkspaceAnnotationMarkerSignature(markers) {
 }
 
 function updateScanWorkspaceHeaderCounts(payload = getScanWorkspacePayload()) {
-  const trusted = getScanWorkspaceTrustedSuggestions(payload);
-  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
-  const guidance = getScanWorkspaceGuidance(payload);
+  const taxonomy = buildScanWorkspaceTaxonomy(payload);
+  const skillsPanel = taxonomy.skills;
 
-  const trustedCount = trusted.directApplyReady.length + trusted.directApplyOptional.length;
-  const aiCount = aiSuggestions.length;
-  const guidanceCount = guidance.length;
+  const matchedCount = skillsPanel.matchedCount;
+  const aiCount = skillsPanel.aiCount;
+  const missingCount = skillsPanel.missingCount;
 
-  const trustedCountNode = qs("scanWorkspaceTrustedCount");
+  const matchedCountNode = qs("scanWorkspaceTrustedCount");
   const aiCountNode = qs("scanWorkspaceAiCount");
-  const guidanceCountNode = qs("scanWorkspaceGuidanceCount");
+  const missingCountNode = qs("scanWorkspaceGuidanceCount");
 
-  if (trustedCountNode) trustedCountNode.textContent = String(trustedCount);
-  if (aiCountNode) aiCountNode.textContent = String(aiCount);
-  if (guidanceCountNode) guidanceCountNode.textContent = String(guidanceCount);
+  if (matchedCountNode) {
+    matchedCountNode.textContent = String(matchedCount);
+    const label = matchedCountNode
+      .closest(".scan-workspace-review-inline-metric")
+      ?.querySelector(".scan-workspace-review-inline-metric-label");
+    if (label) label.textContent = "Matched";
+  }
+
+  if (aiCountNode) {
+    aiCountNode.textContent = String(aiCount);
+    const label = aiCountNode
+      .closest(".scan-workspace-review-inline-metric")
+      ?.querySelector(".scan-workspace-review-inline-metric-label");
+    if (label) label.textContent = "AI";
+  }
+
+  if (missingCountNode) {
+    missingCountNode.textContent = String(missingCount);
+    const label = missingCountNode
+      .closest(".scan-workspace-review-inline-metric")
+      ?.querySelector(".scan-workspace-review-inline-metric-label");
+    if (label) label.textContent = "Missing";
+  }
 }
 
 function syncScanWorkspaceAnnotationMarkers(payload = getScanWorkspacePayload()) {
@@ -9454,18 +9638,8 @@ function renderScanWorkspaceView() {
   const selectedIds = getScanWorkspaceSelectedCandidateIds();
   const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
 
-  let bodyHtml = renderScanWorkspaceIssueInventory(aiSuggestions, "ai_optimize");
-
-  if (scanWorkspaceState.selectedTab === "trusted") {
-    bodyHtml = renderScanWorkspaceIssueInventory(
-      [...trusted.directApplyReady, ...trusted.directApplyOptional],
-      "trusted"
-    );
-  } else if (scanWorkspaceState.selectedTab === "guidance") {
-    bodyHtml = renderScanWorkspaceIssueInventory(guidance, "guidance");
-  }
-
-  root.innerHTML = bodyHtml;
+  const activePanel = getScanWorkspaceActiveTaxonomyPanel(payload);
+  root.innerHTML = renderScanWorkspaceTaxonomyPanel(activePanel);
 
   renderScanWorkspaceTabs();
   updateScanWorkspaceMeta();
@@ -9605,7 +9779,7 @@ function bindScanWorkspaceHandlers() {
       if (!tabButton) return;
 
       const nextTab = String(tabButton.dataset.scanSelectedTab || "").trim();
-      if (!nextTab) return;
+      if (!["skills", "searchability", "recruiter_tips"].includes(nextTab)) return;
 
       scanWorkspaceState.selectedTab = nextTab;
       scanWorkspaceState.activeCandidateId = "";
@@ -9711,20 +9885,7 @@ async function initScanWorkspacePage() {
     scanWorkspaceState.suggestionDecisionOverrides = {};
     scanWorkspaceState.previewPayload = null;
 
-    const aiCount = getScanWorkspaceAiSuggestions(payload).length;
-    const trustedCount =
-      getScanWorkspaceTrustedSuggestions(payload).directApplyReady.length +
-      getScanWorkspaceTrustedSuggestions(payload).directApplyOptional.length;
-    const guidanceCount = getScanWorkspaceGuidance(payload).length;
-
-    scanWorkspaceState.selectedTab =
-      aiCount > 0
-        ? "ai_optimize"
-        : trustedCount > 0
-          ? "trusted"
-          : guidanceCount > 0
-            ? "guidance"
-            : "trusted";
+    scanWorkspaceState.selectedTab = "skills";
 
     renderScanWorkspaceView();
     window.setTimeout(() => {

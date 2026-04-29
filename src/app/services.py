@@ -20,6 +20,9 @@ from src.config.consts import (
     _SCAN_DIMENSION_DISPLAY_LABELS,
     _SCAN_GROUP_LABELS,
     _SCAN_RECRUITER_TIPS_SIGNAL_KEYS,
+    _SCAN_SEARCHABILITY_BULLET_WORD_LIMIT,
+    _SCAN_SEARCHABILITY_DIMENSIONS,
+    _SCAN_SEARCHABILITY_MIN_VISIBLE_TECH_TERMS,
     _SCAN_SIGNAL_DISPLAY_OVERRIDES,
     _SCAN_SKILLS_SIGNAL_KEYS,
     _SCAN_TITLE_SIGNAL_PATTERNS,
@@ -1710,6 +1713,240 @@ def _scan_issue_group_id_for_row(row: Dict[str, Any], *, lane: str) -> str:
 
     return "skills"
 
+def _scan_issue_unique_display_labels(values: List[Any]) -> List[str]:
+    output: List[str] = []
+    seen = set()
+
+    for value in values or []:
+        label = _scan_issue_display_label(value)
+        key = label.lower()
+        if not label or key in seen:
+            continue
+        seen.add(key)
+        output.append(label)
+
+    return output
+
+
+def _scan_resume_document_text(resume_evidence: Any) -> str:
+    document = getattr(resume_evidence, "document", None)
+    return (
+        _clean_text(getattr(document, "raw_text", ""))
+        or _clean_text(getattr(document, "normalized_text", ""))
+    )
+
+
+def _scan_resume_bullet_texts(resume_evidence: Any) -> List[str]:
+    bullets: List[str] = []
+
+    for entry in list(getattr(resume_evidence, "experience_entries", []) or []):
+        bullets.extend(_clean_text(bullet) for bullet in list(getattr(entry, "bullets", []) or []))
+
+    for entry in list(getattr(resume_evidence, "project_entries", []) or []):
+        bullets.extend(_clean_text(bullet) for bullet in list(getattr(entry, "bullets", []) or []))
+
+    return [bullet for bullet in bullets if bullet]
+
+
+def _scan_resume_visible_search_terms(resume_evidence: Any) -> List[str]:
+    raw_terms: List[Any] = []
+
+    for field_name in (
+        "skills",
+        "tools",
+        "methods",
+        "workflows",
+        "tooling_signals",
+        "analytics_ml_signals",
+        "experimentation_signals",
+        "domain_signals",
+    ):
+        raw_terms.extend(list(getattr(resume_evidence, field_name, []) or []))
+
+    return _scan_issue_unique_display_labels(raw_terms)
+
+
+def _scan_searchability_issue(
+    *,
+    check_id: str,
+    bucket: str,
+    title: str,
+    reason: str,
+    current_text: str = "",
+    suggested_text: str = "",
+    supported_jd_signals: List[str] | None = None,
+    priority: str = "",
+) -> Dict[str, Any]:
+    bucket_label = "Matched searchability signal" if bucket == "matched" else "Searchability opportunity"
+
+    return {
+        "issue_id": f"scan_issue:searchability:{check_id}",
+        "candidate_id": "",
+        "source_lane": "searchability_check",
+        "group_id": "searchability",
+        "group_label": _scan_issue_group_label("searchability"),
+        "bucket": bucket,
+        "bucket_label": bucket_label,
+        "title": title,
+        "status": "searchability_matched" if bucket == "matched" else "searchability_opportunity",
+        "priority": priority,
+        "confidence": "deterministic",
+        "source": "resume_evidence",
+        "section": "",
+        "source_entry_id": "",
+        "source_bullet_id": "",
+        "source_bullet_ids": [],
+        "original_text": current_text,
+        "current_text": current_text,
+        "suggested_text": suggested_text,
+        "reason": reason,
+        "supported_jd_signals": list(supported_jd_signals or []),
+        "likely_impacted_dimensions": sorted(_SCAN_SEARCHABILITY_DIMENSIONS),
+        "materiality_validation_status": "",
+        "patch_generation_method": "deterministic_searchability_check",
+        "projected_overall_delta": None,
+        "original_final_score": None,
+        "projected_final_score": None,
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "can_accept": False,
+        "can_accept_all": False,
+        "anchor_strategy": "none",
+        "can_focus_preview": False,
+        "raw": {
+            "check_id": check_id,
+            "source": "deterministic_searchability_check",
+        },
+    }
+
+
+def _build_searchability_scan_issues(resume_evidence: Any = None) -> List[Dict[str, Any]]:
+    if resume_evidence is None:
+        return []
+
+    raw_text = _scan_resume_document_text(resume_evidence)
+    text_norm = raw_text.lower()
+    bullets = _scan_resume_bullet_texts(resume_evidence)
+    visible_terms = _scan_resume_visible_search_terms(resume_evidence)
+
+    issues: List[Dict[str, Any]] = []
+
+    skills = list(getattr(resume_evidence, "skills", []) or [])
+    has_skills_section = bool(re.search(r"(?im)^\s*(technical\s+skills|skills|core\s+skills)\s*:?\s*$", raw_text))
+    has_parseable_skills = bool(skills)
+
+    if has_skills_section or has_parseable_skills:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="skills_section_parseable",
+                bucket="matched",
+                title="Skills section parseable",
+                reason="The resume exposes a skills signal that can be parsed deterministically.",
+                current_text=", ".join(_scan_issue_unique_display_labels(skills[:12])),
+                supported_jd_signals=_scan_issue_unique_display_labels(skills[:6]),
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="skills_section_parseable",
+                bucket="missing",
+                title="Add a parseable skills section",
+                reason="The scan could not detect a clear skills section or structured skills list.",
+                suggested_text="Add a concise Technical Skills section with the strongest JD-relevant tools, methods, and platforms.",
+                priority="high",
+            )
+        )
+
+    if len(visible_terms) >= int(_SCAN_SEARCHABILITY_MIN_VISIBLE_TECH_TERMS):
+        issues.append(
+            _scan_searchability_issue(
+                check_id="visible_technical_terms",
+                bucket="matched",
+                title="Technical terms visible",
+                reason=f"{len(visible_terms)} technical/search terms are visible in the parsed resume evidence.",
+                current_text=", ".join(visible_terms[:12]),
+                supported_jd_signals=visible_terms[:6],
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="visible_technical_terms",
+                bucket="missing",
+                title="Add more searchable technical terms",
+                reason=(
+                    f"Only {len(visible_terms)} technical/search term(s) were visible in the parsed resume evidence."
+                ),
+                current_text=", ".join(visible_terms[:12]),
+                suggested_text="Surface the strongest supported JD keywords in Skills and experience bullets.",
+                supported_jd_signals=visible_terms[:6],
+                priority="high",
+            )
+        )
+
+    quantified_bullets = list(getattr(resume_evidence, "quantified_bullets", []) or [])
+    if quantified_bullets:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="quantified_impact_visible",
+                bucket="matched",
+                title="Quantified impact visible",
+                reason=f"{len(quantified_bullets)} quantified bullet(s) were detected.",
+                current_text=_clean_text(quantified_bullets[0])[:220],
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="quantified_impact_visible",
+                bucket="missing",
+                title="Add quantified impact",
+                reason="No quantified bullets were detected in the parsed resume evidence.",
+                suggested_text="Add measurable impact where already supported by the original experience.",
+                priority="medium",
+            )
+        )
+
+    long_bullets = [
+        bullet for bullet in bullets
+        if len(re.findall(r"\w+", bullet)) > int(_SCAN_SEARCHABILITY_BULLET_WORD_LIMIT)
+    ]
+
+    if long_bullets:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="bullet_length_risk",
+                bucket="missing",
+                title="Shorten long bullets",
+                reason=(
+                    f"{len(long_bullets)} bullet(s) exceed "
+                    f"{int(_SCAN_SEARCHABILITY_BULLET_WORD_LIMIT)} words, which can reduce scan readability."
+                ),
+                current_text=_clean_text(long_bullets[0])[:260],
+                suggested_text="Split or tighten long bullets while preserving the supported evidence.",
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="bullet_length_risk",
+                bucket="matched",
+                title="Bullet length looks scannable",
+                reason=(
+                    f"No parsed experience/project bullet exceeded "
+                    f"{int(_SCAN_SEARCHABILITY_BULLET_WORD_LIMIT)} words."
+                ),
+                priority="low",
+            )
+        )
+
+    return issues
+
 def _scan_issue_from_replacement_row(
     row: Dict[str, Any],
     *,
@@ -1777,6 +2014,8 @@ def _scan_issue_from_replacement_row(
         "unsupported_risk_signals": list(row.get("unsupported_risk_signals", []) or []),
         "can_accept": bool(can_accept),
         "can_accept_all": bool(can_accept_all),
+        "anchor_strategy": "replacement_candidate",
+        "can_focus_preview": bool(candidate_id),
         "raw": row,
     }
 
@@ -1787,6 +2026,7 @@ def _build_tailoring_scan_issue_contract(
     trusted_optional: List[Dict[str, Any]],
     ai_optimize_optional: List[Dict[str, Any]],
     directional_guidance: List[Dict[str, Any]],
+    resume_evidence: Any = None,
 ) -> Dict[str, Any]:
     issues: List[Dict[str, Any]] = []
 
@@ -1843,6 +2083,8 @@ def _build_tailoring_scan_issue_contract(
                     index=index,
                 )
             )
+
+    issues.extend(_build_searchability_scan_issues(resume_evidence))
 
     counts = {
         "total": len(issues),
@@ -3735,11 +3977,19 @@ def tailoring_scan_preload_payload(
 
     selected_jd_record = dict(job_snapshot or job)
 
+    try:
+        scan_resume_evidence = _load_resume_evidence_for_workspace_preview(
+            effective_selected_resume,
+        )
+    except Exception:
+        scan_resume_evidence = None
+
     scan_issue_contract = _build_tailoring_scan_issue_contract(
         trusted_ready=trusted_ready,
         trusted_optional=trusted_optional,
         ai_optimize_optional=ai_optimize_optional,
         directional_guidance=directional_guidance,
+        resume_evidence=scan_resume_evidence,
     )
 
     return {

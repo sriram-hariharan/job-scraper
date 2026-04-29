@@ -1852,3 +1852,14 @@ _SCAN_TITLE_SIGNAL_PATTERNS = list(dict.fromkeys(
     + ANALYTICS_ML_SIGNAL_PATTERNS
     + DOMAIN_SIGNAL_PATTERNS
 ))
+
+_SCAN_SEARCHABILITY_BULLET_WORD_LIMIT = 38
+_SCAN_SEARCHABILITY_MIN_VISIBLE_TECH_TERMS = 5
+
+_SCAN_SEARCHABILITY_DIMENSIONS = {
+    "ats_match",
+    "required_skills_alignment",
+    "preferred_skills_alignment",
+    "tooling_alignment",
+    "workflow_alignment",
+}

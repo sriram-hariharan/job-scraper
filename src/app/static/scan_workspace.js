@@ -420,7 +420,11 @@ function normalizeScanWorkspaceAnnotationMarker(marker, index) {
     topPercent: Number.isFinite(topPercent) ? Math.max(2, Math.min(98, topPercent)) : 50,
     leftPercent: Number.isFinite(leftPercent) ? Math.max(2, Math.min(98, leftPercent)) : 50,
     candidateIds: collectScanWorkspaceMarkerCandidateIds(marker),
-      };
+    originalText: String(marker?.originalText || marker?.original_text || "").trim(),
+    suggestedText: String(marker?.suggestedText || marker?.suggested_text || "").trim(),
+    reasonText: String(marker?.reasonText || marker?.reason_text || "").trim(),
+    sourceLabel: String(marker?.sourceLabel || marker?.source_label || "AI suggested").trim(),
+  };
 }
 
 function getScanWorkspaceAnnotationMarkerById(markerId) {
@@ -1163,6 +1167,22 @@ function openScanWorkspaceSuggestionPopover(markerId) {
   renderScanWorkspaceAnnotationShell();
 }
 
+function openScanWorkspaceSuggestionPopoverForCandidateId(candidateId) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId) return false;
+
+  const marker = scanWorkspaceAnnotationState.markers.find((item) =>
+    Array.isArray(item?.candidateIds) &&
+    item.candidateIds.some((value) => String(value || "").trim() === safeCandidateId)
+  );
+
+  if (!marker) return false;
+
+  scanWorkspaceAnnotationState.activeMarkerId = marker.id;
+  renderScanWorkspaceAnnotationShell();
+  return true;
+}
+
 function renderScanWorkspaceAnnotationOverlay() {
   const overlay = getScanWorkspaceInput("scanWorkspaceAnnotationOverlay");
   const status = getScanWorkspaceInput("scanWorkspaceAnnotationStatus");
@@ -1211,6 +1231,55 @@ function renderScanWorkspaceAnnotationOverlay() {
     `${counts.accepted} accepted, ${counts.rejected} rejected, ${counts.pending} pending.`;
 }
 
+function buildScanWorkspaceSuggestionDiffHtml(marker) {
+  const originalText = String(marker?.originalText || "").trim();
+  const suggestedText = String(marker?.suggestedText || "").trim();
+
+  if (!originalText && !suggestedText) {
+    return "";
+  }
+
+  return `
+    <div class="scan-workspace-inline-diff">
+      ${
+        originalText
+          ? `
+            <div class="scan-workspace-inline-diff-del">
+              ${scanWorkspaceEscapeHtml(originalText)}
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        suggestedText
+          ? `
+            <div class="scan-workspace-inline-diff-add">
+              ${scanWorkspaceEscapeHtml(suggestedText)}
+            </div>
+          `
+          : ""
+      }
+    </div>
+  `;
+}
+
+function getScanWorkspaceSuggestionPopoverPosition(marker) {
+  const top = Number(marker?.topPercent || 0);
+  const left = Number(marker?.leftPercent || 0);
+
+  const anchoredTop = Math.max(8, Math.min(88, top - 2));
+  const anchoredLeft =
+    left > 72
+      ? `calc(${left}% - 292px)`
+      : `calc(${left}% + 18px)`;
+
+  return {
+    top: `${anchoredTop}%`,
+    left: anchoredLeft,
+  };
+}
+
 function renderScanWorkspaceSuggestionPopover() {
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
   const title = getScanWorkspaceInput("scanWorkspaceSuggestionPopoverTitle");
@@ -1240,9 +1309,11 @@ function renderScanWorkspaceSuggestionPopover() {
 
   if (!marker) {
     popover.classList.add("hidden");
+    popover.style.top = "";
+    popover.style.left = "";
+    popover.style.right = "";
     title.textContent = "Select a suggestion anchor to inspect it here.";
-    copy.textContent =
-      "This shell is now ready for anchored AI suggestion details. Real suggestion positioning and accept/reject state wiring come in the next phase.";
+    copy.textContent = "";
     decisionPill.textContent = "Pending";
     decisionPill.className =
       "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending";
@@ -1250,38 +1321,64 @@ function renderScanWorkspaceSuggestionPopover() {
     acceptBtn.disabled = true;
     rejectBtn.disabled = true;
     resetBtn.disabled = true;
+    resetBtn.hidden = true;
     acceptBtn.classList.remove("is-active");
     rejectBtn.classList.remove("is-active");
     return;
   }
 
-  popover.classList.remove("hidden");
-  title.textContent = marker.title;
-  copy.textContent = marker.copy;
-
+  const position = getScanWorkspaceSuggestionPopoverPosition(marker);
   const decision = normalizeScanWorkspaceAnnotationDecision(marker.decision);
+  const sourceLabel = String(marker.sourceLabel || "AI suggested").trim();
+  const reasonText = String(marker.reasonText || "").trim();
 
-  if (decision === "accepted") {
-    decisionPill.textContent = "Accepted";
-    decisionPill.className = "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--accepted";
-    decisionMeta.textContent = marker.candidateIds.length
-      ? "This suggestion is accepted and linked into the compare/apply decision set."
-      : "This suggestion is accepted, but it does not yet carry a linked compare candidate id.";
-  } else if (decision === "rejected") {
-    decisionPill.textContent = "Rejected";
-    decisionPill.className =
-      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--rejected";
-    decisionMeta.textContent = "This suggestion is currently rejected from the scan decision set.";
-  } else {
-    decisionPill.textContent = "Pending";
-    decisionPill.className =
-      "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending";
-    decisionMeta.textContent = "No decision recorded yet.";
-  }
+  popover.classList.remove("hidden");
+  popover.style.top = position.top;
+  popover.style.left = position.left;
+  popover.style.right = "auto";
+
+  title.textContent = sourceLabel;
+
+  copy.innerHTML = `
+    <div class="scan-workspace-suggestion-kicker-row">
+      <span class="scan-workspace-suggestion-kicker">
+        ✨ ${scanWorkspaceEscapeHtml(sourceLabel)}
+      </span>
+
+      <span class="scan-workspace-suggestion-chip">
+        REPHRASE
+      </span>
+    </div>
+
+    ${buildScanWorkspaceSuggestionDiffHtml(marker)}
+
+    ${
+      reasonText
+        ? `
+          <div class="scan-workspace-suggestion-reason">
+            ${scanWorkspaceEscapeHtml(reasonText)}
+          </div>
+        `
+        : ""
+    }
+  `;
+
+  decisionPill.textContent =
+    decision === "accepted" ? "Accepted" : decision === "rejected" ? "Rejected" : "Pending";
+
+  decisionPill.className =
+    decision === "accepted"
+      ? "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--accepted"
+      : decision === "rejected"
+        ? "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--rejected"
+        : "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending";
+
+  decisionMeta.textContent = "";
 
   acceptBtn.disabled = false;
   rejectBtn.disabled = false;
   resetBtn.disabled = decision === "pending";
+  resetBtn.hidden = decision === "pending";
 
   acceptBtn.classList.toggle("is-active", decision === "accepted");
   rejectBtn.classList.toggle("is-active", decision === "rejected");
@@ -1671,6 +1768,9 @@ window.addEventListener("DOMContentLoaded", () => {
     refreshCompare: () => ensureScanWorkspaceCompareLoaded({ force: true }),
     setAnnotationMarkers: (markers) => {
       setScanWorkspaceAnnotationMarkers(markers);
+    },
+    focusCandidateId: (candidateId) => {
+      return openScanWorkspaceSuggestionPopoverForCandidateId(candidateId);
     },
     clearAnnotationMarkers: () => {
       setScanWorkspaceAnnotationMarkers([]);

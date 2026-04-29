@@ -95,6 +95,7 @@ const scanWorkspaceState = {
   suggestionDecisionOverrides: {},
   selectedTab: "trusted",
   activeCandidateId: "",
+  annotationMarkerSignature: "",
   previewPayload: null,
   isPreviewing: false,
   isSaving: false,
@@ -8921,6 +8922,327 @@ function getScanWorkspaceItemsForSelectedTab(payload) {
   return aiSuggestions;
 }
 
+function getScanWorkspaceIssueSignals(item) {
+  const values = [
+    item?.supported_jd_signals,
+    item?.jd_signals,
+    item?.matched_signals,
+    item?.supported_signals,
+  ];
+
+  const signals = [];
+
+  values.forEach((value) => {
+    if (Array.isArray(value)) {
+      value.forEach((entry) => {
+        const safe = String(entry || "").trim();
+        if (safe) signals.push(safe);
+      });
+    } else if (value && typeof value === "object") {
+      Object.values(value).forEach((entry) => {
+        if (Array.isArray(entry)) {
+          entry.forEach((nested) => {
+            const safe = String(nested || "").trim();
+            if (safe) signals.push(safe);
+          });
+        } else {
+          const safe = String(entry || "").trim();
+          if (safe) signals.push(safe);
+        }
+      });
+    } else {
+      const safe = String(value || "").trim();
+      if (safe) signals.push(safe);
+    }
+  });
+
+  return Array.from(new Set(signals)).slice(0, 3);
+}
+
+function getScanWorkspaceIssueTitle(item, index) {
+  const signals = getScanWorkspaceIssueSignals(item);
+  const directTitle = String(
+    item?.suggestion_label ||
+    item?.proposal_label ||
+    item?.rewrite_category ||
+    item?.materiality_dimension ||
+    item?.dimension ||
+    ""
+  ).trim();
+
+  if (directTitle) return directTitle;
+  if (signals.length) return signals[0];
+
+  const text = String(
+    item?.final_replacement_text ||
+    item?.rewrite_direction ||
+    item?.rewrite_instruction ||
+    item?.original_text ||
+    item?.current_text ||
+    `Suggestion ${index + 1}`
+  ).trim();
+
+  return text.length > 52 ? `${text.slice(0, 49)}...` : text;
+}
+
+function getScanWorkspaceIssueMeta(item, bucket) {
+  if (bucket === "ai_optimize") return "AI Suggested";
+  if (bucket === "trusted") return "Ready";
+  if (bucket === "guidance") return "Guidance";
+  return "Suggestion";
+}
+
+function getScanWorkspaceIssueCountLabel(item, bucket) {
+  if (bucket === "ai_optimize") return "0/1";
+  if (bucket === "trusted") return "1/1";
+  if (bucket === "guidance") return "0/1";
+  return "0/1";
+}
+
+function getScanWorkspaceIssueToneClass(item, bucket) {
+  if (bucket === "trusted") return "is-matched";
+  if (bucket === "ai_optimize") return "is-ai";
+  return "is-missing";
+}
+
+function renderScanWorkspaceIssueInventory(items, bucket) {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  if (!safeItems.length) {
+    return `
+      <div class="tailoring-empty-state">
+        No scan items in this category.
+      </div>
+    `;
+  }
+
+  const activeCandidateId = String(scanWorkspaceState.activeCandidateId || "").trim();
+
+  return `
+    <div class="scan-workspace-issue-list">
+      ${safeItems
+        .map((item, index) => {
+          const candidateId = getTailoringReplacementCandidateId(item);
+          if (!candidateId) return "";
+
+          const isActive = candidateId === activeCandidateId;
+          const title = getScanWorkspaceIssueTitle(item, index);
+          const signals = getScanWorkspaceIssueSignals(item);
+          const meta = getScanWorkspaceIssueMeta(item, bucket);
+          const countLabel = getScanWorkspaceIssueCountLabel(item, bucket);
+          const toneClass = getScanWorkspaceIssueToneClass(item, bucket);
+
+          return `
+            <button
+              type="button"
+              class="scan-workspace-issue-row ${toneClass} ${isActive ? "is-active" : ""}"
+              data-scan-focus-candidate="${escapeHtml(candidateId)}"
+            >
+              <span class="scan-workspace-issue-status" aria-hidden="true"></span>
+
+              <span class="scan-workspace-issue-main">
+                <span class="scan-workspace-issue-title">
+                  ${escapeHtml(title)}
+                </span>
+
+                ${
+                  signals.length
+                    ? `
+                      <span class="scan-workspace-issue-signals">
+                        ${signals.map((signal) => escapeHtml(signal)).join(" · ")}
+                      </span>
+                    `
+                    : ""
+                }
+              </span>
+
+              <span class="scan-workspace-issue-right">
+                ${
+                  bucket === "ai_optimize"
+                    ? `<span class="scan-workspace-issue-ai-icon">✦</span>`
+                    : `<span class="scan-workspace-issue-flag">⚑</span>`
+                }
+
+                <span class="scan-workspace-issue-meta">
+                  ${escapeHtml(meta)}
+                </span>
+
+                <span class="scan-workspace-issue-count">
+                  ${escapeHtml(countLabel)}
+                </span>
+              </span>
+            </button>
+          `;
+        })
+        .join("")}
+    </div>
+  `;
+}
+
+function getScanWorkspaceReplacementSuggestions(payload = getScanWorkspacePayload()) {
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+
+  return [
+    ...trusted.directApplyReady,
+    ...trusted.directApplyOptional,
+    ...getScanWorkspaceAiSuggestions(payload),
+  ];
+}
+
+function buildScanWorkspaceAnnotationMarkerCopy(item) {
+  const originalText = String(
+    item?.current_text ||
+    item?.original_text ||
+    item?.source_bullet_text ||
+    item?.bullet_text ||
+    ""
+  ).trim();
+
+  const suggestedText = String(
+    item?.final_replacement_text ||
+    item?.rewrite_direction ||
+    item?.rewrite_instruction ||
+    ""
+  ).trim();
+
+  const reasonText = String(
+    item?.why_selected ||
+    item?.materiality_reason ||
+    item?.rewrite_instruction ||
+    item?.direction_only_reason ||
+    ""
+  ).trim();
+
+  return [
+    suggestedText ? `Suggestion: ${suggestedText}` : "",
+    originalText ? `Original: ${originalText}` : "",
+    reasonText ? `Reason: ${reasonText}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
+  return getScanWorkspaceReplacementSuggestions(payload)
+    .map((item, index) => {
+      const candidateId = getTailoringReplacementCandidateId(item);
+      if (!candidateId) return null;
+
+      const title = String(
+        item?.suggestion_label ||
+        item?.proposal_label ||
+        item?.final_replacement_text ||
+        item?.rewrite_direction ||
+        item?.rewrite_instruction ||
+        `Suggestion ${index + 1}`
+      ).trim();
+
+      return {
+        id: `scan_marker_${candidateId}`,
+        tone: item?.replacement_status === "ai_optimize_optional" ? "replace" : "focus",
+        title,
+        copy: buildScanWorkspaceAnnotationMarkerCopy(item),
+        topPercent: Math.min(88, 24 + index * 9),
+        leftPercent: 91,
+        candidateIds: [candidateId],
+        originalText: String(
+          item?.current_text ||
+          item?.original_text ||
+          item?.source_bullet_text ||
+          item?.bullet_text ||
+          ""
+        ).trim(),
+        suggestedText: String(
+          item?.final_replacement_text ||
+          item?.rewrite_direction ||
+          item?.rewrite_instruction ||
+          ""
+        ).trim(),
+        reasonText: String(
+          item?.why_selected ||
+          item?.materiality_reason ||
+          item?.rewrite_instruction ||
+          item?.direction_only_reason ||
+          ""
+        ).trim(),
+        sourceLabel:
+          item?.replacement_status === "ai_optimize_optional"
+            ? "AI suggested"
+            : "Trusted suggestion",
+      };
+    })
+    .filter(Boolean);
+}
+
+function getScanWorkspaceAnnotationMarkerSignature(markers) {
+  return JSON.stringify(
+    (Array.isArray(markers) ? markers : []).map((marker) => ({
+      id: marker.id,
+      tone: marker.tone,
+      title: marker.title,
+      topPercent: marker.topPercent,
+      leftPercent: marker.leftPercent,
+      candidateIds: marker.candidateIds,
+      originalText: marker.originalText,
+      suggestedText: marker.suggestedText,
+      reasonText: marker.reasonText,
+      sourceLabel: marker.sourceLabel,
+    }))
+  );
+}
+
+function updateScanWorkspaceHeaderCounts(payload = getScanWorkspacePayload()) {
+  const trusted = getScanWorkspaceTrustedSuggestions(payload);
+  const aiSuggestions = getScanWorkspaceAiSuggestions(payload);
+  const guidance = getScanWorkspaceGuidance(payload);
+
+  const trustedCount = trusted.directApplyReady.length + trusted.directApplyOptional.length;
+  const aiCount = aiSuggestions.length;
+  const guidanceCount = guidance.length;
+
+  const trustedCountNode = qs("scanWorkspaceTrustedCount");
+  const aiCountNode = qs("scanWorkspaceAiCount");
+  const guidanceCountNode = qs("scanWorkspaceGuidanceCount");
+
+  if (trustedCountNode) trustedCountNode.textContent = String(trustedCount);
+  if (aiCountNode) aiCountNode.textContent = String(aiCount);
+  if (guidanceCountNode) guidanceCountNode.textContent = String(guidanceCount);
+}
+
+function syncScanWorkspaceAnnotationMarkers(payload = getScanWorkspacePayload()) {
+  updateScanWorkspaceHeaderCounts(payload);
+
+  if (!window.scanWorkspacePhase1?.setAnnotationMarkers) return;
+
+  if (!payload) {
+    if (scanWorkspaceState.annotationMarkerSignature !== "[]") {
+      scanWorkspaceState.annotationMarkerSignature = "[]";
+      window.scanWorkspacePhase1.setAnnotationMarkers([]);
+    }
+    return;
+  }
+
+  const markers = buildScanWorkspaceAnnotationMarkersFromPayload(payload);
+  const markerSignature = getScanWorkspaceAnnotationMarkerSignature(markers);
+
+  if (markerSignature !== scanWorkspaceState.annotationMarkerSignature) {
+    scanWorkspaceState.annotationMarkerSignature = markerSignature;
+    window.scanWorkspacePhase1.setAnnotationMarkers(markers);
+  }
+
+  const activeCandidateId = String(scanWorkspaceState.activeCandidateId || "").trim();
+  if (activeCandidateId && window.scanWorkspacePhase1?.focusCandidateId) {
+    window.scanWorkspacePhase1.focusCandidateId(activeCandidateId);
+  }
+}
+
+function syncScanWorkspaceActiveCandidateToAnnotation(candidateId) {
+  const safeCandidateId = String(candidateId || "").trim();
+  if (!safeCandidateId || !window.scanWorkspacePhase1?.focusCandidateId) return;
+
+  window.scanWorkspacePhase1.focusCandidateId(safeCandidateId);
+}
+
 function findScanWorkspaceCandidateById(candidateId, payload = getScanWorkspacePayload()) {
   const safeCandidateId = String(candidateId || "").trim();
   if (!safeCandidateId || !payload) return null;
@@ -9098,12 +9420,13 @@ function setScanWorkspaceActiveCandidate(candidateId) {
   if (!nextId) return;
 
   if (scanWorkspaceState.activeCandidateId === nextId) {
-    renderScanWorkspaceActiveInspector();
+    syncScanWorkspaceActiveCandidateToAnnotation(nextId);
     return;
   }
 
   scanWorkspaceState.activeCandidateId = nextId;
   renderScanWorkspaceView();
+  syncScanWorkspaceActiveCandidateToAnnotation(nextId);
 }
 
 function renderScanWorkspaceView() {
@@ -9119,7 +9442,7 @@ function renderScanWorkspaceView() {
     `;
     updateScanWorkspaceMeta();
     updateScanWorkspaceActionBar();
-    renderScanWorkspaceActiveInspector(null);
+    syncScanWorkspaceAnnotationMarkers(null);
     return;
   }
 
@@ -9131,46 +9454,15 @@ function renderScanWorkspaceView() {
   const selectedIds = getScanWorkspaceSelectedCandidateIds();
   const reviewDecisionMap = getScanWorkspaceCurrentReviewDecisionMap();
 
-  const trustedHtml = renderReplacementDecisionSection({
-    title: "",
-    subtitle: "",
-    items: [...trusted.directApplyReady, ...trusted.directApplyOptional],
-    emptyLabel: "No trusted suggestions.",
-    tone: "safe",
-    mode: "replacement",
-    selectionEnabled: false,
-    actionPrefix: "scan",
-  });
+  let bodyHtml = renderScanWorkspaceIssueInventory(aiSuggestions, "ai_optimize");
 
-  const aiHtml = renderReplacementDecisionSection({
-    title: "",
-    subtitle: "",
-    items: aiSuggestions,
-    emptyLabel: "No AI suggestions.",
-    tone: "caution",
-    mode: "replacement",
-    selectionEnabled: true,
-    selectedCandidateIds: selectedIds,
-    actionPrefix: "scan",
-  });
-
-  const guidanceHtml = renderReplacementDecisionSection({
-    title: "",
-    subtitle: "",
-    items: guidance,
-    emptyLabel: "No guidance items.",
-    tone: "muted",
-    mode: "direction_only",
-    reviewActionsEnabled: true,
-    reviewDecisionMap,
-    actionPrefix: "scan",
-  });
-
-  let bodyHtml = aiHtml;
   if (scanWorkspaceState.selectedTab === "trusted") {
-    bodyHtml = trustedHtml;
+    bodyHtml = renderScanWorkspaceIssueInventory(
+      [...trusted.directApplyReady, ...trusted.directApplyOptional],
+      "trusted"
+    );
   } else if (scanWorkspaceState.selectedTab === "guidance") {
-    bodyHtml = guidanceHtml;
+    bodyHtml = renderScanWorkspaceIssueInventory(guidance, "guidance");
   }
 
   root.innerHTML = bodyHtml;
@@ -9178,7 +9470,7 @@ function renderScanWorkspaceView() {
   renderScanWorkspaceTabs();
   updateScanWorkspaceMeta();
   updateScanWorkspaceActionBar();
-  renderScanWorkspaceActiveInspector(payload);
+  syncScanWorkspaceAnnotationMarkers(payload);
 }
 
 async function previewScanWorkspaceState() {
@@ -9211,6 +9503,10 @@ async function previewScanWorkspaceState() {
     };
 
     renderScanWorkspaceView();
+    window.setTimeout(() => {
+      syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+    }, 0);
+
   } catch (err) {
     showAppError("Failed to preview scan state", err);
   } finally {
@@ -9431,6 +9727,10 @@ async function initScanWorkspacePage() {
             : "trusted";
 
     renderScanWorkspaceView();
+    window.setTimeout(() => {
+      syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+    }, 0);
+
   } catch (err) {
     if (meta) {
       meta.textContent = "Failed to load scan preload.";

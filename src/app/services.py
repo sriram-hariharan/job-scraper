@@ -1484,6 +1484,276 @@ def run_live_pipeline_payload(
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+def _scan_issue_candidate_id(row: Dict[str, Any]) -> str:
+    return (
+        _clean_text(row.get("replacement_candidate_id"))
+        or _clean_text(row.get("candidate_id"))
+        or _clean_text(row.get("decision_id"))
+        or _clean_text(row.get("source_bullet_id"))
+    )
+
+
+def _scan_issue_supported_signals(row: Dict[str, Any]) -> List[str]:
+    raw_values = (
+        list(row.get("supported_jd_signals", []) or [])
+        + list(row.get("jd_signal_terms", []) or [])
+        + list(row.get("likely_impacted_dimensions", []) or [])
+    )
+
+    output: List[str] = []
+    seen = set()
+
+    for value in raw_values:
+        text = _clean_text(value)
+        key = text.lower()
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        output.append(text)
+
+    return output
+
+
+def _scan_issue_title(row: Dict[str, Any], *, fallback_label: str) -> str:
+    signals = _scan_issue_supported_signals(row)
+    if signals:
+        return ", ".join(signals[:3])
+
+    for field in (
+        "final_replacement_text",
+        "rewrite_direction",
+        "rewrite_instruction",
+        "original_text",
+        "current_evidence",
+        "parent_bullet",
+    ):
+        text = _clean_text(row.get(field))
+        if text:
+            return text[:72] + ("..." if len(text) > 72 else "")
+
+    return fallback_label
+
+
+def _scan_issue_from_replacement_row(
+    row: Dict[str, Any],
+    *,
+    lane: str,
+    group_id: str,
+    group_label: str,
+    bucket: str,
+    bucket_label: str,
+    can_accept: bool,
+    can_accept_all: bool,
+    index: int,
+) -> Dict[str, Any]:
+    candidate_id = _scan_issue_candidate_id(row)
+    issue_id = candidate_id or f"{lane}:{index}"
+
+    original_text = (
+        _clean_text(row.get("original_text"))
+        or _clean_text(row.get("current_evidence"))
+        or _clean_text(row.get("parent_bullet"))
+    )
+    suggested_text = (
+        _clean_text(row.get("final_replacement_text"))
+        or _clean_text(row.get("rewrite_direction"))
+        or _clean_text(row.get("rewrite_instruction"))
+    )
+
+    return {
+        "issue_id": f"scan_issue:{lane}:{issue_id}",
+        "candidate_id": candidate_id,
+        "source_lane": lane,
+        "group_id": group_id,
+        "group_label": group_label,
+        "bucket": bucket,
+        "bucket_label": bucket_label,
+        "title": _scan_issue_title(row, fallback_label=bucket_label),
+        "status": _clean_text(row.get("replacement_status")) or lane,
+        "priority": _clean_text(row.get("apply_priority")) or _clean_text(row.get("priority")),
+        "confidence": _clean_text(row.get("confidence")),
+        "source": _clean_text(row.get("source")),
+        "section": _clean_text(row.get("section")),
+        "source_entry_id": _clean_text(row.get("source_entry_id")),
+        "source_bullet_id": _clean_text(row.get("source_bullet_id")),
+        "source_bullet_ids": list(row.get("source_bullet_ids", []) or []),
+        "original_text": original_text,
+        "current_text": original_text,
+        "suggested_text": suggested_text,
+        "reason": (
+            _clean_text(row.get("why_selected"))
+            or _clean_text(row.get("why_this_improves_match"))
+            or _clean_text(row.get("rewrite_direction"))
+            or _clean_text(row.get("rewrite_instruction"))
+            or _clean_text(row.get("placement_guidance"))
+        ),
+        "supported_jd_signals": _scan_issue_supported_signals(row),
+        "likely_impacted_dimensions": list(row.get("likely_impacted_dimensions", []) or []),
+        "materiality_validation_status": _clean_text(row.get("materiality_validation_status")),
+        "patch_generation_method": _clean_text(row.get("patch_generation_method")),
+        "projected_overall_delta": row.get("projected_overall_delta", None),
+        "original_final_score": row.get("original_final_score", None),
+        "projected_final_score": row.get("projected_final_score", None),
+        "adjacent_risk_signals": list(row.get("adjacent_risk_signals", []) or []),
+        "unsupported_risk_signals": list(row.get("unsupported_risk_signals", []) or []),
+        "can_accept": bool(can_accept),
+        "can_accept_all": bool(can_accept_all),
+        "raw": row,
+    }
+
+
+def _build_tailoring_scan_issue_contract(
+    *,
+    trusted_ready: List[Dict[str, Any]],
+    trusted_optional: List[Dict[str, Any]],
+    ai_optimize_optional: List[Dict[str, Any]],
+    directional_guidance: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    issues: List[Dict[str, Any]] = []
+
+    lane_specs = [
+        (
+            "direct_apply_ready",
+            trusted_ready,
+            "matched",
+            "Matched",
+            True,
+            True,
+        ),
+        (
+            "direct_apply_optional",
+            trusted_optional,
+            "matched",
+            "Matched",
+            True,
+            False,
+        ),
+        (
+            "ai_optimize_optional",
+            ai_optimize_optional,
+            "ai",
+            "AI Suggested",
+            True,
+            True,
+        ),
+        (
+            "direction_only",
+            directional_guidance,
+            "missing",
+            "Missing / optimization opportunity",
+            False,
+            False,
+        ),
+    ]
+
+    for lane, rows, bucket, bucket_label, can_accept, can_accept_all in lane_specs:
+        for index, row in enumerate(rows or [], start=1):
+            if not isinstance(row, dict):
+                continue
+
+            issues.append(
+                _scan_issue_from_replacement_row(
+                    row,
+                    lane=lane,
+                    group_id="skills",
+                    group_label="Skills",
+                    bucket=bucket,
+                    bucket_label=bucket_label,
+                    can_accept=can_accept,
+                    can_accept_all=can_accept_all,
+                    index=index,
+                )
+            )
+
+    counts = {
+        "total": len(issues),
+        "matched": sum(1 for issue in issues if issue.get("bucket") == "matched"),
+        "missing": sum(1 for issue in issues if issue.get("bucket") == "missing"),
+        "ai": sum(1 for issue in issues if issue.get("bucket") == "ai"),
+        "actionable": sum(1 for issue in issues if issue.get("can_accept")),
+        "accept_all_eligible": sum(1 for issue in issues if issue.get("can_accept_all")),
+    }
+
+    groups = [
+        {
+            "group_id": "skills",
+            "label": "Skills",
+            "description": "Deterministic scan issues derived from the existing tailoring replacement lanes.",
+            "counts": counts,
+            "buckets": [
+                {
+                    "bucket": "matched",
+                    "label": "Matched skills",
+                    "count": counts["matched"],
+                },
+                {
+                    "bucket": "missing",
+                    "label": "Missing / optimization opportunities",
+                    "count": counts["missing"],
+                },
+                {
+                    "bucket": "ai",
+                    "label": "AI suggested",
+                    "count": counts["ai"],
+                },
+            ],
+        },
+        {
+            "group_id": "searchability",
+            "label": "Searchability",
+            "description": "Reserved for deterministic formatting and ATS parse checks.",
+            "counts": {
+                "total": 0,
+                "matched": 0,
+                "missing": 0,
+                "ai": 0,
+            },
+            "buckets": [],
+        },
+        {
+            "group_id": "recruiter_tips",
+            "label": "Recruiter Tips",
+            "description": "Reserved for recruiter-facing clarity and positioning checks.",
+            "counts": {
+                "total": 0,
+                "matched": 0,
+                "missing": 0,
+                "ai": 0,
+            },
+            "buckets": [],
+        },
+    ]
+
+    return {
+        "version": "scan_issue_contract_v1",
+        "source": "tailoring_replacement_lanes",
+        "groups": groups,
+        "issues": issues,
+        "counts": counts,
+        "acceptance_policy": {
+            "direct_apply_ready": {
+                "can_accept": True,
+                "can_accept_all": True,
+                "trusted": True,
+            },
+            "direct_apply_optional": {
+                "can_accept": True,
+                "can_accept_all": False,
+                "trusted": True,
+            },
+            "ai_optimize_optional": {
+                "can_accept": True,
+                "can_accept_all": True,
+                "trusted": False,
+            },
+            "direction_only": {
+                "can_accept": False,
+                "can_accept_all": False,
+                "trusted": False,
+            },
+        },
+    }
+
 def _normalize_selected_patch_candidate_ids(value: Any) -> List[str]:
     if isinstance(value, list):
         raw_items = value
@@ -3247,6 +3517,13 @@ def tailoring_scan_preload_payload(
 
     selected_jd_record = dict(job_snapshot or job)
 
+    scan_issue_contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=trusted_ready,
+        trusted_optional=trusted_optional,
+        ai_optimize_optional=ai_optimize_optional,
+        directional_guidance=directional_guidance,
+    )
+
     return {
         "ok": True,
         "preload_mode": "tailoring_artifact",
@@ -3283,6 +3560,7 @@ def tailoring_scan_preload_payload(
             "ai_optimize_optional": len(ai_optimize_optional),
             "direction_only": len(directional_guidance),
         },
+        "scan_issue_contract": scan_issue_contract,
         "final_replacement_summary": final_replacement_summary,
         "rewrite_review_summary": rewrite_review_summary,
         "rewrite_review_groups": rewrite_review_groups,

@@ -8912,7 +8912,164 @@ function renderScanWorkspaceTabs() {
   recruiterTipsTab.title = `${taxonomy.recruiter_tips.totalCount} recruiter tip item(s)`;
 }
 
+function getScanWorkspaceIssueContract(payload = getScanWorkspacePayload()) {
+  const contract = payload?.scan_issue_contract;
+  return contract && typeof contract === "object" ? contract : {};
+}
+
+function getScanWorkspaceContractIssues(payload = getScanWorkspacePayload()) {
+  const contract = getScanWorkspaceIssueContract(payload);
+  return Array.isArray(contract?.issues) ? contract.issues : [];
+}
+
+function hasScanWorkspaceIssueContract(payload = getScanWorkspacePayload()) {
+  return getScanWorkspaceContractIssues(payload).length > 0;
+}
+
+function normalizeScanWorkspaceContractIssue(issue) {
+  const raw = issue?.raw && typeof issue.raw === "object" ? issue.raw : {};
+  const candidateId = String(
+    issue?.candidate_id ||
+    raw?.replacement_candidate_id ||
+    raw?.candidate_id ||
+    issue?.issue_id ||
+    ""
+  ).trim();
+
+  const sourceLane = String(issue?.source_lane || raw?.replacement_status || "").trim();
+  const bucket = String(issue?.bucket || "").trim();
+  const bucketLabel = String(issue?.bucket_label || "").trim();
+
+  return {
+    ...raw,
+    ...issue,
+    scan_issue_id: String(issue?.issue_id || "").trim(),
+    scan_issue_group_id: String(issue?.group_id || "").trim(),
+    scan_issue_group_label: String(issue?.group_label || "").trim(),
+    scan_issue_bucket: bucket,
+    scan_issue_bucket_label: bucketLabel,
+    source_lane: sourceLane,
+    candidate_id: candidateId,
+    replacement_candidate_id: candidateId,
+    replacement_status: sourceLane || String(raw?.replacement_status || "").trim(),
+    original_text: String(issue?.original_text || raw?.original_text || "").trim(),
+    current_text: String(issue?.current_text || issue?.original_text || raw?.current_evidence || raw?.original_text || "").trim(),
+    current_evidence: String(issue?.current_text || issue?.original_text || raw?.current_evidence || raw?.original_text || "").trim(),
+    final_replacement_text: String(issue?.suggested_text || raw?.final_replacement_text || raw?.patch_text || "").trim(),
+    rewrite_direction: String(issue?.suggested_text || raw?.rewrite_direction || raw?.rewrite_instruction || "").trim(),
+    rewrite_instruction: String(issue?.suggested_text || raw?.rewrite_instruction || raw?.rewrite_direction || "").trim(),
+    why_selected: String(issue?.reason || raw?.why_selected || raw?.why_this_improves_match || "").trim(),
+    supported_jd_signals: Array.isArray(issue?.supported_jd_signals)
+      ? issue.supported_jd_signals
+      : Array.isArray(raw?.supported_jd_signals)
+        ? raw.supported_jd_signals
+        : [],
+    likely_impacted_dimensions: Array.isArray(issue?.likely_impacted_dimensions)
+      ? issue.likely_impacted_dimensions
+      : Array.isArray(raw?.likely_impacted_dimensions)
+        ? raw.likely_impacted_dimensions
+        : [],
+    can_accept: Boolean(issue?.can_accept),
+    can_accept_all: Boolean(issue?.can_accept_all),
+  };
+}
+
+function getScanWorkspaceNormalizedContractIssues(payload = getScanWorkspacePayload()) {
+  return getScanWorkspaceContractIssues(payload)
+    .map((issue) => normalizeScanWorkspaceContractIssue(issue))
+    .filter((issue) => String(issue?.candidate_id || issue?.scan_issue_id || "").trim());
+}
+
+function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspacePayload()) {
+  const contract = getScanWorkspaceIssueContract(payload);
+  const issues = getScanWorkspaceNormalizedContractIssues(payload);
+
+  const groupRows = Array.isArray(contract?.groups) ? contract.groups : [];
+  const defaultGroups = [
+    { group_id: "skills", label: "Skills", description: "" },
+    { group_id: "searchability", label: "Searchability", description: "" },
+    { group_id: "recruiter_tips", label: "Recruiter Tips", description: "" },
+  ];
+
+  const groups = defaultGroups.map((fallbackGroup) => {
+    const sourceGroup =
+      groupRows.find((group) => String(group?.group_id || "").trim() === fallbackGroup.group_id) ||
+      fallbackGroup;
+
+    const groupId = String(sourceGroup?.group_id || fallbackGroup.group_id).trim();
+    const groupIssues = issues.filter(
+      (issue) => String(issue?.scan_issue_group_id || "").trim() === groupId
+    );
+
+    const matchedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "matched");
+    const missingItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "missing");
+    const aiItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "ai");
+
+    const panel = {
+      key: groupId,
+      label: String(sourceGroup?.label || fallbackGroup.label).trim(),
+      title:
+        groupId === "skills"
+          ? "Hard skills"
+          : String(sourceGroup?.label || fallbackGroup.label).trim(),
+      matchedCount: matchedItems.length,
+      missingCount: missingItems.length,
+      aiCount: aiItems.length,
+      totalCount: groupIssues.length,
+      groups: [],
+    };
+
+    if (matchedItems.length) {
+      panel.groups.push({
+        title: "Matched skills",
+        summary: `${matchedItems.length} scan item(s) already backed by the resume.`,
+        bucket: "matched",
+        items: matchedItems,
+      });
+    }
+
+    if (missingItems.length) {
+      panel.groups.push({
+        title: "Missing / optimization opportunities",
+        summary: `${missingItems.length} item(s) can improve JD signal coverage.`,
+        bucket: "missing",
+        items: missingItems,
+      });
+    }
+
+    if (aiItems.length) {
+      panel.groups.push({
+        title: "AI suggested opportunities",
+        summary: `${aiItems.length} model-assisted item(s) available for review.`,
+        bucket: "ai",
+        items: aiItems,
+      });
+    }
+
+    if (!panel.groups.length) {
+      panel.groups.push({
+        title: "No scan issues yet",
+        summary: String(sourceGroup?.description || "This scan category is reserved for the next backend pass.").trim(),
+        bucket: groupId === "skills" ? "missing" : "guidance",
+        items: [],
+      });
+    }
+
+    return panel;
+  });
+
+  return {
+    skills: groups[0],
+    searchability: groups[1],
+    recruiter_tips: groups[2],
+  };
+}
+
 function buildScanWorkspaceTaxonomy(payload = getScanWorkspacePayload()) {
+  if (hasScanWorkspaceIssueContract(payload)) {
+    return buildScanWorkspaceTaxonomyFromIssueContract(payload);
+  }
+
   const trusted = getScanWorkspaceTrustedSuggestions(payload);
   const trustedItems = [
     ...trusted.directApplyReady,
@@ -9125,6 +9282,7 @@ function getScanWorkspaceIssueSignals(item) {
 function getScanWorkspaceIssueTitle(item, index) {
   const signals = getScanWorkspaceIssueSignals(item);
   const directTitle = String(
+    item?.title ||
     item?.suggestion_label ||
     item?.proposal_label ||
     item?.rewrite_category ||
@@ -9148,23 +9306,24 @@ function getScanWorkspaceIssueTitle(item, index) {
   return text.length > 52 ? `${text.slice(0, 49)}...` : text;
 }
 
-function getScanWorkspaceIssueMeta(item, bucket) {
+function getScanWorkspaceIssueMeta(bucket) {
+  if (bucket === "matched") return "Matched";
+  if (bucket === "missing") return "Missing";
+  if (bucket === "ai") return "AI Suggested";
   if (bucket === "ai_optimize") return "AI Suggested";
   if (bucket === "trusted") return "Ready";
   if (bucket === "guidance") return "Guidance";
   return "Suggestion";
 }
 
-function getScanWorkspaceIssueCountLabel(item, bucket) {
-  if (bucket === "ai_optimize") return "0/1";
-  if (bucket === "trusted") return "1/1";
-  if (bucket === "guidance") return "0/1";
+function getScanWorkspaceIssueCountLabel(bucket) {
+  if (bucket === "matched" || bucket === "trusted") return "1/1";
   return "0/1";
 }
 
-function getScanWorkspaceIssueToneClass(item, bucket) {
-  if (bucket === "trusted") return "is-matched";
-  if (bucket === "ai_optimize") return "is-ai";
+function getScanWorkspaceIssueToneClass(bucket) {
+  if (bucket === "matched" || bucket === "trusted") return "is-matched";
+  if (bucket === "ai" || bucket === "ai_optimize") return "is-ai";
   return "is-missing";
 }
 
@@ -9243,12 +9402,17 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
 }
 
 function getScanWorkspaceReplacementSuggestions(payload = getScanWorkspacePayload()) {
+  if (hasScanWorkspaceIssueContract(payload)) {
+    return getScanWorkspaceNormalizedContractIssues(payload);
+  }
+
   const trusted = getScanWorkspaceTrustedSuggestions(payload);
 
   return [
     ...trusted.directApplyReady,
     ...trusted.directApplyOptional,
     ...getScanWorkspaceAiSuggestions(payload),
+    ...getScanWorkspaceGuidance(payload),
   ];
 }
 
@@ -9330,9 +9494,12 @@ function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
           ""
         ).trim(),
         sourceLabel:
-          item?.replacement_status === "ai_optimize_optional"
+          item?.scan_issue_bucket_label ||
+          (item?.scan_issue_bucket === "ai" || item?.replacement_status === "ai_optimize_optional"
             ? "AI suggested"
-            : "Trusted suggestion",
+            : item?.scan_issue_bucket === "missing"
+              ? "Optimization opportunity"
+              : "Trusted suggestion"),
       };
     })
     .filter(Boolean);

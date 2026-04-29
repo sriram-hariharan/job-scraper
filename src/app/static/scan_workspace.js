@@ -431,6 +431,20 @@ function normalizeScanWorkspaceAnnotationMarker(marker, index) {
     suggestedText: String(marker?.suggestedText || marker?.suggested_text || "").trim(),
     reasonText: String(marker?.reasonText || marker?.reason_text || "").trim(),
     sourceLabel: String(marker?.sourceLabel || marker?.source_label || "AI suggested").trim(),
+    canFocusPreview: marker?.canFocusPreview !== false && marker?.can_focus_preview !== false,
+    anchorStrategy: String(marker?.anchorStrategy || marker?.anchor_strategy || "").trim(),
+    anchorText: String(marker?.anchorText || marker?.anchor_text || "").trim(),
+    isExactReplacement:
+      marker?.isExactReplacement === true ||
+      marker?.scan_issue_exact_replacement === true ||
+      marker?.renderMode === "diff" ||
+      marker?.scan_issue_render_mode === "diff",
+    renderMode:
+      marker?.renderMode === "diff" ||
+      marker?.scan_issue_render_mode === "diff" ||
+      marker?.isExactReplacement === true
+        ? "diff"
+        : "guidance",
   };
 }
 
@@ -1176,6 +1190,12 @@ function openScanWorkspaceSuggestionPopover(markerId) {
   const marker = getScanWorkspaceAnnotationMarkerById(markerId);
   if (!marker) return false;
 
+  const targetRow =
+    getScanWorkspacePreviewMarkerTargetById(marker.id) ||
+    findScanWorkspacePreviewTargetForMarker(marker, new Set());
+
+  if (!targetRow) return false;
+
   scanWorkspaceAnnotationState.activeMarkerId = marker.id;
   renderScanWorkspaceAnnotationShell();
 
@@ -1383,6 +1403,95 @@ function getScanWorkspaceChangedPreviewRows() {
   );
 }
 
+function normalizeScanWorkspaceAnchorText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[•●◦▪]/g, " ")
+    .replace(/[^a-z0-9%+.#/&\s-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getScanWorkspaceMarkerAnchorTexts(marker) {
+  return [
+    marker?.anchorText,
+    marker?.originalText,
+    marker?.suggestedText,
+    marker?.copy,
+    marker?.title,
+  ]
+    .map((value) => normalizeScanWorkspaceAnchorText(value))
+    .filter((value) => value && value.length >= 16);
+}
+
+function getScanWorkspacePreviewRowsForAnchoring() {
+  const scroller = getScanWorkspacePreviewScroller();
+  if (!scroller) return [];
+
+  return Array.from(
+    scroller.querySelectorAll(
+      ".tailoring-workspace-doc-line, .tailoring-workspace-doc-bullet-row, .tailoring-workspace-doc-line-copy, .tailoring-workspace-doc-bullet-copy"
+    )
+  ).filter((row) => normalizeScanWorkspaceAnchorText(row.textContent).length >= 16);
+}
+
+function scoreScanWorkspacePreviewRowForMarker(row, marker) {
+  const rowText = normalizeScanWorkspaceAnchorText(row?.textContent || "");
+  if (!rowText) return 0;
+
+  const markerTexts = getScanWorkspaceMarkerAnchorTexts(marker);
+  let bestScore = 0;
+
+  markerTexts.forEach((markerText) => {
+    if (!markerText) return;
+
+    if (rowText === markerText) {
+      bestScore = Math.max(bestScore, 1000);
+      return;
+    }
+
+    if (rowText.includes(markerText)) {
+      bestScore = Math.max(bestScore, 800 + Math.min(markerText.length, 160));
+      return;
+    }
+
+    if (markerText.includes(rowText) && rowText.length >= 32) {
+      bestScore = Math.max(bestScore, 600 + Math.min(rowText.length, 120));
+      return;
+    }
+
+    const markerWords = new Set(markerText.split(" ").filter((word) => word.length >= 4));
+    const rowWords = new Set(rowText.split(" ").filter((word) => word.length >= 4));
+    const overlap = Array.from(markerWords).filter((word) => rowWords.has(word)).length;
+
+    if (overlap >= 5) {
+      bestScore = Math.max(bestScore, 100 + overlap * 20);
+    }
+  });
+
+  return bestScore;
+}
+
+function findScanWorkspacePreviewTargetForMarker(marker, usedRows = new Set()) {
+  if (!marker || marker?.canFocusPreview === false) return null;
+
+  const rows = getScanWorkspacePreviewRowsForAnchoring();
+  let bestRow = null;
+  let bestScore = 0;
+
+  rows.forEach((row) => {
+    if (usedRows.has(row)) return;
+
+    const score = scoreScanWorkspacePreviewRowForMarker(row, marker);
+    if (score > bestScore) {
+      bestScore = score;
+      bestRow = row;
+    }
+  });
+
+  return bestScore >= 180 ? bestRow : null;
+}
+
 function getScanWorkspacePreviewMarkerTargetById(markerId) {
   const safeMarkerId = String(markerId || "").trim();
   if (!safeMarkerId) return null;
@@ -1419,27 +1528,23 @@ function decorateScanWorkspacePreviewSuggestionTargets() {
 
   clearScanWorkspacePreviewSuggestionTargets();
 
-  const changedRows = getScanWorkspaceChangedPreviewRows();
-  if (!changedRows.length || !scanWorkspaceAnnotationState.markers.length) return;
+  if (!scanWorkspaceAnnotationState.markers.length) return;
 
-  scanWorkspaceAnnotationState.markers.forEach((marker, index) => {
-    const previewRowIndex = Number(marker?.previewRowIndex ?? index);
-    const targetRow =
-      changedRows[Number.isFinite(previewRowIndex) ? previewRowIndex : index] ||
-      changedRows[index] ||
-      changedRows[0] ||
-      null;
+  const usedRows = new Set();
 
+  scanWorkspaceAnnotationState.markers.forEach((marker) => {
+    if (marker?.canFocusPreview === false) return;
+
+    const targetRow = findScanWorkspacePreviewTargetForMarker(marker, usedRows);
     if (!targetRow) return;
+
+    usedRows.add(targetRow);
 
     targetRow.classList.add("scan-workspace-preview-suggestion-target");
     targetRow.dataset.scanPreviewMarker = marker.id;
     targetRow.setAttribute("role", "button");
     targetRow.setAttribute("tabindex", "0");
-    targetRow.setAttribute(
-      "title",
-      "Click to review the suggested change"
-    );
+    targetRow.setAttribute("title", "Click to review the suggested change");
 
     if (scanWorkspaceAnnotationState.activeMarkerId === marker.id) {
       targetRow.classList.add("is-scan-preview-active");
@@ -1451,33 +1556,61 @@ function scrollScanWorkspacePreviewToMarker(marker) {
   const scroller = getScanWorkspacePreviewScroller();
   if (!scroller || !marker) return;
 
-  const changedRows = getScanWorkspaceChangedPreviewRows();
-  const previewRowIndex = Number(marker?.previewRowIndex || 0);
   const targetRow =
-    changedRows[previewRowIndex] ||
-    changedRows[0] ||
-    null;
+    getScanWorkspacePreviewMarkerTargetById(marker?.id) ||
+    findScanWorkspacePreviewTargetForMarker(marker, new Set());
 
-  if (targetRow) {
-    targetRow.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-      inline: "nearest",
-    });
-    return;
+  if (!targetRow) return;
+
+  targetRow.scrollIntoView({
+    behavior: "smooth",
+    block: "center",
+    inline: "nearest",
+  });
+}
+
+function shouldRenderScanWorkspacePopoverDiff(marker) {
+  return marker?.renderMode === "diff" || marker?.isExactReplacement === true;
+}
+
+function renderScanWorkspaceSuggestionPopoverCopyHtml(marker) {
+  const originalText = String(marker?.originalText || "").trim();
+  const suggestedText = String(marker?.suggestedText || "").trim();
+  const reasonText = String(marker?.reasonText || marker?.copy || "").trim();
+  const shouldRenderDiff = shouldRenderScanWorkspacePopoverDiff(marker);
+
+  if (shouldRenderDiff && originalText && suggestedText) {
+    return `
+      <div class="scan-workspace-inline-diff">
+        <div class="scan-workspace-inline-diff-del">${scanWorkspaceEscapeHtml(originalText)}</div>
+        <div class="scan-workspace-inline-diff-add">${scanWorkspaceEscapeHtml(suggestedText)}</div>
+      </div>
+      ${reasonText ? `
+        <div class="scan-workspace-suggestion-reason">
+          ${scanWorkspaceEscapeHtml(reasonText)}
+        </div>
+      ` : ""}
+    `;
   }
 
-  const scrollableDistance = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-  const markerTopRatio = Math.max(0, Math.min(1, Number(marker?.topPercent || 50) / 100));
-  const nextTop = Math.max(
-    0,
-    Math.min(scrollableDistance, scrollableDistance * markerTopRatio - scroller.clientHeight * 0.25)
-  );
-
-  scroller.scrollTo({
-    top: nextTop,
-    behavior: "smooth",
-  });
+  return `
+    ${originalText ? `
+      <div class="scan-workspace-suggestion-reason">
+        <strong>Current context:</strong><br>
+        ${scanWorkspaceEscapeHtml(originalText)}
+      </div>
+    ` : ""}
+    ${suggestedText ? `
+      <div class="scan-workspace-inline-diff-add" style="margin-top: 10px;">
+        ${scanWorkspaceEscapeHtml(suggestedText)}
+      </div>
+    ` : ""}
+    ${reasonText && reasonText !== suggestedText ? `
+      <div class="scan-workspace-suggestion-reason" style="margin-top: 10px;">
+        ${scanWorkspaceEscapeHtml(reasonText)}
+      </div>
+    ` : ""}
+  `;
 }
 
 function renderScanWorkspaceSuggestionPopover() {
@@ -1542,29 +1675,7 @@ function renderScanWorkspaceSuggestionPopover() {
 
   title.textContent = sourceLabel;
 
-  copy.innerHTML = `
-    <div class="scan-workspace-suggestion-kicker-row">
-      <span class="scan-workspace-suggestion-kicker">
-        ✨ ${scanWorkspaceEscapeHtml(sourceLabel)}
-      </span>
-
-      <span class="scan-workspace-suggestion-chip">
-        REPHRASE
-      </span>
-    </div>
-
-    ${buildScanWorkspaceSuggestionDiffHtml(marker)}
-
-    ${
-      reasonText
-        ? `
-          <div class="scan-workspace-suggestion-reason">
-            ${scanWorkspaceEscapeHtml(reasonText)}
-          </div>
-        `
-        : ""
-    }
-  `;
+  copy.innerHTML = renderScanWorkspaceSuggestionPopoverCopyHtml(marker);
   
   positionScanWorkspaceSuggestionPopover(marker);
 

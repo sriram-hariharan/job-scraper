@@ -8940,6 +8940,34 @@ function normalizeScanWorkspaceContractIssue(issue) {
   const bucket = String(issue?.bucket || "").trim();
   const bucketLabel = String(issue?.bucket_label || "").trim();
 
+  const rawFinalReplacementText = String(
+    raw?.final_replacement_text ||
+    raw?.patch_text ||
+    ""
+  ).trim();
+
+  const issueSuggestedText = String(issue?.suggested_text || "").trim();
+
+  const normalizedStatus = String(
+    issue?.status ||
+    raw?.replacement_status ||
+    raw?.proposal_status ||
+    ""
+  ).trim();
+
+  const normalizedPatchMethod = String(raw?.patch_generation_method || "").trim();
+
+  const isExactReplacement =
+    Boolean(rawFinalReplacementText) &&
+    (
+      normalizedStatus === "direct_apply_ready" ||
+      normalizedStatus === "patch_ready" ||
+      normalizedStatus === "direct_apply_optional" ||
+      sourceLane === "direct_apply_ready" ||
+      sourceLane === "direct_apply_optional" ||
+      Boolean(normalizedPatchMethod)
+    );
+
   return {
     ...raw,
     ...issue,
@@ -8955,9 +8983,20 @@ function normalizeScanWorkspaceContractIssue(issue) {
     original_text: String(issue?.original_text || raw?.original_text || "").trim(),
     current_text: String(issue?.current_text || issue?.original_text || raw?.current_evidence || raw?.original_text || "").trim(),
     current_evidence: String(issue?.current_text || issue?.original_text || raw?.current_evidence || raw?.original_text || "").trim(),
-    final_replacement_text: String(issue?.suggested_text || raw?.final_replacement_text || raw?.patch_text || "").trim(),
-    rewrite_direction: String(issue?.suggested_text || raw?.rewrite_direction || raw?.rewrite_instruction || "").trim(),
-    rewrite_instruction: String(issue?.suggested_text || raw?.rewrite_instruction || raw?.rewrite_direction || "").trim(),
+    suggested_text: issueSuggestedText || rawFinalReplacementText,
+    final_replacement_text: isExactReplacement ? rawFinalReplacementText : "",
+    rewrite_direction: String(
+      raw?.rewrite_direction ||
+      raw?.rewrite_instruction ||
+      (!isExactReplacement ? issueSuggestedText : "")
+    ).trim(),
+    rewrite_instruction: String(
+      raw?.rewrite_instruction ||
+      raw?.rewrite_direction ||
+      (!isExactReplacement ? issueSuggestedText : "")
+    ).trim(),
+    scan_issue_exact_replacement: isExactReplacement,
+    scan_issue_render_mode: isExactReplacement ? "diff" : "guidance",
     why_selected: String(issue?.reason || raw?.why_selected || raw?.why_this_improves_match || "").trim(),
     supported_jd_signals: Array.isArray(issue?.supported_jd_signals)
       ? issue.supported_jd_signals
@@ -8971,6 +9010,8 @@ function normalizeScanWorkspaceContractIssue(issue) {
         : [],
     can_accept: Boolean(issue?.can_accept),
     can_accept_all: Boolean(issue?.can_accept_all),
+    can_focus_preview: issue?.can_focus_preview === true,
+    anchor_strategy: String(issue?.anchor_strategy || raw?.anchor_strategy || "").trim(),
   };
 }
 
@@ -9345,9 +9386,12 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
       ${safeItems
         .map((item, index) => {
           const candidateId = getTailoringReplacementCandidateId(item);
-          if (!candidateId) return "";
+          const scanIssueId = String(item?.scan_issue_id || item?.issue_id || "").trim();
+          const rowId = candidateId || scanIssueId;
+          if (!rowId) return "";
 
-          const isActive = candidateId === activeCandidateId;
+          const isAnchorable = isScanWorkspacePreviewAnchorableItem(item);
+          const isActive = isAnchorable && candidateId === activeCandidateId;
           const title = getScanWorkspaceIssueTitle(item, index);
           const signals = getScanWorkspaceIssueSignals(item);
           const meta = getScanWorkspaceIssueMeta(item, bucket);
@@ -9357,8 +9401,8 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           return `
             <button
               type="button"
-              class="scan-workspace-issue-row ${toneClass} ${isActive ? "is-active" : ""}"
-              data-scan-focus-candidate="${escapeHtml(candidateId)}"
+              class="scan-workspace-issue-row ${toneClass} ${isActive ? "is-active" : ""} ${isAnchorable ? "" : "is-static"}"
+              ${isAnchorable ? `data-scan-focus-candidate="${escapeHtml(candidateId)}"` : `data-scan-static-issue="${escapeHtml(rowId)}"`}
             >
               <span class="scan-workspace-issue-status" aria-hidden="true"></span>
 
@@ -9416,6 +9460,43 @@ function getScanWorkspaceReplacementSuggestions(payload = getScanWorkspacePayloa
   ];
 }
 
+function isScanWorkspacePreviewAnchorableItem(item) {
+  const candidateId = String(
+    item?.replacement_candidate_id ||
+    item?.candidate_id ||
+    item?.scan_issue_id ||
+    ""
+  ).trim();
+
+  const originalText = String(
+    item?.current_text ||
+    item?.original_text ||
+    item?.source_bullet_text ||
+    item?.bullet_text ||
+    item?.current_evidence ||
+    ""
+  ).trim();
+
+  const suggestedText = String(
+    item?.final_replacement_text ||
+    item?.suggested_text ||
+    item?.rewrite_direction ||
+    item?.rewrite_instruction ||
+    ""
+  ).trim();
+
+  if (item?.can_focus_preview === false) return false;
+  if (!candidateId) return false;
+
+  return Boolean(originalText || suggestedText);
+}
+
+function getScanWorkspaceAnchorableReplacementSuggestions(payload = getScanWorkspacePayload()) {
+  return getScanWorkspaceReplacementSuggestions(payload).filter((item) =>
+    isScanWorkspacePreviewAnchorableItem(item)
+  );
+}
+
 function buildScanWorkspaceAnnotationMarkerCopy(item) {
   const originalText = String(
     item?.current_text ||
@@ -9450,52 +9531,78 @@ function buildScanWorkspaceAnnotationMarkerCopy(item) {
 }
 
 function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
-  return getScanWorkspaceReplacementSuggestions(payload)
+  return getScanWorkspaceAnchorableReplacementSuggestions(payload)
     .map((item, index) => {
       const candidateId = getTailoringReplacementCandidateId(item);
       if (!candidateId) return null;
 
+      const originalText = String(
+        item?.current_text ||
+        item?.original_text ||
+        item?.source_bullet_text ||
+        item?.bullet_text ||
+        item?.current_evidence ||
+        ""
+      ).trim();
+
+      const suggestedText = String(
+        item?.final_replacement_text ||
+        item?.suggested_text ||
+        item?.rewrite_direction ||
+        item?.rewrite_instruction ||
+        ""
+      ).trim();
+
+      const reasonText = String(
+        item?.why_selected ||
+        item?.reason ||
+        item?.materiality_reason ||
+        item?.rewrite_instruction ||
+        item?.direction_only_reason ||
+        ""
+      ).trim();
+
       const title = String(
+        item?.title ||
         item?.suggestion_label ||
         item?.proposal_label ||
         item?.final_replacement_text ||
+        item?.suggested_text ||
         item?.rewrite_direction ||
-        item?.rewrite_instruction ||
-        `Suggestion ${index + 1}`
+        `Scan suggestion ${index + 1}`
       ).trim();
+
+      const isExactReplacement =
+        item?.scan_issue_exact_replacement === true ||
+        item?.scan_issue_render_mode === "diff";
+
+      const topPercent = Math.min(86, 20 + index * 8);
 
       return {
         id: `scan_marker_${candidateId}`,
-        tone: item?.replacement_status === "ai_optimize_optional" ? "replace" : "focus",
+        tone:
+          item?.scan_issue_bucket === "missing" ||
+          item?.replacement_status === "ai_optimize_optional"
+            ? "replace"
+            : "focus",
         title,
         copy: buildScanWorkspaceAnnotationMarkerCopy(item),
-        topPercent: Math.min(88, 24 + index * 9),
-        leftPercent: 91,
+        topPercent,
+        leftPercent: 88,
         previewRowIndex: index,
         candidateIds: [candidateId],
-        originalText: String(
-          item?.current_text ||
-          item?.original_text ||
-          item?.source_bullet_text ||
-          item?.bullet_text ||
-          ""
-        ).trim(),
-        suggestedText: String(
-          item?.final_replacement_text ||
-          item?.rewrite_direction ||
-          item?.rewrite_instruction ||
-          ""
-        ).trim(),
-        reasonText: String(
-          item?.why_selected ||
-          item?.materiality_reason ||
-          item?.rewrite_instruction ||
-          item?.direction_only_reason ||
-          ""
-        ).trim(),
+        originalText,
+        suggestedText,
+        reasonText,
+        canFocusPreview: item?.can_focus_preview !== false,
+        anchorStrategy: String(item?.anchor_strategy || "replacement_candidate").trim(),
+        anchorText: originalText || suggestedText,
+        isExactReplacement,
+        renderMode: isExactReplacement ? "diff" : "guidance",
         sourceLabel:
           item?.scan_issue_bucket_label ||
-          (item?.scan_issue_bucket === "ai" || item?.replacement_status === "ai_optimize_optional"
+          (item?.scan_issue_bucket === "ai" ||
+          item?.replacement_status === "ai_optimize_optional"
             ? "AI suggested"
             : item?.scan_issue_bucket === "missing"
               ? "Optimization opportunity"
@@ -9519,6 +9626,11 @@ function getScanWorkspaceAnnotationMarkerSignature(markers) {
       suggestedText: marker.suggestedText,
       reasonText: marker.reasonText,
       sourceLabel: marker.sourceLabel,
+      canFocusPreview: marker.canFocusPreview,
+      anchorStrategy: marker.anchorStrategy,
+      anchorText: marker.anchorText,
+      isExactReplacement: marker.isExactReplacement,
+      renderMode: marker.renderMode,
     }))
   );
 }
@@ -9578,7 +9690,9 @@ function syncScanWorkspaceAnnotationMarkers(payload = getScanWorkspacePayload())
 
   if (markerSignature !== scanWorkspaceState.annotationMarkerSignature) {
     scanWorkspaceState.annotationMarkerSignature = markerSignature;
-    window.scanWorkspacePhase1.setAnnotationMarkers(markers);
+    if (window.scanWorkspacePhase1?.setAnnotationMarkers) {
+      window.scanWorkspacePhase1.setAnnotationMarkers(markers);
+    }
   }
 
   const activeCandidateId = String(scanWorkspaceState.activeCandidateId || "").trim();
@@ -10029,12 +10143,30 @@ async function initScanWorkspacePage() {
     return true;
   }
 
+  let payload = null;
+
   try {
     if (meta) {
       meta.textContent = "Loading preloaded scan...";
     }
 
-    const payload = await loadScanWorkspacePreload();
+    payload = await loadScanWorkspacePreload();
+  } catch (err) {
+    if (meta) {
+      meta.textContent = "Failed to load scan preload.";
+    }
+
+    root.innerHTML = `
+      <div class="tailoring-empty-state">
+        Failed to load the scan preload payload for this job/resume pair.
+      </div>
+    `;
+
+    console.error("Failed to fetch scan preload", err);
+    return true;
+  }
+
+  try {
     scanWorkspaceState.preloadPayload = payload;
     updateScanWorkspaceContextLine(payload);
 
@@ -10055,22 +10187,32 @@ async function initScanWorkspacePage() {
     scanWorkspaceState.selectedTab = "skills";
 
     renderScanWorkspaceView();
-    window.setTimeout(() => {
-      syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
-    }, 0);
 
+    window.setTimeout(() => {
+      try {
+        syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+      } catch (markerErr) {
+        console.error("Failed to sync scan annotation markers", markerErr);
+      }
+    }, 0);
   } catch (err) {
     if (meta) {
-      meta.textContent = "Failed to load scan preload.";
+      meta.textContent = "Loaded scan preload, but failed to render scan workspace.";
     }
+
+    const errorMessage = String(err?.message || err || "Unknown render error");
+    const errorStack = String(err?.stack || "");
 
     root.innerHTML = `
       <div class="tailoring-empty-state">
-        Failed to load the scan preload payload for this job/resume pair.
+        <div>The scan preload loaded, but the scan workspace renderer failed.</div>
+        <pre style="white-space:pre-wrap;text-align:left;margin-top:12px;font-size:12px;line-height:1.45;">${escapeHtml(errorMessage)}
+
+    ${escapeHtml(errorStack)}</pre>
       </div>
     `;
 
-    console.error("Failed to initialize scan workspace", err);
+    console.error("Failed to render scan workspace after preload", err);
   }
 
   return true;

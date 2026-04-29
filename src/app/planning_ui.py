@@ -1169,7 +1169,7 @@ def scan_workspace(
     )
     back_href_safe = escape(f"/tailoring-workspace?{back_query}", quote=True)
 
-    scan_initial_mode = "review" if (tailoring_json or packet_json or raw_resume_name) else "new_scan"
+    scan_initial_mode = "review" if (tailoring_json or packet_json) else "new_scan"
     scan_initial_mode_safe = escape(scan_initial_mode)
 
     return f"""
@@ -1827,8 +1827,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260429_scan_e1b"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_14"></script>
+  <script src="/static/planning.js?v=planning_ui_20260429_scan_e1f"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_16"></script>
 </body>
 </html>
     """.strip()

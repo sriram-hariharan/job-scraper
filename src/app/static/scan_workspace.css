@@ -1294,17 +1294,21 @@
 }
 
 .scan-workspace-suggestion-popover {
-  position: absolute;
-  z-index: 40;
-  width: 282px;
+  position: fixed;
+  z-index: 5000;
+  width: min(360px, calc(100vw - 32px));
+  max-height: min(520px, calc(100vh - 112px));
   padding: 12px 14px;
   border-radius: 12px;
   background: #ffffff;
   border: 1px solid rgba(46, 120, 219, 0.24);
   box-shadow:
-    0 12px 28px rgba(0, 0, 0, 0.16),
+    0 18px 46px rgba(0, 0, 0, 0.22),
     0 2px 8px rgba(0, 0, 0, 0.08);
   color: #24324a;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .scan-workspace-suggestion-popover.hidden {
@@ -1324,6 +1328,11 @@
   transform: rotate(45deg);
 }
 
+.scan-workspace-suggestion-popover.is-above::before {
+  top: auto;
+  bottom: 28px;
+}
+
 .scan-workspace-suggestion-popover-topline {
   display: none;
 }
@@ -1333,9 +1342,13 @@
 }
 
 .scan-workspace-suggestion-popover-copy {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
   color: #334155;
   font-size: 13px;
   line-height: 1.45;
+  padding-right: 4px;
 }
 
 .scan-workspace-suggestion-kicker-row {
@@ -1401,6 +1414,11 @@
   justify-content: flex-start;
   gap: 10px;
   margin-top: 12px;
+  flex: 0 0 auto;
+  position: sticky;
+  bottom: 0;
+  background: #ffffff;
+  padding-top: 10px;
 }
 
 .scan-workspace-suggestion-action-btn {

@@ -1278,32 +1278,94 @@ function buildScanWorkspaceSuggestionDiffHtml(marker) {
 }
 
 function getScanWorkspaceSuggestionPopoverPosition(marker) {
-  const stage = getScanWorkspaceInput("scanWorkspaceAnnotationStage");
   const targetRow = getScanWorkspacePreviewMarkerTargetById(marker?.id);
+  const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
 
-  if (stage && targetRow) {
-    const stageRect = stage.getBoundingClientRect();
+  const viewportPadding = 16;
+  const topSafePadding = 96;
+  const gap = 12;
+
+  const measuredRect = popover?.getBoundingClientRect();
+  const measuredWidth = Math.max(300, Number(measuredRect?.width || popover?.offsetWidth || 360));
+  const measuredHeight = Math.max(260, Number(measuredRect?.height || popover?.offsetHeight || 380));
+
+  const width = Math.min(360, window.innerWidth - viewportPadding * 2);
+
+  if (targetRow) {
     const targetRect = targetRow.getBoundingClientRect();
 
-    const rawTop = targetRect.top - stageRect.top + Math.min(36, targetRect.height * 0.55);
-    const rawLeft = targetRect.left - stageRect.left + Math.min(360, targetRect.width * 0.46);
+    const preferredLeft =
+      targetRect.left + Math.min(420, Math.max(180, targetRect.width * 0.42));
 
-    const top = Math.max(12, Math.min(stageRect.height - 140, rawTop));
-    const left = Math.max(16, Math.min(stageRect.width - 312, rawLeft));
+    const left = Math.max(
+      viewportPadding,
+      Math.min(window.innerWidth - width - viewportPadding, preferredLeft)
+    );
+
+    const belowSpace = window.innerHeight - targetRect.bottom - viewportPadding - gap;
+    const aboveSpace = targetRect.top - topSafePadding - gap;
+
+    let placement = "below";
+    if (belowSpace < Math.min(measuredHeight, 300) && aboveSpace > belowSpace) {
+      placement = "above";
+    }
+
+    const availableHeight =
+      placement === "above"
+        ? Math.max(140, aboveSpace)
+        : Math.max(140, belowSpace);
+
+    const maxHeight = Math.max(
+      140,
+      Math.min(520, availableHeight, window.innerHeight - topSafePadding - viewportPadding)
+    );
+
+    const renderedHeight = Math.min(measuredHeight, maxHeight);
+
+    const top =
+      placement === "above"
+        ? Math.max(topSafePadding, targetRect.top - gap - renderedHeight)
+        : Math.min(
+            window.innerHeight - viewportPadding - renderedHeight,
+            targetRect.bottom + gap
+          );
 
     return {
-      top: `${top}px`,
+      top: `${Math.max(topSafePadding, top)}px`,
       left: `${left}px`,
+      width: `${Math.min(width, measuredWidth)}px`,
+      maxHeight: `${maxHeight}px`,
+      placement,
     };
   }
 
-  const top = Number(marker?.topPercent || 0);
-  const left = Number(marker?.leftPercent || 0);
-
   return {
-    top: `${Math.max(8, Math.min(88, top - 2))}%`,
-    left: left > 72 ? `calc(${left}% - 292px)` : `calc(${left}% + 18px)`,
+    top: `${topSafePadding}px`,
+    left: `${Math.max(viewportPadding, window.innerWidth - 380)}px`,
+    width: `${width}px`,
+    maxHeight: `${Math.min(520, window.innerHeight - topSafePadding - viewportPadding)}px`,
+    placement: "floating",
   };
+}
+
+function positionScanWorkspaceSuggestionPopover(marker) {
+  const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+  if (!popover || !marker) return;
+
+  const position = getScanWorkspaceSuggestionPopoverPosition(marker);
+
+  popover.style.position = "fixed";
+  popover.style.top = position.top;
+  popover.style.left = position.left;
+  popover.style.right = "auto";
+  popover.style.bottom = "auto";
+  popover.style.width = position.width;
+  popover.style.maxHeight = position.maxHeight;
+
+  popover.classList.toggle("is-above", position.placement === "above");
+  popover.classList.toggle("is-below", position.placement === "below");
+  popover.classList.toggle("is-clamped", position.placement === "clamped");
+  popover.classList.toggle("is-floating", position.placement === "floating");
 }
 
 function getScanWorkspacePreviewScroller() {
@@ -1471,9 +1533,12 @@ function renderScanWorkspaceSuggestionPopover() {
   const reasonText = String(marker.reasonText || "").trim();
 
   popover.classList.remove("hidden");
-  popover.style.top = position.top;
-  popover.style.left = position.left;
+  popover.style.visibility = "hidden";
+  popover.style.position = "fixed";
+  popover.style.top = "16px";
+  popover.style.left = "16px";
   popover.style.right = "auto";
+  popover.style.bottom = "auto";
 
   title.textContent = sourceLabel;
 
@@ -1500,6 +1565,13 @@ function renderScanWorkspaceSuggestionPopover() {
         : ""
     }
   `;
+  
+  positionScanWorkspaceSuggestionPopover(marker);
+
+  window.requestAnimationFrame(() => {
+    positionScanWorkspaceSuggestionPopover(marker);
+    popover.style.visibility = "";
+  });
 
   decisionPill.textContent =
     decision === "accepted" ? "Accepted" : decision === "rejected" ? "Rejected" : "Pending";
@@ -1701,9 +1773,35 @@ function bindScanWorkspaceAnnotationShell() {
       event.preventDefault();
       openScanWorkspaceSuggestionPopover(markerId);
     });
+
+    previewScroller.addEventListener("scroll", () => {
+      const marker = getScanWorkspaceAnnotationMarkerById(
+        scanWorkspaceAnnotationState.activeMarkerId
+      );
+      const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+
+      if (!marker || !popover || popover.classList.contains("hidden")) return;
+
+      positionScanWorkspaceSuggestionPopover(marker);
+    });
   }
 
   renderScanWorkspaceAnnotationShell();
+
+  if (window.scanWorkspaceViewportBound !== true) {
+    window.scanWorkspaceViewportBound = true;
+
+    window.addEventListener("resize", () => {
+      const marker = getScanWorkspaceAnnotationMarkerById(
+        scanWorkspaceAnnotationState.activeMarkerId
+      );
+      const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+
+      if (!marker || !popover || popover.classList.contains("hidden")) return;
+
+      positionScanWorkspaceSuggestionPopover(marker);
+    });
+  }
 }
 
 function buildScanWorkspaceCompareSummaryHtml() {

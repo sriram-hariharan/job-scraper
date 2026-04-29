@@ -1757,3 +1757,98 @@ _ALLOWED_REWRITE_REVIEW_STATES = {
     "rejected",
     "edited_after_accept",
 }
+
+# ============================================================
+# SCAN ISSUE CONTRACT
+# ============================================================
+
+_SCAN_DIMENSION_DISPLAY_LABELS = {
+    "ats_match": "ATS match",
+    "human_recruiter_match": "Recruiter match",
+    "domain_match": "Domain match",
+    "domain_relevance": "Domain relevance",
+    "believability": "Believability",
+    "ml_match": "ML match",
+    "title_alignment": "Title alignment",
+    "required_skills_alignment": "Required skills alignment",
+    "preferred_skills_alignment": "Preferred skills alignment",
+    "workflow_alignment": "Workflow alignment",
+    "experimentation_depth": "Experimentation depth",
+    "analytics_ml_depth": "Analytics / ML depth",
+    "tooling_alignment": "Tooling alignment",
+    "project_relevance": "Project relevance",
+    "business_context": "Business context",
+    "ownership_scope": "Ownership scope",
+}
+
+_SCAN_SIGNAL_DISPLAY_OVERRIDES = {
+    "a/b testing": "A/B testing",
+    "ab testing": "A/B testing",
+    "a b testing": "A/B testing",
+    "a/b test": "A/B testing",
+    "sql": "SQL",
+    "python": "Python",
+    "r": "R",
+    "ml": "ML",
+    "machine learning": "Machine learning",
+    "analytics": "Analytics",
+    "experimentation": "Experimentation",
+    "forecasting": "Forecasting",
+    "time series": "Time series",
+    "tableau": "Tableau",
+    "power bi": "Power BI",
+    "databricks": "Databricks",
+    "spark": "Spark",
+    "pandas": "Pandas",
+    "numpy": "NumPy",
+    "scikit-learn": "Scikit-learn",
+    "eda": "EDA",
+    "etl": "ETL",
+    "elt": "ELT",
+    "kpi": "KPI",
+    "kpis": "KPIs",
+    "aws": "AWS",
+    "rag": "RAG",
+}
+
+_SCAN_RECRUITER_TIPS_SIGNAL_KEYS = {
+    "believability",
+    "human_recruiter_match",
+    "recruiter match",
+    "ownership_scope",
+    "business_context",
+    "stakeholder",
+    "stakeholders",
+    "executive",
+    "non-technical",
+    "leadership",
+}
+
+_SCAN_SKILLS_SIGNAL_KEYS = {
+    "ats_match",
+    "title_alignment",
+    "workflow_alignment",
+    "required_skills_alignment",
+    "preferred_skills_alignment",
+    "tooling_alignment",
+    "experimentation_depth",
+    "analytics_ml_depth",
+    "ml_match",
+}
+
+_SCAN_GROUP_LABELS = {
+    "skills": "Skills",
+    "searchability": "Searchability",
+    "recruiter_tips": "Recruiter Tips",
+}
+
+_SCAN_TITLE_SIGNAL_PATTERNS = list(dict.fromkeys(
+    COMMON_SKILL_PATTERNS
+    + RESUME_WORKFLOW_SIGNAL_PATTERNS
+    + RESUME_METHOD_SIGNAL_PATTERNS
+    + RESUME_BUSINESS_CONTEXT_SIGNAL_PATTERNS
+    + EXPERIMENTATION_SIGNAL_PATTERNS
+    + TOOLING_SIGNAL_PATTERNS
+    + ANALYTICS_ML_SIGNAL_PATTERNS
+    + DOMAIN_SIGNAL_PATTERNS
+))

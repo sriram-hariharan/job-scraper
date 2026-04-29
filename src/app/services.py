@@ -15,7 +15,15 @@ import shutil
 
 from src.pipeline.post_run_notification import DEFAULT_NOTIFICATION_RECORDS_DIR
 
-from src.config.consts import _ALLOWED_REWRITE_REVIEW_STATES
+from src.config.consts import (
+    _ALLOWED_REWRITE_REVIEW_STATES,
+    _SCAN_DIMENSION_DISPLAY_LABELS,
+    _SCAN_GROUP_LABELS,
+    _SCAN_RECRUITER_TIPS_SIGNAL_KEYS,
+    _SCAN_SIGNAL_DISPLAY_OVERRIDES,
+    _SCAN_SKILLS_SIGNAL_KEYS,
+    _SCAN_TITLE_SIGNAL_PATTERNS,
+)
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -1484,6 +1492,134 @@ def run_live_pipeline_payload(
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+def _scan_issue_display_label(value: Any) -> str:
+    raw = _clean_text(value)
+    if not raw:
+        return ""
+
+    key = raw.strip().lower()
+    normalized_key = key.replace("-", "_").replace(" ", "_")
+
+    if key in _SCAN_SIGNAL_DISPLAY_OVERRIDES:
+        return _SCAN_SIGNAL_DISPLAY_OVERRIDES[key]
+
+    if normalized_key in _SCAN_DIMENSION_DISPLAY_LABELS:
+        return _SCAN_DIMENSION_DISPLAY_LABELS[normalized_key]
+
+    cleaned = raw.replace("_", " ").replace("-", " ").strip()
+    if cleaned.isupper() and len(cleaned) <= 5:
+        return cleaned
+
+    return cleaned[:1].upper() + cleaned[1:]
+
+def _scan_issue_normalized_key(value: Any) -> str:
+    return _clean_text(value).strip().lower().replace("-", "_").replace(" ", "_")
+
+
+def _scan_issue_is_dimension_key(value: Any) -> bool:
+    return _scan_issue_normalized_key(value) in _SCAN_DIMENSION_DISPLAY_LABELS
+
+
+def _scan_issue_text_blob(row: Dict[str, Any]) -> str:
+    values = [
+        row.get("final_replacement_text"),
+        row.get("rewrite_direction"),
+        row.get("rewrite_instruction"),
+        row.get("original_text"),
+        row.get("current_evidence"),
+        row.get("parent_bullet"),
+        row.get("why_selected"),
+        row.get("why_this_improves_match"),
+        row.get("placement_guidance"),
+    ]
+
+    return re.sub(
+        r"\s+",
+        " ",
+        " ".join(_clean_text(value).lower() for value in values if _clean_text(value)),
+    ).strip()
+
+
+def _scan_issue_text_contains_term(text: str, term: str) -> bool:
+    clean_term = _clean_text(term).lower()
+    if not text or not clean_term:
+        return False
+
+    pattern = r"(?<![a-z0-9])" + re.escape(clean_term) + r"(?![a-z0-9])"
+    return bool(re.search(pattern, text))
+
+
+def _scan_issue_text_signal_terms(row: Dict[str, Any]) -> List[str]:
+    blob = _scan_issue_text_blob(row)
+    if not blob:
+        return []
+
+    output: List[str] = []
+    seen = set()
+
+    for term in _SCAN_TITLE_SIGNAL_PATTERNS:
+        if not _scan_issue_text_contains_term(blob, term):
+            continue
+
+        label = _scan_issue_display_label(term)
+        key = label.lower()
+        if not label or key in seen:
+            continue
+
+        seen.add(key)
+        output.append(label)
+
+        if len(output) >= 4:
+            break
+
+    return output
+
+def _scan_issue_display_terms(row: Dict[str, Any]) -> List[str]:
+    preferred_fields = (
+        "supported_jd_signals",
+        "jd_signal_terms",
+        "supported_terms",
+        "matched_signals",
+    )
+
+    output: List[str] = []
+    seen = set()
+
+    for field in preferred_fields:
+        raw_values = list(row.get(field, []) or [])
+        for value in raw_values:
+            if _scan_issue_is_dimension_key(value):
+                continue
+
+            label = _scan_issue_display_label(value)
+            key = label.lower()
+            if not label or key in seen:
+                continue
+
+            seen.add(key)
+            output.append(label)
+
+    return output
+
+
+def _scan_issue_dimension_labels(row: Dict[str, Any]) -> List[str]:
+    output: List[str] = []
+    seen = set()
+
+    for value in list(row.get("likely_impacted_dimensions", []) or []):
+        label = _scan_issue_display_label(value)
+        key = label.lower()
+        if not label or key in seen:
+            continue
+        seen.add(key)
+        output.append(label)
+
+    return output
+
+
+def _scan_issue_group_label(group_id: str) -> str:
+    return _SCAN_GROUP_LABELS.get(_clean_text(group_id), "Skills")
+
 def _scan_issue_candidate_id(row: Dict[str, Any]) -> str:
     return (
         _clean_text(row.get("replacement_candidate_id"))
@@ -1497,6 +1633,8 @@ def _scan_issue_supported_signals(row: Dict[str, Any]) -> List[str]:
     raw_values = (
         list(row.get("supported_jd_signals", []) or [])
         + list(row.get("jd_signal_terms", []) or [])
+        + list(row.get("supported_terms", []) or [])
+        + list(row.get("matched_signals", []) or [])
         + list(row.get("likely_impacted_dimensions", []) or [])
     )
 
@@ -1504,20 +1642,28 @@ def _scan_issue_supported_signals(row: Dict[str, Any]) -> List[str]:
     seen = set()
 
     for value in raw_values:
-        text = _clean_text(value)
-        key = text.lower()
-        if not text or key in seen:
+        label = _scan_issue_display_label(value)
+        key = label.lower()
+        if not label or key in seen:
             continue
         seen.add(key)
-        output.append(text)
+        output.append(label)
 
     return output
 
 
 def _scan_issue_title(row: Dict[str, Any], *, fallback_label: str) -> str:
-    signals = _scan_issue_supported_signals(row)
-    if signals:
-        return ", ".join(signals[:3])
+    display_terms = _scan_issue_display_terms(row)
+    if display_terms:
+        return ", ".join(display_terms[:3])
+
+    text_terms = _scan_issue_text_signal_terms(row)
+    if text_terms:
+        return ", ".join(text_terms[:3])
+
+    dimension_labels = _scan_issue_dimension_labels(row)
+    if dimension_labels:
+        return ", ".join(dimension_labels[:2])
 
     for field in (
         "final_replacement_text",
@@ -1533,6 +1679,36 @@ def _scan_issue_title(row: Dict[str, Any], *, fallback_label: str) -> str:
 
     return fallback_label
 
+def _scan_issue_group_id_for_row(row: Dict[str, Any], *, lane: str) -> str:
+    raw_signals = {
+        _clean_text(value).lower()
+        for value in (
+            list(row.get("supported_jd_signals", []) or [])
+            + list(row.get("jd_signal_terms", []) or [])
+            + list(row.get("supported_terms", []) or [])
+            + list(row.get("matched_signals", []) or [])
+            + list(row.get("likely_impacted_dimensions", []) or [])
+        )
+        if _clean_text(value)
+    }
+
+    normalized_signals = {
+        value.replace("-", "_").replace(" ", "_")
+        for value in raw_signals
+    }
+
+    all_signals = raw_signals | normalized_signals
+
+    if all_signals & set(_SCAN_RECRUITER_TIPS_SIGNAL_KEYS):
+        return "recruiter_tips"
+
+    if all_signals & set(_SCAN_SKILLS_SIGNAL_KEYS):
+        return "skills"
+
+    if lane == "direction_only":
+        return "recruiter_tips"
+
+    return "skills"
 
 def _scan_issue_from_replacement_row(
     row: Dict[str, Any],
@@ -1560,12 +1736,15 @@ def _scan_issue_from_replacement_row(
         or _clean_text(row.get("rewrite_instruction"))
     )
 
+    resolved_group_id = _scan_issue_group_id_for_row(row, lane=lane)
+    resolved_group_label = _scan_issue_group_label(resolved_group_id)
+
     return {
         "issue_id": f"scan_issue:{lane}:{issue_id}",
         "candidate_id": candidate_id,
         "source_lane": lane,
-        "group_id": group_id,
-        "group_label": group_label,
+        "group_id": resolved_group_id,
+        "group_label": resolved_group_label,
         "bucket": bucket,
         "bucket_label": bucket_label,
         "title": _scan_issue_title(row, fallback_label=bucket_label),
@@ -1674,53 +1853,92 @@ def _build_tailoring_scan_issue_contract(
         "accept_all_eligible": sum(1 for issue in issues if issue.get("can_accept_all")),
     }
 
+    def _group_counts(group_id: str) -> Dict[str, int]:
+        group_issues = [
+            issue for issue in issues
+            if _clean_text(issue.get("group_id")) == group_id
+        ]
+
+        return {
+            "total": len(group_issues),
+            "matched": sum(1 for issue in group_issues if issue.get("bucket") == "matched"),
+            "missing": sum(1 for issue in group_issues if issue.get("bucket") == "missing"),
+            "ai": sum(1 for issue in group_issues if issue.get("bucket") == "ai"),
+        }
+
+    skills_counts = _group_counts("skills")
+    searchability_counts = _group_counts("searchability")
+    recruiter_tips_counts = _group_counts("recruiter_tips")
+
     groups = [
         {
             "group_id": "skills",
-            "label": "Skills",
-            "description": "Deterministic scan issues derived from the existing tailoring replacement lanes.",
-            "counts": counts,
+            "label": _scan_issue_group_label("skills"),
+            "description": "Skill and JD-signal alignment issues derived from tailoring replacement lanes.",
+            "counts": skills_counts,
             "buckets": [
                 {
                     "bucket": "matched",
                     "label": "Matched skills",
-                    "count": counts["matched"],
+                    "count": skills_counts["matched"],
                 },
                 {
                     "bucket": "missing",
                     "label": "Missing / optimization opportunities",
-                    "count": counts["missing"],
+                    "count": skills_counts["missing"],
                 },
                 {
                     "bucket": "ai",
                     "label": "AI suggested",
-                    "count": counts["ai"],
+                    "count": skills_counts["ai"],
                 },
             ],
         },
         {
             "group_id": "searchability",
-            "label": "Searchability",
+            "label": _scan_issue_group_label("searchability"),
             "description": "Reserved for deterministic formatting and ATS parse checks.",
-            "counts": {
-                "total": 0,
-                "matched": 0,
-                "missing": 0,
-                "ai": 0,
-            },
-            "buckets": [],
+            "counts": searchability_counts,
+            "buckets": [
+                {
+                    "bucket": "matched",
+                    "label": "Matched searchability signals",
+                    "count": searchability_counts["matched"],
+                },
+                {
+                    "bucket": "missing",
+                    "label": "Searchability opportunities",
+                    "count": searchability_counts["missing"],
+                },
+                {
+                    "bucket": "ai",
+                    "label": "AI suggested",
+                    "count": searchability_counts["ai"],
+                },
+            ],
         },
         {
             "group_id": "recruiter_tips",
-            "label": "Recruiter Tips",
-            "description": "Reserved for recruiter-facing clarity and positioning checks.",
-            "counts": {
-                "total": 0,
-                "matched": 0,
-                "missing": 0,
-                "ai": 0,
-            },
-            "buckets": [],
+            "label": _scan_issue_group_label("recruiter_tips"),
+            "description": "Recruiter-facing clarity, positioning, and claim-safety notes derived from deterministic tailoring guidance.",
+            "counts": recruiter_tips_counts,
+            "buckets": [
+                {
+                    "bucket": "matched",
+                    "label": "Strong recruiter-facing evidence",
+                    "count": recruiter_tips_counts["matched"],
+                },
+                {
+                    "bucket": "missing",
+                    "label": "Recruiter review opportunities",
+                    "count": recruiter_tips_counts["missing"],
+                },
+                {
+                    "bucket": "ai",
+                    "label": "AI suggested",
+                    "count": recruiter_tips_counts["ai"],
+                },
+            ],
         },
     ]
 

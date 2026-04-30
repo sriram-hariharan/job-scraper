@@ -9348,18 +9348,19 @@ function getScanWorkspaceIssueTitle(item, index) {
 }
 
 function getScanWorkspaceIssueMeta(bucket) {
-  if (bucket === "matched") return "Matched";
-  if (bucket === "missing") return "Missing";
-  if (bucket === "ai") return "AI Suggested";
-  if (bucket === "ai_optimize") return "AI Suggested";
+  if (bucket === "matched") return "Backed";
+  if (bucket === "missing") return "Manual guidance";
+  if (bucket === "ai") return "AI replacement";
+  if (bucket === "ai_optimize") return "AI replacement";
   if (bucket === "trusted") return "Ready";
-  if (bucket === "guidance") return "Guidance";
-  return "Suggestion";
+  if (bucket === "guidance") return "Manual guidance";
+  return "Review";
 }
 
 function getScanWorkspaceIssueCountLabel(bucket) {
-  if (bucket === "matched" || bucket === "trusted") return "1/1";
-  return "0/1";
+  if (bucket === "matched" || bucket === "trusted") return "Done";
+  if (bucket === "missing" || bucket === "guidance") return "Open";
+  return "Review";
 }
 
 function getScanWorkspaceIssueToneClass(bucket) {
@@ -9394,9 +9395,9 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const isActive = isAnchorable && candidateId === activeCandidateId;
           const title = getScanWorkspaceIssueTitle(item, index);
           const signals = getScanWorkspaceIssueSignals(item);
-          const meta = getScanWorkspaceIssueMeta(item, bucket);
-          const countLabel = getScanWorkspaceIssueCountLabel(item, bucket);
-          const toneClass = getScanWorkspaceIssueToneClass(item, bucket);
+          const meta = getScanWorkspaceIssueMeta(bucket);
+          const countLabel = getScanWorkspaceIssueCountLabel(bucket);
+          const toneClass = getScanWorkspaceIssueToneClass(bucket);
 
           return `
             <button

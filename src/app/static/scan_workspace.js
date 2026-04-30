@@ -457,14 +457,21 @@ function getScanWorkspaceAnnotationMarkerById(markerId) {
 function getScanWorkspaceAnnotationDecisionCounts() {
   return scanWorkspaceAnnotationState.markers.reduce(
     (acc, marker) => {
+      if (!isScanWorkspaceReplacementMarker(marker)) {
+        acc.total += 1;
+        acc.guidance += 1;
+        return acc;
+      }
+
       const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
       acc.total += 1;
+      acc.actionableTotal += 1;
       if (decision === "accepted") acc.accepted += 1;
       else if (decision === "rejected") acc.rejected += 1;
       else acc.pending += 1;
       return acc;
     },
-    { total: 0, accepted: 0, rejected: 0, pending: 0 }
+    { total: 0, actionableTotal: 0, guidance: 0, accepted: 0, rejected: 0, pending: 0 }
   );
 }
 
@@ -516,12 +523,15 @@ function restoreScanWorkspaceDecisionSnapshot(snapshot) {
   }));
 }
 
-function refreshScanWorkspaceDecisionOutputs({ forcePreview = true } = {}) {
-  scanWorkspacePreviewState.documentPreviewPayload = null;
+function refreshScanWorkspaceDecisionOutputs({ forcePreview = false } = {}) {
+  if (forcePreview) {
+    scanWorkspacePreviewState.documentPreviewPayload = null;
+  }
   scanWorkspaceCompareState.beforePayload = null;
   scanWorkspaceCompareState.afterPayload = null;
 
   renderScanWorkspaceAnnotationShell();
+  decorateScanWorkspacePreviewSuggestionTargets();
 
   if (forcePreview) {
     ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
@@ -777,8 +787,9 @@ function renderScanWorkspacePersistenceStatus() {
     statusNode.classList.add("is-warning");
   } else if (scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
     const savedAt = String(scanWorkspacePersistenceState.loadResponse?.draft?.saved_at || "").trim();
+    const savedAtLabel = formatScanWorkspaceSavedAt(savedAt);
     statusNode.textContent = savedAt
-      ? `Scan decisions saved into the workspace draft. Saved at ${savedAt}.`
+      ? `Scan decisions saved. Saved ${savedAtLabel}.`
       : "Scan decisions are saved into the workspace draft.";
     statusNode.classList.add("is-success");
   } else {
@@ -801,6 +812,20 @@ function renderScanWorkspacePersistenceStatus() {
   }
 }
 
+function formatScanWorkspaceSavedAt(value) {
+  if (!value) return "";
+
+  const savedAt = new Date(value);
+  if (Number.isNaN(savedAt.getTime())) return value;
+
+  return savedAt.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function updateScanWorkspaceDecisionSummaryUi() {
   const counts = getScanWorkspaceAnnotationDecisionCounts();
   const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
@@ -815,9 +840,17 @@ function updateScanWorkspaceDecisionSummaryUi() {
   const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
 
   if (selectionStatus) {
-    if (counts.total > 0) {
-      selectionStatus.textContent =
-        `${counts.accepted} accepted · ${counts.rejected} rejected · ${counts.pending} pending`;
+    if (counts.actionableTotal > 0 || counts.guidance > 0) {
+      const parts = [];
+      if (counts.actionableTotal > 0) {
+        parts.push(`${counts.accepted} accepted`);
+        parts.push(`${counts.rejected} rejected`);
+        parts.push(`${counts.pending} pending`);
+      }
+      if (counts.guidance > 0) {
+        parts.push(`${counts.guidance} guidance`);
+      }
+      selectionStatus.textContent = parts.join(" · ");
     } else if (savedAcceptedIds.length > 0) {
       selectionStatus.textContent =
         `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded. Waiting for scan markers.`;
@@ -828,18 +861,16 @@ function updateScanWorkspaceDecisionSummaryUi() {
 
   if (previewStatus) {
     if (counts.accepted > 0) {
-      previewStatus.textContent =
-        `${counts.accepted} accepted linked suggestion(s) are currently reflected in the scan decision set.`;
+      previewStatus.textContent = `${counts.accepted} accepted replacement`;
     } else if (!hasMarkers && savedAcceptedIds.length > 0) {
-      previewStatus.textContent =
-        `${savedAcceptedIds.length} saved accepted linked suggestion(s) loaded from the workspace draft.`;
+      previewStatus.textContent = `${savedAcceptedIds.length} saved accepted`;
     } else {
-      previewStatus.textContent = "Live draft preview is ready for scan decisions.";
+      previewStatus.textContent = "Resume preview";
     }
   }
 
   if (acceptAllBtn) {
-    acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
+    acceptAllBtn.disabled = counts.actionableTotal === 0 || counts.pending === 0;
   }
 
   if (undoBtn) {
@@ -851,15 +882,19 @@ function updateScanWorkspaceDecisionSummaryUi() {
   }
 
   if (aiSuggestionStepLabel) {
-    aiSuggestionStepLabel.textContent = `AI Suggestions (${counts.accepted}/${counts.total})`;
+    const guidanceSuffix = counts.guidance > 0 ? ` + ${counts.guidance} guidance` : "";
+    aiSuggestionStepLabel.textContent =
+      `AI Suggestions (${counts.accepted}/${counts.actionableTotal}${guidanceSuffix})`;
   }
 
   if (scoreValue) {
-    scoreValue.textContent = counts.total > 0 ? String(Math.round((counts.accepted / counts.total) * 100)) : "0";
+    scoreValue.textContent = counts.actionableTotal > 0
+      ? String(Math.round((counts.accepted / counts.actionableTotal) * 100))
+      : "0";
     scoreValue.setAttribute(
       "aria-label",
-      counts.total > 0
-        ? `${counts.accepted} of ${counts.total} AI suggestions accepted`
+      counts.actionableTotal > 0
+        ? `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
         : "No AI suggestions loaded"
     );
   }
@@ -1373,7 +1408,8 @@ function renderScanWorkspaceAnnotationOverlay() {
 
   status.textContent =
     `${counts.total} suggestion target(s) loaded. ` +
-    `${counts.accepted} accepted, ${counts.rejected} rejected, ${counts.pending} pending.`;
+    `${counts.accepted} accepted, ${counts.rejected} rejected, ` +
+    `${counts.pending} pending, ${counts.guidance} guidance.`;
 }
 
 function buildScanWorkspaceSuggestionDiffHtml(marker) {
@@ -1625,9 +1661,16 @@ function clearScanWorkspacePreviewSuggestionTargets() {
   scroller.querySelectorAll("[data-scan-preview-marker]").forEach((row) => {
     row.classList.remove(
       "scan-workspace-preview-suggestion-target",
-      "is-scan-preview-active"
+      "is-scan-preview-active",
+      "scan-workspace-preview-suggestion-target--guidance",
+      "scan-workspace-preview-suggestion-target--replacement",
+      "is-scan-decision-accepted",
+      "is-scan-decision-rejected",
+      "is-scan-decision-pending"
     );
     row.removeAttribute("data-scan-preview-marker");
+    row.removeAttribute("data-scan-preview-mode");
+    row.removeAttribute("data-scan-preview-decision");
     row.removeAttribute("role");
     row.removeAttribute("tabindex");
     row.removeAttribute("title");
@@ -1653,7 +1696,19 @@ function decorateScanWorkspacePreviewSuggestionTargets() {
     usedRows.add(targetRow);
 
     targetRow.classList.add("scan-workspace-preview-suggestion-target");
+    targetRow.classList.add(
+      isScanWorkspaceReplacementMarker(marker)
+        ? "scan-workspace-preview-suggestion-target--replacement"
+        : "scan-workspace-preview-suggestion-target--guidance"
+    );
+
+    const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
+    targetRow.classList.add(`is-scan-decision-${decision}`);
     targetRow.dataset.scanPreviewMarker = marker.id;
+    targetRow.dataset.scanPreviewMode = isScanWorkspaceReplacementMarker(marker)
+      ? "replacement"
+      : "guidance";
+    targetRow.dataset.scanPreviewDecision = decision;
     targetRow.setAttribute("role", "button");
     targetRow.setAttribute("tabindex", "0");
     targetRow.setAttribute("title", "Click to review the suggested change");
@@ -1661,7 +1716,30 @@ function decorateScanWorkspacePreviewSuggestionTargets() {
     if (scanWorkspaceAnnotationState.activeMarkerId === marker.id) {
       targetRow.classList.add("is-scan-preview-active");
     }
+
+    syncScanWorkspacePreviewMarkerContent(targetRow, marker);
   });
+}
+
+function getScanWorkspacePreviewMarkerTextNode(targetRow) {
+  return targetRow?.querySelector?.(".scan-workspace-preview-line-text") || null;
+}
+
+function syncScanWorkspacePreviewMarkerContent(targetRow, marker) {
+  if (!targetRow || !isScanWorkspaceReplacementMarker(marker)) return;
+
+  const textNode = getScanWorkspacePreviewMarkerTextNode(targetRow);
+  if (!textNode) return;
+
+  const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
+  const originalText = String(marker?.originalText || "").trim();
+  const suggestedText = String(marker?.suggestedText || "").trim();
+  const nextText = decision === "accepted" ? suggestedText : originalText;
+
+  if (!nextText) return;
+  if (textNode.textContent !== nextText) {
+    textNode.textContent = nextText;
+  }
 }
 
 function scrollScanWorkspacePreviewToMarker(marker) {
@@ -1683,6 +1761,21 @@ function scrollScanWorkspacePreviewToMarker(marker) {
 
 function shouldRenderScanWorkspacePopoverDiff(marker) {
   return marker?.renderMode === "diff" || marker?.isExactReplacement === true;
+}
+
+function isScanWorkspaceReplacementMarker(marker) {
+  return shouldRenderScanWorkspacePopoverDiff(marker);
+}
+
+function getScanWorkspaceSuggestionActionLabel(marker) {
+  if (shouldRenderScanWorkspacePopoverDiff(marker)) {
+    return "AI suggested to REPLACE CONTENT";
+  }
+
+  const tone = String(marker?.tone || "").trim().toLowerCase();
+  if (tone === "add") return "AI suggested to ADD CONTENT";
+  if (tone === "focus") return "AI suggested to EMPHASIZE CONTENT";
+  return "AI suggested to IMPROVE CONTENT";
 }
 
 function renderScanWorkspaceSuggestionPopoverCopyHtml(marker) {
@@ -1734,6 +1827,7 @@ function renderScanWorkspaceSuggestionPopover() {
   const acceptBtn = getScanWorkspaceInput("scanWorkspaceSuggestionAcceptBtn");
   const rejectBtn = getScanWorkspaceInput("scanWorkspaceSuggestionRejectBtn");
   const resetBtn = getScanWorkspaceInput("scanWorkspaceSuggestionResetBtn");
+  const kicker = popover?.querySelector(".scan-workspace-suggestion-popover-kicker");
 
   if (!popover || !title || !copy || !decisionPill || !decisionMeta || !acceptBtn || !rejectBtn) {
     return;
@@ -1742,6 +1836,7 @@ function renderScanWorkspaceSuggestionPopover() {
   const marker = getScanWorkspaceAnnotationMarkerById(
     scanWorkspaceAnnotationState.activeMarkerId
   );
+  const isReplacement = isScanWorkspaceReplacementMarker(marker);
 
   if (!marker) {
     popover.classList.add("hidden");
@@ -1749,6 +1844,7 @@ function renderScanWorkspaceSuggestionPopover() {
     popover.style.left = "";
     popover.style.right = "";
     title.textContent = "Select a suggestion anchor to inspect it here.";
+    if (kicker) kicker.textContent = "AI suggested change";
     copy.textContent = "";
     decisionPill.textContent = "Pending";
     decisionPill.className =
@@ -1779,6 +1875,9 @@ function renderScanWorkspaceSuggestionPopover() {
   popover.style.bottom = "auto";
 
   title.textContent = sourceLabel;
+  if (kicker) {
+    kicker.textContent = getScanWorkspaceSuggestionActionLabel(marker);
+  }
 
   copy.innerHTML = renderScanWorkspaceSuggestionPopoverCopyHtml(marker);
   
@@ -1801,11 +1900,15 @@ function renderScanWorkspaceSuggestionPopover() {
 
   decisionMeta.textContent = "";
 
-  acceptBtn.disabled = false;
-  rejectBtn.disabled = false;
+  acceptBtn.hidden = !isReplacement;
+  rejectBtn.hidden = !isReplacement;
+  acceptBtn.disabled = !isReplacement;
+  rejectBtn.disabled = !isReplacement;
   if (resetBtn) {
-    resetBtn.disabled = true;
-    resetBtn.hidden = true;
+    resetBtn.hidden = isReplacement;
+    resetBtn.disabled = isReplacement;
+    resetBtn.textContent = isReplacement ? "Reset" : "Got it";
+    resetBtn.dataset.scanGuidanceAction = isReplacement ? "" : "close";
   }
 
   acceptBtn.classList.toggle("is-active", decision === "accepted");
@@ -1874,6 +1977,11 @@ function applyScanWorkspaceDecisionToActiveMarker(decision) {
   );
   if (!activeMarker) return;
 
+  if (!isScanWorkspaceReplacementMarker(activeMarker)) {
+    closeScanWorkspaceSuggestionPopover();
+    return;
+  }
+
   const nextDecision = normalizeScanWorkspaceAnnotationDecision(decision);
   if (normalizeScanWorkspaceAnnotationDecision(activeMarker.decision) === nextDecision) return;
 
@@ -1925,6 +2033,11 @@ function bindScanWorkspaceAnnotationShell() {
   if (resetBtn && resetBtn.dataset.bound !== "true") {
     resetBtn.dataset.bound = "true";
     resetBtn.addEventListener("click", () => {
+      if (resetBtn.dataset.scanGuidanceAction === "close") {
+        closeScanWorkspaceSuggestionPopover();
+        return;
+      }
+
       applyScanWorkspaceDecisionToActiveMarker("pending");
     });
   }
@@ -1933,8 +2046,12 @@ function bindScanWorkspaceAnnotationShell() {
   if (acceptAllBtn && acceptAllBtn.dataset.bound !== "true") {
     acceptAllBtn.dataset.bound = "true";
     acceptAllBtn.addEventListener("click", () => {
-      if (!scanWorkspaceAnnotationState.markers.length) return;
+      const replacementMarkers = scanWorkspaceAnnotationState.markers.filter((marker) =>
+        isScanWorkspaceReplacementMarker(marker)
+      );
+      if (!replacementMarkers.length) return;
       if (!scanWorkspaceAnnotationState.markers.some((marker) => (
+        isScanWorkspaceReplacementMarker(marker) &&
         normalizeScanWorkspaceAnnotationDecision(marker?.decision) !== "accepted"
       ))) {
         return;
@@ -1943,7 +2060,7 @@ function bindScanWorkspaceAnnotationShell() {
       pushScanWorkspaceDecisionHistory();
       scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => ({
         ...marker,
-        decision: "accepted",
+        decision: isScanWorkspaceReplacementMarker(marker) ? "accepted" : marker.decision,
       }));
 
       refreshScanWorkspaceDecisionOutputs();

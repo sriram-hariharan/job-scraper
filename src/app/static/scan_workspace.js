@@ -47,6 +47,8 @@ const scanWorkspacePreviewState = {
 const scanWorkspaceAnnotationState = {
   markers: [],
   activeMarkerId: "",
+  undoStack: [],
+  redoStack: [],
 };
 
 const scanWorkspaceCompareState = {
@@ -466,6 +468,90 @@ function getScanWorkspaceAnnotationDecisionCounts() {
   );
 }
 
+function getScanWorkspaceDecisionSnapshot() {
+  return scanWorkspaceAnnotationState.markers.map((marker) => ({
+    id: marker.id,
+    decision: normalizeScanWorkspaceAnnotationDecision(marker?.decision),
+  }));
+}
+
+function getScanWorkspaceDecisionSnapshotSignature(snapshot) {
+  return JSON.stringify(
+    (Array.isArray(snapshot) ? snapshot : [])
+      .map((row) => [
+        String(row?.id || "").trim(),
+        normalizeScanWorkspaceAnnotationDecision(row?.decision),
+      ])
+      .filter((row) => row[0])
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+  );
+}
+
+function pushScanWorkspaceDecisionHistory() {
+  const snapshot = getScanWorkspaceDecisionSnapshot();
+  const currentSignature = getScanWorkspaceDecisionSnapshotSignature(snapshot);
+  const lastSnapshot =
+    scanWorkspaceAnnotationState.undoStack[scanWorkspaceAnnotationState.undoStack.length - 1];
+  const lastSignature = getScanWorkspaceDecisionSnapshotSignature(lastSnapshot);
+
+  if (currentSignature === lastSignature) return;
+
+  scanWorkspaceAnnotationState.undoStack.push(snapshot);
+  scanWorkspaceAnnotationState.redoStack = [];
+}
+
+function restoreScanWorkspaceDecisionSnapshot(snapshot) {
+  const decisionById = new Map(
+    (Array.isArray(snapshot) ? snapshot : [])
+      .map((row) => [
+        String(row?.id || "").trim(),
+        normalizeScanWorkspaceAnnotationDecision(row?.decision),
+      ])
+      .filter((row) => row[0])
+  );
+
+  scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => ({
+    ...marker,
+    decision: decisionById.get(marker.id) || "pending",
+  }));
+}
+
+function refreshScanWorkspaceDecisionOutputs({ forcePreview = true } = {}) {
+  scanWorkspacePreviewState.documentPreviewPayload = null;
+  scanWorkspaceCompareState.beforePayload = null;
+  scanWorkspaceCompareState.afterPayload = null;
+
+  renderScanWorkspaceAnnotationShell();
+
+  if (forcePreview) {
+    ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+  }
+
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+    ensureScanWorkspaceCompareLoaded({ force: true });
+  }
+}
+
+function undoScanWorkspaceDecisionChange() {
+  if (!scanWorkspaceAnnotationState.undoStack.length) return;
+
+  const currentSnapshot = getScanWorkspaceDecisionSnapshot();
+  const previousSnapshot = scanWorkspaceAnnotationState.undoStack.pop();
+  scanWorkspaceAnnotationState.redoStack.push(currentSnapshot);
+  restoreScanWorkspaceDecisionSnapshot(previousSnapshot);
+  refreshScanWorkspaceDecisionOutputs();
+}
+
+function redoScanWorkspaceDecisionChange() {
+  if (!scanWorkspaceAnnotationState.redoStack.length) return;
+
+  const currentSnapshot = getScanWorkspaceDecisionSnapshot();
+  const nextSnapshot = scanWorkspaceAnnotationState.redoStack.pop();
+  scanWorkspaceAnnotationState.undoStack.push(currentSnapshot);
+  restoreScanWorkspaceDecisionSnapshot(nextSnapshot);
+  refreshScanWorkspaceDecisionOutputs();
+}
+
 function getAcceptedCompareCandidateIds() {
   const ids = [];
 
@@ -720,6 +806,10 @@ function updateScanWorkspaceDecisionSummaryUi() {
   const selectionStatus = getScanWorkspaceInput("scanWorkspaceSelectionStatus");
   const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
   const acceptAllBtn = getScanWorkspaceInput("scanWorkspaceAcceptAllAiBtn");
+  const undoBtn = getScanWorkspaceInput("scanWorkspaceUndoBtn");
+  const redoBtn = getScanWorkspaceInput("scanWorkspaceRedoBtn");
+  const aiSuggestionStepLabel = getScanWorkspaceInput("scanWorkspaceAiSuggestionStepLabel");
+  const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
 
   const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
   const savedAcceptedIds = getSavedSelectedPatchCandidateIds();
@@ -750,6 +840,28 @@ function updateScanWorkspaceDecisionSummaryUi() {
 
   if (acceptAllBtn) {
     acceptAllBtn.disabled = counts.total === 0 || counts.pending === 0;
+  }
+
+  if (undoBtn) {
+    undoBtn.disabled = scanWorkspaceAnnotationState.undoStack.length === 0;
+  }
+
+  if (redoBtn) {
+    redoBtn.disabled = scanWorkspaceAnnotationState.redoStack.length === 0;
+  }
+
+  if (aiSuggestionStepLabel) {
+    aiSuggestionStepLabel.textContent = `AI Suggestions (${counts.accepted}/${counts.total})`;
+  }
+
+  if (scoreValue) {
+    scoreValue.textContent = counts.total > 0 ? String(Math.round((counts.accepted / counts.total) * 100)) : "0";
+    scoreValue.setAttribute(
+      "aria-label",
+      counts.total > 0
+        ? `${counts.accepted} of ${counts.total} AI suggestions accepted`
+        : "No AI suggestions loaded"
+    );
   }
 
   renderScanWorkspacePersistenceStatus();
@@ -1623,16 +1735,7 @@ function renderScanWorkspaceSuggestionPopover() {
   const rejectBtn = getScanWorkspaceInput("scanWorkspaceSuggestionRejectBtn");
   const resetBtn = getScanWorkspaceInput("scanWorkspaceSuggestionResetBtn");
 
-  if (
-    !popover ||
-    !title ||
-    !copy ||
-    !decisionPill ||
-    !decisionMeta ||
-    !acceptBtn ||
-    !rejectBtn ||
-    !resetBtn
-  ) {
+  if (!popover || !title || !copy || !decisionPill || !decisionMeta || !acceptBtn || !rejectBtn) {
     return;
   }
 
@@ -1653,8 +1756,10 @@ function renderScanWorkspaceSuggestionPopover() {
     decisionMeta.textContent = "No decision recorded yet.";
     acceptBtn.disabled = true;
     rejectBtn.disabled = true;
-    resetBtn.disabled = true;
-    resetBtn.hidden = true;
+    if (resetBtn) {
+      resetBtn.disabled = true;
+      resetBtn.hidden = true;
+    }
     acceptBtn.classList.remove("is-active");
     rejectBtn.classList.remove("is-active");
     return;
@@ -1698,8 +1803,10 @@ function renderScanWorkspaceSuggestionPopover() {
 
   acceptBtn.disabled = false;
   rejectBtn.disabled = false;
-  resetBtn.disabled = decision === "pending";
-  resetBtn.hidden = decision === "pending";
+  if (resetBtn) {
+    resetBtn.disabled = true;
+    resetBtn.hidden = true;
+  }
 
   acceptBtn.classList.toggle("is-active", decision === "accepted");
   rejectBtn.classList.toggle("is-active", decision === "rejected");
@@ -1741,6 +1848,8 @@ function setScanWorkspaceAnnotationMarkers(markers) {
   }
 
   applySavedDraftStateToScanMarkers();
+  scanWorkspaceAnnotationState.undoStack = [];
+  scanWorkspaceAnnotationState.redoStack = [];
 
   scanWorkspacePreviewState.documentPreviewPayload = null;
   scanWorkspaceCompareState.beforePayload = null;
@@ -1765,17 +1874,12 @@ function applyScanWorkspaceDecisionToActiveMarker(decision) {
   );
   if (!activeMarker) return;
 
+  const nextDecision = normalizeScanWorkspaceAnnotationDecision(decision);
+  if (normalizeScanWorkspaceAnnotationDecision(activeMarker.decision) === nextDecision) return;
+
+  pushScanWorkspaceDecisionHistory();
   setScanWorkspaceMarkerDecision(activeMarker.id, decision);
-  scanWorkspacePreviewState.documentPreviewPayload = null;
-  scanWorkspaceCompareState.beforePayload = null;
-  scanWorkspaceCompareState.afterPayload = null;
-
-  renderScanWorkspaceAnnotationShell();
-  ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
-
-  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
-    ensureScanWorkspaceCompareLoaded({ force: true });
-  }
+  refreshScanWorkspaceDecisionOutputs();
 }
 
 function bindScanWorkspaceAnnotationShell() {
@@ -1830,22 +1934,35 @@ function bindScanWorkspaceAnnotationShell() {
     acceptAllBtn.dataset.bound = "true";
     acceptAllBtn.addEventListener("click", () => {
       if (!scanWorkspaceAnnotationState.markers.length) return;
+      if (!scanWorkspaceAnnotationState.markers.some((marker) => (
+        normalizeScanWorkspaceAnnotationDecision(marker?.decision) !== "accepted"
+      ))) {
+        return;
+      }
 
+      pushScanWorkspaceDecisionHistory();
       scanWorkspaceAnnotationState.markers = scanWorkspaceAnnotationState.markers.map((marker) => ({
         ...marker,
         decision: "accepted",
       }));
 
-      scanWorkspacePreviewState.documentPreviewPayload = null;
-      scanWorkspaceCompareState.beforePayload = null;
-      scanWorkspaceCompareState.afterPayload = null;
+      refreshScanWorkspaceDecisionOutputs();
+    });
+  }
 
-      renderScanWorkspaceAnnotationShell();
-      ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+  const undoBtn = getScanWorkspaceInput("scanWorkspaceUndoBtn");
+  if (undoBtn && undoBtn.dataset.bound !== "true") {
+    undoBtn.dataset.bound = "true";
+    undoBtn.addEventListener("click", () => {
+      undoScanWorkspaceDecisionChange();
+    });
+  }
 
-      if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
-        ensureScanWorkspaceCompareLoaded({ force: true });
-      }
+  const redoBtn = getScanWorkspaceInput("scanWorkspaceRedoBtn");
+  if (redoBtn && redoBtn.dataset.bound !== "true") {
+    redoBtn.dataset.bound = "true";
+    redoBtn.addEventListener("click", () => {
+      redoScanWorkspaceDecisionChange();
     });
   }
 

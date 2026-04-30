@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_14" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_16" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1536,37 +1536,86 @@ def scan_workspace(
 
         <section class="card scan-workspace-review-main">
           <div class="scan-workspace-review-main-header">
-            <div
-              class="scan-workspace-review-surface-tabs"
-              role="tablist"
-              aria-label="Optimization surfaces"
-            >
-              <button
-                type="button"
-                class="scan-workspace-surface-tab is-active"
-                aria-pressed="true"
+            <div class="scan-workspace-review-nav">
+              <div
+                class="scan-workspace-review-surface-tabs"
+                role="tablist"
+                aria-label="Optimization surfaces"
               >
-                Resume
-              </button>
+                <button
+                  type="button"
+                  class="scan-workspace-surface-tab is-active"
+                  aria-pressed="true"
+                  data-scan-surface="resume"
+                >
+                  Resume
+                </button>
 
-              <button
-                type="button"
-                class="scan-workspace-surface-tab"
-                disabled
-              >
-                Cover Letter
-              </button>
+                <button
+                  type="button"
+                  class="scan-workspace-surface-tab"
+                  data-scan-surface="cover_letter"
+                  disabled
+                  aria-disabled="true"
+                >
+                  Cover Letter
+                </button>
 
-              <button
-                type="button"
-                class="scan-workspace-surface-tab"
-                disabled
+                <button
+                  type="button"
+                  class="scan-workspace-surface-tab"
+                  data-scan-surface="job_description"
+                  disabled
+                  aria-disabled="true"
+                >
+                  Job Description
+                </button>
+              </div>
+
+              <div
+                class="scan-workspace-workflow-row"
+                aria-label="Resume optimization workflow"
               >
-                Job Description
-              </button>
+                <div
+                  class="scan-workspace-workflow-step is-active"
+                  id="scanWorkspaceAiSuggestionStep"
+                >
+                  <span class="scan-workspace-workflow-step-number">1</span>
+                  <span id="scanWorkspaceAiSuggestionStepLabel">AI Suggestions (0/0)</span>
+                </div>
+
+                <div
+                  class="scan-workspace-workflow-step is-disabled"
+                  id="scanWorkspaceEditStep"
+                  aria-disabled="true"
+                >
+                  <span class="scan-workspace-workflow-step-number">2</span>
+                  <span>Edit</span>
+                </div>
+              </div>
             </div>
 
             <div class="scan-workspace-review-main-actions">
+              <button
+                type="button"
+                class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                id="scanWorkspaceUndoBtn"
+                disabled
+                aria-label="Undo scan decision"
+              >
+                Undo
+              </button>
+
+              <button
+                type="button"
+                class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                id="scanWorkspaceRedoBtn"
+                disabled
+                aria-label="Redo scan decision"
+              >
+                Redo
+              </button>
+
               <button
                 type="button"
                 class="ghost-btn btn-sm scan-workspace-toolbar-btn"
@@ -1626,7 +1675,7 @@ def scan_workspace(
                           id="scanWorkspacePreviewStatus"
                           aria-live="polite"
                         >
-                          Live draft preview
+                          Resume preview
                         </span>
 
                         <span class="subtext" id="scanWorkspacePreviewMeta">
@@ -1702,6 +1751,16 @@ def scan_workspace(
                 <div class="scan-workspace-suggestion-popover-actions">
                   <button
                     type="button"
+                    class="btn-sm scan-workspace-suggestion-action-btn"
+                    id="scanWorkspaceSuggestionAcceptBtn"
+                    data-scan-decision-action="accept"
+                    disabled
+                  >
+                    Accept
+                  </button>
+
+                  <button
+                    type="button"
                     class="ghost-btn btn-sm scan-workspace-suggestion-action-btn"
                     id="scanWorkspaceSuggestionRejectBtn"
                     data-scan-decision-action="reject"
@@ -1716,18 +1775,9 @@ def scan_workspace(
                     id="scanWorkspaceSuggestionResetBtn"
                     data-scan-decision-action="reset"
                     disabled
+                    hidden
                   >
                     Reset
-                  </button>
-
-                  <button
-                    type="button"
-                    class="btn-sm scan-workspace-suggestion-action-btn"
-                    id="scanWorkspaceSuggestionAcceptBtn"
-                    data-scan-decision-action="accept"
-                    disabled
-                  >
-                    Accept
                   </button>
                 </div>
               </div>
@@ -1828,7 +1878,7 @@ def scan_workspace(
 
   <script src="/static/shell.js"></script>
   <script src="/static/planning.js?v=planning_ui_20260429_scan_e1f"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_16"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_18"></script>
 </body>
 </html>
     """.strip()

@@ -8,6 +8,15 @@
   display: block;
 }
 
+.scan-workspace-page {
+  max-width: none;
+  padding: 18px 20px 20px;
+}
+
+.scan-workspace-page .page-header {
+  margin-bottom: 10px;
+}
+
 .scan-workspace-intake-card {
   padding: 22px;
   border-radius: 20px;
@@ -197,7 +206,7 @@
 
 .scan-workspace-header-copy h1 {
   margin: 0;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1.02;
 }
 
@@ -237,10 +246,10 @@
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  border: 1px solid rgba(120, 166, 255, 0.14);
-  background: rgba(255, 255, 255, 0.025);
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 166, 255, 0.18);
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .scan-workspace-review-score-card--minimal {
@@ -248,10 +257,18 @@
 }
 
 .scan-workspace-review-score-ring {
-  width: 40px;
-  height: 40px;
-  min-width: 40px;
-  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 54px;
+  height: 54px;
+  min-width: 54px;
+  border-radius: 999px;
+  border: 4px solid rgba(120, 166, 255, 0.32);
+  background: rgba(255, 255, 255, 0.9);
+  color: #1f2937;
+  font-size: 18px;
+  font-weight: 850;
 }
 
 .scan-workspace-review-score-copy {
@@ -374,14 +391,16 @@
 
 .scan-workspace-review-shell {
   display: grid;
-  grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
-  gap: 14px;
+  grid-template-columns: minmax(330px, 360px) minmax(0, 1fr);
+  gap: 0;
   align-items: stretch;
-  height: calc(100vh - 132px);
+  height: calc(100vh - 108px);
   min-height: 620px;
+  overflow: hidden;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 166, 255, 0.16);
+  background: rgba(245, 248, 252, 0.96);
 }
-
-
 
 .scan-workspace-review-controls {
   flex: 0 0 auto;
@@ -468,11 +487,20 @@
 }
 
 .scan-workspace-review-main-header {
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
   justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 12px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid rgba(42, 53, 99, 0.16);
+}
+
+.scan-workspace-review-nav {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .scan-workspace-review-surface-tabs {
@@ -483,34 +511,84 @@
 }
 
 .scan-workspace-surface-tab {
-  min-height: 34px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  border: 1px solid rgba(42, 53, 99, 0.82);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--muted);
+  min-height: 30px;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #65708a;
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
   box-shadow: none;
+  position: relative;
 }
 
 .scan-workspace-surface-tab:hover:not(:disabled) {
   opacity: 1;
-  border-color: rgba(120, 166, 255, 0.32);
-  background: rgba(120, 166, 255, 0.08);
-  color: #eef4ff;
+  background: transparent;
+  color: #1f80e0;
 }
 
 .scan-workspace-surface-tab.is-active {
-  border-color: rgba(120, 166, 255, 0.34);
-  background: rgba(120, 166, 255, 0.14);
-  color: #eef4ff;
+  border-color: transparent;
+  background: transparent;
+  color: #1f80e0;
+}
+
+.scan-workspace-surface-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 999px;
+  background: #1f80e0;
 }
 
 .scan-workspace-surface-tab:disabled {
   opacity: 0.64;
   cursor: not-allowed;
+}
+
+.scan-workspace-workflow-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.scan-workspace-workflow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  color: #596273;
+}
+
+.scan-workspace-workflow-step.is-disabled {
+  opacity: 0.58;
+}
+
+.scan-workspace-workflow-step.is-active {
+  color: #253246;
+}
+
+.scan-workspace-workflow-step-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(31, 128, 224, 0.28);
+  background: #1f80e0;
+  color: #ffffff;
+  font-size: 11px;
 }
 
 .scan-workspace-review-main-actions {
@@ -529,10 +607,50 @@
   min-height: 0;
 }
 
+.scan-workspace-review-rail {
+  border: 0;
+  border-right: 1px solid rgba(42, 53, 99, 0.18);
+  border-radius: 0;
+  background: rgba(248, 250, 252, 0.98);
+  box-shadow: none;
+  color: #172033;
+}
+
+.scan-workspace-review-main {
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+  color: #172033;
+}
+
+.scan-workspace-review-rail .subtext,
+.scan-workspace-review-main .subtext,
+.scan-workspace-review-context-line,
+.scan-workspace-review-score-title {
+  color: #65708a;
+}
+
+.scan-workspace-review-score-title,
+.scan-workspace-review-main .tailoring-workspace-preview-name,
+#scanWorkspaceInteractiveSummary .scan-workspace-inventory-row,
+#scanWorkspaceInteractiveSummary .scan-workspace-inventory-row-text,
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-row,
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-title,
+#scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-title,
+#scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-title {
+  color: #172033;
+}
+
 .scan-workspace-review-main .tailoring-preview-canvas--pdfjs {
   flex: 1 1 auto;
   height: 100%;
   min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .scan-workspace-annotation-shell {
@@ -557,7 +675,7 @@
 }
 
 .scan-workspace-preview-header--minimal {
-  padding-bottom: 4px;
+  display: none;
 }
 
 .scan-workspace-preview-title-row--minimal {
@@ -601,10 +719,18 @@
   min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(120, 166, 255, 0.12);
-  background: rgba(7, 11, 25, 0.52);
+  padding: 28px 36px;
+  border-radius: 0;
+  border: 0;
+  background: #ffffff;
+}
+
+#scanWorkspaceLiveDraftPreview .tailoring-workspace-doc-page {
+  max-width: 840px;
+  margin: 0 auto;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 28px 34px;
 }
 
 #scanWorkspaceLiveDraftPreview::-webkit-scrollbar,
@@ -753,9 +879,10 @@
 
 #scanWorkspaceInteractiveSummary .tailoring-edit-card {
   padding: 12px 14px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(42, 53, 99, 0.56);
+  border-radius: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(42, 53, 99, 0.12);
   box-shadow: none;
 }
 
@@ -850,7 +977,7 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-inventory-card + .scan-workspace-inventory-card {
-  border-top: 1px solid rgba(42, 53, 99, 0.44);
+  border-top: 1px solid rgba(42, 53, 99, 0.12);
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-inventory-card > .tailoring-card-topline--scan {
@@ -870,7 +997,7 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #eef4ff;
+  color: #172033;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -893,11 +1020,11 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-inventory-row:hover {
-  background: rgba(120, 166, 255, 0.07);
+  background: rgba(31, 128, 224, 0.06);
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-inventory-row.is-active {
-  background: rgba(120, 166, 255, 0.12);
+  background: rgba(31, 128, 224, 0.1);
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-inventory-row.is-active::before {
@@ -911,7 +1038,7 @@
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  color: #eef4ff;
+  color: #172033;
   font-size: 12px;
   font-weight: 700;
   word-break: break-word;
@@ -927,18 +1054,18 @@
   flex-direction: column;
   gap: 8px;
   padding: 10px 12px 12px;
-  background: rgba(255, 255, 255, 0.025);
-  border-top: 1px solid rgba(42, 53, 99, 0.44);
+  background: rgba(31, 128, 224, 0.035);
+  border-top: 1px solid rgba(42, 53, 99, 0.12);
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-list {
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-radius: 14px;
+  border-radius: 0;
   overflow: hidden;
-  border: 1px solid rgba(42, 53, 99, 0.44);
-  background: rgba(255, 255, 255, 0.018);
+  border: 1px solid rgba(42, 53, 99, 0.12);
+  background: #ffffff;
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-row {
@@ -946,9 +1073,9 @@
   width: 100%;
   min-width: 0;
   border: 0;
-  border-bottom: 1px solid rgba(42, 53, 99, 0.34);
+  border-bottom: 1px solid rgba(42, 53, 99, 0.12);
   background: transparent;
-  color: #eef4ff;
+  color: #172033;
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
@@ -964,11 +1091,11 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-row:hover {
-  background: rgba(120, 166, 255, 0.07);
+  background: rgba(31, 128, 224, 0.06);
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-row.is-active {
-  background: rgba(120, 166, 255, 0.13);
+  background: rgba(31, 128, 224, 0.1);
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-status {
@@ -1002,7 +1129,7 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-title {
-  color: #eef4ff;
+  color: #172033;
   font-size: 12px;
   font-weight: 800;
   line-height: 1.25;
@@ -1069,9 +1196,9 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(42, 53, 99, 0.44);
-  background: rgba(255, 255, 255, 0.022);
+  border-radius: 8px;
+  border: 1px solid rgba(42, 53, 99, 0.12);
+  background: #ffffff;
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-kicker {
@@ -1085,7 +1212,7 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-title {
-  color: #eef4ff;
+  color: #172033;
   font-size: 14px;
   font-weight: 850;
   line-height: 1.2;
@@ -1105,8 +1232,8 @@
   min-height: 22px;
   padding: 0 8px;
   border-radius: 999px;
-  border: 1px solid rgba(42, 53, 99, 0.58);
-  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(42, 53, 99, 0.16);
+  background: rgba(248, 250, 252, 0.96);
   color: var(--muted);
   font-size: 10px;
   font-weight: 800;
@@ -1143,7 +1270,7 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-title {
-  color: #eef4ff;
+  color: #172033;
   font-size: 12px;
   font-weight: 850;
   line-height: 1.25;
@@ -1166,8 +1293,8 @@
   justify-content: center;
   padding: 0 7px;
   border-radius: 999px;
-  border: 1px solid rgba(42, 53, 99, 0.58);
-  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid rgba(42, 53, 99, 0.16);
+  background: rgba(248, 250, 252, 0.96);
   color: var(--muted);
   font-size: 10px;
   font-weight: 850;
@@ -1177,14 +1304,14 @@
 .scan-workspace-suggestion-popover {
   position: fixed;
   z-index: 5000;
-  width: min(360px, calc(100vw - 32px));
-  max-height: min(520px, calc(100vh - 112px));
-  padding: 12px 14px;
-  border-radius: 12px;
+  width: min(300px, calc(100vw - 32px));
+  max-height: min(360px, calc(100vh - 112px));
+  padding: 12px;
+  border-radius: 4px;
   background: #ffffff;
-  border: 1px solid rgba(46, 120, 219, 0.24);
+  border: 1px solid rgba(31, 128, 224, 0.38);
   box-shadow:
-    0 18px 46px rgba(0, 0, 0, 0.22),
+    0 14px 34px rgba(15, 23, 42, 0.18),
     0 2px 8px rgba(0, 0, 0, 0.08);
   color: #24324a;
   display: flex;
@@ -1204,8 +1331,8 @@
   width: 12px;
   height: 12px;
   background: #ffffff;
-  border-left: 1px solid rgba(46, 120, 219, 0.24);
-  border-bottom: 1px solid rgba(46, 120, 219, 0.24);
+  border-left: 1px solid rgba(31, 128, 224, 0.38);
+  border-bottom: 1px solid rgba(31, 128, 224, 0.38);
   transform: rotate(45deg);
 }
 
@@ -1215,11 +1342,35 @@
 }
 
 .scan-workspace-suggestion-popover-topline {
-  display: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.scan-workspace-suggestion-popover-kicker {
+  color: #4b6d8f;
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.scan-workspace-suggestion-popover-close {
+  min-height: 24px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 10px;
 }
 
 .scan-workspace-suggestion-popover-title {
-  display: none;
+  display: block;
+  margin-bottom: 8px;
+  color: #172033;
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.25;
 }
 
 .scan-workspace-suggestion-popover-copy {
@@ -1227,7 +1378,7 @@
   min-height: 0;
   overflow-y: auto;
   color: #334155;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1.45;
   padding-right: 4px;
 }
@@ -1263,7 +1414,7 @@
 .scan-workspace-suggestion-popover-actions {
   display: flex;
   justify-content: flex-start;
-  gap: 10px;
+  gap: 8px;
   margin-top: 12px;
   flex: 0 0 auto;
   position: sticky;
@@ -1273,9 +1424,9 @@
 }
 
 .scan-workspace-suggestion-action-btn {
-  min-width: 84px;
-  min-height: 36px;
-  border-radius: 8px;
+  min-width: 88px;
+  min-height: 32px;
+  border-radius: 4px;
   color: #2563a8;
   background: #ffffff;
   border-color: rgba(46, 120, 219, 0.34);
@@ -1691,10 +1842,16 @@
     align-items: flex-start;
   }
 
+  .scan-workspace-review-main-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
   .scan-workspace-header-actions,
   .scan-workspace-intake-actions,
   .scan-workspace-review-main-actions,
   .scan-workspace-review-surface-tabs,
+  .scan-workspace-workflow-row,
   .scan-workspace-compare-header-actions,
   .scan-workspace-review-actions,
   .scan-workspace-preview-meta-inline {

@@ -41,6 +41,7 @@ const scanWorkspacePreviewState = {
   documentPreviewPayload: null,
   isDocumentPreviewLoading: false,
   documentPreviewRequestSeq: 0,
+  scorePreviewRequestSeq: 0,
   candidateSignature: "",
 };
 
@@ -532,6 +533,7 @@ function refreshScanWorkspaceDecisionOutputs({ forcePreview = false } = {}) {
 
   renderScanWorkspaceAnnotationShell();
   decorateScanWorkspacePreviewSuggestionTargets();
+  refreshScanWorkspaceScorePreview();
 
   if (forcePreview) {
     ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
@@ -888,15 +890,18 @@ function updateScanWorkspaceDecisionSummaryUi() {
   }
 
   if (scoreValue) {
-    scoreValue.textContent = counts.actionableTotal > 0
-      ? String(Math.round((counts.accepted / counts.actionableTotal) * 100))
-      : "0";
-    scoreValue.setAttribute(
-      "aria-label",
-      counts.actionableTotal > 0
-        ? `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
-        : "No AI suggestions loaded"
-    );
+    const scoreSource = String(scoreValue.dataset.scanScoreSource || "").trim();
+    if (scoreSource !== "backend") {
+      scoreValue.textContent = counts.actionableTotal > 0
+        ? String(Math.round((counts.accepted / counts.actionableTotal) * 100))
+        : "0";
+      scoreValue.setAttribute(
+        "aria-label",
+        counts.actionableTotal > 0
+          ? `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
+          : "No AI suggestions loaded"
+      );
+    }
   }
 
   renderScanWorkspacePersistenceStatus();
@@ -924,6 +929,24 @@ function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []
     ),
     manual_bullet_edits: {},
   };
+}
+
+function coerceScanWorkspaceScore100(value) {
+  const score = Number(value);
+  if (!Number.isFinite(score)) return null;
+  const displayScore = score >= 0 && score <= 1 ? score * 100 : score;
+  return Math.max(0, Math.min(100, Math.round(displayScore)));
+}
+
+function updateScanWorkspaceScoreValue(score, { label = "Optimization score", source = "backend" } = {}) {
+  const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
+  const displayScore = coerceScanWorkspaceScore100(score);
+  if (!scoreValue || displayScore === null) return false;
+
+  scoreValue.textContent = String(displayScore);
+  scoreValue.dataset.scanScoreSource = source;
+  scoreValue.setAttribute("aria-label", label);
+  return true;
 }
 
 async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = []) {
@@ -972,6 +995,74 @@ async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [
       pages: [],
     };
   }
+}
+
+async function requestScanWorkspaceScorePreview(selectedPatchCandidateIds = []) {
+  const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds);
+
+  if (!requestBody) {
+    return {
+      ok: false,
+      error_message: "Scan preload is not available for this route.",
+    };
+  }
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout(
+            "/planning/preview-workspace-draft",
+            requestBody,
+            20000
+          )
+        : await fetch("/planning/preview-workspace-draft", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {
+                // ignore secondary parse error
+              }
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    return response;
+  } catch (err) {
+    return {
+      ok: false,
+      error_message:
+        err instanceof Error ? err.message : "Failed to preview scan score.",
+    };
+  }
+}
+
+async function refreshScanWorkspaceScorePreview() {
+  const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
+  const requestSeq = ++scanWorkspacePreviewState.scorePreviewRequestSeq;
+  const response = await requestScanWorkspaceScorePreview(acceptedIds);
+  if (requestSeq !== scanWorkspacePreviewState.scorePreviewRequestSeq) return;
+
+  const projectedScore =
+    response?.projected_score ?? response?.projected_final_score ?? null;
+  const originalScore =
+    response?.original_score ?? response?.original_final_score ?? null;
+  const nextScore = projectedScore ?? originalScore;
+
+  if (nextScore === null || nextScore === undefined) return;
+
+  updateScanWorkspaceScoreValue(nextScore, {
+    label: acceptedIds.length
+      ? `Projected score after ${acceptedIds.length} accepted replacement${acceptedIds.length === 1 ? "" : "s"}`
+      : "Original optimization score",
+    source: "backend",
+  });
 }
 
 function fallbackRenderScanWorkspaceStructuredRow(row) {

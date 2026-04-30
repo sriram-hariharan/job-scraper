@@ -2214,6 +2214,54 @@ def _build_tailoring_scan_issue_contract(
         },
     }
 
+
+def _coerce_scan_score_value(*values: Any) -> int | None:
+    for value in values:
+        if value is None:
+            continue
+
+        try:
+            numeric_score = float(value)
+        except (TypeError, ValueError):
+            continue
+
+        score = round(numeric_score * 100 if 0 <= numeric_score <= 1 else numeric_score)
+        return max(0, min(100, int(score)))
+
+    return None
+
+
+def _build_tailoring_scan_score_snapshot(
+    *,
+    selection: Dict[str, Any],
+    preview_response: Dict[str, Any],
+    scan_issue_contract: Dict[str, Any],
+) -> Dict[str, Any]:
+    counts = dict(scan_issue_contract.get("counts", {}) or {})
+    total = int(counts.get("total", 0) or 0)
+    matched = int(counts.get("matched", 0) or 0)
+    actionable = int(counts.get("actionable", 0) or 0)
+
+    score = _coerce_scan_score_value(
+        preview_response.get("projected_score"),
+        selection.get("selected_score"),
+        preview_response.get("original_score"),
+    )
+
+    if score is None:
+        score = round((matched / total) * 100) if total else 0
+
+    return {
+        "score": score,
+        "source": "projected_score" if preview_response.get("projected_score") is not None else "scan_issue_contract",
+        "matched_count": matched,
+        "missing_count": int(counts.get("missing", 0) or 0),
+        "ai_count": int(counts.get("ai", 0) or 0),
+        "total_count": total,
+        "actionable_count": actionable,
+        "label": "Optimization score",
+    }
+
 def _normalize_selected_patch_candidate_ids(value: Any) -> List[str]:
     if isinstance(value, list):
         raw_items = value
@@ -3991,6 +4039,11 @@ def tailoring_scan_preload_payload(
         directional_guidance=directional_guidance,
         resume_evidence=scan_resume_evidence,
     )
+    scan_score_snapshot = _build_tailoring_scan_score_snapshot(
+        selection=selection,
+        preview_response=preview_response,
+        scan_issue_contract=scan_issue_contract,
+    )
 
     return {
         "ok": True,
@@ -4016,6 +4069,7 @@ def tailoring_scan_preload_payload(
                 "selected_patch_set_counterfactual_preview"
             ),
         },
+        "scan_score": scan_score_snapshot,
         "trusted_suggestions": {
             "direct_apply_ready": trusted_ready,
             "direct_apply_optional": trusted_optional,

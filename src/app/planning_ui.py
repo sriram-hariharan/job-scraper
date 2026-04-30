@@ -1878,8 +1878,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260429_scan_e1g"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_21"></script>
+  <script src="/static/planning.js?v=planning_ui_20260429_scan_e1i"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_23"></script>
 </body>
 </html>
     """.strip()

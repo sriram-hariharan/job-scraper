@@ -9639,14 +9639,32 @@ function getScanWorkspaceAnnotationMarkerSignature(markers) {
 function updateScanWorkspaceHeaderCounts(payload = getScanWorkspacePayload()) {
   const taxonomy = buildScanWorkspaceTaxonomy(payload);
   const skillsPanel = taxonomy.skills;
+  const scoreSnapshot = payload?.scan_score && typeof payload.scan_score === "object"
+    ? payload.scan_score
+    : {};
 
   const matchedCount = skillsPanel.matchedCount;
   const aiCount = skillsPanel.aiCount;
   const missingCount = skillsPanel.missingCount;
 
+  const scoreNode = qs("scanWorkspaceScoreValue");
   const matchedCountNode = qs("scanWorkspaceTrustedCount");
   const aiCountNode = qs("scanWorkspaceAiCount");
   const missingCountNode = qs("scanWorkspaceGuidanceCount");
+
+  if (scoreNode && Number.isFinite(Number(scoreSnapshot.score))) {
+    const rawScore = Number(scoreSnapshot.score);
+    const score = Math.max(
+      0,
+      Math.min(100, Math.round(rawScore >= 0 && rawScore <= 1 ? rawScore * 100 : rawScore))
+    );
+    scoreNode.textContent = String(score);
+    scoreNode.dataset.scanScoreSource = "backend";
+    scoreNode.setAttribute(
+      "aria-label",
+      String(scoreSnapshot.label || "Optimization score")
+    );
+  }
 
   if (matchedCountNode) {
     matchedCountNode.textContent = String(matchedCount);

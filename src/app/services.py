@@ -1793,6 +1793,63 @@ def _scan_resume_visible_term_keys(resume_evidence: Any) -> set[str]:
     return keys
 
 
+def _scan_resume_term_match_count(term: str, resume_evidence: Any) -> int:
+    if resume_evidence is None:
+        return 0
+
+    canonical = _scan_issue_canonical_term(term)
+    if not canonical:
+        return 0
+
+    visible_term_hits = sum(
+        1
+        for value in _scan_resume_visible_search_terms(resume_evidence)
+        if _scan_issue_canonical_term(value) == canonical
+    )
+
+    text = _scan_resume_document_text(resume_evidence).lower()
+    text_hits = len(
+        re.findall(
+            r"(?<![a-z0-9])" + re.escape(canonical) + r"(?![a-z0-9])",
+            text,
+        )
+    )
+
+    return max(visible_term_hits, text_hits)
+
+
+def _scan_resume_evidence_anchors_for_term(
+    term: str,
+    resume_evidence: Any,
+    *,
+    limit: int = 3,
+) -> List[Dict[str, str]]:
+    if resume_evidence is None:
+        return []
+
+    anchors: List[Dict[str, str]] = []
+    seen = set()
+
+    for bullet in _scan_resume_bullet_texts(resume_evidence):
+        if not _scan_issue_text_contains_term(bullet.lower(), term):
+            continue
+
+        key = _normalize_tailoring_workspace_text_key(bullet)
+        if not key or key in seen:
+            continue
+
+        seen.add(key)
+        anchors.append({
+            "type": "resume_bullet",
+            "text": bullet,
+        })
+
+        if len(anchors) >= limit:
+            break
+
+    return anchors
+
+
 def _scan_issue_best_candidate(issues: List[Dict[str, Any]]) -> Dict[str, Any] | None:
     if not issues:
         return None
@@ -1818,10 +1875,12 @@ def _scan_keyword_issue_from_term(
     required_count: int,
     source: str,
     linked_issues: List[Dict[str, Any]] | None = None,
+    evidence_anchors: List[Dict[str, str]] | None = None,
     fallback_bucket: str = "",
     reason: str = "",
 ) -> Dict[str, Any]:
     linked_issues = list(linked_issues or [])
+    evidence_anchors = list(evidence_anchors or [])
     best_issue = _scan_issue_best_candidate(linked_issues)
     direct_issues = [
         issue for issue in linked_issues
@@ -1889,6 +1948,7 @@ def _scan_keyword_issue_from_term(
             "matched_count": matched_count,
             "required_count": required_count,
             "coverage_label": coverage_label,
+            "evidence_anchors": evidence_anchors,
             "has_ai_suggestion": bool(linked_candidate_ids),
             "linked_candidate_ids": list(dict.fromkeys(linked_candidate_ids)),
             "best_candidate_id": best_candidate_id,
@@ -1956,18 +2016,24 @@ def _scan_keyword_rows_from_replacement_issues(
     rows: List[Dict[str, Any]] = []
     for canonical in sorted(grouped.keys()):
         linked = grouped.get(canonical, [])
+        display_term = display_by_key.get(canonical, canonical)
         is_matched = canonical in resume_term_keys or canonical in matched_keys
         is_missing = canonical in missing_keys
         required_count = max(1, len(linked), 1 if is_missing else 0)
-        matched_count = 1 if is_matched else 0
+        evidence_match_count = _scan_resume_term_match_count(display_term, resume_evidence)
+        matched_count = max(1 if is_matched else 0, evidence_match_count)
         rows.append(
             _scan_keyword_issue_from_term(
                 group_id="skills",
-                term=display_by_key.get(canonical, canonical),
+                term=display_term,
                 matched_count=matched_count,
                 required_count=required_count,
                 source="tailoring_keyword_scan",
                 linked_issues=linked,
+                evidence_anchors=_scan_resume_evidence_anchors_for_term(
+                    display_term,
+                    resume_evidence,
+                ),
                 fallback_bucket="missing",
                 reason="Job-specific skill signal derived from scorer and replacement evidence.",
             )
@@ -2642,6 +2708,101 @@ def _build_tailoring_scan_score_snapshot(
         "total_count": total,
         "actionable_count": actionable,
         "label": "Optimization score",
+    }
+
+
+def _build_tailoring_scan_session_snapshot(
+    *,
+    artifact_path: Path,
+    draft: Dict[str, Any],
+    selected_resume: str,
+    scan_issue_contract: Dict[str, Any],
+    preview_response: Dict[str, Any],
+) -> Dict[str, Any]:
+    job_doc_id = _clean_text(draft.get("job_doc_id"))
+    artifact_signature = _clean_text(draft.get("artifact_signature"))
+    session_source = "|".join([
+        artifact_signature,
+        str(artifact_path),
+        selected_resume,
+        job_doc_id,
+    ])
+    session_id = hashlib.sha256(session_source.encode("utf-8")).hexdigest()[:24]
+    counts = dict(scan_issue_contract.get("counts", {}) or {})
+    telemetry = dict(draft.get("rewrite_review_telemetry", {}) or {})
+
+    return {
+        "session_id": session_id,
+        "session_version": 1,
+        "artifact_signature": artifact_signature,
+        "tailoring_json_path": str(artifact_path),
+        "selected_resume": selected_resume,
+        "job_doc_id": job_doc_id,
+        "draft_status": _clean_text(draft.get("draft_status")),
+        "saved_at": _clean_text(draft.get("saved_at")),
+        "issue_counts": counts,
+        "decision_counts": {
+            "accepted": int(telemetry.get("accepted_count", 0) or 0),
+            "accepted_as_is": int(telemetry.get("accepted_as_is_count", 0) or 0),
+            "edited_after_accept": int(telemetry.get("edited_after_accept_count", 0) or 0),
+            "rejected": int(telemetry.get("rejected_count", 0) or 0),
+            "pending": int(telemetry.get("pending_count", 0) or 0),
+            "manual_edits": int(telemetry.get("manual_edit_count", 0) or 0),
+        },
+        "score_preview_status": _clean_text(preview_response.get("preview_status")),
+        "score_preview_note": _clean_text(preview_response.get("preview_note")),
+    }
+
+
+def _build_workspace_score_preview_contract(
+    *,
+    preview_status: str,
+    preview_note: str,
+    original_score: Any = None,
+    projected_score: Any = None,
+    projected_delta: Any = None,
+    selected_candidate_ids: List[str] | None = None,
+    manual_bullet_edits: Dict[str, str] | None = None,
+    patch_specs: List[Dict[str, Any]] | None = None,
+    unresolved_manual_edit_keys: List[str] | None = None,
+    dimension_deltas: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    selected_ids = list(selected_candidate_ids or [])
+    manual_map = dict(manual_bullet_edits or {})
+    patches = list(patch_specs or [])
+    unresolved_keys = list(unresolved_manual_edit_keys or [])
+    delta_points = score_delta_to_points(projected_delta)
+
+    dimension_delta_points: Dict[str, int] = {}
+    for key, value in dict(dimension_deltas or {}).items():
+        points = score_delta_to_points(value)
+        if points is not None:
+            dimension_delta_points[str(key)] = points
+
+    return {
+        "version": "workspace_score_preview_v1",
+        "status": _clean_text(preview_status),
+        "note": _clean_text(preview_note),
+        "original_score": original_score,
+        "projected_score": projected_score,
+        "projected_delta": projected_delta,
+        "original_score_points": score_to_points(original_score),
+        "projected_score_points": score_to_points(projected_score),
+        "delta_points": delta_points,
+        "dimension_delta_points": dimension_delta_points,
+        "selected_candidate_ids": selected_ids,
+        "selected_patch_count": len(selected_ids),
+        "manual_edit_count": len(manual_map),
+        "patch_count": len(patches),
+        "changed_bullet_keys": [
+            _clean_text(patch.get("bullet_key"))
+            for patch in patches
+            if _clean_text(patch.get("bullet_key"))
+        ],
+        "unresolved_manual_edit_keys": unresolved_keys,
+        "has_previewable_changes": bool(patches),
+        "can_update_score": projected_score is not None or original_score is not None,
+        "requires_full_preview_reload": False,
     }
 
 def _normalize_selected_patch_candidate_ids(value: Any) -> List[str]:
@@ -4362,6 +4523,8 @@ def tailoring_scan_preload_payload(
     tailoring_json_path: str = "",
     selected_resume: str = "",
 ) -> Dict[str, Any]:
+    from src.tailoring.llm import tailoring_llm_model_config_payload
+
     artifact_path = _resolve_planning_artifact_path(
         tailoring_json_path,
         output_dir=output_dir,
@@ -4437,6 +4600,13 @@ def tailoring_scan_preload_payload(
         preview_response=preview_response,
         scan_issue_contract=scan_issue_contract,
     )
+    scan_session_snapshot = _build_tailoring_scan_session_snapshot(
+        artifact_path=artifact_path,
+        draft=draft,
+        selected_resume=effective_selected_resume,
+        scan_issue_contract=scan_issue_contract,
+        preview_response=preview_response,
+    )
 
     return {
         "ok": True,
@@ -4463,6 +4633,8 @@ def tailoring_scan_preload_payload(
             ),
         },
         "scan_score": scan_score_snapshot,
+        "scan_session": scan_session_snapshot,
+        "score_preview": preview_response.get("score_preview", {}),
         "trusted_suggestions": {
             "direct_apply_ready": trusted_ready,
             "direct_apply_optional": trusted_optional,
@@ -4476,6 +4648,7 @@ def tailoring_scan_preload_payload(
             "direction_only": len(directional_guidance),
         },
         "scan_issue_contract": scan_issue_contract,
+        "llm_model_config": tailoring_llm_model_config_payload(),
         "final_replacement_summary": final_replacement_summary,
         "rewrite_review_summary": rewrite_review_summary,
         "rewrite_review_groups": rewrite_review_groups,
@@ -5758,6 +5931,17 @@ def preview_tailoring_workspace_draft_payload(
             "unresolved_manual_edit_keys": [],
             "rewrite_review_decisions": effective_review_decisions,
             "rewrite_review_telemetry": effective_review_telemetry,
+            "score_preview": _build_workspace_score_preview_contract(
+                preview_status="preview_unavailable",
+                preview_note=str(exc),
+                original_score=None,
+                projected_score=None,
+                projected_delta=None,
+                selected_candidate_ids=effective_selected_ids,
+                manual_bullet_edits=effective_manual_edits,
+                patch_specs=[],
+                unresolved_manual_edit_keys=[],
+            ),
         }
 
     patch_specs, unresolved_manual_keys = _build_tailoring_workspace_effective_patch_specs(
@@ -5795,6 +5979,17 @@ def preview_tailoring_workspace_draft_payload(
             "unresolved_manual_edit_keys": unresolved_manual_keys,
             "rewrite_review_decisions": effective_review_decisions,
             "rewrite_review_telemetry": effective_review_telemetry,
+            "score_preview": _build_workspace_score_preview_contract(
+                preview_status=preview_status,
+                preview_note=preview_note,
+                original_score=original_score,
+                projected_score=None,
+                projected_delta=None,
+                selected_candidate_ids=effective_selected_ids,
+                manual_bullet_edits=effective_manual_edits,
+                patch_specs=[],
+                unresolved_manual_edit_keys=unresolved_manual_keys,
+            ),
         }
 
     counterfactual_resume = original_resume
@@ -5835,6 +6030,17 @@ def preview_tailoring_workspace_draft_payload(
             "unresolved_manual_edit_keys": unresolved_manual_keys,
             "rewrite_review_decisions": effective_review_decisions,
             "rewrite_review_telemetry": effective_review_telemetry,
+            "score_preview": _build_workspace_score_preview_contract(
+                preview_status="workspace_draft_rescore_failed",
+                preview_note=preview_note,
+                original_score=original_score,
+                projected_score=None,
+                projected_delta=None,
+                selected_candidate_ids=effective_selected_ids,
+                manual_bullet_edits=effective_manual_edits,
+                patch_specs=patch_specs,
+                unresolved_manual_edit_keys=unresolved_manual_keys,
+            ),
         }
 
     projected_result = score_resume_job_match(counterfactual_resume, job_evidence)
@@ -5882,6 +6088,148 @@ def preview_tailoring_workspace_draft_payload(
         "unresolved_manual_edit_keys": unresolved_manual_keys,
         "rewrite_review_decisions": effective_review_decisions,
         "rewrite_review_telemetry": effective_review_telemetry,
+        "score_preview": _build_workspace_score_preview_contract(
+            preview_status="workspace_draft_rescored",
+            preview_note=preview_note,
+            original_score=original_score,
+            projected_score=projected_score,
+            projected_delta=projected_delta,
+            selected_candidate_ids=effective_selected_ids,
+            manual_bullet_edits=effective_manual_edits,
+            patch_specs=patch_specs,
+            unresolved_manual_edit_keys=unresolved_manual_keys,
+            dimension_deltas=preview.get("projected_dimension_deltas"),
+        ),
+    }
+
+
+def _scan_phrase_signal_terms(
+    *,
+    guidance_text: str,
+    supported_terms: List[str],
+) -> List[str]:
+    raw_terms: List[Any] = list(supported_terms or [])
+    lead_match = re.search(
+        r"\blead with\s+(.+?)\s+(?:in|within|then|and)\b",
+        guidance_text,
+        flags=re.IGNORECASE,
+    )
+    if lead_match:
+        raw_terms.insert(0, lead_match.group(1))
+
+    output: List[str] = []
+    seen = set()
+    for value in raw_terms:
+        text = _scan_issue_display_label(value)
+        text = re.sub(r"\bthis opening clause\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\bopening clause\b", "", text, flags=re.IGNORECASE)
+        text = re.sub(r"\s+", " ", text).strip(" ,.;:")
+        if not text or len(text) > 48:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        output.append(text)
+        if len(output) >= 3:
+            break
+
+    return output
+
+
+def _scan_phrase_insert_after_lead_verb(current_text: str, term: str) -> str:
+    text = _clean_text(current_text)
+    clean_term = _clean_text(term)
+    if not text or not clean_term:
+        return text
+
+    if _scan_issue_text_contains_term(text.lower(), clean_term):
+        return text
+
+    match = re.match(r"^([A-Z][A-Za-z-]+)\s+(.*)$", text)
+    if not match:
+        return f"{clean_term}: {text}"
+
+    verb = match.group(1)
+    rest = match.group(2).strip()
+    lower_rest = rest.lower()
+    if lower_rest.startswith(("a ", "an ", "the ")):
+        return f"{verb} {clean_term}-focused {rest}"
+
+    return f"{verb} {clean_term} {rest}"
+
+
+def _scan_phrase_append_context(current_text: str, term: str) -> str:
+    text = _clean_text(current_text).rstrip(".")
+    clean_term = _clean_text(term)
+    if not text or not clean_term:
+        return text
+
+    if _scan_issue_text_contains_term(text.lower(), clean_term):
+        return text
+
+    return f"{text}, surfacing {clean_term} relevance while preserving the original scope"
+
+
+def generate_tailoring_scan_phrase_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    selected_resume: str = "",
+    bullet_key: str = "",
+    current_text: str = "",
+    guidance_text: str = "",
+    supported_terms: Any = None,
+) -> Dict[str, Any]:
+    artifact_path = _resolve_planning_artifact_path(
+        tailoring_json_path,
+        output_dir=output_dir,
+    )
+    if artifact_path.suffix.lower() != ".json":
+        raise ValueError("Scan phrase generation requires a tailoring JSON artifact.")
+
+    current = _clean_text(current_text)
+    if not current:
+        raise ValueError("Scan phrase generation requires current_text.")
+
+    terms = _scan_phrase_signal_terms(
+        guidance_text=_clean_text(guidance_text),
+        supported_terms=list(supported_terms or []),
+    )
+    primary_term = terms[0] if terms else ""
+
+    raw_options = [
+        _scan_phrase_insert_after_lead_verb(current, primary_term),
+        _scan_phrase_append_context(current, primary_term),
+        current,
+    ]
+
+    options: List[Dict[str, Any]] = []
+    seen = set()
+    for index, text in enumerate(raw_options, start=1):
+        normalized = _normalize_tailoring_workspace_text_key(text)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        options.append({
+            "option_id": f"phrase_{index}",
+            "text": text,
+            "source": "deterministic_guidance_phrase",
+            "supported_terms": terms,
+            "requires_review": True,
+            "can_accept_directly": False,
+        })
+
+    return {
+        "ok": True,
+        "version": "scan_phrase_options_v1",
+        "tailoring_json_path": str(artifact_path),
+        "selected_resume": _sanitize_optional_resume_filename(selected_resume),
+        "bullet_key": _clean_text(bullet_key),
+        "guidance_text": _clean_text(guidance_text),
+        "supported_terms": terms,
+        "options": options[:3],
+        "note": "Phrase drafts are manual-edit helpers. Save edit to rescore before export.",
     }
 
 def _normalize_workspace_export_format(value: Any) -> str:

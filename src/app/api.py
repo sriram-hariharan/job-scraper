@@ -63,6 +63,14 @@ class PlanningWorkspaceDraftRenderRequest(BaseModel):
     selected_patch_candidate_ids: list[str] | None = None
     manual_bullet_edits: dict[str, str] | None = None
 
+class PlanningScanPhraseRequest(BaseModel):
+    tailoring_json_path: str
+    selected_resume: str = ""
+    bullet_key: str = ""
+    current_text: str = ""
+    guidance_text: str = ""
+    supported_terms: list[str] = Field(default_factory=list)
+
 class PlanningWorkspaceDraftExportRequest(BaseModel):
     tailoring_json_path: str
     selected_resume: str = ""
@@ -666,6 +674,24 @@ def render_workspace_draft_preview(
             selected_resume=request.selected_resume,
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,
             manual_bullet_edits=request.manual_bullet_edits,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.post("/planning/generate-scan-phrases")
+def generate_scan_phrases(
+    request: PlanningScanPhraseRequest,
+    output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
+):
+    try:
+        return services.generate_tailoring_scan_phrase_payload(
+            output_dir=Path(output_dir),
+            tailoring_json_path=request.tailoring_json_path,
+            selected_resume=request.selected_resume,
+            bullet_key=request.bullet_key,
+            current_text=request.current_text,
+            guidance_text=request.guidance_text,
+            supported_terms=request.supported_terms,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

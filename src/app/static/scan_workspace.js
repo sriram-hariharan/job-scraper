@@ -39,6 +39,7 @@ const scanWorkspaceProcessingState = {
 
 const scanWorkspacePreviewState = {
   documentPreviewPayload: null,
+  scorePreviewPayload: null,
   isDocumentPreviewLoading: false,
   isScorePreviewLoading: false,
   documentPreviewRequestSeq: 0,
@@ -68,6 +69,13 @@ const scanWorkspacePersistenceState = {
   lastError: "",
   hydratedSignature: "",
   manualBulletEdits: {},
+};
+
+const scanWorkspacePhraseState = {
+  isLoading: false,
+  lastError: "",
+  markerId: "",
+  options: [],
 };
 
 function getScanWorkspacePageRoot() {
@@ -570,6 +578,7 @@ function refreshScanWorkspaceDecisionOutputs({ forcePreview = false } = {}) {
   if (forcePreview) {
     scanWorkspacePreviewState.documentPreviewPayload = null;
   }
+  scanWorkspacePreviewState.scorePreviewPayload = null;
   scanWorkspaceCompareState.beforePayload = null;
   scanWorkspaceCompareState.afterPayload = null;
 
@@ -1132,17 +1141,36 @@ async function refreshScanWorkspaceScorePreview() {
 
   if (requestSeq !== scanWorkspacePreviewState.scorePreviewRequestSeq) return;
 
+  scanWorkspacePreviewState.scorePreviewPayload =
+    response?.score_preview && typeof response.score_preview === "object"
+      ? response.score_preview
+      : response || null;
+
+  const scorePreview = scanWorkspacePreviewState.scorePreviewPayload || {};
   const projectedScore =
-    response?.projected_score ?? response?.projected_final_score ?? null;
+    scorePreview?.projected_score_points ??
+    scorePreview?.projected_score ??
+    response?.projected_score ??
+    response?.projected_final_score ??
+    null;
   const originalScore =
-    response?.original_score ?? response?.original_final_score ?? null;
+    scorePreview?.original_score_points ??
+    scorePreview?.original_score ??
+    response?.original_score ??
+    response?.original_final_score ??
+    null;
   const nextScore = projectedScore ?? originalScore;
 
   if (nextScore === null || nextScore === undefined) return;
 
+  const deltaPoints = Number(scorePreview?.delta_points);
+  const deltaLabel = Number.isFinite(deltaPoints) && deltaPoints !== 0
+    ? ` (${deltaPoints > 0 ? "+" : ""}${Math.round(deltaPoints)} pts)`
+    : "";
+
   updateScanWorkspaceScoreValue(nextScore, {
     label: acceptedIds.length
-      ? `Projected score after ${acceptedIds.length} accepted replacement${acceptedIds.length === 1 ? "" : "s"}`
+      ? `Projected score after ${acceptedIds.length} accepted replacement${acceptedIds.length === 1 ? "" : "s"}${deltaLabel}`
       : "Original optimization score",
     source: "backend",
   });
@@ -1428,6 +1456,7 @@ async function loadScanWorkspaceDraftState() {
     applySavedDraftStateToScanMarkers();
 
     scanWorkspacePreviewState.documentPreviewPayload = null;
+    scanWorkspacePreviewState.scorePreviewPayload = response?.score_preview || null;
     scanWorkspaceCompareState.beforePayload = null;
     scanWorkspaceCompareState.afterPayload = null;
 
@@ -2228,6 +2257,7 @@ function setScanWorkspaceAnnotationMarkers(markers) {
   scanWorkspaceAnnotationState.redoStack = [];
 
   scanWorkspacePreviewState.documentPreviewPayload = null;
+  scanWorkspacePreviewState.scorePreviewPayload = null;
   scanWorkspaceCompareState.beforePayload = null;
   scanWorkspaceCompareState.afterPayload = null;
 

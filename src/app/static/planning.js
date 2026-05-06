@@ -9622,6 +9622,9 @@ function getScanWorkspaceIssueRightLabel(item, bucket) {
 function getScanWorkspaceIssueScoreTitle(item) {
   const originalScore = coerceScanWorkspaceScorePoints(item?.original_final_score);
   const projectedScore = coerceScanWorkspaceScorePoints(item?.projected_final_score);
+  const evidenceAnchors = Array.isArray(item?.evidence_anchors)
+    ? item.evidence_anchors
+    : [];
   const dimensionDeltas = item?.projected_dimension_deltas && typeof item.projected_dimension_deltas === "object"
     ? item.projected_dimension_deltas
     : {};
@@ -9638,6 +9641,10 @@ function getScanWorkspaceIssueScoreTitle(item) {
   if (originalScore !== null) parts.push(`Original score ${originalScore}`);
   if (projectedScore !== null) parts.push(`Projected score ${projectedScore}`);
   if (dimensionLabels.length) parts.push(`Impact: ${dimensionLabels.join(", ")}`);
+  if (evidenceAnchors.length) {
+    const anchorText = String(evidenceAnchors[0]?.text || "").trim();
+    if (anchorText) parts.push(`Evidence: ${anchorText}`);
+  }
 
   return parts.join(" · ");
 }
@@ -9890,6 +9897,9 @@ function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
         originalText,
         suggestedText,
         reasonText,
+        supportedTerms: Array.isArray(item?.supported_jd_signals)
+          ? item.supported_jd_signals
+          : [],
         canFocusPreview: item?.can_focus_preview !== false,
         anchorStrategy: String(item?.anchor_strategy || "replacement_candidate").trim(),
         anchorText: originalText || suggestedText,
@@ -9921,6 +9931,7 @@ function getScanWorkspaceAnnotationMarkerSignature(markers) {
       originalText: marker.originalText,
       suggestedText: marker.suggestedText,
       reasonText: marker.reasonText,
+      supportedTerms: marker.supportedTerms,
       bulletKey: marker.bulletKey,
       sourceLabel: marker.sourceLabel,
       canFocusPreview: marker.canFocusPreview,

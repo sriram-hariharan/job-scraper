@@ -51,8 +51,14 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 _PATCH_REFINEMENT_LEAD_VERB_STOPWORDS = set(ACTION_VERB_HINTS)
-LLM_TAILOR_PROVIDER = os.getenv("LLM_TAILOR_PROVIDER", "groq").strip().lower()
-LLM_TAILOR_MODEL = os.getenv("LLM_TAILOR_MODEL", "llama-3.3-70b-versatile").strip()
+LLM_TAILOR_PROVIDER = os.getenv(
+    "TAILORING_EXTRACTION_PROVIDER",
+    os.getenv("LLM_TAILOR_PROVIDER", "groq"),
+).strip().lower()
+LLM_TAILOR_MODEL = os.getenv(
+    "TAILORING_EXTRACTION_MODEL",
+    os.getenv("LLM_TAILOR_MODEL", "llama-3.3-70b-versatile"),
+).strip()
 LLM_TAILOR_MAX_TOKENS = 700
 LLM_TAILOR_TEMPERATURE = 0
 LLM_TAILOR_PROMPT_VERSION = "v6"
@@ -142,13 +148,13 @@ PATCH_REFINEMENT_RESPONSE_SCHEMA = {
 }
 
 PATCH_REFINEMENT_WRITER_PROVIDER = os.getenv(
-    "PATCH_REFINEMENT_WRITER_PROVIDER",
-    PATCH_REFINEMENT_PROVIDER,
+    "TAILORING_REWRITE_PROVIDER",
+    os.getenv("PATCH_REFINEMENT_WRITER_PROVIDER", PATCH_REFINEMENT_PROVIDER),
 ).strip().lower()
 
 PATCH_REFINEMENT_WRITER_MODEL = os.getenv(
-    "PATCH_REFINEMENT_WRITER_MODEL",
-    PATCH_REFINEMENT_MODEL,
+    "TAILORING_REWRITE_MODEL",
+    os.getenv("PATCH_REFINEMENT_WRITER_MODEL", PATCH_REFINEMENT_MODEL),
 ).strip()
 
 PATCH_REFINEMENT_WRITER_MAX_TOKENS = 420
@@ -156,18 +162,46 @@ PATCH_REFINEMENT_WRITER_TEMPERATURE = 0
 PATCH_REFINEMENT_WRITER_PROMPT_VERSION = "v2"
 
 PATCH_REFINEMENT_JUDGE_PROVIDER = os.getenv(
-    "PATCH_REFINEMENT_JUDGE_PROVIDER",
-    PATCH_REFINEMENT_PROVIDER,
+    "TAILORING_JUDGE_PROVIDER",
+    os.getenv("PATCH_REFINEMENT_JUDGE_PROVIDER", PATCH_REFINEMENT_PROVIDER),
 ).strip().lower()
 
 PATCH_REFINEMENT_JUDGE_MODEL = os.getenv(
-    "PATCH_REFINEMENT_JUDGE_MODEL",
-    "llama-3.3-70b-versatile",
+    "TAILORING_JUDGE_MODEL",
+    os.getenv("PATCH_REFINEMENT_JUDGE_MODEL", "llama-3.3-70b-versatile"),
 ).strip()
 
 PATCH_REFINEMENT_JUDGE_MAX_TOKENS = 500
 PATCH_REFINEMENT_JUDGE_TEMPERATURE = 0
 PATCH_REFINEMENT_JUDGE_PROMPT_VERSION = "v1"
+
+
+def tailoring_llm_model_config_payload() -> Dict[str, Any]:
+    return {
+        "extraction": {
+            "provider": LLM_TAILOR_PROVIDER,
+            "model": LLM_TAILOR_MODEL,
+            "prompt_version": LLM_TAILOR_PROMPT_VERSION,
+            "max_tokens": LLM_TAILOR_MAX_TOKENS,
+        },
+        "rewrite": {
+            "provider": PATCH_REFINEMENT_WRITER_PROVIDER,
+            "model": PATCH_REFINEMENT_WRITER_MODEL,
+            "prompt_version": PATCH_REFINEMENT_WRITER_PROMPT_VERSION,
+            "max_tokens": PATCH_REFINEMENT_WRITER_MAX_TOKENS,
+        },
+        "judge": {
+            "provider": PATCH_REFINEMENT_JUDGE_PROVIDER,
+            "model": PATCH_REFINEMENT_JUDGE_MODEL,
+            "prompt_version": PATCH_REFINEMENT_JUDGE_PROMPT_VERSION,
+            "max_tokens": PATCH_REFINEMENT_JUDGE_MAX_TOKENS,
+        },
+        "fallback": {
+            "enabled": TAILOR_LLM_FALLBACK_ENABLED,
+            "provider": TAILOR_LLM_FALLBACK_PROVIDER if TAILOR_LLM_FALLBACK_ENABLED else "",
+            "model": TAILOR_LLM_FALLBACK_MODEL if TAILOR_LLM_FALLBACK_ENABLED else "",
+        },
+    }
 
 PATCH_REFINEMENT_WRITER_RESPONSE_SCHEMA = {
     "type": "object",

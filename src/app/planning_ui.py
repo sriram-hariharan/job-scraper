@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_21" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_23" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1602,7 +1602,7 @@ def scan_workspace(
                 class="ghost-btn btn-sm scan-workspace-toolbar-btn"
                 id="scanWorkspaceUndoBtn"
                 disabled
-                aria-label="Undo scan decision"
+                aria-label="Undo scan change"
               >
                 Undo
               </button>
@@ -1612,7 +1612,7 @@ def scan_workspace(
                 class="ghost-btn btn-sm scan-workspace-toolbar-btn"
                 id="scanWorkspaceRedoBtn"
                 disabled
-                aria-label="Redo scan decision"
+                aria-label="Redo scan change"
               >
                 Redo
               </button>
@@ -1878,8 +1878,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260429_scan_f1a"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_25"></script>
+  <script src="/static/planning.js?v=planning_ui_20260429_scan_f1c"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_29"></script>
 </body>
 </html>
     """.strip()

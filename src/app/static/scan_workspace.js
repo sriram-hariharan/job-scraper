@@ -67,6 +67,7 @@ const scanWorkspacePersistenceState = {
   isSaving: false,
   lastError: "",
   hydratedSignature: "",
+  manualBulletEdits: {},
 };
 
 function getScanWorkspacePageRoot() {
@@ -431,6 +432,7 @@ function normalizeScanWorkspaceAnnotationMarker(marker, index) {
       ? Math.max(0, Math.floor(previewRowIndex))
       : index,
     candidateIds: collectScanWorkspaceMarkerCandidateIds(marker),
+    bulletKey: String(marker?.bulletKey || marker?.bullet_key || "").trim(),
     originalText: String(marker?.originalText || marker?.original_text || "").trim(),
     suggestedText: String(marker?.suggestedText || marker?.suggested_text || "").trim(),
     reasonText: String(marker?.reasonText || marker?.reason_text || "").trim(),
@@ -478,22 +480,47 @@ function getScanWorkspaceAnnotationDecisionCounts() {
 }
 
 function getScanWorkspaceDecisionSnapshot() {
-  return scanWorkspaceAnnotationState.markers.map((marker) => ({
-    id: marker.id,
-    decision: normalizeScanWorkspaceAnnotationDecision(marker?.decision),
-  }));
+  return {
+    markerDecisions: scanWorkspaceAnnotationState.markers.map((marker) => ({
+      id: marker.id,
+      decision: normalizeScanWorkspaceAnnotationDecision(marker?.decision),
+    })),
+    manualBulletEdits: getScanWorkspaceManualBulletEdits(),
+  };
 }
 
 function getScanWorkspaceDecisionSnapshotSignature(snapshot) {
-  return JSON.stringify(
-    (Array.isArray(snapshot) ? snapshot : [])
+  const markerDecisions = Array.isArray(snapshot)
+    ? snapshot
+    : Array.isArray(snapshot?.markerDecisions)
+      ? snapshot.markerDecisions
+      : [];
+
+  const normalizedDecisions = markerDecisions
       .map((row) => [
         String(row?.id || "").trim(),
         normalizeScanWorkspaceAnnotationDecision(row?.decision),
       ])
       .filter((row) => row[0])
-      .sort((a, b) => String(a[0]).localeCompare(String(b[0])))
-  );
+      .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+  const normalizedManualEdits = Object.entries(
+    snapshot?.manualBulletEdits && typeof snapshot.manualBulletEdits === "object"
+      ? snapshot.manualBulletEdits
+      : {}
+  )
+    .map(([key, value]) => {
+      const safeKey = String(key || "").trim();
+      const safeValue = String(value || "").trim();
+      return safeKey && safeValue ? [safeKey, safeValue] : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+  return JSON.stringify({
+    markerDecisions: normalizedDecisions,
+    manualBulletEdits: normalizedManualEdits,
+  });
 }
 
 function pushScanWorkspaceDecisionHistory() {
@@ -510,8 +537,14 @@ function pushScanWorkspaceDecisionHistory() {
 }
 
 function restoreScanWorkspaceDecisionSnapshot(snapshot) {
+  const markerDecisions = Array.isArray(snapshot)
+    ? snapshot
+    : Array.isArray(snapshot?.markerDecisions)
+      ? snapshot.markerDecisions
+      : [];
+
   const decisionById = new Map(
-    (Array.isArray(snapshot) ? snapshot : [])
+    markerDecisions
       .map((row) => [
         String(row?.id || "").trim(),
         normalizeScanWorkspaceAnnotationDecision(row?.decision),
@@ -523,9 +556,17 @@ function restoreScanWorkspaceDecisionSnapshot(snapshot) {
     ...marker,
     decision: decisionById.get(marker.id) || "pending",
   }));
+
+  scanWorkspacePersistenceState.manualBulletEdits = {
+    ...(
+      snapshot?.manualBulletEdits && typeof snapshot.manualBulletEdits === "object"
+        ? snapshot.manualBulletEdits
+        : {}
+    ),
+  };
 }
 
-function refreshScanWorkspaceDecisionOutputs({ forcePreview = true } = {}) {
+function refreshScanWorkspaceDecisionOutputs({ forcePreview = false } = {}) {
   if (forcePreview) {
     scanWorkspacePreviewState.documentPreviewPayload = null;
   }
@@ -552,7 +593,7 @@ function undoScanWorkspaceDecisionChange() {
   const previousSnapshot = scanWorkspaceAnnotationState.undoStack.pop();
   scanWorkspaceAnnotationState.redoStack.push(currentSnapshot);
   restoreScanWorkspaceDecisionSnapshot(previousSnapshot);
-  refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
+  refreshScanWorkspaceDecisionOutputs({ forcePreview: false });
 }
 
 function redoScanWorkspaceDecisionChange() {
@@ -562,7 +603,7 @@ function redoScanWorkspaceDecisionChange() {
   const nextSnapshot = scanWorkspaceAnnotationState.redoStack.pop();
   scanWorkspaceAnnotationState.undoStack.push(currentSnapshot);
   restoreScanWorkspaceDecisionSnapshot(nextSnapshot);
-  refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
+  refreshScanWorkspaceDecisionOutputs({ forcePreview: false });
 }
 
 function getAcceptedCompareCandidateIds() {
@@ -650,13 +691,13 @@ function buildScanWorkspacePersistencePayload() {
     tailoring_json_path: context.tailoringJsonPath,
     selected_resume: context.resumeName,
     selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
-    manual_bullet_edits: {},
+    manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
     rewrite_review_decisions: buildScanWorkspaceRewriteReviewDecisionsPayload(),
     note: "Saved from AI Optimize scan.",
   };
 }
 
-function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewriteReviewDecisions) {
+function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewriteReviewDecisions, manualBulletEdits = {}) {
   const normalizedIds = Array.from(
     new Set(
       (Array.isArray(selectedPatchCandidateIds) ? selectedPatchCandidateIds : [])
@@ -683,9 +724,21 @@ function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewri
     .filter(Boolean)
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
+  const normalizedManualEdits = Object.entries(
+    manualBulletEdits && typeof manualBulletEdits === "object" ? manualBulletEdits : {}
+  )
+    .map(([key, value]) => {
+      const safeKey = String(key || "").trim();
+      const safeValue = String(value || "").trim();
+      return safeKey && safeValue ? [safeKey, safeValue] : null;
+    })
+    .filter(Boolean)
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
   return JSON.stringify({
     selected_patch_candidate_ids: normalizedIds,
     rewrite_review_decisions: normalizedDecisions,
+    manual_bullet_edits: normalizedManualEdits,
   });
 }
 
@@ -695,7 +748,8 @@ function getCurrentScanWorkspacePersistenceSignature() {
 
   return buildScanWorkspacePersistenceSignature(
     payload.selected_patch_candidate_ids,
-    payload.rewrite_review_decisions
+    payload.rewrite_review_decisions,
+    payload.manual_bullet_edits
   );
 }
 
@@ -703,7 +757,8 @@ function getSavedScanWorkspacePersistenceSignature() {
   const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
   return buildScanWorkspacePersistenceSignature(
     draft.selected_patch_candidate_ids || [],
-    draft.rewrite_review_decisions || {}
+    draft.rewrite_review_decisions || {},
+    draft.manual_bullet_edits || {}
   );
 }
 
@@ -928,7 +983,7 @@ function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []
           .filter(Boolean)
       )
     ),
-    manual_bullet_edits: {},
+    manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
   };
 }
 
@@ -1360,6 +1415,14 @@ async function loadScanWorkspaceDraftState() {
           });
 
     scanWorkspacePersistenceState.loadResponse = response;
+    scanWorkspacePersistenceState.manualBulletEdits = {
+      ...(
+        response?.draft?.manual_bullet_edits &&
+        typeof response.draft.manual_bullet_edits === "object"
+          ? response.draft.manual_bullet_edits
+          : {}
+      ),
+    };
     scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
 
     applySavedDraftStateToScanMarkers();
@@ -1423,6 +1486,15 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           });
 
     scanWorkspacePersistenceState.loadResponse = response;
+    scanWorkspacePersistenceState.manualBulletEdits = {
+      ...getScanWorkspaceManualBulletEdits(),
+      ...(
+        response?.draft?.manual_bullet_edits &&
+        typeof response.draft.manual_bullet_edits === "object"
+          ? response.draft.manual_bullet_edits
+          : {}
+      ),
+    };
     scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
     scanWorkspacePersistenceState.lastError = "";
     renderScanWorkspacePersistenceStatus();
@@ -1679,6 +1751,48 @@ function normalizeScanWorkspaceAnchorText(value) {
     .trim();
 }
 
+function normalizeScanWorkspaceManualEditKeyText(value) {
+  return normalizeScanWorkspaceAnchorText(value)
+    .replace(/[^a-z0-9%$&.,+/\- ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getScanWorkspaceMarkerBulletKey(marker) {
+  const explicitKey = String(
+    marker?.bulletKey ||
+    marker?.bullet_key ||
+    marker?.manualBulletKey ||
+    marker?.manual_bullet_key ||
+    ""
+  ).trim();
+  if (explicitKey) return explicitKey;
+
+  const candidateIds = Array.isArray(marker?.candidateIds) ? marker.candidateIds : [];
+  const candidateId = String(candidateIds[0] || "").trim();
+  if (candidateId) return `candidate:${candidateId}`;
+
+  const originalText = String(marker?.originalText || "").trim();
+  const textKey = normalizeScanWorkspaceManualEditKeyText(originalText);
+  return textKey ? `text:${textKey}` : "";
+}
+
+function getScanWorkspaceManualBulletEdits() {
+  const normalized = {};
+  Object.entries(scanWorkspacePersistenceState.manualBulletEdits || {}).forEach(([key, value]) => {
+    const safeKey = String(key || "").trim();
+    const safeValue = String(value || "").trim();
+    if (safeKey && safeValue) normalized[safeKey] = safeValue;
+  });
+  return normalized;
+}
+
+function getScanWorkspaceManualTextForMarker(marker) {
+  const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
+  if (!bulletKey) return "";
+  return String(getScanWorkspaceManualBulletEdits()[bulletKey] || "").trim();
+}
+
 function getScanWorkspaceMarkerAnchorTexts(marker) {
   return [
     marker?.anchorText,
@@ -1845,7 +1959,7 @@ function getScanWorkspacePreviewMarkerTextNode(targetRow) {
 }
 
 function syncScanWorkspacePreviewMarkerContent(targetRow, marker) {
-  if (!targetRow || !isScanWorkspaceReplacementMarker(marker)) return;
+  if (!targetRow) return;
 
   const textNode = getScanWorkspacePreviewMarkerTextNode(targetRow);
   if (!textNode) return;
@@ -1853,7 +1967,8 @@ function syncScanWorkspacePreviewMarkerContent(targetRow, marker) {
   const decision = normalizeScanWorkspaceAnnotationDecision(marker?.decision);
   const originalText = String(marker?.originalText || "").trim();
   const suggestedText = String(marker?.suggestedText || "").trim();
-  const nextText = decision === "accepted" ? suggestedText : originalText;
+  const manualText = getScanWorkspaceManualTextForMarker(marker);
+  const nextText = manualText || (decision === "accepted" ? suggestedText : originalText);
 
   if (!nextText) return;
   if (textNode.textContent !== nextText) {
@@ -1918,23 +2033,44 @@ function renderScanWorkspaceSuggestionPopoverCopyHtml(marker) {
   }
 
   return `
-    ${originalText ? `
-      <div class="scan-workspace-suggestion-reason">
-        <strong>Current context:</strong><br>
-        ${scanWorkspaceEscapeHtml(originalText)}
-      </div>
-    ` : ""}
-    ${suggestedText ? `
-      <div class="scan-workspace-inline-diff-add" style="margin-top: 10px;">
-        ${scanWorkspaceEscapeHtml(suggestedText)}
-      </div>
-    ` : ""}
+    <div class="scan-workspace-guidance-editor">
+      ${suggestedText ? `
+        <div class="scan-workspace-guidance-tip">
+          <span class="scan-workspace-guidance-label">AI guidance</span>
+          <div>${scanWorkspaceEscapeHtml(suggestedText)}</div>
+        </div>
+      ` : ""}
+      <label class="scan-workspace-guidance-textarea-label" for="scanWorkspaceGuidanceTextarea">
+        Edit draft bullet
+      </label>
+      <textarea
+        class="scan-workspace-guidance-textarea"
+        id="scanWorkspaceGuidanceTextarea"
+        data-scan-guidance-textarea="true"
+        rows="5"
+        placeholder="Rewrite this bullet using the guidance above."
+      >${scanWorkspaceEscapeHtml(getScanWorkspaceManualTextForMarker(marker) || originalText)}</textarea>
+    </div>
     ${reasonText && reasonText !== suggestedText ? `
       <div class="scan-workspace-suggestion-reason" style="margin-top: 10px;">
         ${scanWorkspaceEscapeHtml(reasonText)}
       </div>
     ` : ""}
   `;
+}
+
+function refreshScanWorkspaceGuidanceSaveButton(marker) {
+  const saveBtn = getScanWorkspaceInput("scanWorkspaceSuggestionResetBtn");
+  const textarea = getScanWorkspaceInput("scanWorkspaceGuidanceTextarea");
+  if (!saveBtn || !textarea || !marker || isScanWorkspaceReplacementMarker(marker)) return;
+
+  const originalText = String(marker?.originalText || "").trim();
+  const nextText = String(textarea.value || "").trim();
+  const savedText = getScanWorkspaceManualTextForMarker(marker);
+  const hasChanged = Boolean(nextText) && nextText !== originalText && nextText !== savedText;
+
+  saveBtn.disabled = !hasChanged || scanWorkspacePersistenceState.isSaving;
+  saveBtn.textContent = scanWorkspacePersistenceState.isSaving ? "Saving..." : "Save edit";
 }
 
 function renderScanWorkspaceSuggestionPopover() {
@@ -1974,6 +2110,7 @@ function renderScanWorkspaceSuggestionPopover() {
     if (resetBtn) {
       resetBtn.disabled = true;
       resetBtn.hidden = true;
+      resetBtn.classList.remove("scan-workspace-suggestion-action-btn--save-guidance");
     }
     acceptBtn.classList.remove("is-active");
     rejectBtn.classList.remove("is-active");
@@ -2017,25 +2154,38 @@ function renderScanWorkspaceSuggestionPopover() {
         ? "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--rejected"
         : "scan-workspace-suggestion-decision-pill scan-workspace-suggestion-decision-pill--pending";
 
-  decisionMeta.textContent = "";
+  decisionMeta.textContent = isReplacement
+    ? ""
+    : "Guidance only. Edit the draft bullet here, then save to rescore.";
+
+  const hasSavedManualEdit = Boolean(getScanWorkspaceManualTextForMarker(marker));
 
   acceptBtn.hidden = !isReplacement;
-  rejectBtn.hidden = !isReplacement;
   acceptBtn.textContent = decision === "accepted" ? "Accepted" : "Accept";
-  rejectBtn.textContent = decision === "rejected" ? "Rejected" : "Reject";
   acceptBtn.disabled = !isReplacement || decision === "accepted";
-  rejectBtn.disabled = !isReplacement || decision === "rejected";
   acceptBtn.setAttribute("aria-pressed", decision === "accepted" ? "true" : "false");
-  rejectBtn.setAttribute("aria-pressed", decision === "rejected" ? "true" : "false");
+
+  rejectBtn.hidden = false;
+  rejectBtn.textContent = isReplacement
+    ? decision === "rejected" ? "Rejected" : "Reject"
+    : "Revert edit";
+  rejectBtn.disabled = isReplacement ? decision === "rejected" : !hasSavedManualEdit;
+  rejectBtn.dataset.scanGuidanceAction = isReplacement ? "" : "revert_guidance";
+  rejectBtn.setAttribute(
+    "aria-pressed",
+    isReplacement && decision === "rejected" ? "true" : "false"
+  );
   if (resetBtn) {
     resetBtn.hidden = isReplacement;
-    resetBtn.disabled = isReplacement;
-    resetBtn.textContent = isReplacement ? "Reset" : "Got it";
-    resetBtn.dataset.scanGuidanceAction = isReplacement ? "" : "close";
+    resetBtn.disabled = true;
+    resetBtn.textContent = isReplacement ? "Reset" : "Save edit";
+    resetBtn.dataset.scanGuidanceAction = isReplacement ? "" : "save_guidance";
+    resetBtn.classList.toggle("scan-workspace-suggestion-action-btn--save-guidance", !isReplacement);
   }
 
   acceptBtn.classList.toggle("is-active", decision === "accepted");
   rejectBtn.classList.toggle("is-active", decision === "rejected");
+  refreshScanWorkspaceGuidanceSaveButton(marker);
 }
 
 function renderScanWorkspaceAnnotationShell() {
@@ -2110,7 +2260,66 @@ function applyScanWorkspaceDecisionToActiveMarker(decision) {
 
   pushScanWorkspaceDecisionHistory();
   setScanWorkspaceMarkerDecision(activeMarker.id, decision);
-  refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
+  refreshScanWorkspaceDecisionOutputs({ forcePreview: false });
+}
+
+async function saveScanWorkspaceGuidanceEditForActiveMarker() {
+  const marker = getScanWorkspaceAnnotationMarkerById(
+    scanWorkspaceAnnotationState.activeMarkerId
+  );
+  const textarea = getScanWorkspaceInput("scanWorkspaceGuidanceTextarea");
+  if (!marker || !textarea || isScanWorkspaceReplacementMarker(marker)) return;
+
+  const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
+  const nextText = String(textarea.value || "").trim();
+  const originalText = String(marker.originalText || "").trim();
+  if (!bulletKey || !nextText || nextText === originalText) return;
+
+  pushScanWorkspaceDecisionHistory();
+  scanWorkspacePersistenceState.manualBulletEdits = {
+    ...getScanWorkspaceManualBulletEdits(),
+    [bulletKey]: nextText,
+  };
+
+  decorateScanWorkspacePreviewSuggestionTargets();
+  refreshScanWorkspaceGuidanceSaveButton(marker);
+  refreshScanWorkspaceScorePreview();
+
+  const saved = await saveScanWorkspaceDraftState();
+  if (saved) {
+    decorateScanWorkspacePreviewSuggestionTargets();
+    renderScanWorkspaceSuggestionPopover();
+    refreshScanWorkspaceScorePreview();
+  } else {
+    refreshScanWorkspaceGuidanceSaveButton(marker);
+  }
+}
+
+async function revertScanWorkspaceGuidanceEditForActiveMarker() {
+  const marker = getScanWorkspaceAnnotationMarkerById(
+    scanWorkspaceAnnotationState.activeMarkerId
+  );
+  if (!marker || isScanWorkspaceReplacementMarker(marker)) return;
+
+  const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
+  const currentManualEdits = getScanWorkspaceManualBulletEdits();
+  if (!bulletKey || !Object.prototype.hasOwnProperty.call(currentManualEdits, bulletKey)) return;
+
+  pushScanWorkspaceDecisionHistory();
+  const nextManualEdits = { ...currentManualEdits };
+  delete nextManualEdits[bulletKey];
+  scanWorkspacePersistenceState.manualBulletEdits = nextManualEdits;
+
+  decorateScanWorkspacePreviewSuggestionTargets();
+  renderScanWorkspaceSuggestionPopover();
+  refreshScanWorkspaceScorePreview();
+
+  const saved = await saveScanWorkspaceDraftState();
+  if (saved) {
+    decorateScanWorkspacePreviewSuggestionTargets();
+    renderScanWorkspaceSuggestionPopover();
+    refreshScanWorkspaceScorePreview();
+  }
 }
 
 function bindScanWorkspaceAnnotationShell() {
@@ -2148,6 +2357,11 @@ function bindScanWorkspaceAnnotationShell() {
   if (rejectBtn && rejectBtn.dataset.bound !== "true") {
     rejectBtn.dataset.bound = "true";
     rejectBtn.addEventListener("click", () => {
+      if (rejectBtn.dataset.scanGuidanceAction === "revert_guidance") {
+        revertScanWorkspaceGuidanceEditForActiveMarker();
+        return;
+      }
+
       applyScanWorkspaceDecisionToActiveMarker("rejected");
     });
   }
@@ -2156,12 +2370,26 @@ function bindScanWorkspaceAnnotationShell() {
   if (resetBtn && resetBtn.dataset.bound !== "true") {
     resetBtn.dataset.bound = "true";
     resetBtn.addEventListener("click", () => {
-      if (resetBtn.dataset.scanGuidanceAction === "close") {
-        closeScanWorkspaceSuggestionPopover();
+      if (resetBtn.dataset.scanGuidanceAction === "save_guidance") {
+        saveScanWorkspaceGuidanceEditForActiveMarker();
         return;
       }
 
       applyScanWorkspaceDecisionToActiveMarker("pending");
+    });
+  }
+
+  const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+  if (popover && popover.dataset.guidanceBound !== "true") {
+    popover.dataset.guidanceBound = "true";
+    popover.addEventListener("input", (event) => {
+      const textarea = event.target.closest("[data-scan-guidance-textarea]");
+      if (!textarea) return;
+
+      const marker = getScanWorkspaceAnnotationMarkerById(
+        scanWorkspaceAnnotationState.activeMarkerId
+      );
+      refreshScanWorkspaceGuidanceSaveButton(marker);
     });
   }
 
@@ -2186,7 +2414,7 @@ function bindScanWorkspaceAnnotationShell() {
         decision: isScanWorkspaceReplacementMarker(marker) ? "accepted" : marker.decision,
       }));
 
-      refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
+      refreshScanWorkspaceDecisionOutputs({ forcePreview: false });
     });
   }
 

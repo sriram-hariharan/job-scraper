@@ -9608,9 +9608,9 @@ function getScanWorkspaceIssueRightLabel(item, bucket) {
   const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
 
   if (scoreImpact !== null && (item?.row_action_type === "direct_replacement" || bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted")) {
-    if (scoreImpact > 0) return `Score +${scoreImpact}`;
-    if (scoreImpact < 0) return `Score ${scoreImpact}`;
-    return "No lift";
+    if (scoreImpact > 0) return `+${scoreImpact}`;
+    if (scoreImpact < 0) return `${scoreImpact}`;
+    return "0";
   }
 
   const coverage = getScanWorkspaceIssueCoverageLabel(item);
@@ -9685,6 +9685,10 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const countLabel = getScanWorkspaceIssueRightLabel(item, bucket);
           const toneClass = getScanWorkspaceIssueToneClassForItem(item, bucket);
           const scoreTitle = getScanWorkspaceIssueScoreTitle(item);
+          const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
+          const isScoreBubble =
+            scoreImpact !== null &&
+            (item?.row_action_type === "direct_replacement" || bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted");
           const hasAiBadge = item?.has_ai_suggestion === true || item?.row_action_type === "direct_replacement";
 
           return `
@@ -9723,7 +9727,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                   ${escapeHtml(meta)}
                 </span>
 
-                <span class="scan-workspace-issue-count">
+                <span class="scan-workspace-issue-count ${isScoreBubble ? "scan-workspace-issue-count--score" : ""} ${isScoreBubble && scoreImpact > 0 ? "is-positive" : ""} ${isScoreBubble && scoreImpact < 0 ? "is-negative" : ""}">
                   ${escapeHtml(countLabel)}
                 </span>
               </span>
@@ -9882,6 +9886,7 @@ function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
         leftPercent: 88,
         previewRowIndex: index,
         candidateIds: [candidateId],
+        bulletKey: `candidate:${candidateId}`,
         originalText,
         suggestedText,
         reasonText,
@@ -9916,6 +9921,7 @@ function getScanWorkspaceAnnotationMarkerSignature(markers) {
       originalText: marker.originalText,
       suggestedText: marker.suggestedText,
       reasonText: marker.reasonText,
+      bulletKey: marker.bulletKey,
       sourceLabel: marker.sourceLabel,
       canFocusPreview: marker.canFocusPreview,
       anchorStrategy: marker.anchorStrategy,

@@ -14,6 +14,7 @@ let resumeChoiceState = {
 };
 
 const PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY = "planningTableLastResponse_v4";
+const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const PLANNING_TABLE_REQUEST_TIMEOUT_MS = 0;
 const PLANNING_TABLE_PREFETCH_TIMEOUT_MS = 12000;
 
@@ -38,6 +39,7 @@ const planningTableState = {
   responseCache: new Map(),
   prefetchInFlight: new Set(),
   prefetchVisibleTimer: null,
+  pipelineDataVersion: "",
 };
 
 let currentTailoringState = {
@@ -1330,6 +1332,7 @@ async function fetchJson(url, options = {}) {
 
   try {
     const response = await fetch(url, {
+      cache: fetchOptions.cache || "no-store",
       ...fetchOptions,
       signal: controller.signal,
     });
@@ -1353,6 +1356,35 @@ async function fetchJson(url, options = {}) {
       externalSignal.removeEventListener("abort", handleExternalAbort);
     }
   }
+}
+
+function readPipelineDataVersion() {
+  try {
+    return window.localStorage.getItem(PIPELINE_DATA_VERSION_STORAGE_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+function clearPlanningTableResponseCache({ removeSession = true } = {}) {
+  planningTableState.responseCache.clear();
+  planningTableState.prefetchInFlight.clear();
+
+  if (!removeSession) return;
+  try {
+    window.sessionStorage.removeItem(PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY);
+  } catch {
+    // ignore session cache failures
+  }
+}
+
+function invalidatePlanningTableCacheIfPipelineChanged() {
+  const currentVersion = readPipelineDataVersion();
+  if (planningTableState.pipelineDataVersion === currentVersion) return false;
+
+  planningTableState.pipelineDataVersion = currentVersion;
+  clearPlanningTableResponseCache();
+  return true;
 }
 
 async function postJson(url, payload) {
@@ -1408,6 +1440,10 @@ function readPlanningTableLastResponse(url) {
 
     const parsed = JSON.parse(raw);
     if (!parsed || parsed.url !== url || !parsed.data) return null;
+    if ((parsed.pipelineDataVersion || "") !== planningTableState.pipelineDataVersion) {
+      window.sessionStorage.removeItem(PLANNING_TABLE_LAST_RESPONSE_STORAGE_KEY);
+      return null;
+    }
 
     planningTableState.responseCache.set(url, parsed.data);
     return parsed.data;
@@ -1427,6 +1463,7 @@ function writePlanningTableLastResponse(url, data, { persistToSession = false } 
       JSON.stringify({
         url,
         savedAt: Date.now(),
+        pipelineDataVersion: planningTableState.pipelineDataVersion,
         data,
       })
     );
@@ -4272,6 +4309,7 @@ function renderKeepAsIs(items) {
 
 function getTailoringReplacementCandidateId(item) {
   return String(
+    item?.best_candidate_id ||
     item?.replacement_candidate_id ||
     item?.candidate_id ||
     ""
@@ -6527,17 +6565,17 @@ function clearTailoringWorkspaceSelectedTabsSection() {
 
   if (readyTab) {
     readyTab.classList.remove("active");
-    readyTab.innerHTML = `Ready <span class="tailoring-selected-tab-count">0</span>`;
+    readyTab.innerHTML = `<span class="tailoring-selected-tab-label">Ready</span><span class="tailoring-selected-tab-count">0</span>`;
   }
 
   if (reviewTab) {
     reviewTab.classList.remove("active");
-    reviewTab.innerHTML = `Review <span class="tailoring-selected-tab-count">0</span>`;
+    reviewTab.innerHTML = `<span class="tailoring-selected-tab-label">Review</span><span class="tailoring-selected-tab-count">0</span>`;
   }
 
   if (freeEditTab) {
     freeEditTab.classList.remove("active");
-    freeEditTab.innerHTML = `Free Edit <span class="tailoring-selected-tab-count">0</span>`;
+    freeEditTab.innerHTML = `<span class="tailoring-selected-tab-label">Free Edit</span><span class="tailoring-selected-tab-count">0</span>`;
   }
 
   if (shell) {
@@ -6572,9 +6610,13 @@ function renderTailoringWorkspaceSelectedTabsSection() {
   reviewTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "review");
   freeEditTab.classList.toggle("active", tailoringWorkspaceState.selectedTab === "free_edit");
 
-  readyTab.innerHTML = `Ready <span class="tailoring-selected-tab-count">${readyItems.length}</span>`;
-  reviewTab.innerHTML = `Review <span class="tailoring-selected-tab-count">${reviewItems.length}</span>`;
-  freeEditTab.innerHTML = `Free Edit <span class="tailoring-selected-tab-count">${freeEditRows.length}</span>`;
+  readyTab.innerHTML = `<span class="tailoring-selected-tab-label">Ready</span><span class="tailoring-selected-tab-count">${readyItems.length}</span>`;
+  reviewTab.innerHTML = `<span class="tailoring-selected-tab-label">Review</span><span class="tailoring-selected-tab-count">${reviewItems.length}</span>`;
+  freeEditTab.innerHTML = `<span class="tailoring-selected-tab-label">Free Edit</span><span class="tailoring-selected-tab-count">${freeEditRows.length}</span>`;
+
+  readyTab.title = `${readyItems.length} score-ready replacement${readyItems.length === 1 ? "" : "s"}`;
+  reviewTab.title = `${reviewItems.length} review guidance item${reviewItems.length === 1 ? "" : "s"}`;
+  freeEditTab.title = `${freeEditRows.length} editable bullet${freeEditRows.length === 1 ? "" : "s"}`;
 
   shell.classList.remove("hidden");
 }
@@ -6692,51 +6734,163 @@ function updateTailoringWorkspaceMetaSummary(payload) {
   renderTailoringWorkspaceReviewTelemetryStrip();
 }
 
+function renderTailoringWorkspaceSimpleSuggestionFallback(payload, error = null) {
+  const root = qs("tailoringWorkspaceInteractiveSummary");
+  if (!root) return;
+
+  const activeTab = String(tailoringWorkspaceState.selectedTab || "ready").trim();
+  const grouped = getTailoringWorkspaceSuggestionBuckets();
+  const selectedSet = new Set(getTailoringWorkspaceSelectedCandidateIds());
+
+  const items =
+    activeTab === "review"
+      ? grouped.reviewGuidance
+      : activeTab === "free_edit"
+        ? []
+        : grouped.ready;
+
+  if (activeTab === "free_edit") {
+    try {
+      root.innerHTML = renderTailoringWorkspaceFreeEditSection(payload);
+      return;
+    } catch (freeEditErr) {
+      console.error("Failed to render free edit fallback", freeEditErr);
+    }
+  }
+
+  const rows = Array.isArray(items) ? items : [];
+  const title =
+    activeTab === "review"
+      ? "Review guidance"
+      : "Ready suggestions";
+
+  const body = rows.length
+    ? rows.map((item, index) => {
+        const candidateId = getTailoringReplacementCandidateId(item);
+        const originalText = String(
+          item?.current_evidence ||
+          item?.original_text ||
+          item?.parent_bullet ||
+          ""
+        ).trim();
+        const suggestionText = String(
+          item?.final_replacement_text ||
+          item?.rewrite_direction ||
+          item?.why_selected ||
+          item?.materiality_reason ||
+          ""
+        ).trim();
+        const isSelected = Boolean(candidateId && selectedSet.has(candidateId));
+        const canSelect = activeTab !== "review" && Boolean(candidateId);
+
+        return `
+          <article
+            class="tailoring-edit-card tailoring-edit-card--compact ${candidateId ? "tailoring-edit-card--clickable" : ""} ${isSelected ? "tailoring-edit-card--selected" : ""}"
+            ${candidateId ? `data-tailoring-focus-candidate="${escapeHtml(candidateId)}"` : ""}
+          >
+            <div class="tailoring-card-topline tailoring-card-topline--compact">
+              <div class="tailoring-edit-card-label">${escapeHtml(title)} ${index + 1}</div>
+              <div class="tailoring-chip-group tailoring-chip-group--compact">
+                ${buildTailoringTonePill(activeTab === "review" ? "Review" : "Ready", activeTab === "review" ? "caution" : "safe")}
+                ${isSelected ? buildTailoringTonePill("Selected", "safe") : ""}
+              </div>
+            </div>
+            ${originalText ? `
+              <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-label">Current bullet</div>
+                <div class="tailoring-quote-block">${escapeHtml(originalText)}</div>
+              </div>
+            ` : ""}
+            ${suggestionText ? `
+              <div class="tailoring-info-block tailoring-info-block--compact">
+                <div class="tailoring-info-label">${activeTab === "review" ? "Guidance" : "Suggested edit"}</div>
+                <div class="tailoring-rewrite-callout">${escapeHtml(suggestionText)}</div>
+              </div>
+            ` : ""}
+            ${canSelect ? `
+              <div class="tailoring-card-actions tailoring-card-actions--compact">
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm tailoring-select-btn ${isSelected ? "is-selected" : ""}"
+                  data-tailoring-select-candidate="${escapeHtml(candidateId)}"
+                >
+                  ${isSelected ? "Remove" : "Add"}
+                </button>
+              </div>
+            ` : ""}
+          </article>
+        `;
+      }).join("")
+    : `<div class="tailoring-empty-inline">No ${escapeHtml(title.toLowerCase())} available for this tab.</div>`;
+
+  root.innerHTML = `
+    <section class="tailoring-section-block">
+      <div class="tailoring-section-title">${escapeHtml(title)}</div>
+      <div class="tailoring-card-copy">
+        Loaded using the simplified suggestion renderer.
+      </div>
+      ${error ? `
+        <div class="tailoring-card-copy">
+          Advanced renderer fallback: ${escapeHtml(error.message || String(error))}
+        </div>
+      ` : ""}
+      <div class="tailoring-edit-card-list">
+        ${body}
+      </div>
+    </section>
+  `;
+}
+
 function rerenderTailoringWorkspaceSelectionView() {
   if (!tailoringWorkspaceState.artifact) return;
 
   const payload = getTailoringWorkspacePayload();
   renderTailoringWorkspaceSelectedTabsSection();
 
-  if (tailoringWorkspaceState.selectedTab === "free_edit") {
-    qs("tailoringWorkspaceInteractiveSummary").innerHTML = renderTailoringWorkspaceFreeEditSection(payload);
-  } else {
-    const reviewFilterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
+  try {
+    if (tailoringWorkspaceState.selectedTab === "free_edit") {
+      qs("tailoringWorkspaceInteractiveSummary").innerHTML = renderTailoringWorkspaceFreeEditSection(payload);
+    } else {
+      const reviewFilterKey = String(tailoringWorkspaceState.reviewTelemetryFilter || "").trim();
 
-    const reviewFilteredPayload =
-      tailoringWorkspaceState.selectedTab === "review" && payload
-        ? {
-            ...payload,
-            direction_only_replacements: getTailoringWorkspaceFilteredReviewItems(
-              payload.direction_only_replacements
-            ),
-            anchor_cards:
-              reviewFilterKey && reviewFilterKey !== "selected" && reviewFilterKey !== "manual_edits"
-                ? []
-                : Array.isArray(payload.anchor_cards)
-                  ? payload.anchor_cards
-                  : [],
-          }
-        : payload;
+      const reviewFilteredPayload =
+        tailoringWorkspaceState.selectedTab === "review" && payload
+          ? {
+              ...payload,
+              direction_only_replacements: getTailoringWorkspaceFilteredReviewItems(
+                payload.direction_only_replacements
+              ),
+              anchor_cards:
+                reviewFilterKey && reviewFilterKey !== "selected" && reviewFilterKey !== "manual_edits"
+                  ? []
+                  : Array.isArray(payload.anchor_cards)
+                    ? payload.anchor_cards
+                    : [],
+            }
+          : payload;
 
-    const artifactForRender =
-      reviewFilteredPayload && reviewFilteredPayload !== payload
-        ? {
-            ...tailoringWorkspaceState.artifact,
-            data: reviewFilteredPayload,
-          }
-        : tailoringWorkspaceState.artifact;
+      const artifactForRender =
+        reviewFilteredPayload && reviewFilteredPayload !== payload
+          ? {
+              ...tailoringWorkspaceState.artifact,
+              data: reviewFilteredPayload,
+            }
+          : tailoringWorkspaceState.artifact;
 
-    renderTailoringInteractiveSummaryInto(
-      "tailoringWorkspaceInteractiveSummary",
-      artifactForRender,
-      {
-        includeDiagnostics: false,
-        selectionEnabled: true,
-        selectedCandidateIds: getTailoringWorkspaceSelectedCandidateIds(),
-        bucketFilter: tailoringWorkspaceState.selectedTab,
-      }
-    );
+      renderTailoringInteractiveSummaryInto(
+        "tailoringWorkspaceInteractiveSummary",
+        artifactForRender,
+        {
+          includeDiagnostics: false,
+          selectionEnabled: true,
+          selectedCandidateIds: getTailoringWorkspaceSelectedCandidateIds(),
+          bucketFilter: tailoringWorkspaceState.selectedTab,
+        }
+      );
+    }
+  } catch (renderErr) {
+    console.error("Failed to render advanced tailoring suggestions", renderErr);
+    renderTailoringWorkspaceSimpleSuggestionFallback(payload, renderErr);
   }
 
   scheduleTailoringWorkspaceDocumentPreview();
@@ -7601,7 +7755,7 @@ function renderReplacementDecisionSection({
               ? getReplacementReviewState(item, effectiveReviewDecisionMap)
               : "";
           const reviewStatusChip =
-            reviewActionsEnabled && candidateId
+            reviewActionsEnabled && candidateId && reviewState && reviewState !== "pending"
               ? buildTailoringTonePill(
                   getTailoringWorkspaceReviewDecisionLabel(reviewState),
                   getTailoringWorkspaceReviewDecisionTone(reviewState)
@@ -7647,7 +7801,7 @@ function renderReplacementDecisionSection({
           const currentBulletLabel = isScan ? "Original" : "Current bullet";
 
           const priorityChip =
-            !isScan || priority === "high"
+            (!isScan || priority === "high") && priority !== "low"
               ? buildTailoringTonePill(
                   priority === "high"
                     ? "High priority"
@@ -7689,38 +7843,43 @@ function renderReplacementDecisionSection({
                 ? "danger"
                 : "";
 
-          const trustReasonText = String(
-            item.direction_only_reason ||
-            item.why_not_material ||
-            item.materiality_reason ||
-            item.rewrite_instruction ||
-            ""
-          ).trim();
+  const trustReasonText = String(
+    item.direction_only_reason ||
+    item.why_not_material ||
+    item.materiality_reason ||
+    ""
+  ).trim();
+  const rewriteDirectionText = String(item.rewrite_direction || "").trim();
+  const compactTrustReasonText =
+    trustReasonText && trustReasonText !== rewriteDirectionText
+      ? trustReasonText
+      : "";
 
-          const compactTrustHtml =
-            claimSafetyLabel || trustReasonText
-              ? `
-                <div class="tailoring-edit-inline-summary tailoring-edit-inline-summary--trust">
-                  ${claimSafetyLabel ? `
-                    <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
-                      ${buildTailoringTonePill(claimSafetyLabel, claimSafetyTone)}
-                    </div>
-                  ` : ""}
-                  ${trustReasonText ? `
-                    <div
-                      class="tailoring-edit-inline-reason tailoring-edit-inline-reason--trust"
-                      title="${escapeHtml(trustReasonText)}"
-                    >
-                      ${escapeHtml(trustReasonText)}
-                    </div>
-                  ` : ""}
-                </div>
-              `
-              : "";
+  const compactTrustHtml =
+    claimSafetyLabel || compactTrustReasonText
+      ? `
+        <div class="tailoring-edit-inline-summary tailoring-edit-inline-summary--trust">
+          ${claimSafetyLabel ? `
+            <div class="tailoring-chip-group tailoring-chip-group--compact tailoring-edit-impact-chips">
+              ${buildTailoringTonePill(claimSafetyLabel, claimSafetyTone)}
+            </div>
+          ` : ""}
+          ${compactTrustReasonText ? `
+            <div
+              class="tailoring-edit-inline-reason tailoring-edit-inline-reason--trust"
+              title="${escapeHtml(compactTrustReasonText)}"
+            >
+              ${escapeHtml(compactTrustReasonText)}
+            </div>
+          ` : ""}
+        </div>
+      `
+      : "";
 
           const shouldShowCompactReason =
             reasonText &&
-            (!trustReasonText || reasonText !== trustReasonText);
+    (!compactTrustReasonText || reasonText !== compactTrustReasonText) &&
+    (!rewriteDirectionText || reasonText !== rewriteDirectionText);
 
           const compactReasonHtml = shouldShowCompactReason
             ? `
@@ -8183,6 +8342,44 @@ function renderTailoringAnchorEvidenceSection({
   `;
 }
 
+function renderReplacementPlanSummary(summary = {}) {
+  const data = summary && typeof summary === "object" ? summary : {};
+  const total = Number(data.total_rewrite_bullets || data.total_candidates || 0);
+  const ready = Number(
+    data.app_ready_count ||
+    data.direct_apply_ready_count ||
+    0
+  );
+  const optional = Number(
+    data.direct_apply_optional_count ||
+    data.ai_optimize_optional_count ||
+    0
+  );
+  const review = Number(data.direction_only_count || 0);
+  const keep = Number(data.keep_original_count || 0);
+
+  if (!total && !ready && !optional && !review && !keep) return "";
+
+  const chips = [
+    ready ? buildTailoringTonePill(`Ready ${ready}`, "safe") : "",
+    optional ? buildTailoringTonePill(`Optional ${optional}`, "caution") : "",
+    review ? buildTailoringTonePill(`Review ${review}`, "neutral") : "",
+    keep ? buildTailoringTonePill(`Keep ${keep}`, "muted") : "",
+  ].filter(Boolean).join("");
+
+  return `
+    <section class="tailoring-section-block tailoring-section-block--summary">
+      <div class="tailoring-section-title">Suggestion summary</div>
+      <div class="tailoring-card-copy">
+        ${total
+          ? `${escapeHtml(String(total))} rewrite candidate${total === 1 ? "" : "s"} evaluated for this row.`
+          : "Suggestion counts loaded for this row."}
+      </div>
+      ${chips ? `<div class="tailoring-chip-group tailoring-chip-group--compact">${chips}</div>` : ""}
+    </section>
+  `;
+}
+
 function renderTailoringInteractiveSummaryInto(
   rootId,
   artifact,
@@ -8230,7 +8427,7 @@ function renderTailoringInteractiveSummaryInto(
   const recommendedHtml = directionOnly.length
     ? renderReplacementDecisionSection({
         title: "Review guidance",
-        subtitle: "These bullets need review, reordering, or manual judgment before any export decision.",
+        subtitle: "Manual guidance only. Use Free Edit for changes you want to keep.",
         items: directionOnly,
         emptyLabel: "No review-only suggestions.",
         tone: "muted",
@@ -8250,7 +8447,7 @@ function renderTailoringInteractiveSummaryInto(
   const readyHtml = appReady.length
     ? renderReplacementDecisionSection({
         title: "Ready to use",
-        subtitle: "These edits are ready to use as written.",
+        subtitle: "Score-safe replacements available for selection.",
         items: appReady,
         emptyLabel: "No ready-to-use edits.",
         tone: "safe",
@@ -8263,7 +8460,7 @@ function renderTailoringInteractiveSummaryInto(
   const optionalHtml = directApplyOptional.length
     ? renderReplacementDecisionSection({
         title: "Nice to improve",
-        subtitle: "These are safe wording improvements, but not the main fit drivers.",
+        subtitle: "Safe wording improvements with smaller projected impact.",
         items: directApplyOptional,
         emptyLabel: "No optional improvements.",
         tone: "caution",
@@ -8306,7 +8503,7 @@ function renderTailoringInteractiveSummaryInto(
       : "";
 
   root.innerHTML = `
-    ${renderReplacementPlanSummary(summary)}
+    ${normalizedBucket ? "" : renderReplacementPlanSummary(summary)}
     ${bucketHtml}
     ${diagnosticsHtml}
   `;
@@ -8930,6 +9127,7 @@ function normalizeScanWorkspaceContractIssue(issue) {
   const raw = issue?.raw && typeof issue.raw === "object" ? issue.raw : {};
   const candidateId = String(
     issue?.candidate_id ||
+    issue?.best_candidate_id ||
     raw?.replacement_candidate_id ||
     raw?.candidate_id ||
     issue?.issue_id ||
@@ -8978,6 +9176,16 @@ function normalizeScanWorkspaceContractIssue(issue) {
     scan_issue_group_label: String(issue?.group_label || "").trim(),
     scan_issue_bucket: bucket,
     scan_issue_bucket_label: bucketLabel,
+    row_action_type: String(issue?.row_action_type || issue?.scan_issue_type || "").trim(),
+    display_term: String(issue?.display_term || "").trim(),
+    canonical_term: String(issue?.canonical_term || "").trim(),
+    term_family: String(issue?.term_family || "").trim(),
+    matched_count: issue?.matched_count,
+    required_count: issue?.required_count,
+    coverage_label: String(issue?.coverage_label || "").trim(),
+    has_ai_suggestion: issue?.has_ai_suggestion === true,
+    linked_candidate_ids: Array.isArray(issue?.linked_candidate_ids) ? issue.linked_candidate_ids : [],
+    best_candidate_id: String(issue?.best_candidate_id || "").trim(),
     source_lane: sourceLane,
     candidate_id: candidateId,
     replacement_candidate_id: candidateId,
@@ -9048,6 +9256,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
     const matchedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "matched");
     const missingItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "missing");
     const aiItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "ai");
+    const bucketRows = Array.isArray(sourceGroup?.buckets) ? sourceGroup.buckets : [];
 
     const panel = {
       key: groupId,
@@ -9063,32 +9272,27 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       groups: [],
     };
 
-    if (matchedItems.length) {
-      panel.groups.push({
-        title: "Matched skills",
-        summary: `${matchedItems.length} scan item(s) already backed by the resume.`,
-        bucket: "matched",
-        items: matchedItems,
-      });
-    }
+    const orderedBuckets = bucketRows.length
+      ? bucketRows
+      : [
+          { bucket: "matched", label: "Matched skills" },
+          { bucket: "missing", label: "Missing / optimization opportunities" },
+          { bucket: "ai", label: "AI suggested" },
+        ];
 
-    if (missingItems.length) {
-      panel.groups.push({
-        title: "Missing / optimization opportunities",
-        summary: `${missingItems.length} item(s) can improve JD signal coverage.`,
-        bucket: "missing",
-        items: missingItems,
-      });
-    }
+    orderedBuckets.forEach((bucketRow) => {
+      const bucketKey = String(bucketRow?.bucket || "").trim();
+      if (!bucketKey) return;
+      const bucketItems = groupIssues.filter((issue) => issue.scan_issue_bucket === bucketKey);
+      if (!bucketItems.length) return;
 
-    if (aiItems.length) {
       panel.groups.push({
-        title: "AI suggested opportunities",
-        summary: `${aiItems.length} model-assisted item(s) available for review.`,
-        bucket: "ai",
-        items: aiItems,
+        title: String(bucketRow?.label || humanizeUnderscoreLabel(bucketKey) || "Scan items").trim(),
+        summary: String(bucketRow?.summary || "").trim(),
+        bucket: bucketKey,
+        items: bucketItems,
       });
-    }
+    });
 
     if (!panel.groups.length) {
       panel.groups.push({
@@ -9326,6 +9530,7 @@ function getScanWorkspaceIssueSignals(item) {
 function getScanWorkspaceIssueTitle(item, index) {
   const signals = getScanWorkspaceIssueSignals(item);
   const directTitle = String(
+    item?.display_term ||
     item?.title ||
     item?.suggestion_label ||
     item?.proposal_label ||
@@ -9351,9 +9556,17 @@ function getScanWorkspaceIssueTitle(item, index) {
 }
 
 function getScanWorkspaceIssueMeta(bucket) {
+  return getScanWorkspaceIssueMetaForItem(null, bucket);
+}
+
+function getScanWorkspaceIssueMetaForItem(item, bucket) {
+  const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
+  if (item?.has_ai_suggestion === true || rowActionType === "direct_replacement") return "AI Suggested";
+  if (rowActionType === "matched") return "Backed";
+  if (rowActionType === "guidance") return "Manual guidance";
   if (bucket === "matched") return "Backed";
   if (bucket === "missing") return "Manual guidance";
-  if (bucket === "ai") return "AI replacement";
+  if (bucket === "ai") return "AI Suggested";
   if (bucket === "ai_optimize") return "AI replacement";
   if (bucket === "trusted") return "Ready";
   if (bucket === "guidance") return "Manual guidance";
@@ -9364,6 +9577,19 @@ function getScanWorkspaceIssueCountLabel(bucket) {
   if (bucket === "matched" || bucket === "trusted") return "Done";
   if (bucket === "missing" || bucket === "guidance") return "Open";
   return "Review";
+}
+
+function getScanWorkspaceIssueCoverageLabel(item) {
+  const direct = String(item?.coverage_label || "").trim();
+  if (direct) return direct;
+
+  const matched = Number(item?.matched_count);
+  const required = Number(item?.required_count);
+  if (Number.isFinite(matched) && Number.isFinite(required) && required > 0) {
+    return `${Math.max(0, Math.round(matched))}/${Math.max(1, Math.round(required))}`;
+  }
+
+  return "";
 }
 
 function coerceScanWorkspaceScorePoints(value) {
@@ -9381,11 +9607,14 @@ function getScanWorkspaceIssueScoreImpact(item) {
 function getScanWorkspaceIssueRightLabel(item, bucket) {
   const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
 
-  if (scoreImpact !== null && (bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted" || bucket === "matched")) {
+  if (scoreImpact !== null && (item?.row_action_type === "direct_replacement" || bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted")) {
     if (scoreImpact > 0) return `Score +${scoreImpact}`;
     if (scoreImpact < 0) return `Score ${scoreImpact}`;
     return "No lift";
   }
+
+  const coverage = getScanWorkspaceIssueCoverageLabel(item);
+  if (coverage) return coverage;
 
   return getScanWorkspaceIssueCountLabel(bucket);
 }
@@ -9414,6 +9643,13 @@ function getScanWorkspaceIssueScoreTitle(item) {
 }
 
 function getScanWorkspaceIssueToneClass(bucket) {
+  return getScanWorkspaceIssueToneClassForItem(null, bucket);
+}
+
+function getScanWorkspaceIssueToneClassForItem(item, bucket) {
+  const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
+  if (rowActionType === "matched") return "is-matched";
+  if (rowActionType === "direct_replacement") return "is-ai";
   if (bucket === "matched" || bucket === "trusted") return "is-matched";
   if (bucket === "ai" || bucket === "ai_optimize") return "is-ai";
   return "is-missing";
@@ -9445,10 +9681,11 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const isActive = isAnchorable && candidateId === activeCandidateId;
           const title = getScanWorkspaceIssueTitle(item, index);
           const signals = getScanWorkspaceIssueSignals(item);
-          const meta = getScanWorkspaceIssueMeta(bucket);
+          const meta = getScanWorkspaceIssueMetaForItem(item, bucket);
           const countLabel = getScanWorkspaceIssueRightLabel(item, bucket);
-          const toneClass = getScanWorkspaceIssueToneClass(bucket);
+          const toneClass = getScanWorkspaceIssueToneClassForItem(item, bucket);
           const scoreTitle = getScanWorkspaceIssueScoreTitle(item);
+          const hasAiBadge = item?.has_ai_suggestion === true || item?.row_action_type === "direct_replacement";
 
           return `
             <button
@@ -9477,7 +9714,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
 
               <span class="scan-workspace-issue-right">
                 ${
-                  bucket === "ai_optimize"
+                  hasAiBadge
                     ? `<span class="scan-workspace-issue-ai-icon">✦</span>`
                     : `<span class="scan-workspace-issue-flag">⚑</span>`
                 }
@@ -9515,6 +9752,7 @@ function getScanWorkspaceReplacementSuggestions(payload = getScanWorkspacePayloa
 
 function isScanWorkspacePreviewAnchorableItem(item) {
   const candidateId = String(
+    item?.best_candidate_id ||
     item?.replacement_candidate_id ||
     item?.candidate_id ||
     item?.scan_issue_id ||
@@ -10505,6 +10743,8 @@ async function loadPlanningTable({
 } = {}) {
   const tbody = qs("planningTableBody");
   if (!tbody) return;
+  const pipelineVersionChanged = invalidatePlanningTableCacheIfPipelineChanged();
+  const shouldForceNetwork = forceNetwork || pipelineVersionChanged;
 
   const paginationMeta = qs("planningPaginationMeta");
   const tableMeta = qs("planningTableMeta");
@@ -10515,7 +10755,7 @@ async function loadPlanningTable({
       : planningTableState.pagination.page || 1;
 
   const url = buildPlanningUrl(resolvedPage);
-  const cachedData = forceNetwork ? null : readPlanningTableLastResponse(url);
+  const cachedData = shouldForceNetwork ? null : readPlanningTableLastResponse(url);
   const stableSnapshot = capturePlanningTableSnapshot();
 
   planningTableState.requestSeq += 1;
@@ -10782,8 +11022,25 @@ function attachPlanningHandlers() {
 
   window.addEventListener("focus", () => {
     const pending = loadPendingApplicationFromStorage();
-    if (!pending || !getApplicationModal().classList.contains("hidden")) return;
-    openApplicationModal(pending);
+    if (pending && getApplicationModal().classList.contains("hidden")) {
+      openApplicationModal(pending);
+    }
+
+    if (invalidatePlanningTableCacheIfPipelineChanged()) {
+      loadPlanningTable({ forceNetwork: true }).catch((err) => {
+        showAppError("Failed to refresh planning dashboard after pipeline run", err);
+      });
+    }
+  });
+
+  window.addEventListener("storage", (event) => {
+    if (event.key !== PIPELINE_DATA_VERSION_STORAGE_KEY) return;
+
+    planningTableState.pipelineDataVersion = String(event.newValue || "");
+    clearPlanningTableResponseCache();
+    loadPlanningTable({ forceNetwork: true }).catch((err) => {
+      showAppError("Failed to refresh planning dashboard after pipeline run", err);
+    });
   });
 
   window.addEventListener("popstate", async () => {

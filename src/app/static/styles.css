@@ -2014,19 +2014,42 @@ tbody tr:hover {
 }
 
 .pipeline-modal-card {
-  width: min(860px, calc(100vw - 24px));
-  max-height: calc(100vh - 24px);
+  width: min(780px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 24px;
+  border-color: rgba(120, 166, 255, 0.22);
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.pipeline-modal-card .modal-header {
+  align-items: center;
+  margin-bottom: 18px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(42, 53, 99, 0.72);
+}
+
+.pipeline-modal-card .modal-header h3 {
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.pipeline-modal-card .modal-close-btn {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 14px;
 }
 
 .pipeline-modal-scroll {
   flex: 1 1 auto;
   overflow-y: auto;
   overflow-x: hidden;
-  padding-right: 8px;
-  margin-right: -8px;
+  padding: 2px 10px 2px 0;
+  margin-right: -10px;
 }
 
 .pipeline-modal-scroll::-webkit-scrollbar {
@@ -2044,8 +2067,11 @@ tbody tr:hover {
 
 .pipeline-modal-actions {
   flex: 0 0 auto;
-  padding-top: 14px;
-  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 16px;
+  margin-top: 18px;
   border-top: 1px solid rgba(42, 53, 99, 0.7);
 }
 
@@ -2467,7 +2493,8 @@ tbody tr:hover {
 @media (max-width: 900px) {
   .pipeline-form-grid,
   .pipeline-checkbox-grid,
-  .pipeline-quick-row {
+  .pipeline-quick-row,
+  .pipeline-path-preview-grid {
     grid-template-columns: 1fr;
   }
 
@@ -2477,12 +2504,23 @@ tbody tr:hover {
   }
 
   .pipeline-modal-card {
-    width: min(100vw - 16px, 860px);
+    width: min(100vw - 16px, 780px);
     max-height: calc(100vh - 16px);
+    padding: 18px;
   }
 }
 
 /* === pipeline modal final overrides === */
+
+.pipeline-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(42, 53, 99, 0.66);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.018);
+}
 
 .pipeline-form-grid .wide-control,
 .pipeline-path-field,
@@ -2493,12 +2531,51 @@ tbody tr:hover {
   min-width: 0;
 }
 
+.pipeline-form-grid .wide-control {
+  grid-column: 1 / -1;
+}
+
+.pipeline-modal-card .control-group {
+  gap: 7px;
+}
+
+.pipeline-modal-card .control-group label {
+  color: #c6d0ef;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.pipeline-modal-card .control-group input {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  border-radius: 13px;
+  background: rgba(24, 34, 67, 0.82);
+  border-color: rgba(120, 166, 255, 0.24);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.pipeline-modal-card .control-group input:focus {
+  outline: none;
+  border-color: rgba(120, 166, 255, 0.68);
+  box-shadow: 0 0 0 3px rgba(120, 166, 255, 0.12);
+}
+
+.pipeline-modal-card .control-help {
+  max-width: 62ch;
+  color: rgba(174, 184, 217, 0.82);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .pipeline-inline-helper {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
+  gap: 8px;
+  margin-top: 4px;
 }
 
 .pipeline-inline-helper-label {
@@ -2510,20 +2587,62 @@ tbody tr:hover {
 }
 
 .pipeline-chip-row--compact {
+  display: inline-flex;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .pipeline-chip-row--compact .pipeline-chip-btn {
-  padding: 6px 10px;
+  min-height: 30px;
+  padding: 0 10px;
   font-size: 12px;
   border-radius: 999px;
+}
+
+.pipeline-path-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.pipeline-preview-card {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(42, 53, 99, 0.58);
+  background: rgba(7, 12, 28, 0.34);
+}
+
+.pipeline-preview-label {
+  margin-bottom: 6px;
+  color: rgba(174, 184, 217, 0.88);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.pipeline-preview-path {
+  color: #eef2ff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .pipeline-support-row {
   display: grid;
   grid-template-columns: 1fr;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
+}
+
+.pipeline-toggle-group {
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(42, 53, 99, 0.62);
+  background: rgba(255, 255, 255, 0.018);
 }
 
 .pipeline-toggle-grid {
@@ -2538,7 +2657,7 @@ tbody tr:hover {
   justify-content: space-between;
   gap: 14px;
   padding: 12px 14px;
-  border-radius: 14px;
+  border-radius: 13px;
   background: rgba(255, 255, 255, 0.02);
   border: 1px solid rgba(42, 53, 99, 0.7);
 }
@@ -4779,7 +4898,7 @@ th.sortable-col {
 }
 
 .tailoring-edit-card--compact {
-  padding: 14px 15px;
+  padding: 12px 13px;
 }
 
 .tailoring-edit-card--review-fronting {
@@ -4831,9 +4950,51 @@ th.sortable-col {
 .tailoring-edit-card--compact .tailoring-quote-block,
 .tailoring-edit-card--compact .tailoring-rewrite-callout {
   margin-top: 0;
-  padding: 10px 12px;
+  padding: 9px 11px;
   font-size: 13px;
-  line-height: 1.5;
+  line-height: 1.45;
+  border-radius: 10px;
+}
+
+.tailoring-workspace-content {
+  gap: 14px;
+}
+
+.tailoring-workspace-content .tailoring-section-block {
+  gap: 10px;
+}
+
+.tailoring-workspace-content .tailoring-section-title {
+  font-size: 17px;
+}
+
+.tailoring-workspace-content .tailoring-card-copy {
+  font-size: 13px;
+  line-height: 1.45;
+  color: #cbd7f2;
+}
+
+.tailoring-workspace-content .tailoring-edit-card-list {
+  gap: 10px;
+}
+
+.tailoring-workspace-content .tailoring-card-topline--compact {
+  margin-bottom: 6px;
+}
+
+.tailoring-workspace-content .tailoring-info-block--compact {
+  margin-top: 7px;
+}
+
+.tailoring-workspace-content .tailoring-info-label,
+.tailoring-workspace-content .tailoring-edit-card-label {
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.tailoring-workspace-content .tailoring-tone-pill {
+  padding: 4px 8px;
+  font-size: 10px;
 }
 
 .tailoring-card-actions--compact,
@@ -6142,7 +6303,7 @@ th.sortable-col {
 :root {
   --app-shell-width: 270px;
   --app-shell-collapsed-width: 56px;
-  --profile-safe-zone: 96px;
+  --profile-safe-zone: 360px;
 }
 
 body {
@@ -6704,14 +6865,74 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  padding: 2px 8px;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 9px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 1;
-  background: rgba(255, 255, 255, 0.08);
-  color: inherit;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f3f7ff;
+}
+
+.tailoring-selected-tab-label {
+  min-width: 0;
+}
+
+.tailoring-workspace-selected-tabs {
+  padding: 10px 12px;
+}
+
+.tailoring-workspace-selected-tabs .scheduler-tab-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.tailoring-selected-tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 10px;
+  border-radius: 10px;
+}
+
+.tailoring-selected-tab-btn.active {
+  background: rgba(120, 166, 255, 0.08);
+}
+
+.tailoring-selected-tab-btn--ready .tailoring-selected-tab-count {
+  background: rgba(145, 242, 195, 0.14);
+  color: #d7f8ea;
+}
+
+.tailoring-selected-tab-btn--review .tailoring-selected-tab-count {
+  background: rgba(255, 204, 120, 0.14);
+  color: #ffe7b8;
+}
+
+.tailoring-selected-tab-btn--free-edit .tailoring-selected-tab-count {
+  background: rgba(120, 166, 255, 0.16);
+  color: #dbe6ff;
+}
+
+.tailoring-section-block--summary {
+  padding: 10px 12px;
+  border: 1px solid rgba(120, 166, 255, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.tailoring-section-block--summary .tailoring-section-title {
+  font-size: 15px;
+}
+
+.tailoring-section-block--summary .tailoring-card-copy {
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 @media (max-width: 1560px) {
@@ -6772,7 +6993,7 @@ body:not(.app-shell-collapsed) .app-shell-nav-label {
 
 @media (max-width: 900px) {
   :root {
-    --profile-safe-zone: 84px;
+    --profile-safe-zone: 0px;
   }
 
   .page-header {

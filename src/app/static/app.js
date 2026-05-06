@@ -10,6 +10,7 @@ const state = {
   pipelineFailureVisible: false,
   currentPipelineFailureKey: null,
   acknowledgedPipelineSuccessKey: null,
+  lastPipelineTableRefreshKey: "",
 };
 
 const queueTableState = {
@@ -30,6 +31,7 @@ const queueTableState = {
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const PIPELINE_PENDING_SUCCESS_KEY = "job_operator_pipeline_pending_success";
 const PIPELINE_SHOWN_SUCCESS_KEY = "job_operator_pipeline_shown_success";
+const PIPELINE_DATA_VERSION_STORAGE_KEY = "job_operator_pipeline_data_version";
 const EXECUTIVE_VIEW_MODE_STORAGE_KEY = "job_operator_executive_view_mode";
 let pipelinePollTimer = null;
 let pipelineSuccessGifTimer = null;
@@ -90,6 +92,12 @@ const COUNT_LABELS = {
   resume_matched_jobs: "Resume Matched",
   scored_jobs: "Scored",
   rag_export_count: "RAG Exported",
+  planning_packets_total: "Planning Packets",
+  planning_packets_completed: "Packets Done",
+  planning_packets_generated: "Packets Created",
+  planning_llm_generated: "LLM Generated",
+  planning_llm_cached: "LLM Cached",
+  planning_llm_failed: "LLM Failed",
   final_jobs: "Final Jobs",
 };
 
@@ -1075,7 +1083,35 @@ function renderPipelineStageStepper(pipeline) {
 }
 
 function getPipelineSuccessKey(pipeline = {}) {
-  return pipeline.finished_at || pipeline.started_at || pipeline.status || "succeeded";
+  return pipeline.run_id || pipeline.finished_at || pipeline.started_at || pipeline.status || "succeeded";
+}
+
+function publishPipelineDataVersion(pipeline = {}) {
+  const version = getPipelineSuccessKey(pipeline);
+  if (!version || version === "succeeded") return "";
+
+  try {
+    window.localStorage.setItem(PIPELINE_DATA_VERSION_STORAGE_KEY, version);
+  } catch {
+    // ignore localStorage failures
+  }
+
+  return version;
+}
+
+function refreshTablesAfterPipelineSuccess(pipeline = {}) {
+  const version = publishPipelineDataVersion(pipeline);
+  if (!version || state.lastPipelineTableRefreshKey === version) return;
+
+  state.lastPipelineTableRefreshKey = version;
+  queueTableState.page = 1;
+
+  loadStatus().catch((err) => {
+    console.warn("Failed to refresh dashboard stats after pipeline success", err);
+  });
+  reloadCurrentTable(1).catch((err) => {
+    console.warn("Failed to refresh dashboard table after pipeline success", err);
+  });
 }
 
 function markPipelinePendingSuccess() {
@@ -1360,6 +1396,7 @@ function renderPipelineStatus(payload) {
   if (status === "succeeded") {
     runBtn.disabled = false;
     runBtn.textContent = "Run Live Pipeline";
+    refreshTablesAfterPipelineSuccess(pipeline);
 
     const successKey = getPipelineSuccessKey(pipeline);
     const shouldShowSuccess =

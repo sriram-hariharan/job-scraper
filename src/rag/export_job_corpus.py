@@ -82,11 +82,16 @@ def _load_existing_docs(path: Path) -> List[Dict[str, Any]]:
     return docs
 
 
-def export_job_corpus(jobs: List[Dict[str, Any]], output_path: str) -> int:
+def export_job_corpus(
+    jobs: List[Dict[str, Any]],
+    output_path: str,
+    *,
+    merge_existing: bool = True,
+) -> int:
     path = Path(output_path)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    existing_docs = _load_existing_docs(path)
+    existing_docs = _load_existing_docs(path) if merge_existing else []
 
     merged_docs_by_key: Dict[str, Dict[str, Any]] = {}
     ordered_keys: List[str] = []

@@ -1732,6 +1732,322 @@ def _scan_issue_unique_display_labels(values: List[Any]) -> List[str]:
     return output
 
 
+def _scan_issue_canonical_term(value: Any) -> str:
+    label = _scan_issue_display_label(value)
+    return re.sub(r"\s+", " ", label.strip().lower())
+
+
+def _scan_issue_term_family(value: Any, dimensions: List[Any] | None = None) -> str:
+    key = _scan_issue_normalized_key(value)
+    dimension_keys = {_scan_issue_normalized_key(item) for item in list(dimensions or [])}
+    keys = {key} | dimension_keys
+
+    if keys & set(_SCAN_RECRUITER_TIPS_SIGNAL_KEYS):
+        return "recruiter_tips"
+    if keys & {"tooling_alignment", "required_skills_alignment", "preferred_skills_alignment"}:
+        return "tooling"
+    if keys & {"analytics_ml_depth", "ml_match", "experimentation_depth"}:
+        return "methods"
+    if keys & {"workflow_alignment", "title_alignment", "ats_match"}:
+        return "skills"
+    return "skills"
+
+
+def _scan_issue_extract_summary_terms(summary: Dict[str, Any] | None, keys: List[str]) -> List[str]:
+    if not isinstance(summary, dict):
+        return []
+
+    values: List[Any] = []
+    for key in keys:
+        raw = summary.get(key)
+        if isinstance(raw, dict):
+            values.extend(raw.keys())
+        elif isinstance(raw, list):
+            values.extend(raw)
+        elif raw:
+            values.append(raw)
+
+    return _scan_issue_unique_display_labels(values)
+
+
+def _scan_resume_visible_term_keys(resume_evidence: Any) -> set[str]:
+    if resume_evidence is None:
+        return set()
+
+    keys = {
+        _scan_issue_canonical_term(term)
+        for term in _scan_resume_visible_search_terms(resume_evidence)
+        if _scan_issue_canonical_term(term)
+    }
+
+    raw_text = _scan_resume_document_text(resume_evidence).lower()
+    for term in list(keys):
+        if term:
+            keys.add(term.lower())
+
+    for term in _SCAN_TITLE_SIGNAL_PATTERNS:
+        label = _scan_issue_canonical_term(term)
+        if label and _scan_issue_text_contains_term(raw_text, term):
+            keys.add(label)
+
+    return keys
+
+
+def _scan_issue_best_candidate(issues: List[Dict[str, Any]]) -> Dict[str, Any] | None:
+    if not issues:
+        return None
+
+    def sort_key(issue: Dict[str, Any]) -> Tuple[int, int, int, str]:
+        delta = score_delta_to_points(issue.get("projected_overall_delta"))
+        row_type = _clean_text(issue.get("scan_issue_type"))
+        return (
+            1 if row_type == "direct_replacement" else 0,
+            int(delta or 0),
+            1 if issue.get("can_accept") else 0,
+            _clean_text(issue.get("candidate_id")),
+        )
+
+    return sorted(issues, key=sort_key, reverse=True)[0]
+
+
+def _scan_keyword_issue_from_term(
+    *,
+    group_id: str,
+    term: str,
+    matched_count: int,
+    required_count: int,
+    source: str,
+    linked_issues: List[Dict[str, Any]] | None = None,
+    fallback_bucket: str = "",
+    reason: str = "",
+) -> Dict[str, Any]:
+    linked_issues = list(linked_issues or [])
+    best_issue = _scan_issue_best_candidate(linked_issues)
+    direct_issues = [
+        issue for issue in linked_issues
+        if _clean_text(issue.get("scan_issue_type")) == "direct_replacement"
+        and issue.get("can_accept")
+    ]
+    direct_issue = _scan_issue_best_candidate(direct_issues)
+    negative_only = bool(linked_issues) and all(
+        _clean_text(issue.get("scan_issue_type")) == "rejected_by_score_gate"
+        for issue in linked_issues
+    )
+
+    if negative_only:
+        row_action_type = "hidden_rejected"
+        bucket = "hidden"
+    elif direct_issue:
+        row_action_type = "direct_replacement"
+        bucket = "ai"
+        best_issue = direct_issue
+    elif matched_count > 0:
+        row_action_type = "matched"
+        bucket = "matched"
+    else:
+        row_action_type = "guidance"
+        bucket = fallback_bucket or "missing"
+
+    display_term = _scan_issue_display_label(term)
+    canonical_term = _scan_issue_canonical_term(display_term)
+    required_count = max(1, int(required_count or 0))
+    matched_count = max(0, int(matched_count or 0))
+    coverage_label = f"{matched_count}/{required_count}"
+    linked_candidate_ids = [
+        _clean_text(issue.get("candidate_id"))
+        for issue in linked_issues
+        if _clean_text(issue.get("candidate_id"))
+    ]
+    best_candidate_id = _clean_text((best_issue or {}).get("candidate_id"))
+
+    base = dict(best_issue or {})
+    base.update(
+        {
+            "issue_id": f"scan_issue:{group_id}:keyword:{canonical_term.replace(' ', '_')}",
+            "candidate_id": best_candidate_id,
+            "replacement_candidate_id": best_candidate_id,
+            "source_lane": _clean_text((best_issue or {}).get("source_lane")) or "keyword_scan",
+            "keyword_source": source,
+            "group_id": group_id,
+            "group_label": _scan_issue_group_label(group_id),
+            "bucket": bucket,
+            "bucket_label": (
+                "AI Suggested"
+                if row_action_type == "direct_replacement"
+                else "Matched"
+                if row_action_type == "matched"
+                else "Missing / optimization opportunity"
+            ),
+            "title": display_term,
+            "display_term": display_term,
+            "canonical_term": canonical_term,
+            "term_family": _scan_issue_term_family(display_term, base.get("likely_impacted_dimensions", [])),
+            "matched_count": matched_count,
+            "required_count": required_count,
+            "coverage_label": coverage_label,
+            "has_ai_suggestion": bool(linked_candidate_ids),
+            "linked_candidate_ids": list(dict.fromkeys(linked_candidate_ids)),
+            "best_candidate_id": best_candidate_id,
+            "row_action_type": row_action_type,
+            "scan_issue_type": row_action_type,
+            "is_visible_in_review": row_action_type != "hidden_rejected",
+            "can_accept": bool(row_action_type == "direct_replacement" and (best_issue or {}).get("can_accept")),
+            "can_accept_all": bool(row_action_type == "direct_replacement" and (best_issue or {}).get("can_accept_all")),
+            "can_focus_preview": bool(best_candidate_id and (best_issue or {}).get("can_focus_preview", True)),
+            "anchor_strategy": "replacement_candidate" if best_candidate_id else "none",
+            "supported_jd_signals": _scan_issue_unique_display_labels(
+                [display_term]
+                + list((best_issue or {}).get("supported_jd_signals", []) or [])
+            ),
+            "reason": reason or _clean_text((best_issue or {}).get("reason")),
+            "raw": dict((best_issue or {}).get("raw", best_issue or {})),
+        }
+    )
+    return base
+
+
+def _scan_keyword_rows_from_replacement_issues(
+    issues: List[Dict[str, Any]],
+    *,
+    resume_evidence: Any = None,
+    tailoring_summary: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
+    resume_term_keys = _scan_resume_visible_term_keys(resume_evidence)
+    matched_terms = _scan_issue_extract_summary_terms(
+        tailoring_summary,
+        ["matched_required", "matched_preferred", "matched_terms"],
+    )
+    missing_terms = _scan_issue_extract_summary_terms(
+        tailoring_summary,
+        ["missing_required", "missing_preferred", "missing_terms", "missing_requirements"],
+    )
+
+    matched_keys = {_scan_issue_canonical_term(term) for term in matched_terms if _scan_issue_canonical_term(term)}
+    missing_keys = {_scan_issue_canonical_term(term) for term in missing_terms if _scan_issue_canonical_term(term)}
+
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    display_by_key: Dict[str, str] = {}
+
+    for issue in issues:
+        if _clean_text(issue.get("group_id")) != "skills":
+            continue
+
+        terms = _scan_issue_display_terms(dict(issue.get("raw", {}) or issue)) or _scan_issue_display_terms(issue)
+        if not terms:
+            terms = [_clean_text(issue.get("title"))]
+
+        for term in terms:
+            canonical = _scan_issue_canonical_term(term)
+            if not canonical:
+                continue
+            grouped.setdefault(canonical, []).append(issue)
+            display_by_key.setdefault(canonical, _scan_issue_display_label(term))
+
+    for term in matched_terms + missing_terms:
+        canonical = _scan_issue_canonical_term(term)
+        if canonical:
+            grouped.setdefault(canonical, [])
+            display_by_key.setdefault(canonical, _scan_issue_display_label(term))
+
+    rows: List[Dict[str, Any]] = []
+    for canonical in sorted(grouped.keys()):
+        linked = grouped.get(canonical, [])
+        is_matched = canonical in resume_term_keys or canonical in matched_keys
+        is_missing = canonical in missing_keys
+        required_count = max(1, len(linked), 1 if is_missing else 0)
+        matched_count = 1 if is_matched else 0
+        rows.append(
+            _scan_keyword_issue_from_term(
+                group_id="skills",
+                term=display_by_key.get(canonical, canonical),
+                matched_count=matched_count,
+                required_count=required_count,
+                source="tailoring_keyword_scan",
+                linked_issues=linked,
+                fallback_bucket="missing",
+                reason="Job-specific skill signal derived from scorer and replacement evidence.",
+            )
+        )
+
+    return rows
+
+
+def _scan_keyword_rows_from_non_skill_replacement_issues(
+    issues: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    grouped: Dict[Tuple[str, str], List[Dict[str, Any]]] = {}
+    display_by_key: Dict[Tuple[str, str], str] = {}
+
+    for issue in issues:
+        group_id = _clean_text(issue.get("group_id"))
+        if not group_id or group_id == "skills":
+            continue
+
+        terms = _scan_issue_display_terms(dict(issue.get("raw", {}) or issue)) or _scan_issue_display_terms(issue)
+        if not terms:
+            terms = [_clean_text(issue.get("title"))]
+
+        for term in terms:
+            canonical = _scan_issue_canonical_term(term)
+            if not canonical:
+                continue
+            key = (group_id, canonical)
+            grouped.setdefault(key, []).append(issue)
+            display_by_key.setdefault(key, _scan_issue_display_label(term))
+
+    rows: List[Dict[str, Any]] = []
+    for (group_id, canonical), linked in sorted(grouped.items()):
+        rows.append(
+            _scan_keyword_issue_from_term(
+                group_id=group_id,
+                term=display_by_key.get((group_id, canonical), canonical),
+                matched_count=0,
+                required_count=max(1, len(linked)),
+                source="tailoring_keyword_scan",
+                linked_issues=linked,
+                fallback_bucket="missing",
+                reason="Job-specific recruiter/search signal derived from tailoring guidance.",
+            )
+        )
+
+    return rows
+
+
+def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+
+    for issue in issues:
+        group_id = _clean_text(issue.get("group_id"))
+        if group_id == "skills":
+            continue
+
+        row_action_type = "matched" if issue.get("bucket") == "matched" else "guidance"
+        display_term = _clean_text(issue.get("display_term")) or _clean_text(issue.get("title"))
+        canonical = _scan_issue_canonical_term(display_term)
+        matched_count = 1 if row_action_type == "matched" else 0
+        required_count = 1
+        updated = dict(issue)
+        updated.update(
+            {
+                "display_term": display_term,
+                "canonical_term": canonical,
+                "term_family": group_id,
+                "matched_count": matched_count,
+                "required_count": required_count,
+                "coverage_label": f"{matched_count}/{required_count}",
+                "has_ai_suggestion": False,
+                "linked_candidate_ids": [],
+                "best_candidate_id": "",
+                "row_action_type": row_action_type,
+                "scan_issue_type": row_action_type,
+                "is_visible_in_review": True,
+            }
+        )
+        rows.append(updated)
+
+    return rows
+
+
 def _scan_score_delta_points(value: Any) -> int | None:
     return score_delta_to_points(value)
 
@@ -2063,8 +2379,9 @@ def _build_tailoring_scan_issue_contract(
     ai_optimize_optional: List[Dict[str, Any]],
     directional_guidance: List[Dict[str, Any]],
     resume_evidence: Any = None,
+    tailoring_summary: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    issues: List[Dict[str, Any]] = []
+    replacement_issues: List[Dict[str, Any]] = []
 
     lane_specs = [
         (
@@ -2106,7 +2423,7 @@ def _build_tailoring_scan_issue_contract(
             if not isinstance(row, dict):
                 continue
 
-            issues.append(
+            replacement_issues.append(
                 _scan_issue_from_replacement_row(
                     row,
                     lane=lane,
@@ -2120,7 +2437,26 @@ def _build_tailoring_scan_issue_contract(
                 )
             )
 
-    issues.extend(_build_searchability_scan_issues(resume_evidence))
+    deterministic_issues = _build_searchability_scan_issues(resume_evidence)
+    issues = (
+        _scan_keyword_rows_from_replacement_issues(
+            replacement_issues,
+            resume_evidence=resume_evidence,
+            tailoring_summary=tailoring_summary,
+        )
+        + _scan_keyword_rows_from_non_skill_replacement_issues(replacement_issues)
+        + _scan_keyword_rows_from_generic_issues(deterministic_issues)
+    )
+
+    hidden_replacement_issues = [
+        issue for issue in replacement_issues
+        if not issue.get("is_visible_in_review", True)
+        and not any(
+            issue.get("candidate_id") in list(keyword_issue.get("linked_candidate_ids", []) or [])
+            for keyword_issue in issues
+        )
+    ]
+    issues.extend(hidden_replacement_issues)
 
     visible_issues = [
         issue for issue in issues
@@ -2228,10 +2564,11 @@ def _build_tailoring_scan_issue_contract(
     ]
 
     return {
-        "version": "scan_issue_contract_v1",
-        "source": "tailoring_replacement_lanes",
+        "version": "scan_issue_contract_v2",
+        "source": "tailoring_keyword_scan",
         "groups": groups,
         "issues": issues,
+        "replacement_issues": replacement_issues,
         "counts": counts,
         "acceptance_policy": {
             "direct_apply_ready": {
@@ -2455,23 +2792,33 @@ def _load_latest_patch_selection_overlay() -> Dict[str, Dict[str, Any]]:
     if isinstance(cached, dict):
         return dict(cached)
 
-    meta_payload = get_patch_selections_postgres_status_payload(
-        limit=1,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
+    try:
+        meta_payload = get_patch_selections_postgres_status_payload(
+            limit=1,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+    except (Exception, SystemExit):
+        _PATCH_SELECTION_OVERLAY_CACHE["data"] = {}
+        return {}
+
     meta_block = dict(meta_payload.get("postgres", {}) or {})
     query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
 
-    postgres_payload = get_patch_selections_postgres_status_payload(
-        limit=query_limit,
-        database_url="",
-        database_url_env="DATABASE_URL",
-        psql_bin="psql",
-        print_only=False,
-    )
+    try:
+        postgres_payload = get_patch_selections_postgres_status_payload(
+            limit=query_limit,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+        )
+    except (Exception, SystemExit):
+        _PATCH_SELECTION_OVERLAY_CACHE["data"] = {}
+        return {}
+
     postgres_block = dict(postgres_payload.get("postgres", {}) or {})
     postgres_rows = list(postgres_block.get("latest_rows", []) or [])
 
@@ -4074,6 +4421,7 @@ def tailoring_scan_preload_payload(
         ai_optimize_optional=ai_optimize_optional,
         directional_guidance=directional_guidance,
         resume_evidence=scan_resume_evidence,
+        tailoring_summary=dict(payload_data.get("summary", {}) or {}),
     )
     scan_score_snapshot = _build_tailoring_scan_score_snapshot(
         selection=selection,

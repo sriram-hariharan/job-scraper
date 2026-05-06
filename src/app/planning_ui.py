@@ -663,7 +663,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260427_1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260506_declutter1"></script>
 </body>
 </html>
     """.strip()
@@ -718,7 +718,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260417_6" />
+  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260506_declutter1" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -1122,7 +1122,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=planning_ui_20260427_1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260506_declutter1"></script>
 </body>
 </html>
     """.strip()
@@ -1878,7 +1878,7 @@ def scan_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260429_scan_e1j"></script>
+  <script src="/static/planning.js?v=planning_ui_20260429_scan_f1a"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_phase10_23"></script>
 </body>
 </html>

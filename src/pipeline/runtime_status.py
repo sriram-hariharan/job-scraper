@@ -166,6 +166,18 @@ def update_counts(**counts: Any) -> None:
     _write_status(payload)
 
 
+def update_stage_message(message: str = "", counts: Optional[Dict[str, Any]] = None) -> None:
+    if not is_enabled():
+        return
+
+    payload = _read_status()
+    if message:
+        payload["stage_message"] = message
+    if counts:
+        payload.setdefault("counts", {}).update(counts)
+    _write_status(payload)
+
+
 def finish_run(
     *,
     return_code: int = 0,

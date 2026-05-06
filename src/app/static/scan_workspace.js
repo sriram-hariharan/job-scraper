@@ -40,6 +40,7 @@ const scanWorkspaceProcessingState = {
 const scanWorkspacePreviewState = {
   documentPreviewPayload: null,
   isDocumentPreviewLoading: false,
+  isScorePreviewLoading: false,
   documentPreviewRequestSeq: 0,
   scorePreviewRequestSeq: 0,
   candidateSignature: "",
@@ -524,7 +525,7 @@ function restoreScanWorkspaceDecisionSnapshot(snapshot) {
   }));
 }
 
-function refreshScanWorkspaceDecisionOutputs({ forcePreview = false } = {}) {
+function refreshScanWorkspaceDecisionOutputs({ forcePreview = true } = {}) {
   if (forcePreview) {
     scanWorkspacePreviewState.documentPreviewPayload = null;
   }
@@ -551,7 +552,7 @@ function undoScanWorkspaceDecisionChange() {
   const previousSnapshot = scanWorkspaceAnnotationState.undoStack.pop();
   scanWorkspaceAnnotationState.redoStack.push(currentSnapshot);
   restoreScanWorkspaceDecisionSnapshot(previousSnapshot);
-  refreshScanWorkspaceDecisionOutputs();
+  refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
 }
 
 function redoScanWorkspaceDecisionChange() {
@@ -561,7 +562,7 @@ function redoScanWorkspaceDecisionChange() {
   const nextSnapshot = scanWorkspaceAnnotationState.redoStack.pop();
   scanWorkspaceAnnotationState.undoStack.push(currentSnapshot);
   restoreScanWorkspaceDecisionSnapshot(nextSnapshot);
-  refreshScanWorkspaceDecisionOutputs();
+  refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
 }
 
 function getAcceptedCompareCandidateIds() {
@@ -946,7 +947,24 @@ function updateScanWorkspaceScoreValue(score, { label = "Optimization score", so
   scoreValue.textContent = String(displayScore);
   scoreValue.dataset.scanScoreSource = source;
   scoreValue.setAttribute("aria-label", label);
+  scoreValue.classList.remove("is-loading");
+  scoreValue.removeAttribute("aria-busy");
   return true;
+}
+
+function setScanWorkspaceScoreLoading(isLoading) {
+  scanWorkspacePreviewState.isScorePreviewLoading = Boolean(isLoading);
+
+  const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
+  if (!scoreValue) return;
+
+  scoreValue.classList.toggle("is-loading", scanWorkspacePreviewState.isScorePreviewLoading);
+  if (scanWorkspacePreviewState.isScorePreviewLoading) {
+    scoreValue.setAttribute("aria-busy", "true");
+    scoreValue.setAttribute("aria-label", "Rescoring accepted scan decisions");
+  } else {
+    scoreValue.removeAttribute("aria-busy");
+  }
 }
 
 async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = []) {
@@ -1046,7 +1064,17 @@ async function requestScanWorkspaceScorePreview(selectedPatchCandidateIds = []) 
 async function refreshScanWorkspaceScorePreview() {
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const requestSeq = ++scanWorkspacePreviewState.scorePreviewRequestSeq;
-  const response = await requestScanWorkspaceScorePreview(acceptedIds);
+  setScanWorkspaceScoreLoading(true);
+
+  let response = null;
+  try {
+    response = await requestScanWorkspaceScorePreview(acceptedIds);
+  } finally {
+    if (requestSeq === scanWorkspacePreviewState.scorePreviewRequestSeq) {
+      setScanWorkspaceScoreLoading(false);
+    }
+  }
+
   if (requestSeq !== scanWorkspacePreviewState.scorePreviewRequestSeq) return;
 
   const projectedScore =
@@ -1993,8 +2021,12 @@ function renderScanWorkspaceSuggestionPopover() {
 
   acceptBtn.hidden = !isReplacement;
   rejectBtn.hidden = !isReplacement;
-  acceptBtn.disabled = !isReplacement;
-  rejectBtn.disabled = !isReplacement;
+  acceptBtn.textContent = decision === "accepted" ? "Accepted" : "Accept";
+  rejectBtn.textContent = decision === "rejected" ? "Rejected" : "Reject";
+  acceptBtn.disabled = !isReplacement || decision === "accepted";
+  rejectBtn.disabled = !isReplacement || decision === "rejected";
+  acceptBtn.setAttribute("aria-pressed", decision === "accepted" ? "true" : "false");
+  rejectBtn.setAttribute("aria-pressed", decision === "rejected" ? "true" : "false");
   if (resetBtn) {
     resetBtn.hidden = isReplacement;
     resetBtn.disabled = isReplacement;
@@ -2078,7 +2110,7 @@ function applyScanWorkspaceDecisionToActiveMarker(decision) {
 
   pushScanWorkspaceDecisionHistory();
   setScanWorkspaceMarkerDecision(activeMarker.id, decision);
-  refreshScanWorkspaceDecisionOutputs();
+  refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
 }
 
 function bindScanWorkspaceAnnotationShell() {
@@ -2154,7 +2186,7 @@ function bindScanWorkspaceAnnotationShell() {
         decision: isScanWorkspaceReplacementMarker(marker) ? "accepted" : marker.decision,
       }));
 
-      refreshScanWorkspaceDecisionOutputs();
+      refreshScanWorkspaceDecisionOutputs({ forcePreview: true });
     });
   }
 

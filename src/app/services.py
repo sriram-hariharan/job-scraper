@@ -1852,7 +1852,11 @@ def _scan_keyword_issue_from_term(
     canonical_term = _scan_issue_canonical_term(display_term)
     required_count = max(1, int(required_count or 0))
     matched_count = max(0, int(matched_count or 0))
-    coverage_label = f"{matched_count}/{required_count}"
+    coverage_label = (
+        str(matched_count)
+        if row_action_type == "matched"
+        else f"{matched_count}/{required_count}"
+    )
     linked_candidate_ids = [
         _clean_text(issue.get("candidate_id"))
         for issue in linked_issues
@@ -2026,6 +2030,11 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
         canonical = _scan_issue_canonical_term(display_term)
         matched_count = 1 if row_action_type == "matched" else 0
         required_count = 1
+        coverage_label = (
+            str(matched_count)
+            if row_action_type == "matched"
+            else f"{matched_count}/{required_count}"
+        )
         updated = dict(issue)
         updated.update(
             {
@@ -2034,7 +2043,7 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
                 "term_family": group_id,
                 "matched_count": matched_count,
                 "required_count": required_count,
-                "coverage_label": f"{matched_count}/{required_count}",
+                "coverage_label": coverage_label,
                 "has_ai_suggestion": False,
                 "linked_candidate_ids": [],
                 "best_candidate_id": "",

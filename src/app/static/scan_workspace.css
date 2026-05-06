@@ -786,6 +786,7 @@
   text-decoration-thickness: 3px !important;
   text-underline-offset: 5px !important;
   text-decoration-skip-ink: none;
+  animation: scanWorkspaceDecisionFlash 0.32s ease-out;
 }
 
 #scanWorkspaceLiveDraftPreview .scan-workspace-preview-suggestion-target--replacement.is-scan-decision-rejected .tailoring-workspace-doc-line-copy,
@@ -799,6 +800,15 @@
   text-decoration-thickness: 3px !important;
   text-underline-offset: 5px !important;
   text-decoration-skip-ink: none;
+}
+
+@keyframes scanWorkspaceDecisionFlash {
+  0% {
+    background: rgba(120, 166, 255, 0.28);
+  }
+  100% {
+    background: transparent;
+  }
 }
 
 #scanWorkspaceLiveDraftPreview .scan-workspace-preview-suggestion-target:hover .scan-workspace-preview-line-text,
@@ -1377,6 +1387,16 @@
   padding: 0 6px;
   border-radius: 4px;
   font-size: 10px;
+  border: 1px solid rgba(29, 78, 216, 0.42);
+  background: #ffffff;
+  color: #1e3a8a;
+  font-weight: 850;
+}
+
+.scan-workspace-suggestion-popover-close:hover,
+.scan-workspace-suggestion-popover-close:focus-visible {
+  background: #eff6ff;
+  color: #172554;
 }
 
 .scan-workspace-suggestion-popover-title {
@@ -1471,10 +1491,24 @@
   color: #ffffff;
 }
 
+.scan-workspace-suggestion-action-btn.is-active[data-scan-decision-action="accept"]:disabled {
+  opacity: 1;
+  background: #15803d;
+  border-color: #15803d;
+  color: #ffffff;
+}
+
 .scan-workspace-suggestion-action-btn.is-active[data-scan-decision-action="reject"] {
   background: #fff5f5;
   border-color: rgba(194, 65, 65, 0.36);
   color: #c24141;
+}
+
+.scan-workspace-suggestion-action-btn.is-active[data-scan-decision-action="reject"]:disabled {
+  opacity: 1;
+  background: #fff5f5;
+  border-color: rgba(194, 65, 65, 0.58);
+  color: #b91c1c;
 }
 
 .scan-workspace-persist-status {
@@ -1825,14 +1859,15 @@
   position: relative;
   align-items: center;
   min-height: 88px;
+  padding-right: 92px;
   border-radius: 10px;
 }
 
 .scan-workspace-review-score-card::after {
   content: "ATS tip";
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 16px;
+  right: 16px;
   min-height: 22px;
   padding: 0 8px;
   border-radius: 8px;
@@ -1845,6 +1880,7 @@
 }
 
 .scan-workspace-review-score-ring {
+  position: relative;
   width: 54px;
   height: 54px;
   min-width: 54px;
@@ -1855,8 +1891,39 @@
   box-shadow: inset 0 0 0 4px rgba(255, 214, 102, 0.18);
 }
 
+.scan-workspace-review-score-ring.is-loading {
+  color: transparent;
+}
+
+.scan-workspace-review-score-ring.is-loading::after {
+  content: "";
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 3px solid rgba(15, 23, 42, 0.18);
+  border-top-color: #2563eb;
+  animation: scanWorkspaceScoreSpin 0.8s linear infinite;
+}
+
+@keyframes scanWorkspaceScoreSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.scan-workspace-review-score-copy {
+  min-width: 0;
+}
+
 .scan-workspace-review-score-title {
   padding-right: 58px;
+}
+
+.scan-workspace-review-context-line,
+.scan-workspace-review-score-copy .subtext {
+  max-width: 100%;
+  overflow-wrap: anywhere;
 }
 
 .scan-workspace-review-inline-metrics {

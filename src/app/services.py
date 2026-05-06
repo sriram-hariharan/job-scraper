@@ -86,6 +86,10 @@ from src.storage.scheduler.read_postgres import (
 from src.storage.scheduler.contract import (
     scheduler_contract_health_payload,
 )
+from src.tailoring.score_utils import (
+    score_delta_to_points,
+    score_to_points,
+)
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -1728,6 +1732,10 @@ def _scan_issue_unique_display_labels(values: List[Any]) -> List[str]:
     return output
 
 
+def _scan_score_delta_points(value: Any) -> int | None:
+    return score_delta_to_points(value)
+
+
 def _scan_resume_document_text(resume_evidence: Any) -> str:
     document = getattr(resume_evidence, "document", None)
     return (
@@ -1972,6 +1980,18 @@ def _scan_issue_from_replacement_row(
         or _clean_text(row.get("rewrite_direction"))
         or _clean_text(row.get("rewrite_instruction"))
     )
+    projected_overall_delta = row.get("projected_overall_delta", None)
+    delta_points = score_delta_to_points(projected_overall_delta)
+    score_gate = _clean_text(row.get("score_gate"))
+    if not score_gate:
+        if delta_points is not None and delta_points > 0 and can_accept:
+            score_gate = "direct_replacement"
+        elif delta_points is not None and delta_points < 0:
+            score_gate = "rejected_by_score_gate"
+        else:
+            score_gate = "score_neutral_guidance"
+
+    can_direct_accept = score_gate == "direct_replacement"
 
     resolved_group_id = _scan_issue_group_id_for_row(row, lane=lane)
     resolved_group_label = _scan_issue_group_label(resolved_group_id)
@@ -2007,13 +2027,29 @@ def _scan_issue_from_replacement_row(
         "likely_impacted_dimensions": list(row.get("likely_impacted_dimensions", []) or []),
         "materiality_validation_status": _clean_text(row.get("materiality_validation_status")),
         "patch_generation_method": _clean_text(row.get("patch_generation_method")),
-        "projected_overall_delta": row.get("projected_overall_delta", None),
+        "projected_overall_delta": projected_overall_delta,
+        "projected_score_delta_points": delta_points,
+        "projected_dimension_deltas": dict(row.get("projected_dimension_deltas", {}) or {}),
+        "precheck_projected_overall_delta": row.get("precheck_projected_overall_delta", None),
+        "precheck_projected_dimension_deltas": dict(row.get("precheck_projected_dimension_deltas", {}) or {}),
         "original_final_score": row.get("original_final_score", None),
         "projected_final_score": row.get("projected_final_score", None),
+        "scan_issue_type": score_gate,
+        "is_visible_in_review": score_gate != "rejected_by_score_gate",
+        "llm_judge_score_intent": _clean_text(row.get("llm_judge_score_intent")),
+        "llm_judge_expected_dimensions": list(row.get("llm_judge_expected_dimensions", []) or []),
+        "llm_judge_risk_flags": list(row.get("llm_judge_risk_flags", []) or []),
+        "llm_judge_reason": _clean_text(row.get("llm_judge_reason")),
+        "llm_substantive_judge_score_intent": _clean_text(row.get("llm_substantive_judge_score_intent")),
+        "llm_substantive_judge_expected_dimensions": list(
+            row.get("llm_substantive_judge_expected_dimensions", []) or []
+        ),
+        "llm_substantive_judge_risk_flags": list(row.get("llm_substantive_judge_risk_flags", []) or []),
+        "llm_substantive_judge_reason": _clean_text(row.get("llm_substantive_judge_reason")),
         "adjacent_risk_signals": list(row.get("adjacent_risk_signals", []) or []),
         "unsupported_risk_signals": list(row.get("unsupported_risk_signals", []) or []),
-        "can_accept": bool(can_accept),
-        "can_accept_all": bool(can_accept_all),
+        "can_accept": bool(can_accept and can_direct_accept),
+        "can_accept_all": bool(can_accept_all and can_direct_accept),
         "anchor_strategy": "replacement_candidate",
         "can_focus_preview": bool(candidate_id),
         "raw": row,
@@ -2086,19 +2122,26 @@ def _build_tailoring_scan_issue_contract(
 
     issues.extend(_build_searchability_scan_issues(resume_evidence))
 
+    visible_issues = [
+        issue for issue in issues
+        if issue.get("is_visible_in_review", True)
+    ]
+
     counts = {
-        "total": len(issues),
-        "matched": sum(1 for issue in issues if issue.get("bucket") == "matched"),
-        "missing": sum(1 for issue in issues if issue.get("bucket") == "missing"),
-        "ai": sum(1 for issue in issues if issue.get("bucket") == "ai"),
-        "actionable": sum(1 for issue in issues if issue.get("can_accept")),
-        "accept_all_eligible": sum(1 for issue in issues if issue.get("can_accept_all")),
+        "total": len(visible_issues),
+        "hidden": len(issues) - len(visible_issues),
+        "matched": sum(1 for issue in visible_issues if issue.get("bucket") == "matched"),
+        "missing": sum(1 for issue in visible_issues if issue.get("bucket") == "missing"),
+        "ai": sum(1 for issue in visible_issues if issue.get("bucket") == "ai"),
+        "actionable": sum(1 for issue in visible_issues if issue.get("can_accept")),
+        "accept_all_eligible": sum(1 for issue in visible_issues if issue.get("can_accept_all")),
     }
 
     def _group_counts(group_id: str) -> Dict[str, int]:
         group_issues = [
             issue for issue in issues
             if _clean_text(issue.get("group_id")) == group_id
+            and issue.get("is_visible_in_review", True)
         ]
 
         return {
@@ -2217,16 +2260,9 @@ def _build_tailoring_scan_issue_contract(
 
 def _coerce_scan_score_value(*values: Any) -> int | None:
     for value in values:
-        if value is None:
-            continue
-
-        try:
-            numeric_score = float(value)
-        except (TypeError, ValueError):
-            continue
-
-        score = round(numeric_score * 100 if 0 <= numeric_score <= 1 else numeric_score)
-        return max(0, min(100, int(score)))
+        score = score_to_points(value)
+        if score is not None:
+            return score
 
     return None
 

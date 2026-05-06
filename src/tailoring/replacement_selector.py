@@ -6,6 +6,12 @@ from src.config.consts import (
     _DIRECT_APPLY_READY_MATERIALITY_STATUSES,
     _DIRECT_APPLY_OPTIONAL_MATERIALITY_STATUSES,
 )
+from src.tailoring.score_utils import (
+    is_score_negative,
+    is_score_neutral,
+    is_score_positive,
+    score_delta_to_points,
+)
 
 
 def _text(value: Any) -> str:
@@ -62,6 +68,16 @@ def _candidate_delta_rank(candidate: Dict[str, Any]) -> float:
     except Exception:
         return -999.0
 
+def _candidate_score_gate_rank(candidate: Dict[str, Any]) -> int:
+    delta = candidate.get("projected_overall_delta", None)
+    if is_score_positive(delta):
+        return 3
+    if is_score_neutral(delta):
+        return 2
+    if is_score_negative(delta):
+        return 0
+    return 1
+
 def _candidate_projected_delta(candidate: Dict[str, Any]) -> Optional[float]:
     value = candidate.get("projected_overall_delta", None)
     try:
@@ -72,9 +88,8 @@ def _candidate_projected_delta(candidate: Dict[str, Any]) -> Optional[float]:
         return None
 
 
-def _has_non_negative_projected_delta(candidate: Dict[str, Any]) -> bool:
-    delta = _candidate_projected_delta(candidate)
-    return delta is not None and delta >= 0.0
+def _has_positive_projected_delta(candidate: Dict[str, Any]) -> bool:
+    return is_score_positive(candidate.get("projected_overall_delta", None))
 
 def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
     proposal_status = _text(candidate.get("proposal_status", ""))
@@ -88,10 +103,12 @@ def _rewrite_candidate_sort_key(candidate: Dict[str, Any]) -> Tuple:
 
     return (
         patch_ready,
+        _candidate_score_gate_rank(candidate),
+        0 if list(candidate.get("unsupported_risk_signals", []) or []) else 1,
+        _candidate_delta_rank(candidate),
         _candidate_materiality_rank(candidate),
         _candidate_confidence_rank(candidate),
         llm_used,
-        _candidate_delta_rank(candidate),
         len(patch_text),
     )
 
@@ -153,6 +170,8 @@ def _passes_direct_apply_safety(candidate: Dict[str, Any]) -> bool:
 def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
         return False
+    if not _has_positive_projected_delta(candidate):
+        return False
 
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
     return materiality_status in _DIRECT_APPLY_READY_MATERIALITY_STATUSES
@@ -160,6 +179,8 @@ def _is_direct_apply_ready(candidate: Dict[str, Any]) -> bool:
 
 def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
+        return False
+    if not _has_positive_projected_delta(candidate):
         return False
 
     materiality_status = _text(candidate.get("materiality_validation_status", ""))
@@ -170,6 +191,8 @@ def _is_direct_apply_optional(candidate: Dict[str, Any]) -> bool:
 
 def _is_ai_optimize_optional(candidate: Dict[str, Any]) -> bool:
     if not _passes_direct_apply_safety(candidate):
+        return False
+    if not _has_positive_projected_delta(candidate):
         return False
 
     return bool(candidate.get("llm_refinement_used", False))
@@ -183,6 +206,43 @@ def _apply_priority(candidate: Dict[str, Any]) -> str:
     if materiality_status == "export_safe_no_score_lift" and confidence_rank >= 2:
         return "medium"
     return "low"
+
+
+def _score_gate(candidate: Dict[str, Any]) -> str:
+    delta = candidate.get("projected_overall_delta", None)
+    if is_score_positive(delta):
+        return "direct_replacement"
+    if is_score_neutral(delta):
+        return "score_neutral_guidance"
+    if is_score_negative(delta):
+        return "rejected_by_score_gate"
+    return "score_unknown_guidance"
+
+
+def _score_metadata(candidate: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "score_gate": _score_gate(candidate),
+        "projected_score_delta_points": score_delta_to_points(
+            candidate.get("projected_overall_delta", None)
+        ),
+        "projected_dimension_deltas": dict(candidate.get("projected_dimension_deltas", {}) or {}),
+        "precheck_projected_overall_delta": candidate.get("precheck_projected_overall_delta", None),
+        "precheck_projected_dimension_deltas": dict(
+            candidate.get("precheck_projected_dimension_deltas", {}) or {}
+        ),
+        "llm_judge_score_intent": _text(candidate.get("llm_judge_score_intent", "")),
+        "llm_judge_expected_dimensions": list(candidate.get("llm_judge_expected_dimensions", []) or []),
+        "llm_judge_risk_flags": list(candidate.get("llm_judge_risk_flags", []) or []),
+        "llm_judge_reason": _text(candidate.get("llm_judge_reason", "")),
+        "llm_substantive_judge_score_intent": _text(candidate.get("llm_substantive_judge_score_intent", "")),
+        "llm_substantive_judge_expected_dimensions": list(
+            candidate.get("llm_substantive_judge_expected_dimensions", []) or []
+        ),
+        "llm_substantive_judge_risk_flags": list(
+            candidate.get("llm_substantive_judge_risk_flags", []) or []
+        ),
+        "llm_substantive_judge_reason": _text(candidate.get("llm_substantive_judge_reason", "")),
+    }
 
 
 def _replacement_source(candidate: Dict[str, Any]) -> str:
@@ -301,6 +361,7 @@ def build_final_replacement_plan(
                     "original_final_score": best_candidate.get("original_final_score", None),
                     "projected_final_score": best_candidate.get("projected_final_score", None),
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                    **_score_metadata(best_candidate),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
@@ -332,6 +393,7 @@ def build_final_replacement_plan(
                     "original_final_score": best_candidate.get("original_final_score", None),
                     "projected_final_score": best_candidate.get("projected_final_score", None),
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                    **_score_metadata(best_candidate),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
@@ -369,6 +431,7 @@ def build_final_replacement_plan(
                     "original_final_score": best_candidate.get("original_final_score", None),
                     "projected_final_score": best_candidate.get("projected_final_score", None),
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                    **_score_metadata(best_candidate),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
@@ -400,6 +463,7 @@ def build_final_replacement_plan(
                     "original_final_score": best_candidate.get("original_final_score", None),
                     "projected_final_score": best_candidate.get("projected_final_score", None),
                     "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                    **_score_metadata(best_candidate),
                     "confidence": _text(best_candidate.get("confidence", "")),
                     "original_text": original_text,
                     "current_evidence": current_evidence,
@@ -430,6 +494,7 @@ def build_final_replacement_plan(
                 "original_final_score": best_candidate.get("original_final_score", None),
                 "projected_final_score": best_candidate.get("projected_final_score", None),
                 "projected_overall_delta": best_candidate.get("projected_overall_delta", None),
+                **_score_metadata(best_candidate),
                 "confidence": _text(best_candidate.get("confidence", "")),
                 "original_text": original_text,
                 "current_evidence": current_evidence,

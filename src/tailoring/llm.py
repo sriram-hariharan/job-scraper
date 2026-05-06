@@ -430,7 +430,8 @@ def _build_substantive_multisignal_judge_prompt(
     lines.append("7. Prefer options that surface multiple supported JD signals earlier only when the sentence still reads naturally.")
     lines.append("8. Prefer concrete supported phrase bundles already present in the original bullet over generalized paraphrases.")
     lines.append("8a. Strongly prefer options that preserve the original concrete lead object phrase when one exists.")
-    lines.append("9. Choose abstain if none are good enough to surface as a final bullet.")
+    lines.append("9. Choose a writer option only when it is expected to improve scorer-visible evidence or supported JD signal coverage.")
+    lines.append("10. Choose abstain if none are good enough to surface as a final bullet.")
     lines.append("")
     lines.append(f"Original lead token: {original_lead}")
     lines.append(f"Supported JD signals: {supported_terms}")
@@ -458,6 +459,9 @@ def _build_substantive_multisignal_judge_prompt(
     lines.append("REASON: <one short sentence>")
     lines.append("REJECTED: <comma-separated option ids or none>")
     lines.append("QUALITY_FLAGS: <comma-separated tags or none>")
+    lines.append("SCORE_INTENT: <short scorer-visible improvement intent or none>")
+    lines.append("EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>")
+    lines.append("RISK_FLAGS: <comma-separated risk tags or none>")
 
     return "\n".join(lines)
 
@@ -844,6 +848,9 @@ def _parse_patch_refinement_judge_text(raw_text: str) -> Dict[str, Any]:
             "reason": "empty_judge_response",
             "rejected_options": [],
             "quality_flags": [],
+            "score_intent": "",
+            "expected_dimensions": [],
+            "risk_flags": [],
         }
 
     cleaned = text.replace("```", "").strip()
@@ -859,6 +866,9 @@ def _parse_patch_refinement_judge_text(raw_text: str) -> Dict[str, Any]:
     reason = ""
     rejected_options: List[str] = []
     quality_flags: List[str] = []
+    score_intent = ""
+    expected_dimensions: List[str] = []
+    risk_flags: List[str] = []
 
     for line in [line.strip() for line in cleaned.splitlines() if line.strip()]:
         winner_match = re.match(r"(?i)^winner\s*:\s*(.+)$", line)
@@ -887,11 +897,33 @@ def _parse_patch_refinement_judge_text(raw_text: str) -> Dict[str, Any]:
                 quality_flags = [part.strip() for part in raw.split(",") if part.strip()]
             continue
 
+        score_intent_match = re.match(r"(?i)^score_intent\s*:\s*(.+)$", line)
+        if score_intent_match:
+            score_intent = score_intent_match.group(1).strip()
+            continue
+
+        dimensions_match = re.match(r"(?i)^expected_dimensions\s*:\s*(.+)$", line)
+        if dimensions_match:
+            raw = dimensions_match.group(1).strip()
+            if raw.lower() != "none":
+                expected_dimensions = [part.strip() for part in raw.split(",") if part.strip()]
+            continue
+
+        risks_match = re.match(r"(?i)^risk_flags?\s*:\s*(.+)$", line)
+        if risks_match:
+            raw = risks_match.group(1).strip()
+            if raw.lower() != "none":
+                risk_flags = [part.strip() for part in raw.split(",") if part.strip()]
+            continue
+
     return {
         "winner": winner,
         "reason": reason,
         "rejected_options": rejected_options,
         "quality_flags": quality_flags,
+        "score_intent": score_intent,
+        "expected_dimensions": expected_dimensions,
+        "risk_flags": risk_flags,
     }
 
 def _run_patch_refinement_judge_plain_call(
@@ -1662,6 +1694,9 @@ def _normalize_patch_refinement_judge_parsed(parsed: Dict[str, Any]) -> Dict[str
         "reason": str(parsed.get("reason", "") or "").strip(),
         "rejected_options": _normalize_string_list(parsed.get("rejected_options", [])),
         "quality_flags": _normalize_string_list(parsed.get("quality_flags", [])),
+        "score_intent": str(parsed.get("score_intent", "") or "").strip(),
+        "expected_dimensions": _normalize_string_list(parsed.get("expected_dimensions", [])),
+        "risk_flags": _normalize_string_list(parsed.get("risk_flags", [])),
     }
 
 
@@ -2227,6 +2262,8 @@ def _build_patch_refinement_judge_prompt(
     lines.append("8. Reject options whose best improvement is only stylistic.")
     lines.append("9. Reject long-copying of JD sentence phrasing.")
     lines.append("10. Reject options that only change connective or stylistic wording without net supported alignment gain over deterministic.")
+    lines.append("11. Select a writer option only when it is expected to improve scorer-visible evidence, not merely polish wording.")
+    lines.append("12. Name the score dimensions the winner should improve using existing supported signals.")
     lines.append("")
     lines.append(f"Original lead token: {original_lead}")
     lines.append(f"Matched JD terms: {alignment.get('matched_jd_terms', [])}")
@@ -2267,6 +2304,9 @@ def _build_patch_refinement_judge_prompt(
     lines.append("REASON: <one short sentence>")
     lines.append("REJECTED: <comma-separated option ids or none>")
     lines.append("QUALITY_FLAGS: <comma-separated tags or none>")
+    lines.append("SCORE_INTENT: <short scorer-visible improvement intent or none>")
+    lines.append("EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>")
+    lines.append("RISK_FLAGS: <comma-separated risk tags or none>")
     return "\n".join(lines)
 
 
@@ -2284,6 +2324,9 @@ def _keep_deterministic_with_status(
     judge_reason: str = "",
     judge_rejected_options: Optional[List[str]] = None,
     judge_quality_flags: Optional[List[str]] = None,
+    judge_score_intent: str = "",
+    judge_expected_dimensions: Optional[List[str]] = None,
+    judge_risk_flags: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     updated = dict(candidate)
     updated["llm_refinement_used"] = False
@@ -2298,6 +2341,9 @@ def _keep_deterministic_with_status(
     updated["llm_judge_reason"] = str(judge_reason or "").strip()
     updated["llm_judge_rejected_options"] = list(judge_rejected_options or [])
     updated["llm_judge_quality_flags"] = list(judge_quality_flags or [])
+    updated["llm_judge_score_intent"] = str(judge_score_intent or "").strip()
+    updated["llm_judge_expected_dimensions"] = list(judge_expected_dimensions or [])
+    updated["llm_judge_risk_flags"] = list(judge_risk_flags or [])
 
     writer_metadata = writer_metadata or {}
     judge_metadata = judge_metadata or {}
@@ -2853,6 +2899,9 @@ WINNER: writer_option_1 | writer_option_2 | abstain
 REASON: <one short sentence>
 REJECTED: <comma-separated option ids or none>
 QUALITY_FLAGS: <comma-separated tags or none>
+SCORE_INTENT: <short scorer-visible improvement intent or none>
+EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>
+RISK_FLAGS: <comma-separated risk tags or none>
 """
 
     judge_prompt = _build_substantive_multisignal_judge_prompt(
@@ -2903,6 +2952,9 @@ QUALITY_FLAGS: <comma-separated tags or none>
         unchanged["llm_substantive_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
         unchanged["llm_substantive_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
         unchanged["llm_substantive_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
+        unchanged["llm_substantive_judge_score_intent"] = str(judge_parsed.get("score_intent", "") or "").strip()
+        unchanged["llm_substantive_judge_expected_dimensions"] = list(judge_parsed.get("expected_dimensions", []) or [])
+        unchanged["llm_substantive_judge_risk_flags"] = list(judge_parsed.get("risk_flags", []) or [])
         unchanged["llm_writer_options"] = valid_options
         unchanged["llm_writer_invalid_options"] = invalid_options
         return unchanged
@@ -2926,6 +2978,9 @@ QUALITY_FLAGS: <comma-separated tags or none>
         unchanged["llm_substantive_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
         unchanged["llm_substantive_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
         unchanged["llm_substantive_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
+        unchanged["llm_substantive_judge_score_intent"] = str(judge_parsed.get("score_intent", "") or "").strip()
+        unchanged["llm_substantive_judge_expected_dimensions"] = list(judge_parsed.get("expected_dimensions", []) or [])
+        unchanged["llm_substantive_judge_risk_flags"] = list(judge_parsed.get("risk_flags", []) or [])
         unchanged["llm_writer_options"] = valid_options
         unchanged["llm_writer_invalid_options"] = invalid_options
         return unchanged
@@ -2953,6 +3008,9 @@ QUALITY_FLAGS: <comma-separated tags or none>
     promoted["llm_substantive_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
     promoted["llm_substantive_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
     promoted["llm_substantive_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
+    promoted["llm_substantive_judge_score_intent"] = str(judge_parsed.get("score_intent", "") or "").strip()
+    promoted["llm_substantive_judge_expected_dimensions"] = list(judge_parsed.get("expected_dimensions", []) or [])
+    promoted["llm_substantive_judge_risk_flags"] = list(judge_parsed.get("risk_flags", []) or [])
     promoted["llm_writer_options"] = valid_options
     promoted["llm_writer_invalid_options"] = invalid_options
 
@@ -3060,6 +3118,14 @@ You are the judge stage for one resume bullet rewrite.
 Return plain text only.
 Do not use markdown.
 Do not use code fences.
+Use exactly:
+WINNER: deterministic | writer_option_1 | writer_option_2 | abstain
+REASON: <one short sentence>
+REJECTED: <comma-separated option ids or none>
+QUALITY_FLAGS: <comma-separated tags or none>
+SCORE_INTENT: <short scorer-visible improvement intent or none>
+EXPECTED_DIMENSIONS: <comma-separated scorer dimensions or none>
+RISK_FLAGS: <comma-separated risk tags or none>
 """
     judge_prompt = _build_patch_refinement_judge_prompt(
         payload,
@@ -3103,6 +3169,9 @@ Do not use code fences.
             judge_reason=str(judge_parsed.get("reason", "") or "").strip(),
             judge_rejected_options=list(judge_parsed.get("rejected_options", []) or []),
             judge_quality_flags=list(judge_parsed.get("quality_flags", []) or []),
+            judge_score_intent=str(judge_parsed.get("score_intent", "") or "").strip(),
+            judge_expected_dimensions=list(judge_parsed.get("expected_dimensions", []) or []),
+            judge_risk_flags=list(judge_parsed.get("risk_flags", []) or []),
         )
 
     selected_option = next(
@@ -3123,6 +3192,9 @@ Do not use code fences.
             judge_reason="judge selected an unavailable option",
             judge_rejected_options=list(judge_parsed.get("rejected_options", []) or []),
             judge_quality_flags=list(judge_parsed.get("quality_flags", []) or []),
+            judge_score_intent=str(judge_parsed.get("score_intent", "") or "").strip(),
+            judge_expected_dimensions=list(judge_parsed.get("expected_dimensions", []) or []),
+            judge_risk_flags=list(judge_parsed.get("risk_flags", []) or []),
         )
 
     updated = dict(candidate)
@@ -3141,6 +3213,9 @@ Do not use code fences.
     updated["llm_judge_reason"] = str(judge_parsed.get("reason", "") or "").strip()
     updated["llm_judge_rejected_options"] = list(judge_parsed.get("rejected_options", []) or [])
     updated["llm_judge_quality_flags"] = list(judge_parsed.get("quality_flags", []) or [])
+    updated["llm_judge_score_intent"] = str(judge_parsed.get("score_intent", "") or "").strip()
+    updated["llm_judge_expected_dimensions"] = list(judge_parsed.get("expected_dimensions", []) or [])
+    updated["llm_judge_risk_flags"] = list(judge_parsed.get("risk_flags", []) or [])
 
     updated["llm_refinement_provider"] = str(writer_metadata.get("provider", "") or "").strip()
     updated["llm_refinement_model"] = str(writer_metadata.get("model", "") or "").strip()
@@ -3596,4 +3671,3 @@ You MUST obey these rules:
                 cache_meta,
                 cache_hit=False,
             )
-

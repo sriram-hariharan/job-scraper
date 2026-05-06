@@ -1188,7 +1188,7 @@
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-meta {
-  max-width: 74px;
+  max-width: 92px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -1197,6 +1197,7 @@
   color: #f3b6c0;
   font-size: 10px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-panel {

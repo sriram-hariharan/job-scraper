@@ -8956,8 +8956,10 @@ function normalizeScanWorkspaceContractIssue(issue) {
   ).trim();
 
   const normalizedPatchMethod = String(raw?.patch_generation_method || "").trim();
+  const canAccept = Boolean(issue?.can_accept);
 
   const isExactReplacement =
+    canAccept &&
     Boolean(rawFinalReplacementText) &&
     (
       normalizedStatus === "direct_apply_ready" ||
@@ -9008,7 +9010,7 @@ function normalizeScanWorkspaceContractIssue(issue) {
       : Array.isArray(raw?.likely_impacted_dimensions)
         ? raw.likely_impacted_dimensions
         : [],
-    can_accept: Boolean(issue?.can_accept),
+    can_accept: canAccept,
     can_accept_all: Boolean(issue?.can_accept_all),
     can_focus_preview: issue?.can_focus_preview === true,
     anchor_strategy: String(issue?.anchor_strategy || raw?.anchor_strategy || "").trim(),
@@ -9018,7 +9020,8 @@ function normalizeScanWorkspaceContractIssue(issue) {
 function getScanWorkspaceNormalizedContractIssues(payload = getScanWorkspacePayload()) {
   return getScanWorkspaceContractIssues(payload)
     .map((issue) => normalizeScanWorkspaceContractIssue(issue))
-    .filter((issue) => String(issue?.candidate_id || issue?.scan_issue_id || "").trim());
+    .filter((issue) => String(issue?.candidate_id || issue?.scan_issue_id || "").trim())
+    .filter((issue) => issue?.is_visible_in_review !== false);
 }
 
 function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspacePayload()) {
@@ -9363,6 +9366,53 @@ function getScanWorkspaceIssueCountLabel(bucket) {
   return "Review";
 }
 
+function coerceScanWorkspaceScorePoints(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(numeric >= -1 && numeric <= 1 ? numeric * 100 : numeric);
+}
+
+function getScanWorkspaceIssueScoreImpact(item) {
+  const directPoints = coerceScanWorkspaceScorePoints(item?.projected_score_delta_points);
+  if (directPoints !== null) return directPoints;
+  return coerceScanWorkspaceScorePoints(item?.projected_overall_delta);
+}
+
+function getScanWorkspaceIssueRightLabel(item, bucket) {
+  const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
+
+  if (scoreImpact !== null && (bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted" || bucket === "matched")) {
+    if (scoreImpact > 0) return `Score +${scoreImpact}`;
+    if (scoreImpact < 0) return `Score ${scoreImpact}`;
+    return "No lift";
+  }
+
+  return getScanWorkspaceIssueCountLabel(bucket);
+}
+
+function getScanWorkspaceIssueScoreTitle(item) {
+  const originalScore = coerceScanWorkspaceScorePoints(item?.original_final_score);
+  const projectedScore = coerceScanWorkspaceScorePoints(item?.projected_final_score);
+  const dimensionDeltas = item?.projected_dimension_deltas && typeof item.projected_dimension_deltas === "object"
+    ? item.projected_dimension_deltas
+    : {};
+  const dimensionLabels = Object.entries(dimensionDeltas)
+    .map(([key, value]) => {
+      const points = coerceScanWorkspaceScorePoints(value);
+      if (points === null || points === 0) return "";
+      return `${humanizeUnderscoreLabel(key)} ${points > 0 ? "+" : ""}${points}`;
+    })
+    .filter(Boolean)
+    .slice(0, 3);
+
+  const parts = [];
+  if (originalScore !== null) parts.push(`Original score ${originalScore}`);
+  if (projectedScore !== null) parts.push(`Projected score ${projectedScore}`);
+  if (dimensionLabels.length) parts.push(`Impact: ${dimensionLabels.join(", ")}`);
+
+  return parts.join(" · ");
+}
+
 function getScanWorkspaceIssueToneClass(bucket) {
   if (bucket === "matched" || bucket === "trusted") return "is-matched";
   if (bucket === "ai" || bucket === "ai_optimize") return "is-ai";
@@ -9396,14 +9446,16 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const title = getScanWorkspaceIssueTitle(item, index);
           const signals = getScanWorkspaceIssueSignals(item);
           const meta = getScanWorkspaceIssueMeta(bucket);
-          const countLabel = getScanWorkspaceIssueCountLabel(bucket);
+          const countLabel = getScanWorkspaceIssueRightLabel(item, bucket);
           const toneClass = getScanWorkspaceIssueToneClass(bucket);
+          const scoreTitle = getScanWorkspaceIssueScoreTitle(item);
 
           return `
             <button
               type="button"
               class="scan-workspace-issue-row ${toneClass} ${isActive ? "is-active" : ""} ${isAnchorable ? "" : "is-static"}"
               ${isAnchorable ? `data-scan-focus-candidate="${escapeHtml(candidateId)}"` : `data-scan-static-issue="${escapeHtml(rowId)}"`}
+              ${scoreTitle ? `title="${escapeHtml(scoreTitle)}"` : ""}
             >
               <span class="scan-workspace-issue-status" aria-hidden="true"></span>
 

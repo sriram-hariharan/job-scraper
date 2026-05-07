@@ -9,6 +9,7 @@ from typing import Dict, List, Set
 from src.matching.job_adapter import build_job_evidence
 
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.pipeline.runtime_status import update_stage_message
 
 def _normalize_text(value: str) -> str:
     return " ".join(str(value or "").lower().split()).strip()
@@ -53,6 +54,18 @@ def _run_optional_cmd(cmd: List[str], step_name: str) -> int:
         )
 
     return result.returncode
+
+def _planning_status(message: str, **counts) -> None:
+    update_stage_message(
+        message,
+        {key: value for key, value in counts.items() if value is not None},
+    )
+
+def _status_label(company: str, title: str, max_len: int = 88) -> str:
+    label = f"{company} | {title}".strip(" |")
+    if len(label) <= max_len:
+        return label
+    return label[: max_len - 1].rstrip() + "..."
 
 def _load_job_doc_id_to_index(job_corpus_path: Path) -> Dict[str, int]:
     if not job_corpus_path.exists():
@@ -454,7 +467,15 @@ def main() -> None:
     if args.generate_llm_adjudication:
         batch_selector_cmd.append("--generate-llm-adjudication")
 
+    _planning_status(
+        "Planning: selecting best resume variants",
+        planning_substage="best_variant_selection",
+    )
     _run_cmd(batch_selector_cmd)
+    _planning_status(
+        "Planning: best resume variant selection complete",
+        planning_substage="best_variant_selection_complete",
+    )
 
     archive_selector_runtime_fixture_cmd = [
         sys.executable,
@@ -462,6 +483,10 @@ def main() -> None:
         "--input-csv",
         str(best_variant_csv),
     ]
+    _planning_status(
+        "Planning: archiving selector runtime fixture",
+        planning_substage="selector_fixture_archive",
+    )
     _run_optional_cmd(
         archive_selector_runtime_fixture_cmd,
         "selector runtime fixture archiver",
@@ -482,6 +507,10 @@ def main() -> None:
     if args.title_contains.strip():
         shortlist_cmd.extend(["--title-contains", args.title_contains])
 
+    _planning_status(
+        "Planning: building application shortlist",
+        planning_substage="application_shortlist",
+    )
     _run_cmd(shortlist_cmd)
 
     execution_queue_cmd = [
@@ -494,8 +523,16 @@ def main() -> None:
         "--top-k-console",
         str(args.top_k_console),
     ]
+    _planning_status(
+        "Planning: building execution queue",
+        planning_substage="execution_queue",
+    )
     _run_cmd(execution_queue_cmd)
 
+    _planning_status(
+        "Planning: loading selected packet rows",
+        planning_substage="load_selected_packets",
+    )
     job_doc_id_to_index = _load_job_doc_id_to_index(job_corpus_path)
     shortlist_rows = _load_shortlist_rows(execution_queue_csv)
 
@@ -514,10 +551,17 @@ def main() -> None:
         include_actions=include_actions,
         packet_limit=args.job_packet_limit,
     )
+    total_selected = len(selected)
+    _planning_status(
+        f"Planning packets: 0/{total_selected} complete",
+        planning_substage="packet_generation",
+        planning_packets_total=total_selected,
+        planning_packets_completed=0,
+    )
 
     manifest_rows = []
 
-    for row in selected:
+    for packet_index, row in enumerate(selected, start=1):
         job_doc_id = row["job_doc_id"]
         if job_doc_id not in job_doc_id_to_index:
             raise RuntimeError(f"Could not map job_doc_id to index: {job_doc_id}")
@@ -526,6 +570,15 @@ def main() -> None:
         winner_resume = row["winner_resume"]
         company = row["job_company"]
         title = row["job_title"]
+        status_label = _status_label(company, title)
+        _planning_status(
+            f"Planning packet {packet_index}/{total_selected}: {status_label}",
+            planning_substage="packet_generation",
+            planning_packets_total=total_selected,
+            planning_packets_completed=packet_index - 1,
+            planning_current_company=company,
+            planning_current_title=title,
+        )
 
         packet_resolution = _resolve_packet_resume_selection(row)
         packet_status = packet_resolution["packet_status"]
@@ -572,6 +625,14 @@ def main() -> None:
                 str(packet_json_path),
             ]
 
+            _planning_status(
+                f"Planning packet {packet_index}/{total_selected}: building JD/resume packet",
+                planning_substage="jd_resume_packet",
+                planning_packets_total=total_selected,
+                planning_packets_completed=packet_index - 1,
+                planning_current_company=company,
+                planning_current_title=title,
+            )
             _run_cmd(diff_cmd)
 
             if args.generate_tailoring:
@@ -606,6 +667,15 @@ def main() -> None:
                     else:
                         llm_status["llm_tailoring_status"] = "skipped_action_filter"
 
+                _planning_status(
+                    f"Planning packet {packet_index}/{total_selected}: generating tailoring suggestions",
+                    planning_substage="tailoring_generation",
+                    planning_packets_total=total_selected,
+                    planning_packets_completed=packet_index - 1,
+                    planning_current_company=company,
+                    planning_current_title=title,
+                    planning_live_llm_tailoring=bool(tailoring_llm_json_path),
+                )
                 _run_cmd(tailoring_cmd)
 
                 if tailoring_llm_json_path:
@@ -678,6 +748,28 @@ def main() -> None:
                 "llm_adjudication_error_type": row.get("llm_adjudication_error_type", ""),
             }
         )
+        _planning_status(
+            f"Planning packets: {packet_index}/{total_selected} complete",
+            planning_substage="packet_generation",
+            planning_packets_total=total_selected,
+            planning_packets_completed=packet_index,
+            planning_packets_generated=sum(
+                1
+                for manifest_row in manifest_rows
+                if str(manifest_row.get("packet_status", "")).strip() == "generated"
+            ),
+            planning_llm_generated=sum(
+                1
+                for manifest_row in manifest_rows
+                if str(manifest_row.get("llm_tailoring_status", "")).strip() == "generated"
+            ),
+            planning_llm_failed=sum(
+                1
+                for manifest_row in manifest_rows
+                if str(manifest_row.get("llm_tailoring_status", "")).strip()
+                in {"failed", "rate_limited", "transient_error", "missing", "unreadable"}
+            ),
+        )
 
     manifest_csv = output_dir / "job_packet_manifest.csv"
     fieldnames = [
@@ -725,6 +817,12 @@ def main() -> None:
         "llm_adjudication_differs_from_deterministic",
         "llm_adjudication_error_type",
     ]
+    _planning_status(
+        "Planning: writing packet manifest",
+        planning_substage="write_manifest",
+        planning_packets_total=total_selected,
+        planning_packets_completed=total_selected,
+    )
     with manifest_csv.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
@@ -755,6 +853,22 @@ def main() -> None:
     )
     action_counts = _count_by(manifest_rows, "action")
     llm_status_counts = _count_by(manifest_rows, "llm_tailoring_status")
+    _planning_status(
+        f"Application planning completed: {packet_created_count} packets created",
+        planning_substage="complete",
+        planning_packets_total=total_selected,
+        planning_packets_completed=total_selected,
+        planning_packets_generated=packet_created_count,
+        planning_pending_variant_selection=pending_variant_selection_count,
+        planning_unresolved_no_credible_match=unresolved_no_credible_match_count,
+        planning_unresolved_missing_winner=unresolved_missing_winner_count,
+        planning_llm_generated=llm_status_counts.get("generated", 0),
+        planning_llm_cached=llm_status_counts.get("cached", 0),
+        planning_llm_failed=sum(
+            llm_status_counts.get(status, 0)
+            for status in ("failed", "rate_limited", "transient_error", "missing", "unreadable")
+        ),
+    )
 
     print()
     print("=" * 100)

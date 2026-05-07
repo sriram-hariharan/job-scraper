@@ -14,6 +14,7 @@ from src.pipeline.runtime_status import (
     initialize_run,
     start_stage,
 )
+from src.rag.export_job_corpus import export_job_corpus
 from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -96,12 +97,23 @@ def _run_cmd(cmd):
     subprocess.run(cmd, check=True)
 
 
-def _run_application_planning(args):
+def _write_current_run_planning_corpus(jobs, output_dir):
+    path = Path(output_dir) / "current_run_job_corpus.jsonl"
+    exported_count = export_job_corpus(jobs, str(path), merge_existing=False)
+    logger.info(
+        "Current-run planning corpus exported: %s documents at %s",
+        exported_count,
+        path,
+    )
+    return str(path)
+
+
+def _run_application_planning(args, job_corpus_path="data/rag/job_corpus.jsonl"):
     cmd = [
         sys.executable,
         "run_application_planning.py",
         "--job-corpus",
-        "data/rag/job_corpus.jsonl",
+        job_corpus_path,
         "--job-limit",
         str(args.application_planning_job_limit),
         "--job-packet-limit",
@@ -435,15 +447,22 @@ async def main_async(args):
         logger.info("=============================")
 
         corpus_path = "data/rag/job_corpus.jsonl"
-        if _corpus_has_job_records(corpus_path):
+        planning_corpus_path = corpus_path
+        if jobs and not args.application_planning_only:
+            planning_corpus_path = _write_current_run_planning_corpus(
+                jobs,
+                args.application_planning_output_dir,
+            )
+
+        if _corpus_has_job_records(planning_corpus_path):
             start_stage("planning", "Running application planning")
-            _run_application_planning(args)
+            _run_application_planning(args, job_corpus_path=planning_corpus_path)
             complete_stage("planning", "Application planning completed")
             application_planning_ran = True
         else:
             logger.warning(
                 "Skipping application planning because the job corpus is missing or empty: %s",
-                corpus_path,
+                planning_corpus_path,
             )
 
     if not jobs and application_planning_ran and args.application_planning_only:

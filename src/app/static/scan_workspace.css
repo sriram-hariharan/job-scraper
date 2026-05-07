@@ -1362,6 +1362,9 @@
   z-index: 5000;
   width: min(300px, calc(100vw - 32px));
   max-height: min(360px, calc(100vh - 112px));
+  min-width: min(320px, calc(100vw - 32px));
+  min-height: 250px;
+  max-width: calc(100vw - 32px);
   padding: 12px;
   border-radius: 4px;
   background: #ffffff;
@@ -1372,7 +1375,8 @@
   color: #24324a;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: auto;
+  resize: both;
 }
 
 .scan-workspace-suggestion-popover.hidden {
@@ -1390,6 +1394,20 @@
   border-left: 1px solid rgba(31, 128, 224, 0.38);
   border-bottom: 1px solid rgba(31, 128, 224, 0.38);
   transform: rotate(45deg);
+}
+
+.scan-workspace-suggestion-popover::after {
+  content: "";
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 14px;
+  height: 14px;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, transparent 0 48%, rgba(46, 120, 219, 0.42) 49% 55%, transparent 56%),
+    linear-gradient(135deg, transparent 0 66%, rgba(46, 120, 219, 0.3) 67% 73%, transparent 74%);
+  opacity: 0.8;
 }
 
 .scan-workspace-suggestion-popover.is-above::before {
@@ -2327,6 +2345,7 @@
 .scan-workspace-suggestion-popover {
   width: min(320px, calc(100vw - 32px));
   max-height: min(390px, calc(100vh - 112px));
+  max-width: calc(100vw - 32px);
   border-radius: 6px;
 }
 
@@ -2345,7 +2364,7 @@
 }
 
 .scan-workspace-suggestion-popover-copy {
-  max-height: 220px;
+  max-height: none;
 }
 
 .scan-workspace-inline-diff {
@@ -2435,6 +2454,7 @@
     right: 12px;
     top: 12px;
     width: auto;
+    resize: vertical;
   }
 
   .scan-workspace-suggestion-popover-actions {

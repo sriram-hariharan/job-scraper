@@ -1659,6 +1659,30 @@ def _scan_issue_supported_signals(row: Dict[str, Any]) -> List[str]:
     return output
 
 
+def _scan_issue_is_deterministic_only_replacement(row: Dict[str, Any]) -> bool:
+    source_blob = " ".join(
+        _clean_text(row.get(field)).lower()
+        for field in (
+            "replacement_source",
+            "patch_generation_method",
+            "preferred_rewrite_source",
+            "selected_source",
+            "source_family",
+            "resolved_to_source_family",
+            "candidate_source",
+            "rewrite_source",
+            "final_replacement_source",
+            "generation_source",
+        )
+        if _clean_text(row.get(field))
+    )
+    if not source_blob:
+        return False
+    if "llm" in source_blob or "live_ai" in source_blob:
+        return False
+    return "deterministic" in source_blob
+
+
 def _scan_issue_title(row: Dict[str, Any], *, fallback_label: str) -> str:
     display_terms = _scan_issue_display_terms(row)
     if display_terms:
@@ -2381,6 +2405,9 @@ def _scan_issue_from_replacement_row(
             score_gate = "rejected_by_score_gate"
         else:
             score_gate = "score_neutral_guidance"
+
+    if score_gate == "direct_replacement" and _scan_issue_is_deterministic_only_replacement(row):
+        score_gate = "score_neutral_guidance"
 
     can_direct_accept = score_gate == "direct_replacement"
 
@@ -6171,6 +6198,367 @@ def _scan_phrase_append_context(current_text: str, term: str) -> str:
     return f"{text}, surfacing {clean_term} relevance while preserving the original scope"
 
 
+SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "options": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "properties": {
+                    "text": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "supported_terms": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                    "risk_flags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["text", "reason", "supported_terms", "risk_flags"],
+            },
+        }
+    },
+    "required": ["options"],
+}
+
+def _scan_phrase_default_provider() -> str:
+    if os.getenv("OPENAI_API_KEY"):
+        return "openai"
+    return os.getenv(
+        "TAILORING_REWRITE_PROVIDER",
+        os.getenv(
+            "PATCH_REFINEMENT_WRITER_PROVIDER",
+            os.getenv("PATCH_REFINEMENT_PROVIDER", "groq"),
+        ),
+    )
+
+
+def _scan_phrase_default_model(provider: str) -> str:
+    if provider == "openai":
+        return "gpt-4.1-mini"
+    if provider == "gemini":
+        return "gemini-2.5-flash"
+    return os.getenv(
+        "TAILORING_REWRITE_MODEL",
+        os.getenv(
+            "PATCH_REFINEMENT_WRITER_MODEL",
+            os.getenv("PATCH_REFINEMENT_MODEL", "llama-3.3-70b-versatile"),
+        ),
+    )
+
+
+SCAN_PHRASE_PROVIDER = os.getenv(
+    "SCAN_PHRASE_PROVIDER",
+    os.getenv("TAILORING_SCAN_PHRASE_PROVIDER", _scan_phrase_default_provider()),
+).strip().lower()
+SCAN_PHRASE_MODEL = os.getenv(
+    "SCAN_PHRASE_MODEL",
+    os.getenv(
+        "TAILORING_SCAN_PHRASE_MODEL",
+        _scan_phrase_default_model(SCAN_PHRASE_PROVIDER),
+    ),
+).strip()
+SCAN_PHRASE_FALLBACK_PROVIDER = os.getenv(
+    "SCAN_PHRASE_FALLBACK_PROVIDER",
+    "groq" if SCAN_PHRASE_PROVIDER != "groq" else "openai",
+).strip().lower()
+SCAN_PHRASE_FALLBACK_MODEL = os.getenv(
+    "SCAN_PHRASE_FALLBACK_MODEL",
+    _scan_phrase_default_model(SCAN_PHRASE_FALLBACK_PROVIDER),
+).strip()
+SCAN_PHRASE_LLM_FALLBACK_ENABLED = (
+    os.getenv("SCAN_PHRASE_LLM_FALLBACK_ENABLED", "true").strip().lower() == "true"
+)
+SCAN_PHRASE_DETERMINISTIC_FALLBACK_ENABLED = (
+    os.getenv("SCAN_PHRASE_DETERMINISTIC_FALLBACK_ENABLED", "false").strip().lower()
+    == "true"
+)
+
+
+def _scan_phrase_extract_first_json_value(text: str) -> str:
+    value = str(text or "").strip().replace("```json", "").replace("```", "").strip()
+    if not value:
+        return ""
+
+    start_positions = [
+        idx for idx in (value.find("{"), value.find("["))
+        if idx >= 0
+    ]
+    if not start_positions:
+        return value
+
+    start = min(start_positions)
+    opening = value[start]
+    closing = "}" if opening == "{" else "]"
+    depth = 0
+    in_string = False
+    escape = False
+
+    for idx in range(start, len(value)):
+        ch = value[idx]
+        if in_string:
+            if escape:
+                escape = False
+                continue
+            if ch == "\\":
+                escape = True
+                continue
+            if ch == '"':
+                in_string = False
+            continue
+
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == opening:
+            depth += 1
+            continue
+        if ch == closing:
+            depth -= 1
+            if depth == 0:
+                return value[start : idx + 1].strip()
+
+    return value[start:].strip()
+
+
+def _scan_phrase_parse_options_payload(raw: Any) -> List[Any]:
+    if isinstance(raw, dict):
+        options = raw.get("options")
+        return list(options or []) if isinstance(options, list) else []
+
+    if isinstance(raw, list):
+        return raw
+
+    text = _clean_text(raw)
+    if not text:
+        return []
+
+    candidates = [text, _scan_phrase_extract_first_json_value(text)]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except Exception:
+            continue
+        return _scan_phrase_parse_options_payload(parsed)
+
+    return []
+
+
+def _scan_phrase_deterministic_options(
+    *,
+    current: str,
+    terms: List[str],
+) -> List[Dict[str, Any]]:
+    primary_term = terms[0] if terms else ""
+    raw_options = [
+        _scan_phrase_insert_after_lead_verb(current, primary_term),
+        _scan_phrase_append_context(current, primary_term),
+        current,
+    ]
+
+    options: List[Dict[str, Any]] = []
+    seen = set()
+    for index, text in enumerate(raw_options, start=1):
+        normalized = _normalize_tailoring_workspace_text_key(text)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        options.append({
+            "option_id": f"phrase_{index}",
+            "text": text,
+            "source": "deterministic_guidance_phrase",
+            "reason": "Deterministic phrase draft from the guidance term and current bullet.",
+            "supported_terms": terms,
+            "risk_flags": [],
+            "requires_review": True,
+            "can_accept_directly": False,
+        })
+
+    return options[:3]
+
+
+def _scan_phrase_llm_prompt(
+    *,
+    current: str,
+    guidance: str,
+    terms: List[str],
+) -> str:
+    term_line = ", ".join(terms) if terms else "none"
+    return "\n".join([
+        "Create up to three high-quality resume bullet rewrite drafts for a manual editor.",
+        "",
+        "Rewrite objective:",
+        "- Apply the AI guidance as a concrete wording improvement, not a vague note.",
+        "- Put the strongest supported job signal earlier in the bullet when truthful.",
+        "- Preserve the original metric values, tools, employer context, and scope.",
+        "- Do not invent tools, domains, ownership, impact, numbers, or responsibilities.",
+        "- Keep each option as one resume bullet without a leading bullet symbol.",
+        "- Return only JSON in this exact shape:",
+        '{"options":[{"text":"...","reason":"...","supported_terms":["..."],"risk_flags":[]}]}',
+        "",
+        f"Supported terms: {term_line}",
+        f"AI guidance: {guidance}",
+        "",
+        "Current bullet:",
+        current,
+    ])
+
+
+def _scan_phrase_validate_llm_options(
+    raw_options: Any,
+    *,
+    current: str,
+    terms: List[str],
+) -> List[Dict[str, Any]]:
+    raw_option_rows = _scan_phrase_parse_options_payload(raw_options)
+    if not isinstance(raw_option_rows, list):
+        return []
+
+    current_norm = _normalize_tailoring_workspace_text_key(current)
+    options: List[Dict[str, Any]] = []
+    seen = set()
+
+    for index, row in enumerate(raw_option_rows, start=1):
+        if not isinstance(row, dict):
+            continue
+
+        text = _clean_text(row.get("text"))
+        normalized = _normalize_tailoring_workspace_text_key(text)
+        if not text or not normalized or normalized in seen:
+            continue
+
+        if len(text) > max(280, len(current) + 120):
+            continue
+
+        seen.add(normalized)
+        options.append({
+            "option_id": f"phrase_llm_{index}",
+            "text": text,
+            "source": "llm_guidance_phrase",
+            "reason": _clean_text(row.get("reason")) or "LLM phrase draft from guidance.",
+            "supported_terms": _scan_issue_unique_display_labels(
+                list(row.get("supported_terms", []) or []) or terms
+            ),
+            "risk_flags": list(row.get("risk_flags", []) or []),
+            "requires_review": True,
+            "can_accept_directly": False,
+            "changed_from_current": normalized != current_norm,
+        })
+
+        if len(options) >= 3:
+            break
+
+    return options
+
+
+def _generate_scan_phrase_options_with_llm(
+    *,
+    current: str,
+    guidance: str,
+    terms: List[str],
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    from src.ai.llm_client import run_chat_completion_with_metadata
+    from src.tailoring import llm as tailoring_llm
+
+    provider = SCAN_PHRASE_PROVIDER or tailoring_llm.PATCH_REFINEMENT_WRITER_PROVIDER
+    model = SCAN_PHRASE_MODEL or (
+        "gemini-2.5-flash"
+        if provider == "gemini"
+        else tailoring_llm.PATCH_REFINEMENT_WRITER_MODEL
+    )
+    fallback_provider = SCAN_PHRASE_FALLBACK_PROVIDER
+    fallback_model = SCAN_PHRASE_FALLBACK_MODEL
+    system_prompt = (
+        "You generate conservative, truthful resume bullet rewrite options for manual editing. "
+        "Return only JSON."
+    )
+    user_prompt = _scan_phrase_llm_prompt(
+        current=current,
+        guidance=guidance,
+        terms=terms,
+    )
+    last_error = ""
+
+    result = run_chat_completion_with_metadata(
+        provider=provider,
+        model=model,
+        temperature=0,
+        max_tokens=520,
+        response_mime_type="application/json",
+        response_schema=SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA,
+        return_parsed=True,
+        thinking_budget=0,
+        fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
+        fallback_provider=fallback_provider,
+        fallback_model=fallback_model,
+        messages=[
+            {
+                "role": "system",
+                "content": system_prompt,
+            },
+            {
+                "role": "user",
+                "content": user_prompt,
+            },
+        ],
+    )
+
+    content = result.get("content")
+    options = _scan_phrase_validate_llm_options(
+        content,
+        current=current,
+        terms=terms,
+    )
+    if not options:
+        last_error = (
+            "Structured phrase response had no valid options. Retrying with plain JSON parsing."
+        )
+        plain_result = run_chat_completion_with_metadata(
+            provider=provider,
+            model=model,
+            temperature=0,
+            max_tokens=520,
+            response_mime_type=None,
+            response_schema=None,
+            return_parsed=False,
+            thinking_budget=0,
+            fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
+            fallback_provider=fallback_provider,
+            fallback_model=fallback_model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+        )
+        result = plain_result
+        content = plain_result.get("content")
+        options = _scan_phrase_validate_llm_options(
+            content,
+            current=current,
+            terms=terms,
+        )
+    metadata = {
+        "provider": _clean_text(result.get("provider")),
+        "model": _clean_text(result.get("model")),
+        "fallback_used": bool(result.get("fallback_used", False)),
+        "requested_provider": provider,
+        "requested_model": model,
+        "plain_retry_used": bool(last_error),
+    }
+    if last_error and not options:
+        metadata["last_error"] = last_error
+    return options, metadata
+
+
 def generate_tailoring_scan_phrase_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     *,
@@ -6196,29 +6584,48 @@ def generate_tailoring_scan_phrase_payload(
         guidance_text=_clean_text(guidance_text),
         supported_terms=list(supported_terms or []),
     )
-    primary_term = terms[0] if terms else ""
+    guidance = _clean_text(guidance_text)
+    llm_options: List[Dict[str, Any]] = []
+    llm_metadata: Dict[str, Any] = {}
+    llm_error = ""
 
-    raw_options = [
-        _scan_phrase_insert_after_lead_verb(current, primary_term),
-        _scan_phrase_append_context(current, primary_term),
-        current,
-    ]
+    if guidance or terms:
+        try:
+            llm_options, llm_metadata = _generate_scan_phrase_options_with_llm(
+                current=current,
+                guidance=guidance,
+                terms=terms,
+            )
+        except Exception as exc:
+            llm_error = str(exc)
 
-    options: List[Dict[str, Any]] = []
-    seen = set()
-    for index, text in enumerate(raw_options, start=1):
-        normalized = _normalize_tailoring_workspace_text_key(text)
-        if not normalized or normalized in seen:
-            continue
-        seen.add(normalized)
-        options.append({
-            "option_id": f"phrase_{index}",
-            "text": text,
-            "source": "deterministic_guidance_phrase",
-            "supported_terms": terms,
-            "requires_review": True,
-            "can_accept_directly": False,
-        })
+    deterministic_options = (
+        _scan_phrase_deterministic_options(
+            current=current,
+            terms=terms,
+        )
+        if SCAN_PHRASE_DETERMINISTIC_FALLBACK_ENABLED and not llm_options
+        else []
+    )
+
+    options = llm_options or deterministic_options
+    source = (
+        "llm"
+        if llm_options
+        else "deterministic_fallback"
+        if deterministic_options
+        else "llm_unavailable"
+    )
+
+    if source == "llm":
+        note = "LLM phrase drafts generated for manual edit and rescore."
+    elif source == "deterministic_fallback":
+        note = "Deterministic fallback phrase drafts generated because explicit fallback is enabled."
+    else:
+        note = (
+            "No valid LLM phrase drafts were generated. Check the LLM provider/model settings "
+            "or retry after the server has the latest code."
+        )
 
     return {
         "ok": True,
@@ -6226,10 +6633,14 @@ def generate_tailoring_scan_phrase_payload(
         "tailoring_json_path": str(artifact_path),
         "selected_resume": _sanitize_optional_resume_filename(selected_resume),
         "bullet_key": _clean_text(bullet_key),
-        "guidance_text": _clean_text(guidance_text),
+        "guidance_text": guidance,
         "supported_terms": terms,
         "options": options[:3],
-        "note": "Phrase drafts are manual-edit helpers. Save edit to rescore before export.",
+        "source": source,
+        "llm_metadata": llm_metadata,
+        "llm_error": llm_error,
+        "fallback_used": source == "deterministic_fallback",
+        "note": note,
     }
 
 def _normalize_workspace_export_format(value: Any) -> str:

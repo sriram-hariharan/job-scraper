@@ -1698,7 +1698,10 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
   const measuredWidth = Math.max(300, Number(measuredRect?.width || popover?.offsetWidth || 360));
   const measuredHeight = Math.max(260, Number(measuredRect?.height || popover?.offsetHeight || 380));
 
-  const width = Math.min(360, window.innerWidth - viewportPadding * 2);
+  const width = Math.min(
+    Math.max(360, measuredWidth),
+    window.innerWidth - viewportPadding * 2
+  );
 
   if (targetRow) {
     const targetRect = targetRow.getBoundingClientRect();
@@ -1726,7 +1729,7 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
 
     const maxHeight = Math.max(
       140,
-      Math.min(520, availableHeight, window.innerHeight - topSafePadding - viewportPadding)
+      Math.min(760, availableHeight, window.innerHeight - topSafePadding - viewportPadding)
     );
 
     const renderedHeight = Math.min(measuredHeight, maxHeight);
@@ -1743,6 +1746,7 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
       top: `${Math.max(topSafePadding, top)}px`,
       left: `${left}px`,
       width: `${Math.min(width, measuredWidth)}px`,
+      minWidth: "320px",
       maxHeight: `${maxHeight}px`,
       placement,
     };
@@ -1752,7 +1756,8 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
     top: `${topSafePadding}px`,
     left: `${Math.max(viewportPadding, window.innerWidth - 380)}px`,
     width: `${width}px`,
-    maxHeight: `${Math.min(520, window.innerHeight - topSafePadding - viewportPadding)}px`,
+    minWidth: "320px",
+    maxHeight: `${Math.min(760, window.innerHeight - topSafePadding - viewportPadding)}px`,
     placement: "floating",
   };
 }
@@ -1769,6 +1774,7 @@ function positionScanWorkspaceSuggestionPopover(marker) {
   popover.style.right = "auto";
   popover.style.bottom = "auto";
   popover.style.width = position.width;
+  popover.style.minWidth = position.minWidth || "";
   popover.style.maxHeight = position.maxHeight;
 
   popover.classList.toggle("is-above", position.placement === "above");
@@ -1876,47 +1882,6 @@ function getScanWorkspaceGuidanceSignalTerms(marker) {
   return terms.slice(0, 3);
 }
 
-function buildLocalScanWorkspacePhraseOptions(marker) {
-  const currentText = String(
-    getScanWorkspaceManualTextForMarker(marker) || marker?.originalText || ""
-  ).trim();
-  if (!currentText) return [];
-
-  const terms = getScanWorkspaceGuidanceSignalTerms(marker);
-  const primaryTerm = terms[0] || "";
-  const options = [];
-  const seen = new Set();
-
-  const addOption = (text, optionId) => {
-    const safeText = String(text || "").trim();
-    const key = normalizeScanWorkspaceManualEditKeyText(safeText);
-    if (!safeText || !key || seen.has(key)) return;
-    seen.add(key);
-    options.push({
-      option_id: optionId,
-      text: safeText,
-      source: "browser_guidance_phrase_fallback",
-      supported_terms: terms,
-      requires_review: true,
-      can_accept_directly: false,
-    });
-  };
-
-  if (primaryTerm && !normalizeScanWorkspaceAnchorText(currentText).includes(normalizeScanWorkspaceAnchorText(primaryTerm))) {
-    const match = currentText.match(/^([A-Z][A-Za-z-]+)\s+(.*)$/);
-    if (match) {
-      addOption(`${match[1]} ${primaryTerm} ${match[2].trim()}`, "phrase_local_1");
-    }
-    addOption(
-      `${currentText.replace(/\.$/, "")}, surfacing ${primaryTerm} relevance while preserving the original scope`,
-      "phrase_local_2"
-    );
-  }
-
-  addOption(currentText, "phrase_local_3");
-  return options.slice(0, 3);
-}
-
 function buildScanWorkspacePhraseRequest(marker) {
   const baseRequest = buildScanWorkspaceDocumentPreviewRequest([]);
   if (!baseRequest || !marker) return null;
@@ -1949,7 +1914,7 @@ function renderScanWorkspacePhraseOptionsHtml(marker) {
         data-scan-phrase-action="generate"
         ${scanWorkspacePhraseState.isLoading && isCurrentMarker ? "disabled" : ""}
       >
-        ${scanWorkspacePhraseState.isLoading && isCurrentMarker ? "Generating..." : "Generate phrase options"}
+        ${scanWorkspacePhraseState.isLoading && isCurrentMarker ? "Generating..." : "Generate LLM phrase options"}
       </button>
 
       ${errorText ? `
@@ -2521,8 +2486,9 @@ async function generateScanWorkspacePhrasesForActiveMarker() {
   const requestBody = buildScanWorkspacePhraseRequest(marker);
   if (!requestBody) {
     scanWorkspacePhraseState.markerId = marker.id;
-    scanWorkspacePhraseState.options = buildLocalScanWorkspacePhraseOptions(marker);
-    scanWorkspacePhraseState.lastNote = "Generated local phrase options.";
+    scanWorkspacePhraseState.options = [];
+    scanWorkspacePhraseState.lastNote = "";
+    scanWorkspacePhraseState.lastError = "Cannot generate phrase options for this scan row.";
     renderScanWorkspaceSuggestionPopover();
     return;
   }
@@ -2559,20 +2525,16 @@ async function generateScanWorkspacePhrasesForActiveMarker() {
     const responseOptions = Array.isArray(response?.options)
       ? response.options
       : [];
-    scanWorkspacePhraseState.options = responseOptions.length
-      ? responseOptions
-      : buildLocalScanWorkspacePhraseOptions(marker);
-    scanWorkspacePhraseState.lastNote = responseOptions.length
-      ? ""
-      : "Generated local phrase options.";
-  } catch (err) {
-    scanWorkspacePhraseState.options = buildLocalScanWorkspacePhraseOptions(marker);
-    scanWorkspacePhraseState.lastNote = scanWorkspacePhraseState.options.length
-      ? "Generated local phrase options while backend phrase generation was unavailable."
+    scanWorkspacePhraseState.options = responseOptions;
+    scanWorkspacePhraseState.lastNote = String(response?.note || "").trim();
+    scanWorkspacePhraseState.lastError = !responseOptions.length
+      ? String(response?.llm_error || "").trim()
       : "";
-    scanWorkspacePhraseState.lastError = scanWorkspacePhraseState.options.length
-      ? ""
-      : err instanceof Error ? err.message : "Failed to generate phrase options.";
+  } catch (err) {
+    scanWorkspacePhraseState.options = [];
+    scanWorkspacePhraseState.lastNote = "";
+    scanWorkspacePhraseState.lastError =
+      err instanceof Error ? err.message : "Failed to generate LLM phrase options.";
   } finally {
     scanWorkspacePhraseState.isLoading = false;
     renderScanWorkspaceSuggestionPopover();

@@ -1524,6 +1524,64 @@
   box-shadow: 0 0 0 3px rgba(31, 128, 224, 0.12);
 }
 
+.scan-workspace-phrase-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.scan-workspace-phrase-generate-btn {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(46, 120, 219, 0.24);
+  background: #eef6ff;
+  color: #1d5fae;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.scan-workspace-phrase-generate-btn:disabled {
+  opacity: 0.58;
+  cursor: wait;
+}
+
+.scan-workspace-phrase-option-list {
+  display: grid;
+  gap: 7px;
+}
+
+.scan-workspace-phrase-option {
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(46, 120, 219, 0.24);
+  background: #ffffff;
+  color: #172033;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+  cursor: pointer;
+}
+
+.scan-workspace-phrase-option:hover {
+  border-color: rgba(46, 120, 219, 0.56);
+  background: #f8fbff;
+}
+
+.scan-workspace-phrase-status {
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.scan-workspace-phrase-status.is-error {
+  color: #c24141;
+}
+
 .scan-workspace-suggestion-popover-meta {
   display: none;
 }

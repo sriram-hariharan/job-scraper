@@ -74,6 +74,7 @@ const scanWorkspacePersistenceState = {
 const scanWorkspacePhraseState = {
   isLoading: false,
   lastError: "",
+  lastNote: "",
   markerId: "",
   options: [],
 };
@@ -976,6 +977,25 @@ function getAcceptedCandidateSignature() {
   return getEffectiveAcceptedCompareCandidateIds().join("|");
 }
 
+function getScanWorkspaceDraftPreviewSignature(selectedPatchCandidateIds = getEffectiveAcceptedCompareCandidateIds()) {
+  const normalizedIds = Array.from(
+    new Set(
+      (Array.isArray(selectedPatchCandidateIds) ? selectedPatchCandidateIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  ).sort();
+  const normalizedManualEdits = Object.entries(getScanWorkspaceManualBulletEdits())
+    .map(([key, value]) => [String(key || "").trim(), String(value || "").trim()])
+    .filter((row) => row[0] && row[1])
+    .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
+
+  return JSON.stringify({
+    selected_patch_candidate_ids: normalizedIds,
+    manual_bullet_edits: normalizedManualEdits,
+  });
+}
+
 function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []) {
   const context = getScanWorkspaceContext();
   if (!context || !context.tailoringJsonPath || !context.resumeName) {
@@ -1357,7 +1377,7 @@ function renderScanWorkspaceLiveDraftPreviewInto() {
 async function fetchScanWorkspaceDocumentPreview() {
   const previewMeta = getScanWorkspaceInput("scanWorkspacePreviewMeta");
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
-  const currentSignature = acceptedIds.join("|");
+  const currentSignature = getScanWorkspaceDraftPreviewSignature(acceptedIds);
   const requestSeq = ++scanWorkspacePreviewState.documentPreviewRequestSeq;
 
   scanWorkspacePreviewState.isDocumentPreviewLoading = true;
@@ -1385,7 +1405,7 @@ async function fetchScanWorkspaceDocumentPreview() {
 }
 
 function ensureScanWorkspaceDocumentPreviewLoaded({ force = false } = {}) {
-  const acceptedSignature = getAcceptedCandidateSignature();
+  const acceptedSignature = getScanWorkspaceDraftPreviewSignature();
 
   if (
     !force &&
@@ -1564,6 +1584,7 @@ function openScanWorkspaceSuggestionPopover(markerId) {
   if (!targetRow) return false;
 
   scanWorkspaceAnnotationState.activeMarkerId = marker.id;
+  resetScanWorkspacePhraseState(marker.id);
   renderScanWorkspaceAnnotationShell();
 
   window.requestAnimationFrame(() => {
@@ -1820,6 +1841,144 @@ function getScanWorkspaceManualTextForMarker(marker) {
   const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
   if (!bulletKey) return "";
   return String(getScanWorkspaceManualBulletEdits()[bulletKey] || "").trim();
+}
+
+function resetScanWorkspacePhraseState(markerId = "") {
+  scanWorkspacePhraseState.isLoading = false;
+  scanWorkspacePhraseState.lastError = "";
+  scanWorkspacePhraseState.lastNote = "";
+  scanWorkspacePhraseState.markerId = String(markerId || "").trim();
+  scanWorkspacePhraseState.options = [];
+}
+
+function getScanWorkspaceGuidanceSignalTerms(marker) {
+  const terms = [];
+  const seen = new Set();
+  const addTerm = (value) => {
+    const safe = String(value || "")
+      .replace(/\bthis opening clause\b/gi, "")
+      .replace(/\bopening clause\b/gi, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/^[,.;:\s]+|[,.;:\s]+$/g, "");
+    if (!safe || safe.length > 48) return;
+    const key = safe.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    terms.push(safe);
+  };
+
+  const guidance = String(marker?.suggestedText || marker?.reasonText || "").trim();
+  const leadMatch = guidance.match(/\blead with\s+(.+?)\s+(?:in|within|then|and)\b/i);
+  if (leadMatch) addTerm(leadMatch[1]);
+
+  (Array.isArray(marker?.supportedTerms) ? marker.supportedTerms : []).forEach(addTerm);
+  return terms.slice(0, 3);
+}
+
+function buildLocalScanWorkspacePhraseOptions(marker) {
+  const currentText = String(
+    getScanWorkspaceManualTextForMarker(marker) || marker?.originalText || ""
+  ).trim();
+  if (!currentText) return [];
+
+  const terms = getScanWorkspaceGuidanceSignalTerms(marker);
+  const primaryTerm = terms[0] || "";
+  const options = [];
+  const seen = new Set();
+
+  const addOption = (text, optionId) => {
+    const safeText = String(text || "").trim();
+    const key = normalizeScanWorkspaceManualEditKeyText(safeText);
+    if (!safeText || !key || seen.has(key)) return;
+    seen.add(key);
+    options.push({
+      option_id: optionId,
+      text: safeText,
+      source: "browser_guidance_phrase_fallback",
+      supported_terms: terms,
+      requires_review: true,
+      can_accept_directly: false,
+    });
+  };
+
+  if (primaryTerm && !normalizeScanWorkspaceAnchorText(currentText).includes(normalizeScanWorkspaceAnchorText(primaryTerm))) {
+    const match = currentText.match(/^([A-Z][A-Za-z-]+)\s+(.*)$/);
+    if (match) {
+      addOption(`${match[1]} ${primaryTerm} ${match[2].trim()}`, "phrase_local_1");
+    }
+    addOption(
+      `${currentText.replace(/\.$/, "")}, surfacing ${primaryTerm} relevance while preserving the original scope`,
+      "phrase_local_2"
+    );
+  }
+
+  addOption(currentText, "phrase_local_3");
+  return options.slice(0, 3);
+}
+
+function buildScanWorkspacePhraseRequest(marker) {
+  const baseRequest = buildScanWorkspaceDocumentPreviewRequest([]);
+  if (!baseRequest || !marker) return null;
+
+  return {
+    tailoring_json_path: baseRequest.tailoring_json_path,
+    selected_resume: baseRequest.selected_resume,
+    bullet_key: getScanWorkspaceMarkerBulletKey(marker),
+    current_text: getScanWorkspaceManualTextForMarker(marker) || String(marker?.originalText || "").trim(),
+    guidance_text: String(marker?.suggestedText || marker?.reasonText || "").trim(),
+    supported_terms: Array.isArray(marker?.supportedTerms) ? marker.supportedTerms : [],
+  };
+}
+
+function renderScanWorkspacePhraseOptionsHtml(marker) {
+  if (!marker || isScanWorkspaceReplacementMarker(marker)) return "";
+
+  const isCurrentMarker = scanWorkspacePhraseState.markerId === marker.id;
+  const options = isCurrentMarker && Array.isArray(scanWorkspacePhraseState.options)
+    ? scanWorkspacePhraseState.options
+    : [];
+  const errorText = isCurrentMarker ? String(scanWorkspacePhraseState.lastError || "").trim() : "";
+  const noteText = isCurrentMarker ? String(scanWorkspacePhraseState.lastNote || "").trim() : "";
+
+  return `
+    <div class="scan-workspace-phrase-tools">
+      <button
+        type="button"
+        class="scan-workspace-phrase-generate-btn"
+        data-scan-phrase-action="generate"
+        ${scanWorkspacePhraseState.isLoading && isCurrentMarker ? "disabled" : ""}
+      >
+        ${scanWorkspacePhraseState.isLoading && isCurrentMarker ? "Generating..." : "Generate phrase options"}
+      </button>
+
+      ${errorText ? `
+        <div class="scan-workspace-phrase-status is-error">
+          ${scanWorkspaceEscapeHtml(errorText)}
+        </div>
+      ` : ""}
+
+      ${noteText ? `
+        <div class="scan-workspace-phrase-status">
+          ${scanWorkspaceEscapeHtml(noteText)}
+        </div>
+      ` : ""}
+
+      ${options.length ? `
+        <div class="scan-workspace-phrase-option-list">
+          ${options.map((option, index) => `
+            <button
+              type="button"
+              class="scan-workspace-phrase-option"
+              data-scan-phrase-option="${scanWorkspaceEscapeHtml(String(option?.option_id || index))}"
+            >
+              ${scanWorkspaceEscapeHtml(String(option?.text || "").trim())}
+            </button>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
 }
 
 function getScanWorkspaceMarkerAnchorTexts(marker) {
@@ -2079,6 +2238,7 @@ function renderScanWorkspaceSuggestionPopoverCopyHtml(marker) {
         rows="5"
         placeholder="Rewrite this bullet using the guidance above."
       >${scanWorkspaceEscapeHtml(getScanWorkspaceManualTextForMarker(marker) || originalText)}</textarea>
+      ${renderScanWorkspacePhraseOptionsHtml(marker)}
     </div>
     ${reasonText && reasonText !== suggestedText ? `
       <div class="scan-workspace-suggestion-reason" style="margin-top: 10px;">
@@ -2352,6 +2512,88 @@ async function revertScanWorkspaceGuidanceEditForActiveMarker() {
   }
 }
 
+async function generateScanWorkspacePhrasesForActiveMarker() {
+  const marker = getScanWorkspaceAnnotationMarkerById(
+    scanWorkspaceAnnotationState.activeMarkerId
+  );
+  if (!marker || isScanWorkspaceReplacementMarker(marker)) return;
+
+  const requestBody = buildScanWorkspacePhraseRequest(marker);
+  if (!requestBody) {
+    scanWorkspacePhraseState.markerId = marker.id;
+    scanWorkspacePhraseState.options = buildLocalScanWorkspacePhraseOptions(marker);
+    scanWorkspacePhraseState.lastNote = "Generated local phrase options.";
+    renderScanWorkspaceSuggestionPopover();
+    return;
+  }
+
+  scanWorkspacePhraseState.isLoading = true;
+  scanWorkspacePhraseState.lastError = "";
+  scanWorkspacePhraseState.lastNote = "";
+  scanWorkspacePhraseState.markerId = marker.id;
+  scanWorkspacePhraseState.options = [];
+  renderScanWorkspaceSuggestionPopover();
+
+  try {
+    const response =
+      typeof postJsonWithTimeout === "function"
+        ? await postJsonWithTimeout("/planning/generate-scan-phrases", requestBody, 20000)
+        : await fetch("/planning/generate-scan-phrases", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(requestBody),
+          }).then(async (res) => {
+            if (!res.ok) {
+              let message = `Request failed (${res.status})`;
+              try {
+                const data = await res.json();
+                message = String(data?.detail || data?.error_message || message);
+              } catch {
+                // ignore secondary parse error
+              }
+              throw new Error(message);
+            }
+            return res.json();
+          });
+
+    const responseOptions = Array.isArray(response?.options)
+      ? response.options
+      : [];
+    scanWorkspacePhraseState.options = responseOptions.length
+      ? responseOptions
+      : buildLocalScanWorkspacePhraseOptions(marker);
+    scanWorkspacePhraseState.lastNote = responseOptions.length
+      ? ""
+      : "Generated local phrase options.";
+  } catch (err) {
+    scanWorkspacePhraseState.options = buildLocalScanWorkspacePhraseOptions(marker);
+    scanWorkspacePhraseState.lastNote = scanWorkspacePhraseState.options.length
+      ? "Generated local phrase options while backend phrase generation was unavailable."
+      : "";
+    scanWorkspacePhraseState.lastError = scanWorkspacePhraseState.options.length
+      ? ""
+      : err instanceof Error ? err.message : "Failed to generate phrase options.";
+  } finally {
+    scanWorkspacePhraseState.isLoading = false;
+    renderScanWorkspaceSuggestionPopover();
+  }
+}
+
+function applyScanWorkspacePhraseOption(optionId) {
+  const safeOptionId = String(optionId || "").trim();
+  const textarea = getScanWorkspaceInput("scanWorkspaceGuidanceTextarea");
+  if (!safeOptionId || !textarea) return;
+
+  const option = (scanWorkspacePhraseState.options || []).find((item, index) => (
+    String(item?.option_id || index).trim() === safeOptionId
+  ));
+  const text = String(option?.text || "").trim();
+  if (!text) return;
+
+  textarea.value = text;
+  textarea.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 function bindScanWorkspaceAnnotationShell() {
   const overlay = getScanWorkspaceInput("scanWorkspaceAnnotationOverlay");
   if (overlay && overlay.dataset.bound !== "true") {
@@ -2412,6 +2654,9 @@ function bindScanWorkspaceAnnotationShell() {
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
   if (popover && popover.dataset.guidanceBound !== "true") {
     popover.dataset.guidanceBound = "true";
+    popover.addEventListener("click", (event) => {
+      event.stopPropagation();
+    });
     popover.addEventListener("input", (event) => {
       const textarea = event.target.closest("[data-scan-guidance-textarea]");
       if (!textarea) return;
@@ -2420,6 +2665,21 @@ function bindScanWorkspaceAnnotationShell() {
         scanWorkspaceAnnotationState.activeMarkerId
       );
       refreshScanWorkspaceGuidanceSaveButton(marker);
+    });
+    popover.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const generateBtn = event.target.closest("[data-scan-phrase-action='generate']");
+      if (generateBtn) {
+        event.preventDefault();
+        generateScanWorkspacePhrasesForActiveMarker();
+        return;
+      }
+
+      const optionBtn = event.target.closest("[data-scan-phrase-option]");
+      if (optionBtn) {
+        event.preventDefault();
+        applyScanWorkspacePhraseOption(optionBtn.dataset.scanPhraseOption);
+      }
     });
   }
 
@@ -2611,7 +2871,7 @@ function renderScanWorkspaceCompareShell() {
 
 async function ensureScanWorkspaceCompareLoaded({ force = false } = {}) {
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
-  const acceptedSignature = acceptedIds.join("|");
+  const acceptedSignature = getScanWorkspaceDraftPreviewSignature(acceptedIds);
 
   if (
     !force &&
@@ -2727,7 +2987,12 @@ function bindScanWorkspaceGlobalShortcuts() {
     const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
     if (!popover || popover.classList.contains("hidden")) return;
 
-    const clickedInsidePopover = event.target instanceof Element && event.target.closest("#scanWorkspaceSuggestionPopover");
+    const eventPath = typeof event.composedPath === "function"
+      ? event.composedPath()
+      : [];
+    const clickedInsidePopover =
+      eventPath.includes(popover) ||
+      (event.target instanceof Element && event.target.closest("#scanWorkspaceSuggestionPopover"));
     const clickedMarker =
       event.target instanceof Element &&
       event.target.closest("[data-scan-annotation-marker]");

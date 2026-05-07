@@ -9561,15 +9561,16 @@ function getScanWorkspaceIssueMeta(bucket) {
 
 function getScanWorkspaceIssueMetaForItem(item, bucket) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
-  if (item?.has_ai_suggestion === true || rowActionType === "direct_replacement") return "AI Suggested";
+  if (rowActionType === "direct_replacement") return "AI Suggested";
+  if (rowActionType === "guidance" && item?.has_ai_suggestion === true) return "AI guidance";
   if (rowActionType === "matched") return "Backed";
-  if (rowActionType === "guidance") return "Manual guidance";
+  if (rowActionType === "guidance") return "Manual edit";
   if (bucket === "matched") return "Backed";
-  if (bucket === "missing") return "Manual guidance";
+  if (bucket === "missing") return "Manual edit";
   if (bucket === "ai") return "AI Suggested";
   if (bucket === "ai_optimize") return "AI replacement";
   if (bucket === "trusted") return "Ready";
-  if (bucket === "guidance") return "Manual guidance";
+  if (bucket === "guidance") return "Manual edit";
   return "Review";
 }
 

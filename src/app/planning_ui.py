@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_23" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_24" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1878,8 +1878,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260429_scan_f1c"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_29"></script>
+  <script src="/static/planning.js?v=planning_ui_20260506_scan_phrase1"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_30"></script>
 </body>
 </html>
     """.strip()

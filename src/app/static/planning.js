@@ -9226,6 +9226,8 @@ function normalizeScanWorkspaceContractIssue(issue) {
       ? Number(issue.score_priority_weight)
       : 0,
     score_priority_source: String(issue?.score_priority_source || "").trim(),
+    predicted_skill: issue?.predicted_skill === true,
+    prediction_source: String(issue?.prediction_source || "").trim(),
     matched_count: issue?.matched_count,
     required_count: issue?.required_count,
     coverage_label: String(issue?.coverage_label || "").trim(),
@@ -9305,6 +9307,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
     const matchedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "matched");
     const missingItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "missing");
     const aiItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "ai");
+    const predictedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "predicted");
     const bucketRows = Array.isArray(sourceGroup?.buckets) ? sourceGroup.buckets : [];
 
     const panel = {
@@ -9318,10 +9321,20 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       missingCount: missingItems.length,
       aiCount: aiItems.length,
       totalCount: groupIssues.length,
+      predictedCount: predictedItems.length,
       groups: [],
     };
 
     if (groupId === "skills") {
+      if (predictedItems.length) {
+        panel.groups.push({
+          title: "Predicted skills",
+          summary: `${predictedItems.length} role-adjacent skill(s), not explicit JD requirements.`,
+          bucket: "predicted",
+          items: predictedItems,
+        });
+      }
+
       const skillTypeOrder = [
         { key: "hard_skill", label: "Hard skills" },
         { key: "soft_skill", label: "Soft skills" },
@@ -9337,6 +9350,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
         matched: "Matched",
         missing: "Missing / optimization opportunities",
         ai: "AI suggested",
+        predicted: "Predicted skills",
       };
 
       skillTypeOrder.forEach((skillType) => {
@@ -9695,6 +9709,7 @@ function getScanWorkspaceIssueMetaForItem(item, bucket) {
   if (rowActionType === "direct_replacement") return "AI Suggested";
   if (rowActionType === "phrase_generation") return "Phrase";
   if (rowActionType === "manual_guidance") return "Manual edit";
+  if (rowActionType === "predicted_skill" || bucket === "predicted") return "Predicted";
   if (rowActionType === "guidance" && item?.has_ai_suggestion === true) return "AI guidance";
   if (rowActionType === "matched" && isDeterministicCheckGroup) return "Check";
   if (rowActionType === "matched" && groupId === "skills") return "";
@@ -9702,6 +9717,7 @@ function getScanWorkspaceIssueMetaForItem(item, bucket) {
   if (rowActionType === "guidance") return "Manual edit";
   if (bucket === "matched") return isDeterministicCheckGroup ? "Check" : "Backed";
   if (bucket === "missing") return "Manual edit";
+  if (bucket === "predicted") return "Predicted";
   if (bucket === "ai") return "AI Suggested";
   if (bucket === "ai_optimize") return "AI replacement";
   if (bucket === "trusted") return "Ready";
@@ -9785,6 +9801,7 @@ function getScanWorkspaceIssueRightLabel(item, bucket) {
 
   if (rowActionType === "phrase_generation") return rowActionLabel || "Phrase";
   if (rowActionType === "manual_guidance") return rowActionLabel || "Guidance";
+  if (rowActionType === "predicted_skill" || bucket === "predicted") return rowActionLabel || "Predicted";
 
   const coverage = getScanWorkspaceIssueCoverageLabel(item);
   if (coverage) return coverage;
@@ -9805,6 +9822,7 @@ function getScanWorkspaceIssueToneClassForItem(item, bucket) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
   if (rowActionType === "matched") return "is-matched";
   if (rowActionType === "direct_replacement") return "is-ai";
+  if (rowActionType === "predicted_skill" || bucket === "predicted") return "is-predicted";
   if (rowActionType === "phrase_generation" || rowActionType === "manual_guidance") return "is-missing";
   if (bucket === "matched" || bucket === "trusted") return "is-matched";
   if (bucket === "ai" || bucket === "ai_optimize") return "is-ai";

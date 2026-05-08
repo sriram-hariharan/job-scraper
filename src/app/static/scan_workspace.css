@@ -1237,6 +1237,11 @@
   box-shadow: 0 0 0 3px rgba(120, 166, 255, 0.14);
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-row.is-predicted .scan-workspace-issue-status {
+  background: rgba(245, 194, 93, 0.96);
+  box-shadow: 0 0 0 3px rgba(245, 194, 93, 0.14);
+}
+
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-row.is-active .scan-workspace-issue-status {
   background: rgba(120, 166, 255, 0.98);
   box-shadow: 0 0 0 4px rgba(120, 166, 255, 0.18);

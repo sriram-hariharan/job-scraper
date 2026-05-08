@@ -2047,6 +2047,148 @@ def _scan_jd_context_anchors_for_term(
     return anchors
 
 
+_SCAN_PREDICTED_SKILL_TERMS_BY_ROLE = {
+    "machine_learning_engineer": [
+        "Python",
+        "PyTorch",
+        "Tensorflow",
+        "Spark",
+        "Kubernetes",
+        "Docker",
+    ],
+    "data_scientist": [
+        "Python",
+        "SQL",
+        "Machine learning",
+        "Statistical modeling",
+        "A/B testing",
+        "Causal inference",
+    ],
+    "analytics_engineer": [
+        "SQL",
+        "dbt",
+        "Snowflake",
+        "BigQuery",
+        "Airflow",
+    ],
+}
+
+
+def _scan_predicted_skill_role_key(
+    *,
+    tailoring_summary: Dict[str, Any] | None = None,
+    jd_record: Dict[str, Any] | None = None,
+) -> str:
+    summary = dict(tailoring_summary or {})
+    record = dict(jd_record or {})
+    role_blob = " ".join(
+        _clean_text(value).lower()
+        for value in (
+            _scan_searchability_target_title(summary),
+            summary.get("role_archetype"),
+            record.get("role_archetype"),
+            record.get("role_family"),
+            record.get("title"),
+            record.get("job_title"),
+        )
+        if _clean_text(value)
+    )
+
+    if "machine learning engineer" in role_blob or "ml_engineer" in role_blob or "ml engineer" in role_blob:
+        return "machine_learning_engineer"
+    if "analytics engineer" in role_blob:
+        return "analytics_engineer"
+    if "data scientist" in role_blob or "data science" in role_blob:
+        return "data_scientist"
+    return ""
+
+
+def _build_predicted_skill_scan_rows(
+    *,
+    existing_issues: List[Dict[str, Any]],
+    resume_evidence: Any = None,
+    tailoring_summary: Dict[str, Any] | None = None,
+    jd_record: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
+    role_key = _scan_predicted_skill_role_key(
+        tailoring_summary=tailoring_summary,
+        jd_record=jd_record,
+    )
+    if not role_key:
+        return []
+
+    existing_terms = {
+        _scan_issue_canonical_term(issue.get("display_term") or issue.get("title"))
+        for issue in existing_issues
+        if _clean_text(issue.get("group_id")) == "skills"
+    }
+    jd_text = _scan_jd_text_from_record(jd_record).lower()
+
+    rows: List[Dict[str, Any]] = []
+    for term in _SCAN_PREDICTED_SKILL_TERMS_BY_ROLE.get(role_key, []):
+        canonical = _scan_issue_canonical_term(term)
+        if not canonical or canonical in existing_terms:
+            continue
+        if _scan_issue_text_contains_term(jd_text, term):
+            continue
+
+        matched_count = _scan_resume_term_match_count(term, resume_evidence)
+        row_action_type = "predicted_skill"
+        rows.append(
+            {
+                "issue_id": f"scan_issue:skills:predicted:{canonical.replace(' ', '_')}",
+                "candidate_id": "",
+                "replacement_candidate_id": "",
+                "source_lane": "predicted_skill_check",
+                "keyword_source": "predicted_skill",
+                "group_id": "skills",
+                "group_label": _scan_issue_group_label("skills"),
+                "bucket": "predicted",
+                "bucket_label": "Predicted skills",
+                "title": _scan_issue_display_label(term),
+                "display_term": _scan_issue_display_label(term),
+                "canonical_term": canonical,
+                "term_family": "skills",
+                "skill_type": "hard_skill",
+                "skill_type_label": "Hard skill",
+                "score_priority_rank": 0,
+                "score_priority_label": "Predicted role-adjacent skill",
+                "score_priority_weight": 0.0,
+                "score_priority_source": "role_based_prediction",
+                "matched_count": matched_count,
+                "required_count": 0,
+                "coverage_label": "Predicted",
+                "matched_count_label": "",
+                "evidence_anchors": _scan_resume_evidence_anchors_for_term(term, resume_evidence),
+                "jd_context_anchors": [],
+                "jd_context_label": "",
+                "has_ai_suggestion": False,
+                "linked_candidate_ids": [],
+                "best_candidate_id": "",
+                "row_action_type": row_action_type,
+                "row_action_label": "Predicted",
+                "scan_issue_type": row_action_type,
+                "severity": "low",
+                "projected_score_delta_points": None,
+                "is_visible_in_review": True,
+                "can_accept": False,
+                "can_accept_all": False,
+                "can_focus_preview": False,
+                "anchor_strategy": "none",
+                "supported_jd_signals": [],
+                "reason": "Common role-adjacent skill inferred from the target role, not explicitly detected in the JD.",
+                "predicted_skill": True,
+                "prediction_source": role_key,
+                "raw": {
+                    "source": "role_based_predicted_skill",
+                    "role_key": role_key,
+                },
+            }
+        )
+
+    return rows
+
+
 def _scan_resume_visible_term_keys(resume_evidence: Any) -> set[str]:
     if resume_evidence is None:
         return set()
@@ -3255,6 +3397,14 @@ def _build_tailoring_scan_issue_contract(
         + _scan_keyword_rows_from_non_skill_replacement_issues(replacement_issues)
         + _scan_keyword_rows_from_generic_issues(deterministic_issues)
     )
+    issues.extend(
+        _build_predicted_skill_scan_rows(
+            existing_issues=issues,
+            resume_evidence=resume_evidence,
+            tailoring_summary=tailoring_summary,
+            jd_record=jd_record,
+        )
+    )
 
     hidden_replacement_issues = [
         issue for issue in replacement_issues
@@ -3293,6 +3443,7 @@ def _build_tailoring_scan_issue_contract(
             "matched": sum(1 for issue in group_issues if issue.get("bucket") == "matched"),
             "missing": sum(1 for issue in group_issues if issue.get("bucket") == "missing"),
             "ai": sum(1 for issue in group_issues if issue.get("bucket") == "ai"),
+            "predicted": sum(1 for issue in group_issues if issue.get("bucket") == "predicted"),
         }
 
     def _skill_type_counts() -> Dict[str, int]:
@@ -3333,6 +3484,12 @@ def _build_tailoring_scan_issue_contract(
                     "bucket": "ai",
                     "label": "AI suggested",
                     "count": skills_counts["ai"],
+                },
+                {
+                    "bucket": "predicted",
+                    "label": "Predicted skills",
+                    "count": skills_counts["predicted"],
+                    "summary": "Role-adjacent skills inferred from the target title, not explicit JD requirements.",
                 },
             ],
         },

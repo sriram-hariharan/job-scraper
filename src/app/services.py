@@ -26,6 +26,7 @@ from src.config.consts import (
     _SCAN_SIGNAL_DISPLAY_OVERRIDES,
     _SCAN_SKILLS_SIGNAL_KEYS,
     _SCAN_TITLE_SIGNAL_PATTERNS,
+    DOMAIN_SIGNAL_PATTERNS,
 )
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
@@ -57,6 +58,13 @@ from src.storage.notification_state.store import (
 )
 from src.storage.notification_state.read_postgres import (
     get_notification_state_postgres_status_payload,
+)
+from src.storage.saved_scans.store import (
+    insert_saved_scan_row_to_postgres,
+    saved_scan_db_row,
+)
+from src.storage.saved_scans.read_postgres import (
+    get_saved_scans_postgres_payload,
 )
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
@@ -100,6 +108,9 @@ DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
 DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
 DEFAULT_PROFILE_RESUME_DIR = Path(
     os.environ.get("RESUME_DIR", "data/profile_resumes")
+).expanduser()
+DEFAULT_SCAN_UPLOAD_DIR = Path(
+    os.environ.get("SCAN_UPLOAD_DIR", "data/scan_uploads")
 ).expanduser()
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
@@ -199,6 +210,12 @@ def _get_resume_dir() -> Path:
     return resume_dir
 
 
+def _get_scan_upload_dir() -> Path:
+    upload_dir = DEFAULT_SCAN_UPLOAD_DIR
+    upload_dir.mkdir(parents=True, exist_ok=True)
+    return upload_dir
+
+
 def _sanitize_resume_filename(value: str) -> str:
     raw = str(value or "").strip()
     safe = Path(raw).name
@@ -211,6 +228,23 @@ def _sanitize_resume_filename(value: str) -> str:
 
     if re.search(r"[/\\\\]", safe):
         raise ValueError("Invalid resume filename.")
+
+    return safe
+
+
+def _sanitize_scan_upload_filename(value: str) -> str:
+    raw = str(value or "").strip()
+    safe = Path(raw).name
+
+    if not raw or not safe or safe != raw:
+        raise ValueError("Invalid scan upload filename.")
+
+    suffix = Path(safe).suffix.lower()
+    if suffix not in {".pdf", ".docx", ".txt"}:
+        raise ValueError("Only PDF, DOCX, and TXT scan uploads are supported.")
+
+    if re.search(r"[/\\\\]", safe):
+        raise ValueError("Invalid scan upload filename.")
 
     return safe
 
@@ -282,6 +316,196 @@ def profile_delete_resume_payload(resume_name: str) -> Dict[str, Any]:
         "message": "Resume deleted.",
         "resume_name": safe_name,
     }
+
+
+def _scan_upload_mime_type(filename: str, fallback: str = "") -> str:
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".pdf":
+        return "application/pdf"
+    if suffix == ".docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if suffix == ".txt":
+        return "text/plain"
+    return _clean_text(fallback) or "application/octet-stream"
+
+
+def _scan_upload_target_path(filename: str, scan_timestamp: str) -> Path:
+    upload_dir = _get_scan_upload_dir()
+    safe_name = _sanitize_scan_upload_filename(filename)
+    stamp = re.sub(r"[^0-9A-Za-z]+", "_", scan_timestamp).strip("_")[:40] or "scan"
+    digest = hashlib.sha1(f"{scan_timestamp}:{safe_name}".encode("utf-8")).hexdigest()[:10]
+    return upload_dir / f"{stamp}_{digest}_{safe_name}"
+
+
+def _dual_write_saved_scan_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
+    database_url = str(os.environ.get("DATABASE_URL", "") or "").strip()
+    if not database_url:
+        return {
+            "attempted": False,
+            "ok": False,
+            "skipped": "missing_database_url",
+            "table_name": "saved_scans",
+        }
+
+    try:
+        payload = insert_saved_scan_row_to_postgres(
+            record=row,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            allow_contract_drift=False,
+            ensure_schema=True,
+        )
+        return {
+            "attempted": True,
+            "ok": True,
+            "table_name": payload.get("table_name", "saved_scans"),
+            "scan_id": str(payload.get("row", {}).get("scan_id", "") or ""),
+            "contract_health_ok": bool(payload.get("contract_health_ok", False)),
+            "command_text": str(payload.get("command_text", "") or ""),
+        }
+    except SystemExit as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "saved_scans",
+            "error_type": "SystemExit",
+            "error": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "attempted": True,
+            "ok": False,
+            "table_name": "saved_scans",
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
+
+
+def create_saved_scan_payload(
+    *,
+    company: str = "",
+    role: str = "",
+    job_description_text: str = "",
+    job_url: str = "",
+    job_doc_id: str = "",
+    saved_resume_name: str = "",
+    resume_text: str = "",
+    upload_filename: str = "",
+    upload_content_type: str = "",
+    upload_bytes: bytes | None = None,
+    tailoring_json_path: str = "",
+) -> Dict[str, Any]:
+    safe_company = _clean_text(company)
+    safe_role = _clean_text(role)
+    safe_job_description = _clean_text(job_description_text)
+    safe_job_url = _clean_text(job_url)
+    safe_job_doc_id = _clean_text(job_doc_id)
+    safe_resume_text = _clean_text(resume_text)
+    safe_tailoring_json_path = _clean_text(tailoring_json_path)
+
+    if not safe_job_description:
+        raise ValueError("Job description is required for a new scan.")
+
+    scan_timestamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
+    resume_source = "pasted_text"
+    resume_name = ""
+    resume_filename = ""
+    resume_file_path = ""
+    resume_file_mime_type = ""
+    resume_size_bytes = 0
+
+    if upload_bytes:
+        safe_upload_name = _sanitize_scan_upload_filename(upload_filename)
+        target_path = _scan_upload_target_path(safe_upload_name, scan_timestamp)
+        target_path.write_bytes(upload_bytes)
+        resume_source = "uploaded_file"
+        resume_name = Path(safe_upload_name).stem
+        resume_filename = safe_upload_name
+        resume_file_path = str(target_path)
+        resume_file_mime_type = _scan_upload_mime_type(safe_upload_name, upload_content_type)
+        resume_size_bytes = len(upload_bytes)
+    elif _clean_text(saved_resume_name):
+        safe_saved_resume = _sanitize_resume_filename(saved_resume_name)
+        resume_source = "saved_resume"
+        resume_name = safe_saved_resume
+        resume_filename = safe_saved_resume
+        resume_file_path = str((_get_resume_dir() / safe_saved_resume).resolve())
+        resume_file_mime_type = "application/pdf"
+        try:
+            resume_size_bytes = (_get_resume_dir() / safe_saved_resume).stat().st_size
+        except FileNotFoundError:
+            resume_size_bytes = 0
+    elif safe_resume_text:
+        resume_source = "pasted_text"
+        resume_name = "Pasted resume"
+        resume_filename = ""
+    else:
+        raise ValueError("A saved resume, uploaded file, or pasted resume text is required.")
+
+    row = saved_scan_db_row(
+        {
+            "scan_timestamp": scan_timestamp,
+            "scan_source": "scan_workspace_new_scan",
+            "scan_status": "intake_saved",
+            "resume_source": resume_source,
+            "resume_name": resume_name,
+            "resume_filename": resume_filename,
+            "resume_file_path": resume_file_path,
+            "resume_file_mime_type": resume_file_mime_type,
+            "resume_size_bytes": resume_size_bytes,
+            "resume_text": safe_resume_text,
+            "job_doc_id": safe_job_doc_id,
+            "job_url": safe_job_url,
+            "job_company": safe_company,
+            "job_title": safe_role,
+            "job_description_text": safe_job_description,
+            "match_rate": None,
+            "tailoring_json_path": safe_tailoring_json_path,
+            "note": "New scan intake saved. Match report generation will enrich this record.",
+            "payload_json": {
+                "version": "saved_scan_intake_v1",
+                "company": safe_company,
+                "role": safe_role,
+                "has_resume_text": bool(safe_resume_text),
+                "has_uploaded_file": bool(upload_bytes),
+                "job_description_length": len(safe_job_description),
+                "resume_text_length": len(safe_resume_text),
+            },
+        }
+    )
+    postgres_write = _dual_write_saved_scan_postgres(row)
+
+    return {
+        "ok": bool(postgres_write.get("ok", False)),
+        "scan_status": row["scan_status"],
+        "scan": row,
+        "postgres_write": postgres_write,
+    }
+
+
+def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
+    try:
+        payload = get_saved_scans_postgres_payload(limit=limit)
+        return {
+            "ok": True,
+            "source": "postgres",
+            "count": int(payload.get("count", 0) or 0),
+            "total_count": int(payload.get("postgres", {}).get("total_row_count", 0) or 0),
+            "saved_scans": list(payload.get("rows", []) or []),
+            "postgres": payload.get("postgres", {}),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "source": "postgres",
+            "count": 0,
+            "total_count": 0,
+            "saved_scans": [],
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -2189,6 +2413,83 @@ def _build_predicted_skill_scan_rows(
     return rows
 
 
+def _build_other_keyword_scan_rows(
+    *,
+    existing_issues: List[Dict[str, Any]],
+    resume_evidence: Any = None,
+    jd_record: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
+    jd_text = _scan_jd_text_from_record(jd_record)
+    if not jd_text:
+        return []
+
+    existing_terms = {
+        _scan_issue_canonical_term(issue.get("display_term") or issue.get("title"))
+        for issue in existing_issues
+        if _clean_text(issue.get("group_id")) == "skills"
+    }
+
+    rows: List[Dict[str, Any]] = []
+    for term in DOMAIN_SIGNAL_PATTERNS:
+        canonical = _scan_issue_canonical_term(term)
+        if not canonical or canonical in existing_terms:
+            continue
+        if not _scan_issue_text_contains_term(jd_text.lower(), term):
+            continue
+
+        rows.append(
+            {
+                "issue_id": f"scan_issue:skills:other_keyword:{canonical.replace(' ', '_')}",
+                "candidate_id": "",
+                "replacement_candidate_id": "",
+                "source_lane": "other_keyword_check",
+                "keyword_source": "other_keyword",
+                "group_id": "skills",
+                "group_label": _scan_issue_group_label("skills"),
+                "bucket": "other_keyword",
+                "bucket_label": "Other keywords",
+                "title": _scan_issue_display_label(term),
+                "display_term": _scan_issue_display_label(term),
+                "canonical_term": canonical,
+                "term_family": "domain",
+                "skill_type": "other_keyword",
+                "skill_type_label": "Other keyword",
+                "score_priority_rank": 5,
+                "score_priority_label": "Other keywords",
+                "score_priority_weight": 0.0,
+                "score_priority_source": "lower_impact_keyword_group",
+                "matched_count": _scan_resume_term_match_count(term, resume_evidence),
+                "required_count": 0,
+                "coverage_label": "Keyword",
+                "matched_count_label": "",
+                "evidence_anchors": _scan_resume_evidence_anchors_for_term(term, resume_evidence),
+                "jd_context_anchors": _scan_jd_context_anchors_for_term(term, jd_record),
+                "jd_context_label": "",
+                "has_ai_suggestion": False,
+                "linked_candidate_ids": [],
+                "best_candidate_id": "",
+                "row_action_type": "other_keyword",
+                "row_action_label": "Keyword",
+                "scan_issue_type": "other_keyword",
+                "severity": "low",
+                "projected_score_delta_points": None,
+                "is_visible_in_review": True,
+                "can_accept": False,
+                "can_accept_all": False,
+                "can_focus_preview": False,
+                "anchor_strategy": "none",
+                "supported_jd_signals": [_scan_issue_display_label(term)],
+                "reason": "Lower-impact industry or domain term detected in the JD. Use only if truthful and useful.",
+                "other_keyword": True,
+                "raw": {
+                    "source": "domain_other_keyword_check",
+                },
+            }
+        )
+
+    return rows
+
+
 def _scan_resume_visible_term_keys(resume_evidence: Any) -> set[str]:
     if resume_evidence is None:
         return set()
@@ -2619,6 +2920,162 @@ def _scan_resume_document_text(resume_evidence: Any) -> str:
         _clean_text(getattr(document, "raw_text", ""))
         or _clean_text(getattr(document, "normalized_text", ""))
     )
+
+
+_US_STATE_ABBREVIATIONS = {
+    "AL", "AK", "AZ", "AR", "CA", "CO", "CT", "DE", "FL", "GA",
+    "HI", "ID", "IL", "IN", "IA", "KS", "KY", "LA", "ME", "MD",
+    "MA", "MI", "MN", "MS", "MO", "MT", "NE", "NV", "NH", "NJ",
+    "NM", "NY", "NC", "ND", "OH", "OK", "OR", "PA", "RI", "SC",
+    "SD", "TN", "TX", "UT", "VT", "VA", "WA", "WV", "WI", "WY",
+    "DC",
+}
+
+_WORKSPACE_PERSONAL_DETAIL_FIELDS = (
+    "name",
+    "city",
+    "state",
+    "contact",
+    "email",
+    "linkedin",
+)
+
+
+def _normalize_workspace_personal_details(value: Any) -> Dict[str, str]:
+    if isinstance(value, dict):
+        raw_items = value
+    else:
+        raw_text = _clean_text(value)
+        if not raw_text:
+            raw_items = {}
+        else:
+            try:
+                parsed = json.loads(raw_text)
+            except Exception as exc:
+                raise ValueError("personal_details must be a JSON object.") from exc
+            if not isinstance(parsed, dict):
+                raise ValueError("personal_details must be a JSON object.")
+            raw_items = parsed
+
+    normalized = {field: "" for field in _WORKSPACE_PERSONAL_DETAIL_FIELDS}
+    for field in _WORKSPACE_PERSONAL_DETAIL_FIELDS:
+        normalized[field] = _clean_text(raw_items.get(field))
+
+    state = normalized["state"].upper()
+    normalized["state"] = state if state in _US_STATE_ABBREVIATIONS else state[:2]
+    return normalized
+
+
+def _extract_resume_personal_details(resume_evidence: Any) -> Dict[str, str]:
+    details = _normalize_workspace_personal_details({})
+    if resume_evidence is None:
+        return details
+
+    document = getattr(resume_evidence, "document", None)
+    resume_name = _clean_text(getattr(document, "resume_name", ""))
+    if resume_name:
+        try:
+            resume_pdf_path = planning_resume_preview_path(resume_name)
+            for link_item in _workspace_export_extract_pdf_header_link_items(resume_pdf_path):
+                label = _clean_text(link_item.get("label")).lower()
+                uri = _clean_text(link_item.get("uri"))
+                if uri and ("linkedin" in label or "linkedin.com" in uri.lower()):
+                    details["linkedin"] = uri
+                    break
+        except Exception:
+            pass
+
+    raw_text = _scan_resume_document_text(resume_evidence)
+    if not raw_text:
+        return details
+
+    lines = [_clean_text(line) for line in raw_text.splitlines()]
+    lines = [line for line in lines if line]
+    header_lines = lines[:10]
+
+    email_match = re.search(
+        r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b",
+        raw_text,
+        flags=re.IGNORECASE,
+    )
+    if email_match:
+        details["email"] = email_match.group(0)
+
+    phone_match = re.search(
+        r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b",
+        raw_text,
+    )
+    if phone_match:
+        details["contact"] = phone_match.group(0).strip()
+
+    linkedin_match = re.search(
+        r"(?:https?://)?(?:www\.)?linkedin\.com/[^\s|,;]+",
+        raw_text,
+        flags=re.IGNORECASE,
+    )
+    if linkedin_match:
+        details["linkedin"] = linkedin_match.group(0).strip().rstrip(".")
+
+    section_headings = {
+        "summary", "experience", "work experience", "professional experience",
+        "education", "skills", "technical skills", "projects", "certifications",
+    }
+    for line in header_lines:
+        lower = line.lower().strip(":")
+        if lower in section_headings:
+            break
+        if "@" in line or "linkedin.com" in lower or "github.com" in lower:
+            continue
+        if re.search(r"\d{3}", line):
+            continue
+        if len(line) > 80:
+            continue
+        if re.search(r"[A-Za-z]", line):
+            details["name"] = line
+            break
+
+    state_pattern = "|".join(sorted(_US_STATE_ABBREVIATIONS))
+    location_pattern = re.compile(
+        rf"\b([A-Za-z][A-Za-z .'-]{{1,40}}?)\s*,\s*({state_pattern})(?:\s+\d{{5}}(?:-\d{{4}})?)?\b",
+        flags=re.IGNORECASE,
+    )
+    for line in header_lines:
+        match = location_pattern.search(line)
+        if not match:
+            continue
+        city = _clean_text(match.group(1)).strip(" ,|-")
+        state = _clean_text(match.group(2)).upper()
+        if city and state in _US_STATE_ABBREVIATIONS:
+            details["city"] = city
+            details["state"] = state
+            break
+
+    return details
+
+
+def _workspace_personal_details_contact_text(details: Dict[str, str]) -> str:
+    safe_details = _normalize_workspace_personal_details(details)
+    location = ", ".join(
+        item for item in [safe_details.get("city", ""), safe_details.get("state", "")]
+        if _clean_text(item)
+    )
+    return " | ".join(
+        item for item in [
+            location,
+            safe_details.get("contact", ""),
+            safe_details.get("email", ""),
+            "LinkedIn" if _clean_text(safe_details.get("linkedin")) else "",
+        ]
+        if _clean_text(item)
+    )
+
+
+def _workspace_personal_details_link_items(details: Dict[str, str]) -> List[Dict[str, str]]:
+    safe_details = _normalize_workspace_personal_details(details)
+    linkedin_url = _clean_text(safe_details.get("linkedin"))
+    if not linkedin_url:
+        return []
+    return [{"label": "LinkedIn", "uri": linkedin_url}]
 
 
 def _scan_resume_bullet_texts(resume_evidence: Any) -> List[str]:
@@ -3405,6 +3862,13 @@ def _build_tailoring_scan_issue_contract(
             jd_record=jd_record,
         )
     )
+    issues.extend(
+        _build_other_keyword_scan_rows(
+            existing_issues=issues,
+            resume_evidence=resume_evidence,
+            jd_record=jd_record,
+        )
+    )
 
     hidden_replacement_issues = [
         issue for issue in replacement_issues
@@ -3444,6 +3908,7 @@ def _build_tailoring_scan_issue_contract(
             "missing": sum(1 for issue in group_issues if issue.get("bucket") == "missing"),
             "ai": sum(1 for issue in group_issues if issue.get("bucket") == "ai"),
             "predicted": sum(1 for issue in group_issues if issue.get("bucket") == "predicted"),
+            "other_keyword": sum(1 for issue in group_issues if issue.get("bucket") == "other_keyword"),
         }
 
     def _skill_type_counts() -> Dict[str, int]:
@@ -3490,6 +3955,12 @@ def _build_tailoring_scan_issue_contract(
                     "label": "Predicted skills",
                     "count": skills_counts["predicted"],
                     "summary": "Role-adjacent skills inferred from the target title, not explicit JD requirements.",
+                },
+                {
+                    "bucket": "other_keyword",
+                    "label": "Other keywords",
+                    "count": skills_counts["other_keyword"],
+                    "summary": "Lower-impact domain or industry terms detected in the JD.",
                 },
             ],
         },
@@ -5532,6 +6003,14 @@ def tailoring_scan_preload_payload(
         )
     except Exception:
         scan_resume_evidence = None
+    extracted_personal_details = _extract_resume_personal_details(scan_resume_evidence)
+    saved_personal_details = _normalize_workspace_personal_details(
+        draft.get("personal_details", {})
+    )
+    has_saved_personal_details = any(saved_personal_details.values())
+    current_personal_details = (
+        saved_personal_details if has_saved_personal_details else extracted_personal_details
+    )
 
     scan_issue_contract = _build_tailoring_scan_issue_contract(
         trusted_ready=trusted_ready,
@@ -5599,6 +6078,11 @@ def tailoring_scan_preload_payload(
         "final_replacement_summary": final_replacement_summary,
         "rewrite_review_summary": rewrite_review_summary,
         "rewrite_review_groups": rewrite_review_groups,
+        "personal_details": {
+            "extracted": extracted_personal_details,
+            "saved": saved_personal_details,
+            "current": current_personal_details,
+        },
         "draft_status": _clean_text(draft_response.get("draft_status")),
         "has_saved_draft": bool(draft_response.get("has_saved_draft", False)),
         "draft": draft,
@@ -6146,6 +6630,7 @@ def _build_tailoring_workspace_default_draft_payload(
         "selected_patch_candidate_ids": selected_candidate_ids,
         "manual_bullet_edits": {},
         "excluded_scan_issue_ids": [],
+        "personal_details": {},
         "note": "",
         "rewrite_review_decisions": {},
         "source_selected_patch_selection_status": _clean_text(
@@ -6250,6 +6735,9 @@ def load_tailoring_workspace_draft_payload(
     saved_excluded_scan_issue_ids = _normalize_workspace_excluded_scan_issue_ids(
         saved_data.get("excluded_scan_issue_ids", [])
     )
+    saved_personal_details = _normalize_workspace_personal_details(
+        saved_data.get("personal_details", {})
+    )
 
     merged = dict(default_draft)
     merged.update({
@@ -6262,6 +6750,7 @@ def load_tailoring_workspace_draft_payload(
         "selected_patch_candidate_ids": saved_selected_ids,
         "manual_bullet_edits": saved_manual_edits,
         "excluded_scan_issue_ids": saved_excluded_scan_issue_ids,
+        "personal_details": saved_personal_details,
         "note": _clean_text(saved_data.get("note")),
         "rewrite_review_decisions": saved_review_decisions,
         "rewrite_review_telemetry": saved_review_telemetry,
@@ -6284,6 +6773,7 @@ def save_tailoring_workspace_draft_payload(
     manual_bullet_edits: Any = None,
     rewrite_review_decisions: Any = None,
     excluded_scan_issue_ids: Any = None,
+    personal_details: Any = None,
     note: str = "",
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(
@@ -6333,6 +6823,7 @@ def save_tailoring_workspace_draft_payload(
 
     manual_edit_map = _normalize_workspace_manual_bullet_edits(manual_bullet_edits)
     excluded_issue_ids = _normalize_workspace_excluded_scan_issue_ids(excluded_scan_issue_ids)
+    personal_detail_map = _normalize_workspace_personal_details(personal_details)
     review_decision_map = _normalize_workspace_rewrite_review_decisions(
         rewrite_review_decisions
     )
@@ -6357,6 +6848,7 @@ def save_tailoring_workspace_draft_payload(
         "selected_patch_candidate_ids": requested_candidate_ids,
         "manual_bullet_edits": manual_edit_map,
         "excluded_scan_issue_ids": excluded_issue_ids,
+        "personal_details": personal_detail_map,
         "note": _clean_text(note),
         "rewrite_review_decisions": derived_review_decisions,
         "rewrite_review_telemetry": derived_review_telemetry,
@@ -8592,6 +9084,88 @@ def _apply_workspace_export_patch_specs(
         "unresolved_candidate_ids": unresolved_candidate_ids,
     }
 
+
+def _workspace_export_apply_personal_details(
+    exported_pages: List[Dict[str, Any]],
+    personal_details: Any,
+) -> bool:
+    details = _normalize_workspace_personal_details(personal_details)
+    if not any(details.values()) or not exported_pages:
+        return False
+
+    first_page = exported_pages[0]
+    header_paragraphs: List[Dict[str, Any]] = []
+    for block in list(first_page.get("blocks", []) or []):
+        for paragraph in list(block.get("paragraphs", []) or []):
+            if not _clean_text(paragraph.get("text")):
+                continue
+            if _clean_text(paragraph.get("alignment")).lower() != "center":
+                continue
+            header_paragraphs.append(paragraph)
+            if len(header_paragraphs) >= 2:
+                break
+        if len(header_paragraphs) >= 2:
+            break
+
+    if not header_paragraphs:
+        return False
+
+    def _replace_paragraph(
+        paragraph: Dict[str, Any],
+        text: str,
+        *,
+        link_items: List[Dict[str, str]] | None = None,
+    ) -> bool:
+        clean_text = _workspace_export_clean_docx_text(_clean_text(text))
+        if not clean_text:
+            return False
+
+        style = dict(paragraph.get("style", {}) or {})
+        runs = list(paragraph.get("runs", []) or [])
+        first_run = dict(runs[0]) if runs else {}
+
+        paragraph["text"] = clean_text
+        paragraph["runs"] = [
+            {
+                "text": clean_text,
+                "font_name": _clean_text(first_run.get("font_name") or style.get("font_name")),
+                "font_size": float(first_run.get("font_size", style.get("font_size", paragraph.get("font_size", 11.0))) or 11.0),
+                "bold": bool(first_run.get("bold", style.get("bold", False))),
+                "italic": bool(first_run.get("italic", style.get("italic", False))),
+            }
+        ]
+        paragraph["patched"] = True
+        paragraph["patch_source"] = "personal_details"
+        if link_items is not None:
+            paragraph["link_items"] = list(link_items or [])
+        return True
+
+    changed = False
+    if _clean_text(details.get("name")):
+        changed = _replace_paragraph(header_paragraphs[0], details["name"]) or changed
+
+    contact_text = _workspace_personal_details_contact_text(details)
+    if contact_text:
+        if len(header_paragraphs) >= 2:
+            contact_paragraph = header_paragraphs[1]
+        else:
+            contact_paragraph = dict(header_paragraphs[0])
+            contact_paragraph["gap_before"] = 1.0
+            contact_paragraph["font_size"] = 10.0
+            first_page_blocks = list(first_page.get("blocks", []) or [])
+            if not first_page_blocks:
+                return changed
+            first_page_blocks[0].setdefault("paragraphs", []).insert(1, contact_paragraph)
+
+        changed = _replace_paragraph(
+            contact_paragraph,
+            contact_text,
+            link_items=_workspace_personal_details_link_items(details),
+        ) or changed
+
+    return changed
+
+
 def _workspace_export_is_section_heading_text(text: str) -> bool:
     clean = _clean_text(text)
     if not clean or len(clean) > 64:
@@ -9220,7 +9794,7 @@ def _build_workspace_export_pdf(
                     text=text,
                     font_name=font_name,
                     font_size=font_size,
-                    link_items=header_link_items,
+                    link_items=list(paragraph.get("link_items", []) or []) or header_link_items,
                 )
 
                 y -= line_height
@@ -9622,14 +10196,28 @@ def _build_workspace_export_docx(
                     and alignment == "center"
                 )
 
-                _append_runs(
-                    paragraph,
-                    runs,
-                    is_name=is_name_line,
-                    is_contact=is_contact_line,
-                    is_heading=bool(paragraph_data.get("is_heading", False)),
-                    trim_leading_whitespace=True,
-                )
+                link_items = list(paragraph_data.get("link_items", []) or [])
+                if is_contact_line and link_items:
+                    style = dict(runs[0] if runs else paragraph_data.get("style", {}) or {})
+                    _workspace_export_rebuild_docx_contact_paragraph(
+                        paragraph,
+                        text,
+                        font_name=_clean_text(style.get("font_name")),
+                        font_size_pt=_workspace_export_docx_effective_font_size(
+                            source_size=float(style.get("font_size", paragraph_data.get("font_size", 10.0)) or 10.0),
+                            is_contact=True,
+                        ),
+                        link_items=link_items,
+                    )
+                else:
+                    _append_runs(
+                        paragraph,
+                        runs,
+                        is_name=is_name_line,
+                        is_contact=is_contact_line,
+                        is_heading=bool(paragraph_data.get("is_heading", False)),
+                        trim_leading_whitespace=True,
+                    )
 
                 if _workspace_export_is_section_heading_text(text):
                     paragraph.paragraph_format.space_after = Pt(2.0)
@@ -10028,6 +10616,7 @@ def _workspace_export_normalize_docx_bootstrap_header(
     docx_path: Path,
     *,
     resume_pdf_path: Path | None = None,
+    link_items_override: List[Dict[str, str]] | None = None,
 ) -> bool:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -10096,7 +10685,11 @@ def _workspace_export_normalize_docx_bootstrap_header(
     contact_format.space_after = Pt(8.0)
     contact_format.line_spacing = 1.0
 
-    link_items = _workspace_export_extract_pdf_header_link_items(resume_pdf_path)
+    link_items = (
+        list(link_items_override or [])
+        if link_items_override is not None
+        else _workspace_export_extract_pdf_header_link_items(resume_pdf_path)
+    )
     _workspace_export_rebuild_docx_contact_paragraph(
         contact_paragraph,
         _workspace_export_clean_docx_text(contact_text),
@@ -10503,6 +11096,34 @@ def _build_workspace_export_docx_with_pdf2docx_bootstrap(
             except Exception:
                 pass
 
+
+def _workspace_export_header_link_items_from_pages(
+    exported_pages: List[Dict[str, Any]],
+) -> List[Dict[str, str]]:
+    if not exported_pages:
+        return []
+
+    for block in list(exported_pages[0].get("blocks", []) or []):
+        for paragraph in list(block.get("paragraphs", []) or []):
+            link_items = list(paragraph.get("link_items", []) or [])
+            if link_items:
+                return link_items
+    return []
+
+
+def _workspace_export_has_personal_details_patch(
+    exported_pages: List[Dict[str, Any]],
+) -> bool:
+    if not exported_pages:
+        return False
+
+    for block in list(exported_pages[0].get("blocks", []) or []):
+        for paragraph in list(block.get("paragraphs", []) or []):
+            if _clean_text(paragraph.get("patch_source")) == "personal_details":
+                return True
+    return False
+
+
 def _workspace_export_find_soffice_binary() -> str:
     candidates = [
         _clean_text(os.environ.get("SOFFICE_BIN")),
@@ -10545,8 +11166,12 @@ def _build_workspace_export_finalized_docx(
 
     export_strategy = "native_docx"
     export_strategy_note = ""
+    header_link_items = _workspace_export_header_link_items_from_pages(exported_pages)
+    has_personal_details_patch = _workspace_export_has_personal_details_patch(exported_pages)
 
     try:
+        if has_personal_details_patch:
+            raise ValueError("Personal-details header edits require native DOCX export.")
         bootstrap_patch_result = _build_workspace_export_docx_with_pdf2docx_bootstrap(
             resume_pdf_path=resume_pdf_path,
             patch_specs=patch_specs,
@@ -10571,6 +11196,7 @@ def _build_workspace_export_finalized_docx(
     _workspace_export_normalize_docx_bootstrap_header(
         output_path,
         resume_pdf_path=resume_pdf_path,
+        link_items_override=header_link_items if header_link_items else None,
     )
     _workspace_export_normalize_docx_first_bullet_indent(output_path)
 
@@ -10718,6 +11344,11 @@ def _build_tailoring_workspace_export_context(
     if not exported_pages:
         raise ValueError("Could not extract resume text for export.")
 
+    _workspace_export_apply_personal_details(
+        exported_pages,
+        draft.get("personal_details", {}),
+    )
+
     patch_result = _apply_workspace_export_patch_specs(
         exported_pages,
         patch_specs,
@@ -10760,6 +11391,7 @@ def _workspace_export_preview_row_from_paragraph(
         "is_bullet": bool(paragraph.get("is_bullet")),
         "patched": bool(paragraph.get("patched")),
         "patch_source": _clean_text(paragraph.get("patch_source")),
+        "link_items": list(paragraph.get("link_items", []) or []),
     }
 
 

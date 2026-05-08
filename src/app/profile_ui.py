@@ -29,6 +29,26 @@ def profile_page() -> str:
     </header>
 
     <section class="card profile-section-card">
+      <div class="profile-tab-row" role="tablist" aria-label="Profile sections">
+        <button
+          type="button"
+          class="profile-tab-btn is-active"
+          data-profile-tab="resumes"
+          aria-pressed="true"
+        >
+          Resumes
+        </button>
+        <button
+          type="button"
+          class="profile-tab-btn"
+          data-profile-tab="saved_scans"
+          aria-pressed="false"
+        >
+          Saved Scans
+        </button>
+      </div>
+
+      <section data-profile-tab-panel="resumes">
       <div class="section-header">
         <div>
           <h2>Resumes</h2>
@@ -75,6 +95,40 @@ def profile_page() -> str:
           <div class="resume-list" id="resumeList"></div>
         </section>
       </div>
+      </section>
+
+      <section data-profile-tab-panel="saved_scans" hidden>
+        <div class="section-header">
+          <div>
+            <h2>Saved Scans</h2>
+            <div class="subtext" id="savedScansMeta">Loading saved scans...</div>
+          </div>
+          <button type="button" class="ghost-btn btn-sm" id="refreshSavedScansBtn">
+            Refresh
+          </button>
+        </div>
+
+        <div class="saved-scans-table-wrap">
+          <table class="saved-scans-table">
+            <thead>
+              <tr>
+                <th>Scanned</th>
+                <th>Company</th>
+                <th>Role</th>
+                <th>Resume</th>
+                <th>Source</th>
+                <th>Status</th>
+                <th>Match</th>
+              </tr>
+            </thead>
+            <tbody id="savedScansTableBody">
+              <tr>
+                <td colspan="7">Loading saved scans...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   </div>
 

@@ -1,5 +1,6 @@
 const profileState = {
   pendingDeleteResumeName: null,
+  activeTab: "resumes",
 };
 
 function qs(id) {
@@ -46,6 +47,12 @@ function formatDateTime(value) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString();
+}
+
+function formatPercent(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "-";
+  return `${Math.round(number)}%`;
 }
 
 function setStatus(message, tone = "info") {
@@ -128,6 +135,97 @@ async function loadResumes() {
 
   const data = await fetchJson("/profile/resumes");
   renderResumeList(data.resumes || []);
+}
+
+function normalizeSavedScanSource(value) {
+  const source = String(value || "").trim();
+  if (source === "saved_resume") return "Saved resume";
+  if (source === "uploaded_file") return "Uploaded file";
+  if (source === "pasted_text") return "Pasted text";
+  return source || "-";
+}
+
+function renderSavedScans(items, { ok = true, error = "" } = {}) {
+  const tbody = qs("savedScansTableBody");
+  const metaEl = qs("savedScansMeta");
+  const scans = Array.isArray(items) ? items : [];
+
+  if (!ok) {
+    metaEl.textContent = "Saved scans unavailable";
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="saved-scans-empty-cell">
+          ${escapeHtml(error || "Could not load saved scans from Postgres.")}
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  metaEl.textContent = `${scans.length} saved scan${scans.length === 1 ? "" : "s"} shown`;
+
+  if (!scans.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="7" class="saved-scans-empty-cell">
+          No saved scans yet.
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = scans.map((scan) => `
+    <tr>
+      <td>${escapeHtml(formatDateTime(scan.scan_timestamp || ""))}</td>
+      <td>${escapeHtml(scan.job_company || "-")}</td>
+      <td>${escapeHtml(scan.job_title || "-")}</td>
+      <td>${escapeHtml(scan.resume_name || scan.resume_filename || "-")}</td>
+      <td>${escapeHtml(normalizeSavedScanSource(scan.resume_source))}</td>
+      <td>${escapeHtml(scan.scan_status || "-")}</td>
+      <td>${escapeHtml(formatPercent(scan.match_rate))}</td>
+    </tr>
+  `).join("");
+}
+
+async function loadSavedScans() {
+  const tbody = qs("savedScansTableBody");
+  const metaEl = qs("savedScansMeta");
+  if (!tbody || !metaEl) return;
+
+  metaEl.textContent = "Loading saved scans...";
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="7" class="saved-scans-empty-cell">Loading saved scans...</td>
+    </tr>
+  `;
+
+  const data = await fetchJson("/profile/saved-scans?limit=50");
+  renderSavedScans(data.saved_scans || [], {
+    ok: data.ok !== false,
+    error: data.error || "",
+  });
+}
+
+function setProfileTab(tab) {
+  const safeTab = tab === "saved_scans" ? "saved_scans" : "resumes";
+  profileState.activeTab = safeTab;
+
+  document.querySelectorAll("[data-profile-tab]").forEach((button) => {
+    const isActive = button.dataset.profileTab === safeTab;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+
+  document.querySelectorAll("[data-profile-tab-panel]").forEach((panel) => {
+    panel.hidden = panel.dataset.profileTabPanel !== safeTab;
+  });
+
+  if (safeTab === "saved_scans") {
+    loadSavedScans().catch((err) => {
+      renderSavedScans([], { ok: false, error: err.message });
+    });
+  }
 }
 
 function validateResumeFile(file) {
@@ -325,9 +423,27 @@ function bindDeleteInteractions() {
   });
 }
 
+function bindProfileTabs() {
+  document.querySelectorAll("[data-profile-tab]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setProfileTab(button.dataset.profileTab || "resumes");
+    });
+  });
+
+  const refreshBtn = qs("refreshSavedScansBtn");
+  if (refreshBtn) {
+    refreshBtn.addEventListener("click", () => {
+      loadSavedScans().catch((err) => {
+        renderSavedScans([], { ok: false, error: err.message });
+      });
+    });
+  }
+}
+
 async function initProfilePage() {
   try {
     clearStatus();
+    bindProfileTabs();
     bindUploadInteractions();
     bindDeleteInteractions();
     await loadResumes();

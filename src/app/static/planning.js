@@ -92,17 +92,34 @@ const tailoringWorkspacePdfState = {
 
 const scanWorkspaceState = {
   preloadPayload: null,
+  personalDetails: {},
   selectedCandidateIds: [],
   rewriteReviewDecisions: {},
   suggestionDecisionOverrides: {},
   excludedScanIssueIds: [],
-  selectedTab: "skills",
+  selectedTab: "personal_details",
   activeCandidateId: "",
   annotationMarkerSignature: "",
   previewPayload: null,
   isPreviewing: false,
   isSaving: false,
 };
+
+const SCAN_WORKSPACE_PERSONAL_DETAIL_FIELDS = ["name", "city", "state", "contact", "email", "linkedin"];
+const SCAN_WORKSPACE_US_STATES = [
+  ["", "State"],
+  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"],
+  ["CO", "Colorado"], ["CT", "Connecticut"], ["DE", "Delaware"], ["DC", "District of Columbia"],
+  ["FL", "Florida"], ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"],
+  ["IN", "Indiana"], ["IA", "Iowa"], ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"],
+  ["ME", "Maine"], ["MD", "Maryland"], ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"],
+  ["MS", "Mississippi"], ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"], ["NV", "Nevada"],
+  ["NH", "New Hampshire"], ["NJ", "New Jersey"], ["NM", "New Mexico"], ["NY", "New York"],
+  ["NC", "North Carolina"], ["ND", "North Dakota"], ["OH", "Ohio"], ["OK", "Oklahoma"], ["OR", "Oregon"],
+  ["PA", "Pennsylvania"], ["RI", "Rhode Island"], ["SC", "South Carolina"], ["SD", "South Dakota"],
+  ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"], ["VT", "Vermont"], ["VA", "Virginia"],
+  ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"], ["WY", "Wyoming"],
+];
 
 const scanWorkspacePdfState = {
   pdfDoc: null,
@@ -5404,6 +5421,43 @@ function buildTailoringWorkspacePreviewPresentationRows(
   }));
 }
 
+function renderTailoringWorkspaceLinkedText(text, linkItems = []) {
+  const rawText = normalizeTailoringWorkspaceFlowText(String(text || ""));
+  const links = (Array.isArray(linkItems) ? linkItems : [])
+    .map((item) => ({
+      label: String(item?.label || "").trim(),
+      uri: String(item?.uri || "").trim(),
+    }))
+    .filter((item) => item.label && item.uri)
+    .map((item) => ({
+      ...item,
+      pos: rawText.indexOf(item.label),
+    }))
+    .filter((item) => item.pos >= 0)
+    .sort((left, right) => left.pos - right.pos);
+
+  if (!links.length) return escapeHtml(rawText);
+
+  let html = "";
+  let lastEnd = 0;
+  links.forEach((item) => {
+    if (item.pos < lastEnd) return;
+    html += escapeHtml(rawText.slice(lastEnd, item.pos));
+    html += `
+      <a
+        class="tailoring-workspace-doc-link"
+        href="${escapeHtml(item.uri)}"
+        title="${escapeHtml(item.uri)}"
+        target="_blank"
+        rel="noopener noreferrer"
+      >${escapeHtml(item.label)}</a>
+    `;
+    lastEnd = item.pos + item.label.length;
+  });
+  html += escapeHtml(rawText.slice(lastEnd));
+  return html;
+}
+
 function renderTailoringWorkspaceStructuredRow(row) {
   const kind = String(row?.kind || "").trim();
   const gapBefore = Math.max(0, Math.min(28, Number(row?.gap_before || 0)));
@@ -5485,7 +5539,7 @@ function renderTailoringWorkspaceStructuredRow(row) {
         class="tailoring-workspace-doc-line-copy"
         style="${alignStyle} padding-left:${alignment === "left" ? indent : 0}px;"
       >
-        <span class="scan-workspace-preview-line-text">${escapeHtml(normalizedText)}</span>
+        <span class="scan-workspace-preview-line-text">${renderTailoringWorkspaceLinkedText(normalizedText, row?.link_items || [])}</span>
       </div>
     `;
   }
@@ -8921,6 +8975,54 @@ function getScanWorkspacePayload() {
     : null;
 }
 
+function normalizeScanWorkspacePersonalDetails(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const normalized = {};
+  SCAN_WORKSPACE_PERSONAL_DETAIL_FIELDS.forEach((field) => {
+    normalized[field] = String(raw[field] || "").trim();
+  });
+  normalized.state = normalized.state.toUpperCase().slice(0, 2);
+  return normalized;
+}
+
+function getScanWorkspacePersonalDetailsFromPreload(payload = getScanWorkspacePayload()) {
+  const envelope = payload?.personal_details && typeof payload.personal_details === "object"
+    ? payload.personal_details
+    : {};
+  return normalizeScanWorkspacePersonalDetails(
+    envelope.current && typeof envelope.current === "object"
+      ? envelope.current
+      : envelope
+  );
+}
+
+function getScanWorkspacePersonalDetailsForSave() {
+  return normalizeScanWorkspacePersonalDetails(scanWorkspaceState.personalDetails || {});
+}
+
+function hasScanWorkspacePersonalDetailsValue(details) {
+  return Object.values(normalizeScanWorkspacePersonalDetails(details)).some(Boolean);
+}
+
+function setScanWorkspacePersonalDetails(details = {}) {
+  scanWorkspaceState.personalDetails = normalizeScanWorkspacePersonalDetails(details);
+}
+
+function setScanWorkspacePersonalDetailField(field, value) {
+  const safeField = String(field || "").trim();
+  if (!SCAN_WORKSPACE_PERSONAL_DETAIL_FIELDS.includes(safeField)) return;
+
+  scanWorkspaceState.personalDetails = {
+    ...normalizeScanWorkspacePersonalDetails(scanWorkspaceState.personalDetails || {}),
+    [safeField]: String(value || "").trim(),
+  };
+  scanWorkspaceState.previewPayload = null;
+
+  if (window.scanWorkspacePhase1?.renderPersistenceStatus) {
+    window.scanWorkspacePhase1.renderPersistenceStatus();
+  }
+}
+
 function getScanWorkspaceTrustedSuggestions(payload = getScanWorkspacePayload()) {
   const trusted = payload && payload.trusted_suggestions && typeof payload.trusted_suggestions === "object"
     ? payload.trusted_suggestions
@@ -9004,6 +9106,11 @@ function getScanWorkspaceExcludedIssueIds() {
   return normalizeScanWorkspaceExcludedIssueIds(scanWorkspaceState.excludedScanIssueIds || []);
 }
 
+function setScanWorkspaceExcludedIssueIds(issueIds = []) {
+  scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(issueIds);
+  scanWorkspaceState.previewPayload = null;
+}
+
 function setScanWorkspaceIssueExcluded(issueId, excluded) {
   const safeIssueId = String(issueId || "").trim();
   if (!safeIssueId) return;
@@ -9015,10 +9122,7 @@ function setScanWorkspaceIssueExcluded(issueId, excluded) {
     current.delete(safeIssueId);
   }
 
-  scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
-    Array.from(current)
-  );
-  scanWorkspaceState.previewPayload = null;
+  setScanWorkspaceExcludedIssueIds(Array.from(current));
   renderScanWorkspaceView();
   if (window.scanWorkspacePhase1?.renderPersistenceStatus) {
     window.scanWorkspacePhase1.renderPersistenceStatus();
@@ -9155,27 +9259,32 @@ function updateScanWorkspaceActionBar() {
 }
 
 function renderScanWorkspaceTabs() {
+  const personalTab = qs("scanWorkspacePersonalTab");
   const skillsTab = qs("scanWorkspaceTrustedTab");
   const searchabilityTab = qs("scanWorkspaceAiTab");
   const recruiterTipsTab = qs("scanWorkspaceGuidanceTab");
   const payload = getScanWorkspacePayload();
 
-  if (!skillsTab || !searchabilityTab || !recruiterTipsTab || !payload) return;
+  if (!personalTab || !skillsTab || !searchabilityTab || !recruiterTipsTab || !payload) return;
 
   const taxonomy = buildScanWorkspaceTaxonomy(payload);
 
+  personalTab.dataset.scanSelectedTab = "personal_details";
   skillsTab.dataset.scanSelectedTab = "skills";
   searchabilityTab.dataset.scanSelectedTab = "searchability";
   recruiterTipsTab.dataset.scanSelectedTab = "recruiter_tips";
 
+  personalTab.classList.toggle("active", scanWorkspaceState.selectedTab === "personal_details");
   skillsTab.classList.toggle("active", scanWorkspaceState.selectedTab === "skills");
   searchabilityTab.classList.toggle("active", scanWorkspaceState.selectedTab === "searchability");
   recruiterTipsTab.classList.toggle("active", scanWorkspaceState.selectedTab === "recruiter_tips");
 
+  personalTab.textContent = "Personal Details";
   skillsTab.textContent = "Skills";
   searchabilityTab.textContent = "Searchability";
   recruiterTipsTab.textContent = "Recruiter Tips";
 
+  personalTab.title = "Resume header and contact details";
   skillsTab.title = `${taxonomy.skills.totalCount} skill scan item(s)`;
   searchabilityTab.title = `${taxonomy.searchability.totalCount} searchability item(s)`;
   recruiterTipsTab.title = `${taxonomy.recruiter_tips.totalCount} recruiter tip item(s)`;
@@ -9193,6 +9302,77 @@ function getScanWorkspaceContractIssues(payload = getScanWorkspacePayload()) {
     const issueId = String(issue?.issue_id || "").trim();
     return !issueId || !excluded.has(issueId);
   });
+}
+
+function getScanWorkspaceRawContractIssues(payload = getScanWorkspacePayload()) {
+  const contract = getScanWorkspaceIssueContract(payload);
+  return Array.isArray(contract?.issues) ? contract.issues : [];
+}
+
+function getScanWorkspaceExclusionAdjustedScore(
+  payload = getScanWorkspacePayload(),
+  { excludedIssueIds = getScanWorkspaceExcludedIssueIds() } = {}
+) {
+  const scoreSnapshot = payload?.scan_score && typeof payload.scan_score === "object"
+    ? payload.scan_score
+    : {};
+  const rawScore = Number(scoreSnapshot.score);
+  if (!Number.isFinite(rawScore)) return null;
+
+  const baseScore = Math.max(
+    0,
+    Math.min(100, rawScore >= 0 && rawScore <= 1 ? rawScore * 100 : rawScore)
+  );
+  const issues = getScanWorkspaceRawContractIssues(payload);
+  const excluded = new Set(normalizeScanWorkspaceExcludedIssueIds(excludedIssueIds));
+  if (!issues.length || !excluded.size) {
+    return {
+      score: Math.round(baseScore),
+      delta: 0,
+      excludedPenaltyRows: 0,
+      source: "backend",
+      label: String(scoreSnapshot.label || "Optimization score"),
+    };
+  }
+
+  const scoringMissingRows = issues.filter((issue) => {
+    const groupId = String(issue?.group_id || "").trim();
+    const bucket = String(issue?.bucket || "").trim();
+    const rowType = String(issue?.row_action_type || issue?.scan_issue_type || "").trim();
+    return (
+      groupId === "skills" &&
+      bucket === "missing" &&
+      rowType !== "predicted_skill" &&
+      rowType !== "other_keyword"
+    );
+  });
+
+  const excludedPenaltyRows = scoringMissingRows.filter((issue) => {
+    const issueId = String(issue?.issue_id || "").trim();
+    return issueId && excluded.has(issueId);
+  }).length;
+
+  if (!scoringMissingRows.length || !excludedPenaltyRows) {
+    return {
+      score: Math.round(baseScore),
+      delta: 0,
+      excludedPenaltyRows,
+      source: "backend",
+      label: String(scoreSnapshot.label || "Optimization score"),
+    };
+  }
+
+  const remainingGap = Math.max(0, 100 - baseScore);
+  const perRowLift = remainingGap / scoringMissingRows.length;
+  const nextScore = Math.min(100, baseScore + perRowLift * excludedPenaltyRows);
+
+  return {
+    score: Math.round(nextScore),
+    delta: Math.round(nextScore - baseScore),
+    excludedPenaltyRows,
+    source: "excluded_skill_preview",
+    label: `Optimization score after excluding ${excludedPenaltyRows} irrelevant skill${excludedPenaltyRows === 1 ? "" : "s"}`,
+  };
 }
 
 function hasScanWorkspaceIssueContract(payload = getScanWorkspacePayload()) {
@@ -9325,6 +9505,20 @@ function getScanWorkspaceNormalizedContractIssues(payload = getScanWorkspacePayl
     .filter((issue) => issue?.is_visible_in_review !== false);
 }
 
+function buildScanWorkspacePersonalDetailsPanel() {
+  return {
+    key: "personal_details",
+    label: "Personal Details",
+    title: "Resume contact header",
+    matchedCount: 0,
+    missingCount: 0,
+    aiCount: 0,
+    totalCount: 0,
+    hideCounts: true,
+    groups: [],
+  };
+}
+
 function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspacePayload()) {
   const contract = getScanWorkspaceIssueContract(payload);
   const issues = getScanWorkspaceNormalizedContractIssues(payload);
@@ -9350,6 +9544,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
     const missingItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "missing");
     const aiItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "ai");
     const predictedItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "predicted");
+    const otherKeywordItems = groupIssues.filter((issue) => issue.scan_issue_bucket === "other_keyword");
     const bucketRows = Array.isArray(sourceGroup?.buckets) ? sourceGroup.buckets : [];
 
     const panel = {
@@ -9364,10 +9559,20 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       aiCount: aiItems.length,
       totalCount: groupIssues.length,
       predictedCount: predictedItems.length,
+      otherKeywordCount: otherKeywordItems.length,
       groups: [],
     };
 
     if (groupId === "skills") {
+      if (otherKeywordItems.length) {
+        panel.groups.push({
+          title: "Other keywords",
+          summary: `${otherKeywordItems.length} lower-impact domain or industry keyword(s).`,
+          bucket: "other_keyword",
+          items: otherKeywordItems,
+        });
+      }
+
       if (predictedItems.length) {
         panel.groups.push({
           title: "Predicted skills",
@@ -9393,6 +9598,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
         missing: "Missing / optimization opportunities",
         ai: "AI suggested",
         predicted: "Predicted skills",
+        other_keyword: "Other keywords",
       };
 
       skillTypeOrder.forEach((skillType) => {
@@ -9465,6 +9671,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
   });
 
   return {
+    personal_details: buildScanWorkspacePersonalDetailsPanel(),
     skills: groups[0],
     searchability: groups[1],
     recruiter_tips: groups[2],
@@ -9499,6 +9706,7 @@ function buildScanWorkspaceTaxonomy(payload = getScanWorkspacePayload()) {
     : trustedItems;
 
   return {
+    personal_details: buildScanWorkspacePersonalDetailsPanel(),
     skills: {
       key: "skills",
       label: "Skills",
@@ -9565,7 +9773,7 @@ function getScanWorkspaceActiveTaxonomyPanel(payload = getScanWorkspacePayload()
   const taxonomy = buildScanWorkspaceTaxonomy(payload);
   const selected = String(scanWorkspaceState.selectedTab || "").trim();
 
-  return taxonomy[selected] || taxonomy.skills;
+  return taxonomy[selected] || taxonomy.personal_details || taxonomy.skills;
 }
 
 function getScanWorkspaceItemsForSelectedTab(payload) {
@@ -9589,19 +9797,25 @@ function renderScanWorkspaceTaxonomySummary(panel) {
         </div>
       </div>
 
-      <div class="scan-workspace-taxonomy-counts">
-        <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--matched">
-          Matched ${panel.matchedCount}
-        </span>
+      ${
+        panel.hideCounts
+          ? ""
+          : `
+            <div class="scan-workspace-taxonomy-counts">
+              <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--matched">
+                Matched ${panel.matchedCount}
+              </span>
 
-        <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--missing">
-          Missing ${panel.missingCount}
-        </span>
+              <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--missing">
+                Missing ${panel.missingCount}
+              </span>
 
-        <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--ai">
-          AI ${panel.aiCount}
-        </span>
-      </div>
+              <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--ai">
+                AI ${panel.aiCount}
+              </span>
+            </div>
+          `
+      }
     </div>
   `;
 }
@@ -9653,7 +9867,54 @@ function renderScanWorkspaceTaxonomyGroup(group) {
   `;
 }
 
+function renderScanWorkspacePersonalDetailsPanel(panel) {
+  const details = getScanWorkspacePersonalDetailsForSave();
+  const stateOptions = SCAN_WORKSPACE_US_STATES.map(([value, label]) => `
+    <option value="${escapeHtml(value)}" ${details.state === value ? "selected" : ""}>
+      ${escapeHtml(label)}
+    </option>
+  `).join("");
+
+  const input = (field, label, type = "text") => `
+    <label class="scan-workspace-personal-field">
+      <span>${escapeHtml(label)}</span>
+      <input
+        type="${escapeHtml(type)}"
+        value="${escapeHtml(details[field] || "")}"
+        data-scan-personal-detail="${escapeHtml(field)}"
+        autocomplete="off"
+      />
+    </label>
+  `;
+
+  return `
+    <div class="scan-workspace-taxonomy-panel scan-workspace-personal-panel">
+      ${renderScanWorkspaceTaxonomySummary(panel)}
+
+      <div class="scan-workspace-personal-grid">
+        ${input("name", "Name")}
+        ${input("city", "City")}
+
+        <label class="scan-workspace-personal-field">
+          <span>State</span>
+          <select data-scan-personal-detail="state">
+            ${stateOptions}
+          </select>
+        </label>
+
+        ${input("contact", "Contact", "tel")}
+        ${input("email", "Email", "email")}
+        ${input("linkedin", "LinkedIn")}
+      </div>
+    </div>
+  `;
+}
+
 function renderScanWorkspaceTaxonomyPanel(panel) {
+  if (panel?.key === "personal_details") {
+    return renderScanWorkspacePersonalDetailsPanel(panel);
+  }
+
   return `
     <div class="scan-workspace-taxonomy-panel">
       ${renderScanWorkspaceTaxonomySummary(panel)}
@@ -9747,11 +10008,12 @@ function getScanWorkspaceIssueMetaForItem(item, bucket) {
   const rowActionLabel = String(item?.row_action_label || "").trim();
   const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
   const isDeterministicCheckGroup = groupId === "searchability" || groupId === "recruiter_tips";
-  if (rowActionLabel && rowActionType !== "matched") return rowActionLabel;
   if (rowActionType === "direct_replacement") return "AI Suggested";
   if (rowActionType === "phrase_generation") return "Phrase";
   if (rowActionType === "manual_guidance") return "Manual edit";
   if (rowActionType === "predicted_skill" || bucket === "predicted") return "Predicted";
+  if (rowActionType === "other_keyword" || bucket === "other_keyword") return "";
+  if (rowActionLabel && rowActionType !== "matched") return rowActionLabel;
   if (rowActionType === "guidance" && item?.has_ai_suggestion === true) return "AI guidance";
   if (rowActionType === "matched" && isDeterministicCheckGroup) return "Check";
   if (rowActionType === "matched" && groupId === "skills") return "";
@@ -9760,6 +10022,7 @@ function getScanWorkspaceIssueMetaForItem(item, bucket) {
   if (bucket === "matched") return isDeterministicCheckGroup ? "Check" : "Backed";
   if (bucket === "missing") return "Manual edit";
   if (bucket === "predicted") return "Predicted";
+  if (bucket === "other_keyword") return "Keyword";
   if (bucket === "ai") return "AI Suggested";
   if (bucket === "ai_optimize") return "AI replacement";
   if (bucket === "trusted") return "Ready";
@@ -9844,6 +10107,7 @@ function getScanWorkspaceIssueRightLabel(item, bucket) {
   if (rowActionType === "phrase_generation") return rowActionLabel || "Phrase";
   if (rowActionType === "manual_guidance") return "";
   if (rowActionType === "predicted_skill" || bucket === "predicted") return "";
+  if (rowActionType === "other_keyword" || bucket === "other_keyword") return "Keyword";
 
   const coverage = getScanWorkspaceIssueCoverageLabel(item);
   if (coverage) return coverage;
@@ -9865,10 +10129,28 @@ function getScanWorkspaceIssueToneClassForItem(item, bucket) {
   if (rowActionType === "matched") return "is-matched";
   if (rowActionType === "direct_replacement") return "is-ai";
   if (rowActionType === "predicted_skill" || bucket === "predicted") return "is-predicted";
+  if (rowActionType === "other_keyword" || bucket === "other_keyword") return "is-other-keyword";
   if (rowActionType === "phrase_generation" || rowActionType === "manual_guidance") return "is-missing";
   if (bucket === "matched" || bucket === "trusted") return "is-matched";
   if (bucket === "ai" || bucket === "ai_optimize") return "is-ai";
   return "is-missing";
+}
+
+function isScanWorkspaceIssueExcludable(item) {
+  const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
+  const issueId = String(item?.scan_issue_id || item?.issue_id || "").trim();
+  const bucket = String(item?.scan_issue_bucket || item?.bucket || "").trim();
+  const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
+
+  return (
+    groupId === "skills" &&
+    Boolean(issueId) &&
+    bucket === "missing" &&
+    rowActionType !== "direct_replacement" &&
+    rowActionType !== "predicted_skill" &&
+    rowActionType !== "other_keyword" &&
+    rowActionType !== "matched"
+  );
 }
 
 function renderScanWorkspaceIssueInventory(items, bucket) {
@@ -9912,10 +10194,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const showFlagIcon =
             item?.row_action_type === "matched" ||
             bucket === "matched";
-          const canExclude =
-            String(item?.scan_issue_group_id || item?.group_id || "").trim() === "skills" &&
-            String(item?.scan_issue_id || item?.issue_id || "").trim() &&
-            item?.row_action_type !== "direct_replacement";
+          const canExclude = isScanWorkspaceIssueExcludable(item);
 
           return `
             <button
@@ -9961,7 +10240,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                         tabindex="0"
                         class="scan-workspace-issue-exclude-btn"
                         data-scan-exclude-issue="${escapeHtml(scanIssueId)}"
-                        title="Exclude this skill from scan report counts"
+                        title="Exclude this missing skill from scan report counts"
                       >
                         Exclude
                       </span>
@@ -10202,6 +10481,13 @@ function updateScanWorkspaceHeaderCounts(payload = getScanWorkspacePayload()) {
   const scoreSnapshot = payload?.scan_score && typeof payload.scan_score === "object"
     ? payload.scan_score
     : {};
+  const savedExcludedIssueIds =
+    typeof window.scanWorkspacePhase1?.getSavedExcludedIssueIds === "function"
+      ? window.scanWorkspacePhase1.getSavedExcludedIssueIds()
+      : [];
+  const adjustedScore = getScanWorkspaceExclusionAdjustedScore(payload, {
+    excludedIssueIds: savedExcludedIssueIds,
+  });
 
   const matchedCount = skillsPanel.matchedCount;
   const aiCount = skillsPanel.aiCount;
@@ -10212,17 +10498,14 @@ function updateScanWorkspaceHeaderCounts(payload = getScanWorkspacePayload()) {
   const aiCountNode = qs("scanWorkspaceAiCount");
   const missingCountNode = qs("scanWorkspaceGuidanceCount");
 
-  if (scoreNode && Number.isFinite(Number(scoreSnapshot.score))) {
-    const rawScore = Number(scoreSnapshot.score);
-    const score = Math.max(
-      0,
-      Math.min(100, Math.round(rawScore >= 0 && rawScore <= 1 ? rawScore * 100 : rawScore))
-    );
-    scoreNode.textContent = String(score);
-    scoreNode.dataset.scanScoreSource = "backend";
+  if (scoreNode && adjustedScore) {
+    scoreNode.textContent = String(adjustedScore.score);
+    scoreNode.dataset.scanScoreSource = adjustedScore.source;
     scoreNode.setAttribute(
       "aria-label",
-      String(scoreSnapshot.label || "Optimization score")
+      adjustedScore.delta
+        ? `${adjustedScore.label}. Score changed by +${adjustedScore.delta} points.`
+        : adjustedScore.label
     );
   }
 
@@ -10564,6 +10847,7 @@ async function saveScanWorkspaceState() {
       manual_bullet_edits: {},
       rewrite_review_decisions: getScanWorkspaceCurrentReviewDecisionMap(),
       excluded_scan_issue_ids: getScanWorkspaceExcludedIssueIds(),
+      personal_details: getScanWorkspacePersonalDetailsForSave(),
       note: "Saved from scan workspace.",
     });
 
@@ -10580,6 +10864,9 @@ async function saveScanWorkspaceState() {
     );
     scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
       draft.excluded_scan_issue_ids || []
+    );
+    scanWorkspaceState.personalDetails = normalizeScanWorkspacePersonalDetails(
+      draft.personal_details || {}
     );
     scanWorkspaceState.previewPayload = null;
 
@@ -10654,6 +10941,18 @@ function bindScanWorkspaceHandlers() {
         setScanWorkspaceIssueExcluded(issueId, true);
       }
     });
+
+    const handlePersonalDetailEdit = (event) => {
+      const input = event.target.closest("[data-scan-personal-detail]");
+      if (!input) return;
+      setScanWorkspacePersonalDetailField(
+        input.dataset.scanPersonalDetail,
+        input.value
+      );
+    };
+
+    root.addEventListener("input", handlePersonalDetailEdit);
+    root.addEventListener("change", handlePersonalDetailEdit);
   }
 
   const tabRow = qs("scanWorkspaceTabRow");
@@ -10665,7 +10964,7 @@ function bindScanWorkspaceHandlers() {
       if (!tabButton) return;
 
       const nextTab = String(tabButton.dataset.scanSelectedTab || "").trim();
-      if (!["skills", "searchability", "recruiter_tips"].includes(nextTab)) return;
+      if (!["personal_details", "skills", "searchability", "recruiter_tips"].includes(nextTab)) return;
 
       scanWorkspaceState.selectedTab = nextTab;
       scanWorkspaceState.activeCandidateId = "";
@@ -10789,10 +11088,18 @@ async function initScanWorkspacePage() {
     scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
       savedDraft.excluded_scan_issue_ids || []
     );
+    const savedPersonalDetails = normalizeScanWorkspacePersonalDetails(
+      savedDraft.personal_details || {}
+    );
+    scanWorkspaceState.personalDetails = normalizeScanWorkspacePersonalDetails(
+      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
+        ? savedPersonalDetails
+        : getScanWorkspacePersonalDetailsFromPreload(payload)
+    );
     scanWorkspaceState.suggestionDecisionOverrides = {};
     scanWorkspaceState.previewPayload = null;
 
-    scanWorkspaceState.selectedTab = "skills";
+    scanWorkspaceState.selectedTab = "personal_details";
 
     renderScanWorkspaceView();
 

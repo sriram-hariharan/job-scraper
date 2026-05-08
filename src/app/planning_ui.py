@@ -1180,7 +1180,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_25" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_28_linkedin_link" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1267,6 +1267,16 @@ def scan_workspace(
             </label>
 
             <label class="scan-workspace-input-group">
+              <span class="scan-workspace-input-label">Upload resume file</span>
+              <input
+                type="file"
+                id="scanWorkspaceResumeFileInput"
+                class="scan-workspace-input"
+                accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+              />
+            </label>
+
+            <label class="scan-workspace-input-group">
               <span class="scan-workspace-input-label">Resume text</span>
               <textarea
                 id="scanWorkspaceResumeTextInput"
@@ -1307,6 +1317,16 @@ def scan_workspace(
                 class="scan-workspace-input"
                 value="{title_safe if title else ''}"
                 placeholder="Optional job title"
+              />
+            </label>
+
+            <label class="scan-workspace-input-group">
+              <span class="scan-workspace-input-label">Job posting URL</span>
+              <input
+                type="url"
+                id="scanWorkspaceJobUrlInput"
+                class="scan-workspace-input"
+                placeholder="Optional posting URL"
               />
             </label>
 
@@ -1468,6 +1488,15 @@ def scan_workspace(
                 <button
                   type="button"
                   class="scan-workspace-tab-btn active"
+                  data-scan-selected-tab="personal_details"
+                  id="scanWorkspacePersonalTab"
+                >
+                  Personal Details
+                </button>
+
+                <button
+                  type="button"
+                  class="scan-workspace-tab-btn"
                   data-scan-selected-tab="trusted"
                   id="scanWorkspaceTrustedTab"
                 >
@@ -1933,8 +1962,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/planning.js?v=planning_ui_20260506_scan_phrase1"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_32"></script>
+  <script src="/static/planning.js?v=planning_ui_20260508_linkedin_link1"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_36_linkedin_link"></script>
 </body>
 </html>
     """.strip()

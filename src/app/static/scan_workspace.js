@@ -26,7 +26,9 @@ const SCAN_WORKSPACE_PROCESSING_STAGES = [
 const scanWorkspaceIntakeState = {
   company: "",
   role: "",
+  jobUrl: "",
   resumeText: "",
+  resumeFileName: "",
   jobDescriptionText: "",
 };
 
@@ -174,11 +176,15 @@ function bindScanWorkspaceModeButtons() {
 function readScanWorkspaceIntakeDraft() {
   const companyInput = getScanWorkspaceInput("scanWorkspaceCompanyInput");
   const roleInput = getScanWorkspaceInput("scanWorkspaceRoleInput");
+  const jobUrlInput = getScanWorkspaceInput("scanWorkspaceJobUrlInput");
+  const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
   const resumeTextInput = getScanWorkspaceInput("scanWorkspaceResumeTextInput");
   const jobDescriptionInput = getScanWorkspaceInput("scanWorkspaceJobDescriptionInput");
 
   scanWorkspaceIntakeState.company = String(companyInput?.value || "").trim();
   scanWorkspaceIntakeState.role = String(roleInput?.value || "").trim();
+  scanWorkspaceIntakeState.jobUrl = String(jobUrlInput?.value || "").trim();
+  scanWorkspaceIntakeState.resumeFileName = String(resumeFileInput?.files?.[0]?.name || "").trim();
   scanWorkspaceIntakeState.resumeText = String(resumeTextInput?.value || "").trim();
   scanWorkspaceIntakeState.jobDescriptionText = String(jobDescriptionInput?.value || "").trim();
 
@@ -190,7 +196,7 @@ function updateScanWorkspaceIntakeActions() {
   if (!startBtn) return;
 
   const draft = readScanWorkspaceIntakeDraft();
-  const hasResume = getScanWorkspaceHasPreselectedResume() || Boolean(draft.resumeText);
+  const hasResume = getScanWorkspaceHasPreselectedResume() || Boolean(draft.resumeText) || Boolean(draft.resumeFileName);
   const hasJobDescription = Boolean(draft.jobDescriptionText);
 
   startBtn.disabled = !(hasResume && hasJobDescription);
@@ -199,16 +205,22 @@ function updateScanWorkspaceIntakeActions() {
 function clearScanWorkspaceIntakeForm() {
   const companyInput = getScanWorkspaceInput("scanWorkspaceCompanyInput");
   const roleInput = getScanWorkspaceInput("scanWorkspaceRoleInput");
+  const jobUrlInput = getScanWorkspaceInput("scanWorkspaceJobUrlInput");
+  const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
   const resumeTextInput = getScanWorkspaceInput("scanWorkspaceResumeTextInput");
   const jobDescriptionInput = getScanWorkspaceInput("scanWorkspaceJobDescriptionInput");
 
   if (companyInput) companyInput.value = "";
   if (roleInput) roleInput.value = "";
+  if (jobUrlInput) jobUrlInput.value = "";
+  if (resumeFileInput) resumeFileInput.value = "";
   if (resumeTextInput) resumeTextInput.value = "";
   if (jobDescriptionInput) jobDescriptionInput.value = "";
 
   scanWorkspaceIntakeState.company = "";
   scanWorkspaceIntakeState.role = "";
+  scanWorkspaceIntakeState.jobUrl = "";
+  scanWorkspaceIntakeState.resumeFileName = "";
   scanWorkspaceIntakeState.resumeText = "";
   scanWorkspaceIntakeState.jobDescriptionText = "";
 
@@ -219,6 +231,8 @@ function bindScanWorkspaceIntakeForm() {
   const watchedIds = [
     "scanWorkspaceCompanyInput",
     "scanWorkspaceRoleInput",
+    "scanWorkspaceJobUrlInput",
+    "scanWorkspaceResumeFileInput",
     "scanWorkspaceResumeTextInput",
     "scanWorkspaceJobDescriptionInput",
   ];
@@ -229,6 +243,9 @@ function bindScanWorkspaceIntakeForm() {
 
     input.dataset.bound = "true";
     input.addEventListener("input", () => {
+      updateScanWorkspaceIntakeActions();
+    });
+    input.addEventListener("change", () => {
       updateScanWorkspaceIntakeActions();
     });
   });
@@ -244,10 +261,10 @@ function bindScanWorkspaceIntakeForm() {
   const startBtn = getScanWorkspaceInput("scanWorkspaceStartScanBtn");
   if (startBtn && startBtn.dataset.bound !== "true") {
     startBtn.dataset.bound = "true";
-    startBtn.addEventListener("click", () => {
+    startBtn.addEventListener("click", async () => {
       updateScanWorkspaceIntakeActions();
       if (startBtn.disabled) return;
-      beginScanWorkspaceProcessing();
+      await beginScanWorkspaceProcessing();
     });
   }
 
@@ -271,9 +288,11 @@ function buildScanWorkspaceProcessingSummaryHtml(draft) {
   const hasSavedResume = getScanWorkspaceHasPreselectedResume();
   const resumeSource = hasSavedResume
     ? "Saved resume variant"
-    : draft.resumeText
-      ? "Pasted resume text"
-      : "Missing";
+    : draft.resumeFileName
+      ? `Uploaded file: ${draft.resumeFileName}`
+      : draft.resumeText
+        ? "Pasted resume text"
+        : "Missing";
 
   const jobDescriptionValue = draft.jobDescriptionText
     ? `${draft.jobDescriptionText.length} chars`
@@ -281,12 +300,14 @@ function buildScanWorkspaceProcessingSummaryHtml(draft) {
 
   const companyValue = draft.company || "Not set";
   const roleValue = draft.role || "Not set";
+  const jobUrlValue = draft.jobUrl ? "Provided" : "Not provided";
 
   const cards = [
     { label: "Resume source", value: resumeSource },
     { label: "Job description", value: jobDescriptionValue },
     { label: "Company", value: companyValue },
     { label: "Role", value: roleValue },
+    { label: "Posting URL", value: jobUrlValue },
   ];
 
   return cards
@@ -352,16 +373,99 @@ function updateScanWorkspaceProcessingView() {
   }
 }
 
-function beginScanWorkspaceProcessing() {
+function readScanWorkspaceFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve("");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const base64 = result.includes(",") ? result.split(",").pop() : result;
+      resolve(base64 || "");
+    };
+    reader.onerror = () => reject(new Error("Failed to read uploaded resume file."));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function buildScanWorkspaceStartScanPayload(draft) {
+  const root = getScanWorkspacePageRoot();
+  const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
+  const resumeName = String(root?.dataset?.resumeName || "").trim();
+  const tailoringJsonPath = String(root?.dataset?.tailoringJsonPath || "").trim();
+  const jobDocId = String(root?.dataset?.jobDocId || "").trim();
+  const file = resumeFileInput?.files?.[0] || null;
+
+  return {
+    company: draft.company || "",
+    role: draft.role || "",
+    job_url: draft.jobUrl || "",
+    job_doc_id: jobDocId || "",
+    job_description_text: draft.jobDescriptionText || "",
+    saved_resume_name: file ? "" : resumeName || "",
+    resume_text: draft.resumeText || "",
+    tailoring_json_path: tailoringJsonPath || "",
+    upload_filename: file?.name || "",
+    upload_content_type: file?.type || "",
+    upload_base64: file ? await readScanWorkspaceFileAsBase64(file) : "",
+  };
+}
+
+async function beginScanWorkspaceProcessing() {
   const draft = readScanWorkspaceIntakeDraft();
 
   scanWorkspaceProcessingState.status = "running";
   scanWorkspaceProcessingState.currentStageKey = "prepare";
   scanWorkspaceProcessingState.intakeDraft = { ...draft };
   scanWorkspaceProcessingState.note =
-    "The backend scan runner is not wired yet. The next phase will attach the real start-scan request and polling flow.";
+    "Saving this scan intake to Postgres...";
 
   setScanWorkspaceMode("processing");
+
+  try {
+    scanWorkspaceProcessingState.currentStageKey = "resume";
+    updateScanWorkspaceProcessingView();
+
+    const response = await fetch("/planning/start-scan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(await buildScanWorkspaceStartScanPayload(draft)),
+    });
+
+    if (!response.ok) {
+      let message = `Start scan failed (${response.status})`;
+      try {
+        const data = await response.json();
+        message = String(data?.detail || data?.error || message);
+      } catch {
+        // keep status message
+      }
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+    const scanId = String(data?.scan?.scan_id || "").trim();
+    const writeOk = data?.postgres_write?.ok === true;
+    if (!writeOk) {
+      const writeError = String(data?.postgres_write?.error || data?.postgres_write?.skipped || "").trim();
+      throw new Error(writeError || "Saved scan could not be written to Postgres.");
+    }
+
+    scanWorkspaceProcessingState.status = "complete";
+    scanWorkspaceProcessingState.currentStageKey = "review_payload";
+    scanWorkspaceProcessingState.note = scanId
+      ? `Saved scan intake ${scanId.slice(0, 10)}. Match report generation comes next.`
+      : "Saved scan intake. Match report generation comes next.";
+    updateScanWorkspaceProcessingView();
+  } catch (err) {
+    scanWorkspaceProcessingState.status = "error";
+    scanWorkspaceProcessingState.note =
+      err instanceof Error ? err.message : "Failed to save scan intake.";
+    updateScanWorkspaceProcessingView();
+  }
 }
 
 function bindScanWorkspaceProcessingShell() {
@@ -706,16 +810,53 @@ function buildScanWorkspacePersistencePayload() {
     selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
     manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
     rewrite_review_decisions: buildScanWorkspaceRewriteReviewDecisionsPayload(),
-    excluded_scan_issue_ids: getScanWorkspacePersistenceExcludedIssueIds(),
+    excluded_scan_issue_ids: getCurrentScanWorkspaceExcludedIssueIds(),
+    personal_details: getCurrentScanWorkspacePersonalDetails(),
     note: "Saved from AI Optimize scan.",
   };
 }
 
-function getScanWorkspacePersistenceExcludedIssueIds() {
+function normalizeScanWorkspacePersistencePersonalDetails(value) {
+  if (typeof normalizeScanWorkspacePersonalDetails === "function") {
+    return normalizeScanWorkspacePersonalDetails(value);
+  }
+
+  const raw = value && typeof value === "object" ? value : {};
+  const fields = ["name", "city", "state", "contact", "email", "linkedin"];
+  const normalized = {};
+  fields.forEach((field) => {
+    normalized[field] = String(raw[field] || "").trim();
+  });
+  normalized.state = normalized.state.toUpperCase().slice(0, 2);
+  return normalized;
+}
+
+function getCurrentScanWorkspacePersonalDetails() {
+  if (typeof getScanWorkspacePersonalDetailsForSave === "function") {
+    return getScanWorkspacePersonalDetailsForSave();
+  }
+
+  return getSavedScanWorkspacePersonalDetails();
+}
+
+function getSavedScanWorkspacePersonalDetails() {
+  const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  return normalizeScanWorkspacePersistencePersonalDetails(draft.personal_details || {});
+}
+
+function hasScanWorkspacePersonalDetailsValue(details) {
+  return Object.values(normalizeScanWorkspacePersistencePersonalDetails(details)).some(Boolean);
+}
+
+function getCurrentScanWorkspaceExcludedIssueIds() {
   if (typeof getScanWorkspaceExcludedIssueIds === "function") {
     return getScanWorkspaceExcludedIssueIds();
   }
 
+  return getSavedScanWorkspaceExcludedIssueIds();
+}
+
+function getSavedScanWorkspaceExcludedIssueIds() {
   const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
   return Array.isArray(draft.excluded_scan_issue_ids)
     ? draft.excluded_scan_issue_ids
@@ -724,11 +865,16 @@ function getScanWorkspacePersistenceExcludedIssueIds() {
     : [];
 }
 
+function getScanWorkspacePersistenceExcludedIssueIds() {
+  return getSavedScanWorkspaceExcludedIssueIds();
+}
+
 function buildScanWorkspacePersistenceSignature(
   selectedPatchCandidateIds,
   rewriteReviewDecisions,
   manualBulletEdits = {},
-  excludedScanIssueIds = []
+  excludedScanIssueIds = [],
+  personalDetails = {}
 ) {
   const normalizedIds = Array.from(
     new Set(
@@ -774,12 +920,16 @@ function buildScanWorkspacePersistenceSignature(
         .filter(Boolean)
     )
   ).sort();
+  const normalizedPersonalDetails = Object.entries(
+    normalizeScanWorkspacePersistencePersonalDetails(personalDetails)
+  ).sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
   return JSON.stringify({
     selected_patch_candidate_ids: normalizedIds,
     rewrite_review_decisions: normalizedDecisions,
     manual_bullet_edits: normalizedManualEdits,
     excluded_scan_issue_ids: normalizedExcludedIssues,
+    personal_details: normalizedPersonalDetails,
   });
 }
 
@@ -791,7 +941,8 @@ function getCurrentScanWorkspacePersistenceSignature() {
     payload.selected_patch_candidate_ids,
     payload.rewrite_review_decisions,
     payload.manual_bullet_edits,
-    payload.excluded_scan_issue_ids
+    payload.excluded_scan_issue_ids,
+    payload.personal_details
   );
 }
 
@@ -801,7 +952,8 @@ function getSavedScanWorkspacePersistenceSignature() {
     draft.selected_patch_candidate_ids || [],
     draft.rewrite_review_decisions || {},
     draft.manual_bullet_edits || {},
-    draft.excluded_scan_issue_ids || []
+    draft.excluded_scan_issue_ids || [],
+    draft.personal_details || {}
   );
 }
 
@@ -1088,7 +1240,20 @@ function buildScanWorkspaceDocumentPreviewRequest(
     manual_bullet_edits: manualBulletEdits && typeof manualBulletEdits === "object"
       ? manualBulletEdits
       : {},
+    excluded_scan_issue_ids: getScanWorkspacePersistenceExcludedIssueIds(),
   };
+}
+
+function getSavedScanWorkspaceExclusionAdjustedScore() {
+  if (typeof getScanWorkspaceExclusionAdjustedScore !== "function") return null;
+  if (typeof getScanWorkspacePayload !== "function") return null;
+
+  const savedExcludedIssueIds = getScanWorkspacePersistenceExcludedIssueIds();
+  if (!savedExcludedIssueIds.length) return null;
+
+  return getScanWorkspaceExclusionAdjustedScore(getScanWorkspacePayload(), {
+    excludedIssueIds: savedExcludedIssueIds,
+  });
 }
 
 function coerceScanWorkspaceScore100(value) {
@@ -1243,6 +1408,22 @@ async function refreshScanWorkspaceScorePreview() {
   applyScanWorkspaceDraftFragments(response?.draft_fragments || null);
 
   const scorePreview = scanWorkspacePreviewState.scorePreviewPayload || {};
+  const hasAcceptedRewrites = acceptedIds.length > 0;
+  const hasManualEdits = Object.keys(getScanWorkspaceManualBulletEdits()).length > 0;
+  const savedExclusionScore =
+    !hasAcceptedRewrites && !hasManualEdits
+      ? getSavedScanWorkspaceExclusionAdjustedScore()
+      : null;
+  if (savedExclusionScore) {
+    updateScanWorkspaceScoreValue(savedExclusionScore.score, {
+      label: savedExclusionScore.delta
+        ? `${savedExclusionScore.label}. Score changed by +${savedExclusionScore.delta} points.`
+        : savedExclusionScore.label,
+      source: "saved_excluded_skill_preview",
+    });
+    return;
+  }
+
   const projectedScore =
     scorePreview?.projected_score_points ??
     scorePreview?.projected_score ??
@@ -1322,6 +1503,65 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
   `;
 }
 
+function buildScanWorkspacePersonalDetailsContactLine(details) {
+  const safeDetails = normalizeScanWorkspacePersistencePersonalDetails(details);
+  const location = [safeDetails.city, safeDetails.state].filter(Boolean).join(", ");
+  return [
+    location,
+    safeDetails.contact,
+    safeDetails.email,
+    safeDetails.linkedin ? "LinkedIn" : "",
+  ].filter(Boolean).join(" | ");
+}
+
+function buildScanWorkspacePersonalDetailsLinkItems(details) {
+  const safeDetails = normalizeScanWorkspacePersistencePersonalDetails(details);
+  return safeDetails.linkedin
+    ? [{ label: "LinkedIn", uri: safeDetails.linkedin }]
+    : [];
+}
+
+function applySavedScanWorkspacePersonalDetailsToRows(rows) {
+  const savedDetails = getSavedScanWorkspacePersonalDetails();
+  if (!Object.values(savedDetails).some(Boolean)) {
+    return rows;
+  }
+
+  const nextRows = Array.isArray(rows) ? rows.map((row) => ({ ...row })) : [];
+  const name = savedDetails.name;
+  const contactLine = buildScanWorkspacePersonalDetailsContactLine(savedDetails);
+  let patchedName = false;
+  let patchedContact = false;
+
+  return nextRows.map((row) => {
+    const role = String(row?.presentation_role || "").trim();
+    if (!patchedName && name && role === "header_name") {
+      patchedName = true;
+      return {
+        ...row,
+        text: name,
+        display_text: name,
+        patched: true,
+        patch_source: "personal_details",
+      };
+    }
+
+    if (!patchedContact && contactLine && role === "header_contact") {
+      patchedContact = true;
+      return {
+        ...row,
+        text: contactLine,
+        display_text: contactLine,
+        patched: true,
+        patch_source: "personal_details",
+        link_items: buildScanWorkspacePersonalDetailsLinkItems(savedDetails),
+      };
+    }
+
+    return row;
+  });
+}
+
 function normalizeScanWorkspacePreviewPages(preview) {
   const pages = Array.isArray(preview?.pages) ? preview.pages : [];
   const buildPresentationRowsFn =
@@ -1341,15 +1581,19 @@ function normalizeScanWorkspacePreviewPages(preview) {
       initialSection: carrySection,
       allowDocumentHeaderRoles: pageIndex === 0,
     });
+    const rowsWithPersonalDetails =
+      pageIndex === 0
+        ? applySavedScanWorkspacePersonalDetailsToRows(presentationRows)
+        : presentationRows;
 
-    presentationRows.forEach((row) => {
+    rowsWithPersonalDetails.forEach((row) => {
       const sectionKey = getSectionKeyFn(row);
       if (sectionKey) carrySection = sectionKey;
     });
 
     return {
       ...page,
-      presentation_rows: presentationRows,
+      presentation_rows: rowsWithPersonalDetails,
     };
   });
 }
@@ -1549,6 +1793,16 @@ async function loadScanWorkspaceDraftState() {
     };
     scanWorkspacePersistenceState.hydratedSignature = getSavedScanWorkspacePersistenceSignature();
 
+    if (typeof setScanWorkspaceExcludedIssueIds === "function") {
+      setScanWorkspaceExcludedIssueIds(response?.draft?.excluded_scan_issue_ids || []);
+    }
+    const savedPersonalDetails = response?.draft?.personal_details || {};
+    if (
+      typeof setScanWorkspacePersonalDetails === "function" &&
+      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
+    ) {
+      setScanWorkspacePersonalDetails(savedPersonalDetails);
+    }
     applySavedDraftStateToScanMarkers();
 
     scanWorkspacePreviewState.documentPreviewPayload = null;
@@ -1620,9 +1874,27 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
           : {}
       ),
     };
+    if (typeof setScanWorkspaceExcludedIssueIds === "function") {
+      setScanWorkspaceExcludedIssueIds(response?.draft?.excluded_scan_issue_ids || []);
+    }
+    const savedPersonalDetails = response?.draft?.personal_details || {};
+    if (
+      typeof setScanWorkspacePersonalDetails === "function" &&
+      hasScanWorkspacePersonalDetailsValue(savedPersonalDetails)
+    ) {
+      setScanWorkspacePersonalDetails(savedPersonalDetails);
+    }
     scanWorkspacePersistenceState.hydratedSignature = getCurrentScanWorkspacePersistenceSignature();
     scanWorkspacePersistenceState.lastError = "";
     renderScanWorkspacePersistenceStatus();
+
+    if (typeof renderScanWorkspaceView === "function") {
+      renderScanWorkspaceView();
+    }
+    refreshScanWorkspaceScorePreview();
+    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+      ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+    }
 
     if (navigateAfterSave) {
       const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
@@ -3295,6 +3567,8 @@ window.addEventListener("DOMContentLoaded", () => {
     saveDraftState: () => saveScanWorkspaceDraftState(),
     reloadDraftState: () => loadScanWorkspaceDraftState(),
     renderPersistenceStatus: () => renderScanWorkspacePersistenceStatus(),
+    getSavedExcludedIssueIds: () => getScanWorkspacePersistenceExcludedIssueIds(),
+    getSavedPersonalDetails: () => getSavedScanWorkspacePersonalDetails(),
     getAnnotationState: () => ({
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
       activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,

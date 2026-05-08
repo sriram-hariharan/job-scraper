@@ -1,4 +1,6 @@
 from pathlib import Path
+import base64
+import binascii
 from fastapi import Body, FastAPI, HTTPException, Query
 from fastapi.responses import FileResponse
 from src.app import services
@@ -48,6 +50,7 @@ class PlanningWorkspaceDraftSaveRequest(BaseModel):
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
     rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
     excluded_scan_issue_ids: list[str] = Field(default_factory=list)
+    personal_details: dict[str, str] = Field(default_factory=dict)
     note: str = ""
 
 
@@ -57,12 +60,14 @@ class PlanningWorkspaceDraftPreviewRequest(BaseModel):
     selected_patch_candidate_ids: list[str] | None = None
     manual_bullet_edits: dict[str, str] | None = None
     rewrite_review_decisions: dict[str, dict[str, str] | str] | None = None
+    excluded_scan_issue_ids: list[str] | None = None
 
 class PlanningWorkspaceDraftRenderRequest(BaseModel):
     tailoring_json_path: str
     selected_resume: str = ""
     selected_patch_candidate_ids: list[str] | None = None
     manual_bullet_edits: dict[str, str] | None = None
+    excluded_scan_issue_ids: list[str] | None = None
 
 class PlanningScanPhraseRequest(BaseModel):
     tailoring_json_path: str
@@ -80,6 +85,19 @@ class PlanningWorkspaceDraftExportRequest(BaseModel):
 class PlanningScanPreloadRequest(BaseModel):
     tailoring_json_path: str
     selected_resume: str = ""
+
+class PlanningStartScanRequest(BaseModel):
+    company: str = ""
+    role: str = ""
+    job_description_text: str = ""
+    job_url: str = ""
+    job_doc_id: str = ""
+    saved_resume_name: str = ""
+    resume_text: str = ""
+    tailoring_json_path: str = ""
+    upload_filename: str = ""
+    upload_content_type: str = ""
+    upload_base64: str = ""
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -512,6 +530,28 @@ def planning_scan_preload(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.post("/planning/start-scan")
+def planning_start_scan(request: PlanningStartScanRequest):
+    try:
+        upload_bytes = None
+        if request.upload_base64:
+            upload_bytes = base64.b64decode(request.upload_base64)
+        return services.create_saved_scan_payload(
+            company=request.company,
+            role=request.role,
+            job_description_text=request.job_description_text,
+            job_url=request.job_url,
+            job_doc_id=request.job_doc_id,
+            saved_resume_name=request.saved_resume_name,
+            resume_text=request.resume_text,
+            upload_filename=request.upload_filename,
+            upload_content_type=request.upload_content_type,
+            upload_bytes=upload_bytes,
+            tailoring_json_path=request.tailoring_json_path,
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.get("/planning/resume-preview")
 def planning_resume_preview(
@@ -641,6 +681,7 @@ def save_workspace_draft(request: PlanningWorkspaceDraftSaveRequest):
             manual_bullet_edits=request.manual_bullet_edits,
             rewrite_review_decisions=request.rewrite_review_decisions,
             excluded_scan_issue_ids=request.excluded_scan_issue_ids,
+            personal_details=request.personal_details,
             note=request.note,
         )
     except ValueError as exc:
@@ -823,6 +864,11 @@ def rag_answer(
 @app.get("/profile/resumes")
 def profile_resumes():
     return services.profile_resumes_payload()
+
+
+@app.get("/profile/saved-scans")
+def profile_saved_scans(limit: int = 25):
+    return services.profile_saved_scans_payload(limit=limit)
 
 
 @app.post("/profile/resumes/upload")

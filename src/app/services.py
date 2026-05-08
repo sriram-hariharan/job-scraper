@@ -2322,7 +2322,58 @@ def _scan_recruiter_tip_issue(
     }
 
 
-def _build_searchability_scan_issues(resume_evidence: Any = None) -> List[Dict[str, Any]]:
+def _scan_searchability_target_title(tailoring_summary: Dict[str, Any] | None = None) -> str:
+    summary = dict(tailoring_summary or {})
+    for key in (
+        "target_job_title",
+        "job_title",
+        "role_title",
+        "title",
+        "position_title",
+    ):
+        value = _clean_text(summary.get(key))
+        if value:
+            return value
+
+    job = summary.get("job")
+    if isinstance(job, dict):
+        return _clean_text(
+            job.get("title")
+            or job.get("job_title")
+            or job.get("role_title")
+        )
+
+    return ""
+
+
+def _scan_searchability_title_tokens(title: str) -> List[str]:
+    stop_words = {
+        "and",
+        "the",
+        "for",
+        "with",
+        "senior",
+        "junior",
+        "lead",
+        "principal",
+        "staff",
+        "ii",
+        "iii",
+        "iv",
+    }
+    tokens = [
+        token
+        for token in re.findall(r"\b[a-z][a-z0-9+#.]{2,}\b", title.lower())
+        if token not in stop_words
+    ]
+    return list(dict.fromkeys(tokens))
+
+
+def _build_searchability_scan_issues(
+    resume_evidence: Any = None,
+    *,
+    tailoring_summary: Dict[str, Any] | None = None,
+) -> List[Dict[str, Any]]:
     if resume_evidence is None:
         return []
 
@@ -2330,8 +2381,173 @@ def _build_searchability_scan_issues(resume_evidence: Any = None) -> List[Dict[s
     text_norm = raw_text.lower()
     bullets = _scan_resume_bullet_texts(resume_evidence)
     visible_terms = _scan_resume_visible_search_terms(resume_evidence)
+    education_entries = list(getattr(resume_evidence, "education_entries", []) or [])
+    target_title = _scan_searchability_target_title(tailoring_summary)
 
     issues: List[Dict[str, Any]] = []
+
+    contact_hits = []
+    if re.search(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", raw_text, flags=re.IGNORECASE):
+        contact_hits.append("email")
+    if re.search(r"(?:\+?1[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b", raw_text):
+        contact_hits.append("phone")
+    if re.search(r"\b(?:linkedin\.com|github\.com|portfolio|www\.)\b", text_norm):
+        contact_hits.append("profile link")
+
+    if len(contact_hits) >= 2:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="contact_info_searchable",
+                bucket="matched",
+                title="Contact info searchable",
+                reason=f"Detected parseable contact signals: {', '.join(contact_hits)}.",
+                current_text=", ".join(contact_hits),
+                priority="high",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="contact_info_searchable",
+                bucket="missing",
+                title="Make contact info searchable",
+                reason="The scan could not detect at least two clear contact signals such as email, phone, or profile link.",
+                current_text=", ".join(contact_hits),
+                suggested_text="Use plain text for email, phone, LinkedIn, GitHub, or portfolio links in the resume header.",
+                priority="high",
+            )
+        )
+
+    education_terms = [
+        "education",
+        "university",
+        "college",
+        "bachelor",
+        "master",
+        "phd",
+        "doctorate",
+        "degree",
+        "gpa",
+    ]
+    education_hits = [term for term in education_terms if re.search(rf"\b{re.escape(term)}\b", text_norm)]
+    if education_entries or education_hits:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="education_info_searchable",
+                bucket="matched",
+                title="Education info searchable",
+                reason="Detected parseable education text or structured education evidence.",
+                current_text=", ".join(education_hits[:6]),
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="education_info_searchable",
+                bucket="missing",
+                title="Make education info searchable",
+                reason="The scan could not detect a clear education section, degree, school, or related education signal.",
+                suggested_text="Add a plain-text Education section with school, degree, and graduation details where applicable.",
+                priority="medium",
+            )
+        )
+
+    date_pattern = re.compile(
+        r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\.?\s+\d{4}\b"
+        r"|\b(?:19|20)\d{2}\s*(?:-|–|to)\s*(?:present|current|(?:19|20)\d{2})\b"
+        r"|\b(?:19|20)\d{2}\b",
+        flags=re.IGNORECASE,
+    )
+    date_hits = date_pattern.findall(raw_text)
+    if len(date_hits) >= 2:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="dates_searchable",
+                bucket="matched",
+                title="Dates searchable",
+                reason=f"Detected {len(date_hits)} parseable date signal(s).",
+                current_text=", ".join(_scan_issue_unique_display_labels(date_hits[:6])),
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="dates_searchable",
+                bucket="missing",
+                title="Make dates searchable",
+                reason="The scan found fewer than two parseable date signals for experience or education timelines.",
+                current_text=", ".join(_scan_issue_unique_display_labels(date_hits[:6])),
+                suggested_text="Use plain-text month/year or year ranges for roles and education dates.",
+                priority="medium",
+            )
+        )
+
+    section_patterns = {
+        "experience": r"(?im)^\s*(professional\s+experience|experience|work\s+experience)\s*:?\s*$",
+        "education": r"(?im)^\s*education\s*:?\s*$",
+        "skills": r"(?im)^\s*(technical\s+skills|skills|core\s+skills)\s*:?\s*$",
+        "projects": r"(?im)^\s*(projects|selected\s+projects)\s*:?\s*$",
+    }
+    parseable_sections = [
+        label
+        for label, pattern in section_patterns.items()
+        if re.search(pattern, raw_text)
+    ]
+    if len(parseable_sections) >= 2:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="section_headings_parseable",
+                bucket="matched",
+                title="Section headings parseable",
+                reason=f"Detected standard section headings: {', '.join(parseable_sections)}.",
+                current_text=", ".join(parseable_sections),
+                priority="high",
+            )
+        )
+    else:
+        issues.append(
+            _scan_searchability_issue(
+                check_id="section_headings_parseable",
+                bucket="missing",
+                title="Use standard section headings",
+                reason="The scan detected fewer than two standard resume section headings.",
+                current_text=", ".join(parseable_sections),
+                suggested_text="Use plain section headings such as Experience, Skills, Projects, and Education.",
+                priority="high",
+            )
+        )
+
+    title_tokens = _scan_searchability_title_tokens(target_title)
+    matched_title_tokens = [token for token in title_tokens if re.search(rf"\b{re.escape(token)}\b", text_norm)]
+    if title_tokens:
+        required_title_hits = max(1, min(len(title_tokens), 2))
+        if len(matched_title_tokens) >= required_title_hits:
+            issues.append(
+                _scan_searchability_issue(
+                    check_id="job_title_alignment",
+                    bucket="matched",
+                    title="Job title alignment visible",
+                    reason=f"The resume includes target-role terms from {target_title}.",
+                    current_text=", ".join(matched_title_tokens),
+                    supported_jd_signals=[target_title],
+                    priority="high",
+                )
+            )
+        else:
+            issues.append(
+                _scan_searchability_issue(
+                    check_id="job_title_alignment",
+                    bucket="missing",
+                    title="Add target job title alignment",
+                    reason=f"The scan found limited title alignment for the target role: {target_title}.",
+                    current_text=", ".join(matched_title_tokens),
+                    suggested_text="Mention the target role or truthful equivalent role language in the summary, headline, or relevant experience.",
+                    supported_jd_signals=[target_title],
+                    priority="high",
+                )
+            )
 
     skills = list(getattr(resume_evidence, "skills", []) or [])
     has_skills_section = bool(re.search(r"(?im)^\s*(technical\s+skills|skills|core\s+skills)\s*:?\s*$", raw_text))
@@ -2711,7 +2927,10 @@ def _build_tailoring_scan_issue_contract(
             )
 
     deterministic_issues = (
-        _build_searchability_scan_issues(resume_evidence)
+        _build_searchability_scan_issues(
+            resume_evidence,
+            tailoring_summary=tailoring_summary,
+        )
         + _build_recruiter_tip_scan_issues(resume_evidence)
     )
     issues = (

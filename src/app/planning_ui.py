@@ -1268,12 +1268,32 @@ def scan_workspace(
 
             <label class="scan-workspace-input-group">
               <span class="scan-workspace-input-label">Upload resume file</span>
-              <input
-                type="file"
-                id="scanWorkspaceResumeFileInput"
-                class="scan-workspace-input"
-                accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-              />
+              <div class="scan-workspace-file-picker">
+                <input
+                  type="file"
+                  id="scanWorkspaceResumeFileInput"
+                  class="scan-workspace-file-input"
+                  accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                />
+                <button
+                  type="button"
+                  class="ghost-btn scan-workspace-file-btn"
+                  id="scanWorkspaceResumeBrowseBtn"
+                >
+                  Choose file
+                </button>
+                <span
+                  class="scan-workspace-file-name"
+                  id="scanWorkspaceResumeFileName"
+                >
+                  No file selected
+                </span>
+              </div>
+              <div
+                class="scan-workspace-file-status"
+                id="scanWorkspaceResumeFileStatus"
+                aria-live="polite"
+              ></div>
             </label>
 
             <label class="scan-workspace-input-group">

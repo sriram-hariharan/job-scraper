@@ -99,6 +99,11 @@ class PlanningStartScanRequest(BaseModel):
     upload_content_type: str = ""
     upload_base64: str = ""
 
+class PlanningExtractResumeUploadRequest(BaseModel):
+    filename: str
+    content_type: str = ""
+    upload_base64: str
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -552,7 +557,18 @@ def planning_start_scan(request: PlanningStartScanRequest):
         )
     except (binascii.Error, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    
+
+@app.post("/planning/extract-resume-upload")
+def planning_extract_resume_upload(request: PlanningExtractResumeUploadRequest):
+    try:
+        return services.extract_scan_resume_upload_text_payload(
+            filename=request.filename,
+            content_type=request.content_type,
+            file_bytes=base64.b64decode(request.upload_base64),
+        )
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+     
 @app.get("/planning/resume-preview")
 def planning_resume_preview(
     resume_name: str = Query(..., min_length=1),

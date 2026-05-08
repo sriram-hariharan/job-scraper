@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
+from src.storage.saved_scans.store import saved_scans_schema_sql_text
+
 
 def _load_local_dotenv_if_present(dotenv_path: Path = Path(".env")) -> None:
     path = dotenv_path.expanduser()
@@ -139,6 +141,27 @@ def _run_psql_json_query(
     return payload
 
 
+def _run_psql_command(
+    *,
+    sql: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    database_url_value = _resolve_database_url(database_url, database_url_env, allow_placeholder=bool(print_only))
+    cmd: List[str] = [str(psql_bin), database_url_value, "-X", "-q", "-v", "ON_ERROR_STOP=1", "-c", sql]
+    redacted_cmd = list(cmd)
+    redacted_cmd[1] = _redact_database_url(redacted_cmd[1])
+    payload: Dict[str, Any] = {"command": redacted_cmd, "command_text": shlex.join(redacted_cmd)}
+    if print_only:
+        return payload
+    if shutil.which(str(psql_bin)) is None:
+        raise SystemExit(f"psql executable not found on PATH: {psql_bin!r}.")
+    subprocess.run(cmd, check=True, capture_output=True, text=True)
+    return payload
+
+
 def get_saved_scans_postgres_payload(
     *,
     limit: int = 25,
@@ -146,8 +169,19 @@ def get_saved_scans_postgres_payload(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     print_only: bool = False,
+    ensure_schema: bool = True,
 ) -> Dict[str, Any]:
     normalized_limit = _normalize_positive_int(limit, "limit")
+    schema_payload: Dict[str, Any] = {}
+    if ensure_schema:
+        schema_payload = _run_psql_command(
+            sql=saved_scans_schema_sql_text(),
+            database_url=database_url,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            print_only=print_only,
+        )
+
     query_payload = _run_psql_json_query(
         sql=_build_saved_scans_sql(normalized_limit),
         database_url=database_url,
@@ -159,6 +193,8 @@ def get_saved_scans_postgres_payload(
     return {
         "ok": True,
         "query_limit": normalized_limit,
+        "schema_command": schema_payload.get("command", []),
+        "schema_command_text": schema_payload.get("command_text", ""),
         "command": query_payload["command"],
         "command_text": query_payload["command_text"],
         "postgres": query_payload["data"],

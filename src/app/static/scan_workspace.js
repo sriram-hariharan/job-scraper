@@ -132,6 +132,21 @@ function getScanWorkspaceHasPreselectedResume() {
   return Boolean(String(root.dataset.resumeName || "").trim());
 }
 
+function setScanWorkspaceResumeFileUi(fileName = "", message = "", tone = "") {
+  const fileNameNode = getScanWorkspaceInput("scanWorkspaceResumeFileName");
+  const statusNode = getScanWorkspaceInput("scanWorkspaceResumeFileStatus");
+
+  if (fileNameNode) {
+    fileNameNode.textContent = fileName || "No file selected";
+  }
+
+  if (statusNode) {
+    statusNode.textContent = message || "";
+    statusNode.classList.toggle("is-error", tone === "error");
+    statusNode.classList.toggle("is-success", tone === "success");
+  }
+}
+
 function setScanWorkspaceMode(nextMode) {
   const root = getScanWorkspacePageRoot();
   if (!root) return;
@@ -216,6 +231,7 @@ function clearScanWorkspaceIntakeForm() {
   if (resumeFileInput) resumeFileInput.value = "";
   if (resumeTextInput) resumeTextInput.value = "";
   if (jobDescriptionInput) jobDescriptionInput.value = "";
+  setScanWorkspaceResumeFileUi();
 
   scanWorkspaceIntakeState.company = "";
   scanWorkspaceIntakeState.role = "";
@@ -249,6 +265,23 @@ function bindScanWorkspaceIntakeForm() {
       updateScanWorkspaceIntakeActions();
     });
   });
+
+  const browseBtn = getScanWorkspaceInput("scanWorkspaceResumeBrowseBtn");
+  const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
+  if (browseBtn && resumeFileInput && browseBtn.dataset.bound !== "true") {
+    browseBtn.dataset.bound = "true";
+    browseBtn.addEventListener("click", () => {
+      resumeFileInput.click();
+    });
+  }
+
+  if (resumeFileInput && resumeFileInput.dataset.extractBound !== "true") {
+    resumeFileInput.dataset.extractBound = "true";
+    resumeFileInput.addEventListener("change", async () => {
+      updateScanWorkspaceIntakeActions();
+      await handleScanWorkspaceResumeFileSelected();
+    });
+  }
 
   const clearBtn = getScanWorkspaceInput("scanWorkspaceClearIntakeBtn");
   if (clearBtn && clearBtn.dataset.bound !== "true") {
@@ -389,6 +422,63 @@ function readScanWorkspaceFileAsBase64(file) {
     reader.onerror = () => reject(new Error("Failed to read uploaded resume file."));
     reader.readAsDataURL(file);
   });
+}
+
+async function handleScanWorkspaceResumeFileSelected() {
+  const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
+  const resumeTextInput = getScanWorkspaceInput("scanWorkspaceResumeTextInput");
+  const file = resumeFileInput?.files?.[0] || null;
+
+  if (!file) {
+    setScanWorkspaceResumeFileUi();
+    updateScanWorkspaceIntakeActions();
+    return;
+  }
+
+  setScanWorkspaceResumeFileUi(file.name, "Extracting resume text...");
+
+  try {
+    const response = await fetch("/planning/extract-resume-upload", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name || "",
+        content_type: file.type || "",
+        upload_base64: await readScanWorkspaceFileAsBase64(file),
+      }),
+    });
+
+    if (!response.ok) {
+      let message = `Resume extraction failed (${response.status})`;
+      try {
+        const data = await response.json();
+        message = String(data?.detail || data?.error || message);
+      } catch {
+        // keep status message
+      }
+      throw new Error(message);
+    }
+
+    const data = await response.json();
+    const text = String(data?.text || "").trim();
+    if (resumeTextInput && text) {
+      resumeTextInput.value = text;
+    }
+
+    setScanWorkspaceResumeFileUi(
+      file.name,
+      text ? `Extracted ${text.length} characters into Resume text.` : "File selected.",
+      text ? "success" : ""
+    );
+  } catch (err) {
+    setScanWorkspaceResumeFileUi(
+      file.name,
+      err instanceof Error ? err.message : "Could not extract resume text.",
+      "error"
+    );
+  } finally {
+    updateScanWorkspaceIntakeActions();
+  }
 }
 
 async function buildScanWorkspaceStartScanPayload(draft) {

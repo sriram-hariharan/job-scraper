@@ -496,7 +496,7 @@ def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
             "saved_scans": list(payload.get("rows", []) or []),
             "postgres": payload.get("postgres", {}),
         }
-    except Exception as exc:
+    except BaseException as exc:
         return {
             "ok": False,
             "source": "postgres",
@@ -506,6 +506,73 @@ def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
             "error_type": exc.__class__.__name__,
             "error": str(exc),
         }
+
+
+def _extract_scan_upload_text_from_pdf(path: Path) -> str:
+    from pdfminer.high_level import extract_text
+
+    return _clean_text(extract_text(str(path)))
+
+
+def _extract_scan_upload_text_from_docx(path: Path) -> str:
+    from docx import Document
+
+    document = Document(str(path))
+    lines: List[str] = []
+    for paragraph in document.paragraphs:
+        text = _clean_text(paragraph.text)
+        if text:
+            lines.append(text)
+    for table in document.tables:
+        for row in table.rows:
+            cells = [_clean_text(cell.text) for cell in row.cells]
+            line = " | ".join(cell for cell in cells if cell)
+            if line:
+                lines.append(line)
+    return _clean_text("\n".join(lines))
+
+
+def extract_scan_resume_upload_text_payload(
+    *,
+    filename: str = "",
+    content_type: str = "",
+    file_bytes: bytes | None = None,
+) -> Dict[str, Any]:
+    safe_name = _sanitize_scan_upload_filename(filename)
+    if not file_bytes:
+        raise ValueError("Uploaded resume file is empty.")
+
+    suffix = Path(safe_name).suffix.lower()
+    if suffix == ".txt":
+        text = file_bytes.decode("utf-8", errors="replace")
+    else:
+        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:
+            handle.write(file_bytes)
+            temp_path = Path(handle.name)
+        try:
+            if suffix == ".pdf":
+                text = _extract_scan_upload_text_from_pdf(temp_path)
+            elif suffix == ".docx":
+                text = _extract_scan_upload_text_from_docx(temp_path)
+            else:
+                raise ValueError("Only PDF, DOCX, and TXT scan uploads are supported.")
+        finally:
+            try:
+                temp_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    clean_text = _clean_text(text)
+    if not clean_text:
+        raise ValueError("Could not extract readable resume text from this file.")
+
+    return {
+        "ok": True,
+        "filename": safe_name,
+        "content_type": _scan_upload_mime_type(safe_name, content_type),
+        "char_count": len(clean_text),
+        "text": clean_text,
+    }
 
 def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")

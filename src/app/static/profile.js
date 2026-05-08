@@ -1,6 +1,5 @@
 const profileState = {
   pendingDeleteResumeName: null,
-  activeTab: "resumes",
 };
 
 function qs(id) {
@@ -50,6 +49,7 @@ function formatDateTime(value) {
 }
 
 function formatPercent(value) {
+  if (value === null || value === undefined || value === "") return "-";
   const number = Number(value);
   if (!Number.isFinite(number)) return "-";
   return `${Math.round(number)}%`;
@@ -205,27 +205,6 @@ async function loadSavedScans() {
     ok: data.ok !== false,
     error: data.error || "",
   });
-}
-
-function setProfileTab(tab) {
-  const safeTab = tab === "saved_scans" ? "saved_scans" : "resumes";
-  profileState.activeTab = safeTab;
-
-  document.querySelectorAll("[data-profile-tab]").forEach((button) => {
-    const isActive = button.dataset.profileTab === safeTab;
-    button.classList.toggle("is-active", isActive);
-    button.setAttribute("aria-pressed", isActive ? "true" : "false");
-  });
-
-  document.querySelectorAll("[data-profile-tab-panel]").forEach((panel) => {
-    panel.hidden = panel.dataset.profileTabPanel !== safeTab;
-  });
-
-  if (safeTab === "saved_scans") {
-    loadSavedScans().catch((err) => {
-      renderSavedScans([], { ok: false, error: err.message });
-    });
-  }
 }
 
 function validateResumeFile(file) {
@@ -423,13 +402,7 @@ function bindDeleteInteractions() {
   });
 }
 
-function bindProfileTabs() {
-  document.querySelectorAll("[data-profile-tab]").forEach((button) => {
-    button.addEventListener("click", () => {
-      setProfileTab(button.dataset.profileTab || "resumes");
-    });
-  });
-
+function bindSavedScansPage() {
   const refreshBtn = qs("refreshSavedScansBtn");
   if (refreshBtn) {
     refreshBtn.addEventListener("click", () => {
@@ -438,17 +411,37 @@ function bindProfileTabs() {
       });
     });
   }
+
+  return loadSavedScans();
+}
+
+function isSavedScansPage() {
+  return Boolean(qs("savedScansTableBody"));
+}
+
+function isProfileResumePage() {
+  return Boolean(qs("resumeList"));
 }
 
 async function initProfilePage() {
   try {
-    clearStatus();
-    bindProfileTabs();
-    bindUploadInteractions();
-    bindDeleteInteractions();
-    await loadResumes();
+    if (isSavedScansPage()) {
+      await bindSavedScansPage();
+      return;
+    }
+
+    if (isProfileResumePage()) {
+      clearStatus();
+      bindUploadInteractions();
+      bindDeleteInteractions();
+      await loadResumes();
+    }
   } catch (err) {
-    setStatus(`Failed to load resumes: ${err.message}`, "error");
+    if (isSavedScansPage()) {
+      renderSavedScans([], { ok: false, error: err.message });
+    } else {
+      setStatus(`Failed to load resumes: ${err.message}`, "error");
+    }
   }
 }
 

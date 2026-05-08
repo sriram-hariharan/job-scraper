@@ -171,6 +171,14 @@ def render_top_shell(active_href: str) -> str:
     <div class="profile-dropdown hidden" id="profileDropdown">
       <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
       <div class="profile-dropdown-actions">
+        <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Saved Scans</span>
+            <span class="profile-dropdown-nav-subtitle">Resume scan history and match snapshots</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
         <a class="profile-dropdown-nav-btn" href="/profile">
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">My Profile</span>

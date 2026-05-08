@@ -18,8 +18,8 @@
 }
 
 .scan-workspace-intake-card {
-  padding: 22px;
-  border-radius: 20px;
+  padding: 20px;
+  border-radius: 18px;
   border: 1px solid rgba(120, 166, 255, 0.16);
   background:
     linear-gradient(180deg, rgba(9, 14, 31, 0.78) 0%, rgba(18, 25, 51, 0.9) 100%);
@@ -33,12 +33,12 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .scan-workspace-intake-header h2 {
   margin: 0 0 8px 0;
-  font-size: 28px;
+  font-size: 24px;
   line-height: 1.1;
 }
 
@@ -52,13 +52,13 @@
 .scan-workspace-intake-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 .scan-workspace-intake-panel {
   min-width: 0;
-  padding: 18px;
-  border-radius: 18px;
+  padding: 16px;
+  border-radius: 16px;
   border: 1px solid rgba(42, 53, 99, 0.75);
   background: rgba(255, 255, 255, 0.025);
 }
@@ -67,7 +67,7 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .scan-workspace-intake-panel-header h3 {
@@ -85,7 +85,7 @@
 }
 
 .scan-workspace-input-group + .scan-workspace-input-group {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .scan-workspace-input-label {
@@ -104,7 +104,7 @@
   border: 1px solid rgba(120, 166, 255, 0.16);
   background: linear-gradient(180deg, rgba(7, 11, 25, 0.94) 0%, rgba(14, 20, 42, 0.98) 100%);
   color: #eef4ff;
-  padding: 12px 14px;
+  padding: 10px 12px;
   font: inherit;
   line-height: 1.5;
   outline: none;
@@ -136,12 +136,65 @@
 }
 
 .scan-workspace-textarea {
-  min-height: 220px;
+  min-height: 180px;
   resize: vertical;
 }
 
 .scan-workspace-textarea--jd {
-  min-height: 320px;
+  min-height: 288px;
+}
+
+.scan-workspace-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scan-workspace-file-picker {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 166, 255, 0.16);
+  background: linear-gradient(180deg, rgba(7, 11, 25, 0.94) 0%, rgba(14, 20, 42, 0.98) 100%);
+}
+
+.scan-workspace-file-btn {
+  min-height: 34px;
+  padding: 7px 11px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.scan-workspace-file-name {
+  min-width: 0;
+  color: #dbe6ff;
+  font-size: 13px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-workspace-file-status {
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.scan-workspace-file-status.is-error {
+  color: #ffd7d7;
+}
+
+.scan-workspace-file-status.is-success {
+  color: #d7f8ea;
 }
 
 .scan-workspace-input-hint {

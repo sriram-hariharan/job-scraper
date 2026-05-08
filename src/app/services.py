@@ -1777,6 +1777,60 @@ def _scan_issue_term_family(value: Any, dimensions: List[Any] | None = None) -> 
     return "skills"
 
 
+_SCAN_SOFT_SKILL_TERMS = {
+    "adaptability",
+    "collaboration",
+    "communication",
+    "cross functional",
+    "cross-functional",
+    "decision making",
+    "empathy",
+    "leadership",
+    "mentoring",
+    "organization",
+    "ownership",
+    "problem solving",
+    "stakeholder management",
+    "stakeholders",
+    "teamwork",
+    "written communication",
+}
+
+_SCAN_OTHER_KEYWORD_TERMS = {
+    "business impact",
+    "customer",
+    "customers",
+    "domain",
+    "industry",
+    "metrics",
+    "ownership scope",
+    "scale",
+    "seniority",
+}
+
+
+def _scan_issue_skill_type(value: Any, dimensions: List[Any] | None = None) -> Tuple[str, str]:
+    key = _scan_issue_normalized_key(value)
+    display_key = _clean_text(value).strip().lower()
+    dimension_keys = {_scan_issue_normalized_key(item) for item in list(dimensions or [])}
+
+    if key in {_scan_issue_normalized_key(term) for term in _SCAN_SOFT_SKILL_TERMS} or display_key in _SCAN_SOFT_SKILL_TERMS:
+        return "soft_skill", "Soft skill"
+
+    if key in {_scan_issue_normalized_key(term) for term in _SCAN_OTHER_KEYWORD_TERMS}:
+        return "other_keyword", "Other keyword"
+
+    if dimension_keys & {
+        "business_context",
+        "ownership_scope",
+        "human_recruiter_match",
+        "believability",
+    }:
+        return "other_keyword", "Other keyword"
+
+    return "hard_skill", "Hard skill"
+
+
 def _scan_issue_extract_summary_terms(summary: Dict[str, Any] | None, keys: List[str]) -> List[str]:
     if not isinstance(summary, dict):
         return []
@@ -1939,6 +1993,14 @@ def _scan_keyword_issue_from_term(
 
     display_term = _scan_issue_display_label(term)
     canonical_term = _scan_issue_canonical_term(display_term)
+    base = dict(best_issue or {})
+    skill_type = ""
+    skill_type_label = ""
+    if group_id == "skills":
+        skill_type, skill_type_label = _scan_issue_skill_type(
+            display_term,
+            base.get("likely_impacted_dimensions", []),
+        )
     required_count = max(1, int(required_count or 0))
     matched_count = max(0, int(matched_count or 0))
     if row_action_type == "matched":
@@ -1968,7 +2030,6 @@ def _scan_keyword_issue_from_term(
     elif row_action_type == "hidden_rejected":
         severity = "diagnostic"
 
-    base = dict(best_issue or {})
     base.update(
         {
             "issue_id": f"scan_issue:{group_id}:keyword:{canonical_term.replace(' ', '_')}",
@@ -1990,6 +2051,8 @@ def _scan_keyword_issue_from_term(
             "display_term": display_term,
             "canonical_term": canonical_term,
             "term_family": _scan_issue_term_family(display_term, base.get("likely_impacted_dimensions", [])),
+            "skill_type": skill_type,
+            "skill_type_label": skill_type_label,
             "matched_count": matched_count,
             "required_count": required_count,
             "coverage_label": coverage_label,
@@ -2982,6 +3045,18 @@ def _build_tailoring_scan_issue_contract(
             "ai": sum(1 for issue in group_issues if issue.get("bucket") == "ai"),
         }
 
+    def _skill_type_counts() -> Dict[str, int]:
+        skill_issues = [
+            issue for issue in issues
+            if _clean_text(issue.get("group_id")) == "skills"
+            and issue.get("is_visible_in_review", True)
+        ]
+        return {
+            "hard_skill": sum(1 for issue in skill_issues if issue.get("skill_type") == "hard_skill"),
+            "soft_skill": sum(1 for issue in skill_issues if issue.get("skill_type") == "soft_skill"),
+            "other_keyword": sum(1 for issue in skill_issues if issue.get("skill_type") == "other_keyword"),
+        }
+
     skills_counts = _group_counts("skills")
     searchability_counts = _group_counts("searchability")
     recruiter_tips_counts = _group_counts("recruiter_tips")
@@ -2992,6 +3067,7 @@ def _build_tailoring_scan_issue_contract(
             "label": _scan_issue_group_label("skills"),
             "description": "Skill and JD-signal alignment issues derived from tailoring replacement lanes.",
             "counts": skills_counts,
+            "skill_type_counts": _skill_type_counts(),
             "buckets": [
                 {
                     "bucket": "matched",

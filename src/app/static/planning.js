@@ -9216,6 +9216,8 @@ function normalizeScanWorkspaceContractIssue(issue) {
     display_term: String(issue?.display_term || "").trim(),
     canonical_term: String(issue?.canonical_term || "").trim(),
     term_family: String(issue?.term_family || "").trim(),
+    skill_type: String(issue?.skill_type || "").trim(),
+    skill_type_label: String(issue?.skill_type_label || "").trim(),
     matched_count: issue?.matched_count,
     required_count: issue?.required_count,
     coverage_label: String(issue?.coverage_label || "").trim(),
@@ -9300,7 +9302,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       label: String(sourceGroup?.label || fallbackGroup.label).trim(),
       title:
         groupId === "skills"
-          ? "Hard skills"
+          ? "Hard + soft skills"
           : String(sourceGroup?.label || fallbackGroup.label).trim(),
       matchedCount: matchedItems.length,
       missingCount: missingItems.length,
@@ -9308,6 +9310,59 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
       totalCount: groupIssues.length,
       groups: [],
     };
+
+    if (groupId === "skills") {
+      const skillTypeOrder = [
+        { key: "hard_skill", label: "Hard skills" },
+        { key: "soft_skill", label: "Soft skills" },
+        { key: "other_keyword", label: "Other keywords" },
+      ];
+      const bucketLabelByKey = new Map(
+        bucketRows.map((bucketRow) => [
+          String(bucketRow?.bucket || "").trim(),
+          String(bucketRow?.label || "").trim(),
+        ])
+      );
+      const fallbackBucketLabels = {
+        matched: "Matched",
+        missing: "Missing / optimization opportunities",
+        ai: "AI suggested",
+      };
+
+      skillTypeOrder.forEach((skillType) => {
+        const skillTypeItems = groupIssues.filter((issue) => {
+          const rowSkillType = String(issue?.skill_type || "").trim() || "hard_skill";
+          return rowSkillType === skillType.key;
+        });
+        if (!skillTypeItems.length) return;
+
+        ["matched", "missing", "ai"].forEach((bucketKey) => {
+          const bucketItems = skillTypeItems.filter((issue) => issue.scan_issue_bucket === bucketKey);
+          if (!bucketItems.length) return;
+          const bucketLabel = bucketLabelByKey.get(bucketKey) || fallbackBucketLabels[bucketKey] || humanizeUnderscoreLabel(bucketKey);
+
+          panel.groups.push({
+            title: `${skillType.label}: ${bucketLabel}`,
+            summary: `${bucketItems.length} ${skillType.label.toLowerCase()} item(s).`,
+            bucket: bucketKey,
+            items: bucketItems,
+          });
+        });
+      });
+
+      const untypedItems = groupIssues.filter((issue) => !String(issue?.skill_type || "").trim());
+      if (panel.groups.length || !untypedItems.length) {
+        if (!panel.groups.length) {
+          panel.groups.push({
+            title: "No scan issues yet",
+            summary: String(sourceGroup?.description || "No skill rows are available for this scan.").trim(),
+            bucket: "missing",
+            items: [],
+          });
+        }
+        return panel;
+      }
+    }
 
     const orderedBuckets = bucketRows.length
       ? bucketRows

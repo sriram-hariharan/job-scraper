@@ -9218,6 +9218,14 @@ function normalizeScanWorkspaceContractIssue(issue) {
     term_family: String(issue?.term_family || "").trim(),
     skill_type: String(issue?.skill_type || "").trim(),
     skill_type_label: String(issue?.skill_type_label || "").trim(),
+    score_priority_rank: Number.isFinite(Number(issue?.score_priority_rank))
+      ? Number(issue.score_priority_rank)
+      : 0,
+    score_priority_label: String(issue?.score_priority_label || "").trim(),
+    score_priority_weight: Number.isFinite(Number(issue?.score_priority_weight))
+      ? Number(issue.score_priority_weight)
+      : 0,
+    score_priority_source: String(issue?.score_priority_source || "").trim(),
     matched_count: issue?.matched_count,
     required_count: issue?.required_count,
     coverage_label: String(issue?.coverage_label || "").trim(),
@@ -9654,14 +9662,17 @@ function getScanWorkspaceIssueMeta(bucket) {
 function getScanWorkspaceIssueMetaForItem(item, bucket) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
   const rowActionLabel = String(item?.row_action_label || "").trim();
+  const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
+  const isDeterministicCheckGroup = groupId === "searchability" || groupId === "recruiter_tips";
   if (rowActionLabel && rowActionType !== "matched") return rowActionLabel;
   if (rowActionType === "direct_replacement") return "AI Suggested";
   if (rowActionType === "phrase_generation") return "Phrase";
   if (rowActionType === "manual_guidance") return "Manual edit";
   if (rowActionType === "guidance" && item?.has_ai_suggestion === true) return "AI guidance";
+  if (rowActionType === "matched" && isDeterministicCheckGroup) return "Check";
   if (rowActionType === "matched") return "Backed";
   if (rowActionType === "guidance") return "Manual edit";
-  if (bucket === "matched") return "Backed";
+  if (bucket === "matched") return isDeterministicCheckGroup ? "Check" : "Backed";
   if (bucket === "missing") return "Manual edit";
   if (bucket === "ai") return "AI Suggested";
   if (bucket === "ai_optimize") return "AI replacement";
@@ -9677,6 +9688,15 @@ function getScanWorkspaceIssueCountLabel(bucket) {
 }
 
 function getScanWorkspaceIssueCoverageLabel(item) {
+  const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
+  const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
+  if (
+    rowActionType === "matched" &&
+    (groupId === "searchability" || groupId === "recruiter_tips")
+  ) {
+    return "Pass";
+  }
+
   const matchedLabel = String(item?.matched_count_label || "").trim();
   if (matchedLabel) return matchedLabel;
 
@@ -9702,6 +9722,26 @@ function getScanWorkspaceIssueScoreImpact(item) {
   const directPoints = coerceScanWorkspaceScorePoints(item?.projected_score_delta_points);
   if (directPoints !== null) return directPoints;
   return coerceScanWorkspaceScorePoints(item?.projected_overall_delta);
+}
+
+function compareScanWorkspaceIssuePriority(left, right) {
+  const leftRank = Number(left?.score_priority_rank || 0);
+  const rightRank = Number(right?.score_priority_rank || 0);
+  const leftEffectiveRank = leftRank > 0 ? leftRank : 99;
+  const rightEffectiveRank = rightRank > 0 ? rightRank : 99;
+  if (leftEffectiveRank !== rightEffectiveRank) return leftEffectiveRank - rightEffectiveRank;
+
+  const leftWeight = Number(left?.score_priority_weight || 0);
+  const rightWeight = Number(right?.score_priority_weight || 0);
+  if (leftWeight !== rightWeight) return rightWeight - leftWeight;
+
+  const leftImpact = getScanWorkspaceIssueScoreImpact(left);
+  const rightImpact = getScanWorkspaceIssueScoreImpact(right);
+  if ((leftImpact || 0) !== (rightImpact || 0)) return (rightImpact || 0) - (leftImpact || 0);
+
+  const leftTitle = getScanWorkspaceIssueTitle(left, 0).toLowerCase();
+  const rightTitle = getScanWorkspaceIssueTitle(right, 0).toLowerCase();
+  return leftTitle.localeCompare(rightTitle);
 }
 
 function getScanWorkspaceIssueRightLabel(item, bucket) {
@@ -9743,6 +9783,11 @@ function getScanWorkspaceIssueScoreTitle(item) {
     .slice(0, 3);
 
   const parts = [];
+  if (item?.score_priority_label) {
+    const weight = Number(item?.score_priority_weight || 0);
+    const weightLabel = weight > 0 ? `, scorer weight ${Math.round(weight * 100)}%` : "";
+    parts.push(`Priority: ${item.score_priority_label}${weightLabel}`);
+  }
   if (originalScore !== null) parts.push(`Original score ${originalScore}`);
   if (projectedScore !== null) parts.push(`Projected score ${projectedScore}`);
   if (dimensionLabels.length) parts.push(`Impact: ${dimensionLabels.join(", ")}`);
@@ -9769,7 +9814,9 @@ function getScanWorkspaceIssueToneClassForItem(item, bucket) {
 }
 
 function renderScanWorkspaceIssueInventory(items, bucket) {
-  const safeItems = Array.isArray(items) ? items : [];
+  const safeItems = Array.isArray(items)
+    ? items.slice().sort(compareScanWorkspaceIssuePriority)
+    : [];
 
   if (!safeItems.length) {
     return `

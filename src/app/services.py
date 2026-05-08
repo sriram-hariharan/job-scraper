@@ -31,6 +31,7 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
+from src.matching.dimensions import get_dimension_weights
 from src.storage.application_actions.store import (
     application_action_db_row,
     insert_application_action_row_to_postgres,
@@ -1831,6 +1832,111 @@ def _scan_issue_skill_type(value: Any, dimensions: List[Any] | None = None) -> T
     return "hard_skill", "Hard skill"
 
 
+def _scan_summary_has_advanced_degree_requirement(summary: Dict[str, Any] | None = None) -> bool:
+    if not isinstance(summary, dict):
+        return False
+
+    values: List[Any] = []
+    for key in (
+        "required_education",
+        "education_requirements",
+        "matched_required",
+        "missing_required",
+        "required_terms",
+        "missing_requirements",
+    ):
+        raw = summary.get(key)
+        if isinstance(raw, dict):
+            values.extend(raw.keys())
+            values.extend(raw.values())
+        elif isinstance(raw, list):
+            values.extend(raw)
+        elif raw:
+            values.append(raw)
+
+    blob = " ".join(_clean_text(value).lower() for value in values if _clean_text(value))
+    return bool(
+        re.search(
+            r"\b(?:master|masters|ms|m\.s\.|mba|phd|ph\.d\.|doctorate|graduate degree|advanced degree)\b",
+            blob,
+        )
+    )
+
+
+def _scan_issue_score_priority(
+    *,
+    group_id: str,
+    skill_type: str = "",
+    dimensions: List[Any] | None = None,
+    check_id: str = "",
+    advanced_degree_required: bool = False,
+) -> Tuple[int, str]:
+    dimension_keys = {_scan_issue_normalized_key(item) for item in list(dimensions or [])}
+
+    if group_id == "skills":
+        if "title_alignment" in dimension_keys:
+            return 3, "Job title"
+        if skill_type == "soft_skill":
+            return 4, "Soft skills"
+        if skill_type == "other_keyword":
+            return 5, "Other keywords"
+        return 1, "Hard skills"
+
+    if group_id == "searchability" and check_id == "education_info_searchable" and advanced_degree_required:
+        return 2, "Education level"
+
+    if group_id == "searchability" and check_id == "job_title_alignment":
+        return 3, "Job title"
+
+    return 0, "Non-scoring guidance"
+
+
+def _scan_issue_score_priority_weight(
+    *,
+    group_id: str,
+    skill_type: str = "",
+    dimensions: List[Any] | None = None,
+    check_id: str = "",
+    advanced_degree_required: bool = False,
+) -> float:
+    weights = get_dimension_weights()
+    dimension_keys = [
+        _scan_issue_normalized_key(item)
+        for item in list(dimensions or [])
+        if _scan_issue_normalized_key(item) in weights
+    ]
+    if dimension_keys:
+        return round(max(weights.get(key, 0.0) for key in dimension_keys), 6)
+
+    if group_id == "skills":
+        if skill_type == "soft_skill":
+            return round(weights.get("stakeholder_translation_alignment", 0.0), 6)
+        if skill_type == "other_keyword":
+            return round(
+                max(
+                    weights.get("business_context_alignment", 0.0),
+                    weights.get("domain_relevance", 0.0),
+                ),
+                6,
+            )
+        return round(
+            max(
+                weights.get("required_skills_alignment", 0.0),
+                weights.get("tooling_alignment", 0.0),
+                weights.get("analytics_ml_depth", 0.0),
+            ),
+            6,
+        )
+
+    if group_id == "searchability" and check_id == "job_title_alignment":
+        return round(weights.get("title_alignment", 0.0), 6)
+
+    if group_id == "searchability" and check_id == "education_info_searchable" and advanced_degree_required:
+        return 0.0
+
+    return 0.0
+
+
 def _scan_issue_extract_summary_terms(summary: Dict[str, Any] | None, keys: List[str]) -> List[str]:
     if not isinstance(summary, dict):
         return []
@@ -1996,10 +2102,17 @@ def _scan_keyword_issue_from_term(
     base = dict(best_issue or {})
     skill_type = ""
     skill_type_label = ""
+    score_priority_rank = 0
+    score_priority_label = "Non-scoring guidance"
     if group_id == "skills":
         skill_type, skill_type_label = _scan_issue_skill_type(
             display_term,
             base.get("likely_impacted_dimensions", []),
+        )
+        score_priority_rank, score_priority_label = _scan_issue_score_priority(
+            group_id=group_id,
+            skill_type=skill_type,
+            dimensions=base.get("likely_impacted_dimensions", []),
         )
     required_count = max(1, int(required_count or 0))
     matched_count = max(0, int(matched_count or 0))
@@ -2053,6 +2166,14 @@ def _scan_keyword_issue_from_term(
             "term_family": _scan_issue_term_family(display_term, base.get("likely_impacted_dimensions", [])),
             "skill_type": skill_type,
             "skill_type_label": skill_type_label,
+            "score_priority_rank": score_priority_rank,
+            "score_priority_label": score_priority_label,
+            "score_priority_weight": _scan_issue_score_priority_weight(
+                group_id=group_id,
+                skill_type=skill_type,
+                dimensions=base.get("likely_impacted_dimensions", []),
+            ),
+            "score_priority_source": "jobscan_match_report_order",
             "matched_count": matched_count,
             "required_count": required_count,
             "coverage_label": coverage_label,
@@ -2206,19 +2327,25 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
         row_action_type = "matched" if issue.get("bucket") == "matched" else "manual_guidance"
         display_term = _clean_text(issue.get("display_term")) or _clean_text(issue.get("title"))
         canonical = _scan_issue_canonical_term(display_term)
+        is_check_group = group_id in {"searchability", "recruiter_tips"}
         matched_count = 1 if row_action_type == "matched" else 0
         required_count = 1
-        coverage_label = (
-            f"Seen {matched_count}"
-            if row_action_type == "matched"
-            else f"{matched_count}/{required_count}"
-        )
+        if row_action_type == "matched" and is_check_group:
+            coverage_label = "Pass"
+        elif row_action_type == "matched":
+            coverage_label = f"Seen {matched_count}"
+        else:
+            coverage_label = f"{matched_count}/{required_count}"
         updated = dict(issue)
         updated.update(
             {
                 "display_term": display_term,
                 "canonical_term": canonical,
                 "term_family": group_id,
+                "score_priority_rank": int(issue.get("score_priority_rank") or 0),
+                "score_priority_label": _clean_text(issue.get("score_priority_label")) or "Non-scoring guidance",
+                "score_priority_weight": float(issue.get("score_priority_weight") or 0.0),
+                "score_priority_source": _clean_text(issue.get("score_priority_source")) or "jobscan_match_report_order",
                 "matched_count": matched_count,
                 "required_count": required_count,
                 "coverage_label": coverage_label,
@@ -2227,7 +2354,7 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
                 "linked_candidate_ids": [],
                 "best_candidate_id": "",
                 "row_action_type": row_action_type,
-                "row_action_label": coverage_label if row_action_type == "matched" else "Guidance",
+                "row_action_label": "Check" if row_action_type == "matched" and is_check_group else coverage_label if row_action_type == "matched" else "Guidance",
                 "scan_issue_type": row_action_type,
                 "severity": "low" if row_action_type == "matched" else "medium",
                 "is_visible_in_review": True,
@@ -2290,6 +2417,8 @@ def _scan_searchability_issue(
     suggested_text: str = "",
     supported_jd_signals: List[str] | None = None,
     priority: str = "",
+    score_priority_rank: int = 0,
+    score_priority_label: str = "Non-scoring guidance",
 ) -> Dict[str, Any]:
     bucket_label = "Matched searchability signal" if bucket == "matched" else "Searchability opportunity"
 
@@ -2304,6 +2433,14 @@ def _scan_searchability_issue(
         "title": title,
         "status": "searchability_matched" if bucket == "matched" else "searchability_opportunity",
         "priority": priority,
+        "score_priority_rank": int(score_priority_rank or 0),
+        "score_priority_label": score_priority_label,
+        "score_priority_weight": _scan_issue_score_priority_weight(
+            group_id="searchability",
+            check_id=check_id,
+            advanced_degree_required=score_priority_label == "Education level",
+        ),
+        "score_priority_source": "jobscan_match_report_order",
         "confidence": "deterministic",
         "source": "resume_evidence",
         "section": "",
@@ -2446,6 +2583,7 @@ def _build_searchability_scan_issues(
     visible_terms = _scan_resume_visible_search_terms(resume_evidence)
     education_entries = list(getattr(resume_evidence, "education_entries", []) or [])
     target_title = _scan_searchability_target_title(tailoring_summary)
+    advanced_degree_required = _scan_summary_has_advanced_degree_requirement(tailoring_summary)
 
     issues: List[Dict[str, Any]] = []
 
@@ -2502,6 +2640,8 @@ def _build_searchability_scan_issues(
                 reason="Detected parseable education text or structured education evidence.",
                 current_text=", ".join(education_hits[:6]),
                 priority="medium",
+                score_priority_rank=2 if advanced_degree_required else 0,
+                score_priority_label="Education level" if advanced_degree_required else "Non-scoring guidance",
             )
         )
     else:
@@ -2513,6 +2653,8 @@ def _build_searchability_scan_issues(
                 reason="The scan could not detect a clear education section, degree, school, or related education signal.",
                 suggested_text="Add a plain-text Education section with school, degree, and graduation details where applicable.",
                 priority="medium",
+                score_priority_rank=2 if advanced_degree_required else 0,
+                score_priority_label="Education level" if advanced_degree_required else "Non-scoring guidance",
             )
         )
 
@@ -2596,6 +2738,8 @@ def _build_searchability_scan_issues(
                     current_text=", ".join(matched_title_tokens),
                     supported_jd_signals=[target_title],
                     priority="high",
+                    score_priority_rank=3,
+                    score_priority_label="Job title",
                 )
             )
         else:
@@ -2609,6 +2753,8 @@ def _build_searchability_scan_issues(
                     suggested_text="Mention the target role or truthful equivalent role language in the summary, headline, or relevant experience.",
                     supported_jd_signals=[target_title],
                     priority="high",
+                    score_priority_rank=3,
+                    score_priority_label="Job title",
                 )
             )
 

@@ -9262,31 +9262,36 @@ function renderScanWorkspaceTabs() {
   const personalTab = qs("scanWorkspacePersonalTab");
   const skillsTab = qs("scanWorkspaceTrustedTab");
   const searchabilityTab = qs("scanWorkspaceAiTab");
+  const formattingTab = qs("scanWorkspaceFormattingTab");
   const recruiterTipsTab = qs("scanWorkspaceGuidanceTab");
   const payload = getScanWorkspacePayload();
 
-  if (!personalTab || !skillsTab || !searchabilityTab || !recruiterTipsTab || !payload) return;
+  if (!personalTab || !skillsTab || !searchabilityTab || !formattingTab || !recruiterTipsTab || !payload) return;
 
   const taxonomy = buildScanWorkspaceTaxonomy(payload);
 
   personalTab.dataset.scanSelectedTab = "personal_details";
   skillsTab.dataset.scanSelectedTab = "skills";
   searchabilityTab.dataset.scanSelectedTab = "searchability";
+  formattingTab.dataset.scanSelectedTab = "formatting";
   recruiterTipsTab.dataset.scanSelectedTab = "recruiter_tips";
 
   personalTab.classList.toggle("active", scanWorkspaceState.selectedTab === "personal_details");
   skillsTab.classList.toggle("active", scanWorkspaceState.selectedTab === "skills");
   searchabilityTab.classList.toggle("active", scanWorkspaceState.selectedTab === "searchability");
+  formattingTab.classList.toggle("active", scanWorkspaceState.selectedTab === "formatting");
   recruiterTipsTab.classList.toggle("active", scanWorkspaceState.selectedTab === "recruiter_tips");
 
   personalTab.textContent = "Personal Details";
   skillsTab.textContent = "Skills";
   searchabilityTab.textContent = "Searchability";
+  formattingTab.textContent = "Formatting";
   recruiterTipsTab.textContent = "Recruiter Tips";
 
   personalTab.title = "Resume header and contact details";
   skillsTab.title = `${taxonomy.skills.totalCount} skill scan item(s)`;
   searchabilityTab.title = `${taxonomy.searchability.totalCount} searchability item(s)`;
+  formattingTab.title = `${taxonomy.formatting.totalCount} formatting item(s)`;
   recruiterTipsTab.title = `${taxonomy.recruiter_tips.totalCount} recruiter tip item(s)`;
 }
 
@@ -9527,6 +9532,7 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
   const defaultGroups = [
     { group_id: "skills", label: "Skills", description: "" },
     { group_id: "searchability", label: "Searchability", description: "" },
+    { group_id: "formatting", label: "Formatting", description: "" },
     { group_id: "recruiter_tips", label: "Recruiter Tips", description: "" },
   ];
 
@@ -9674,7 +9680,8 @@ function buildScanWorkspaceTaxonomyFromIssueContract(payload = getScanWorkspaceP
     personal_details: buildScanWorkspacePersonalDetailsPanel(),
     skills: groups[0],
     searchability: groups[1],
-    recruiter_tips: groups[2],
+    formatting: groups[2],
+    recruiter_tips: groups[3],
   };
 }
 
@@ -9745,6 +9752,24 @@ function buildScanWorkspaceTaxonomy(payload = getScanWorkspacePayload()) {
           summary: "Suggestions that improve where JD language appears in the resume.",
           bucket: aiItems.length ? "ai_optimize" : "trusted",
           items: searchabilityItems,
+        },
+      ],
+    },
+
+    formatting: {
+      key: "formatting",
+      label: "Formatting",
+      title: "Formatting checks",
+      matchedCount: 0,
+      missingCount: 0,
+      aiCount: 0,
+      totalCount: 0,
+      groups: [
+        {
+          title: "ATS formatting checks",
+          summary: "Text extraction, tables, columns, bullets, and symbol checks will appear after the scan contract is loaded.",
+          bucket: "guidance",
+          items: [],
         },
       ],
     },
@@ -10007,7 +10032,7 @@ function getScanWorkspaceIssueMetaForItem(item, bucket) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
   const rowActionLabel = String(item?.row_action_label || "").trim();
   const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
-  const isDeterministicCheckGroup = groupId === "searchability" || groupId === "recruiter_tips";
+  const isDeterministicCheckGroup = ["searchability", "formatting", "recruiter_tips"].includes(groupId);
   if (rowActionType === "direct_replacement") return "AI Suggested";
   if (rowActionType === "phrase_generation") return "Phrase";
   if (rowActionType === "manual_guidance") return "Manual edit";
@@ -10041,7 +10066,7 @@ function getScanWorkspaceIssueCoverageLabel(item) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
   if (
     rowActionType === "matched" &&
-    (groupId === "searchability" || groupId === "recruiter_tips")
+    ["searchability", "formatting", "recruiter_tips"].includes(groupId)
   ) {
     return "Pass";
   }
@@ -10964,7 +10989,7 @@ function bindScanWorkspaceHandlers() {
       if (!tabButton) return;
 
       const nextTab = String(tabButton.dataset.scanSelectedTab || "").trim();
-      if (!["personal_details", "skills", "searchability", "recruiter_tips"].includes(nextTab)) return;
+      if (!["personal_details", "skills", "searchability", "formatting", "recruiter_tips"].includes(nextTab)) return;
 
       scanWorkspaceState.selectedTab = nextTab;
       scanWorkspaceState.activeCandidateId = "";

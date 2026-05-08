@@ -1839,6 +1839,7 @@ _SCAN_SKILLS_SIGNAL_KEYS = {
 _SCAN_GROUP_LABELS = {
     "skills": "Skills",
     "searchability": "Searchability",
+    "formatting": "Formatting",
     "recruiter_tips": "Recruiter Tips",
 }
 

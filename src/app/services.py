@@ -2939,7 +2939,7 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
         row_action_type = "matched" if issue.get("bucket") == "matched" else "manual_guidance"
         display_term = _clean_text(issue.get("display_term")) or _clean_text(issue.get("title"))
         canonical = _scan_issue_canonical_term(display_term)
-        is_check_group = group_id in {"searchability", "recruiter_tips"}
+        is_check_group = group_id in {"searchability", "formatting", "recruiter_tips"}
         matched_count = 1 if row_action_type == "matched" else 0
         required_count = 1
         if row_action_type == "matched" and is_check_group:
@@ -2966,7 +2966,13 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
                 "linked_candidate_ids": [],
                 "best_candidate_id": "",
                 "row_action_type": row_action_type,
-                "row_action_label": "Check" if row_action_type == "matched" and is_check_group else coverage_label if row_action_type == "matched" else "Guidance",
+                "row_action_label": (
+                    "Check"
+                    if row_action_type == "matched" and is_check_group
+                    else coverage_label
+                    if row_action_type == "matched"
+                    else "Guidance"
+                ),
                 "scan_issue_type": row_action_type,
                 "severity": "low" if row_action_type == "matched" else "medium",
                 "is_visible_in_review": True,
@@ -3286,6 +3292,57 @@ def _scan_recruiter_tip_issue(
         "raw": {
             "check_id": check_id,
             "source": "deterministic_recruiter_tip_check",
+        },
+    }
+
+
+def _scan_formatting_issue(
+    *,
+    check_id: str,
+    bucket: str,
+    title: str,
+    reason: str,
+    current_text: str = "",
+    suggested_text: str = "",
+    priority: str = "",
+) -> Dict[str, Any]:
+    return {
+        "issue_id": f"scan_issue:formatting:{check_id}",
+        "candidate_id": "",
+        "source_lane": "formatting_check",
+        "group_id": "formatting",
+        "group_label": _scan_issue_group_label("formatting"),
+        "bucket": bucket,
+        "bucket_label": "ATS-friendly formatting signal" if bucket == "matched" else "Formatting opportunity",
+        "title": title,
+        "status": "formatting_matched" if bucket == "matched" else "formatting_opportunity",
+        "priority": priority,
+        "confidence": "deterministic",
+        "source": "resume_text",
+        "section": "",
+        "source_entry_id": "",
+        "source_bullet_id": "",
+        "source_bullet_ids": [],
+        "original_text": current_text,
+        "current_text": current_text,
+        "suggested_text": suggested_text,
+        "reason": reason,
+        "supported_jd_signals": [],
+        "likely_impacted_dimensions": ["ats_parseability"],
+        "materiality_validation_status": "",
+        "patch_generation_method": "deterministic_formatting_check",
+        "projected_overall_delta": None,
+        "original_final_score": None,
+        "projected_final_score": None,
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "can_accept": False,
+        "can_accept_all": False,
+        "anchor_strategy": "none",
+        "can_focus_preview": False,
+        "raw": {
+            "check_id": check_id,
+            "source": "deterministic_formatting_check",
         },
     }
 
@@ -3734,6 +3791,293 @@ def _build_recruiter_tip_scan_issues(resume_evidence: Any = None) -> List[Dict[s
 
     return issues
 
+
+def _build_formatting_scan_issues(resume_evidence: Any = None) -> List[Dict[str, Any]]:
+    if resume_evidence is None:
+        return []
+
+    raw_text = _scan_resume_document_text(resume_evidence)
+    lines = [_clean_text(line) for line in raw_text.splitlines()]
+    non_empty_lines = [line for line in lines if line]
+    issues: List[Dict[str, Any]] = []
+
+    word_count = len(re.findall(r"\w+", raw_text))
+    if word_count >= 80:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="text_extractable",
+                bucket="matched",
+                title="Resume text is extractable",
+                reason=f"Detected {word_count} parseable word(s), which suggests the resume is not image-only.",
+                current_text=f"{word_count} words parsed",
+                priority="high",
+            )
+        )
+    else:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="text_extractable",
+                bucket="missing",
+                title="Make resume text extractable",
+                reason="Very little parseable text was detected, which can happen with image-only or heavily graphical resumes.",
+                current_text=f"{word_count} words parsed",
+                suggested_text="Use selectable text in an ATS-friendly PDF or DOCX instead of scanned images.",
+                priority="high",
+            )
+        )
+
+    def _looks_like_contact_separator_line(line: str) -> bool:
+        lowered = line.lower()
+        has_contact_signal = (
+            "@" in line
+            or "linkedin" in lowered
+            or "github" in lowered
+            or re.search(r"\+?\d[\d\s().-]{6,}\d", line)
+        )
+        return bool(has_contact_signal and line.count("|") >= 1)
+
+    table_like_lines = [
+        line for line in non_empty_lines
+        if not _looks_like_contact_separator_line(line)
+        and (line.count("|") >= 2 or line.count("\t") >= 2)
+    ]
+    wide_gap_lines = [
+        line for line in non_empty_lines
+        if re.search(r"\S\s{6,}\S", line)
+    ]
+    if table_like_lines or len(wide_gap_lines) >= 4:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="table_column_risk",
+                bucket="missing",
+                title="Reduce table or column formatting risk",
+                reason="The parsed text shows table-like separators or wide spacing that can indicate columns/tables.",
+                current_text=(table_like_lines or wide_gap_lines)[0][:220],
+                suggested_text="Prefer a single-column layout with plain section headings and simple bullet lists.",
+                priority="high",
+            )
+        )
+    else:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="table_column_risk",
+                bucket="matched",
+                title="No obvious table or column risk",
+                reason="The parsed text does not show repeated table separators or wide column spacing.",
+                priority="high",
+            )
+        )
+
+    bullet_lines = [
+        line for line in non_empty_lines
+        if re.match(r"^\s*(?:[-*•▪◦‣]|\d+[.)])\s+", line)
+    ]
+    unusual_bullets = [
+        line for line in non_empty_lines
+        if re.match(r"^\s*[➤✓✔★◆●]\s+", line)
+    ]
+    if unusual_bullets:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="bullet_formatting",
+                bucket="missing",
+                title="Use simple bullet symbols",
+                reason="Decorative bullet symbols can be less reliable for ATS parsing.",
+                current_text=unusual_bullets[0][:220],
+                suggested_text="Use simple bullets such as -, *, or standard round bullets.",
+                priority="medium",
+            )
+        )
+    elif bullet_lines:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="bullet_formatting",
+                bucket="matched",
+                title="Bullet formatting is simple",
+                reason=f"Detected {len(bullet_lines)} line(s) using common bullet/list markers.",
+                current_text=bullet_lines[0][:220],
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="bullet_formatting",
+                bucket="missing",
+                title="Use parseable bullet lists",
+                reason="The scan did not detect common bullet/list markers in parsed resume text.",
+                suggested_text="Use simple bullet lists for accomplishments and responsibilities.",
+                priority="medium",
+            )
+        )
+
+    replacement_char_count = raw_text.count("\ufffd")
+    odd_symbol_count = len(re.findall(r"[^\x00-\x7F]", raw_text))
+    if replacement_char_count or odd_symbol_count > 40:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="special_character_risk",
+                bucket="missing",
+                title="Reduce special character parsing risk",
+                reason="The parsed text contains many non-standard characters or replacement glyphs.",
+                current_text=f"{odd_symbol_count} non-ASCII character(s), {replacement_char_count} replacement glyph(s)",
+                suggested_text="Use standard punctuation and avoid decorative symbols in core resume text.",
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="special_character_risk",
+                bucket="matched",
+                title="Special character risk is low",
+                reason="The parsed text does not show heavy use of decorative or corrupted characters.",
+                priority="low",
+            )
+        )
+
+    heading_order = []
+    heading_patterns = [
+        ("summary", r"(?im)^\s*(summary|profile|professional\s+summary)\s*:?\s*$"),
+        ("skills", r"(?im)^\s*(technical\s+skills|skills|core\s+skills)\s*:?\s*$"),
+        ("experience", r"(?im)^\s*(professional\s+experience|experience|work\s+experience)\s*:?\s*$"),
+        ("education", r"(?im)^\s*education\s*:?\s*$"),
+    ]
+    for key, pattern in heading_patterns:
+        match = re.search(pattern, raw_text)
+        if match:
+            heading_order.append((match.start(), key))
+    heading_order.sort()
+    detected_headings = [key for _, key in heading_order]
+    if len(detected_headings) >= 3:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="standard_resume_structure",
+                bucket="matched",
+                title="Standard resume structure detected",
+                reason=f"Detected standard headings: {', '.join(detected_headings)}.",
+                current_text=", ".join(detected_headings),
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_formatting_issue(
+                check_id="standard_resume_structure",
+                bucket="missing",
+                title="Use standard resume sections",
+                reason="The scan detected fewer than three standard resume headings.",
+                current_text=", ".join(detected_headings),
+                suggested_text="Use common headings such as Summary, Skills, Experience, Projects, and Education.",
+                priority="medium",
+            )
+        )
+
+    return issues
+
+
+def _build_scan_match_report_summary(
+    *,
+    issues: List[Dict[str, Any]],
+    groups: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    visible_issues = [
+        issue for issue in issues
+        if issue.get("is_visible_in_review", True)
+    ]
+
+    def priority_row(
+        *,
+        key: str,
+        label: str,
+        rank: int,
+        group_ids: List[str],
+        skill_types: List[str] | None = None,
+        score_priority_labels: List[str] | None = None,
+    ) -> Dict[str, Any]:
+        allowed_groups = set(group_ids)
+        allowed_skill_types = set(skill_types or [])
+        allowed_priority_labels = set(score_priority_labels or [])
+
+        rows = []
+        for issue in visible_issues:
+            group_id = _clean_text(issue.get("group_id"))
+            if group_id not in allowed_groups:
+                continue
+            if allowed_skill_types and _clean_text(issue.get("skill_type")) not in allowed_skill_types:
+                continue
+            if allowed_priority_labels and _clean_text(issue.get("score_priority_label")) not in allowed_priority_labels:
+                continue
+            rows.append(issue)
+
+        matched = sum(1 for issue in rows if issue.get("bucket") == "matched")
+        missing = sum(1 for issue in rows if issue.get("bucket") == "missing")
+        ai = sum(1 for issue in rows if issue.get("bucket") == "ai")
+        total = len(rows)
+
+        return {
+            "key": key,
+            "label": label,
+            "rank": rank,
+            "total": total,
+            "matched": matched,
+            "missing": missing,
+            "ai": ai,
+            "complete": total > 0 and missing == 0,
+        }
+
+    priority_rows = [
+        priority_row(
+            key="hard_skills",
+            label="Hard skills",
+            rank=1,
+            group_ids=["skills"],
+            skill_types=["hard_skill"],
+        ),
+        priority_row(
+            key="education_level",
+            label="Education level",
+            rank=2,
+            group_ids=["searchability"],
+            score_priority_labels=["Education level"],
+        ),
+        priority_row(
+            key="job_title",
+            label="Job title",
+            rank=3,
+            group_ids=["searchability"],
+            score_priority_labels=["Job title"],
+        ),
+        priority_row(
+            key="soft_skills",
+            label="Soft skills",
+            rank=4,
+            group_ids=["skills"],
+            skill_types=["soft_skill"],
+        ),
+        priority_row(
+            key="other_keywords",
+            label="Other keywords",
+            rank=5,
+            group_ids=["skills"],
+            skill_types=["other_keyword"],
+        ),
+    ]
+
+    group_counts = {
+        _clean_text(group.get("group_id")): dict(group.get("counts", {}) or {})
+        for group in groups
+    }
+
+    return {
+        "version": "scan_match_report_v1",
+        "priority_order": priority_rows,
+        "group_counts": group_counts,
+        "formatting": group_counts.get("formatting", {}),
+        "searchability": group_counts.get("searchability", {}),
+    }
+
+
 def _scan_issue_from_replacement_row(
     row: Dict[str, Any],
     *,
@@ -3909,6 +4253,7 @@ def _build_tailoring_scan_issue_contract(
             resume_evidence,
             tailoring_summary=tailoring_summary,
         )
+        + _build_formatting_scan_issues(resume_evidence)
         + _build_recruiter_tip_scan_issues(resume_evidence)
     )
     issues = (
@@ -3992,6 +4337,7 @@ def _build_tailoring_scan_issue_contract(
 
     skills_counts = _group_counts("skills")
     searchability_counts = _group_counts("searchability")
+    formatting_counts = _group_counts("formatting")
     recruiter_tips_counts = _group_counts("recruiter_tips")
 
     groups = [
@@ -4034,7 +4380,7 @@ def _build_tailoring_scan_issue_contract(
         {
             "group_id": "searchability",
             "label": _scan_issue_group_label("searchability"),
-            "description": "Reserved for deterministic formatting and ATS parse checks.",
+            "description": "Deterministic ATS searchability and parse checks.",
             "counts": searchability_counts,
             "buckets": [
                 {
@@ -4051,6 +4397,29 @@ def _build_tailoring_scan_issue_contract(
                     "bucket": "ai",
                     "label": "AI suggested",
                     "count": searchability_counts["ai"],
+                },
+            ],
+        },
+        {
+            "group_id": "formatting",
+            "label": _scan_issue_group_label("formatting"),
+            "description": "Deterministic ATS formatting checks for text extraction, tables, columns, bullets, and symbols.",
+            "counts": formatting_counts,
+            "buckets": [
+                {
+                    "bucket": "matched",
+                    "label": "ATS-friendly formatting signals",
+                    "count": formatting_counts["matched"],
+                },
+                {
+                    "bucket": "missing",
+                    "label": "Formatting opportunities",
+                    "count": formatting_counts["missing"],
+                },
+                {
+                    "bucket": "ai",
+                    "label": "AI suggested",
+                    "count": formatting_counts["ai"],
                 },
             ],
         },
@@ -4083,6 +4452,7 @@ def _build_tailoring_scan_issue_contract(
         "version": "scan_issue_contract_v2",
         "source": "tailoring_keyword_scan",
         "groups": groups,
+        "match_report": _build_scan_match_report_summary(issues=visible_issues, groups=groups),
         "issues": issues,
         "replacement_issues": replacement_issues,
         "counts": counts,

@@ -1535,6 +1535,15 @@ def scan_workspace(
                 <button
                   type="button"
                   class="scan-workspace-tab-btn"
+                  data-scan-selected-tab="formatting"
+                  id="scanWorkspaceFormattingTab"
+                >
+                  Formatting
+                </button>
+
+                <button
+                  type="button"
+                  class="scan-workspace-tab-btn"
                   data-scan-selected-tab="guidance"
                   id="scanWorkspaceGuidanceTab"
                 >

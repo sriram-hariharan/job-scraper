@@ -485,6 +485,123 @@ def create_saved_scan_payload(
     }
 
 
+def _scan_job_description_text_for_display(record: Dict[str, Any] | None = None) -> str:
+    if not isinstance(record, dict):
+        return ""
+
+    values: List[Any] = []
+    for key in (
+        "description_text",
+        "description",
+        "job_description",
+        "raw_description",
+        "requirements",
+        "responsibilities",
+        "qualifications",
+    ):
+        raw = record.get(key)
+        if isinstance(raw, list):
+            values.extend(raw)
+        elif isinstance(raw, dict):
+            values.extend(raw.values())
+        elif raw:
+            values.append(raw)
+
+    direct_text = "\n".join(_clean_text(value) for value in values if _clean_text(value)).strip()
+    if direct_text:
+        return direct_text
+
+    return _clean_text(record.get("retrieval_text"))
+
+
+def _scan_job_context_from_record(record: Dict[str, Any] | None = None) -> Dict[str, str]:
+    if not isinstance(record, dict):
+        return {}
+
+    metadata = record.get("metadata", {}) if isinstance(record.get("metadata"), dict) else {}
+    return {
+        "company": _clean_text(
+            record.get("company")
+            or record.get("job_company")
+            or metadata.get("company")
+            or metadata.get("job_company")
+        ),
+        "title": _clean_text(
+            record.get("title")
+            or record.get("job_title")
+            or metadata.get("title")
+            or metadata.get("job_title")
+        ),
+        "job_url": _clean_text(
+            record.get("job_url")
+            or record.get("url")
+            or record.get("link")
+            or metadata.get("job_url")
+            or metadata.get("url")
+            or metadata.get("link")
+        ),
+        "job_doc_id": _clean_text(
+            record.get("job_doc_id")
+            or record.get("doc_id")
+            or metadata.get("job_doc_id")
+            or metadata.get("doc_id")
+        ),
+        "job_description_text": _scan_job_description_text_for_display(record),
+    }
+
+
+def scan_workspace_job_context_payload(
+    output_dir: Path = DEFAULT_OUTPUT_DIR,
+    *,
+    tailoring_json_path: str = "",
+    job_doc_id: str = "",
+    company: str = "",
+    title: str = "",
+) -> Dict[str, str]:
+    context = {
+        "company": _clean_text(company),
+        "title": _clean_text(title),
+        "job_url": "",
+        "job_doc_id": _clean_text(job_doc_id),
+        "job_description_text": "",
+    }
+
+    artifact_path_text = _clean_text(tailoring_json_path)
+    if artifact_path_text:
+        try:
+            artifact_path = _resolve_planning_artifact_path(
+                artifact_path_text,
+                output_dir=output_dir,
+            )
+            payload_data = json.loads(artifact_path.read_text(encoding="utf-8"))
+            if isinstance(payload_data, dict):
+                job = payload_data.get("job", {}) if isinstance(payload_data.get("job"), dict) else {}
+                job_snapshot = (
+                    payload_data.get("job_snapshot", {})
+                    if isinstance(payload_data.get("job_snapshot"), dict)
+                    else {}
+                )
+                artifact_context = _scan_job_context_from_record(job_snapshot or job)
+                for key, value in artifact_context.items():
+                    if value:
+                        context[key] = value
+        except Exception:
+            pass
+
+    if not context["job_description_text"] and context["job_doc_id"]:
+        try:
+            corpus_context = _scan_job_context_from_record(
+                _load_job_record_for_workspace_preview(context["job_doc_id"])
+            )
+            for key, value in corpus_context.items():
+                if value:
+                    context[key] = value
+        except Exception:
+            pass
+
+    return context
+
+
 def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
     try:
         payload = get_saved_scans_postgres_payload(limit=limit)

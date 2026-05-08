@@ -688,6 +688,41 @@
   cursor: not-allowed;
 }
 
+.scan-workspace-job-description-panel {
+  width: 100%;
+  min-height: 100%;
+  padding: 22px;
+  border-radius: 12px;
+  border: 1px solid rgba(80, 102, 178, 0.34);
+  background: rgba(7, 12, 31, 0.58);
+  color: #eef4ff;
+}
+
+.scan-workspace-job-description-kicker {
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.scan-workspace-job-description-panel h3 {
+  margin: 0 0 16px;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.scan-workspace-job-description-panel pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #dfe7ff;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.65;
+}
+
 .scan-workspace-workflow-row {
   display: flex;
   align-items: center;

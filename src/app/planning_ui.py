@@ -4,6 +4,7 @@ from html import escape
 from pathlib import Path
 from urllib.parse import urlencode
 
+from src.app import services
 from src.app.ui_shell import render_top_shell
 
 router = APIRouter()
@@ -1154,6 +1155,21 @@ def scan_workspace(
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
 
+    loaded_job_context = services.scan_workspace_job_context_payload(
+        tailoring_json_path=tailoring_json or "",
+        job_doc_id=job_doc_id or "",
+        company=company or "",
+        title=title or "",
+    )
+    loaded_company = loaded_job_context.get("company") or company or ""
+    loaded_title = loaded_job_context.get("title") or title or ""
+    loaded_job_url = loaded_job_context.get("job_url") or ""
+    loaded_job_description = loaded_job_context.get("job_description_text") or ""
+    loaded_company_safe = escape(loaded_company)
+    loaded_title_safe = escape(loaded_title)
+    loaded_job_url_safe = escape(loaded_job_url, quote=True)
+    loaded_job_description_safe = escape(loaded_job_description)
+
     back_query = urlencode(
         {
             "company": company or "",
@@ -1324,7 +1340,7 @@ def scan_workspace(
                 type="text"
                 id="scanWorkspaceCompanyInput"
                 class="scan-workspace-input"
-                value="{company_safe if company else ''}"
+                value="{loaded_company_safe if loaded_company else ''}"
                 placeholder="Optional company name"
               />
             </label>
@@ -1335,7 +1351,7 @@ def scan_workspace(
                 type="text"
                 id="scanWorkspaceRoleInput"
                 class="scan-workspace-input"
-                value="{title_safe if title else ''}"
+                value="{loaded_title_safe if loaded_title else ''}"
                 placeholder="Optional job title"
               />
             </label>
@@ -1346,6 +1362,7 @@ def scan_workspace(
                 type="url"
                 id="scanWorkspaceJobUrlInput"
                 class="scan-workspace-input"
+                value="{loaded_job_url_safe if loaded_job_url else ''}"
                 placeholder="Optional posting URL"
               />
             </label>
@@ -1356,7 +1373,7 @@ def scan_workspace(
                 id="scanWorkspaceJobDescriptionInput"
                 class="scan-workspace-textarea scan-workspace-textarea--jd"
                 placeholder="Paste the full job description here."
-              ></textarea>
+              >{loaded_job_description_safe}</textarea>
             </label>
           </section>
         </div>
@@ -1623,8 +1640,7 @@ def scan_workspace(
                   type="button"
                   class="scan-workspace-surface-tab"
                   data-scan-surface="job_description"
-                  disabled
-                  aria-disabled="true"
+                  aria-disabled="false"
                 >
                   Job Description
                 </button>

@@ -44,6 +44,7 @@ const scanWorkspacePreviewState = {
   scorePreviewPayload: null,
   draftFragmentsPayload: null,
   draftFragmentsByBulletKey: {},
+  activeSurface: "resume",
   isDocumentPreviewLoading: false,
   isScorePreviewLoading: false,
   documentPreviewRequestSeq: 0,
@@ -116,6 +117,111 @@ function scanWorkspaceEscapeHtml(value) {
     .replaceAll("'", "&#39;");
 }
 
+function getScanWorkspacePreloadPayloadForSurface() {
+  if (
+    typeof scanWorkspaceState !== "undefined" &&
+    scanWorkspaceState.preloadPayload &&
+    typeof scanWorkspaceState.preloadPayload === "object"
+  ) {
+    return scanWorkspaceState.preloadPayload;
+  }
+
+  return null;
+}
+
+function firstNonEmptyScanWorkspaceText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text && text !== "-") return text;
+  }
+
+  return "";
+}
+
+function getScanWorkspaceJobRecordCandidates() {
+  const payload = getScanWorkspacePreloadPayloadForSurface();
+  return [
+    payload?.selected_jd_record,
+    payload?.job_snapshot,
+    payload?.job,
+  ].filter((record) => record && typeof record === "object");
+}
+
+function getScanWorkspaceLoadedJobDescriptionText() {
+  const intakeDescription = String(
+    getScanWorkspaceInput("scanWorkspaceJobDescriptionInput")?.value || ""
+  ).trim();
+  if (intakeDescription) return intakeDescription;
+
+  for (const record of getScanWorkspaceJobRecordCandidates()) {
+    const text = firstNonEmptyScanWorkspaceText(
+      record.description_text,
+      record.description,
+      record.job_description,
+      record.raw_description,
+      Array.isArray(record.requirements) ? record.requirements.join("\n") : record.requirements,
+      Array.isArray(record.responsibilities) ? record.responsibilities.join("\n") : record.responsibilities,
+      Array.isArray(record.qualifications) ? record.qualifications.join("\n") : record.qualifications
+    );
+    if (text) return text;
+  }
+
+  return "";
+}
+
+function getScanWorkspaceLoadedJobLabel() {
+  const company = firstNonEmptyScanWorkspaceText(
+    getScanWorkspaceInput("scanWorkspaceCompanyInput")?.value,
+    ...getScanWorkspaceJobRecordCandidates().map((record) => record.company || record.job_company)
+  );
+  const title = firstNonEmptyScanWorkspaceText(
+    getScanWorkspaceInput("scanWorkspaceRoleInput")?.value,
+    ...getScanWorkspaceJobRecordCandidates().map((record) => record.title || record.job_title)
+  );
+
+  return [company, title].filter(Boolean).join(" / ") || "Loaded job";
+}
+
+function normalizeScanWorkspaceSurface(surface) {
+  const safeSurface = String(surface || "").trim().toLowerCase();
+  return safeSurface === "job_description" ? "job_description" : "resume";
+}
+
+function updateScanWorkspaceSurfaceTabs() {
+  document.querySelectorAll("[data-scan-surface]").forEach((button) => {
+    const surface = normalizeScanWorkspaceSurface(button.dataset.scanSurface || "");
+    const isActive = surface === scanWorkspacePreviewState.activeSurface;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  });
+}
+
+function renderScanWorkspaceJobDescriptionSurfaceInto() {
+  const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
+  const previewStatus = getScanWorkspaceInput("scanWorkspacePreviewStatus");
+  const previewMeta = getScanWorkspaceInput("scanWorkspacePreviewMeta");
+  if (!root) return;
+
+  const descriptionText = getScanWorkspaceLoadedJobDescriptionText();
+  const jobLabel = getScanWorkspaceLoadedJobLabel();
+  if (previewStatus) previewStatus.textContent = "Job description";
+  if (previewMeta) previewMeta.textContent = jobLabel;
+
+  root.innerHTML = descriptionText
+    ? `
+      <article class="scan-workspace-job-description-panel">
+        <div class="scan-workspace-job-description-kicker">Job Description</div>
+        <h3>${scanWorkspaceEscapeHtml(jobLabel)}</h3>
+        <pre>${scanWorkspaceEscapeHtml(descriptionText)}</pre>
+      </article>
+    `
+    : `
+      <div class="tailoring-empty-state">
+        No loaded job description is available for this scan.
+      </div>
+    `;
+}
+
 function getScanWorkspaceContext() {
   const root = getScanWorkspacePageRoot();
   if (!root) return null;
@@ -167,7 +273,11 @@ function setScanWorkspaceMode(nextMode) {
 
   if (normalizedMode === "review") {
     renderScanWorkspaceAnnotationShell();
-    ensureScanWorkspaceDocumentPreviewLoaded();
+    if (scanWorkspacePreviewState.activeSurface === "job_description") {
+      renderScanWorkspaceJobDescriptionSurfaceInto();
+    } else {
+      ensureScanWorkspaceDocumentPreviewLoaded();
+    }
   }
 
   if (normalizedMode === "compare") {
@@ -1767,6 +1877,11 @@ function renderScanWorkspaceLiveDraftPreviewInto() {
   const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
   if (!root) return;
 
+  if (scanWorkspacePreviewState.activeSurface === "job_description") {
+    renderScanWorkspaceJobDescriptionSurfaceInto();
+    return;
+  }
+
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const noteText = acceptedIds.length
     ? `Read-only reconstructed draft from the export model using ${acceptedIds.length} accepted linked suggestion(s).`
@@ -1815,6 +1930,11 @@ async function fetchScanWorkspaceDocumentPreview() {
 }
 
 function ensureScanWorkspaceDocumentPreviewLoaded({ force = false } = {}) {
+  if (scanWorkspacePreviewState.activeSurface === "job_description") {
+    renderScanWorkspaceJobDescriptionSurfaceInto();
+    return;
+  }
+
   const acceptedSignature = getScanWorkspaceDraftPreviewSignature();
 
   if (
@@ -2937,6 +3057,7 @@ function renderScanWorkspaceSuggestionPopover() {
 }
 
 function renderScanWorkspaceAnnotationShell() {
+  updateScanWorkspaceSurfaceTabs();
   renderScanWorkspaceAnnotationOverlay();
   renderScanWorkspaceSuggestionPopover();
   updateScanWorkspaceDecisionSummaryUi();
@@ -3151,6 +3272,28 @@ function applyScanWorkspacePhraseOption(optionId) {
 }
 
 function bindScanWorkspaceAnnotationShell() {
+  document.querySelectorAll("[data-scan-surface]").forEach((button) => {
+    if (button.dataset.surfaceBound === "true") return;
+    button.dataset.surfaceBound = "true";
+
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+
+      const nextSurface = normalizeScanWorkspaceSurface(button.dataset.scanSurface || "");
+      if (nextSurface === scanWorkspacePreviewState.activeSurface) return;
+
+      closeScanWorkspaceSuggestionPopover();
+      scanWorkspacePreviewState.activeSurface = nextSurface;
+      renderScanWorkspaceAnnotationShell();
+
+      if (nextSurface === "job_description") {
+        renderScanWorkspaceJobDescriptionSurfaceInto();
+      } else {
+        ensureScanWorkspaceDocumentPreviewLoaded();
+      }
+    });
+  });
+
   const overlay = getScanWorkspaceInput("scanWorkspaceAnnotationOverlay");
   if (overlay && overlay.dataset.bound !== "true") {
     overlay.dataset.bound = "true";

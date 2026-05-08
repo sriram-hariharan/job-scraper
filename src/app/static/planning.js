@@ -10506,12 +10506,8 @@ function updateScanWorkspaceHeaderCounts(payload = getScanWorkspacePayload()) {
   const scoreSnapshot = payload?.scan_score && typeof payload.scan_score === "object"
     ? payload.scan_score
     : {};
-  const savedExcludedIssueIds =
-    typeof window.scanWorkspacePhase1?.getSavedExcludedIssueIds === "function"
-      ? window.scanWorkspacePhase1.getSavedExcludedIssueIds()
-      : [];
   const adjustedScore = getScanWorkspaceExclusionAdjustedScore(payload, {
-    excludedIssueIds: savedExcludedIssueIds,
+    excludedIssueIds: getScanWorkspaceExcludedIssueIds(),
   });
 
   const matchedCount = skillsPanel.matchedCount;

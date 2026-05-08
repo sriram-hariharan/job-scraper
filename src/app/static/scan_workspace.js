@@ -1066,6 +1066,10 @@ function getSavedScanWorkspaceExcludedIssueIds() {
 }
 
 function getScanWorkspacePersistenceExcludedIssueIds() {
+  if (typeof getScanWorkspaceExcludedIssueIds === "function") {
+    return getScanWorkspaceExcludedIssueIds();
+  }
+
   return getSavedScanWorkspaceExcludedIssueIds();
 }
 
@@ -1444,15 +1448,15 @@ function buildScanWorkspaceDocumentPreviewRequest(
   };
 }
 
-function getSavedScanWorkspaceExclusionAdjustedScore() {
+function getCurrentScanWorkspaceExclusionAdjustedScore() {
   if (typeof getScanWorkspaceExclusionAdjustedScore !== "function") return null;
   if (typeof getScanWorkspacePayload !== "function") return null;
 
-  const savedExcludedIssueIds = getScanWorkspacePersistenceExcludedIssueIds();
-  if (!savedExcludedIssueIds.length) return null;
+  const excludedIssueIds = getScanWorkspacePersistenceExcludedIssueIds();
+  if (!excludedIssueIds.length) return null;
 
   return getScanWorkspaceExclusionAdjustedScore(getScanWorkspacePayload(), {
-    excludedIssueIds: savedExcludedIssueIds,
+    excludedIssueIds,
   });
 }
 
@@ -1610,16 +1614,16 @@ async function refreshScanWorkspaceScorePreview() {
   const scorePreview = scanWorkspacePreviewState.scorePreviewPayload || {};
   const hasAcceptedRewrites = acceptedIds.length > 0;
   const hasManualEdits = Object.keys(getScanWorkspaceManualBulletEdits()).length > 0;
-  const savedExclusionScore =
+  const exclusionAdjustedScore =
     !hasAcceptedRewrites && !hasManualEdits
-      ? getSavedScanWorkspaceExclusionAdjustedScore()
+      ? getCurrentScanWorkspaceExclusionAdjustedScore()
       : null;
-  if (savedExclusionScore) {
-    updateScanWorkspaceScoreValue(savedExclusionScore.score, {
-      label: savedExclusionScore.delta
-        ? `${savedExclusionScore.label}. Score changed by +${savedExclusionScore.delta} points.`
-        : savedExclusionScore.label,
-      source: "saved_excluded_skill_preview",
+  if (exclusionAdjustedScore) {
+    updateScanWorkspaceScoreValue(exclusionAdjustedScore.score, {
+      label: exclusionAdjustedScore.delta
+        ? `${exclusionAdjustedScore.label}. Score changed by +${exclusionAdjustedScore.delta} points.`
+        : exclusionAdjustedScore.label,
+      source: "excluded_skill_preview",
     });
     return;
   }
@@ -3800,7 +3804,8 @@ window.addEventListener("DOMContentLoaded", () => {
     saveDraftState: () => saveScanWorkspaceDraftState(),
     reloadDraftState: () => loadScanWorkspaceDraftState(),
     renderPersistenceStatus: () => renderScanWorkspacePersistenceStatus(),
-    getSavedExcludedIssueIds: () => getScanWorkspacePersistenceExcludedIssueIds(),
+    getCurrentExcludedIssueIds: () => getScanWorkspacePersistenceExcludedIssueIds(),
+    getSavedExcludedIssueIds: () => getSavedScanWorkspaceExcludedIssueIds(),
     getSavedPersonalDetails: () => getSavedScanWorkspacePersonalDetails(),
     getAnnotationState: () => ({
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),

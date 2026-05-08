@@ -23,6 +23,7 @@ from src.app.services import (
     _scan_phrase_validate_llm_options,
 )
 from src.app.planning_ui import scan_workspace
+from src.app.profile_ui import saved_scans_page
 from src.storage.saved_scans.store import (
     saved_scan_db_row,
     saved_scans_contract_health_payload,
@@ -280,6 +281,24 @@ def test_scan_workspace_keeps_tailoring_navigation_for_tailoring_context():
     assert "Prefer full control? Use Power Edit" in html
     assert "/tailoring-workspace?" in html
     assert 'data-scan-initial-mode="review"' in html
+
+def test_saved_scans_page_discloses_reports_are_not_openable_yet():
+    html = saved_scans_page()
+
+    assert "Report viewing is disabled until report generation and saved-report restore are wired." in html
+    assert "Opening scan reports from this table is intentionally disabled" in html
+    assert "<th>Action</th>" in html
+    assert 'colspan="8"' in html
+    assert "/static/profile.js?v=profile_saved_scans_e2_honest_state" in html
+
+
+def test_saved_scans_profile_script_keeps_saved_rows_non_openable():
+    script = Path("src/app/static/profile.js").read_text(encoding="utf-8")
+
+    assert 'status === "ready" || status === "complete"' in script
+    assert "Viewer pending" in script
+    assert "Saved intake only" in script
+    assert "saved-scan-action-badge" in script
 
 def test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate():
     plan = build_final_replacement_plan(
@@ -961,6 +980,8 @@ if __name__ == "__main__":
     test_scan_workspace_job_context_prefills_loaded_job_description()
     test_scan_workspace_hides_tailoring_navigation_for_direct_new_scan()
     test_scan_workspace_keeps_tailoring_navigation_for_tailoring_context()
+    test_saved_scans_page_discloses_reports_are_not_openable_yet()
+    test_saved_scans_profile_script_keeps_saved_rows_non_openable()
     test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate()
     test_selector_demotes_negative_or_neutral_candidates_from_direct_replacements()
     test_scan_issue_contract_marks_direct_guidance_and_hidden_score_gate_items()

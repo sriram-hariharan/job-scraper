@@ -145,14 +145,47 @@ function normalizeSavedScanSource(value) {
   return source || "-";
 }
 
-function normalizeSavedScanStatus(value) {
-  const status = String(value || "").trim();
-  if (status === "report_pending") return "Report pending";
-  if (status === "processing") return "Processing";
-  if (status === "ready") return "Ready";
-  if (status === "intake_saved") return "Report pending";
-  if (status === "failed") return "Failed";
-  return status || "-";
+function savedScanStatusMeta(value) {
+  const rawStatus = String(value || "").trim();
+  const status = rawStatus.toLowerCase();
+
+  if (status === "report_pending" || status === "intake_saved") {
+    return {
+      label: "Report pending",
+      tone: "pending",
+      action: "Saved intake only",
+    };
+  }
+
+  if (status === "processing") {
+    return {
+      label: "Processing",
+      tone: "processing",
+      action: "Processing",
+    };
+  }
+
+  if (status === "ready" || status === "complete") {
+    return {
+      label: "Ready",
+      tone: "ready",
+      action: "Viewer pending",
+    };
+  }
+
+  if (status === "failed") {
+    return {
+      label: "Failed",
+      tone: "failed",
+      action: "Unavailable",
+    };
+  }
+
+  return {
+    label: rawStatus || "-",
+    tone: "muted",
+    action: "Not openable",
+  };
 }
 
 function renderSavedScans(items, { ok = true, error = "" } = {}) {
@@ -164,7 +197,7 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
     metaEl.textContent = "Saved scans unavailable";
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="saved-scans-empty-cell">
+        <td colspan="8" class="saved-scans-empty-cell">
           ${escapeHtml(error || "Could not load saved scans from Postgres.")}
         </td>
       </tr>
@@ -177,7 +210,7 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
   if (!scans.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="7" class="saved-scans-empty-cell">
+        <td colspan="8" class="saved-scans-empty-cell">
           No saved scans yet.
         </td>
       </tr>
@@ -185,17 +218,30 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
     return;
   }
 
-  tbody.innerHTML = scans.map((scan) => `
-    <tr>
-      <td>${escapeHtml(formatDateTime(scan.scan_timestamp || ""))}</td>
-      <td>${escapeHtml(scan.job_company || "-")}</td>
-      <td>${escapeHtml(scan.job_title || "-")}</td>
-      <td>${escapeHtml(scan.resume_name || scan.resume_filename || "-")}</td>
-      <td>${escapeHtml(normalizeSavedScanSource(scan.resume_source))}</td>
-      <td>${escapeHtml(normalizeSavedScanStatus(scan.scan_status))}</td>
-      <td>${escapeHtml(formatPercent(scan.match_rate))}</td>
-    </tr>
-  `).join("");
+  tbody.innerHTML = scans.map((scan) => {
+    const statusMeta = savedScanStatusMeta(scan.scan_status);
+
+    return `
+      <tr class="saved-scan-row saved-scan-row-${escapeHtml(statusMeta.tone)}">
+        <td>${escapeHtml(formatDateTime(scan.scan_timestamp || ""))}</td>
+        <td>${escapeHtml(scan.job_company || "-")}</td>
+        <td>${escapeHtml(scan.job_title || "-")}</td>
+        <td>${escapeHtml(scan.resume_name || scan.resume_filename || "-")}</td>
+        <td>${escapeHtml(normalizeSavedScanSource(scan.resume_source))}</td>
+        <td>
+          <span class="saved-scan-status-badge ${escapeHtml(statusMeta.tone)}">
+            ${escapeHtml(statusMeta.label)}
+          </span>
+        </td>
+        <td>${escapeHtml(formatPercent(scan.match_rate))}</td>
+        <td>
+          <span class="saved-scan-action-badge ${escapeHtml(statusMeta.tone)}">
+            ${escapeHtml(statusMeta.action)}
+          </span>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 async function loadSavedScans() {
@@ -206,7 +252,7 @@ async function loadSavedScans() {
   metaEl.textContent = "Loading saved scans...";
   tbody.innerHTML = `
     <tr>
-      <td colspan="7" class="saved-scans-empty-cell">Loading saved scans...</td>
+      <td colspan="8" class="saved-scans-empty-cell">Loading saved scans...</td>
     </tr>
   `;
 

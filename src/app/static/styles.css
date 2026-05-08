@@ -3260,7 +3260,7 @@ tbody tr:hover {
 
 .saved-scans-table {
   width: 100%;
-  min-width: 880px;
+  min-width: 1040px;
   border-collapse: collapse;
 }
 
@@ -3291,6 +3291,65 @@ tbody tr:hover {
 .saved-scans-empty-cell {
   color: var(--muted);
   text-align: center;
+}
+
+.saved-scans-note {
+  margin: -2px 0 14px;
+  padding: 10px 12px;
+  border: 1px solid rgba(92, 141, 255, 0.24);
+  border-radius: 12px;
+  color: var(--muted);
+  background: rgba(92, 141, 255, 0.08);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.saved-scan-row {
+  cursor: default;
+}
+
+.saved-scan-status-badge,
+.saved-scan-action-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  color: var(--muted);
+  background: rgba(148, 163, 184, 0.08);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.saved-scan-status-badge.pending,
+.saved-scan-action-badge.pending {
+  border-color: rgba(250, 204, 21, 0.24);
+  color: #fde68a;
+  background: rgba(250, 204, 21, 0.08);
+}
+
+.saved-scan-status-badge.processing,
+.saved-scan-action-badge.processing {
+  border-color: rgba(96, 165, 250, 0.24);
+  color: #bfdbfe;
+  background: rgba(96, 165, 250, 0.08);
+}
+
+.saved-scan-status-badge.ready,
+.saved-scan-action-badge.ready {
+  border-color: rgba(52, 211, 153, 0.24);
+  color: #bbf7d0;
+  background: rgba(52, 211, 153, 0.08);
+}
+
+.saved-scan-status-badge.failed,
+.saved-scan-action-badge.failed {
+  border-color: rgba(248, 113, 113, 0.24);
+  color: #fecaca;
+  background: rgba(248, 113, 113, 0.08);
 }
 
 @media (max-width: 900px) {

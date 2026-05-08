@@ -15,7 +15,7 @@ def profile_page() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Profile</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_saved_scans_e2_honest_state" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -121,7 +121,7 @@ def profile_page() -> str:
 </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/profile.js"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e2_honest_state"></script>
 </body>
 </html>
     """.strip()
@@ -136,7 +136,7 @@ def saved_scans_page() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Saved Scans</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_saved_scans_e2_honest_state" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -145,7 +145,7 @@ def saved_scans_page() -> str:
     <header class="page-header">
       <div>
         <h1>Saved Scans</h1>
-        <p class="subtext">Review resume scan history created from New Scan.</p>
+        <p class="subtext">Review New Scan intake history. Report viewing is disabled until report generation and saved-report restore are wired.</p>
       </div>
     </header>
 
@@ -160,6 +160,10 @@ def saved_scans_page() -> str:
         </button>
       </div>
 
+      <div class="saved-scans-note">
+        Saved scans currently show intake history only. Opening scan reports from this table is intentionally disabled until the real report runner and restore route are wired.
+      </div>
+
       <div class="saved-scans-table-wrap">
         <table class="saved-scans-table">
           <thead>
@@ -171,11 +175,12 @@ def saved_scans_page() -> str:
               <th>Source</th>
               <th>Status</th>
               <th>Match</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody id="savedScansTableBody">
             <tr>
-              <td colspan="7">Loading saved scans...</td>
+              <td colspan="8">Loading saved scans...</td>
             </tr>
           </tbody>
         </table>
@@ -184,7 +189,7 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/profile.js"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e2_honest_state"></script>
 </body>
 </html>
     """.strip()

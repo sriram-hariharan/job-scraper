@@ -448,7 +448,7 @@ def create_saved_scan_payload(
         {
             "scan_timestamp": scan_timestamp,
             "scan_source": "scan_workspace_new_scan",
-            "scan_status": "intake_saved",
+            "scan_status": "report_pending",
             "resume_source": resume_source,
             "resume_name": resume_name,
             "resume_filename": resume_filename,
@@ -463,7 +463,7 @@ def create_saved_scan_payload(
             "job_description_text": safe_job_description,
             "match_rate": None,
             "tailoring_json_path": safe_tailoring_json_path,
-            "note": "New scan intake saved. Match report generation will enrich this record.",
+            "note": "Scan intake saved. Match report generation is pending.",
             "payload_json": {
                 "version": "saved_scan_intake_v1",
                 "company": safe_company,

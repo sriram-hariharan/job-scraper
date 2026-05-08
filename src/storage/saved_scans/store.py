@@ -143,7 +143,7 @@ def saved_scan_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
     normalized = {
         "scan_timestamp": scan_timestamp,
         "scan_source": _clean_text(record.get("scan_source")) or "scan_workspace_new_scan",
-        "scan_status": _clean_text(record.get("scan_status")) or "intake_saved",
+        "scan_status": _clean_text(record.get("scan_status")) or "report_pending",
         "resume_source": resume_source,
         "resume_name": _clean_text(record.get("resume_name")),
         "resume_filename": _clean_text(record.get("resume_filename")),

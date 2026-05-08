@@ -547,8 +547,8 @@ async function beginScanWorkspaceProcessing() {
     scanWorkspaceProcessingState.status = "complete";
     scanWorkspaceProcessingState.currentStageKey = "review_payload";
     scanWorkspaceProcessingState.note = scanId
-      ? `Saved scan intake ${scanId.slice(0, 10)}. Match report generation comes next.`
-      : "Saved scan intake. Match report generation comes next.";
+      ? `Saved scan ${scanId.slice(0, 10)}. Status: report pending.`
+      : "Saved scan. Status: report pending.";
     updateScanWorkspaceProcessingView();
   } catch (err) {
     scanWorkspaceProcessingState.status = "error";

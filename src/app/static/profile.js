@@ -145,6 +145,16 @@ function normalizeSavedScanSource(value) {
   return source || "-";
 }
 
+function normalizeSavedScanStatus(value) {
+  const status = String(value || "").trim();
+  if (status === "report_pending") return "Report pending";
+  if (status === "processing") return "Processing";
+  if (status === "ready") return "Ready";
+  if (status === "intake_saved") return "Report pending";
+  if (status === "failed") return "Failed";
+  return status || "-";
+}
+
 function renderSavedScans(items, { ok = true, error = "" } = {}) {
   const tbody = qs("savedScansTableBody");
   const metaEl = qs("savedScansMeta");
@@ -182,7 +192,7 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
       <td>${escapeHtml(scan.job_title || "-")}</td>
       <td>${escapeHtml(scan.resume_name || scan.resume_filename || "-")}</td>
       <td>${escapeHtml(normalizeSavedScanSource(scan.resume_source))}</td>
-      <td>${escapeHtml(scan.scan_status || "-")}</td>
+      <td>${escapeHtml(normalizeSavedScanStatus(scan.scan_status))}</td>
       <td>${escapeHtml(formatPercent(scan.match_rate))}</td>
     </tr>
   `).join("");
@@ -200,7 +210,7 @@ async function loadSavedScans() {
     </tr>
   `;
 
-  const data = await fetchJson("/profile/saved-scans?limit=50");
+  const data = await fetchJson("/profile/saved-scans/data?limit=50");
   renderSavedScans(data.saved_scans || [], {
     ok: data.ok !== false,
     error: data.error || "",

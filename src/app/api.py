@@ -882,7 +882,7 @@ def profile_resumes():
     return services.profile_resumes_payload()
 
 
-@app.get("/profile/saved-scans")
+@app.get("/profile/saved-scans/data")
 def profile_saved_scans(limit: int = 25):
     return services.profile_saved_scans_payload(limit=limit)
 

@@ -22,6 +22,7 @@ from src.app.services import (
     _scan_phrase_structured_output_contract,
     _scan_phrase_validate_llm_options,
 )
+from src.app.planning_ui import scan_workspace
 from src.storage.saved_scans.store import (
     saved_scan_db_row,
     saved_scans_contract_health_payload,
@@ -258,6 +259,27 @@ def test_scan_workspace_job_context_prefills_loaded_job_description():
         "Build AI software with Python, distributed systems, and production ML."
     )
 
+def test_scan_workspace_hides_tailoring_navigation_for_direct_new_scan():
+    html = scan_workspace(company="Meta", title="wifi")
+
+    assert "Back to Tailoring" not in html
+    assert "Prefer full control? Use Power Edit" not in html
+    assert 'data-scan-initial-mode="new_scan"' in html
+    assert 'id="scanWorkspaceStartScanBtn"' in html
+
+
+def test_scan_workspace_keeps_tailoring_navigation_for_tailoring_context():
+    html = scan_workspace(
+        company="Meta",
+        title="AI Software Engineer",
+        resume="Sriram_Neelakantan_AI1.pdf",
+        tailoring_json="outputs/application_planning/job_packets/example__tailoring.json",
+    )
+
+    assert "Back to Tailoring" in html
+    assert "Prefer full control? Use Power Edit" in html
+    assert "/tailoring-workspace?" in html
+    assert 'data-scan-initial-mode="review"' in html
 
 def test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate():
     plan = build_final_replacement_plan(
@@ -937,6 +959,8 @@ if __name__ == "__main__":
     test_create_saved_scan_payload_skips_postgres_without_database_url()
     test_extract_scan_resume_upload_text_accepts_txt_upload()
     test_scan_workspace_job_context_prefills_loaded_job_description()
+    test_scan_workspace_hides_tailoring_navigation_for_direct_new_scan()
+    test_scan_workspace_keeps_tailoring_navigation_for_tailoring_context()
     test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate()
     test_selector_demotes_negative_or_neutral_candidates_from_direct_replacements()
     test_scan_issue_contract_marks_direct_guidance_and_hidden_score_gate_items()

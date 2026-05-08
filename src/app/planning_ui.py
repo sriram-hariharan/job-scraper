@@ -1170,6 +1170,13 @@ def scan_workspace(
     loaded_job_url_safe = escape(loaded_job_url, quote=True)
     loaded_job_description_safe = escape(loaded_job_description)
 
+    has_tailoring_context = bool(
+        (tailoring_json or "").strip()
+        or (tailoring_md or "").strip()
+        or (tailoring_llm_json or "").strip()
+        or (packet_json or "").strip()
+    )
+
     back_query = urlencode(
         {
             "company": company or "",
@@ -1185,7 +1192,25 @@ def scan_workspace(
     )
     back_href_safe = escape(f"/tailoring-workspace?{back_query}", quote=True)
 
-    scan_initial_mode = "review" if (tailoring_json or packet_json) else "new_scan"
+    tailoring_back_link_html = ""
+    power_edit_link_html = ""
+    if has_tailoring_context:
+        tailoring_back_link_html = f"""
+          <a class="ghost-btn tailoring-scan-back-btn" href="{back_href_safe}">
+            Back to Tailoring
+          </a>
+        """.strip()
+
+        power_edit_link_html = f"""
+          <a
+            class="scan-workspace-power-edit-link"
+            href="{back_href_safe}"
+          >
+            Prefer full control? Use Power Edit
+          </a>
+        """.strip()
+
+    scan_initial_mode = "review" if has_tailoring_context else "new_scan"
     scan_initial_mode_safe = escape(scan_initial_mode)
 
     return f"""
@@ -1196,7 +1221,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_28_linkedin_link" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_29_linkedin_link" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1221,9 +1246,7 @@ def scan_workspace(
         </div>
 
         <div class="scan-workspace-header-actions">
-          <a class="ghost-btn tailoring-scan-back-btn" href="{back_href_safe}">
-            Back to Tailoring
-          </a>
+          {tailoring_back_link_html}
 
           <button
             type="button"
@@ -1379,12 +1402,7 @@ def scan_workspace(
         </div>
 
         <div class="scan-workspace-intake-footer">
-          <a
-            class="scan-workspace-power-edit-link"
-            href="{back_href_safe}"
-          >
-            Prefer full control? Use Power Edit
-          </a>
+          {power_edit_link_html}
 
           <div class="scan-workspace-intake-actions">
             <button

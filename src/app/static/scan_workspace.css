@@ -230,6 +230,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-left: auto;
 }
 
 .scan-workspace-start-btn {

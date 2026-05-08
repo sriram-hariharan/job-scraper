@@ -47,6 +47,7 @@ class PlanningWorkspaceDraftSaveRequest(BaseModel):
     selected_patch_candidate_ids: list[str] = Field(default_factory=list)
     manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
     rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
+    excluded_scan_issue_ids: list[str] = Field(default_factory=list)
     note: str = ""
 
 
@@ -639,6 +640,7 @@ def save_workspace_draft(request: PlanningWorkspaceDraftSaveRequest):
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,
             manual_bullet_edits=request.manual_bullet_edits,
             rewrite_review_decisions=request.rewrite_review_decisions,
+            excluded_scan_issue_ids=request.excluded_scan_issue_ids,
             note=request.note,
         )
     except ValueError as exc:

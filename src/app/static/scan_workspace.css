@@ -1304,6 +1304,25 @@
   line-height: 1;
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-exclude-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 178, 178, 0.34);
+  background: rgba(255, 143, 143, 0.08);
+  color: #ffd0d0;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-exclude-btn:hover {
+  background: rgba(255, 143, 143, 0.16);
+  border-color: rgba(255, 178, 178, 0.58);
+}
+
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-flag {
   color: #9aa8c7;
   font-size: 11px;

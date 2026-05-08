@@ -95,6 +95,7 @@ const scanWorkspaceState = {
   selectedCandidateIds: [],
   rewriteReviewDecisions: {},
   suggestionDecisionOverrides: {},
+  excludedScanIssueIds: [],
   selectedTab: "skills",
   activeCandidateId: "",
   annotationMarkerSignature: "",
@@ -8987,6 +8988,43 @@ function getScanWorkspaceCurrentReviewDecisionMap() {
   );
 }
 
+function normalizeScanWorkspaceExcludedIssueIds(value) {
+  const seen = new Set();
+  const output = [];
+  (Array.isArray(value) ? value : []).forEach((item) => {
+    const issueId = String(item || "").trim();
+    if (!issueId || seen.has(issueId)) return;
+    seen.add(issueId);
+    output.push(issueId);
+  });
+  return output;
+}
+
+function getScanWorkspaceExcludedIssueIds() {
+  return normalizeScanWorkspaceExcludedIssueIds(scanWorkspaceState.excludedScanIssueIds || []);
+}
+
+function setScanWorkspaceIssueExcluded(issueId, excluded) {
+  const safeIssueId = String(issueId || "").trim();
+  if (!safeIssueId) return;
+
+  const current = new Set(getScanWorkspaceExcludedIssueIds());
+  if (excluded) {
+    current.add(safeIssueId);
+  } else {
+    current.delete(safeIssueId);
+  }
+
+  scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
+    Array.from(current)
+  );
+  scanWorkspaceState.previewPayload = null;
+  renderScanWorkspaceView();
+  if (window.scanWorkspacePhase1?.renderPersistenceStatus) {
+    window.scanWorkspacePhase1.renderPersistenceStatus();
+  }
+}
+
 function toggleScanWorkspaceCandidateSelection(candidateId) {
   const payload = getScanWorkspacePayload();
   if (!payload) return;
@@ -9150,7 +9188,11 @@ function getScanWorkspaceIssueContract(payload = getScanWorkspacePayload()) {
 
 function getScanWorkspaceContractIssues(payload = getScanWorkspacePayload()) {
   const contract = getScanWorkspaceIssueContract(payload);
-  return Array.isArray(contract?.issues) ? contract.issues : [];
+  const excluded = new Set(getScanWorkspaceExcludedIssueIds());
+  return (Array.isArray(contract?.issues) ? contract.issues : []).filter((issue) => {
+    const issueId = String(issue?.issue_id || "").trim();
+    return !issueId || !excluded.has(issueId);
+  });
 }
 
 function hasScanWorkspaceIssueContract(payload = getScanWorkspacePayload()) {
@@ -9800,8 +9842,8 @@ function getScanWorkspaceIssueRightLabel(item, bucket) {
   }
 
   if (rowActionType === "phrase_generation") return rowActionLabel || "Phrase";
-  if (rowActionType === "manual_guidance") return rowActionLabel || "Guidance";
-  if (rowActionType === "predicted_skill" || bucket === "predicted") return rowActionLabel || "Predicted";
+  if (rowActionType === "manual_guidance") return "";
+  if (rowActionType === "predicted_skill" || bucket === "predicted") return "";
 
   const coverage = getScanWorkspaceIssueCoverageLabel(item);
   if (coverage) return coverage;
@@ -9867,6 +9909,13 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
             scoreImpact !== null &&
             item?.row_action_type === "direct_replacement";
           const hasAiBadge = item?.has_ai_suggestion === true || item?.row_action_type === "direct_replacement";
+          const showFlagIcon =
+            item?.row_action_type === "matched" ||
+            bucket === "matched";
+          const canExclude =
+            String(item?.scan_issue_group_id || item?.group_id || "").trim() === "skills" &&
+            String(item?.scan_issue_id || item?.issue_id || "").trim() &&
+            item?.row_action_type !== "direct_replacement";
 
           return `
             <button
@@ -9905,9 +9954,27 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
 
               <span class="scan-workspace-issue-right">
                 ${
+                  canExclude
+                    ? `
+                      <span
+                        role="button"
+                        tabindex="0"
+                        class="scan-workspace-issue-exclude-btn"
+                        data-scan-exclude-issue="${escapeHtml(scanIssueId)}"
+                        title="Exclude this skill from scan report counts"
+                      >
+                        Exclude
+                      </span>
+                    `
+                    : ""
+                }
+
+                ${
                   hasAiBadge
                     ? `<span class="scan-workspace-issue-ai-icon">✦</span>`
-                    : `<span class="scan-workspace-issue-flag">⚑</span>`
+                    : showFlagIcon
+                      ? `<span class="scan-workspace-issue-flag">⚑</span>`
+                      : ""
                 }
 
                 ${
@@ -10496,6 +10563,7 @@ async function saveScanWorkspaceState() {
       selected_patch_candidate_ids: getScanWorkspaceSelectedCandidateIds(),
       manual_bullet_edits: {},
       rewrite_review_decisions: getScanWorkspaceCurrentReviewDecisionMap(),
+      excluded_scan_issue_ids: getScanWorkspaceExcludedIssueIds(),
       note: "Saved from scan workspace.",
     });
 
@@ -10509,6 +10577,9 @@ async function saveScanWorkspaceState() {
     );
     scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
       draft.rewrite_review_decisions || {}
+    );
+    scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
+      draft.excluded_scan_issue_ids || []
     );
     scanWorkspaceState.previewPayload = null;
 
@@ -10527,6 +10598,17 @@ function bindScanWorkspaceHandlers() {
     root.dataset.bound = "true";
 
     root.addEventListener("click", (event) => {
+      const excludeButton = event.target.closest("[data-scan-exclude-issue]");
+      if (excludeButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const issueId = String(excludeButton.dataset.scanExcludeIssue || "").trim();
+        if (issueId) {
+          setScanWorkspaceIssueExcluded(issueId, true);
+        }
+        return;
+      }
+
       const reviewActionButton = event.target.closest("[data-scan-review-action]");
       if (reviewActionButton) {
         event.preventDefault();
@@ -10559,6 +10641,17 @@ function bindScanWorkspaceHandlers() {
         if (candidateId) {
           setScanWorkspaceActiveCandidate(candidateId);
         }
+      }
+    });
+
+    root.addEventListener("keydown", (event) => {
+      const excludeButton = event.target.closest("[data-scan-exclude-issue]");
+      if (!excludeButton || (event.key !== "Enter" && event.key !== " ")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const issueId = String(excludeButton.dataset.scanExcludeIssue || "").trim();
+      if (issueId) {
+        setScanWorkspaceIssueExcluded(issueId, true);
       }
     });
   }
@@ -10692,6 +10785,9 @@ async function initScanWorkspacePage() {
     );
     scanWorkspaceState.rewriteReviewDecisions = normalizeTailoringWorkspaceReviewDecisionMap(
       savedDraft.rewrite_review_decisions || {}
+    );
+    scanWorkspaceState.excludedScanIssueIds = normalizeScanWorkspaceExcludedIssueIds(
+      savedDraft.excluded_scan_issue_ids || []
     );
     scanWorkspaceState.suggestionDecisionOverrides = {};
     scanWorkspaceState.previewPayload = null;

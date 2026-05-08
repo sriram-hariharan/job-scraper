@@ -6079,6 +6079,35 @@ def _normalize_workspace_manual_bullet_edits(value: Any) -> Dict[str, str]:
     return normalized
 
 
+def _normalize_workspace_excluded_scan_issue_ids(value: Any) -> List[str]:
+    if isinstance(value, list):
+        raw_items = value
+    else:
+        raw_text = _clean_text(value)
+        if not raw_text:
+            return []
+
+        try:
+            parsed = json.loads(raw_text)
+        except Exception as exc:
+            raise ValueError("excluded_scan_issue_ids must be a JSON list.") from exc
+
+        if not isinstance(parsed, list):
+            raise ValueError("excluded_scan_issue_ids must be a JSON list.")
+
+        raw_items = parsed
+
+    output: List[str] = []
+    seen = set()
+    for value in raw_items:
+        issue_id = _clean_text(value)
+        if not issue_id or issue_id in seen:
+            continue
+        seen.add(issue_id)
+        output.append(issue_id)
+    return output
+
+
 def _build_tailoring_workspace_default_draft_payload(
     artifact_path: Path,
     payload_data: Dict[str, Any],
@@ -6116,6 +6145,7 @@ def _build_tailoring_workspace_default_draft_payload(
         "selected_resume": safe_selected_resume,
         "selected_patch_candidate_ids": selected_candidate_ids,
         "manual_bullet_edits": {},
+        "excluded_scan_issue_ids": [],
         "note": "",
         "rewrite_review_decisions": {},
         "source_selected_patch_selection_status": _clean_text(
@@ -6217,6 +6247,9 @@ def load_tailoring_workspace_draft_payload(
         manual_bullet_edits=saved_manual_edits,
         rewrite_review_decisions=saved_review_decisions,
     )
+    saved_excluded_scan_issue_ids = _normalize_workspace_excluded_scan_issue_ids(
+        saved_data.get("excluded_scan_issue_ids", [])
+    )
 
     merged = dict(default_draft)
     merged.update({
@@ -6228,6 +6261,7 @@ def load_tailoring_workspace_draft_payload(
         ),
         "selected_patch_candidate_ids": saved_selected_ids,
         "manual_bullet_edits": saved_manual_edits,
+        "excluded_scan_issue_ids": saved_excluded_scan_issue_ids,
         "note": _clean_text(saved_data.get("note")),
         "rewrite_review_decisions": saved_review_decisions,
         "rewrite_review_telemetry": saved_review_telemetry,
@@ -6249,6 +6283,7 @@ def save_tailoring_workspace_draft_payload(
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
     rewrite_review_decisions: Any = None,
+    excluded_scan_issue_ids: Any = None,
     note: str = "",
 ) -> Dict[str, Any]:
     artifact_path = _resolve_planning_artifact_path(
@@ -6297,6 +6332,7 @@ def save_tailoring_workspace_draft_payload(
         )
 
     manual_edit_map = _normalize_workspace_manual_bullet_edits(manual_bullet_edits)
+    excluded_issue_ids = _normalize_workspace_excluded_scan_issue_ids(excluded_scan_issue_ids)
     review_decision_map = _normalize_workspace_rewrite_review_decisions(
         rewrite_review_decisions
     )
@@ -6320,6 +6356,7 @@ def save_tailoring_workspace_draft_payload(
         "saved_at": saved_at,
         "selected_patch_candidate_ids": requested_candidate_ids,
         "manual_bullet_edits": manual_edit_map,
+        "excluded_scan_issue_ids": excluded_issue_ids,
         "note": _clean_text(note),
         "rewrite_review_decisions": derived_review_decisions,
         "rewrite_review_telemetry": derived_review_telemetry,

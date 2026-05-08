@@ -706,11 +706,30 @@ function buildScanWorkspacePersistencePayload() {
     selected_patch_candidate_ids: getEffectiveAcceptedCompareCandidateIds(),
     manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
     rewrite_review_decisions: buildScanWorkspaceRewriteReviewDecisionsPayload(),
+    excluded_scan_issue_ids: getScanWorkspacePersistenceExcludedIssueIds(),
     note: "Saved from AI Optimize scan.",
   };
 }
 
-function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewriteReviewDecisions, manualBulletEdits = {}) {
+function getScanWorkspacePersistenceExcludedIssueIds() {
+  if (typeof getScanWorkspaceExcludedIssueIds === "function") {
+    return getScanWorkspaceExcludedIssueIds();
+  }
+
+  const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
+  return Array.isArray(draft.excluded_scan_issue_ids)
+    ? draft.excluded_scan_issue_ids
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    : [];
+}
+
+function buildScanWorkspacePersistenceSignature(
+  selectedPatchCandidateIds,
+  rewriteReviewDecisions,
+  manualBulletEdits = {},
+  excludedScanIssueIds = []
+) {
   const normalizedIds = Array.from(
     new Set(
       (Array.isArray(selectedPatchCandidateIds) ? selectedPatchCandidateIds : [])
@@ -748,10 +767,19 @@ function buildScanWorkspacePersistenceSignature(selectedPatchCandidateIds, rewri
     .filter(Boolean)
     .sort((a, b) => String(a[0]).localeCompare(String(b[0])));
 
+  const normalizedExcludedIssues = Array.from(
+    new Set(
+      (Array.isArray(excludedScanIssueIds) ? excludedScanIssueIds : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  ).sort();
+
   return JSON.stringify({
     selected_patch_candidate_ids: normalizedIds,
     rewrite_review_decisions: normalizedDecisions,
     manual_bullet_edits: normalizedManualEdits,
+    excluded_scan_issue_ids: normalizedExcludedIssues,
   });
 }
 
@@ -762,7 +790,8 @@ function getCurrentScanWorkspacePersistenceSignature() {
   return buildScanWorkspacePersistenceSignature(
     payload.selected_patch_candidate_ids,
     payload.rewrite_review_decisions,
-    payload.manual_bullet_edits
+    payload.manual_bullet_edits,
+    payload.excluded_scan_issue_ids
   );
 }
 
@@ -771,7 +800,8 @@ function getSavedScanWorkspacePersistenceSignature() {
   return buildScanWorkspacePersistenceSignature(
     draft.selected_patch_candidate_ids || [],
     draft.rewrite_review_decisions || {},
-    draft.manual_bullet_edits || {}
+    draft.manual_bullet_edits || {},
+    draft.excluded_scan_issue_ids || []
   );
 }
 
@@ -833,10 +863,9 @@ function renderScanWorkspacePersistenceStatus() {
 
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
-  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-  const isDirty = Boolean(hasContext && hasMarkers && currentSignature !== savedSignature);
+  const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
 
   statusNode.classList.remove("is-warning", "is-success", "is-danger");
 
@@ -856,10 +885,6 @@ function renderScanWorkspacePersistenceStatus() {
         ? "is-warning"
         : "is-danger"
     );
-  } else if (!hasMarkers && scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
-    statusNode.textContent =
-      "Saved scan decisions loaded from the workspace draft. Waiting for scan markers.";
-    statusNode.classList.add("is-success");
   } else if (isDirty) {
     statusNode.textContent = "You have unsaved scan decisions.";
     statusNode.classList.add("is-warning");
@@ -3154,10 +3179,9 @@ function bindScanWorkspacePersistenceControls() {
     continueBtn.addEventListener("click", async (event) => {
       const context = getScanWorkspaceContext();
       const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
-      const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
       const currentSignature = getCurrentScanWorkspacePersistenceSignature();
       const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-      const isDirty = Boolean(hasContext && hasMarkers && currentSignature !== savedSignature);
+      const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
 
       if (!hasContext || !isDirty) {
         return;
@@ -3174,10 +3198,9 @@ function bindScanWorkspacePersistenceControls() {
 function maybeWarnBeforeUnload(event) {
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
-  const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-  const isDirty = Boolean(hasContext && hasMarkers && currentSignature !== savedSignature);
+  const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
 
   if (!isDirty || scanWorkspacePersistenceState.isSaving) {
     return;
@@ -3271,6 +3294,7 @@ window.addEventListener("DOMContentLoaded", () => {
     },
     saveDraftState: () => saveScanWorkspaceDraftState(),
     reloadDraftState: () => loadScanWorkspaceDraftState(),
+    renderPersistenceStatus: () => renderScanWorkspacePersistenceStatus(),
     getAnnotationState: () => ({
       markers: scanWorkspaceAnnotationState.markers.map((marker) => ({ ...marker })),
       activeMarkerId: scanWorkspaceAnnotationState.activeMarkerId,

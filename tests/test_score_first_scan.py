@@ -16,6 +16,7 @@ from src.app.services import (
     save_tailoring_workspace_draft_payload,
     create_saved_scan_payload,
     extract_scan_resume_upload_text_payload,
+    scan_workspace_job_context_payload,
     _scan_phrase_parse_options_payload,
     _scan_phrase_signal_terms,
     _scan_phrase_structured_output_contract,
@@ -187,7 +188,7 @@ def test_saved_scan_contract_normalizes_pasted_text_record():
 
     assert row["scan_id"]
     assert row["resume_source"] == "pasted_text"
-    assert row["scan_status"] == "intake_saved"
+    assert row["scan_status"] == "report_pending"
     assert saved_scans_contract_health_payload()["all_checks_pass"] is True
 
 
@@ -218,6 +219,44 @@ def test_extract_scan_resume_upload_text_accepts_txt_upload():
     assert payload["ok"] is True
     assert payload["filename"] == "resume.txt"
     assert "SQL dashboards" in payload["text"]
+
+
+def test_scan_workspace_job_context_prefills_loaded_job_description():
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        output_dir = Path(tmp_dir) / "planning"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        artifact_path = output_dir / "example__tailoring.json"
+        artifact_path.write_text(
+            """
+{
+  "job_snapshot": {
+    "company": "Meta",
+    "title": "AI Software Engineer",
+    "job_url": "https://example.com/jobs/ai",
+    "description_text": "Build AI software with Python, distributed systems, and production ML."
+  },
+  "job": {
+    "company": "Fallback",
+    "title": "Fallback Role",
+    "description": "Fallback description"
+  },
+  "selection": {"selected_resume": "resume.pdf"}
+}
+""".strip(),
+            encoding="utf-8",
+        )
+
+        payload = scan_workspace_job_context_payload(
+            output_dir=output_dir,
+            tailoring_json_path=str(artifact_path),
+        )
+
+    assert payload["company"] == "Meta"
+    assert payload["title"] == "AI Software Engineer"
+    assert payload["job_url"] == "https://example.com/jobs/ai"
+    assert payload["job_description_text"] == (
+        "Build AI software with Python, distributed systems, and production ML."
+    )
 
 
 def test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate():
@@ -424,7 +463,7 @@ def test_keyword_contract_selects_highest_positive_candidate_for_duplicate_term(
     assert python_row["coverage_label"] == "0/2"
 
 
-def test_scan_issue_contract_rows_include_all_three_jobscan_groups():
+def test_scan_issue_contract_rows_include_jobscan_review_groups():
     contract = _build_tailoring_scan_issue_contract(
         trusted_ready=[],
         trusted_optional=[],
@@ -441,10 +480,22 @@ def test_scan_issue_contract_rows_include_all_three_jobscan_groups():
     )
 
     groups = {group["group_id"]: group for group in contract["groups"]}
-    assert set(groups) == {"skills", "searchability", "recruiter_tips"}
+    assert set(groups) == {"skills", "searchability", "formatting", "recruiter_tips"}
     assert any(issue["group_id"] == "skills" for issue in contract["issues"])
     assert any(issue["group_id"] == "searchability" for issue in contract["issues"])
+    assert any(issue["group_id"] == "formatting" for issue in contract["issues"])
     assert all("severity" in issue for issue in contract["issues"])
+
+    match_report = contract["match_report"]
+    assert match_report["version"] == "scan_match_report_v1"
+    assert [row["key"] for row in match_report["priority_order"]] == [
+        "hard_skills",
+        "education_level",
+        "job_title",
+        "soft_skills",
+        "other_keywords",
+    ]
+    assert "formatting" in match_report["group_counts"]
 
 
 def test_searchability_contract_includes_jobscan_parseability_details():
@@ -493,6 +544,59 @@ def test_searchability_contract_includes_jobscan_parseability_details():
     assert rows["scan_issue:searchability:education_info_searchable"]["score_priority_label"] == "Education level"
     assert rows["scan_issue:searchability:job_title_alignment"]["score_priority_rank"] == 3
     assert rows["scan_issue:searchability:job_title_alignment"]["score_priority_label"] == "Job title"
+
+
+def test_formatting_contract_includes_ats_formatting_checks():
+    contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[],
+        resume_evidence=_resume_evidence(
+            skills=["Python", "SQL", "AWS"],
+            bullets=[
+                "- Built Python and SQL automation for cloud data quality monitoring.",
+                "- Improved AWS reporting workflows and reduced review time by 20 percent.",
+            ],
+            raw_text=(
+                "Sriram Neelakantan\n"
+                "sriram@example.com | +1 857 437 9513 | linkedin.com/in/sriram\n\n"
+                "Summary\n"
+                "Data engineer with experience building reliable analytics platforms, "
+                "automation workflows, data quality systems, stakeholder dashboards, "
+                "and production monitoring for business teams.\n\n"
+                "Skills\n"
+                "Python, SQL, AWS, Spark, Tableau, Airflow, dbt, data modeling, "
+                "quality checks, pipeline orchestration, cloud analytics.\n\n"
+                "Professional Experience\n"
+                "- Built Python and SQL automation for cloud data quality monitoring "
+                "across finance, operations, and customer reporting workflows.\n"
+                "- Improved AWS reporting workflows and reduced review time by 20 percent "
+                "through automated validation and weekly stakeholder dashboards.\n"
+                "- Partnered with product and analytics teams to translate ambiguous "
+                "requirements into resilient data models and documented runbooks.\n\n"
+                "Education\n"
+                "Master of Science, Northeastern University, 2023\n"
+            ),
+        ),
+        tailoring_summary={"target_job_title": "Data Engineer"},
+    )
+
+    rows = {issue["issue_id"]: issue for issue in contract["issues"]}
+    for check_id in (
+        "text_extractable",
+        "table_column_risk",
+        "bullet_formatting",
+        "special_character_risk",
+        "standard_resume_structure",
+    ):
+        row = rows[f"scan_issue:formatting:{check_id}"]
+        assert row["group_id"] == "formatting"
+        assert row["row_action_label"] == "Check"
+
+    assert rows["scan_issue:formatting:text_extractable"]["row_action_type"] == "matched"
+    assert rows["scan_issue:formatting:table_column_risk"]["coverage_label"] == "Pass"
+    assert contract["match_report"]["formatting"]["matched"] >= 4
 
 
 def test_skills_contract_classifies_hard_soft_and_other_keywords():
@@ -832,14 +936,16 @@ if __name__ == "__main__":
     test_saved_scan_contract_normalizes_pasted_text_record()
     test_create_saved_scan_payload_skips_postgres_without_database_url()
     test_extract_scan_resume_upload_text_accepts_txt_upload()
+    test_scan_workspace_job_context_prefills_loaded_job_description()
     test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate()
     test_selector_demotes_negative_or_neutral_candidates_from_direct_replacements()
     test_scan_issue_contract_marks_direct_guidance_and_hidden_score_gate_items()
     test_scan_issue_contract_demotes_deterministic_only_score_lifts_to_guidance()
     test_keyword_contract_uses_summary_and_resume_evidence_for_matched_missing_rows()
     test_keyword_contract_selects_highest_positive_candidate_for_duplicate_term()
-    test_scan_issue_contract_rows_include_all_three_jobscan_groups()
+    test_scan_issue_contract_rows_include_jobscan_review_groups()
     test_searchability_contract_includes_jobscan_parseability_details()
+    test_formatting_contract_includes_ats_formatting_checks()
     test_skills_contract_classifies_hard_soft_and_other_keywords()
     test_skill_rows_include_job_description_context_anchors()
     test_jd_context_ignores_job_header_when_body_text_has_no_term()

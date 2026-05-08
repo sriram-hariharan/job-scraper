@@ -6734,6 +6734,37 @@ function updateTailoringWorkspaceMetaSummary(payload) {
   renderTailoringWorkspaceReviewTelemetryStrip();
 }
 
+function updateTailoringWorkspaceHeroStatus(payload) {
+  const statusNode =
+    qs("tailoringWorkspaceStatusValue") ||
+    Array.from(document.querySelectorAll(".tailoring-workspace-hero .info-pair"))
+      .find((node) => String(node.querySelector(".label")?.textContent || "").trim().toLowerCase() === "status")
+      ?.querySelector("span:last-child");
+  if (!statusNode) return;
+
+  if (!payload || typeof payload !== "object") {
+    const page = document.querySelector(".tailoring-workspace-page");
+    const routeStatus = String(page?.dataset?.tailoringStatus || "").trim();
+    statusNode.textContent = routeStatus || "Unavailable";
+    return;
+  }
+
+  const grouped = getTailoringWorkspaceSuggestionBuckets();
+  const readyCount = grouped.ready.length;
+  const reviewCount = grouped.review.length;
+  const freeEditCount = buildTailoringWorkspaceEditableBulletRows(payload).length;
+
+  if (readyCount > 0) {
+    statusNode.textContent = "Ready suggestions";
+  } else if (reviewCount > 0) {
+    statusNode.textContent = "Review guidance";
+  } else if (freeEditCount > 0) {
+    statusNode.textContent = "Free edit available";
+  } else {
+    statusNode.textContent = "No safe rewrites yet";
+  }
+}
+
 function renderTailoringWorkspaceSimpleSuggestionFallback(payload, error = null) {
   const root = qs("tailoringWorkspaceInteractiveSummary");
   if (!root) return;
@@ -8546,6 +8577,7 @@ async function initTailoringWorkspacePage() {
     tailoringWorkspaceState.previewPayload = null;
     tailoringWorkspaceState.savedSelectionPayload = null;
 
+    updateTailoringWorkspaceHeroStatus(null);
     clearTailoringWorkspacePatchPreviewSection();
     clearTailoringWorkspaceSavedSelectionSection();
     updateTailoringWorkspaceSelectionActionBar();
@@ -8569,6 +8601,7 @@ async function initTailoringWorkspacePage() {
     }
 
     initializeTailoringWorkspaceSelectionState(tailoringJsonArtifact, draftResponse);
+    updateTailoringWorkspaceHeroStatus(tailoringJsonArtifact);
     rerenderTailoringWorkspaceSelectionView();
 
     await previewPromise;
@@ -8591,6 +8624,7 @@ async function initTailoringWorkspacePage() {
     tailoringWorkspaceState.previewPayload = null;
     tailoringWorkspaceState.savedSelectionPayload = null;
 
+    updateTailoringWorkspaceHeroStatus(null);
     clearTailoringWorkspacePatchPreviewSection();
     clearTailoringWorkspaceSavedSelectionSection();
     updateTailoringWorkspaceSelectionActionBar();
@@ -9177,12 +9211,15 @@ function normalizeScanWorkspaceContractIssue(issue) {
     scan_issue_bucket: bucket,
     scan_issue_bucket_label: bucketLabel,
     row_action_type: String(issue?.row_action_type || issue?.scan_issue_type || "").trim(),
+    row_action_label: String(issue?.row_action_label || "").trim(),
+    severity: String(issue?.severity || "").trim(),
     display_term: String(issue?.display_term || "").trim(),
     canonical_term: String(issue?.canonical_term || "").trim(),
     term_family: String(issue?.term_family || "").trim(),
     matched_count: issue?.matched_count,
     required_count: issue?.required_count,
     coverage_label: String(issue?.coverage_label || "").trim(),
+    matched_count_label: String(issue?.matched_count_label || "").trim(),
     has_ai_suggestion: issue?.has_ai_suggestion === true,
     linked_candidate_ids: Array.isArray(issue?.linked_candidate_ids) ? issue.linked_candidate_ids : [],
     best_candidate_id: String(issue?.best_candidate_id || "").trim(),
@@ -9561,7 +9598,11 @@ function getScanWorkspaceIssueMeta(bucket) {
 
 function getScanWorkspaceIssueMetaForItem(item, bucket) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
+  const rowActionLabel = String(item?.row_action_label || "").trim();
+  if (rowActionLabel && rowActionType !== "matched") return rowActionLabel;
   if (rowActionType === "direct_replacement") return "AI Suggested";
+  if (rowActionType === "phrase_generation") return "Phrase";
+  if (rowActionType === "manual_guidance") return "Manual edit";
   if (rowActionType === "guidance" && item?.has_ai_suggestion === true) return "AI guidance";
   if (rowActionType === "matched") return "Backed";
   if (rowActionType === "guidance") return "Manual edit";
@@ -9581,6 +9622,9 @@ function getScanWorkspaceIssueCountLabel(bucket) {
 }
 
 function getScanWorkspaceIssueCoverageLabel(item) {
+  const matchedLabel = String(item?.matched_count_label || "").trim();
+  if (matchedLabel) return matchedLabel;
+
   const direct = String(item?.coverage_label || "").trim();
   if (direct) return direct;
 
@@ -9607,12 +9651,17 @@ function getScanWorkspaceIssueScoreImpact(item) {
 
 function getScanWorkspaceIssueRightLabel(item, bucket) {
   const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
+  const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
+  const rowActionLabel = String(item?.row_action_label || "").trim();
 
-  if (scoreImpact !== null && (item?.row_action_type === "direct_replacement" || bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted")) {
+  if (scoreImpact !== null && rowActionType === "direct_replacement") {
     if (scoreImpact > 0) return `+${scoreImpact}`;
     if (scoreImpact < 0) return `${scoreImpact}`;
     return "0";
   }
+
+  if (rowActionType === "phrase_generation") return rowActionLabel || "Phrase";
+  if (rowActionType === "manual_guidance") return rowActionLabel || "Guidance";
 
   const coverage = getScanWorkspaceIssueCoverageLabel(item);
   if (coverage) return coverage;
@@ -9658,6 +9707,7 @@ function getScanWorkspaceIssueToneClassForItem(item, bucket) {
   const rowActionType = String(item?.row_action_type || item?.scan_issue_type || "").trim();
   if (rowActionType === "matched") return "is-matched";
   if (rowActionType === "direct_replacement") return "is-ai";
+  if (rowActionType === "phrase_generation" || rowActionType === "manual_guidance") return "is-missing";
   if (bucket === "matched" || bucket === "trusted") return "is-matched";
   if (bucket === "ai" || bucket === "ai_optimize") return "is-ai";
   return "is-missing";
@@ -9696,7 +9746,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
           const isScoreBubble =
             scoreImpact !== null &&
-            (item?.row_action_type === "direct_replacement" || bucket === "ai" || bucket === "ai_optimize" || bucket === "trusted");
+            item?.row_action_type === "direct_replacement";
           const hasAiBadge = item?.has_ai_suggestion === true || item?.row_action_type === "direct_replacement";
 
           return `
@@ -10556,12 +10606,7 @@ function buildTailoringWorkspaceUrl(row) {
   params.set("company", row.job_company || "");
   params.set("title", row.job_title || "");
   params.set("resume", selectedResume || "");
-  params.set(
-    "status",
-    row.llm_tailoring_status
-      ? humanizeUnderscoreLabel(row.llm_tailoring_status)
-      : "Suggestions available"
-  );
+  params.set("status", getTailoringWorkspaceRouteStatusLabel(row));
 
   if (row.job_doc_id) params.set("job_doc_id", row.job_doc_id);
   if (row.tailoring_json) params.set("tailoring_json", row.tailoring_json);
@@ -10570,6 +10615,19 @@ function buildTailoringWorkspaceUrl(row) {
   if (row.packet_json) params.set("packet_json", row.packet_json);
 
   return `/tailoring-workspace?${params.toString()}`;
+}
+
+function getTailoringWorkspaceRouteStatusLabel(row) {
+  const workspaceState = String(row?.tailoring_workspace_state || "").trim().toLowerCase();
+  const actionableCount = Number(row?.tailoring_actionable_replacement_count || 0);
+  const reviewCount = Number(row?.tailoring_review_replacement_count || 0);
+  const rawStatus = String(row?.llm_tailoring_status || "").trim().toLowerCase();
+
+  if (workspaceState === "ready" || actionableCount > 0) return "Ready suggestions";
+  if (workspaceState === "review" || reviewCount > 0) return "Review guidance";
+  if (rawStatus === "failed") return "No safe rewrites yet";
+  if (rawStatus) return humanizeUnderscoreLabel(rawStatus);
+  return "Suggestions available";
 }
 
 function buildTailoringButtonHtml(row) {
@@ -10620,6 +10678,9 @@ function buildTailoringButtonHtml(row) {
       data-tailoring-md="${escapeHtml(row.tailoring_md || "")}"
       data-tailoring-llm-json="${escapeHtml(row.tailoring_llm_json || "")}"
       data-packet-json="${escapeHtml(row.packet_json || "")}"
+      data-tailoring-workspace-state="${escapeHtml(row.tailoring_workspace_state || "")}"
+      data-tailoring-actionable-replacement-count="${escapeHtml(row.tailoring_actionable_replacement_count || "")}"
+      data-tailoring-review-replacement-count="${escapeHtml(row.tailoring_review_replacement_count || "")}"
     >
       ${label}
     </button>
@@ -10638,6 +10699,9 @@ async function handleTailoringClick(button) {
     tailoring_md: button.dataset.tailoringMd || "",
     tailoring_llm_json: button.dataset.tailoringLlmJson || "",
     packet_json: button.dataset.packetJson || "",
+    tailoring_workspace_state: button.dataset.tailoringWorkspaceState || "",
+    tailoring_actionable_replacement_count: button.dataset.tailoringActionableReplacementCount || "",
+    tailoring_review_replacement_count: button.dataset.tailoringReviewReplacementCount || "",
   };
 
   window.location.href = buildTailoringWorkspaceUrl(row);

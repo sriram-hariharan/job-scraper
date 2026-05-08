@@ -1927,25 +1927,46 @@ def _scan_keyword_issue_from_term(
     elif matched_count > 0:
         row_action_type = "matched"
         bucket = "matched"
+    elif linked_issues and any(
+        not _scan_issue_is_deterministic_only_replacement(dict(issue.get("raw", {}) or issue))
+        for issue in linked_issues
+    ):
+        row_action_type = "phrase_generation"
+        bucket = fallback_bucket or "missing"
     else:
-        row_action_type = "guidance"
+        row_action_type = "manual_guidance"
         bucket = fallback_bucket or "missing"
 
     display_term = _scan_issue_display_label(term)
     canonical_term = _scan_issue_canonical_term(display_term)
     required_count = max(1, int(required_count or 0))
     matched_count = max(0, int(matched_count or 0))
-    coverage_label = (
-        str(matched_count)
-        if row_action_type == "matched"
-        else f"{matched_count}/{required_count}"
-    )
+    if row_action_type == "matched":
+        matched_prefix = "Backed" if evidence_anchors else "Seen"
+        coverage_label = f"{matched_prefix} {matched_count}"
+    else:
+        coverage_label = f"{matched_count}/{required_count}"
     linked_candidate_ids = [
         _clean_text(issue.get("candidate_id"))
         for issue in linked_issues
         if _clean_text(issue.get("candidate_id"))
     ]
     best_candidate_id = _clean_text((best_issue or {}).get("candidate_id"))
+    best_delta_points = score_delta_to_points((best_issue or {}).get("projected_overall_delta"))
+    row_action_label = {
+        "direct_replacement": "AI replacement",
+        "phrase_generation": "Phrase",
+        "manual_guidance": "Guidance",
+        "matched": coverage_label,
+        "hidden_rejected": "Hidden",
+    }.get(row_action_type, "Guidance")
+    severity = "low"
+    if row_action_type == "direct_replacement":
+        severity = "high"
+    elif row_action_type in {"phrase_generation", "manual_guidance"}:
+        severity = "medium"
+    elif row_action_type == "hidden_rejected":
+        severity = "diagnostic"
 
     base = dict(best_issue or {})
     base.update(
@@ -1972,12 +1993,16 @@ def _scan_keyword_issue_from_term(
             "matched_count": matched_count,
             "required_count": required_count,
             "coverage_label": coverage_label,
+            "matched_count_label": coverage_label if row_action_type == "matched" else "",
             "evidence_anchors": evidence_anchors,
             "has_ai_suggestion": bool(linked_candidate_ids),
             "linked_candidate_ids": list(dict.fromkeys(linked_candidate_ids)),
             "best_candidate_id": best_candidate_id,
             "row_action_type": row_action_type,
+            "row_action_label": row_action_label,
             "scan_issue_type": row_action_type,
+            "severity": severity,
+            "projected_score_delta_points": best_delta_points,
             "is_visible_in_review": row_action_type != "hidden_rejected",
             "can_accept": bool(row_action_type == "direct_replacement" and (best_issue or {}).get("can_accept")),
             "can_accept_all": bool(row_action_type == "direct_replacement" and (best_issue or {}).get("can_accept_all")),
@@ -2115,13 +2140,13 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
         if group_id == "skills":
             continue
 
-        row_action_type = "matched" if issue.get("bucket") == "matched" else "guidance"
+        row_action_type = "matched" if issue.get("bucket") == "matched" else "manual_guidance"
         display_term = _clean_text(issue.get("display_term")) or _clean_text(issue.get("title"))
         canonical = _scan_issue_canonical_term(display_term)
         matched_count = 1 if row_action_type == "matched" else 0
         required_count = 1
         coverage_label = (
-            str(matched_count)
+            f"Seen {matched_count}"
             if row_action_type == "matched"
             else f"{matched_count}/{required_count}"
         )
@@ -2134,11 +2159,14 @@ def _scan_keyword_rows_from_generic_issues(issues: List[Dict[str, Any]]) -> List
                 "matched_count": matched_count,
                 "required_count": required_count,
                 "coverage_label": coverage_label,
+                "matched_count_label": coverage_label if row_action_type == "matched" else "",
                 "has_ai_suggestion": False,
                 "linked_candidate_ids": [],
                 "best_candidate_id": "",
                 "row_action_type": row_action_type,
+                "row_action_label": coverage_label if row_action_type == "matched" else "Guidance",
                 "scan_issue_type": row_action_type,
+                "severity": "low" if row_action_type == "matched" else "medium",
                 "is_visible_in_review": True,
             }
         )
@@ -2239,6 +2267,57 @@ def _scan_searchability_issue(
         "raw": {
             "check_id": check_id,
             "source": "deterministic_searchability_check",
+        },
+    }
+
+
+def _scan_recruiter_tip_issue(
+    *,
+    check_id: str,
+    bucket: str,
+    title: str,
+    reason: str,
+    current_text: str = "",
+    suggested_text: str = "",
+    priority: str = "",
+) -> Dict[str, Any]:
+    return {
+        "issue_id": f"scan_issue:recruiter_tips:{check_id}",
+        "candidate_id": "",
+        "source_lane": "recruiter_tip_check",
+        "group_id": "recruiter_tips",
+        "group_label": _scan_issue_group_label("recruiter_tips"),
+        "bucket": bucket,
+        "bucket_label": "Strong recruiter-facing evidence" if bucket == "matched" else "Recruiter review opportunity",
+        "title": title,
+        "status": "recruiter_tip_matched" if bucket == "matched" else "recruiter_tip_opportunity",
+        "priority": priority,
+        "confidence": "deterministic",
+        "source": "resume_evidence",
+        "section": "",
+        "source_entry_id": "",
+        "source_bullet_id": "",
+        "source_bullet_ids": [],
+        "original_text": current_text,
+        "current_text": current_text,
+        "suggested_text": suggested_text,
+        "reason": reason,
+        "supported_jd_signals": [],
+        "likely_impacted_dimensions": ["recruiter_clarity"],
+        "materiality_validation_status": "",
+        "patch_generation_method": "deterministic_recruiter_tip_check",
+        "projected_overall_delta": None,
+        "original_final_score": None,
+        "projected_final_score": None,
+        "adjacent_risk_signals": [],
+        "unsupported_risk_signals": [],
+        "can_accept": False,
+        "can_accept_all": False,
+        "anchor_strategy": "none",
+        "can_focus_preview": False,
+        "raw": {
+            "check_id": check_id,
+            "source": "deterministic_recruiter_tip_check",
         },
     }
 
@@ -2364,6 +2443,98 @@ def _build_searchability_scan_issues(resume_evidence: Any = None) -> List[Dict[s
                     f"No parsed experience/project bullet exceeded "
                     f"{int(_SCAN_SEARCHABILITY_BULLET_WORD_LIMIT)} words."
                 ),
+                priority="low",
+            )
+        )
+
+    return issues
+
+
+def _build_recruiter_tip_scan_issues(resume_evidence: Any = None) -> List[Dict[str, Any]]:
+    if resume_evidence is None:
+        return []
+
+    bullets = _scan_resume_bullet_texts(resume_evidence)
+    raw_text = _scan_resume_document_text(resume_evidence)
+    lower_text = raw_text.lower()
+    action_verb_pattern = re.compile(
+        r"\b(?:built|automated|developed|deployed|implemented|designed|created|improved|reduced|increased|partnered|launched|evaluated|optimized|analyzed)\b",
+        flags=re.IGNORECASE,
+    )
+
+    action_bullets = [bullet for bullet in bullets if action_verb_pattern.search(bullet)]
+    if action_bullets:
+        yield_issue = _scan_recruiter_tip_issue(
+            check_id="action_led_bullets",
+            bucket="matched",
+            title="Action-led bullets",
+            reason=f"{len(action_bullets)} parsed bullet(s) start from recruiter-friendly accomplishment language.",
+            current_text=action_bullets[0][:240],
+            priority="medium",
+        )
+    else:
+        yield_issue = _scan_recruiter_tip_issue(
+            check_id="action_led_bullets",
+            bucket="missing",
+            title="Lead bullets with outcomes",
+            reason="The scan did not find strong action-led accomplishment phrasing in parsed bullets.",
+            suggested_text="Start bullets with owned actions and outcomes that are already supported by your experience.",
+            priority="medium",
+        )
+
+    issues = [yield_issue]
+
+    quantified_bullets = list(getattr(resume_evidence, "quantified_bullets", []) or [])
+    if quantified_bullets:
+        issues.append(
+            _scan_recruiter_tip_issue(
+                check_id="business_impact",
+                bucket="matched",
+                title="Business impact is measurable",
+                reason=f"{len(quantified_bullets)} quantified impact bullet(s) help recruiters understand scope.",
+                current_text=_clean_text(quantified_bullets[0])[:240],
+                priority="medium",
+            )
+        )
+    else:
+        issues.append(
+            _scan_recruiter_tip_issue(
+                check_id="business_impact",
+                bucket="missing",
+                title="Add measurable business impact",
+                reason="Recruiters will have an easier time evaluating fit when outcomes include scale, volume, time, cost, quality, or adoption metrics.",
+                suggested_text="Add a truthful metric to one high-signal bullet where the evidence supports it.",
+                priority="high",
+            )
+        )
+
+    repeated_terms = [
+        term
+        for term, count in Counter(
+            word
+            for word in re.findall(r"\b[a-z][a-z0-9+#.]{3,}\b", lower_text)
+            if word not in {"with", "from", "that", "this", "using", "into", "over"}
+        ).items()
+        if count >= 8
+    ]
+    if repeated_terms:
+        issues.append(
+            _scan_recruiter_tip_issue(
+                check_id="repetition_risk",
+                bucket="missing",
+                title="Reduce repeated phrasing",
+                reason=f"Repeated terms may make the resume feel less specific: {', '.join(sorted(repeated_terms)[:4])}.",
+                suggested_text="Vary repeated phrasing only where it preserves the same truthful evidence.",
+                priority="low",
+            )
+        )
+    else:
+        issues.append(
+            _scan_recruiter_tip_issue(
+                check_id="repetition_risk",
+                bucket="matched",
+                title="Repetition looks controlled",
+                reason="No heavily repeated recruiter-facing phrasing was detected.",
                 priority="low",
             )
         )
@@ -2539,7 +2710,10 @@ def _build_tailoring_scan_issue_contract(
                 )
             )
 
-    deterministic_issues = _build_searchability_scan_issues(resume_evidence)
+    deterministic_issues = (
+        _build_searchability_scan_issues(resume_evidence)
+        + _build_recruiter_tip_scan_issues(resume_evidence)
+    )
     issues = (
         _scan_keyword_rows_from_replacement_issues(
             replacement_issues,
@@ -2831,6 +3005,49 @@ def _build_workspace_score_preview_contract(
         "can_update_score": projected_score is not None or original_score is not None,
         "requires_full_preview_reload": False,
     }
+
+
+def _build_workspace_draft_fragments_contract(
+    *,
+    preview_status: str,
+    preview_note: str,
+    patch_specs: List[Dict[str, Any]] | None = None,
+    unresolved_manual_edit_keys: List[str] | None = None,
+) -> Dict[str, Any]:
+    changed_bullets: List[Dict[str, Any]] = []
+    seen = set()
+
+    for patch in list(patch_specs or []):
+        bullet_key = _clean_text(patch.get("bullet_key"))
+        patch_text = _clean_text(patch.get("patch_text"))
+        if not bullet_key or not patch_text or bullet_key in seen:
+            continue
+        seen.add(bullet_key)
+
+        changed_bullets.append({
+            "bullet_key": bullet_key,
+            "candidate_id": _clean_text(patch.get("candidate_id")),
+            "source_bullet_id": _clean_text(patch.get("source_bullet_id")),
+            "original_text": _clean_text(patch.get("source_raw_text")),
+            "current_text": patch_text,
+            "patch_text": patch_text,
+            "patch_source": _clean_text(patch.get("patch_source")),
+            "can_patch_in_place": True,
+            "requires_full_preview_reload": False,
+        })
+
+    return {
+        "version": "workspace_draft_fragments_v1",
+        "status": _clean_text(preview_status),
+        "note": _clean_text(preview_note),
+        "changed_bullets": changed_bullets,
+        "changed_bullet_keys": [row["bullet_key"] for row in changed_bullets],
+        "fragment_count": len(changed_bullets),
+        "can_patch_in_place": True,
+        "requires_full_preview_reload": False,
+        "unresolved_manual_edit_keys": list(unresolved_manual_edit_keys or []),
+    }
+
 
 def _normalize_selected_patch_candidate_ids(value: Any) -> List[str]:
     if isinstance(value, list):
@@ -5969,6 +6186,12 @@ def preview_tailoring_workspace_draft_payload(
                 patch_specs=[],
                 unresolved_manual_edit_keys=[],
             ),
+            "draft_fragments": _build_workspace_draft_fragments_contract(
+                preview_status="preview_unavailable",
+                preview_note=str(exc),
+                patch_specs=[],
+                unresolved_manual_edit_keys=[],
+            ),
         }
 
     patch_specs, unresolved_manual_keys = _build_tailoring_workspace_effective_patch_specs(
@@ -6014,6 +6237,12 @@ def preview_tailoring_workspace_draft_payload(
                 projected_delta=None,
                 selected_candidate_ids=effective_selected_ids,
                 manual_bullet_edits=effective_manual_edits,
+                patch_specs=[],
+                unresolved_manual_edit_keys=unresolved_manual_keys,
+            ),
+            "draft_fragments": _build_workspace_draft_fragments_contract(
+                preview_status=preview_status,
+                preview_note=preview_note,
                 patch_specs=[],
                 unresolved_manual_edit_keys=unresolved_manual_keys,
             ),
@@ -6065,6 +6294,12 @@ def preview_tailoring_workspace_draft_payload(
                 projected_delta=None,
                 selected_candidate_ids=effective_selected_ids,
                 manual_bullet_edits=effective_manual_edits,
+                patch_specs=patch_specs,
+                unresolved_manual_edit_keys=unresolved_manual_keys,
+            ),
+            "draft_fragments": _build_workspace_draft_fragments_contract(
+                preview_status="workspace_draft_rescore_failed",
+                preview_note=preview_note,
                 patch_specs=patch_specs,
                 unresolved_manual_edit_keys=unresolved_manual_keys,
             ),
@@ -6126,6 +6361,12 @@ def preview_tailoring_workspace_draft_payload(
             patch_specs=patch_specs,
             unresolved_manual_edit_keys=unresolved_manual_keys,
             dimension_deltas=preview.get("projected_dimension_deltas"),
+        ),
+        "draft_fragments": _build_workspace_draft_fragments_contract(
+            preview_status="workspace_draft_rescored",
+            preview_note=preview_note,
+            patch_specs=patch_specs,
+            unresolved_manual_edit_keys=unresolved_manual_keys,
         ),
     }
 
@@ -6227,6 +6468,16 @@ SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA = {
     },
     "required": ["options"],
 }
+SCAN_PHRASE_OPTIONS_SCHEMA_NAME = "scan_phrase_options_v1"
+SCAN_PHRASE_PROMPT_VERSION = "v1"
+
+
+def _scan_phrase_structured_output_contract() -> Dict[str, Any]:
+    return {
+        "name": SCAN_PHRASE_OPTIONS_SCHEMA_NAME,
+        "strict": True,
+        "schema": SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA,
+    }
 
 def _scan_phrase_default_provider() -> str:
     if os.getenv("OPENAI_API_KEY"):
@@ -6242,14 +6493,17 @@ def _scan_phrase_default_provider() -> str:
 
 def _scan_phrase_default_model(provider: str) -> str:
     if provider == "openai":
-        return "gpt-4.1-mini"
+        return os.getenv("TAILORING_PHRASE_MODEL", "gpt-5-mini")
     if provider == "gemini":
         return "gemini-2.5-flash"
     return os.getenv(
-        "TAILORING_REWRITE_MODEL",
+        "TAILORING_PHRASE_MODEL",
         os.getenv(
-            "PATCH_REFINEMENT_WRITER_MODEL",
-            os.getenv("PATCH_REFINEMENT_MODEL", "llama-3.3-70b-versatile"),
+            "TAILORING_REWRITE_MODEL",
+            os.getenv(
+                "PATCH_REFINEMENT_WRITER_MODEL",
+                os.getenv("PATCH_REFINEMENT_MODEL", "llama-3.3-70b-versatile"),
+            ),
         ),
     )
 
@@ -6262,7 +6516,7 @@ SCAN_PHRASE_MODEL = os.getenv(
     "SCAN_PHRASE_MODEL",
     os.getenv(
         "TAILORING_SCAN_PHRASE_MODEL",
-        _scan_phrase_default_model(SCAN_PHRASE_PROVIDER),
+        os.getenv("TAILORING_PHRASE_MODEL", _scan_phrase_default_model(SCAN_PHRASE_PROVIDER)),
     ),
 ).strip()
 SCAN_PHRASE_FALLBACK_PROVIDER = os.getenv(
@@ -6494,7 +6748,7 @@ def _generate_scan_phrase_options_with_llm(
         temperature=0,
         max_tokens=520,
         response_mime_type="application/json",
-        response_schema=SCAN_PHRASE_OPTIONS_RESPONSE_SCHEMA,
+        response_schema=_scan_phrase_structured_output_contract()["schema"],
         return_parsed=True,
         thinking_budget=0,
         fallback_enabled=SCAN_PHRASE_LLM_FALLBACK_ENABLED,
@@ -6552,6 +6806,9 @@ def _generate_scan_phrase_options_with_llm(
         "fallback_used": bool(result.get("fallback_used", False)),
         "requested_provider": provider,
         "requested_model": model,
+        "prompt_version": SCAN_PHRASE_PROMPT_VERSION,
+        "structured_output_requested": True,
+        "structured_output_schema": _scan_phrase_structured_output_contract(),
         "plain_retry_used": bool(last_error),
     }
     if last_error and not options:

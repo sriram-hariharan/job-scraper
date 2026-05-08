@@ -762,7 +762,7 @@ def tailoring_workspace(
 
         <div class="info-pair">
           <span class="label">Status</span>
-          <span>{status_safe}</span>
+          <span id="tailoringWorkspaceStatusValue">{status_safe}</span>
         </div>
       </div>
     </section>
@@ -1624,6 +1624,61 @@ def scan_workspace(
               >
                 Accept All
               </button>
+
+              <div class="scan-workspace-export-menu-wrap">
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm scan-workspace-toolbar-btn scan-workspace-export-btn"
+                  id="scanWorkspaceExportBtn"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                >
+                  <img
+                    class="scan-workspace-toolbar-icon"
+                    src="/static/media/download_img.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>Export</span>
+                </button>
+
+                <div
+                  class="scan-workspace-export-menu hidden"
+                  id="scanWorkspaceExportMenu"
+                  role="menu"
+                  aria-label="Export optimized draft"
+                >
+                  <button
+                    type="button"
+                    class="scan-workspace-export-option"
+                    data-scan-export-format="pdf"
+                    role="menuitem"
+                  >
+                    <span
+                      class="scan-workspace-export-format-icon"
+                      aria-hidden="true"
+                    >
+                      PDF
+                    </span>
+                    <span>PDF</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    class="scan-workspace-export-option"
+                    data-scan-export-format="word"
+                    role="menuitem"
+                  >
+                    <span
+                      class="scan-workspace-export-format-icon"
+                      aria-hidden="true"
+                    >
+                      DOC
+                    </span>
+                    <span>DOCX</span>
+                  </button>
+                </div>
+              </div>
 
               <button
                 type="button"

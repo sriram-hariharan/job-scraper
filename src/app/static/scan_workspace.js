@@ -40,6 +40,8 @@ const scanWorkspaceProcessingState = {
 const scanWorkspacePreviewState = {
   documentPreviewPayload: null,
   scorePreviewPayload: null,
+  draftFragmentsPayload: null,
+  draftFragmentsByBulletKey: {},
   isDocumentPreviewLoading: false,
   isScorePreviewLoading: false,
   documentPreviewRequestSeq: 0,
@@ -66,6 +68,7 @@ const scanWorkspacePersistenceState = {
   loadResponse: null,
   isLoading: false,
   isSaving: false,
+  isExporting: false,
   lastError: "",
   hydratedSignature: "",
   manualBulletEdits: {},
@@ -824,6 +827,7 @@ function renderScanWorkspacePersistenceStatus() {
   const statusNode = getScanWorkspaceInput("scanWorkspacePersistStatus");
   const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
   const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
+  const exportBtn = getScanWorkspaceInput("scanWorkspaceExportBtn");
 
   if (!statusNode) return;
 
@@ -843,9 +847,15 @@ function renderScanWorkspacePersistenceStatus() {
     statusNode.textContent = "Loading saved scan decisions from the workspace draft...";
   } else if (scanWorkspacePersistenceState.isSaving) {
     statusNode.textContent = "Saving scan decisions into the workspace draft...";
+  } else if (scanWorkspacePersistenceState.isExporting) {
+    statusNode.textContent = "Exporting optimized draft...";
   } else if (scanWorkspacePersistenceState.lastError) {
     statusNode.textContent = scanWorkspacePersistenceState.lastError;
-    statusNode.classList.add("is-danger");
+    statusNode.classList.add(
+      scanWorkspacePersistenceState.lastError.startsWith("Export completed with warnings")
+        ? "is-warning"
+        : "is-danger"
+    );
   } else if (!hasMarkers && scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
     statusNode.textContent =
       "Saved scan decisions loaded from the workspace draft. Waiting for scan markers.";
@@ -869,6 +879,7 @@ function renderScanWorkspacePersistenceStatus() {
       !hasContext ||
       scanWorkspacePersistenceState.isLoading ||
       scanWorkspacePersistenceState.isSaving ||
+      scanWorkspacePersistenceState.isExporting ||
       !isDirty;
     saveBtn.textContent = scanWorkspacePersistenceState.isSaving
       ? "Saving..."
@@ -877,6 +888,14 @@ function renderScanWorkspacePersistenceStatus() {
 
   if (continueBtn) {
     continueBtn.setAttribute("aria-busy", scanWorkspacePersistenceState.isSaving ? "true" : "false");
+  }
+
+  if (exportBtn) {
+    exportBtn.disabled =
+      !hasContext ||
+      scanWorkspacePersistenceState.isLoading ||
+      scanWorkspacePersistenceState.isSaving ||
+      scanWorkspacePersistenceState.isExporting;
   }
 }
 
@@ -902,6 +921,7 @@ function updateScanWorkspaceDecisionSummaryUi() {
   const undoBtn = getScanWorkspaceInput("scanWorkspaceUndoBtn");
   const redoBtn = getScanWorkspaceInput("scanWorkspaceRedoBtn");
   const aiSuggestionStepLabel = getScanWorkspaceInput("scanWorkspaceAiSuggestionStepLabel");
+  const editStep = getScanWorkspaceInput("scanWorkspaceEditStep");
   const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
 
   const hasMarkers = scanWorkspaceAnnotationState.markers.length > 0;
@@ -955,6 +975,15 @@ function updateScanWorkspaceDecisionSummaryUi() {
       `AI Suggestions (${counts.accepted}/${counts.actionableTotal}${guidanceSuffix})`;
   }
 
+  if (editStep) {
+    const hasGuidance = counts.guidance > 0;
+    editStep.classList.toggle("is-disabled", !hasGuidance);
+    editStep.setAttribute("aria-disabled", hasGuidance ? "false" : "true");
+    editStep.title = hasGuidance
+      ? "Open an orange guidance item to edit the surfaced bullet and preview the score."
+      : "Edit unlocks when manual guidance rows are available.";
+  }
+
   if (scoreValue) {
     const scoreSource = String(scoreValue.dataset.scanScoreSource || "").trim();
     if (scoreSource !== "backend") {
@@ -977,6 +1006,22 @@ function getAcceptedCandidateSignature() {
   return getEffectiveAcceptedCompareCandidateIds().join("|");
 }
 
+function getScanWorkspaceUnresolvedGuidanceCount() {
+  const manualEdits = getScanWorkspaceManualBulletEdits();
+  return scanWorkspaceAnnotationState.markers.reduce((count, marker) => {
+    if (isScanWorkspaceReplacementMarker(marker)) return count;
+    const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
+    return bulletKey && manualEdits[bulletKey] ? count : count + 1;
+  }, 0);
+}
+
+function hasScanWorkspaceCurrentDraftChanges() {
+  return (
+    getEffectiveAcceptedCompareCandidateIds().length > 0 ||
+    Object.keys(getScanWorkspaceManualBulletEdits()).length > 0
+  );
+}
+
 function getScanWorkspaceDraftPreviewSignature(selectedPatchCandidateIds = getEffectiveAcceptedCompareCandidateIds()) {
   const normalizedIds = Array.from(
     new Set(
@@ -996,7 +1041,10 @@ function getScanWorkspaceDraftPreviewSignature(selectedPatchCandidateIds = getEf
   });
 }
 
-function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []) {
+function buildScanWorkspaceDocumentPreviewRequest(
+  selectedPatchCandidateIds = [],
+  { manualBulletEdits = getScanWorkspaceManualBulletEdits() } = {}
+) {
   const context = getScanWorkspaceContext();
   if (!context || !context.tailoringJsonPath || !context.resumeName) {
     return null;
@@ -1012,7 +1060,9 @@ function buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds = []
           .filter(Boolean)
       )
     ),
-    manual_bullet_edits: getScanWorkspaceManualBulletEdits(),
+    manual_bullet_edits: manualBulletEdits && typeof manualBulletEdits === "object"
+      ? manualBulletEdits
+      : {},
   };
 }
 
@@ -1051,8 +1101,8 @@ function setScanWorkspaceScoreLoading(isLoading) {
   }
 }
 
-async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = []) {
-  const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds);
+async function requestScanWorkspaceDocumentPreview(selectedPatchCandidateIds = [], options = {}) {
+  const requestBody = buildScanWorkspaceDocumentPreviewRequest(selectedPatchCandidateIds, options);
 
   if (!requestBody) {
     return {
@@ -1165,6 +1215,7 @@ async function refreshScanWorkspaceScorePreview() {
     response?.score_preview && typeof response.score_preview === "object"
       ? response.score_preview
       : response || null;
+  applyScanWorkspaceDraftFragments(response?.draft_fragments || null);
 
   const scorePreview = scanWorkspacePreviewState.scorePreviewPayload || {};
   const projectedScore =
@@ -1566,6 +1617,112 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     scanWorkspacePersistenceState.isSaving = false;
     renderScanWorkspacePersistenceStatus();
   }
+}
+
+function getScanWorkspaceExportFilename(response, fallbackName) {
+  const disposition = String(response?.headers?.get?.("Content-Disposition") || "").trim();
+  const filenameMatch = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)"?/i);
+  if (!filenameMatch) return fallbackName;
+
+  try {
+    return decodeURIComponent(filenameMatch[1]);
+  } catch {
+    return filenameMatch[1] || fallbackName;
+  }
+}
+
+function downloadScanWorkspaceBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function exportScanWorkspaceDraft(format = "pdf") {
+  const payload = buildScanWorkspacePersistencePayload();
+  if (!payload) {
+    scanWorkspacePersistenceState.lastError =
+      "Workspace-draft export is unavailable for this scan.";
+    renderScanWorkspacePersistenceStatus();
+    return false;
+  }
+
+  const safeFormat = String(format || "").trim().toLowerCase() === "word" ? "word" : "pdf";
+  const currentSignature = getCurrentScanWorkspacePersistenceSignature();
+  const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
+  const isDirty = currentSignature !== savedSignature;
+
+  scanWorkspacePersistenceState.isExporting = true;
+  scanWorkspacePersistenceState.lastError = "";
+  renderScanWorkspacePersistenceStatus();
+
+  try {
+    if (isDirty) {
+      const saved = await saveScanWorkspaceDraftState();
+      if (!saved) return false;
+    }
+
+    const response = await fetch("/planning/export-workspace-draft", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        tailoring_json_path: payload.tailoring_json_path,
+        selected_resume: payload.selected_resume,
+        format: safeFormat,
+      }),
+    });
+
+    if (!response.ok) {
+      let message = `Export failed (${response.status})`;
+      try {
+        const data = await response.json();
+        message = String(data?.detail || data?.error_message || message);
+      } catch {
+        // keep response status message
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const fallbackName = safeFormat === "word"
+      ? "optimized_resume.docx"
+      : "optimized_resume.pdf";
+    downloadScanWorkspaceBlob(blob, getScanWorkspaceExportFilename(response, fallbackName));
+
+    const warningMessage = String(response.headers.get("X-Tailoring-Export-Warning-Message") || "").trim();
+    scanWorkspacePersistenceState.lastError = warningMessage || "";
+    renderScanWorkspacePersistenceStatus();
+    return true;
+  } catch (err) {
+    scanWorkspacePersistenceState.lastError =
+      err instanceof Error ? err.message : "Failed to export optimized draft.";
+    renderScanWorkspacePersistenceStatus();
+    return false;
+  } finally {
+    scanWorkspacePersistenceState.isExporting = false;
+    renderScanWorkspacePersistenceStatus();
+  }
+}
+
+function closeScanWorkspaceExportMenu() {
+  const menu = getScanWorkspaceInput("scanWorkspaceExportMenu");
+  const button = getScanWorkspaceInput("scanWorkspaceExportBtn");
+  if (menu) menu.classList.add("hidden");
+  if (button) button.setAttribute("aria-expanded", "false");
+}
+
+function toggleScanWorkspaceExportMenu() {
+  const menu = getScanWorkspaceInput("scanWorkspaceExportMenu");
+  const button = getScanWorkspaceInput("scanWorkspaceExportBtn");
+  if (!menu || !button || button.disabled) return;
+
+  const isOpen = !menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", isOpen);
+  button.setAttribute("aria-expanded", isOpen ? "false" : "true");
 }
 
 function closeScanWorkspaceSuggestionPopover() {
@@ -2111,6 +2268,49 @@ function getScanWorkspacePreviewMarkerTextNode(targetRow) {
   return targetRow?.querySelector?.(".scan-workspace-preview-line-text") || null;
 }
 
+function applyScanWorkspaceDraftFragments(fragmentsPayload) {
+  const rows = Array.isArray(fragmentsPayload?.changed_bullets)
+    ? fragmentsPayload.changed_bullets
+    : [];
+  const byBulletKey = {};
+
+  rows.forEach((fragment) => {
+    const bulletKey = String(fragment?.bullet_key || fragment?.bulletKey || "").trim();
+    const currentText = String(
+      fragment?.current_text || fragment?.patch_text || fragment?.text || ""
+    ).trim();
+    if (!bulletKey || !currentText) return;
+    byBulletKey[bulletKey] = {
+      ...fragment,
+      bullet_key: bulletKey,
+      current_text: currentText,
+    };
+  });
+
+  scanWorkspacePreviewState.draftFragmentsPayload = fragmentsPayload || null;
+  scanWorkspacePreviewState.draftFragmentsByBulletKey = byBulletKey;
+
+  if (!Object.keys(byBulletKey).length) return;
+
+  scanWorkspaceAnnotationState.markers.forEach((marker) => {
+    const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
+    const fragment = bulletKey ? byBulletKey[bulletKey] : null;
+    if (!fragment) return;
+
+    const targetRow = getScanWorkspacePreviewMarkerTargetById(marker.id);
+    const textNode = getScanWorkspacePreviewMarkerTextNode(targetRow);
+    const nextText = String(fragment.current_text || "").trim();
+    if (!targetRow || !textNode || !nextText) return;
+
+    if (textNode.textContent !== nextText) {
+      textNode.textContent = nextText;
+      targetRow.classList.remove("is-scan-preview-fragment-updated");
+      void targetRow.offsetWidth;
+      targetRow.classList.add("is-scan-preview-fragment-updated");
+    }
+  });
+}
+
 function syncScanWorkspacePreviewMarkerContent(targetRow, marker) {
   if (!targetRow) return;
 
@@ -2121,7 +2321,14 @@ function syncScanWorkspacePreviewMarkerContent(targetRow, marker) {
   const originalText = String(marker?.originalText || "").trim();
   const suggestedText = String(marker?.suggestedText || "").trim();
   const manualText = getScanWorkspaceManualTextForMarker(marker);
-  const nextText = manualText || (decision === "accepted" ? suggestedText : originalText);
+  const bulletKey = getScanWorkspaceMarkerBulletKey(marker);
+  const fragmentText = String(
+    scanWorkspacePreviewState.draftFragmentsByBulletKey?.[bulletKey]?.current_text || ""
+  ).trim();
+  const nextText =
+    fragmentText ||
+    manualText ||
+    (decision === "accepted" ? suggestedText : originalText);
 
   if (!nextText) return;
   if (textNode.textContent !== nextText) {
@@ -2755,12 +2962,29 @@ function bindScanWorkspaceAnnotationShell() {
 function buildScanWorkspaceCompareSummaryHtml() {
   const counts = getScanWorkspaceAnnotationDecisionCounts();
   const linkedAcceptedIds = getEffectiveAcceptedCompareCandidateIds();
+  const manualEditCount = Object.keys(getScanWorkspaceManualBulletEdits()).length;
+  const unresolvedGuidanceCount = getScanWorkspaceUnresolvedGuidanceCount();
+  const scorePreview = scanWorkspacePreviewState.scorePreviewPayload || {};
+  const deltaPoints = Number(scorePreview?.delta_points);
+  const changedBulletCount = Number(
+    scorePreview?.changed_bullet_keys?.length ||
+    scanWorkspacePreviewState.draftFragmentsPayload?.changed_bullet_keys?.length ||
+    scanWorkspaceCompareState.afterPayload?.workspace_patch_count ||
+    0
+  );
 
   const cards = [
     { label: "Accepted", value: String(counts.accepted) },
+    { label: "Manual edits", value: String(manualEditCount) },
     { label: "Rejected", value: String(counts.rejected) },
-    { label: "Pending", value: String(counts.pending) },
-    { label: "Linked compare ids", value: String(linkedAcceptedIds.length) },
+    { label: "Unresolved", value: String(unresolvedGuidanceCount) },
+    {
+      label: "Score delta",
+      value: Number.isFinite(deltaPoints) && deltaPoints !== 0
+        ? `${deltaPoints > 0 ? "+" : ""}${Math.round(deltaPoints)}`
+        : "0",
+    },
+    { label: "Changed bullets", value: String(changedBulletCount || linkedAcceptedIds.length + manualEditCount) },
   ];
 
   return cards
@@ -2786,12 +3010,13 @@ function renderScanWorkspaceCompareShell() {
   if (!summary || !status || !beforeMeta || !afterMeta || !beforePane || !afterPane) return;
 
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
+  const hasDraftChanges = hasScanWorkspaceCurrentDraftChanges();
   summary.innerHTML = buildScanWorkspaceCompareSummaryHtml();
 
   status.textContent = scanWorkspaceCompareState.isLoading
     ? "Refreshing compare surfaces..."
-    : acceptedIds.length
-      ? `Comparing the baseline draft against ${acceptedIds.length} accepted linked suggestion(s).`
+    : hasDraftChanges
+      ? "Comparing the baseline draft against the current accepted and manual draft state."
       : "Compare the baseline draft against the current accepted AI decision set.";
 
   beforeMeta.textContent = scanWorkspaceCompareState.isLoading
@@ -2807,11 +3032,11 @@ function renderScanWorkspaceCompareShell() {
     }
   );
 
-  if (!acceptedIds.length) {
-    afterMeta.textContent = "Accept at least one linked suggestion to generate the after preview.";
+  if (!hasDraftChanges) {
+    afterMeta.textContent = "Accept a suggestion or save a manual edit to generate the after preview.";
     afterPane.innerHTML = `
       <div class="tailoring-empty-state">
-        Accept at least one linked suggestion to generate the after preview.
+        Accept a suggestion or save a manual edit to generate the after preview.
       </div>
     `;
     return;
@@ -2819,14 +3044,14 @@ function renderScanWorkspaceCompareShell() {
 
   afterMeta.textContent = scanWorkspaceCompareState.isLoading
     ? "Loading accepted decision preview..."
-    : `${acceptedIds.length} linked accepted suggestion(s) applied to the after preview.`;
+    : "Current accepted and manual draft state applied to the after preview.";
 
   afterPane.innerHTML = renderScanWorkspaceDocumentMirrorFromPayload(
     scanWorkspaceCompareState.afterPayload,
     {
       isLoading: scanWorkspaceCompareState.isLoading,
       emptyMessage: "After compare preview is not available for this scan.",
-      noteText: `Reconstructed draft preview using ${acceptedIds.length} accepted linked suggestion(s).`,
+      noteText: "Reconstructed draft preview using current accepted replacements and manual edits.",
     }
   );
 }
@@ -2834,12 +3059,13 @@ function renderScanWorkspaceCompareShell() {
 async function ensureScanWorkspaceCompareLoaded({ force = false } = {}) {
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const acceptedSignature = getScanWorkspaceDraftPreviewSignature(acceptedIds);
+  const hasDraftChanges = hasScanWorkspaceCurrentDraftChanges();
 
   if (
     !force &&
     scanWorkspaceCompareState.beforePayload &&
     scanWorkspaceCompareState.acceptedSignature === acceptedSignature &&
-    (acceptedIds.length === 0 || scanWorkspaceCompareState.afterPayload)
+    (!hasDraftChanges || scanWorkspaceCompareState.afterPayload)
   ) {
     renderScanWorkspaceCompareShell();
     return;
@@ -2852,8 +3078,8 @@ async function ensureScanWorkspaceCompareLoaded({ force = false } = {}) {
   const requestSeq = ++scanWorkspaceCompareState.requestSeq;
 
   const [beforePayload, afterPayload] = await Promise.all([
-    requestScanWorkspaceDocumentPreview([]),
-    acceptedIds.length
+    requestScanWorkspaceDocumentPreview([], { manualBulletEdits: {} }),
+    hasDraftChanges
       ? requestScanWorkspaceDocumentPreview(acceptedIds)
       : Promise.resolve(null),
   ]);
@@ -2893,6 +3119,32 @@ function bindScanWorkspacePersistenceControls() {
     saveBtn.dataset.bound = "true";
     saveBtn.addEventListener("click", async () => {
       await saveScanWorkspaceDraftState();
+    });
+  }
+
+  const exportBtn = getScanWorkspaceInput("scanWorkspaceExportBtn");
+  if (exportBtn && exportBtn.dataset.bound !== "true") {
+    exportBtn.dataset.bound = "true";
+    exportBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleScanWorkspaceExportMenu();
+    });
+  }
+
+  const exportMenu = getScanWorkspaceInput("scanWorkspaceExportMenu");
+  if (exportMenu && exportMenu.dataset.bound !== "true") {
+    exportMenu.dataset.bound = "true";
+    exportMenu.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      const option = event.target instanceof Element
+        ? event.target.closest("[data-scan-export-format]")
+        : null;
+      if (!option) return;
+
+      const format = String(option.dataset.scanExportFormat || "pdf").trim();
+      closeScanWorkspaceExportMenu();
+      await exportScanWorkspaceDraft(format);
     });
   }
 
@@ -2942,10 +3194,19 @@ function bindScanWorkspaceGlobalShortcuts() {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       closeScanWorkspaceSuggestionPopover();
+      closeScanWorkspaceExportMenu();
     }
   });
 
   document.addEventListener("click", (event) => {
+    const exportMenu = getScanWorkspaceInput("scanWorkspaceExportMenu");
+    const exportWrap =
+      event.target instanceof Element &&
+      event.target.closest(".scan-workspace-export-menu-wrap");
+    if (exportMenu && !exportMenu.classList.contains("hidden") && !exportWrap) {
+      closeScanWorkspaceExportMenu();
+    }
+
     const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
     if (!popover || popover.classList.contains("hidden")) return;
 

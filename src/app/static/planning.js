@@ -9230,6 +9230,8 @@ function normalizeScanWorkspaceContractIssue(issue) {
     required_count: issue?.required_count,
     coverage_label: String(issue?.coverage_label || "").trim(),
     matched_count_label: String(issue?.matched_count_label || "").trim(),
+    jd_context_anchors: Array.isArray(issue?.jd_context_anchors) ? issue.jd_context_anchors : [],
+    jd_context_label: String(issue?.jd_context_label || "").trim(),
     has_ai_suggestion: issue?.has_ai_suggestion === true,
     linked_candidate_ids: Array.isArray(issue?.linked_candidate_ids) ? issue.linked_candidate_ids : [],
     best_candidate_id: String(issue?.best_candidate_id || "").trim(),
@@ -9550,14 +9552,29 @@ function renderScanWorkspaceTaxonomySummary(panel) {
 
 function renderScanWorkspaceTaxonomyGroup(group) {
   const items = Array.isArray(group.items) ? group.items : [];
+  const weight = items.reduce((maxWeight, item) => {
+    const value = Number(item?.score_priority_weight || 0);
+    return Number.isFinite(value) ? Math.max(maxWeight, value) : maxWeight;
+  }, 0);
+  const weightLabel = weight > 0 ? `Weight ${Math.round(weight * 100)}%` : "";
 
   return `
     <section class="scan-workspace-taxonomy-group">
       <div class="scan-workspace-taxonomy-group-header">
-        <div>
+        <div class="scan-workspace-taxonomy-group-heading">
           <div class="scan-workspace-taxonomy-group-title">
             ${escapeHtml(group.title || "Scan items")}
           </div>
+
+          ${
+            weightLabel
+              ? `
+                <span class="scan-workspace-taxonomy-group-weight">
+                  ${escapeHtml(weightLabel)}
+                </span>
+              `
+              : ""
+          }
 
           ${
             group.summary
@@ -9627,6 +9644,16 @@ function getScanWorkspaceIssueSignals(item) {
   return Array.from(new Set(signals)).slice(0, 3);
 }
 
+function getScanWorkspaceIssueJdContext(item, { full = false } = {}) {
+  const anchors = Array.isArray(item?.jd_context_anchors) ? item.jd_context_anchors : [];
+  const anchorText = String(anchors[0]?.text || "").trim();
+  const directText = String(item?.jd_context_label || "").trim();
+  const text = anchorText || directText;
+  if (!text) return "";
+  if (full) return text;
+  return text.length > 140 ? `${text.slice(0, 137)}...` : text;
+}
+
 function getScanWorkspaceIssueTitle(item, index) {
   const signals = getScanWorkspaceIssueSignals(item);
   const directTitle = String(
@@ -9670,6 +9697,7 @@ function getScanWorkspaceIssueMetaForItem(item, bucket) {
   if (rowActionType === "manual_guidance") return "Manual edit";
   if (rowActionType === "guidance" && item?.has_ai_suggestion === true) return "AI guidance";
   if (rowActionType === "matched" && isDeterministicCheckGroup) return "Check";
+  if (rowActionType === "matched" && groupId === "skills") return "";
   if (rowActionType === "matched") return "Backed";
   if (rowActionType === "guidance") return "Manual edit";
   if (bucket === "matched") return isDeterministicCheckGroup ? "Check" : "Backed";
@@ -9765,38 +9793,8 @@ function getScanWorkspaceIssueRightLabel(item, bucket) {
 }
 
 function getScanWorkspaceIssueScoreTitle(item) {
-  const originalScore = coerceScanWorkspaceScorePoints(item?.original_final_score);
-  const projectedScore = coerceScanWorkspaceScorePoints(item?.projected_final_score);
-  const evidenceAnchors = Array.isArray(item?.evidence_anchors)
-    ? item.evidence_anchors
-    : [];
-  const dimensionDeltas = item?.projected_dimension_deltas && typeof item.projected_dimension_deltas === "object"
-    ? item.projected_dimension_deltas
-    : {};
-  const dimensionLabels = Object.entries(dimensionDeltas)
-    .map(([key, value]) => {
-      const points = coerceScanWorkspaceScorePoints(value);
-      if (points === null || points === 0) return "";
-      return `${humanizeUnderscoreLabel(key)} ${points > 0 ? "+" : ""}${points}`;
-    })
-    .filter(Boolean)
-    .slice(0, 3);
-
-  const parts = [];
-  if (item?.score_priority_label) {
-    const weight = Number(item?.score_priority_weight || 0);
-    const weightLabel = weight > 0 ? `, scorer weight ${Math.round(weight * 100)}%` : "";
-    parts.push(`Priority: ${item.score_priority_label}${weightLabel}`);
-  }
-  if (originalScore !== null) parts.push(`Original score ${originalScore}`);
-  if (projectedScore !== null) parts.push(`Projected score ${projectedScore}`);
-  if (dimensionLabels.length) parts.push(`Impact: ${dimensionLabels.join(", ")}`);
-  if (evidenceAnchors.length) {
-    const anchorText = String(evidenceAnchors[0]?.text || "").trim();
-    if (anchorText) parts.push(`Evidence: ${anchorText}`);
-  }
-
-  return parts.join(" · ");
+  const jdContext = getScanWorkspaceIssueJdContext(item, { full: true });
+  return jdContext ? `JD: ${jdContext}` : "";
 }
 
 function getScanWorkspaceIssueToneClass(bucket) {
@@ -9841,6 +9839,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const isActive = isAnchorable && candidateId === activeCandidateId;
           const title = getScanWorkspaceIssueTitle(item, index);
           const signals = getScanWorkspaceIssueSignals(item);
+          const jdContext = getScanWorkspaceIssueJdContext(item);
           const meta = getScanWorkspaceIssueMetaForItem(item, bucket);
           const countLabel = getScanWorkspaceIssueRightLabel(item, bucket);
           const toneClass = getScanWorkspaceIssueToneClassForItem(item, bucket);
@@ -9874,6 +9873,16 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                     `
                     : ""
                 }
+
+                ${
+                  jdContext
+                    ? `
+                      <span class="scan-workspace-issue-jd-context">
+                        JD: ${escapeHtml(jdContext)}
+                      </span>
+                    `
+                    : ""
+                }
               </span>
 
               <span class="scan-workspace-issue-right">
@@ -9883,9 +9892,15 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                     : `<span class="scan-workspace-issue-flag">⚑</span>`
                 }
 
-                <span class="scan-workspace-issue-meta">
-                  ${escapeHtml(meta)}
-                </span>
+                ${
+                  meta
+                    ? `
+                      <span class="scan-workspace-issue-meta">
+                        ${escapeHtml(meta)}
+                      </span>
+                    `
+                    : ""
+                }
 
                 <span class="scan-workspace-issue-count ${isScoreBubble ? "scan-workspace-issue-count--score" : ""} ${isScoreBubble && scoreImpact > 0 ? "is-positive" : ""} ${isScoreBubble && scoreImpact < 0 ? "is-negative" : ""}">
                   ${escapeHtml(countLabel)}

@@ -1269,6 +1269,17 @@
   white-space: nowrap;
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-jd-context {
+  color: #dbe7ff;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.25;
+  opacity: 0.78;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #scanWorkspaceInteractiveSummary .scan-workspace-issue-right {
   display: inline-flex;
   align-items: center;
@@ -1422,6 +1433,14 @@
   padding: 0 2px;
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
 #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-title {
   color: #eef4ff;
   font-size: 12px;
@@ -1429,7 +1448,23 @@
   line-height: 1.25;
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-weight {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  padding: 0 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(120, 166, 255, 0.42);
+  background: rgba(120, 166, 255, 0.12);
+  color: #dbe7ff;
+  font-size: 9px;
+  font-weight: 850;
+  line-height: 1;
+}
+
 #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-summary {
+  flex-basis: 100%;
   color: var(--muted);
   font-size: 10px;
   font-weight: 650;

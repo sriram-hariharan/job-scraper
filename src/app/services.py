@@ -1954,6 +1954,99 @@ def _scan_issue_extract_summary_terms(summary: Dict[str, Any] | None, keys: List
     return _scan_issue_unique_display_labels(values)
 
 
+def _scan_jd_text_from_record(record: Dict[str, Any] | None = None) -> str:
+    if not isinstance(record, dict):
+        return ""
+
+    values: List[Any] = []
+    for key in (
+        "retrieval_text",
+        "description",
+        "job_description",
+        "raw_description",
+        "preview",
+        "requirements",
+        "responsibilities",
+        "qualifications",
+    ):
+        raw = record.get(key)
+        if isinstance(raw, list):
+            values.extend(raw)
+        elif isinstance(raw, dict):
+            values.extend(raw.values())
+        elif raw:
+            values.append(raw)
+
+    return "\n".join(_clean_text(value) for value in values if _clean_text(value)).strip()
+
+
+def _scan_jd_context_chunk_is_metadata(chunk: str) -> bool:
+    text = _clean_text(chunk)
+    lower = text.lower()
+    if not text:
+        return True
+
+    metadata_labels = re.findall(
+        r"\b(?:company|title|location|source|role family|seniority|job id|posted|salary|employment type)\s*:",
+        lower,
+    )
+    if len(metadata_labels) >= 2:
+        return True
+
+    if re.match(
+        r"(?i)^(?:company|title|location|source|role family|seniority|job id|posted|salary|employment type)\s*:",
+        text,
+    ):
+        return True
+
+    if re.match(
+        r"(?i)^[A-Z][A-Za-z .'-]+,\s*[A-Z][A-Za-z .'-]+,\s*(?:United States|USA)\b",
+        text,
+    ):
+        return True
+
+    return False
+
+
+def _scan_jd_context_anchors_for_term(
+    term: str,
+    jd_record: Dict[str, Any] | None = None,
+    *,
+    limit: int = 2,
+) -> List[Dict[str, str]]:
+    jd_text = _scan_jd_text_from_record(jd_record)
+    if not jd_text or not _clean_text(term):
+        return []
+
+    chunks = []
+    for chunk in re.split(r"(?<=[.!?])\s+|(?:\s+[•\-]\s+)|(?:\n+)", jd_text):
+        clean_chunk = _clean_text(chunk)
+        if not clean_chunk:
+            continue
+        if _scan_jd_context_chunk_is_metadata(clean_chunk):
+            continue
+        chunks.append(clean_chunk)
+    anchors: List[Dict[str, str]] = []
+    seen = set()
+
+    for chunk in chunks:
+        if not _scan_issue_text_contains_term(chunk.lower(), term):
+            continue
+        key = _normalize_tailoring_workspace_text_key(chunk)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        anchors.append({
+            "type": "job_description",
+            "text": chunk[:260],
+            "term": _scan_issue_display_label(term),
+        })
+        if len(anchors) >= limit:
+            break
+
+    return anchors
+
+
 def _scan_resume_visible_term_keys(resume_evidence: Any) -> set[str]:
     if resume_evidence is None:
         return set()
@@ -2060,11 +2153,13 @@ def _scan_keyword_issue_from_term(
     source: str,
     linked_issues: List[Dict[str, Any]] | None = None,
     evidence_anchors: List[Dict[str, str]] | None = None,
+    jd_context_anchors: List[Dict[str, str]] | None = None,
     fallback_bucket: str = "",
     reason: str = "",
 ) -> Dict[str, Any]:
     linked_issues = list(linked_issues or [])
     evidence_anchors = list(evidence_anchors or [])
+    jd_context_anchors = list(jd_context_anchors or [])
     best_issue = _scan_issue_best_candidate(linked_issues)
     direct_issues = [
         issue for issue in linked_issues
@@ -2179,6 +2274,8 @@ def _scan_keyword_issue_from_term(
             "coverage_label": coverage_label,
             "matched_count_label": coverage_label if row_action_type == "matched" else "",
             "evidence_anchors": evidence_anchors,
+            "jd_context_anchors": jd_context_anchors,
+            "jd_context_label": _clean_text(jd_context_anchors[0].get("text")) if jd_context_anchors else "",
             "has_ai_suggestion": bool(linked_candidate_ids),
             "linked_candidate_ids": list(dict.fromkeys(linked_candidate_ids)),
             "best_candidate_id": best_candidate_id,
@@ -2208,6 +2305,7 @@ def _scan_keyword_rows_from_replacement_issues(
     *,
     resume_evidence: Any = None,
     tailoring_summary: Dict[str, Any] | None = None,
+    jd_record: Dict[str, Any] | None = None,
 ) -> List[Dict[str, Any]]:
     resume_term_keys = _scan_resume_visible_term_keys(resume_evidence)
     matched_terms = _scan_issue_extract_summary_terms(
@@ -2266,6 +2364,10 @@ def _scan_keyword_rows_from_replacement_issues(
                 evidence_anchors=_scan_resume_evidence_anchors_for_term(
                     display_term,
                     resume_evidence,
+                ),
+                jd_context_anchors=_scan_jd_context_anchors_for_term(
+                    display_term,
+                    jd_record,
                 ),
                 fallback_bucket="missing",
                 reason="Job-specific skill signal derived from scorer and replacement evidence.",
@@ -3078,6 +3180,7 @@ def _build_tailoring_scan_issue_contract(
     directional_guidance: List[Dict[str, Any]],
     resume_evidence: Any = None,
     tailoring_summary: Dict[str, Any] | None = None,
+    jd_record: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     replacement_issues: List[Dict[str, Any]] = []
 
@@ -3147,6 +3250,7 @@ def _build_tailoring_scan_issue_contract(
             replacement_issues,
             resume_evidence=resume_evidence,
             tailoring_summary=tailoring_summary,
+            jd_record=jd_record,
         )
         + _scan_keyword_rows_from_non_skill_replacement_issues(replacement_issues)
         + _scan_keyword_rows_from_generic_issues(deterministic_issues)
@@ -5279,6 +5383,7 @@ def tailoring_scan_preload_payload(
         directional_guidance=directional_guidance,
         resume_evidence=scan_resume_evidence,
         tailoring_summary=dict(payload_data.get("summary", {}) or {}),
+        jd_record=selected_jd_record,
     )
     scan_score_snapshot = _build_tailoring_scan_score_snapshot(
         selection=selection,

@@ -33,6 +33,12 @@ from src.config.settings import (
     SCHEDULER_RUN_HISTORY_PATH,
 )
 from src.matching.dimensions import get_dimension_weights
+from src.matching.job_adapter import build_job_evidence
+from src.matching.models import MatchPrefilterResult
+from src.matching.prefilter import run_prefilter
+from src.matching.scorer import score_resume_job_match
+from src.resume.evidence_builder import build_resume_evidence
+from src.resume.models import ResumeDocument, ResumeExperienceEntry
 from src.storage.application_actions.store import (
     application_action_db_row,
     insert_application_action_row_to_postgres,
@@ -64,7 +70,10 @@ from src.storage.saved_scans.store import (
     saved_scan_db_row,
 )
 from src.storage.saved_scans.read_postgres import (
+    delete_saved_scan_postgres_payload,
+    get_saved_scan_postgres_payload,
     get_saved_scans_postgres_payload,
+    save_saved_scan_draft_postgres_payload,
 )
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
@@ -383,6 +392,476 @@ def _dual_write_saved_scan_postgres(row: Dict[str, Any]) -> Dict[str, Any]:
         }
 
 
+def _new_scan_resume_document(
+    *,
+    resume_name: str,
+    resume_file_path: str = "",
+    resume_text: str = "",
+) -> ResumeDocument:
+    safe_name = _clean_text(resume_name) or "New scan resume"
+    raw_text = _clean_text(resume_text)
+    if not raw_text and resume_file_path:
+        try:
+            resume_path = Path(resume_file_path)
+            suffix = resume_path.suffix.lower()
+            if suffix == ".pdf":
+                raw_text = _extract_scan_upload_text_from_pdf(resume_path)
+            elif suffix == ".docx":
+                raw_text = _extract_scan_upload_text_from_docx(resume_path)
+            elif suffix == ".txt":
+                raw_text = resume_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            raw_text = ""
+
+    return ResumeDocument(
+        resume_id=safe_name,
+        resume_name=safe_name,
+        path=_clean_text(resume_file_path),
+        raw_text=raw_text,
+        normalized_text=re.sub(r"\s+", " ", raw_text).strip(),
+    )
+
+
+def _build_new_scan_document_preview(
+    *,
+    resume_text: str,
+    personal_details: Dict[str, str] | None = None,
+) -> Dict[str, Any]:
+    safe_text = _clean_text(resume_text)
+    if not safe_text:
+        return {
+            "ok": False,
+            "pages": [],
+            "error_message": "Resume text could not be reconstructed for preview.",
+        }
+
+    details = _normalize_workspace_personal_details(personal_details or {})
+    raw_lines = [line.rstrip() for line in safe_text.splitlines()]
+    lines = [line for line in raw_lines if _clean_text(line)]
+    if not lines:
+        lines = [safe_text]
+
+    rows: List[Dict[str, Any]] = []
+    seen_name = False
+    seen_contact = False
+    section_headings = {
+        "summary",
+        "professional summary",
+        "experience",
+        "professional experience",
+        "work experience",
+        "projects",
+        "skills",
+        "technical skills",
+        "education",
+        "certifications",
+    }
+
+    for index, line in enumerate(lines[:90]):
+        clean_line = _clean_text(line)
+        lower_line = clean_line.lower().strip(":")
+        is_bullet = bool(re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", line))
+        is_heading = lower_line in section_headings or (
+            clean_line.isupper() and len(clean_line.split()) <= 5 and not is_bullet
+        )
+        presentation_role = ""
+        if not seen_name and index <= 2 and details.get("name") and details["name"].lower() in clean_line.lower():
+            presentation_role = "header_name"
+            seen_name = True
+        elif (
+            not seen_contact
+            and index <= 5
+            and (
+                "@" in clean_line
+                or re.search(r"\d{3}", clean_line)
+                or "linkedin" in clean_line.lower()
+            )
+        ):
+            presentation_role = "header_contact"
+            seen_contact = True
+
+        rows.append(
+            {
+                "text": clean_line,
+                "display_text": clean_line,
+                "is_bullet": is_bullet,
+                "is_heading": is_heading,
+                "is_section_heading": is_heading,
+                "presentation_role": presentation_role,
+                "left_indent_pt": 18 if is_bullet else 0,
+                "gap_before": 8 if is_heading else 4,
+            }
+        )
+
+    return {
+        "ok": True,
+        "source": "new_scan_resume_text",
+        "pages": [
+            {
+                "page_number": 1,
+                "rows": rows,
+            }
+        ],
+    }
+
+
+def _new_scan_job_record(
+    *,
+    company: str,
+    role: str,
+    job_description_text: str,
+    job_url: str = "",
+    job_doc_id: str = "",
+) -> Dict[str, Any]:
+    digest_source = "|".join([
+        _clean_text(company),
+        _clean_text(role),
+        _clean_text(job_description_text),
+        _clean_text(job_url),
+    ])
+    fallback_doc_id = "new_scan_" + hashlib.sha256(digest_source.encode("utf-8")).hexdigest()[:16]
+    return {
+        "doc_id": _clean_text(job_doc_id) or fallback_doc_id,
+        "job_doc_id": _clean_text(job_doc_id) or fallback_doc_id,
+        "company": _clean_text(company),
+        "title": _clean_text(role),
+        "job_title": _clean_text(role),
+        "job_url": _clean_text(job_url),
+        "source": "scan_workspace_new_scan",
+        "preview": _clean_text(job_description_text),
+        "retrieval_text": _clean_text(job_description_text),
+        "description_text": _clean_text(job_description_text),
+    }
+
+
+def _new_scan_tailoring_summary(
+    *,
+    job_evidence: Any,
+    match_result: Any,
+) -> Dict[str, Any]:
+    prefilter = getattr(match_result, "prefilter", None)
+    matched_required = list(getattr(prefilter, "matched_required_terms", []) or [])
+    matched_preferred = list(getattr(prefilter, "matched_preferred_terms", []) or [])
+    matched_any = list(getattr(prefilter, "matched_any_terms", []) or [])
+    missing_required = list(getattr(prefilter, "missing_requirements", []) or [])
+
+    required_terms = list(getattr(job_evidence, "required_skills", []) or [])
+    preferred_terms = list(getattr(job_evidence, "preferred_skills", []) or [])
+    all_terms = _unique_scan_terms(
+        list(getattr(job_evidence, "all_skills", []) or [])
+        + required_terms
+        + preferred_terms
+    )
+    if not missing_required:
+        matched_keys = {
+            _scan_issue_canonical_term(term)
+            for term in matched_required + matched_preferred + matched_any
+        }
+        missing_required = [
+            term for term in (required_terms or all_terms)
+            if _scan_issue_canonical_term(term) not in matched_keys
+        ]
+    matched_terms = _unique_scan_terms(matched_required + matched_preferred + matched_any)
+
+    return {
+        "target_job_title": _clean_text(getattr(job_evidence, "title", "")),
+        "job_title": _clean_text(getattr(job_evidence, "title", "")),
+        "matched_required": matched_required,
+        "matched_preferred": matched_preferred,
+        "matched_terms": matched_terms,
+        "missing_required": missing_required,
+        "missing_preferred": [
+            term for term in preferred_terms
+            if _scan_issue_canonical_term(term) not in {
+                _scan_issue_canonical_term(item)
+                for item in matched_preferred + matched_any + missing_required
+            }
+        ],
+        "required_terms": required_terms,
+        "preferred_terms": preferred_terms,
+        "all_terms": all_terms,
+        "missing_terms": missing_required,
+        "match_bucket": _clean_text(getattr(match_result, "match_bucket", "")),
+    }
+
+
+def _unique_scan_terms(values: List[Any]) -> List[str]:
+    terms: List[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = _clean_text(value)
+        key = _scan_issue_canonical_term(text)
+        if not text or not key or key in seen:
+            continue
+        seen.add(key)
+        terms.append(text)
+    return terms
+
+
+def _enrich_new_scan_resume_evidence_for_scoring(resume_evidence: Any) -> Any:
+    if resume_evidence is None:
+        return resume_evidence
+
+    aggregate_skills = _unique_scan_terms(
+        list(getattr(resume_evidence, "skills", []) or [])
+        + list(getattr(resume_evidence, "tools", []) or [])
+        + list(getattr(resume_evidence, "tooling_signals", []) or [])
+    )
+    if not aggregate_skills:
+        return resume_evidence
+
+    entries = list(getattr(resume_evidence, "experience_entries", []) or [])
+    if not entries:
+        entries = [
+            ResumeExperienceEntry(
+                entry_id="new_scan_resume_text",
+                entry_index=0,
+                bullets=list(getattr(resume_evidence, "quantified_bullets", []) or []),
+            )
+        ]
+        resume_evidence.experience_entries = entries
+
+    first_entry = entries[0]
+    first_entry.normalized_skills = _unique_scan_terms(
+        list(getattr(first_entry, "normalized_skills", []) or []) + aggregate_skills
+    )
+    return resume_evidence
+
+
+def _relaxed_new_scan_prefilter(resume_evidence: Any, job_evidence: Any) -> Any:
+    original = run_prefilter(resume_evidence, job_evidence)
+    if getattr(original, "passed", False):
+        return original
+
+    resume_terms = {
+        _scan_issue_canonical_term(term)
+        for term in (
+            list(getattr(resume_evidence, "skills", []) or [])
+            + list(getattr(resume_evidence, "tools", []) or [])
+            + list(getattr(resume_evidence, "tooling_signals", []) or [])
+            + [
+                skill
+                for entry in list(getattr(resume_evidence, "experience_entries", []) or [])
+                for skill in list(getattr(entry, "normalized_skills", []) or [])
+            ]
+        )
+        if _scan_issue_canonical_term(term)
+    }
+    required_terms = _unique_scan_terms(list(getattr(job_evidence, "required_skills", []) or []))
+    preferred_terms = _unique_scan_terms(list(getattr(job_evidence, "preferred_skills", []) or []))
+    all_terms = _unique_scan_terms(
+        list(getattr(job_evidence, "all_skills", []) or [])
+        + required_terms
+        + preferred_terms
+    )
+
+    matched_required = [
+        term for term in required_terms
+        if _scan_issue_canonical_term(term) in resume_terms
+    ]
+    matched_preferred = [
+        term for term in preferred_terms
+        if _scan_issue_canonical_term(term) in resume_terms
+    ]
+    matched_any = [
+        term for term in all_terms
+        if _scan_issue_canonical_term(term) in resume_terms
+    ]
+    title_score = float(getattr(original, "best_title_score", 0.0) or 0.0)
+    has_meaningful_overlap = (
+        len(matched_required) >= 1
+        or len(matched_any) >= 2
+        or title_score >= 0.25
+    )
+    if not has_meaningful_overlap:
+        return original
+
+    return MatchPrefilterResult(
+        passed=True,
+        reasons=list(getattr(original, "reasons", []) or []) + [
+            "New Scan relaxed deterministic prefilter because extracted resume/JD evidence has meaningful overlap."
+        ],
+        matched_terms=_unique_scan_terms(
+            list(getattr(original, "matched_terms", []) or [])
+            + matched_required
+            + matched_preferred
+            + matched_any
+        ),
+        missing_requirements=[
+            term for term in required_terms
+            if _scan_issue_canonical_term(term) not in {
+                _scan_issue_canonical_term(item) for item in matched_required
+            }
+        ],
+        best_title_score=title_score,
+        best_title=_clean_text(getattr(original, "best_title", "")),
+        matched_required_terms=matched_required,
+        matched_preferred_terms=matched_preferred,
+        matched_any_terms=matched_any,
+        matched_required_count=len(matched_required),
+        matched_preferred_count=len(matched_preferred),
+        matched_any_count=len(matched_any),
+    )
+
+
+def _build_new_scan_review_payload(
+    *,
+    scan_id: str,
+    scan_timestamp: str,
+    resume_name: str,
+    resume_file_path: str,
+    resume_text: str,
+    job_record: Dict[str, Any],
+) -> Dict[str, Any]:
+    from src.tailoring.llm import tailoring_llm_model_config_payload
+
+    resume_document = _new_scan_resume_document(
+        resume_name=resume_name,
+        resume_file_path=resume_file_path,
+        resume_text=resume_text,
+    )
+    resume_evidence = _enrich_new_scan_resume_evidence_for_scoring(
+        build_resume_evidence(resume_document)
+    )
+    job_evidence = build_job_evidence(job_record)
+    prefilter_result = _relaxed_new_scan_prefilter(resume_evidence, job_evidence)
+    match_result = score_resume_job_match(
+        resume_evidence,
+        job_evidence,
+        prefilter=prefilter_result,
+    )
+    score = max(0, min(100, round(float(getattr(match_result, "final_score", 0.0) or 0.0) * 100)))
+    tailoring_summary = _new_scan_tailoring_summary(
+        job_evidence=job_evidence,
+        match_result=match_result,
+    )
+    personal_details = _extract_resume_personal_details(resume_evidence)
+    if not personal_details.get("linkedin") and resume_file_path:
+        try:
+            for link_item in _workspace_export_extract_pdf_header_link_items(Path(resume_file_path)):
+                label = _clean_text(link_item.get("label")).lower()
+                uri = _clean_text(link_item.get("uri"))
+                if uri and ("linkedin" in label or "linkedin.com" in uri.lower()):
+                    personal_details["linkedin"] = uri
+                    break
+        except Exception:
+            pass
+    scan_issue_contract = _build_tailoring_scan_issue_contract(
+        trusted_ready=[],
+        trusted_optional=[],
+        ai_optimize_optional=[],
+        directional_guidance=[],
+        resume_evidence=resume_evidence,
+        tailoring_summary=tailoring_summary,
+        jd_record=job_record,
+    )
+    counts = dict(scan_issue_contract.get("counts", {}) or {})
+    selected_resume = _clean_text(resume_name) or "New scan resume"
+
+    return {
+        "ok": True,
+        "preload_mode": "new_scan",
+        "scan_entry_source": "scan_workspace_new_scan",
+        "job_company": _clean_text(job_record.get("company") or job_record.get("job_company")),
+        "job_title": _clean_text(job_record.get("title") or job_record.get("job_title")),
+        "resume_name": selected_resume,
+        "selected_resume": selected_resume,
+        "selected_jd_record": job_record,
+        "job": job_record,
+        "job_snapshot": job_record,
+        "selection": {
+            "selected_resume": selected_resume,
+            "selected_score": score / 100,
+            "company": _clean_text(job_record.get("company") or job_record.get("job_company")),
+            "title": _clean_text(job_record.get("title") or job_record.get("job_title")),
+        },
+        "score_snapshot": {
+            "original_score": score / 100,
+            "projected_score": score / 100,
+            "projected_delta": 0,
+            "draft_preview_status": "new_scan_ready",
+            "draft_preview_note": "New Scan generated a deterministic match report from the submitted resume and job description.",
+        },
+        "scan_score": {
+            "score": score,
+            "source": "new_scan_match_score",
+            "matched_count": int(counts.get("matched", 0) or 0),
+            "missing_count": int(counts.get("missing", 0) or 0),
+            "ai_count": int(counts.get("ai", 0) or 0),
+            "total_count": int(counts.get("total", 0) or 0),
+            "actionable_count": int(counts.get("actionable", 0) or 0),
+            "label": "Match score",
+        },
+        "scan_session": {
+            "session_id": scan_id,
+            "session_version": 1,
+            "selected_resume": selected_resume,
+            "job_doc_id": _clean_text(job_record.get("job_doc_id") or job_record.get("doc_id")),
+            "created_at": scan_timestamp,
+            "issue_counts": counts,
+        },
+        "score_preview": _build_workspace_score_preview_contract(
+            preview_status="new_scan_ready",
+            preview_note="New Scan scoring is ready.",
+            original_score=score / 100,
+            projected_score=score / 100,
+            projected_delta=0,
+        ),
+        "trusted_suggestions": {
+            "direct_apply_ready": [],
+            "direct_apply_optional": [],
+        },
+        "ai_optimize_suggestions": [],
+        "directional_guidance": [],
+        "lane_counts": {
+            "direct_apply_ready": 0,
+            "direct_apply_optional": 0,
+            "ai_optimize_optional": 0,
+            "direction_only": 0,
+        },
+        "scan_issue_contract": scan_issue_contract,
+        "llm_model_config": tailoring_llm_model_config_payload(),
+        "final_replacement_summary": {},
+        "rewrite_review_summary": {},
+        "rewrite_review_groups": [],
+        "personal_details": {
+            "extracted": personal_details,
+            "saved": _normalize_workspace_personal_details({}),
+            "current": personal_details,
+        },
+        "document_preview": _build_new_scan_document_preview(
+            resume_text=resume_document.raw_text,
+            personal_details=personal_details,
+        ),
+        "draft_status": "new_scan_ready",
+        "has_saved_draft": False,
+        "draft": {
+            "selected_resume": selected_resume,
+            "selected_patch_candidate_ids": [],
+            "rewrite_review_decisions": {},
+            "excluded_scan_issue_ids": [],
+            "personal_details": personal_details,
+            "draft_status": "new_scan_ready",
+        },
+        "new_scan": {
+            "scan_id": scan_id,
+            "scan_timestamp": scan_timestamp,
+            "match_bucket": _clean_text(getattr(match_result, "match_bucket", "")),
+            "dimension_scores": [
+                {
+                    "name": _clean_text(getattr(dimension, "name", "")),
+                    "score": getattr(dimension, "score", None),
+                    "weight": getattr(dimension, "weight", None),
+                    "weighted_score": getattr(dimension, "weighted_score", None),
+                    "reason": _clean_text(getattr(dimension, "reason", "")),
+                    "evidence": list(getattr(dimension, "evidence", []) or []),
+                }
+                for dimension in list(getattr(match_result, "dimension_scores", []) or [])
+            ],
+        },
+    }
+
+
 def create_saved_scan_payload(
     *,
     company: str = "",
@@ -404,9 +883,16 @@ def create_saved_scan_payload(
     safe_job_doc_id = _clean_text(job_doc_id)
     safe_resume_text = _clean_text(resume_text)
     safe_tailoring_json_path = _clean_text(tailoring_json_path)
+    should_write_postgres = bool(str(os.environ.get("DATABASE_URL", "") or "").strip())
 
     if not safe_job_description:
         raise ValueError("Job description is required for a new scan.")
+    if not safe_company:
+        raise ValueError("Company is required for a new scan.")
+    if not safe_role:
+        raise ValueError("Role is required for a new scan.")
+    if not safe_job_url:
+        raise ValueError("Job posting URL is required for a new scan.")
 
     scan_timestamp = datetime.now(timezone.utc).isoformat(timespec="microseconds")
     resume_source = "pasted_text"
@@ -444,11 +930,19 @@ def create_saved_scan_payload(
     else:
         raise ValueError("A saved resume, uploaded file, or pasted resume text is required.")
 
+    job_record = _new_scan_job_record(
+        company=safe_company,
+        role=safe_role,
+        job_description_text=safe_job_description,
+        job_url=safe_job_url,
+        job_doc_id=safe_job_doc_id,
+    )
+
     row = saved_scan_db_row(
         {
             "scan_timestamp": scan_timestamp,
             "scan_source": "scan_workspace_new_scan",
-            "scan_status": "report_pending",
+            "scan_status": "processing",
             "resume_source": resume_source,
             "resume_name": resume_name,
             "resume_filename": resume_filename,
@@ -463,7 +957,7 @@ def create_saved_scan_payload(
             "job_description_text": safe_job_description,
             "match_rate": None,
             "tailoring_json_path": safe_tailoring_json_path,
-            "note": "Scan intake saved. Match report generation is pending.",
+            "note": "Scan processing started.",
             "payload_json": {
                 "version": "saved_scan_intake_v1",
                 "company": safe_company,
@@ -475,12 +969,44 @@ def create_saved_scan_payload(
             },
         }
     )
-    postgres_write = _dual_write_saved_scan_postgres(row)
+
+    review_payload = _build_new_scan_review_payload(
+        scan_id=row["scan_id"],
+        scan_timestamp=scan_timestamp,
+        resume_name=resume_name or resume_filename or "New scan resume",
+        resume_file_path=resume_file_path,
+        resume_text=safe_resume_text,
+        job_record=job_record,
+    )
+    scan_score = int(dict(review_payload.get("scan_score", {}) or {}).get("score", 0) or 0)
+    row = saved_scan_db_row(
+        {
+            **row,
+            "scan_status": "ready",
+            "match_rate": scan_score,
+            "note": "Scan report generated from New Scan.",
+            "payload_json": {
+                "version": "saved_scan_report_v1",
+                "scan_review_payload": review_payload,
+            },
+        }
+    )
+    postgres_write = (
+        _dual_write_saved_scan_postgres(row)
+        if should_write_postgres
+        else {
+            "attempted": False,
+            "ok": False,
+            "skipped": "missing_database_url",
+            "table_name": "saved_scans",
+        }
+    )
 
     return {
         "ok": bool(postgres_write.get("ok", False)),
         "scan_status": row["scan_status"],
         "scan": row,
+        "scan_review_payload": review_payload,
         "postgres_write": postgres_write,
     }
 
@@ -623,6 +1149,87 @@ def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
             "error_type": exc.__class__.__name__,
             "error": str(exc),
         }
+
+
+def saved_scan_report_payload(scan_id: str) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+
+    payload = get_saved_scan_postgres_payload(scan_id=safe_scan_id)
+    row = dict(payload.get("scan", {}) or {})
+    if not row:
+        raise ValueError("Saved scan was not found.")
+
+    report_payload = dict(row.get("payload_json", {}) or {})
+    review_payload = report_payload.get("scan_review_payload")
+    if not isinstance(review_payload, dict):
+        raise ValueError("Saved scan does not contain a restorable report payload.")
+
+    return {
+        "ok": True,
+        "scan": row,
+        "scan_review_payload": review_payload,
+    }
+
+
+def delete_saved_scan_payload(scan_id: str) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+
+    payload = delete_saved_scan_postgres_payload(scan_id=safe_scan_id)
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "scan_id": safe_scan_id,
+    }
+
+
+def save_saved_scan_state_payload(
+    *,
+    scan_id: str,
+    selected_patch_candidate_ids: Any = None,
+    manual_bullet_edits: Any = None,
+    rewrite_review_decisions: Any = None,
+    excluded_scan_issue_ids: Any = None,
+    personal_details: Any = None,
+) -> Dict[str, Any]:
+    safe_scan_id = _clean_text(scan_id)
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+
+    draft = {
+        "selected_resume": "",
+        "selected_patch_candidate_ids": [
+            _clean_text(value)
+            for value in list(selected_patch_candidate_ids or [])
+            if _clean_text(value)
+        ],
+        "manual_bullet_edits": dict(manual_bullet_edits or {})
+        if isinstance(manual_bullet_edits, dict)
+        else {},
+        "rewrite_review_decisions": dict(rewrite_review_decisions or {})
+        if isinstance(rewrite_review_decisions, dict)
+        else {},
+        "excluded_scan_issue_ids": _normalize_workspace_excluded_scan_issue_ids(
+            excluded_scan_issue_ids or []
+        ),
+        "personal_details": _normalize_workspace_personal_details(personal_details or {}),
+        "draft_status": "saved_scan_state",
+        "saved_at": _utc_now(),
+    }
+
+    payload = save_saved_scan_draft_postgres_payload(
+        scan_id=safe_scan_id,
+        draft=draft,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "scan_id": safe_scan_id,
+        "draft": draft,
+        "has_saved_draft": True,
+        "score_preview": {},
+    }
 
 
 def _extract_scan_upload_text_from_pdf(path: Path) -> str:
@@ -3205,6 +3812,14 @@ def _extract_resume_personal_details(resume_evidence: Any) -> Dict[str, str]:
     )
     if linkedin_match:
         details["linkedin"] = linkedin_match.group(0).strip().rstrip(".")
+    else:
+        compact_linkedin_match = re.search(
+            r"\blinkedin\s*[:|-]\s*([A-Za-z0-9_.-]+)",
+            raw_text,
+            flags=re.IGNORECASE,
+        )
+        if compact_linkedin_match:
+            details["linkedin"] = f"linkedin.com/in/{compact_linkedin_match.group(1).strip('/')}"
 
     section_headings = {
         "summary", "experience", "work experience", "professional experience",

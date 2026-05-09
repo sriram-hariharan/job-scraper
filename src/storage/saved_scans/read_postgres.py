@@ -162,6 +162,166 @@ def _run_psql_command(
     return payload
 
 
+def _sql_quote_text(value: Any) -> str:
+    return "'" + str(value or "").replace("'", "''") + "'"
+
+
+def _build_saved_scan_by_id_sql(scan_id: str) -> str:
+    return f"""
+SELECT COALESCE(
+    (
+        SELECT row_to_json(row_data)
+        FROM (
+            SELECT
+                scan_id,
+                scan_timestamp,
+                scan_source,
+                scan_status,
+                resume_source,
+                resume_name,
+                resume_filename,
+                resume_file_path,
+                resume_file_mime_type,
+                resume_size_bytes,
+                job_doc_id,
+                job_url,
+                job_company,
+                job_title,
+                match_rate,
+                tailoring_json_path,
+                note,
+                job_description_text,
+                resume_text,
+                payload_json
+            FROM saved_scans
+            WHERE scan_id = {_sql_quote_text(scan_id)}
+            LIMIT 1
+        ) row_data
+    ),
+    '{{}}'::json
+);
+""".strip()
+
+
+def get_saved_scan_postgres_payload(
+    *,
+    scan_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_scan_id = str(scan_id or "").strip()
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+
+    schema_payload: Dict[str, Any] = {}
+    if ensure_schema:
+        schema_payload = _run_psql_command(
+            sql=saved_scans_schema_sql_text(),
+            database_url=database_url,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            print_only=print_only,
+        )
+
+    query_payload = _run_psql_json_query(
+        sql=_build_saved_scan_by_id_sql(safe_scan_id),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    row = dict(query_payload.get("data", {}) or {})
+    return {
+        "ok": bool(row),
+        "scan": row,
+        "schema_command": schema_payload.get("command", []),
+        "schema_command_text": schema_payload.get("command_text", ""),
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def delete_saved_scan_postgres_payload(
+    *,
+    scan_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_scan_id = str(scan_id or "").strip()
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+
+    sql = f"DELETE FROM saved_scans WHERE scan_id = {_sql_quote_text(safe_scan_id)};"
+    schema_sql = saved_scans_schema_sql_text() + "\n\n" if ensure_schema else ""
+    payload = _run_psql_command(
+        sql=schema_sql + sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    return {
+        "ok": True,
+        "scan_id": safe_scan_id,
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
+def save_saved_scan_draft_postgres_payload(
+    *,
+    scan_id: str,
+    draft: Dict[str, Any],
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_scan_id = str(scan_id or "").strip()
+    if not safe_scan_id:
+        raise ValueError("scan_id is required.")
+    safe_draft = draft if isinstance(draft, dict) else {}
+    draft_json = json.dumps(safe_draft, sort_keys=True).replace("'", "''")
+    sql = f"""
+UPDATE saved_scans
+SET payload_json = jsonb_set(
+        jsonb_set(
+            payload_json,
+            '{{scan_review_payload,draft}}',
+            '{draft_json}'::jsonb,
+            true
+        ),
+        '{{scan_review_payload,personal_details,saved}}',
+        '{json.dumps(safe_draft.get("personal_details", {}), sort_keys=True).replace("'", "''")}'::jsonb,
+        true
+    ),
+    note = 'Saved scan state updated from AI Optimize scan.'
+WHERE scan_id = {_sql_quote_text(safe_scan_id)};
+""".strip()
+    schema_sql = saved_scans_schema_sql_text() + "\n\n" if ensure_schema else ""
+    payload = _run_psql_command(
+        sql=schema_sql + sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    return {
+        "ok": True,
+        "scan_id": safe_scan_id,
+        "draft": safe_draft,
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
 def get_saved_scans_postgres_payload(
     *,
     limit: int = 25,

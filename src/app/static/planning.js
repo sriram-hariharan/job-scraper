@@ -9246,10 +9246,17 @@ function updateScanWorkspaceContextLine(payload = getScanWorkspacePayload()) {
 function updateScanWorkspaceMeta() {
   const meta = qs("scanWorkspaceMeta");
   const context = getScanWorkspaceContext();
+  const payload = getScanWorkspacePayload();
 
   if (!meta) return;
 
-  const displayName = humanizeResumeDisplayName(context?.resumeName || "");
+  const displayName = humanizeResumeDisplayName(
+    context?.resumeName ||
+    payload?.resume_name ||
+    payload?.selected_resume ||
+    payload?.selection?.selected_resume ||
+    ""
+  );
   meta.textContent = displayName || "Preloaded resume";
 }
 
@@ -9314,6 +9321,28 @@ function getScanWorkspaceRawContractIssues(payload = getScanWorkspacePayload()) 
   return Array.isArray(contract?.issues) ? contract.issues : [];
 }
 
+function getScanWorkspaceRequiredSkillWeight(payload, scoringMissingRows = []) {
+  const dimensions = Array.isArray(payload?.new_scan?.dimension_scores)
+    ? payload.new_scan.dimension_scores
+    : [];
+  const requiredDimension = dimensions.find((dimension) => {
+    return String(dimension?.name || "").trim() === "required_skills_alignment";
+  });
+  const dimensionWeight = Number(requiredDimension?.weight);
+  if (Number.isFinite(dimensionWeight) && dimensionWeight > 0) {
+    return Math.max(0.05, Math.min(0.35, dimensionWeight));
+  }
+
+  const rowWeights = scoringMissingRows
+    .map((issue) => Number(issue?.score_priority_weight))
+    .filter((weight) => Number.isFinite(weight) && weight > 0);
+  if (rowWeights.length) {
+    return Math.max(0.05, Math.min(0.35, Math.max(...rowWeights)));
+  }
+
+  return 0.2;
+}
+
 function getScanWorkspaceExclusionAdjustedScore(
   payload = getScanWorkspacePayload(),
   { excludedIssueIds = getScanWorkspaceExcludedIssueIds() } = {}
@@ -9351,6 +9380,17 @@ function getScanWorkspaceExclusionAdjustedScore(
       rowType !== "other_keyword"
     );
   });
+  const scoringSkillRows = issues.filter((issue) => {
+    const groupId = String(issue?.group_id || "").trim();
+    const bucket = String(issue?.bucket || "").trim();
+    const rowType = String(issue?.row_action_type || issue?.scan_issue_type || "").trim();
+    return (
+      groupId === "skills" &&
+      (bucket === "matched" || bucket === "missing") &&
+      rowType !== "predicted_skill" &&
+      rowType !== "other_keyword"
+    );
+  });
 
   const excludedPenaltyRows = scoringMissingRows.filter((issue) => {
     const issueId = String(issue?.issue_id || "").trim();
@@ -9367,16 +9407,25 @@ function getScanWorkspaceExclusionAdjustedScore(
     };
   }
 
-  const remainingGap = Math.max(0, 100 - baseScore);
-  const perRowLift = remainingGap / scoringMissingRows.length;
-  const nextScore = Math.min(100, baseScore + perRowLift * excludedPenaltyRows);
+  const requiredSkillWeight = getScanWorkspaceRequiredSkillWeight(payload, scoringMissingRows);
+  const requiredSkillPoints = requiredSkillWeight * 100;
+  const totalSkillRows = Math.max(scoringSkillRows.length, scoringMissingRows.length, 1);
+  const perRowLift = Math.min(3, (requiredSkillPoints / totalSkillRows) * 0.55);
+  const maxExclusionLift = Math.min(8, requiredSkillPoints * 0.35);
+  const lift = Math.max(
+    0,
+    Math.min(100 - baseScore, maxExclusionLift, perRowLift * excludedPenaltyRows)
+  );
+  const adjustedScore = Math.round(baseScore + lift);
+  const roundedBaseScore = Math.round(baseScore);
+  const delta = Math.max(0, adjustedScore - roundedBaseScore);
 
   return {
-    score: Math.round(nextScore),
-    delta: Math.round(nextScore - baseScore),
+    score: adjustedScore,
+    delta,
     excludedPenaltyRows,
-    source: "excluded_skill_preview",
-    label: `Optimization score after excluding ${excludedPenaltyRows} irrelevant skill${excludedPenaltyRows === 1 ? "" : "s"}`,
+    source: "exclusion_rescore_preview",
+    label: `Rescored after excluding ${excludedPenaltyRows} irrelevant skill${excludedPenaltyRows === 1 ? "" : "s"}${delta ? ` (+${delta} pts)` : ""}.`,
   };
 }
 

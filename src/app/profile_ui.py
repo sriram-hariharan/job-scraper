@@ -15,7 +15,7 @@ def profile_page() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Profile</title>
-  <link rel="stylesheet" href="/static/styles.css?v=profile_saved_scans_e2_honest_state" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_saved_scans_e5_discard_icon" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -121,7 +121,7 @@ def profile_page() -> str:
 </section>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e2_honest_state"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
 </body>
 </html>
     """.strip()
@@ -136,7 +136,7 @@ def saved_scans_page() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Saved Scans</title>
-  <link rel="stylesheet" href="/static/styles.css?v=profile_saved_scans_e2_honest_state" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_saved_scans_e5_discard_icon" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -145,7 +145,7 @@ def saved_scans_page() -> str:
     <header class="page-header">
       <div>
         <h1>Saved Scans</h1>
-        <p class="subtext">Review New Scan intake history. Report viewing is disabled until report generation and saved-report restore are wired.</p>
+        <p class="subtext">Review New Scan reports generated from submitted resumes and job descriptions.</p>
       </div>
     </header>
 
@@ -161,7 +161,7 @@ def saved_scans_page() -> str:
       </div>
 
       <div class="saved-scans-note">
-        Saved scans currently show intake history only. Opening scan reports from this table is intentionally disabled until the real report runner and restore route are wired.
+        New Scan rows now store the generated match score and review payload in Postgres.
       </div>
 
       <div class="saved-scans-table-wrap">
@@ -176,20 +176,59 @@ def saved_scans_page() -> str:
               <th>Status</th>
               <th>Match</th>
               <th>Action</th>
+              <th></th>
             </tr>
           </thead>
           <tbody id="savedScansTableBody">
             <tr>
-              <td colspan="8">Loading saved scans...</td>
+              <td colspan="9">Loading saved scans...</td>
             </tr>
           </tbody>
         </table>
       </div>
     </section>
+
+    <section class="modal-backdrop hidden" id="savedScanDeleteModal">
+      <div class="modal-card resume-delete-modal-card">
+        <div class="modal-header">
+          <div>
+            <h3>Delete saved scan?</h3>
+            <p class="subtext">This removes the selected scan row and stored report payload.</p>
+          </div>
+          <button
+            type="button"
+            class="ghost-btn modal-close-btn"
+            id="savedScanDeleteCloseBtn"
+          >
+            Close
+          </button>
+        </div>
+        <div class="modal-body">
+          Are you sure you want to delete
+          <strong id="savedScanDeleteName">this saved scan</strong>?
+        </div>
+        <div class="modal-actions resume-delete-modal-actions">
+          <button
+            type="button"
+            class="ghost-btn"
+            id="savedScanDeleteCancelBtn"
+          >
+            No
+          </button>
+          <button
+            type="button"
+            class="resume-delete-confirm-btn"
+            id="savedScanDeleteConfirmBtn"
+          >
+            Yes, delete
+          </button>
+        </div>
+      </div>
+    </section>
   </div>
 
   <script src="/static/shell.js"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e2_honest_state"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
 </body>
 </html>
     """.strip()

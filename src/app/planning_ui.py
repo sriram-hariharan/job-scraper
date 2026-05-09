@@ -1139,6 +1139,7 @@ def scan_workspace(
     tailoring_md: str = "",
     tailoring_llm_json: str = "",
     packet_json: str = "",
+    saved_scan_id: str = "",
 ) -> str:
     company_safe = escape(company or "-")
     title_safe = escape(title or "-")
@@ -1154,6 +1155,7 @@ def scan_workspace(
     tailoring_md_safe = escape(tailoring_md or "")
     tailoring_llm_json_safe = escape(tailoring_llm_json or "")
     packet_json_safe = escape(packet_json or "")
+    saved_scan_id_safe = escape(saved_scan_id or "")
 
     loaded_job_context = services.scan_workspace_job_context_payload(
         tailoring_json_path=tailoring_json or "",
@@ -1210,7 +1212,8 @@ def scan_workspace(
           </a>
         """.strip()
 
-    scan_initial_mode = "review" if has_tailoring_context else "new_scan"
+    has_saved_scan_context = bool(saved_scan_id)
+    scan_initial_mode = "review" if (has_tailoring_context or has_saved_scan_context) else "new_scan"
     scan_initial_mode_safe = escape(scan_initial_mode)
 
     return f"""
@@ -1221,7 +1224,7 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase10_29_linkedin_link" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase13_spacing_rescan" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1236,6 +1239,7 @@ def scan_workspace(
     data-tailoring-md-path="{tailoring_md_safe}"
     data-tailoring-llm-json-path="{tailoring_llm_json_safe}"
     data-packet-json-path="{packet_json_safe}"
+    data-saved-scan-id="{saved_scan_id_safe}"
     data-scan-initial-mode="{scan_initial_mode_safe}"
     data-scan-mode=""
   >
@@ -1248,14 +1252,6 @@ def scan_workspace(
         <div class="scan-workspace-header-actions">
           {tailoring_back_link_html}
 
-          <button
-            type="button"
-            class="ghost-btn scan-workspace-sample-btn"
-            id="scanWorkspaceHeaderNewScanBtn"
-            data-scan-switch-mode="new_scan"
-          >
-            New Scan
-          </button>
         </div>
       </div>
     </header>
@@ -1364,8 +1360,9 @@ def scan_workspace(
                 id="scanWorkspaceCompanyInput"
                 class="scan-workspace-input"
                 value="{loaded_company_safe if loaded_company else ''}"
-                placeholder="Optional company name"
+                placeholder="Company name"
               />
+              <span class="scan-workspace-field-error" id="scanWorkspaceCompanyError"></span>
             </label>
 
             <label class="scan-workspace-input-group">
@@ -1375,8 +1372,9 @@ def scan_workspace(
                 id="scanWorkspaceRoleInput"
                 class="scan-workspace-input"
                 value="{loaded_title_safe if loaded_title else ''}"
-                placeholder="Optional job title"
+                placeholder="Job title"
               />
+              <span class="scan-workspace-field-error" id="scanWorkspaceRoleError"></span>
             </label>
 
             <label class="scan-workspace-input-group">
@@ -1386,8 +1384,9 @@ def scan_workspace(
                 id="scanWorkspaceJobUrlInput"
                 class="scan-workspace-input"
                 value="{loaded_job_url_safe if loaded_job_url else ''}"
-                placeholder="Optional posting URL"
+                placeholder="Posting URL"
               />
+              <span class="scan-workspace-field-error" id="scanWorkspaceJobUrlError"></span>
             </label>
 
             <label class="scan-workspace-input-group">
@@ -1397,9 +1396,17 @@ def scan_workspace(
                 class="scan-workspace-textarea scan-workspace-textarea--jd"
                 placeholder="Paste the full job description here."
               >{loaded_job_description_safe}</textarea>
+              <span class="scan-workspace-field-error" id="scanWorkspaceJobDescriptionError"></span>
             </label>
           </section>
         </div>
+
+        <div
+          class="scan-workspace-intake-validation"
+          id="scanWorkspaceIntakeValidation"
+          role="status"
+          aria-live="polite"
+        ></div>
 
         <div class="scan-workspace-intake-footer">
           {power_edit_link_html}
@@ -1487,6 +1494,25 @@ def scan_workspace(
             id="scanWorkspaceProcessingNote"
           >
             Waiting for the real scan runner. This phase adds the processing shell and stage model only.
+          </div>
+
+          <div
+            class="scan-workspace-processing-complete"
+            id="scanWorkspaceProcessingComplete"
+            hidden
+          >
+            <div class="scan-workspace-processing-check" aria-hidden="true"></div>
+            <div>
+              <div class="scan-workspace-processing-complete-title">Scan complete</div>
+              <div class="subtext">The match report is ready to review.</div>
+            </div>
+            <button
+              type="button"
+              class="scan-workspace-processing-ok-btn"
+              id="scanWorkspaceProcessingOkBtn"
+            >
+              OK
+            </button>
           </div>
         </div>
       </section>
@@ -1596,6 +1622,20 @@ def scan_workspace(
               </div>
 
               <div class="scan-workspace-review-actions scan-workspace-review-actions--rail">
+                <button
+                  type="button"
+                  class="scan-workspace-rescan-btn"
+                  id="scanWorkspaceRescanBtn"
+                  disabled
+                  hidden
+                >
+                  <img
+                    src="/static/media/re-scan_img.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span>Rescan</span>
+                </button>
                 <button
                   type="button"
                   class="ghost-btn btn-sm"
@@ -2026,7 +2066,7 @@ def scan_workspace(
 
   <script src="/static/shell.js"></script>
   <script src="/static/planning.js?v=planning_ui_20260508_linkedin_link1"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase10_36_linkedin_link"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_phase13_spacing_rescan"></script>
 </body>
 </html>
     """.strip()

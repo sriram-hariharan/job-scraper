@@ -1,5 +1,6 @@
 const profileState = {
   pendingDeleteResumeName: null,
+  pendingDeleteScanId: null,
 };
 
 function qs(id) {
@@ -169,7 +170,7 @@ function savedScanStatusMeta(value) {
     return {
       label: "Ready",
       tone: "ready",
-      action: "Viewer pending",
+      action: "Report generated",
     };
   }
 
@@ -188,6 +189,31 @@ function savedScanStatusMeta(value) {
   };
 }
 
+function getSavedScanOpenHref(scan) {
+  const status = String(scan?.scan_status || "").trim().toLowerCase();
+  const scanId = String(scan?.scan_id || "").trim();
+  if (!scanId || (status !== "ready" && status !== "complete")) return "";
+  return `/scan-workspace?saved_scan_id=${encodeURIComponent(scanId)}`;
+}
+
+function openSavedScanDeleteModal(scan) {
+  profileState.pendingDeleteScanId = String(scan?.scan_id || "").trim();
+  const label = [
+    scan?.job_company || "",
+    scan?.job_title || "",
+    scan?.resume_name || scan?.resume_filename || "",
+  ].filter(Boolean).join(" / ") || "this saved scan";
+  qs("savedScanDeleteName").textContent = label;
+  qs("savedScanDeleteModal").classList.remove("hidden");
+}
+
+function closeSavedScanDeleteModal() {
+  profileState.pendingDeleteScanId = null;
+  const name = qs("savedScanDeleteName");
+  if (name) name.textContent = "this saved scan";
+  qs("savedScanDeleteModal")?.classList.add("hidden");
+}
+
 function renderSavedScans(items, { ok = true, error = "" } = {}) {
   const tbody = qs("savedScansTableBody");
   const metaEl = qs("savedScansMeta");
@@ -197,7 +223,7 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
     metaEl.textContent = "Saved scans unavailable";
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="saved-scans-empty-cell">
+        <td colspan="9" class="saved-scans-empty-cell">
           ${escapeHtml(error || "Could not load saved scans from Postgres.")}
         </td>
       </tr>
@@ -210,7 +236,7 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
   if (!scans.length) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="8" class="saved-scans-empty-cell">
+        <td colspan="9" class="saved-scans-empty-cell">
           No saved scans yet.
         </td>
       </tr>
@@ -222,7 +248,7 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
     const statusMeta = savedScanStatusMeta(scan.scan_status);
 
     return `
-      <tr class="saved-scan-row saved-scan-row-${escapeHtml(statusMeta.tone)}">
+      <tr class="saved-scan-row saved-scan-row-${escapeHtml(statusMeta.tone)}" data-saved-scan-id="${escapeHtml(scan.scan_id || "")}">
         <td>${escapeHtml(formatDateTime(scan.scan_timestamp || ""))}</td>
         <td>${escapeHtml(scan.job_company || "-")}</td>
         <td>${escapeHtml(scan.job_title || "-")}</td>
@@ -235,9 +261,19 @@ function renderSavedScans(items, { ok = true, error = "" } = {}) {
         </td>
         <td>${escapeHtml(formatPercent(scan.match_rate))}</td>
         <td>
-          <span class="saved-scan-action-badge ${escapeHtml(statusMeta.tone)}">
-            ${escapeHtml(statusMeta.action)}
-          </span>
+          ${getSavedScanOpenHref(scan)
+            ? `<a class="saved-scan-action-badge ${escapeHtml(statusMeta.tone)} saved-scan-open-link" href="${escapeHtml(getSavedScanOpenHref(scan))}">${escapeHtml(statusMeta.action)}</a>`
+            : `<span class="saved-scan-action-badge ${escapeHtml(statusMeta.tone)}">${escapeHtml(statusMeta.action)}</span>`}
+        </td>
+        <td class="saved-scan-row-delete-cell">
+          <button
+            type="button"
+            class="saved-scan-delete-btn"
+            aria-label="Delete saved scan"
+            title="Delete saved scan"
+            data-saved-scan-delete="${escapeHtml(scan.scan_id || "")}"
+            data-saved-scan-name="${escapeHtml(scan.resume_name || scan.resume_filename || "saved scan")}"
+          ></button>
         </td>
       </tr>
     `;
@@ -252,7 +288,7 @@ async function loadSavedScans() {
   metaEl.textContent = "Loading saved scans...";
   tbody.innerHTML = `
     <tr>
-      <td colspan="8" class="saved-scans-empty-cell">Loading saved scans...</td>
+      <td colspan="9" class="saved-scans-empty-cell">Loading saved scans...</td>
     </tr>
   `;
 
@@ -261,6 +297,17 @@ async function loadSavedScans() {
     ok: data.ok !== false,
     error: data.error || "",
   });
+}
+
+async function deleteSavedScan() {
+  const scanId = String(profileState.pendingDeleteScanId || "").trim();
+  if (!scanId) return;
+
+  await fetchJson(`/profile/saved-scans/${encodeURIComponent(scanId)}`, {
+    method: "DELETE",
+  });
+  closeSavedScanDeleteModal();
+  await loadSavedScans();
 }
 
 function validateResumeFile(file) {
@@ -467,6 +514,41 @@ function bindSavedScansPage() {
       });
     });
   }
+
+  const tbody = qs("savedScansTableBody");
+  if (tbody) {
+    tbody.addEventListener("click", (event) => {
+      const deleteBtn = event.target.closest("[data-saved-scan-delete]");
+      if (!deleteBtn) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const row = deleteBtn.closest("[data-saved-scan-id]");
+      const scanId = deleteBtn.dataset.savedScanDelete || row?.dataset?.savedScanId || "";
+      const scan = {
+        scan_id: scanId,
+        resume_name: deleteBtn.dataset.savedScanName || "",
+        job_company: row?.children?.[1]?.textContent || "",
+        job_title: row?.children?.[2]?.textContent || "",
+      };
+      openSavedScanDeleteModal(scan);
+    });
+  }
+
+  qs("savedScanDeleteCloseBtn")?.addEventListener("click", closeSavedScanDeleteModal);
+  qs("savedScanDeleteCancelBtn")?.addEventListener("click", closeSavedScanDeleteModal);
+  qs("savedScanDeleteConfirmBtn")?.addEventListener("click", async () => {
+    try {
+      await deleteSavedScan();
+    } catch (err) {
+      renderSavedScans([], { ok: false, error: err.message });
+      closeSavedScanDeleteModal();
+    }
+  });
+  qs("savedScanDeleteModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("savedScanDeleteModal")) {
+      closeSavedScanDeleteModal();
+    }
+  });
 
   return loadSavedScans();
 }

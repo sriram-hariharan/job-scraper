@@ -104,6 +104,13 @@ class PlanningExtractResumeUploadRequest(BaseModel):
     content_type: str = ""
     upload_base64: str
 
+class PlanningSavedScanStateRequest(BaseModel):
+    selected_patch_candidate_ids: list[str] = Field(default_factory=list)
+    manual_bullet_edits: dict[str, str] = Field(default_factory=dict)
+    rewrite_review_decisions: dict[str, dict[str, str] | str] = Field(default_factory=dict)
+    excluded_scan_issue_ids: list[str] = Field(default_factory=list)
+    personal_details: dict[str, str] = Field(default_factory=dict)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -556,6 +563,34 @@ def planning_start_scan(request: PlanningStartScanRequest):
             tailoring_json_path=request.tailoring_json_path,
         )
     except (binascii.Error, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.get("/planning/saved-scan/{scan_id}")
+def planning_saved_scan(scan_id: str):
+    try:
+        return services.saved_scan_report_payload(scan_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+@app.post("/planning/saved-scan/{scan_id}/state")
+def planning_save_saved_scan_state(scan_id: str, request: PlanningSavedScanStateRequest):
+    try:
+        return services.save_saved_scan_state_payload(
+            scan_id=scan_id,
+            selected_patch_candidate_ids=request.selected_patch_candidate_ids,
+            manual_bullet_edits=request.manual_bullet_edits,
+            rewrite_review_decisions=request.rewrite_review_decisions,
+            excluded_scan_issue_ids=request.excluded_scan_issue_ids,
+            personal_details=request.personal_details,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+@app.delete("/profile/saved-scans/{scan_id}")
+def profile_delete_saved_scan(scan_id: str):
+    try:
+        return services.delete_saved_scan_payload(scan_id)
+    except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.post("/planning/extract-resume-upload")

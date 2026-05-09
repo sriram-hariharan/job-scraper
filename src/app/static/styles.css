@@ -3260,7 +3260,7 @@ tbody tr:hover {
 
 .saved-scans-table {
   width: 100%;
-  min-width: 1040px;
+  min-width: 1120px;
   border-collapse: collapse;
 }
 
@@ -3308,6 +3308,11 @@ tbody tr:hover {
   cursor: default;
 }
 
+.saved-scan-row-delete-cell {
+  width: 46px;
+  text-align: right;
+}
+
 .saved-scan-status-badge,
 .saved-scan-action-badge {
   display: inline-flex;
@@ -3322,6 +3327,40 @@ tbody tr:hover {
   font-size: 12px;
   font-weight: 800;
   white-space: nowrap;
+  text-decoration: none;
+}
+
+.saved-scan-open-link {
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, transform 0.16s ease;
+}
+
+.saved-scan-open-link:hover {
+  border-color: rgba(145, 242, 195, 0.5);
+  background: rgba(52, 211, 153, 0.14);
+  transform: translateY(-1px);
+}
+
+.saved-scan-delete-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  background-color: rgba(248, 113, 113, 0.08);
+  background-image: url("/static/media/discard_img.svg");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: 18px 18px;
+  color: #fecaca;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.saved-scan-delete-btn:hover {
+  border-color: rgba(248, 113, 113, 0.46);
+  background-color: rgba(248, 113, 113, 0.16);
 }
 
 .saved-scan-status-badge.pending,

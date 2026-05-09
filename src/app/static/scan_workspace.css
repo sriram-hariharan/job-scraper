@@ -8,13 +8,19 @@
   display: block;
 }
 
+.scan-workspace-mode-panel--new.is-active,
+.scan-workspace-mode-panel--processing.is-active,
+.scan-workspace-mode-panel--review.is-active {
+  margin-top: 28px;
+}
+
 .scan-workspace-page {
   max-width: none;
-  padding: 18px 20px 20px;
+  padding: 24px 20px 20px;
 }
 
 .scan-workspace-page .page-header {
-  margin-bottom: 10px;
+  margin-bottom: 28px;
 }
 
 .scan-workspace-intake-card {
@@ -238,7 +244,8 @@
 }
 
 .scan-workspace-header-shell {
-  margin-bottom: 10px;
+  margin-bottom: 30px;
+  padding-right: 92px;
 }
 
 .scan-workspace-header-shell--minimal {
@@ -252,6 +259,7 @@
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
+  row-gap: 16px;
 }
 
 .scan-workspace-header-copy {
@@ -269,6 +277,40 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+.scan-workspace-intake-validation {
+  display: none;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 117, 117, 0.26);
+  background: rgba(255, 117, 117, 0.1);
+  color: #ffd7d7;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.scan-workspace-intake-validation.is-visible {
+  display: block;
+}
+
+.scan-workspace-field-error {
+  min-height: 18px;
+  color: #ffb8b8;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+.scan-workspace-field-error:empty {
+  display: none;
+}
+
+.scan-workspace-input.is-invalid,
+.scan-workspace-textarea.is-invalid {
+  border-color: rgba(255, 117, 117, 0.55);
+  box-shadow: 0 0 0 1px rgba(255, 117, 117, 0.18);
 }
 
 .scan-workspace-review-rail,
@@ -449,7 +491,7 @@
   grid-template-columns: minmax(300px, 320px) minmax(0, 1fr);
   gap: 14px;
   align-items: stretch;
-  height: calc(100vh - 132px);
+  height: calc(100vh - 158px);
   min-height: 620px;
 }
 
@@ -2232,6 +2274,12 @@
   animation: scan-workspace-processing-indeterminate 1.15s ease-in-out infinite;
 }
 
+.scan-workspace-processing-card:has(.scan-workspace-processing-complete:not([hidden])) .scan-workspace-processing-bar-fill {
+  width: 100%;
+  animation: none;
+  background: linear-gradient(90deg, #64d98f 0%, #2fd177 100%);
+}
+
 .scan-workspace-processing-step-list {
   display: grid;
   grid-template-columns: 1fr;
@@ -2313,6 +2361,89 @@
   color: #ffe9a8;
   font-size: 13px;
   line-height: 1.55;
+}
+
+.scan-workspace-processing-complete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(145, 242, 195, 0.28);
+  background: rgba(145, 242, 195, 0.12);
+}
+
+.scan-workspace-processing-complete[hidden] {
+  display: none;
+}
+
+.scan-workspace-processing-check {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(145, 242, 195, 0.18);
+  border: 1px solid rgba(145, 242, 195, 0.42);
+  position: relative;
+  box-shadow: 0 0 0 6px rgba(145, 242, 195, 0.08);
+}
+
+.scan-workspace-processing-check::after {
+  content: "";
+  position: absolute;
+  left: 13px;
+  top: 10px;
+  width: 13px;
+  height: 20px;
+  border: solid #d9ffed;
+  border-width: 0 4px 4px 0;
+  transform: rotate(45deg);
+}
+
+.scan-workspace-processing-complete-title {
+  color: #eafff3;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.scan-workspace-processing-ok-btn {
+  min-height: 42px;
+  border: 0;
+  border-radius: 14px;
+  padding: 0 22px;
+  background: linear-gradient(180deg, #a7c6ff 0%, #72a2f8 100%);
+  color: #071124;
+  font-size: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.scan-workspace-rescan-btn {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(120, 166, 255, 0.2);
+  background: rgba(120, 166, 255, 0.08);
+  color: #dbe6ff;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.scan-workspace-rescan-btn[hidden] {
+  display: none;
+}
+
+.scan-workspace-rescan-btn img {
+  width: 16px;
+  height: 16px;
+  display: block;
+  filter: brightness(0) saturate(100%) invert(91%) sepia(13%) saturate(937%) hue-rotate(188deg) brightness(103%) contrast(101%);
 }
 
 /* Jobscan-inspired scan polish, kept in the app's dark theme. */

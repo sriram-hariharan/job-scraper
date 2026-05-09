@@ -27,9 +27,16 @@ const scanWorkspaceIntakeState = {
   company: "",
   role: "",
   jobUrl: "",
+  savedResumeName: "",
   resumeText: "",
   resumeFileName: "",
   jobDescriptionText: "",
+};
+
+const scanWorkspaceSavedResumeState = {
+  resumes: [],
+  isLoading: false,
+  lastError: "",
 };
 
 const scanWorkspaceProcessingState = {
@@ -255,6 +262,107 @@ function getScanWorkspaceHasPreselectedResume() {
   return Boolean(String(root.dataset.resumeName || "").trim());
 }
 
+function getScanWorkspaceSelectedResumeName() {
+  const select = getScanWorkspaceInput("scanWorkspaceResumeSelect");
+  const selected = String(select?.value || "").trim();
+  if (selected) return selected;
+
+  const root = getScanWorkspacePageRoot();
+  return String(root?.dataset?.resumeName || "").trim();
+}
+
+function renderScanWorkspaceSavedResumeOptions() {
+  const select = getScanWorkspaceInput("scanWorkspaceResumeSelect");
+  if (!select) return;
+
+  const root = getScanWorkspacePageRoot();
+  const initialResume = String(
+    select.dataset.initialResume ||
+    root?.dataset?.resumeName ||
+    ""
+  ).trim();
+  const selectedResume = String(select.value || initialResume || "").trim();
+  const resumes = Array.isArray(scanWorkspaceSavedResumeState.resumes)
+    ? scanWorkspaceSavedResumeState.resumes
+    : [];
+
+  if (scanWorkspaceSavedResumeState.isLoading) {
+    select.innerHTML = `<option value="">Loading saved resumes...</option>`;
+    select.disabled = true;
+    return;
+  }
+
+  if (scanWorkspaceSavedResumeState.lastError) {
+    select.innerHTML = `<option value="">Could not load saved resumes</option>`;
+    select.disabled = true;
+    return;
+  }
+
+  if (!resumes.length) {
+    if (initialResume) {
+      select.disabled = false;
+      select.innerHTML = `<option value="${scanWorkspaceEscapeHtml(initialResume)}" selected>${scanWorkspaceEscapeHtml(initialResume)}</option>`;
+      scanWorkspaceIntakeState.savedResumeName = initialResume;
+      return;
+    }
+    select.innerHTML = `<option value="">No saved resumes in profile</option>`;
+    select.disabled = true;
+    return;
+  }
+
+  const hasSelectedResume = resumes.some((resume) => {
+    return String(resume?.resume_name || "").trim() === selectedResume;
+  });
+  const effectiveSelected = hasSelectedResume || initialResume === selectedResume ? selectedResume : "";
+
+  select.disabled = false;
+  select.innerHTML = [
+    `<option value="">Select a saved resume</option>`,
+    effectiveSelected && !hasSelectedResume
+      ? `<option value="${scanWorkspaceEscapeHtml(effectiveSelected)}" selected>${scanWorkspaceEscapeHtml(effectiveSelected)}</option>`
+      : "",
+    ...resumes.map((resume) => {
+      const resumeName = String(resume?.resume_name || "").trim();
+      const selected = resumeName && resumeName === effectiveSelected ? " selected" : "";
+      return `<option value="${scanWorkspaceEscapeHtml(resumeName)}"${selected}>${scanWorkspaceEscapeHtml(resumeName)}</option>`;
+    }),
+  ].join("");
+
+  scanWorkspaceIntakeState.savedResumeName = effectiveSelected;
+}
+
+async function loadScanWorkspaceSavedResumes() {
+  const select = getScanWorkspaceInput("scanWorkspaceResumeSelect");
+  if (!select || select.dataset.loaded === "true" || scanWorkspaceSavedResumeState.isLoading) {
+    return;
+  }
+
+  scanWorkspaceSavedResumeState.isLoading = true;
+  scanWorkspaceSavedResumeState.lastError = "";
+  renderScanWorkspaceSavedResumeOptions();
+
+  try {
+    const response = await fetch("/profile/resumes", {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`Saved resumes failed to load (${response.status})`);
+    }
+
+    const data = await response.json();
+    scanWorkspaceSavedResumeState.resumes = Array.isArray(data?.resumes) ? data.resumes : [];
+    select.dataset.loaded = "true";
+  } catch (err) {
+    scanWorkspaceSavedResumeState.resumes = [];
+    scanWorkspaceSavedResumeState.lastError =
+      err instanceof Error ? err.message : "Saved resumes failed to load.";
+  } finally {
+    scanWorkspaceSavedResumeState.isLoading = false;
+    renderScanWorkspaceSavedResumeOptions();
+    updateScanWorkspaceIntakeActions();
+  }
+}
+
 function setScanWorkspaceResumeFileUi(fileName = "", message = "", tone = "") {
   const fileNameNode = getScanWorkspaceInput("scanWorkspaceResumeFileName");
   const statusNode = getScanWorkspaceInput("scanWorkspaceResumeFileStatus");
@@ -326,6 +434,7 @@ function readScanWorkspaceIntakeDraft() {
   scanWorkspaceIntakeState.company = String(companyInput?.value || "").trim();
   scanWorkspaceIntakeState.role = String(roleInput?.value || "").trim();
   scanWorkspaceIntakeState.jobUrl = String(jobUrlInput?.value || "").trim();
+  scanWorkspaceIntakeState.savedResumeName = getScanWorkspaceSelectedResumeName();
   scanWorkspaceIntakeState.resumeFileName = String(resumeFileInput?.files?.[0]?.name || "").trim();
   scanWorkspaceIntakeState.resumeText = String(resumeTextInput?.value || "").trim();
   scanWorkspaceIntakeState.jobDescriptionText = String(jobDescriptionInput?.value || "").trim();
@@ -335,8 +444,8 @@ function readScanWorkspaceIntakeDraft() {
 
 function getScanWorkspaceIntakeValidation(draft = readScanWorkspaceIntakeDraft()) {
   const missing = [];
-  const hasResume = getScanWorkspaceHasPreselectedResume() || Boolean(draft.resumeText) || Boolean(draft.resumeFileName);
-  if (!hasResume) missing.push({ key: "resume", message: "Add a resume by uploading a file, choosing a saved variant, or pasting resume text." });
+  const hasResume = Boolean(draft.savedResumeName);
+  if (!hasResume) missing.push({ key: "resume", message: "Select a saved resume from your profile." });
   if (!draft.company) missing.push({ key: "company", message: "Company is required." });
   if (!draft.role) missing.push({ key: "role", message: "Role is required." });
   if (!draft.jobUrl) missing.push({ key: "jobUrl", message: "Job posting URL is required." });
@@ -369,6 +478,7 @@ function renderScanWorkspaceIntakeValidation(validation) {
   setScanWorkspaceFieldError("scanWorkspaceRoleInput", "scanWorkspaceRoleError", messageByKey.get("role") || "");
   setScanWorkspaceFieldError("scanWorkspaceJobUrlInput", "scanWorkspaceJobUrlError", messageByKey.get("jobUrl") || "");
   setScanWorkspaceFieldError("scanWorkspaceJobDescriptionInput", "scanWorkspaceJobDescriptionError", messageByKey.get("jobDescription") || "");
+  setScanWorkspaceFieldError("scanWorkspaceResumeSelect", "scanWorkspaceResumeError", messageByKey.get("resume") || "");
 
   if (!banner) return;
   if (!messages.length) {
@@ -396,6 +506,7 @@ function clearScanWorkspaceIntakeForm() {
   const companyInput = getScanWorkspaceInput("scanWorkspaceCompanyInput");
   const roleInput = getScanWorkspaceInput("scanWorkspaceRoleInput");
   const jobUrlInput = getScanWorkspaceInput("scanWorkspaceJobUrlInput");
+  const resumeSelect = getScanWorkspaceInput("scanWorkspaceResumeSelect");
   const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
   const resumeTextInput = getScanWorkspaceInput("scanWorkspaceResumeTextInput");
   const jobDescriptionInput = getScanWorkspaceInput("scanWorkspaceJobDescriptionInput");
@@ -403,6 +514,7 @@ function clearScanWorkspaceIntakeForm() {
   if (companyInput) companyInput.value = "";
   if (roleInput) roleInput.value = "";
   if (jobUrlInput) jobUrlInput.value = "";
+  if (resumeSelect) resumeSelect.value = "";
   if (resumeFileInput) resumeFileInput.value = "";
   if (resumeTextInput) resumeTextInput.value = "";
   if (jobDescriptionInput) jobDescriptionInput.value = "";
@@ -411,6 +523,7 @@ function clearScanWorkspaceIntakeForm() {
   scanWorkspaceIntakeState.company = "";
   scanWorkspaceIntakeState.role = "";
   scanWorkspaceIntakeState.jobUrl = "";
+  scanWorkspaceIntakeState.savedResumeName = "";
   scanWorkspaceIntakeState.resumeFileName = "";
   scanWorkspaceIntakeState.resumeText = "";
   scanWorkspaceIntakeState.jobDescriptionText = "";
@@ -423,6 +536,7 @@ function bindScanWorkspaceIntakeForm() {
     "scanWorkspaceCompanyInput",
     "scanWorkspaceRoleInput",
     "scanWorkspaceJobUrlInput",
+    "scanWorkspaceResumeSelect",
     "scanWorkspaceResumeFileInput",
     "scanWorkspaceResumeTextInput",
     "scanWorkspaceJobDescriptionInput",
@@ -495,14 +609,9 @@ function getScanWorkspaceProcessingStageIndex(stageKey) {
 function buildScanWorkspaceProcessingSummaryHtml(draft) {
   if (!draft) return "";
 
-  const hasSavedResume = getScanWorkspaceHasPreselectedResume();
-  const resumeSource = hasSavedResume
-    ? "Saved resume variant"
-    : draft.resumeFileName
-      ? `Uploaded file: ${draft.resumeFileName}`
-      : draft.resumeText
-        ? "Pasted resume text"
-        : "Missing";
+  const resumeSource = draft.savedResumeName
+    ? `Saved resume: ${draft.savedResumeName}`
+    : "Missing";
 
   const jobDescriptionValue = draft.jobDescriptionText
     ? `${draft.jobDescriptionText.length} chars`
@@ -664,11 +773,9 @@ async function handleScanWorkspaceResumeFileSelected() {
 
 async function buildScanWorkspaceStartScanPayload(draft) {
   const root = getScanWorkspacePageRoot();
-  const resumeFileInput = getScanWorkspaceInput("scanWorkspaceResumeFileInput");
-  const resumeName = String(root?.dataset?.resumeName || "").trim();
+  const resumeName = String(draft.savedResumeName || root?.dataset?.resumeName || "").trim();
   const tailoringJsonPath = String(root?.dataset?.tailoringJsonPath || "").trim();
   const jobDocId = String(root?.dataset?.jobDocId || "").trim();
-  const file = resumeFileInput?.files?.[0] || null;
 
   return {
     company: draft.company || "",
@@ -676,12 +783,12 @@ async function buildScanWorkspaceStartScanPayload(draft) {
     job_url: draft.jobUrl || "",
     job_doc_id: jobDocId || "",
     job_description_text: draft.jobDescriptionText || "",
-    saved_resume_name: file ? "" : resumeName || "",
-    resume_text: draft.resumeText || "",
+    saved_resume_name: resumeName || "",
+    resume_text: "",
     tailoring_json_path: tailoringJsonPath || "",
-    upload_filename: file?.name || "",
-    upload_content_type: file?.type || "",
-    upload_base64: file ? await readScanWorkspaceFileAsBase64(file) : "",
+    upload_filename: "",
+    upload_content_type: "",
+    upload_base64: "",
   };
 }
 
@@ -4061,6 +4168,7 @@ window.addEventListener("DOMContentLoaded", () => {
   bindScanWorkspacePersistenceControls();
   bindScanWorkspaceGlobalShortcuts();
   updateScanWorkspaceProcessingView();
+  loadScanWorkspaceSavedResumes();
 
   setScanWorkspaceMode(getScanWorkspaceInitialMode());
   loadSavedScanWorkspaceReviewPayload();

@@ -1266,7 +1266,7 @@ def scan_workspace(
           <div>
             <h2>New scan</h2>
             <div class="subtext">
-              Upload or choose a resume, paste a job description, and start an AI optimization scan.
+              Choose a saved profile resume, paste a job description, and start an AI optimization scan.
             </div>
           </div>
 
@@ -1285,63 +1285,24 @@ def scan_workspace(
             <div class="scan-workspace-intake-panel-header">
               <h3>Resume</h3>
               <div class="subtext">
-                Use the current resume variant or paste resume text for a fresh scan.
+                Select one of the resumes saved in your profile.
               </div>
             </div>
 
             <label class="scan-workspace-input-group">
-              <span class="scan-workspace-input-label">Saved resume variant</span>
-              <input
-                type="text"
-                id="scanWorkspaceResumeNameInput"
+              <span class="scan-workspace-input-label">Saved resume</span>
+              <select
+                id="scanWorkspaceResumeSelect"
                 class="scan-workspace-input"
-                value="{resume_display_safe if raw_resume_name else ''}"
-                placeholder="No saved resume selected yet"
-                readonly
-              />
-            </label>
-
-            <label class="scan-workspace-input-group">
-              <span class="scan-workspace-input-label">Upload resume file</span>
-              <div class="scan-workspace-file-picker">
-                <input
-                  type="file"
-                  id="scanWorkspaceResumeFileInput"
-                  class="scan-workspace-file-input"
-                  accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                />
-                <button
-                  type="button"
-                  class="ghost-btn scan-workspace-file-btn"
-                  id="scanWorkspaceResumeBrowseBtn"
-                >
-                  Choose file
-                </button>
-                <span
-                  class="scan-workspace-file-name"
-                  id="scanWorkspaceResumeFileName"
-                >
-                  No file selected
-                </span>
-              </div>
-              <div
-                class="scan-workspace-file-status"
-                id="scanWorkspaceResumeFileStatus"
-                aria-live="polite"
-              ></div>
-            </label>
-
-            <label class="scan-workspace-input-group">
-              <span class="scan-workspace-input-label">Resume text</span>
-              <textarea
-                id="scanWorkspaceResumeTextInput"
-                class="scan-workspace-textarea"
-                placeholder="Paste resume content here if you want to scan without using the saved variant."
-              ></textarea>
+                data-initial-resume="{resume_display_safe if raw_resume_name else ''}"
+              >
+                <option value="">Loading saved resumes...</option>
+              </select>
+              <span class="scan-workspace-field-error" id="scanWorkspaceResumeError"></span>
             </label>
 
             <div class="scan-workspace-input-hint">
-              A scan can start from either a saved resume variant or pasted resume text.
+              Upload resumes in My Profile if you need more resume options.
             </div>
           </section>
 

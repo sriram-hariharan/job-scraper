@@ -1694,8 +1694,8 @@ def scan_workspace(
                 type="button"
                 class="ghost-btn btn-sm scan-workspace-toolbar-btn"
                 id="scanWorkspaceUndoBtn"
-                disabled
                 aria-label="Undo scan change"
+                aria-disabled="true"
               >
                 Undo
               </button>
@@ -1704,8 +1704,8 @@ def scan_workspace(
                 type="button"
                 class="ghost-btn btn-sm scan-workspace-toolbar-btn"
                 id="scanWorkspaceRedoBtn"
-                disabled
                 aria-label="Redo scan change"
+                aria-disabled="true"
               >
                 Redo
               </button>
@@ -1780,14 +1780,6 @@ def scan_workspace(
               >
                 Compare
               </button>
-
-              <a
-                class="scan-workspace-toolbar-link scan-workspace-toolbar-link--primary"
-                id="scanWorkspaceContinueBtn"
-                href="{back_href_safe}"
-              >
-                Continue
-              </a>
             </div>
           </div>
 

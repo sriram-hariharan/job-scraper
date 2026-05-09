@@ -271,6 +271,21 @@ function getScanWorkspaceSelectedResumeName() {
   return String(root?.dataset?.resumeName || "").trim();
 }
 
+function setScanWorkspaceResumeSelection(resumeName = "") {
+  const select = getScanWorkspaceInput("scanWorkspaceResumeSelect");
+  const safeName = String(resumeName || "").trim();
+  if (!select) return;
+  if (safeName) {
+    select.dataset.initialResume = safeName;
+  }
+  renderScanWorkspaceSavedResumeOptions();
+  if (safeName) {
+    select.value = safeName;
+  }
+  scanWorkspaceIntakeState.savedResumeName = String(select.value || safeName || "").trim();
+  updateScanWorkspaceIntakeActions();
+}
+
 function renderScanWorkspaceSavedResumeOptions() {
   const select = getScanWorkspaceInput("scanWorkspaceResumeSelect");
   if (!select) return;
@@ -500,6 +515,9 @@ function updateScanWorkspaceIntakeActions() {
   renderScanWorkspaceIntakeValidation(validation);
 
   startBtn.disabled = !validation.ok;
+  startBtn.textContent = String(getScanWorkspacePageRoot()?.dataset?.rescanScanId || "").trim()
+    ? "Update scan"
+    : "Start scan";
 }
 
 function clearScanWorkspaceIntakeForm() {
@@ -776,8 +794,10 @@ async function buildScanWorkspaceStartScanPayload(draft) {
   const resumeName = String(draft.savedResumeName || root?.dataset?.resumeName || "").trim();
   const tailoringJsonPath = String(root?.dataset?.tailoringJsonPath || "").trim();
   const jobDocId = String(root?.dataset?.jobDocId || "").trim();
+  const scanId = String(root?.dataset?.rescanScanId || "").trim();
 
   return {
+    scan_id: scanId,
     company: draft.company || "",
     role: draft.role || "",
     job_url: draft.jobUrl || "",
@@ -826,6 +846,11 @@ async function beginScanWorkspaceProcessing() {
 
     const data = await response.json();
     const scanId = String(data?.scan?.scan_id || "").trim();
+    const root = getScanWorkspacePageRoot();
+    if (root) {
+      root.dataset.rescanScanId = "";
+      if (scanId) root.dataset.savedScanId = scanId;
+    }
     const writeOk = data?.postgres_write?.ok === true;
     if (!writeOk) {
       const writeError = String(data?.postgres_write?.error || data?.postgres_write?.skipped || "").trim();
@@ -846,6 +871,60 @@ async function beginScanWorkspaceProcessing() {
       err instanceof Error ? err.message : "Failed to save scan intake.";
     updateScanWorkspaceProcessingView();
   }
+}
+
+function buildSavedScanRescanDraft() {
+  const payload = getScanWorkspacePreloadPayloadForSurface();
+  const jobRecord = payload?.selected_jd_record || payload?.job_snapshot || payload?.job || {};
+  return {
+    company: firstNonEmptyScanWorkspaceText(
+      payload?.job_company,
+      jobRecord?.company,
+      jobRecord?.job_company,
+      payload?.selection?.company
+    ),
+    role: firstNonEmptyScanWorkspaceText(
+      payload?.job_title,
+      jobRecord?.title,
+      jobRecord?.job_title,
+      payload?.selection?.title
+    ),
+    jobUrl: firstNonEmptyScanWorkspaceText(jobRecord?.job_url, jobRecord?.url, jobRecord?.link),
+    savedResumeName: firstNonEmptyScanWorkspaceText(
+      payload?.resume_name,
+      payload?.selected_resume,
+      payload?.selection?.selected_resume,
+      getScanWorkspacePageRoot()?.dataset?.resumeName
+    ),
+    jobDescriptionText: getScanWorkspaceLoadedJobDescriptionText(),
+  };
+}
+
+async function openSavedScanRescanDraft() {
+  const root = getScanWorkspacePageRoot();
+  const scanId = String(root?.dataset?.savedScanId || "").trim();
+  const rescanBtn = getScanWorkspaceInput("scanWorkspaceRescanBtn");
+  if (!scanId) return;
+
+  flashScanWorkspaceActionButton(rescanBtn);
+  const draft = buildSavedScanRescanDraft();
+  if (root) {
+    root.dataset.rescanScanId = scanId;
+  }
+  setScanWorkspaceMode("new_scan");
+  await loadScanWorkspaceSavedResumes();
+
+  const companyInput = getScanWorkspaceInput("scanWorkspaceCompanyInput");
+  const roleInput = getScanWorkspaceInput("scanWorkspaceRoleInput");
+  const jobUrlInput = getScanWorkspaceInput("scanWorkspaceJobUrlInput");
+  const jdInput = getScanWorkspaceInput("scanWorkspaceJobDescriptionInput");
+
+  if (companyInput) companyInput.value = draft.company || "";
+  if (roleInput) roleInput.value = draft.role || "";
+  if (jobUrlInput) jobUrlInput.value = draft.jobUrl || "";
+  if (jdInput) jdInput.value = draft.jobDescriptionText || "";
+  setScanWorkspaceResumeSelection(draft.savedResumeName || "");
+  updateScanWorkspaceIntakeActions();
 }
 
 function applyNewScanWorkspaceReviewPayload(payload) {
@@ -1229,6 +1308,16 @@ function redoScanWorkspaceDecisionChange() {
   refreshScanWorkspaceDecisionOutputs({ forcePreview: false });
 }
 
+function flashScanWorkspaceActionButton(button, className = "is-clicked") {
+  if (!button) return;
+  button.classList.remove(className);
+  void button.offsetWidth;
+  button.classList.add(className);
+  window.setTimeout(() => {
+    button.classList.remove(className);
+  }, 650);
+}
+
 function getAcceptedCompareCandidateIds() {
   const ids = [];
 
@@ -1531,7 +1620,6 @@ function applySavedDraftStateToScanMarkers() {
 function renderScanWorkspacePersistenceStatus() {
   const statusNode = getScanWorkspaceInput("scanWorkspacePersistStatus");
   const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
-  const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
   const exportBtn = getScanWorkspaceInput("scanWorkspaceExportBtn");
   const rescanBtn = getScanWorkspaceInput("scanWorkspaceRescanBtn");
 
@@ -1591,11 +1679,12 @@ function renderScanWorkspacePersistenceStatus() {
 
   if (rescanBtn) {
     rescanBtn.hidden = !isSavedNewScan;
-    rescanBtn.disabled = true;
-  }
-
-  if (continueBtn) {
-    continueBtn.setAttribute("aria-busy", scanWorkspacePersistenceState.isSaving ? "true" : "false");
+    rescanBtn.disabled =
+      !isSavedNewScan ||
+      scanWorkspacePersistenceState.isLoading ||
+      scanWorkspacePersistenceState.isSaving ||
+      scanWorkspacePersistenceState.isExporting;
+    rescanBtn.setAttribute("aria-busy", "false");
   }
 
   if (exportBtn) {
@@ -1666,15 +1755,31 @@ function updateScanWorkspaceDecisionSummaryUi() {
   }
 
   if (acceptAllBtn) {
-    acceptAllBtn.disabled = counts.actionableTotal === 0 || counts.pending === 0;
+    const canAcceptAll = counts.actionableTotal > 0 && counts.pending > 0;
+    acceptAllBtn.classList.toggle("is-unavailable", !canAcceptAll);
+    acceptAllBtn.classList.toggle("is-complete", counts.actionableTotal > 0 && counts.pending === 0);
+    acceptAllBtn.setAttribute("aria-disabled", canAcceptAll ? "false" : "true");
+    acceptAllBtn.title = canAcceptAll
+      ? "Accept all pending scan suggestions"
+      : counts.actionableTotal > 0
+        ? "All scan suggestions already have decisions"
+        : "No actionable scan suggestions are available";
   }
 
   if (undoBtn) {
-    undoBtn.disabled = scanWorkspaceAnnotationState.undoStack.length === 0;
+    const canUndo = scanWorkspaceAnnotationState.undoStack.length > 0;
+    undoBtn.classList.toggle("is-unavailable", !canUndo);
+    undoBtn.classList.toggle("is-available", canUndo);
+    undoBtn.setAttribute("aria-disabled", canUndo ? "false" : "true");
+    undoBtn.title = canUndo ? "Undo last scan decision" : "No scan decision to undo";
   }
 
   if (redoBtn) {
-    redoBtn.disabled = scanWorkspaceAnnotationState.redoStack.length === 0;
+    const canRedo = scanWorkspaceAnnotationState.redoStack.length > 0;
+    redoBtn.classList.toggle("is-unavailable", !canRedo);
+    redoBtn.classList.toggle("is-available", canRedo);
+    redoBtn.setAttribute("aria-disabled", canRedo ? "false" : "true");
+    redoBtn.title = canRedo ? "Redo last scan decision" : "No scan decision to redo";
   }
 
   if (aiSuggestionStepLabel) {
@@ -2207,6 +2312,35 @@ function renderScanWorkspaceDocumentMirrorFromPayload(
   `;
 }
 
+function getScanWorkspacePdfResumeName() {
+  const payload = getScanWorkspacePreloadPayloadForSurface();
+  const resumeName = firstNonEmptyScanWorkspaceText(
+    payload?.resume_name,
+    payload?.selected_resume,
+    payload?.selection?.selected_resume,
+    getScanWorkspacePageRoot()?.dataset?.resumeName
+  );
+  return resumeName.toLowerCase().endsWith(".pdf") ? resumeName : "";
+}
+
+function renderScanWorkspacePdfPreviewShell() {
+  return `
+    <div class="scan-workspace-pdf-preview-shell">
+      <div class="scan-workspace-pdf-toolbar" aria-label="Resume PDF preview controls">
+        <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomOutBtn">-</button>
+        <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomResetBtn">100%</button>
+        <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomInBtn">+</button>
+      </div>
+      <div class="tailoring-workspace-pdf-scroller" id="scanWorkspacePdfScroller">
+        <div class="tailoring-empty-state" id="scanWorkspacePreviewEmpty">
+          Loading PDF preview...
+        </div>
+        <div class="tailoring-workspace-pdf-pages hidden" id="scanWorkspacePdfPages"></div>
+      </div>
+    </div>
+  `;
+}
+
 function renderScanWorkspaceLiveDraftPreviewInto() {
   const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
   if (!root) return;
@@ -2217,6 +2351,18 @@ function renderScanWorkspaceLiveDraftPreviewInto() {
   }
 
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
+  const pdfResumeName = acceptedIds.length ? "" : getScanWorkspacePdfResumeName();
+  if (pdfResumeName && typeof setScanWorkspaceResumePreview === "function") {
+    root.innerHTML = renderScanWorkspacePdfPreviewShell();
+    if (typeof bindScanWorkspacePreviewControls === "function") {
+      bindScanWorkspacePreviewControls();
+    }
+    window.setTimeout(() => {
+      setScanWorkspaceResumePreview(pdfResumeName);
+    }, 0);
+    return;
+  }
+
   const noteText = acceptedIds.length
     ? `Read-only reconstructed draft from the export model using ${acceptedIds.length} accepted linked suggestion(s).`
     : "Read-only reconstructed draft from the export model. Accepted scan changes will appear here first.";
@@ -2497,14 +2643,6 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     refreshScanWorkspaceScorePreview();
     if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
       ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
-    }
-
-    if (navigateAfterSave) {
-      const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
-      const href = String(continueBtn?.getAttribute("href") || "").trim();
-      if (href) {
-        window.location.assign(href);
-      }
     }
 
     return true;
@@ -3782,14 +3920,19 @@ function bindScanWorkspaceAnnotationShell() {
   if (acceptAllBtn && acceptAllBtn.dataset.bound !== "true") {
     acceptAllBtn.dataset.bound = "true";
     acceptAllBtn.addEventListener("click", () => {
+      flashScanWorkspaceActionButton(acceptAllBtn);
       const replacementMarkers = scanWorkspaceAnnotationState.markers.filter((marker) =>
         isScanWorkspaceReplacementMarker(marker)
       );
-      if (!replacementMarkers.length) return;
+      if (!replacementMarkers.length) {
+        updateScanWorkspaceDecisionSummaryUi();
+        return;
+      }
       if (!scanWorkspaceAnnotationState.markers.some((marker) => (
         isScanWorkspaceReplacementMarker(marker) &&
         normalizeScanWorkspaceAnnotationDecision(marker?.decision) !== "accepted"
       ))) {
+        updateScanWorkspaceDecisionSummaryUi();
         return;
       }
 
@@ -3807,7 +3950,9 @@ function bindScanWorkspaceAnnotationShell() {
   if (undoBtn && undoBtn.dataset.bound !== "true") {
     undoBtn.dataset.bound = "true";
     undoBtn.addEventListener("click", () => {
+      flashScanWorkspaceActionButton(undoBtn);
       undoScanWorkspaceDecisionChange();
+      updateScanWorkspaceDecisionSummaryUi();
     });
   }
 
@@ -3815,7 +3960,9 @@ function bindScanWorkspaceAnnotationShell() {
   if (redoBtn && redoBtn.dataset.bound !== "true") {
     redoBtn.dataset.bound = "true";
     redoBtn.addEventListener("click", () => {
+      flashScanWorkspaceActionButton(redoBtn);
       redoScanWorkspaceDecisionChange();
+      updateScanWorkspaceDecisionSummaryUi();
     });
   }
 
@@ -4074,22 +4221,11 @@ function bindScanWorkspacePersistenceControls() {
     });
   }
 
-  const continueBtn = getScanWorkspaceInput("scanWorkspaceContinueBtn");
-  if (continueBtn && continueBtn.dataset.bound !== "true") {
-    continueBtn.dataset.bound = "true";
-    continueBtn.addEventListener("click", async (event) => {
-      const context = getScanWorkspaceContext();
-      const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
-      const currentSignature = getCurrentScanWorkspacePersistenceSignature();
-      const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
-      const isDirty = Boolean(hasContext && currentSignature !== savedSignature);
-
-      if (!hasContext || !isDirty) {
-        return;
-      }
-
-      event.preventDefault();
-      await saveScanWorkspaceDraftState({ navigateAfterSave: true });
+  const rescanBtn = getScanWorkspaceInput("scanWorkspaceRescanBtn");
+  if (rescanBtn && rescanBtn.dataset.bound !== "true") {
+    rescanBtn.dataset.bound = "true";
+    rescanBtn.addEventListener("click", async () => {
+      await openSavedScanRescanDraft();
     });
   }
 

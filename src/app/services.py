@@ -864,6 +864,7 @@ def _build_new_scan_review_payload(
 
 def create_saved_scan_payload(
     *,
+    scan_id: str = "",
     company: str = "",
     role: str = "",
     job_description_text: str = "",
@@ -881,6 +882,7 @@ def create_saved_scan_payload(
     safe_job_description = _clean_text(job_description_text)
     safe_job_url = _clean_text(job_url)
     safe_job_doc_id = _clean_text(job_doc_id)
+    safe_scan_id = _clean_text(scan_id)
     safe_resume_text = _clean_text(resume_text)
     safe_tailoring_json_path = _clean_text(tailoring_json_path)
     should_write_postgres = bool(str(os.environ.get("DATABASE_URL", "") or "").strip())
@@ -940,6 +942,7 @@ def create_saved_scan_payload(
 
     row = saved_scan_db_row(
         {
+            **({"scan_id": safe_scan_id} if safe_scan_id else {}),
             "scan_timestamp": scan_timestamp,
             "scan_source": "scan_workspace_new_scan",
             "scan_status": "processing",

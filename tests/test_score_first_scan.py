@@ -200,6 +200,7 @@ def test_create_saved_scan_payload_skips_postgres_without_database_url():
         payload = create_saved_scan_payload(
             company="Acme",
             role="Data Analyst",
+            job_url="https://example.com/jobs/data-analyst",
             job_description_text="Need SQL dashboards.",
             resume_text="Built SQL dashboards.",
         )
@@ -282,22 +283,25 @@ def test_scan_workspace_keeps_tailoring_navigation_for_tailoring_context():
     assert "/tailoring-workspace?" in html
     assert 'data-scan-initial-mode="review"' in html
 
-def test_saved_scans_page_discloses_reports_are_not_openable_yet():
+def test_saved_scans_page_discloses_ready_report_storage():
     html = saved_scans_page()
 
-    assert "Report viewing is disabled until report generation and saved-report restore are wired." in html
-    assert "Opening scan reports from this table is intentionally disabled" in html
+    assert "Review New Scan reports generated from submitted resumes and job descriptions." in html
+    assert "generated match score and review payload in Postgres" in html
     assert "<th>Action</th>" in html
-    assert 'colspan="8"' in html
-    assert "/static/profile.js?v=profile_saved_scans_e2_honest_state" in html
+    assert 'colspan="9"' in html
+    assert "/static/profile.js?v=profile_saved_scans_e5_discard_icon" in html
+    assert "savedScanDeleteModal" in html
 
 
-def test_saved_scans_profile_script_keeps_saved_rows_non_openable():
+def test_saved_scans_profile_script_labels_ready_reports():
     script = Path("src/app/static/profile.js").read_text(encoding="utf-8")
 
     assert 'status === "ready" || status === "complete"' in script
-    assert "Viewer pending" in script
+    assert "Report generated" in script
     assert "Saved intake only" in script
+    assert "/scan-workspace?saved_scan_id=" in script
+    assert "data-saved-scan-delete" in script
     assert "saved-scan-action-badge" in script
 
 def test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate():
@@ -980,8 +984,8 @@ if __name__ == "__main__":
     test_scan_workspace_job_context_prefills_loaded_job_description()
     test_scan_workspace_hides_tailoring_navigation_for_direct_new_scan()
     test_scan_workspace_keeps_tailoring_navigation_for_tailoring_context()
-    test_saved_scans_page_discloses_reports_are_not_openable_yet()
-    test_saved_scans_profile_script_keeps_saved_rows_non_openable()
+    test_saved_scans_page_discloses_ready_report_storage()
+    test_saved_scans_profile_script_labels_ready_reports()
     test_selector_prefers_score_positive_candidate_over_neutral_llm_candidate()
     test_selector_demotes_negative_or_neutral_candidates_from_direct_replacements()
     test_scan_issue_contract_marks_direct_guidance_and_hidden_score_gate_items()

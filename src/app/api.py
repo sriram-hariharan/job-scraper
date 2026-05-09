@@ -87,6 +87,7 @@ class PlanningScanPreloadRequest(BaseModel):
     selected_resume: str = ""
 
 class PlanningStartScanRequest(BaseModel):
+    scan_id: str = ""
     company: str = ""
     role: str = ""
     job_description_text: str = ""
@@ -550,6 +551,7 @@ def planning_start_scan(request: PlanningStartScanRequest):
         if request.upload_base64:
             upload_bytes = base64.b64decode(request.upload_base64)
         return services.create_saved_scan_payload(
+            scan_id=request.scan_id,
             company=request.company,
             role=request.role,
             job_description_text=request.job_description_text,

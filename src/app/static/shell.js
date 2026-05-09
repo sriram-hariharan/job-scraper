@@ -1,8 +1,56 @@
 const APP_SHELL_COLLAPSED_KEY = "job_stack_app_shell_collapsed";
+const JOBSTACK_THEME_KEY = "jobstack.theme";
 
 function qs(id) {
   return document.getElementById(id);
 }
+
+function normalizeJobstackTheme(value) {
+  return value === "light" ? "light" : "dark";
+}
+
+function getStoredJobstackTheme() {
+  try {
+    return normalizeJobstackTheme(window.localStorage.getItem(JOBSTACK_THEME_KEY));
+  } catch (_) {
+    return "dark";
+  }
+}
+
+function updateThemeToggle(theme) {
+  const themeToggleBtn = qs("themeToggleBtn");
+  if (!themeToggleBtn) return;
+
+  const isLight = theme === "light";
+  const nextLabel = isLight ? "Switch to dark theme" : "Switch to light theme";
+  themeToggleBtn.dataset.theme = theme;
+  themeToggleBtn.setAttribute("aria-label", nextLabel);
+  themeToggleBtn.setAttribute("aria-pressed", isLight ? "true" : "false");
+  themeToggleBtn.title = nextLabel;
+
+  const label = themeToggleBtn.querySelector(".theme-toggle-label");
+  if (label) {
+    label.textContent = isLight ? "Light" : "Dark";
+  }
+}
+
+function applyJobstackTheme(theme, { persist = true } = {}) {
+  const safeTheme = normalizeJobstackTheme(theme);
+  document.documentElement.dataset.theme = safeTheme;
+  document.documentElement.style.colorScheme = safeTheme;
+
+  if (persist) {
+    try {
+      window.localStorage.setItem(JOBSTACK_THEME_KEY, safeTheme);
+    } catch (_) {
+      // Local storage can be unavailable in privacy modes; theme still applies for this page.
+    }
+  }
+
+  updateThemeToggle(safeTheme);
+}
+
+applyJobstackTheme(getStoredJobstackTheme(), { persist: false });
 
 function setShellCollapsed(isCollapsed, { persist = true } = {}) {
   document.body.classList.toggle("app-shell-collapsed", isCollapsed);
@@ -257,6 +305,9 @@ window.clearTableWrapLoading = clearTableWrapLoading;
 
 window.addEventListener("DOMContentLoaded", () => {
   const menuBtn = qs("appShellMenuBtn");
+  const themeToggleBtn = qs("themeToggleBtn");
+
+  applyJobstackTheme(getStoredJobstackTheme(), { persist: false });
 
   const saved = window.localStorage.getItem(APP_SHELL_COLLAPSED_KEY);
   const defaultCollapsed = saved === null ? window.innerWidth < 1220 : saved === "true";
@@ -267,6 +318,14 @@ window.addEventListener("DOMContentLoaded", () => {
       event.preventDefault();
       const next = !document.body.classList.contains("app-shell-collapsed");
       setShellCollapsed(next);
+    });
+  }
+
+  if (themeToggleBtn) {
+    themeToggleBtn.addEventListener("click", (event) => {
+      event.preventDefault();
+      const currentTheme = normalizeJobstackTheme(document.documentElement.dataset.theme);
+      applyJobstackTheme(currentTheme === "light" ? "dark" : "light");
     });
   }
 

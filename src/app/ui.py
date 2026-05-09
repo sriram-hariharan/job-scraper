@@ -15,7 +15,7 @@ def executive_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Executive Queue Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
 </head>
 <body>
   {render_top_shell("/")}
@@ -683,7 +683,7 @@ def executive_dashboard() -> str:
     </div>
   </div>
 </section>
-  <script src="/static/shell.js"></script>
+  <script src="/static/shell.js?v=ux_revamp_v2"></script>
   <script src="/static/app.js"></script>
   </body>
 </html>
@@ -698,7 +698,7 @@ def scheduler_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Scheduler Ops Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
 </head>
 <body>
   {render_top_shell("/scheduler")}
@@ -760,7 +760,7 @@ def scheduler_dashboard() -> str:
     </section>
   </div>
 
-  <script src="/static/shell.js"></script>
+  <script src="/static/shell.js?v=ux_revamp_v2"></script>
   <script>
     (function () {{
       const summaryUrl = "/scheduler/summary?limit=25";

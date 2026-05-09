@@ -141,6 +141,20 @@ def render_top_shell(active_href: str) -> str:
     </div>
   </div>
 
+  <button
+    type="button"
+    class="theme-toggle-btn"
+    id="themeToggleBtn"
+    aria-label="Switch to light theme"
+    aria-pressed="false"
+    title="Switch to light theme"
+  >
+    <span class="theme-toggle-track" aria-hidden="true">
+      <span class="theme-toggle-knob"></span>
+    </span>
+    <span class="theme-toggle-label">Dark</span>
+  </button>
+
   <a
     class="app-shell-primary-link"
     href="/scan-workspace"

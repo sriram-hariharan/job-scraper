@@ -15,7 +15,7 @@ def decisions_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Decisions Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
 </head>
 <body>
 {render_top_shell("/decisions-ui")}
@@ -182,7 +182,7 @@ def decisions_dashboard() -> str:
     </div>
   </section>
 
-  <script src="/static/shell.js"></script>
+  <script src="/static/shell.js?v=ux_revamp_v2"></script>
   <script src="/static/decisions.js"></script>
 </body>
 </html>

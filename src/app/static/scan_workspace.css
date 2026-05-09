@@ -2963,3 +2963,581 @@
     flex-wrap: wrap;
   }
 }
+
+/* === Scan workspace UX revamp layer === */
+
+.scan-workspace-page {
+  padding: 22px 20px 20px;
+}
+
+.scan-workspace-page .page-header,
+.scan-workspace-header-shell {
+  padding-right: clamp(250px, 24vw, 370px);
+}
+
+.scan-workspace-mode-panel--new.is-active,
+.scan-workspace-mode-panel--processing.is-active,
+.scan-workspace-mode-panel--review.is-active {
+  margin-top: 18px;
+}
+
+.scan-workspace-intake-card,
+.scan-workspace-processing-card,
+.scan-workspace-review-shell,
+.scan-workspace-compare-shell,
+.scan-workspace-saved-scans-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-sm);
+}
+
+.scan-workspace-intake-card {
+  padding: 18px;
+}
+
+.scan-workspace-intake-header {
+  align-items: center;
+  margin-bottom: 18px;
+}
+
+.scan-workspace-intake-header h2 {
+  color: var(--text-primary);
+  font-size: 24px;
+  font-weight: 850;
+}
+
+.scan-workspace-intake-grid {
+  gap: 16px;
+}
+
+.scan-workspace-intake-panel,
+.scan-workspace-processing-step,
+.scan-workspace-processing-card,
+.scan-workspace-review-rail,
+.scan-workspace-review-main,
+.scan-workspace-review-main-stage,
+.scan-workspace-review-preview-shell,
+.scan-workspace-review-rail-summary,
+.scan-workspace-compare-pane,
+.scan-workspace-saved-scans-table-shell {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--surface-1);
+  box-shadow: none;
+}
+
+.scan-workspace-intake-panel {
+  padding: 18px;
+}
+
+.scan-workspace-intake-panel-header h3,
+.scan-workspace-review-title,
+.scan-workspace-processing-title,
+.scan-workspace-compare-title,
+.scan-workspace-section-title {
+  color: var(--text-primary);
+}
+
+.scan-workspace-input-label,
+.scan-workspace-card-label,
+.scan-workspace-processing-step-caption,
+.scan-workspace-review-kicker,
+.scan-workspace-issue-meta,
+.scan-workspace-issue-count {
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+.scan-workspace-input,
+.scan-workspace-textarea,
+.scan-workspace-file-picker,
+.scan-workspace-select,
+.scan-workspace-side-input {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-inset);
+  color: var(--text-primary);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text-primary) 4%, transparent);
+}
+
+.scan-workspace-input:hover,
+.scan-workspace-textarea:hover,
+.scan-workspace-file-picker:hover,
+.scan-workspace-select:hover,
+.scan-workspace-side-input:hover {
+  border-color: var(--border-strong);
+}
+
+.scan-workspace-input:focus,
+.scan-workspace-textarea:focus,
+.scan-workspace-select:focus,
+.scan-workspace-side-input:focus {
+  border-color: var(--accent-solid);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.scan-workspace-input[aria-invalid="true"],
+.scan-workspace-textarea[aria-invalid="true"],
+.scan-workspace-select[aria-invalid="true"] {
+  border-color: var(--danger-solid);
+  box-shadow: 0 0 0 3px var(--danger-soft);
+}
+
+.scan-workspace-textarea {
+  min-height: 176px;
+}
+
+.scan-workspace-textarea--jd {
+  min-height: 300px;
+}
+
+.scan-workspace-file-btn,
+.scan-workspace-sample-btn,
+.scan-workspace-toolbar-btn,
+.scan-workspace-rescan-btn,
+.scan-workspace-action-btn,
+.scan-workspace-start-btn,
+.scan-workspace-suggestion-action-btn {
+  border-radius: var(--radius-lg);
+  border-color: var(--border-default);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+}
+
+.scan-workspace-file-btn:hover,
+.scan-workspace-sample-btn:hover,
+.scan-workspace-toolbar-btn:hover,
+.scan-workspace-rescan-btn:hover,
+.scan-workspace-action-btn:hover,
+.scan-workspace-suggestion-action-btn:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+
+.scan-workspace-start-btn,
+.scan-workspace-primary-btn,
+.scan-workspace-action-btn--primary {
+  border-color: color-mix(in srgb, var(--accent-solid) 72%, white 8%);
+  background: linear-gradient(180deg, var(--accent-solid-hover) 0%, var(--accent-solid) 100%);
+  color: var(--accent-text);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent-solid) 24%, transparent);
+}
+
+.scan-workspace-start-btn:disabled {
+  background: var(--surface-2);
+  color: var(--text-subtle);
+  border-color: var(--border-subtle);
+  box-shadow: none;
+}
+
+.scan-workspace-toolbar-btn.is-clicked,
+.scan-workspace-rescan-btn.is-clicked,
+.scan-workspace-toolbar-btn[aria-pressed="true"],
+.scan-workspace-rescan-btn[aria-pressed="true"] {
+  border-color: var(--accent-solid);
+  background: var(--accent-soft);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+.scan-workspace-review-shell {
+  grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+  gap: 14px;
+  padding: 10px;
+}
+
+.scan-workspace-review-rail,
+.scan-workspace-review-main {
+  border-radius: var(--radius-xl);
+  background: var(--surface-1);
+}
+
+.scan-workspace-review-rail {
+  padding: 12px;
+}
+
+.scan-workspace-review-main {
+  padding: 14px;
+}
+
+.scan-workspace-score-card,
+.scan-workspace-review-nav,
+.scan-workspace-review-status-card,
+.scan-workspace-side-card,
+.scan-workspace-issue-list,
+.scan-workspace-inventory-list,
+.scan-workspace-interactive-summary-card {
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+
+.scan-workspace-review-tabs,
+.scan-workspace-review-surface-tabs {
+  border-color: var(--border-subtle);
+}
+
+.scan-workspace-review-tab,
+.scan-workspace-surface-tab {
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+}
+
+.scan-workspace-review-tab.is-active,
+.scan-workspace-surface-tab.is-active {
+  color: var(--text-primary);
+  background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent-solid);
+}
+
+.scan-workspace-workflow-step.is-active,
+.scan-workspace-workflow-step.is-complete,
+.scan-workspace-processing-step.is-complete {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+}
+
+.scan-workspace-workflow-step.is-active {
+  border-color: var(--accent-solid);
+  background: var(--accent-soft);
+}
+
+.scan-workspace-processing-progress,
+.scan-workspace-processing-progress-track {
+  background: var(--surface-3);
+}
+
+.scan-workspace-processing-progress-fill {
+  background: linear-gradient(90deg, var(--accent-solid), var(--success-solid));
+}
+
+.scan-workspace-processing-complete-icon,
+.scan-workspace-complete-mark {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.scan-workspace-alert,
+.scan-workspace-processing-note,
+.scan-workspace-status-note {
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
+.scan-workspace-alert--success,
+.scan-workspace-status-note--success {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.scan-workspace-alert--danger,
+.scan-workspace-status-note--danger {
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger-text);
+}
+
+.scan-workspace-saved-scans-table th {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+.scan-workspace-saved-scans-table td {
+  border-top-color: var(--border-subtle);
+  color: var(--text-secondary);
+}
+
+.scan-workspace-saved-scans-table tr:hover td {
+  background: var(--accent-soft);
+}
+
+.scan-workspace-status-pill,
+.scan-workspace-match-pill,
+.scan-workspace-action-pill {
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-default);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+}
+
+.scan-workspace-status-pill--ready {
+  border-color: var(--success-border);
+  background: var(--success-soft);
+  color: var(--success-text);
+}
+
+.scan-workspace-status-pill--pending {
+  border-color: var(--warning-border);
+  background: var(--warning-soft);
+  color: var(--warning-text);
+}
+
+.scan-workspace-row-delete {
+  border-color: var(--danger-border);
+  background-color: var(--danger-soft);
+}
+
+.scan-workspace-row-delete:hover {
+  border-color: var(--danger-solid);
+  background-color: color-mix(in srgb, var(--danger-soft) 68%, var(--danger-solid) 14%);
+}
+
+.scan-workspace-suggestion-popover {
+  border: 1px solid var(--border-default);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-lg);
+}
+
+.scan-workspace-suggestion-popover-kicker {
+  background: var(--accent-soft);
+  color: var(--accent-muted);
+}
+
+.scan-workspace-review-main-stage,
+.scan-workspace-review-preview-shell {
+  background: var(--surface-inset);
+}
+
+.scan-workspace-review-main .tailoring-preview-canvas--pdfjs,
+.scan-workspace-pdf-preview-shell .tailoring-workspace-pdf-scroller {
+  background: #e5e7eb;
+}
+
+#scanWorkspaceLiveDraftPreview .tailoring-workspace-doc-page,
+.scan-workspace-review-main .tailoring-workspace-pdf-page,
+.scan-workspace-review-main canvas {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .scan-workspace-review-main .tailoring-preview-canvas--pdfjs,
+html[data-theme="light"] .scan-workspace-pdf-preview-shell .tailoring-workspace-pdf-scroller {
+  background: #d9e0eb;
+}
+
+@media (max-width: 1180px) {
+  .scan-workspace-page .page-header,
+  .scan-workspace-header-shell {
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 760px) {
+  .scan-workspace-page {
+    padding: 16px 12px;
+  }
+
+  .scan-workspace-intake-card,
+  .scan-workspace-review-shell,
+  .scan-workspace-processing-card {
+    padding: 12px;
+  }
+
+  .scan-workspace-review-shell {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* === Scan workspace vivid layer === */
+
+.scan-workspace-intake-card,
+.scan-workspace-processing-card,
+.scan-workspace-review-shell,
+.scan-workspace-compare-shell,
+.scan-workspace-saved-scans-card {
+  background:
+    linear-gradient(120deg, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 34%),
+    linear-gradient(220deg, color-mix(in srgb, var(--brand-violet) 9%, transparent), transparent 38%),
+    var(--surface-raised);
+  border-color: color-mix(in srgb, var(--border-default) 72%, var(--brand-cyan) 28%);
+  box-shadow:
+    var(--shadow-md),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.scan-workspace-intake-panel,
+.scan-workspace-processing-step,
+.scan-workspace-review-rail,
+.scan-workspace-review-main,
+.scan-workspace-review-main-stage,
+.scan-workspace-review-preview-shell,
+.scan-workspace-review-rail-summary,
+.scan-workspace-compare-pane,
+.scan-workspace-saved-scans-table-shell {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--brand-blue) 7%, transparent), transparent 46%),
+    var(--surface-1);
+  border-color: color-mix(in srgb, var(--border-default) 78%, var(--brand-blue) 22%);
+}
+
+.scan-workspace-intake-panel:nth-child(2),
+.scan-workspace-compare-pane:nth-child(2n) {
+  background:
+    linear-gradient(145deg, color-mix(in srgb, var(--brand-pink) 7%, transparent), transparent 46%),
+    var(--surface-1);
+}
+
+.scan-workspace-input,
+.scan-workspace-textarea,
+.scan-workspace-file-picker,
+.scan-workspace-select,
+.scan-workspace-side-input {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 5%, transparent), transparent 54%),
+    var(--surface-inset);
+}
+
+.scan-workspace-input:focus,
+.scan-workspace-textarea:focus,
+.scan-workspace-select:focus,
+.scan-workspace-side-input:focus {
+  border-color: var(--brand-cyan);
+  box-shadow:
+    0 0 0 3px var(--focus-ring),
+    0 12px 28px color-mix(in srgb, var(--brand-cyan) 12%, transparent);
+}
+
+.scan-workspace-start-btn,
+.scan-workspace-primary-btn,
+.scan-workspace-action-btn--primary {
+  background: var(--button-gradient);
+}
+
+.scan-workspace-sample-btn,
+.scan-workspace-toolbar-btn,
+.scan-workspace-rescan-btn,
+.scan-workspace-action-btn,
+.scan-workspace-suggestion-action-btn {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-violet) 7%, transparent), transparent 52%),
+    var(--surface-1);
+}
+
+.scan-workspace-toolbar-btn.is-clicked,
+.scan-workspace-rescan-btn.is-clicked,
+.scan-workspace-toolbar-btn[aria-pressed="true"],
+.scan-workspace-rescan-btn[aria-pressed="true"] {
+  border-color: var(--brand-cyan);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 20%, transparent), color-mix(in srgb, var(--brand-violet) 13%, transparent));
+  box-shadow:
+    0 0 0 3px var(--focus-ring),
+    0 12px 28px color-mix(in srgb, var(--brand-cyan) 14%, transparent);
+}
+
+.scan-workspace-score-card {
+  background:
+    linear-gradient(140deg, color-mix(in srgb, var(--brand-gold) 11%, transparent), transparent 40%),
+    linear-gradient(220deg, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 42%),
+    var(--surface-2);
+}
+
+.scan-workspace-score-ring,
+.scan-workspace-score-circle {
+  filter: drop-shadow(0 0 18px color-mix(in srgb, var(--brand-gold) 22%, transparent));
+}
+
+.scan-workspace-review-tab.is-active,
+.scan-workspace-surface-tab.is-active {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 18%, transparent), color-mix(in srgb, var(--brand-violet) 12%, transparent));
+  box-shadow:
+    inset 0 -2px 0 var(--brand-cyan),
+    0 8px 18px color-mix(in srgb, var(--brand-blue) 12%, transparent);
+}
+
+.scan-workspace-review-nav {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 7%, transparent), transparent 52%),
+    var(--surface-2);
+}
+
+.scan-workspace-side-card,
+.scan-workspace-issue-list,
+.scan-workspace-inventory-list,
+.scan-workspace-interactive-summary-card {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-violet) 7%, transparent), transparent 54%),
+    var(--surface-2);
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-inventory-row.is-active,
+#scanWorkspaceInteractiveSummary .scan-workspace-issue-row.is-active,
+.scan-workspace-inventory-row.is-active,
+.scan-workspace-issue-row.is-active {
+  background: linear-gradient(90deg, color-mix(in srgb, var(--brand-cyan) 18%, transparent), color-mix(in srgb, var(--brand-violet) 12%, transparent));
+  box-shadow: inset 3px 0 0 var(--brand-cyan);
+}
+
+.scan-workspace-processing-progress-fill {
+  background: linear-gradient(90deg, var(--brand-cyan), var(--brand-blue), var(--brand-violet), var(--brand-pink));
+  background-size: 220% 100%;
+  animation: scan-workspace-vivid-progress 2.4s var(--ease-standard) infinite;
+}
+
+.scan-workspace-processing-step.is-active {
+  border-color: var(--brand-cyan);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 18%, transparent), color-mix(in srgb, var(--brand-violet) 10%, transparent)),
+    var(--surface-1);
+  box-shadow: 0 14px 34px color-mix(in srgb, var(--brand-cyan) 12%, transparent);
+}
+
+.scan-workspace-processing-step.is-complete {
+  border-color: var(--success-border);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-green) 18%, transparent), transparent 58%),
+    var(--surface-1);
+}
+
+.scan-workspace-status-pill--ready,
+.scan-workspace-match-pill--ready,
+.scan-workspace-action-pill--ready {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-green) 22%, transparent), var(--success-soft));
+}
+
+.scan-workspace-status-pill--pending {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-gold) 24%, transparent), var(--warning-soft));
+}
+
+.scan-workspace-row-delete {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-pink) 18%, transparent), transparent 58%),
+    var(--danger-soft);
+}
+
+.scan-workspace-suggestion-popover {
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 10%, transparent), transparent 42%),
+    var(--surface-overlay);
+}
+
+.scan-workspace-suggestion-popover-kicker {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--brand-cyan) 18%, transparent), color-mix(in srgb, var(--brand-violet) 12%, transparent));
+}
+
+.scan-workspace-review-main .tailoring-preview-canvas--pdfjs,
+.scan-workspace-pdf-preview-shell .tailoring-workspace-pdf-scroller,
+.scan-workspace-review-main-stage,
+.scan-workspace-review-preview-shell {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--brand-cyan) 9%, transparent);
+}
+
+@keyframes scan-workspace-vivid-progress {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 220% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scan-workspace-processing-progress-fill {
+    animation: none;
+  }
+}

@@ -19,7 +19,7 @@ def planning_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning Detail Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_ui_20260417_5" />
+  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -663,7 +663,7 @@ def planning_dashboard() -> str:
     </div>
   </section>
 
-  <script src="/static/shell.js"></script>
+  <script src="/static/shell.js?v=ux_revamp_v2"></script>
   <script src="/static/planning.js?v=planning_ui_20260506_declutter1"></script>
 </body>
 </html>
@@ -719,7 +719,7 @@ def tailoring_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
-  <link rel="stylesheet" href="/static/styles.css?v=tailoring_workspace_20260506_declutter1" />
+  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -1041,7 +1041,7 @@ def tailoring_workspace(
     </section>
   </div>
 
-  <script src="/static/shell.js"></script>
+  <script src="/static/shell.js?v=ux_revamp_v2"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1223,8 +1223,8 @@ def scan_workspace(
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
-  <link rel="stylesheet" href="/static/styles.css?v=scan_workspace_20260422_2" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_phase13_spacing_rescan" />
+  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=ux_revamp_v2" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -2017,7 +2017,7 @@ def scan_workspace(
     </section>
   </div>
 
-  <script src="/static/shell.js"></script>
+  <script src="/static/shell.js?v=ux_revamp_v2"></script>
   <script src="/static/planning.js?v=planning_ui_20260508_linkedin_link1"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_phase13_spacing_rescan"></script>
 </body>

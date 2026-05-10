@@ -18,6 +18,7 @@ def render_top_shell(active_href: str) -> str:
 
     for label, href, short_label in NAV_ITEMS:
         active_class = "app-shell-nav-link active" if href == active_href else "app-shell-nav-link"
+        active_current = ' aria-current="page"' if href == active_href else ""
         nav_links.append(
             f"""
             <a
@@ -25,6 +26,7 @@ def render_top_shell(active_href: str) -> str:
               href="{escape(href)}"
               data-nav-label="{escape(label)}"
               aria-label="{escape(label)}"
+              {active_current}
               title="{escape(label)}"
             >
               <span class="app-shell-nav-short" aria-hidden="true">{escape(short_label)}</span>

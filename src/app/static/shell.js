@@ -37,6 +37,7 @@ function updateThemeToggle(theme) {
 function applyJobstackTheme(theme, { persist = true } = {}) {
   const safeTheme = normalizeJobstackTheme(theme);
   document.documentElement.dataset.theme = safeTheme;
+  document.documentElement.dataset.bsTheme = safeTheme;
   document.documentElement.style.colorScheme = safeTheme;
 
   if (persist) {

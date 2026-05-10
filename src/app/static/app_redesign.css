@@ -1,0 +1,838 @@
+/* Final app UI layer.
+   Loaded after legacy CSS so the redesign is deterministic without deleting
+   older selectors that may still protect route-specific behavior. */
+:root,
+html[data-theme="dark"] {
+  --app-bg: #060913;
+  --app-bg-2: #0b1020;
+  --app-surface: rgba(18, 25, 43, 0.94);
+  --app-surface-2: rgba(25, 34, 56, 0.96);
+  --app-surface-3: rgba(34, 45, 72, 0.96);
+  --app-inset: #080d1a;
+  --app-text: #f8fbff;
+  --app-text-2: #d9e3f4;
+  --app-muted: #9aa9c2;
+  --app-border: rgba(129, 156, 205, 0.24);
+  --app-border-2: rgba(139, 169, 223, 0.38);
+  --app-primary: #7c9cff;
+  --app-primary-strong: #9bb5ff;
+  --app-secondary: #22d3ee;
+  --app-violet: #a78bfa;
+  --app-success: #34d399;
+  --app-warning: #fbbf24;
+  --app-danger: #fb7185;
+  --app-focus: rgba(124, 156, 255, 0.42);
+  --app-shadow-sm: 0 10px 26px rgba(0, 0, 0, 0.22);
+  --app-shadow-md: 0 18px 48px rgba(0, 0, 0, 0.32);
+  --app-radius-md: 14px;
+  --app-radius-lg: 18px;
+  --app-radius-xl: 24px;
+  --app-radius-pill: 999px;
+  --app-fast: 140ms;
+  --app-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --surface-page: var(--app-bg);
+  --surface-1: var(--app-surface);
+  --surface-2: var(--app-surface-2);
+  --surface-3: var(--app-surface-3);
+  --surface-inset: var(--app-inset);
+  --text-primary: var(--app-text);
+  --text-secondary: var(--app-text-2);
+  --text-muted: var(--app-muted);
+  --border-default: var(--app-border);
+  --border-strong: var(--app-border-2);
+  --accent-solid: var(--app-primary);
+  --accent-solid-hover: var(--app-primary-strong);
+  --bg: var(--surface-page);
+  --panel: var(--surface-1);
+  --panel-2: var(--surface-2);
+  --border: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-muted);
+  --accent: var(--accent-solid);
+}
+
+html[data-theme="light"] {
+  --app-bg: #eef4fb;
+  --app-bg-2: #f8fbff;
+  --app-surface: rgba(255, 255, 255, 0.96);
+  --app-surface-2: #ffffff;
+  --app-surface-3: #edf4ff;
+  --app-inset: #f4f8fd;
+  --app-text: #101828;
+  --app-text-2: #26344c;
+  --app-muted: #56657c;
+  --app-border: rgba(71, 94, 132, 0.2);
+  --app-border-2: rgba(71, 94, 132, 0.34);
+  --app-primary: #2563eb;
+  --app-primary-strong: #1d4ed8;
+  --app-secondary: #0891b2;
+  --app-violet: #7c3aed;
+  --app-success: #059669;
+  --app-warning: #b45309;
+  --app-danger: #dc2626;
+  --app-focus: rgba(37, 99, 235, 0.26);
+  --app-shadow-sm: 0 10px 24px rgba(15, 23, 42, 0.08);
+  --app-shadow-md: 0 18px 46px rgba(15, 23, 42, 0.12);
+  --surface-page: var(--app-bg);
+  --surface-1: var(--app-surface);
+  --surface-2: var(--app-surface-2);
+  --surface-3: var(--app-surface-3);
+  --surface-inset: var(--app-inset);
+  --text-primary: var(--app-text);
+  --text-secondary: var(--app-text-2);
+  --text-muted: var(--app-muted);
+  --border-default: var(--app-border);
+  --border-strong: var(--app-border-2);
+  --accent-solid: var(--app-primary);
+  --accent-solid-hover: var(--app-primary-strong);
+  --bg: var(--surface-page);
+  --panel: var(--surface-1);
+  --panel-2: var(--surface-2);
+  --border: var(--border-default);
+  --text: var(--text-primary);
+  --muted: var(--text-muted);
+  --accent: var(--accent-solid);
+}
+
+body {
+  color: var(--app-text) !important;
+  background:
+    radial-gradient(circle at 12% -12%, rgba(124, 156, 255, 0.18), transparent 34%),
+    radial-gradient(circle at 84% 4%, rgba(34, 211, 238, 0.1), transparent 28%),
+    linear-gradient(135deg, var(--app-bg) 0%, var(--app-bg-2) 52%, var(--app-bg) 100%) !important;
+}
+
+html[data-theme="light"] body {
+  background:
+    radial-gradient(circle at 4% 0%, rgba(37, 99, 235, 0.14), transparent 30%),
+    radial-gradient(circle at 96% 2%, rgba(8, 145, 178, 0.12), transparent 30%),
+    linear-gradient(135deg, #eef4fb 0%, #f8fbff 50%, #edf4fb 100%) !important;
+}
+
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: 2px;
+}
+
+.page {
+  width: min(100%, 1720px) !important;
+  max-width: none !important;
+  padding: clamp(20px, 2vw, 34px) !important;
+}
+
+h1 {
+  color: var(--app-text) !important;
+  font-size: clamp(38px, 5vw, 74px) !important;
+  font-weight: 940 !important;
+  letter-spacing: -0.045em !important;
+  line-height: 0.95 !important;
+}
+
+h2 {
+  color: var(--app-text) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.subtext,
+.subtitle,
+.page-description,
+.result-meta,
+.datetime-cell-time,
+.control-help,
+.field-help-wide {
+  color: var(--app-muted) !important;
+}
+
+.card,
+.table-card,
+.controls-card,
+.scheduler-ops-card,
+.scheduler-table-card,
+.profile-section-card,
+.saved-scans-card,
+.saved-scans-table-card,
+.application-view-card,
+.intelligence-card,
+.decision-card,
+.modal-card,
+.profile-dropdown,
+.notification-dropdown {
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-xl) !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.015)),
+    var(--app-surface) !important;
+  box-shadow: var(--app-shadow-md) !important;
+}
+
+html[data-theme="light"] .card,
+html[data-theme="light"] .table-card,
+html[data-theme="light"] .controls-card,
+html[data-theme="light"] .scheduler-ops-card,
+html[data-theme="light"] .scheduler-table-card,
+html[data-theme="light"] .profile-section-card,
+html[data-theme="light"] .saved-scans-card,
+html[data-theme="light"] .saved-scans-table-card,
+html[data-theme="light"] .application-view-card,
+html[data-theme="light"] .intelligence-card,
+html[data-theme="light"] .decision-card,
+html[data-theme="light"] .modal-card,
+html[data-theme="light"] .profile-dropdown,
+html[data-theme="light"] .notification-dropdown {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(248, 251, 255, 0.96)),
+    var(--app-surface) !important;
+}
+
+button,
+.btn,
+.ghost-btn,
+.app-shell-primary-link,
+.application-pagination-btn,
+.planning-pagination-btn,
+.job-apply-btn,
+.apply-btn,
+.planning-tailoring-btn,
+.theme-toggle-btn,
+.profile-avatar-btn,
+.notification-btn {
+  border-radius: var(--app-radius-md) !important;
+  border: 1px solid var(--app-border-2) !important;
+  font-weight: 850 !important;
+  transition:
+    transform var(--app-fast) var(--app-ease),
+    box-shadow var(--app-fast) var(--app-ease),
+    background var(--app-fast) var(--app-ease),
+    border-color var(--app-fast) var(--app-ease),
+    color var(--app-fast) var(--app-ease) !important;
+}
+
+button,
+.app-shell-primary-link {
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+}
+
+.ghost-btn,
+.application-pagination-btn,
+.planning-pagination-btn,
+.theme-toggle-btn,
+.profile-avatar-btn,
+.notification-btn,
+.job-apply-btn,
+.apply-btn,
+.planning-tailoring-btn {
+  background: var(--app-surface-2) !important;
+  color: var(--app-text) !important;
+}
+
+button:not(:disabled):hover,
+.ghost-btn:not(:disabled):hover,
+.job-apply-btn:not(:disabled):hover,
+.apply-btn:not(:disabled):hover,
+.planning-tailoring-btn:not(:disabled):hover {
+  transform: translateY(-1px);
+  border-color: var(--app-primary) !important;
+  box-shadow: var(--app-shadow-sm) !important;
+}
+
+button:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed !important;
+  opacity: 0.58 !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+input,
+select,
+textarea,
+.multi-select-trigger {
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-md) !important;
+  background: var(--app-inset) !important;
+  color: var(--app-text) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--app-muted) !important;
+  opacity: 0.9;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+.multi-select.is-open .multi-select-trigger {
+  border-color: var(--app-primary) !important;
+  box-shadow: 0 0 0 4px var(--app-focus) !important;
+}
+
+.app-shell {
+  width: var(--app-shell-width, 268px) !important;
+  border-right: 1px solid var(--app-border) !important;
+  background:
+    radial-gradient(circle at 0% 0%, rgba(124, 156, 255, 0.16), transparent 38%),
+    linear-gradient(180deg, rgba(11, 16, 32, 0.96), rgba(8, 13, 26, 0.98)) !important;
+}
+
+html[data-theme="light"] .app-shell {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.12), transparent 38%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 255, 0.98)) !important;
+}
+
+.app-shell ~ .page {
+  margin-left: var(--app-shell-width, 268px) !important;
+  padding-top: 104px !important;
+}
+
+body.app-shell-collapsed .app-shell ~ .page {
+  margin-left: var(--app-shell-collapsed-width, 68px) !important;
+}
+
+.app-shell-nav-link {
+  border-radius: var(--app-radius-md) !important;
+  color: var(--app-muted) !important;
+}
+
+.app-shell-nav-link:hover,
+.app-shell-nav-link.active,
+.app-shell-nav-link[aria-current="page"] {
+  background: rgba(124, 156, 255, 0.12) !important;
+  color: var(--app-text) !important;
+}
+
+.app-shell-top-right {
+  position: fixed !important;
+  top: 18px !important;
+  right: 22px !important;
+  z-index: 80 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  width: max-content !important;
+  max-width: min(760px, calc(100vw - var(--app-shell-width, 268px) - 56px)) !important;
+  padding: 8px !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-pill) !important;
+  background: rgba(9, 14, 28, 0.78) !important;
+  backdrop-filter: blur(18px);
+  box-shadow: var(--app-shadow-md) !important;
+}
+
+html[data-theme="light"] .app-shell-top-right {
+  background: rgba(255, 255, 255, 0.86) !important;
+}
+
+.notification-btn,
+.theme-toggle-btn,
+.app-shell-primary-link,
+.app-shell-top-right .profile-avatar-btn {
+  min-height: 48px !important;
+}
+
+.notification-btn,
+.app-shell-top-right .profile-avatar-btn {
+  width: 48px !important;
+  height: 48px !important;
+  padding: 0 !important;
+  border-radius: var(--app-radius-pill) !important;
+}
+
+.theme-toggle-btn,
+.app-shell-primary-link {
+  border-radius: var(--app-radius-pill) !important;
+}
+
+.app-shell-primary-link {
+  min-width: 178px !important;
+  padding: 0 24px !important;
+  text-decoration: none !important;
+}
+
+.stats-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)) !important;
+  gap: 16px !important;
+}
+
+.stat-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 136px;
+  padding: 22px !important;
+}
+
+.stat-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: linear-gradient(180deg, var(--app-primary), var(--app-secondary));
+}
+
+.stat-value {
+  color: var(--app-text) !important;
+  font-size: clamp(34px, 3vw, 48px) !important;
+  font-weight: 940 !important;
+  letter-spacing: -0.045em;
+}
+
+.stat-label,
+.control-group label {
+  color: var(--app-muted) !important;
+  font-size: 12px !important;
+  font-weight: 860 !important;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.dashboard-toolbar,
+.controls-row,
+.application-filter-grid,
+.filters-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px !important;
+  align-items: end !important;
+}
+
+.dashboard-toolbar-left,
+.dashboard-toolbar-left--executive,
+.dashboard-toolbar-left--planning {
+  display: grid !important;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 16px !important;
+}
+
+.dashboard-toolbar-right,
+.dashboard-toolbar-actions,
+.button-group {
+  display: flex !important;
+  justify-content: flex-end;
+  gap: 10px !important;
+}
+
+.binary-toggle {
+  padding: 5px !important;
+  border: 1px solid var(--app-border) !important;
+  border-radius: 16px !important;
+  background: var(--app-inset) !important;
+}
+
+.binary-toggle-option input:checked + span {
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+}
+
+.pipeline-run-meta,
+#schedulerOpsMeta {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0 0 18px !important;
+  padding: 9px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-pill);
+  background: rgba(124, 156, 255, 0.1);
+  color: var(--app-muted) !important;
+}
+
+.application-table-header,
+.planning-table-header,
+.scheduler-table-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 18px !important;
+  margin-bottom: 18px !important;
+}
+
+.application-table-header-right,
+.planning-table-header-right,
+.application-pagination-inline,
+.planning-pagination-inline,
+.application-pagination-actions,
+.planning-pagination-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.table-wrap,
+.saved-scans-table-wrap,
+.scheduler-attached-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--app-border) !important;
+  border-radius: var(--app-radius-xl) !important;
+  background: var(--app-surface-2) !important;
+  box-shadow: var(--app-shadow-sm) !important;
+}
+
+.table-wrap table,
+.saved-scans-table-wrap table,
+#queueTable,
+#planningTable,
+#decisionsTable,
+#applicationTable,
+#schedulerTable {
+  width: 100%;
+  min-width: max-content;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+
+.table-wrap thead th,
+.saved-scans-table-wrap thead th,
+#queueTable thead th,
+#planningTable thead th,
+#decisionsTable thead th,
+#applicationTable thead th,
+#schedulerTable thead th {
+  height: 54px !important;
+  padding: 0 18px !important;
+  border: 0 !important;
+  border-bottom: 1px solid var(--app-border) !important;
+  background:
+    linear-gradient(180deg, rgba(124, 156, 255, 0.16), rgba(124, 156, 255, 0.08)),
+    var(--app-surface-3) !important;
+  color: var(--app-text-2) !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .table-wrap thead th,
+html[data-theme="light"] .saved-scans-table-wrap thead th,
+html[data-theme="light"] #queueTable thead th,
+html[data-theme="light"] #planningTable thead th,
+html[data-theme="light"] #decisionsTable thead th,
+html[data-theme="light"] #applicationTable thead th,
+html[data-theme="light"] #schedulerTable thead th {
+  background: linear-gradient(180deg, #f7fbff 0%, #eaf2ff 100%) !important;
+  color: #243247 !important;
+}
+
+.resizable-col-content,
+.resizable-col-label,
+.sort-header-btn,
+.sort-header-label,
+.sort-header-indicator,
+th .resizable-col-content,
+th .resizable-col-label,
+th .sort-header-btn,
+th .sort-header-label {
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.resizable-col-label,
+.sort-header-label {
+  color: inherit !important;
+  font-size: 12px !important;
+  font-weight: 930 !important;
+  letter-spacing: 0.045em !important;
+  text-transform: uppercase;
+}
+
+.table-wrap tbody td,
+.saved-scans-table-wrap tbody td,
+#queueTable tbody td,
+#planningTable tbody td,
+#decisionsTable tbody td,
+#applicationTable tbody td,
+#schedulerTable tbody td {
+  padding: 18px !important;
+  border-bottom: 1px solid rgba(129, 156, 205, 0.16) !important;
+  background: rgba(255, 255, 255, 0.015) !important;
+  color: var(--app-text) !important;
+  font-weight: 620;
+}
+
+.table-wrap tbody tr:nth-child(even) td,
+.saved-scans-table-wrap tbody tr:nth-child(even) td {
+  background: rgba(124, 156, 255, 0.035) !important;
+}
+
+.table-wrap tbody tr:hover td,
+.saved-scans-table-wrap tbody tr:hover td {
+  background: rgba(124, 156, 255, 0.11) !important;
+}
+
+html[data-theme="light"] .table-wrap tbody td,
+html[data-theme="light"] .saved-scans-table-wrap tbody td,
+html[data-theme="light"] #queueTable tbody td,
+html[data-theme="light"] #planningTable tbody td,
+html[data-theme="light"] #decisionsTable tbody td,
+html[data-theme="light"] #applicationTable tbody td,
+html[data-theme="light"] #schedulerTable tbody td {
+  background: #ffffff !important;
+  color: #172033 !important;
+}
+
+html[data-theme="light"] .table-wrap tbody tr:nth-child(even) td,
+html[data-theme="light"] .saved-scans-table-wrap tbody tr:nth-child(even) td {
+  background: #f6f9fd !important;
+}
+
+html[data-theme="light"] .table-wrap tbody tr:hover td,
+html[data-theme="light"] .saved-scans-table-wrap tbody tr:hover td {
+  background: #eef6ff !important;
+}
+
+.sticky-apply-col,
+.apply-cell {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  min-width: 130px;
+  text-align: center;
+  background: var(--app-surface-2) !important;
+  box-shadow: -1px 0 0 var(--app-border) !important;
+}
+
+html[data-theme="light"] .sticky-apply-col,
+html[data-theme="light"] .apply-cell {
+  background: #ffffff !important;
+}
+
+.application-tabs,
+.scheduler-tab-row {
+  display: inline-flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid var(--app-border);
+  border-radius: 16px;
+  background: var(--app-inset);
+}
+
+.application-tab,
+.scheduler-tab-btn {
+  min-height: 40px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: var(--app-muted) !important;
+  font-weight: 860;
+}
+
+.application-tab.active,
+.scheduler-tab-btn.active,
+.scheduler-tab-btn.is-active {
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+}
+
+.resume-delete-btn::before,
+.saved-scan-delete-btn::before {
+  content: "";
+  width: 19px;
+  height: 19px;
+  background-color: currentColor;
+  -webkit-mask: url("/static/media/discard_img.svg") center / contain no-repeat;
+  mask: url("/static/media/discard_img.svg") center / contain no-repeat;
+}
+
+@media (max-width: 980px) {
+  .app-shell ~ .page,
+  body.app-shell-collapsed .app-shell ~ .page {
+    margin-left: 0 !important;
+    padding-top: 112px !important;
+  }
+
+  .app-shell-top-right {
+    right: 14px !important;
+    max-width: calc(100vw - 72px) !important;
+  }
+
+  .dashboard-toolbar,
+  .controls-row,
+  .application-filter-grid,
+  .filters-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-toolbar-right,
+  .dashboard-toolbar-actions,
+  .button-group,
+  .application-table-header-right,
+  .planning-table-header-right {
+    justify-content: flex-start;
+  }
+
+  .application-table-header,
+  .planning-table-header,
+  .scheduler-table-header {
+    flex-direction: column;
+    align-items: flex-start !important;
+  }
+}
+
+@media (max-width: 680px) {
+  .theme-toggle-label,
+  .app-shell-primary-link-label {
+    display: none !important;
+  }
+
+  .app-shell-primary-link {
+    min-width: 50px !important;
+    width: 50px !important;
+    padding: 0 !important;
+    justify-content: center !important;
+  }
+}
+
+/* Responsive and accessibility guardrails. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+.page,
+.card,
+.table-card,
+.controls-card,
+.profile-section-card,
+.scan-workspace-page,
+.tailoring-workspace-page {
+  min-width: 0;
+}
+
+.page-header,
+.section-header,
+.application-table-header,
+.planning-table-header,
+.scheduler-table-header {
+  min-width: 0;
+}
+
+.page-header-main,
+.page-header > div:first-child,
+.application-table-header h2,
+.planning-table-header h2,
+.scheduler-table-title-wrap,
+.resume-name,
+.job-link,
+.title-cell a,
+.cell-stack,
+.resume-option-block {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.table-wrap {
+  overflow-x: auto !important;
+  overscroll-behavior-x: contain;
+}
+
+button,
+.ghost-btn,
+.app-shell-primary-link,
+.job-apply-btn,
+.apply-btn,
+.planning-tailoring-btn,
+.application-pagination-btn,
+.planning-pagination-btn {
+  white-space: nowrap;
+}
+
+.notification-dropdown,
+.profile-dropdown,
+.modal-card {
+  max-width: calc(100vw - 28px) !important;
+}
+
+.modal-backdrop:not(.hidden) {
+  display: grid !important;
+}
+
+button:focus-visible,
+.ghost-btn:focus-visible,
+.app-shell-primary-link:focus-visible,
+.app-shell-nav-link:focus-visible,
+.multi-select-trigger:focus-visible,
+.binary-toggle-option input:focus-visible + span,
+.application-tab:focus-visible,
+.scheduler-tab-btn:focus-visible,
+.saved-scan-open-link:focus-visible,
+.saved-scan-delete-btn:focus-visible,
+.resume-delete-btn:focus-visible {
+  outline: 3px solid var(--app-focus) !important;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--app-focus) !important;
+}
+
+.table-wrap-loading-overlay {
+  background: rgba(6, 9, 19, 0.72) !important;
+  backdrop-filter: blur(8px);
+}
+
+html[data-theme="light"] .table-wrap-loading-overlay {
+  background: rgba(248, 251, 255, 0.74) !important;
+}
+
+.loading-state,
+.notification-empty,
+.resume-empty-state,
+.saved-scans-empty-cell,
+.tailoring-empty-state {
+  color: var(--app-muted) !important;
+}
+
+@media (max-width: 1180px) {
+  .app-shell-top-right {
+    max-width: min(680px, calc(100vw - 92px)) !important;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  h1 {
+    font-size: clamp(34px, 12vw, 52px) !important;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .header-actions,
+  .dashboard-toolbar-actions,
+  .application-pagination-inline,
+  .planning-pagination-inline,
+  .application-pagination-actions,
+  .planning-pagination-actions {
+    width: 100%;
+  }
+
+  .header-actions > *,
+  .dashboard-toolbar-actions > *,
+  .button-group > * {
+    flex: 1 1 auto;
+  }
+
+  .app-shell-top-right {
+    top: 10px !important;
+    right: 10px !important;
+    max-width: calc(100vw - 64px) !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

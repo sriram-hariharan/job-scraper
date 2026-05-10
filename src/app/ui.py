@@ -15,7 +15,9 @@ def executive_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Executive Queue Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
 </head>
 <body>
   {render_top_shell("/")}
@@ -48,7 +50,6 @@ def executive_dashboard() -> str:
             <button id="runPipelineBtn" type="button">Run Live Pipeline</button>
           </div>
         </header>
-    <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
     <section class="stats-grid">
       <section class="card stat-card">
         <div class="stat-label">Queue Rows</div>
@@ -133,6 +134,8 @@ def executive_dashboard() -> str:
         </div>
       </div>
     </section>
+
+    <div class="subtext pipeline-run-meta" id="pipelineRunMeta">Pipeline idle.</div>
 
     <section class="card table-card">
       <div class="section-header application-table-header">
@@ -683,7 +686,8 @@ def executive_dashboard() -> str:
     </div>
   </div>
 </section>
-  <script src="/static/shell.js?v=ux_revamp_v2"></script>
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=ui_redesign_v6"></script>
   <script src="/static/app.js"></script>
   </body>
 </html>
@@ -698,7 +702,9 @@ def scheduler_dashboard() -> str:
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Scheduler Ops Dashboard</title>
-  <link rel="stylesheet" href="/static/styles.css?v=ux_revamp_v2" />
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
 </head>
 <body>
   {render_top_shell("/scheduler")}
@@ -760,7 +766,8 @@ def scheduler_dashboard() -> str:
     </section>
   </div>
 
-  <script src="/static/shell.js?v=ux_revamp_v2"></script>
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=ui_redesign_v6"></script>
   <script>
     (function () {{
       const summaryUrl = "/scheduler/summary?limit=25";

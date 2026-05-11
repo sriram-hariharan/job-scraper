@@ -20,8 +20,8 @@ def planning_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -666,7 +666,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v6"></script>
+  <script src="/static/shell.js?v=ui_redesign_v17"></script>
   <script src="/static/planning.js?v=planning_ui_20260506_declutter1"></script>
 </body>
 </html>
@@ -723,9 +723,9 @@ def tailoring_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v23" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -1048,7 +1048,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v6"></script>
+  <script src="/static/shell.js?v=ui_redesign_v17"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1231,9 +1231,10 @@ def scan_workspace(
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v23" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_1" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1493,8 +1494,8 @@ def scan_workspace(
       data-scan-mode-panel="review"
       hidden
     >
-      <section class="scan-workspace-review-shell">
-        <aside class="card scan-workspace-review-rail">
+      <section class="scan-workspace-review-shell scan-review-v2">
+        <aside class="card scan-workspace-review-rail scan-review-left-pane">
           <div class="scan-workspace-review-rail-header">
             <div class="scan-workspace-review-score-card scan-workspace-review-score-card--minimal">
               <div class="scan-workspace-review-score-ring" id="scanWorkspaceScoreValue">AI</div>
@@ -1625,7 +1626,7 @@ def scan_workspace(
             </div>
           </section>
 
-          <div class="scan-workspace-review-rail-body">
+          <div class="scan-workspace-review-rail-body scan-review-left-scroll">
             <div
               id="scanWorkspaceInteractiveSummary"
               class="tailoring-interactive-shell tailoring-workspace-content"
@@ -1637,77 +1638,64 @@ def scan_workspace(
           </div>
         </aside>
 
-        <section class="card scan-workspace-review-main">
-          <div class="scan-workspace-review-main-header">
-            <div class="scan-workspace-review-nav">
-              <div
-                class="scan-workspace-review-surface-tabs"
-                role="tablist"
-                aria-label="Optimization surfaces"
-              >
-                <button
-                  type="button"
-                  class="scan-workspace-surface-tab is-active"
-                  aria-pressed="true"
-                  data-scan-surface="resume"
-                >
-                  Resume
-                </button>
+        <div
+          class="scan-workspace-divider scan-review-resizer"
+          id="scanWorkspaceDivider"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize scan workspace panes"
+          tabindex="0"
+        ></div>
 
-                <button
-                  type="button"
-                  class="scan-workspace-surface-tab"
-                  data-scan-surface="cover_letter"
-                  disabled
-                  aria-disabled="true"
-                >
-                  Cover Letter
-                </button>
-
-                <button
-                  type="button"
-                  class="scan-workspace-surface-tab"
-                  data-scan-surface="job_description"
-                  aria-disabled="false"
-                >
-                  Job Description
-                </button>
-              </div>
-
-              <div
-                class="scan-workspace-workflow-row"
-                aria-label="Resume optimization workflow"
-              >
+        <section class="card scan-workspace-review-main scan-review-right-pane">
+          <div class="scan-workspace-review-main-header scan-review-toolbar">
+            <div class="scan-workspace-review-toolbar-row">
+              <div class="scan-workspace-review-nav">
                 <div
-                  class="scan-workspace-workflow-step is-active"
-                  id="scanWorkspaceAiSuggestionStep"
+                  class="scan-workspace-review-surface-tabs scan-review-surface-tabs"
+                  role="tablist"
+                  aria-label="Optimization surfaces"
                 >
-                  <span class="scan-workspace-workflow-step-number">1</span>
-                  <span id="scanWorkspaceAiSuggestionStepLabel">AI Suggestions (0/0)</span>
-                </div>
+                  <button
+                    type="button"
+                    class="scan-workspace-surface-tab is-active"
+                    aria-pressed="true"
+                    data-scan-surface="resume"
+                  >
+                    Resume
+                  </button>
 
-                <div
-                  class="scan-workspace-workflow-step is-disabled"
-                  id="scanWorkspaceEditStep"
-                  aria-disabled="true"
-                  title="Edit step will unlock after backend scan editing is connected."
-                >
-                  <span class="scan-workspace-workflow-step-number">2</span>
-                  <span>Edit</span>
+                  <button
+                    type="button"
+                    class="scan-workspace-surface-tab"
+                    data-scan-surface="cover_letter"
+                    disabled
+                    aria-disabled="true"
+                  >
+                    Cover Letter
+                  </button>
+
+                  <button
+                    type="button"
+                    class="scan-workspace-surface-tab"
+                    data-scan-surface="job_description"
+                    aria-disabled="false"
+                  >
+                    Job Description
+                  </button>
                 </div>
               </div>
-            </div>
 
-            <div class="scan-workspace-review-main-actions">
-              <button
-                type="button"
-                class="ghost-btn btn-sm scan-workspace-toolbar-btn"
-                id="scanWorkspaceUndoBtn"
-                aria-label="Undo scan change"
-                aria-disabled="true"
-              >
-                Undo
-              </button>
+              <div class="scan-workspace-review-main-actions scan-review-actions">
+                <button
+                  type="button"
+                  class="ghost-btn btn-sm scan-workspace-toolbar-btn"
+                  id="scanWorkspaceUndoBtn"
+                  aria-label="Undo scan change"
+                  aria-disabled="true"
+                >
+                  Undo
+                </button>
 
               <button
                 type="button"
@@ -1789,10 +1777,34 @@ def scan_workspace(
               >
                 Compare
               </button>
+              </div>
+            </div>
+
+            <div
+              class="scan-workspace-workflow-row scan-review-workflow"
+              aria-label="Resume optimization workflow"
+            >
+              <div
+                class="scan-workspace-workflow-step is-active"
+                id="scanWorkspaceAiSuggestionStep"
+              >
+                <span class="scan-workspace-workflow-step-number">1</span>
+                <span id="scanWorkspaceAiSuggestionStepLabel">AI Suggestions (0/0)</span>
+              </div>
+
+              <div
+                class="scan-workspace-workflow-step is-disabled"
+                id="scanWorkspaceEditStep"
+                aria-disabled="true"
+                title="Edit step will unlock after backend scan editing is connected."
+              >
+                <span class="scan-workspace-workflow-step-number">2</span>
+                <span>Edit</span>
+              </div>
             </div>
           </div>
 
-          <section class="scan-workspace-annotation-shell">
+          <section class="scan-workspace-annotation-shell scan-review-preview-area">
             <div class="scan-workspace-annotation-topbar scan-workspace-annotation-topbar--minimal">
               <div
                 class="subtext scan-workspace-annotation-status"
@@ -2027,9 +2039,9 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v6"></script>
-  <script src="/static/planning.js?v=planning_ui_20260508_linkedin_link1"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_phase13_spacing_rescan"></script>
+  <script src="/static/shell.js?v=ui_redesign_v17"></script>
+  <script src="/static/planning.js?v=planning_ui_20260511_scan_split2"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_compact_preview1"></script>
 </body>
 </html>
     """.strip()

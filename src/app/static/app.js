@@ -637,6 +637,8 @@ function syncExecutiveViewModeControls() {
   const mode = normalizeExecutiveViewMode(state.executiveViewMode);
   const radio = document.querySelector(`input[name='executiveViewMode'][value='${mode}']`);
   if (radio) radio.checked = true;
+  document.body.classList.toggle("executive-simple-mode", mode === "simple");
+  document.body.classList.toggle("executive-detailed-mode", mode !== "simple");
 }
 
 function setExecutiveViewMode(mode) {
@@ -1748,11 +1750,11 @@ function buildQueueRowSimpleHtml(row) {
   return `
     <tr>
       <td>${queueRank}</td>
-      <td class="title-cell">
-        <div><strong>${company || "-"}</strong></div>
-        <div>${titleHtml}</div>
-        <div class="subtext-inline">Posted: ${postedAt}</div>
-        <div class="subtext-inline">${action || "-"}</div>
+      <td class="title-cell queue-simple-job-cell">
+        <div class="queue-simple-company">${company || "-"}</div>
+        <div class="queue-simple-title">${titleHtml}</div>
+        <div class="queue-simple-posted">Posted: ${postedAt}</div>
+        <div class="queue-simple-action">${action || "-"}</div>
       </td>
       <td>
         ${buildResumeOptionHtml("Best", row.winner_resume || "", row.winner_score || "")}

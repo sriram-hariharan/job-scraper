@@ -836,3 +836,1309 @@ html[data-theme="light"] .table-wrap-loading-overlay {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* UI stabilization pass: keep operational data visible while async refreshes run. */
+body {
+  overflow-x: hidden;
+}
+
+.page,
+.app-shell ~ .page,
+body.app-shell-collapsed .app-shell ~ .page {
+  width: auto !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+.app-shell-top-right {
+  position: absolute !important;
+}
+
+.table-wrap.table-wrap--loading {
+  min-height: 240px;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+.table-wrap.table-wrap--loading table {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.table-wrap-loading-overlay,
+.table-wrap-loading-overlay.hidden,
+.table-wrap:not(.table-wrap--loading) .table-wrap-loading-overlay,
+.table-wrap.table-wrap--loading .table-wrap-loading-overlay {
+  display: none !important;
+}
+
+.table-wrap.table-wrap--loading .table-wrap-loading-overlay {
+  display: none !important;
+  place-items: start center;
+  padding-top: clamp(34px, 8vh, 90px);
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(6, 9, 19, 0.18), rgba(6, 9, 19, 0.05)) !important;
+  backdrop-filter: blur(2px);
+}
+
+html[data-theme="light"] .table-wrap.table-wrap--loading .table-wrap-loading-overlay {
+  background:
+    linear-gradient(180deg, rgba(248, 251, 255, 0.42), rgba(248, 251, 255, 0.08)) !important;
+}
+
+.table-wrap-loading-overlay .loading-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 12px 18px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-pill);
+  background: var(--app-surface-2);
+  color: var(--app-text) !important;
+  box-shadow: var(--app-shadow-md);
+}
+
+html[data-theme="light"] .table-wrap-loading-overlay .loading-state {
+  background: #ffffff;
+  color: #111827 !important;
+}
+
+.table-wrap thead,
+.table-wrap tbody,
+.table-wrap tr,
+.table-wrap th,
+.table-wrap td {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.table-wrap thead th,
+#queueTable thead th,
+#planningTable thead th,
+#decisionsTable thead th,
+#applicationTable thead th,
+#schedulerTable thead th {
+  min-width: 112px;
+  vertical-align: middle;
+}
+
+.resizable-col-content,
+.sort-header-btn,
+th .resizable-col-content,
+th .sort-header-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: inherit !important;
+}
+
+.resizable-col-label,
+.sort-header-label,
+.sort-header-indicator {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-width: 0 !important;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  visibility: visible !important;
+  opacity: 1 !important;
+  color: inherit !important;
+}
+
+.sort-header-indicator {
+  flex: 0 0 auto;
+  color: var(--app-muted) !important;
+}
+
+.table-wrap tbody td,
+#planningTable tbody td,
+#queueTable tbody td,
+#decisionsTable tbody td,
+#applicationTable tbody td,
+#schedulerTable tbody td {
+  min-width: 104px;
+  line-height: 1.35;
+  vertical-align: middle;
+}
+
+#planningTable td.title-cell,
+#queueTable td.title-cell,
+#applicationTable td.title-cell,
+#decisionsTable td.reason-cell,
+#planningTable td.reason-cell {
+  min-width: 240px;
+}
+
+#planningTable tbody td *,
+#queueTable tbody td *,
+#decisionsTable tbody td *,
+#applicationTable tbody td *,
+#schedulerTable tbody td * {
+  visibility: visible !important;
+}
+
+html[data-theme="light"] .table-wrap tbody td,
+html[data-theme="light"] #planningTable tbody td,
+html[data-theme="light"] #queueTable tbody td,
+html[data-theme="light"] #decisionsTable tbody td,
+html[data-theme="light"] #applicationTable tbody td,
+html[data-theme="light"] #schedulerTable tbody td {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .table-wrap tbody tr:nth-child(even) td,
+html[data-theme="light"] #planningTable tbody tr:nth-child(even) td,
+html[data-theme="light"] #queueTable tbody tr:nth-child(even) td,
+html[data-theme="light"] #decisionsTable tbody tr:nth-child(even) td,
+html[data-theme="light"] #applicationTable tbody tr:nth-child(even) td,
+html[data-theme="light"] #schedulerTable tbody tr:nth-child(even) td {
+  background: #f7faff !important;
+}
+
+html[data-theme="light"] .table-wrap tbody tr:hover td,
+html[data-theme="light"] #planningTable tbody tr:hover td,
+html[data-theme="light"] #queueTable tbody tr:hover td,
+html[data-theme="light"] #decisionsTable tbody tr:hover td,
+html[data-theme="light"] #applicationTable tbody tr:hover td,
+html[data-theme="light"] #schedulerTable tbody tr:hover td {
+  background: #eef6ff !important;
+}
+
+html[data-theme="light"] .sticky-apply-col,
+html[data-theme="light"] .apply-cell,
+html[data-theme="light"] #planningTable th.sticky-apply-col,
+html[data-theme="light"] #planningTable td.sticky-apply-col,
+html[data-theme="light"] #planningTable td.apply-cell {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .table-wrap tbody tr:nth-child(even) .sticky-apply-col,
+html[data-theme="light"] .table-wrap tbody tr:nth-child(even) .apply-cell,
+html[data-theme="light"] #planningTable tbody tr:nth-child(even) td.sticky-apply-col,
+html[data-theme="light"] #planningTable tbody tr:nth-child(even) td.apply-cell {
+  background: #f7faff !important;
+}
+
+.planning-table-header,
+.application-table-header,
+.scheduler-table-header {
+  gap: 18px !important;
+}
+
+.planning-table-header-right,
+.application-table-header-right,
+.scheduler-table-header-right {
+  min-width: min(100%, 420px);
+}
+
+.dashboard-toolbar,
+.controls-card,
+.filters-card,
+.table-card,
+.stats-grid,
+.planning-table-header,
+.application-table-header,
+.scheduler-table-header {
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.dashboard-toolbar-actions,
+.header-actions,
+.planning-pagination-inline,
+.application-pagination-inline,
+.scheduler-pagination-inline {
+  min-width: 0 !important;
+}
+
+.table-card {
+  contain: none !important;
+  overflow: visible !important;
+}
+
+.table-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  contain: none !important;
+}
+
+.table-wrap table,
+.saved-scans-table-wrap table,
+#queueTable,
+#planningTable,
+#decisionsTable,
+#applicationTable,
+#schedulerTable {
+  display: table !important;
+}
+
+.table-wrap thead,
+.saved-scans-table-wrap thead {
+  display: table-header-group !important;
+}
+
+.table-wrap tbody,
+.saved-scans-table-wrap tbody {
+  display: table-row-group !important;
+}
+
+.table-wrap tr,
+.saved-scans-table-wrap tr {
+  display: table-row !important;
+}
+
+.table-wrap th,
+.table-wrap td,
+.saved-scans-table-wrap th,
+.saved-scans-table-wrap td {
+  display: table-cell !important;
+}
+
+#queueTable {
+  table-layout: fixed !important;
+  min-width: 2640px !important;
+}
+
+#planningTable {
+  table-layout: fixed !important;
+  min-width: 3660px !important;
+}
+
+#applicationTable {
+  table-layout: fixed !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+#decisionsTable {
+  table-layout: fixed !important;
+  width: 100% !important;
+  min-width: 2440px !important;
+}
+
+#schedulerTable {
+  table-layout: auto !important;
+  width: 100% !important;
+  min-width: 820px !important;
+}
+
+.scheduler-attached-table-wrap {
+  overflow-x: auto !important;
+}
+
+#applicationTable th,
+#applicationTable td,
+#decisionsTable th,
+#decisionsTable td,
+#schedulerTable th,
+#schedulerTable td {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+}
+
+#applicationTable th:nth-child(1),
+#applicationTable td:nth-child(1) {
+  width: 180px !important;
+}
+
+#applicationTable th:nth-child(2),
+#applicationTable td:nth-child(2) {
+  width: 220px !important;
+}
+
+#applicationTable th:nth-child(3),
+#applicationTable td:nth-child(3) {
+  width: 360px !important;
+}
+
+#applicationTable th:nth-child(4),
+#applicationTable td:nth-child(4) {
+  width: 150px !important;
+}
+
+#applicationTable th:nth-child(5),
+#applicationTable td:nth-child(5) {
+  width: 170px !important;
+}
+
+#applicationTable th:nth-child(6),
+#applicationTable td:nth-child(6) {
+  width: auto !important;
+  min-width: 220px !important;
+}
+
+#applicationTable th:nth-child(7),
+#applicationTable td:nth-child(7) {
+  width: 120px !important;
+}
+
+#decisionsTable th:nth-child(1),
+#decisionsTable td:nth-child(1) {
+  width: 190px !important;
+}
+
+#decisionsTable th:nth-child(2),
+#decisionsTable td:nth-child(2) {
+  width: 120px !important;
+}
+
+#decisionsTable th:nth-child(3),
+#decisionsTable td:nth-child(3) {
+  width: 130px !important;
+}
+
+#decisionsTable th:nth-child(4),
+#decisionsTable td:nth-child(4) {
+  width: 190px !important;
+}
+
+#decisionsTable th:nth-child(5),
+#decisionsTable td:nth-child(5) {
+  width: 300px !important;
+}
+
+#decisionsTable th:nth-child(6),
+#decisionsTable td:nth-child(6) {
+  width: 180px !important;
+}
+
+#decisionsTable th:nth-child(7),
+#decisionsTable td:nth-child(7) {
+  width: 170px !important;
+}
+
+#decisionsTable th:nth-child(8),
+#decisionsTable td:nth-child(8),
+#decisionsTable th:nth-child(9),
+#decisionsTable td:nth-child(9),
+#decisionsTable th:nth-child(10),
+#decisionsTable td:nth-child(10) {
+  width: 230px !important;
+}
+
+#decisionsTable th:nth-child(11),
+#decisionsTable td:nth-child(11) {
+  width: 260px !important;
+}
+
+#decisionsTable th:nth-child(12),
+#decisionsTable td:nth-child(12) {
+  width: 150px !important;
+}
+
+#schedulerTable th:nth-child(1),
+#schedulerTable td:nth-child(1) {
+  min-width: 260px !important;
+}
+
+#schedulerTable th:nth-child(2),
+#schedulerTable td:nth-child(2) {
+  min-width: 180px !important;
+}
+
+#schedulerTable th:nth-child(3),
+#schedulerTable td:nth-child(3) {
+  min-width: 150px !important;
+}
+
+#applicationTable .sort-header-btn,
+#decisionsTable .sort-header-btn,
+#schedulerTable .sort-header-btn {
+  white-space: normal !important;
+}
+
+#applicationTable .sort-header-label,
+#decisionsTable .sort-header-label,
+#schedulerTable .sort-header-label,
+#applicationTable .resizable-col-label,
+#decisionsTable .resizable-col-label,
+#schedulerTable .resizable-col-label {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+@media (max-width: 1500px) {
+  #applicationTable {
+    min-width: 1240px !important;
+  }
+}
+
+.table-wrap thead th,
+.table-wrap thead th *,
+.saved-scans-table-wrap thead th,
+.saved-scans-table-wrap thead th *,
+.table-wrap tbody td,
+.table-wrap tbody td *,
+.saved-scans-table-wrap tbody td,
+.saved-scans-table-wrap tbody td * {
+  opacity: 1 !important;
+  text-shadow: none !important;
+}
+
+html[data-theme="light"] .table-wrap thead th,
+html[data-theme="light"] .table-wrap thead th *,
+html[data-theme="light"] .saved-scans-table-wrap thead th,
+html[data-theme="light"] .saved-scans-table-wrap thead th * {
+  color: #172033 !important;
+}
+
+html[data-theme="light"] .table-wrap tbody td,
+html[data-theme="light"] .table-wrap tbody td *,
+html[data-theme="light"] .saved-scans-table-wrap tbody td,
+html[data-theme="light"] .saved-scans-table-wrap tbody td * {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] .table-wrap tbody td .job-link,
+html[data-theme="light"] .table-wrap tbody td .title-cell a,
+html[data-theme="light"] .table-wrap tbody td a.job-link {
+  color: #2563eb !important;
+}
+
+@media (max-width: 1180px) {
+  .app-shell-top-right {
+    position: static !important;
+    margin: 0 0 18px auto;
+  }
+}
+
+/* ui_redesign_v12: sidebar/table QA fixes. Keep behavior intact; only tighten presentation. */
+body.app-shell-collapsed .app-shell {
+  width: var(--app-shell-collapsed-width, 68px) !important;
+  padding: 18px 8px !important;
+  overflow: visible !important;
+}
+
+body.app-shell-collapsed .app-shell-brand-row,
+body.app-shell-collapsed .app-shell-brand {
+  display: none !important;
+}
+
+body.app-shell-collapsed .app-shell-nav {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 14px !important;
+  margin: 0 !important;
+  padding: 104px 0 0 !important;
+  overflow: visible !important;
+}
+
+body.app-shell-collapsed .app-shell-nav-link {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  max-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  overflow: visible !important;
+  border-radius: 15px !important;
+}
+
+body.app-shell-collapsed .app-shell-nav-link:hover {
+  transform: none !important;
+}
+
+body.app-shell-collapsed .app-shell-nav-label {
+  display: none !important;
+}
+
+body.app-shell-collapsed .app-shell-nav-short {
+  position: static !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 30px !important;
+  height: 30px !important;
+  min-width: 30px !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  color: var(--app-text) !important;
+  background: rgba(124, 156, 255, 0.14) !important;
+  border-radius: 10px !important;
+  transform: none !important;
+}
+
+body.app-shell-collapsed .app-shell-nav-link.active .app-shell-nav-short,
+body.app-shell-collapsed .app-shell-nav-link[aria-current="page"] .app-shell-nav-short {
+  color: #ffffff !important;
+  background: linear-gradient(135deg, #2563eb, #7c3aed) !important;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.24) !important;
+}
+
+html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-short {
+  color: #334155 !important;
+  background: rgba(37, 99, 235, 0.1) !important;
+}
+
+html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link.active .app-shell-nav-short,
+html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link[aria-current="page"] .app-shell-nav-short {
+  color: #ffffff !important;
+}
+
+.table-wrap thead th,
+.saved-scans-table-wrap thead th,
+.scheduler-attached-table-wrap thead th {
+  overflow: hidden !important;
+}
+
+.table-wrap thead .sort-header-btn,
+.table-wrap thead th .sort-header-btn,
+.saved-scans-table-wrap thead .sort-header-btn,
+.scheduler-attached-table-wrap thead .sort-header-btn,
+.table-wrap thead .resizable-col-content,
+.table-wrap thead th .resizable-col-content,
+.saved-scans-table-wrap thead .resizable-col-content,
+.scheduler-attached-table-wrap thead .resizable-col-content {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+.table-wrap thead .sort-header-btn::before,
+.table-wrap thead .sort-header-btn::after,
+.table-wrap thead .resizable-col-content::before,
+.table-wrap thead .resizable-col-content::after,
+.saved-scans-table-wrap thead .sort-header-btn::before,
+.saved-scans-table-wrap thead .sort-header-btn::after,
+.saved-scans-table-wrap thead .resizable-col-content::before,
+.saved-scans-table-wrap thead .resizable-col-content::after,
+.scheduler-attached-table-wrap thead .sort-header-btn::before,
+.scheduler-attached-table-wrap thead .sort-header-btn::after,
+.scheduler-attached-table-wrap thead .resizable-col-content::before,
+.scheduler-attached-table-wrap thead .resizable-col-content::after {
+  content: none !important;
+  display: none !important;
+}
+
+.table-wrap thead .sort-header-label,
+.table-wrap thead .sort-header-indicator,
+.table-wrap thead .resizable-col-label,
+.table-wrap thead .resizable-col-content > span,
+.saved-scans-table-wrap thead .sort-header-label,
+.saved-scans-table-wrap thead .sort-header-indicator,
+.saved-scans-table-wrap thead .resizable-col-label,
+.saved-scans-table-wrap thead .resizable-col-content > span,
+.scheduler-attached-table-wrap thead .sort-header-label,
+.scheduler-attached-table-wrap thead .sort-header-indicator,
+.scheduler-attached-table-wrap thead .resizable-col-label,
+.scheduler-attached-table-wrap thead .resizable-col-content > span {
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+}
+
+.table-wrap thead .sort-header-label,
+.table-wrap thead .resizable-col-label,
+.saved-scans-table-wrap thead .sort-header-label,
+.saved-scans-table-wrap thead .resizable-col-label,
+.scheduler-attached-table-wrap thead .sort-header-label,
+.scheduler-attached-table-wrap thead .resizable-col-label {
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.table-wrap thead .col-resize-handle,
+.saved-scans-table-wrap thead .col-resize-handle,
+.scheduler-attached-table-wrap thead .col-resize-handle {
+  opacity: 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  pointer-events: none !important;
+}
+
+#applicationTable {
+  min-width: 1380px !important;
+}
+
+#applicationTable th,
+#applicationTable td {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#applicationTable td:nth-child(3) {
+  white-space: normal !important;
+  line-height: 1.25 !important;
+}
+
+#applicationTable th:nth-child(5),
+#applicationTable td:nth-child(5) {
+  width: 220px !important;
+}
+
+#applicationTable th:nth-child(6),
+#applicationTable td:nth-child(6) {
+  width: 260px !important;
+  min-width: 260px !important;
+}
+
+#decisionsTable {
+  table-layout: fixed !important;
+  width: 100% !important;
+  min-width: 3200px !important;
+}
+
+#decisionsTable th,
+#decisionsTable td {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
+  vertical-align: middle !important;
+}
+
+#decisionsTable tbody td {
+  max-width: none !important;
+  line-height: 1.25 !important;
+}
+
+#decisionsTable td.reason-cell,
+#decisionsTable td:nth-child(11) {
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+}
+
+#decisionsTable th:nth-child(7),
+#decisionsTable td:nth-child(7) {
+  width: 210px !important;
+}
+
+#decisionsTable th:nth-child(8),
+#decisionsTable td:nth-child(8),
+#decisionsTable th:nth-child(9),
+#decisionsTable td:nth-child(9),
+#decisionsTable th:nth-child(10),
+#decisionsTable td:nth-child(10) {
+  width: 330px !important;
+}
+
+#decisionsTable th:nth-child(11),
+#decisionsTable td:nth-child(11) {
+  width: 390px !important;
+}
+
+#decisionsTable th:nth-child(12),
+#decisionsTable td:nth-child(12) {
+  width: 170px !important;
+}
+
+#decisionsTable td.apply-cell,
+#decisionsTable td.sticky-apply-col {
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+/* ui_redesign_v13: compact shell chrome, quieter headings, richer simple queue cells. */
+.app-shell-menu-btn {
+  left: calc(var(--app-shell-width, 268px) - 72px) !important;
+  right: auto !important;
+  top: 30px !important;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
+  padding: 7px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-shell-menu-btn:hover,
+.app-shell-menu-btn:focus-visible {
+  background: rgba(124, 156, 255, 0.12) !important;
+  box-shadow: none !important;
+}
+
+.app-shell-menu-btn-line {
+  width: 24px !important;
+  height: 3px !important;
+  border-radius: 999px !important;
+  background: var(--app-text) !important;
+}
+
+html[data-theme="light"] .app-shell-menu-btn-line {
+  background: #0f172a !important;
+}
+
+body.app-shell-collapsed .app-shell-menu-btn {
+  left: 13px !important;
+  right: auto !important;
+  top: 30px !important;
+}
+
+.app-shell-top-right {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  gap: 12px !important;
+}
+
+html[data-theme="light"] .app-shell-top-right {
+  background: transparent !important;
+}
+
+.notification-btn,
+.theme-toggle-btn,
+.app-shell-primary-link,
+.app-shell-top-right .profile-avatar-btn {
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.14) !important;
+}
+
+.page-header h1,
+.scan-workspace-page .page-header h1,
+.tailoring-workspace-page .page-header h1 {
+  font-size: clamp(42px, 5.2vw, 78px) !important;
+  line-height: 0.98 !important;
+  letter-spacing: -0.055em !important;
+}
+
+.table-card h2,
+.section-card h2,
+.dashboard-section h2,
+.scan-workspace-card h2,
+.profile-card h2,
+.saved-scans-card h2 {
+  font-size: clamp(26px, 2.3vw, 42px) !important;
+  line-height: 1.05 !important;
+  letter-spacing: -0.04em !important;
+}
+
+.page-header .subtext,
+.page-header p,
+.dashboard-subtitle,
+.section-subtitle,
+.subtext {
+  font-size: clamp(16px, 1.1vw, 21px) !important;
+  line-height: 1.45 !important;
+}
+
+.stat-card-value,
+.metric-value {
+  font-size: clamp(38px, 4.1vw, 68px) !important;
+  line-height: 0.98 !important;
+}
+
+body.executive-simple-mode #queueTable {
+  min-width: 0 !important;
+  width: 100% !important;
+  table-layout: fixed !important;
+}
+
+body.executive-simple-mode #queueTable col[data-col-key="queue_rank"] {
+  width: 112px !important;
+}
+
+body.executive-simple-mode #queueTable col[data-col-key="job"] {
+  width: auto !important;
+}
+
+body.executive-simple-mode #queueTable col[data-col-key="resume_options"] {
+  width: 360px !important;
+}
+
+body.executive-simple-mode #queueTable col[data-static-col-key="apply"] {
+  width: 116px !important;
+}
+
+body.executive-simple-mode #queueTable th.sticky-apply-col,
+body.executive-simple-mode #queueTable td.sticky-apply-col,
+body.executive-simple-mode #queueTable td.apply-cell {
+  width: 116px !important;
+  min-width: 116px !important;
+  max-width: 116px !important;
+  padding-inline: 14px !important;
+}
+
+body.executive-simple-mode #queueTable td.apply-cell .job-apply-btn {
+  width: 84px !important;
+  min-width: 84px !important;
+  padding-inline: 10px !important;
+}
+
+.queue-simple-job-cell {
+  text-align: left !important;
+}
+
+.queue-simple-company {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 8px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(20, 184, 166, 0.13);
+  color: #0f766e;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+}
+
+.queue-simple-title {
+  margin-bottom: 8px;
+  color: var(--app-primary);
+  font-size: 18px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.queue-simple-title .job-link {
+  color: inherit !important;
+}
+
+.queue-simple-posted {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 10px;
+  margin-bottom: 8px;
+  padding: 5px 10px;
+  border-radius: 10px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.queue-simple-action {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(124, 58, 237, 0.11);
+  color: #6d28d9;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+html[data-theme="dark"] .queue-simple-company {
+  background: rgba(45, 212, 191, 0.16);
+  color: #99f6e4;
+}
+
+html[data-theme="dark"] .queue-simple-posted {
+  background: rgba(96, 165, 250, 0.16);
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .queue-simple-action {
+  background: rgba(167, 139, 250, 0.18);
+  color: #ddd6fe;
+}
+
+/* ui_redesign_v14: final shell pinning and calmer type scale. */
+body:not(.app-shell-collapsed) .app-shell-menu-btn {
+  position: fixed !important;
+  top: 30px !important;
+  left: calc(var(--app-shell-width, 268px) - 62px) !important;
+  right: auto !important;
+  z-index: 180 !important;
+}
+
+body.app-shell-collapsed .app-shell-menu-btn {
+  position: fixed !important;
+  top: 30px !important;
+  left: 13px !important;
+  right: auto !important;
+  z-index: 180 !important;
+}
+
+.page-header h1,
+.scan-workspace-page .page-header h1,
+.tailoring-workspace-page .page-header h1 {
+  font-size: clamp(34px, 4.2vw, 58px) !important;
+  line-height: 1.02 !important;
+  letter-spacing: -0.045em !important;
+}
+
+.table-card h2,
+.section-card h2,
+.dashboard-section h2,
+.scan-workspace-card h2,
+.profile-card h2,
+.saved-scans-card h2,
+.modal-card h2 {
+  font-size: clamp(22px, 1.9vw, 34px) !important;
+  line-height: 1.12 !important;
+  letter-spacing: -0.032em !important;
+}
+
+.page-header .subtext,
+.page-header p,
+.dashboard-subtitle,
+.section-subtitle,
+.subtext,
+.control-help,
+.field-help-wide {
+  font-size: clamp(14px, 0.95vw, 18px) !important;
+  line-height: 1.45 !important;
+}
+
+.stat-card-value,
+.metric-value {
+  font-size: clamp(32px, 3.2vw, 52px) !important;
+  line-height: 1 !important;
+}
+
+.stat-card-label,
+.metric-label,
+label,
+.form-label,
+.table-wrap th,
+.saved-scans-table-wrap th {
+  font-size: clamp(12px, 0.82vw, 15px) !important;
+}
+
+/* ui_redesign_v15: readable/expandable data tables across the app. */
+.table-wrap,
+.saved-scans-table-wrap,
+.scheduler-attached-table-wrap {
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+}
+
+.table-wrap table,
+.saved-scans-table-wrap table,
+.scheduler-attached-table-wrap table,
+#queueTable,
+#planningTable,
+#decisionsTable,
+#applicationTable,
+#schedulerTable {
+  table-layout: auto !important;
+  width: max-content !important;
+  min-width: 100% !important;
+}
+
+.table-wrap th,
+.table-wrap td,
+.saved-scans-table-wrap th,
+.saved-scans-table-wrap td,
+.scheduler-attached-table-wrap th,
+.scheduler-attached-table-wrap td,
+#queueTable th,
+#queueTable td,
+#planningTable th,
+#planningTable td,
+#decisionsTable th,
+#decisionsTable td,
+#applicationTable th,
+#applicationTable td,
+#schedulerTable th,
+#schedulerTable td {
+  min-width: 132px !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: anywhere !important;
+  vertical-align: top !important;
+}
+
+.table-wrap th,
+.saved-scans-table-wrap th,
+.scheduler-attached-table-wrap th {
+  position: relative;
+  resize: horizontal;
+  overflow: auto !important;
+}
+
+.table-wrap thead .sort-header-btn,
+.table-wrap thead th .sort-header-btn,
+.saved-scans-table-wrap thead .sort-header-btn,
+.scheduler-attached-table-wrap thead .sort-header-btn,
+.table-wrap thead .resizable-col-content,
+.table-wrap thead th .resizable-col-content,
+.saved-scans-table-wrap thead .resizable-col-content,
+.scheduler-attached-table-wrap thead .resizable-col-content {
+  align-items: flex-start !important;
+  gap: 8px !important;
+  white-space: normal !important;
+  overflow: visible !important;
+}
+
+.table-wrap thead .sort-header-label,
+.table-wrap thead .resizable-col-label,
+.saved-scans-table-wrap thead .sort-header-label,
+.saved-scans-table-wrap thead .resizable-col-label,
+.scheduler-attached-table-wrap thead .sort-header-label,
+.scheduler-attached-table-wrap thead .resizable-col-label {
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+}
+
+.table-wrap thead .sort-header-indicator,
+.saved-scans-table-wrap thead .sort-header-indicator,
+.scheduler-attached-table-wrap thead .sort-header-indicator {
+  flex: 0 0 auto !important;
+}
+
+.table-wrap thead .col-resize-handle,
+.saved-scans-table-wrap thead .col-resize-handle,
+.scheduler-attached-table-wrap thead .col-resize-handle {
+  position: absolute !important;
+  top: 12px !important;
+  right: 0 !important;
+  bottom: 12px !important;
+  display: block !important;
+  width: 8px !important;
+  min-width: 8px !important;
+  opacity: 0.65 !important;
+  pointer-events: auto !important;
+  cursor: col-resize !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0), rgba(37, 99, 235, 0.55), rgba(37, 99, 235, 0)) !important;
+}
+
+.table-wrap thead th:hover .col-resize-handle,
+.saved-scans-table-wrap thead th:hover .col-resize-handle,
+.scheduler-attached-table-wrap thead th:hover .col-resize-handle {
+  opacity: 1 !important;
+}
+
+#queueTable th:nth-child(2),
+#queueTable td:nth-child(2),
+#planningTable th:nth-child(4),
+#planningTable td:nth-child(4),
+#planningTable th:nth-child(19),
+#planningTable td:nth-child(19),
+#decisionsTable th:nth-child(11),
+#decisionsTable td:nth-child(11),
+#applicationTable th:nth-child(3),
+#applicationTable td:nth-child(3) {
+  min-width: 260px !important;
+}
+
+#queueTable td.apply-cell,
+#queueTable td.sticky-apply-col,
+#planningTable td.apply-cell,
+#planningTable td.sticky-apply-col,
+#decisionsTable td.apply-cell,
+#decisionsTable td.sticky-apply-col {
+  vertical-align: middle !important;
+}
+
+body.executive-simple-mode #queueTable {
+  width: 100% !important;
+  min-width: 100% !important;
+}
+
+body.executive-simple-mode #queueTable th.sticky-apply-col,
+body.executive-simple-mode #queueTable td.sticky-apply-col,
+body.executive-simple-mode #queueTable td.apply-cell {
+  width: 116px !important;
+  min-width: 116px !important;
+}
+
+/* ui_redesign_v16: stronger solid metric-card backgrounds. */
+.stats-grid .stat-card {
+  border: 1px solid rgba(15, 23, 42, 0.1) !important;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14) !important;
+}
+
+.stats-grid .stat-card::before {
+  display: none !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 1) {
+  background: #dbeafe !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 2) {
+  background: #ccfbf1 !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 3) {
+  background: #ffedd5 !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 4) {
+  background: #fee2e2 !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 1) .stat-label,
+.stats-grid .stat-card:nth-child(4n + 1) .stat-value {
+  color: #0f2f64 !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 2) .stat-label,
+.stats-grid .stat-card:nth-child(4n + 2) .stat-value {
+  color: #0f4f47 !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 3) .stat-label,
+.stats-grid .stat-card:nth-child(4n + 3) .stat-value {
+  color: #7c2d12 !important;
+}
+
+.stats-grid .stat-card:nth-child(4n + 4) .stat-label,
+.stats-grid .stat-card:nth-child(4n + 4) .stat-value {
+  color: #7f1d1d !important;
+}
+
+.stats-grid .stat-card .stat-label {
+  opacity: 0.86 !important;
+}
+
+html[data-theme="dark"] .stats-grid .stat-card:nth-child(4n + 1) {
+  background: #1d3b73 !important;
+}
+
+html[data-theme="dark"] .stats-grid .stat-card:nth-child(4n + 2) {
+  background: #14514a !important;
+}
+
+html[data-theme="dark"] .stats-grid .stat-card:nth-child(4n + 3) {
+  background: #7a3a12 !important;
+}
+
+html[data-theme="dark"] .stats-grid .stat-card:nth-child(4n + 4) {
+  background: #742323 !important;
+}
+
+html[data-theme="dark"] .stats-grid .stat-card .stat-label,
+html[data-theme="dark"] .stats-grid .stat-card .stat-value {
+  color: #f8fafc !important;
+}
+
+/* ui_redesign_v17: table header spacing and subtle resize grips. */
+.table-wrap thead th,
+.saved-scans-table-wrap thead th,
+.scheduler-attached-table-wrap thead th,
+#queueTable thead th,
+#planningTable thead th,
+#decisionsTable thead th,
+#applicationTable thead th,
+#schedulerTable thead th {
+  padding: 16px 26px 16px 18px !important;
+  vertical-align: middle !important;
+  line-height: 1.25 !important;
+}
+
+.table-wrap thead .sort-header-btn,
+.table-wrap thead th .sort-header-btn,
+.saved-scans-table-wrap thead .sort-header-btn,
+.scheduler-attached-table-wrap thead .sort-header-btn,
+.table-wrap thead .resizable-col-content,
+.table-wrap thead th .resizable-col-content,
+.saved-scans-table-wrap thead .resizable-col-content,
+.scheduler-attached-table-wrap thead .resizable-col-content {
+  align-items: center !important;
+  min-height: 28px !important;
+  line-height: 1.25 !important;
+}
+
+.table-wrap thead .sort-header-label,
+.table-wrap thead .resizable-col-label,
+.saved-scans-table-wrap thead .sort-header-label,
+.saved-scans-table-wrap thead .resizable-col-label,
+.scheduler-attached-table-wrap thead .sort-header-label,
+.scheduler-attached-table-wrap thead .resizable-col-label {
+  line-height: 1.25 !important;
+}
+
+.table-wrap thead .col-resize-handle,
+.saved-scans-table-wrap thead .col-resize-handle,
+.scheduler-attached-table-wrap thead .col-resize-handle {
+  top: 50% !important;
+  right: 8px !important;
+  bottom: auto !important;
+  width: 4px !important;
+  min-width: 4px !important;
+  height: 26px !important;
+  transform: translateY(-50%) !important;
+  opacity: 0.42 !important;
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.25), rgba(37, 99, 235, 0.85), rgba(37, 99, 235, 0.25)) !important;
+  box-shadow: none !important;
+}
+
+.table-wrap thead .col-resize-handle::before,
+.saved-scans-table-wrap thead .col-resize-handle::before,
+.scheduler-attached-table-wrap thead .col-resize-handle::before {
+  content: "" !important;
+  position: absolute;
+  inset: -6px -4px;
+}
+
+.table-wrap thead th.sticky-apply-col,
+.table-wrap thead th.apply-col-fixed,
+.table-wrap thead th:last-child,
+.saved-scans-table-wrap thead th:last-child,
+.scheduler-attached-table-wrap thead th:last-child,
+#queueTable thead th.sticky-apply-col,
+#planningTable thead th.sticky-apply-col,
+#decisionsTable thead th.sticky-apply-col,
+#queueTable thead th.apply-col-fixed,
+#planningTable thead th.apply-col-fixed,
+#decisionsTable thead th.apply-col-fixed {
+  padding-right: 18px !important;
+  resize: none !important;
+}
+
+.table-wrap thead th.sticky-apply-col .col-resize-handle,
+.table-wrap thead th.apply-col-fixed .col-resize-handle,
+.table-wrap thead th:last-child .col-resize-handle,
+.saved-scans-table-wrap thead th:last-child .col-resize-handle,
+.scheduler-attached-table-wrap thead th:last-child .col-resize-handle,
+#queueTable thead th.sticky-apply-col .col-resize-handle,
+#planningTable thead th.sticky-apply-col .col-resize-handle,
+#decisionsTable thead th.sticky-apply-col .col-resize-handle,
+#queueTable thead th.apply-col-fixed .col-resize-handle,
+#planningTable thead th.apply-col-fixed .col-resize-handle,
+#decisionsTable thead th.apply-col-fixed .col-resize-handle {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}

@@ -16,8 +16,8 @@ def applied_jobs_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Applied Jobs</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
 </head>
 <body>
   {render_top_shell("/applied")}
@@ -134,7 +134,7 @@ def applied_jobs_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v6"></script>
+  <script src="/static/shell.js?v=ui_redesign_v17"></script>
   <script src="/static/application_views.js"></script>
 </body>
 </html>

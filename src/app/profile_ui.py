@@ -16,8 +16,8 @@ def profile_page() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -123,7 +123,7 @@ def profile_page() -> str:
 </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v6"></script>
+  <script src="/static/shell.js?v=ui_redesign_v17"></script>
   <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
 </body>
 </html>
@@ -140,8 +140,8 @@ def saved_scans_page() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v6" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v6" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -233,7 +233,7 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v6"></script>
+  <script src="/static/shell.js?v=ui_redesign_v17"></script>
   <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
 </body>
 </html>

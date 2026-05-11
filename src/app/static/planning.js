@@ -1,5 +1,6 @@
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
 const TAILORING_WORKSPACE_SPLIT_STORAGE_KEY = "tailoring_workspace_left_width_pct";
+const SCAN_WORKSPACE_SPLIT_STORAGE_KEY = "scan_workspace_left_width_pct";
 
 let currentTailoringMarkdownRaw = "";
 let tailoringCopyResetTimer = null;
@@ -11089,6 +11090,83 @@ function bindScanWorkspacePreviewControls() {
   });
 }
 
+function applyScanWorkspaceSplitPercent(percent, { persist = true } = {}) {
+  const layout = document.querySelector(".scan-workspace-review-shell");
+  if (!layout || window.innerWidth <= 1180) return;
+
+  const safePercent = clampToRange(Number(percent) || 31, 22, 48);
+  layout.style.setProperty("--scan-workspace-left-width", `${safePercent}%`);
+
+  if (persist) {
+    localStorage.setItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY, String(safePercent));
+  }
+}
+
+function bindScanWorkspaceDivider() {
+  const divider = qs("scanWorkspaceDivider");
+  const layout = document.querySelector(".scan-workspace-review-shell");
+
+  if (!divider || !layout || divider.dataset.bound === "true") return;
+  divider.dataset.bound = "true";
+
+  const restoreSavedSplit = () => {
+    if (window.innerWidth <= 1180) {
+      layout.style.removeProperty("--scan-workspace-left-width");
+      return;
+    }
+
+    const saved = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY));
+    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 31, { persist: false });
+  };
+
+  const refreshAfterResize = () => {
+    try {
+      syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+    } catch {
+      // Annotation markers are best-effort during split resizing.
+    }
+  };
+
+  divider.addEventListener("pointerdown", (event) => {
+    if (window.innerWidth <= 1180) return;
+
+    event.preventDefault();
+    document.body.classList.add("scan-workspace-resizing");
+
+    const move = (moveEvent) => {
+      const rect = layout.getBoundingClientRect();
+      const rawPercent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
+      applyScanWorkspaceSplitPercent(rawPercent);
+    };
+
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      document.body.classList.remove("scan-workspace-resizing");
+      refreshAfterResize();
+    };
+
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop, { once: true });
+  });
+
+  divider.addEventListener("keydown", (event) => {
+    if (window.innerWidth <= 1180) return;
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+
+    event.preventDefault();
+
+    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "31");
+    const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
+
+    applyScanWorkspaceSplitPercent(next);
+    refreshAfterResize();
+  });
+
+  window.addEventListener("resize", restoreSavedSplit);
+  restoreSavedSplit();
+}
+
 async function initScanWorkspacePage() {
   const page = getScanWorkspacePage();
   if (!page) return false;
@@ -11777,6 +11855,7 @@ window.addEventListener("DOMContentLoaded", async () => {
   }
 
   if (isScanWorkspacePage) {
+    bindScanWorkspaceDivider();
     await initScanWorkspacePage();
     return;
   }

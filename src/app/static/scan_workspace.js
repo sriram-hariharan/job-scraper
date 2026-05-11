@@ -208,13 +208,16 @@ function getScanWorkspaceLoadedJobLabel() {
 
 function normalizeScanWorkspaceSurface(surface) {
   const safeSurface = String(surface || "").trim().toLowerCase();
-  return safeSurface === "job_description" ? "job_description" : "resume";
+  if (safeSurface === "job_description") return "job_description";
+  if (safeSurface === "cover_letter") return "cover_letter";
+  return "resume";
 }
 
 function updateScanWorkspaceSurfaceTabs() {
   document.querySelectorAll("[data-scan-surface]").forEach((button) => {
     const surface = normalizeScanWorkspaceSurface(button.dataset.scanSurface || "");
-    const isActive = surface === scanWorkspacePreviewState.activeSurface;
+    const isDisabled = button.disabled || button.getAttribute("aria-disabled") === "true";
+    const isActive = !isDisabled && surface === scanWorkspacePreviewState.activeSurface;
     button.classList.toggle("is-active", isActive);
     button.setAttribute("aria-pressed", isActive ? "true" : "false");
   });
@@ -1799,15 +1802,11 @@ function updateScanWorkspaceDecisionSummaryUi() {
 
   if (scoreValue) {
     const scoreSource = String(scoreValue.dataset.scanScoreSource || "").trim();
-    if (scoreSource !== "backend") {
-      scoreValue.textContent = counts.actionableTotal > 0
-        ? String(Math.round((counts.accepted / counts.actionableTotal) * 100))
-        : "0";
+    if (scoreSource !== "backend" && counts.actionableTotal > 0) {
+      scoreValue.textContent = String(Math.round((counts.accepted / counts.actionableTotal) * 100));
       scoreValue.setAttribute(
         "aria-label",
-        counts.actionableTotal > 0
-          ? `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
-          : "No AI suggestions loaded"
+        `${counts.accepted} of ${counts.actionableTotal} replacement suggestions accepted`
       );
     }
   }
@@ -2325,12 +2324,12 @@ function getScanWorkspacePdfResumeName() {
 
 function renderScanWorkspacePdfPreviewShell() {
   return `
+    <div class="scan-workspace-pdf-toolbar" aria-label="Resume PDF preview controls">
+      <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomOutBtn">-</button>
+      <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomResetBtn">100%</button>
+      <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomInBtn">+</button>
+    </div>
     <div class="scan-workspace-pdf-preview-shell">
-      <div class="scan-workspace-pdf-toolbar" aria-label="Resume PDF preview controls">
-        <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomOutBtn">-</button>
-        <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomResetBtn">100%</button>
-        <button type="button" class="ghost-btn btn-sm" id="scanWorkspaceZoomInBtn">+</button>
-      </div>
       <div class="tailoring-workspace-pdf-scroller" id="scanWorkspacePdfScroller">
         <div class="tailoring-empty-state" id="scanWorkspacePreviewEmpty">
           Loading PDF preview...

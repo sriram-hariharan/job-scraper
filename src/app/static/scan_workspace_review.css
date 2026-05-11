@@ -1,0 +1,673 @@
+/* AI Optimize Scan review v2
+   Loaded after the legacy workspace stylesheet. Keep final review layout here. */
+
+.scan-workspace-page {
+  width: min(100%, 1920px) !important;
+  max-width: none !important;
+  padding: 10px 18px 22px !important;
+  color: #0f172a !important;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12), transparent 28%),
+    linear-gradient(225deg, rgba(14, 165, 233, 0.13), transparent 30%),
+    #edf5ff !important;
+  overflow: visible !important;
+}
+
+.scan-workspace-page .scan-workspace-header-shell,
+.scan-workspace-page .scan-workspace-header-shell--minimal {
+  margin: 0 0 12px !important;
+  padding: 0 !important;
+}
+
+.scan-workspace-page .scan-workspace-header-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) max-content !important;
+  align-items: center !important;
+  gap: 14px !important;
+  min-height: 44px !important;
+}
+
+.scan-workspace-page .scan-workspace-header-copy h1,
+.scan-workspace-page .page-header h1 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: clamp(28px, 3vw, 46px) !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+}
+
+.scan-workspace-page .scan-workspace-header-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex-wrap: nowrap !important;
+  gap: 8px !important;
+  min-width: max-content !important;
+}
+
+.scan-workspace-mode-panel--review.is-active {
+  display: block !important;
+  margin-top: 0 !important;
+  padding: 0 !important;
+  overflow: visible !important;
+}
+
+.scan-review-v2 {
+  --scan-review-left: var(--scan-workspace-left-width, 40%);
+  display: grid !important;
+  grid-template-columns: minmax(360px, var(--scan-review-left)) 16px minmax(0, 1fr) !important;
+  gap: 12px !important;
+  align-items: start !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.scan-review-v2,
+.scan-review-v2 * {
+  box-sizing: border-box;
+}
+
+.scan-review-left-pane,
+.scan-review-right-pane {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  border: 1px solid #bfd0e4 !important;
+  border-radius: 16px !important;
+  background: rgba(248, 251, 255, 0.94) !important;
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08) !important;
+  overflow: hidden !important;
+}
+
+.scan-review-left-pane {
+  position: sticky !important;
+  top: 12px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  max-height: calc(100vh - 92px) !important;
+  padding: 12px !important;
+}
+
+.scan-review-right-pane {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  min-height: calc(100vh - 92px) !important;
+  padding: 12px !important;
+}
+
+.scan-review-resizer {
+  position: sticky !important;
+  top: 12px !important;
+  width: 16px !important;
+  height: calc(100vh - 92px) !important;
+  min-height: 520px !important;
+  border: 0 !important;
+  border-radius: 999px !important;
+  background: #2563eb !important;
+  cursor: col-resize !important;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.18) !important;
+}
+
+.scan-review-resizer::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 4px;
+  height: 28px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, #ffffff 0 2px, transparent 2.5px) 0 0 / 4px 9px;
+  opacity: 0.95;
+}
+
+.scan-workspace-resizing,
+.scan-workspace-resizing * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-rail-header {
+  flex: 0 0 auto !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-score-card {
+  display: grid !important;
+  grid-template-columns: 84px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 14px !important;
+  margin: 0 0 12px !important;
+  padding: 16px !important;
+  border: 1px solid #93c5fd !important;
+  border-radius: 14px !important;
+  background: linear-gradient(135deg, #dff4ff 0%, #d6f7ef 100%) !important;
+  box-shadow: none !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-score-ring {
+  width: 68px !important;
+  height: 68px !important;
+  font-size: 26px !important;
+  line-height: 68px !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-score-title {
+  color: #0f172a !important;
+  font-size: 22px !important;
+  line-height: 1.1 !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-context-line,
+.scan-review-left-pane .subtext,
+.scan-review-left-pane .scan-workspace-review-inline-metric-label {
+  color: #475569 !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-inline-metrics {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  margin-top: 8px !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-inline-metric {
+  min-height: 28px !important;
+  padding: 4px 10px !important;
+  border: 1px solid #93c5fd !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-controls {
+  flex: 0 0 auto !important;
+  margin: 0 0 12px !important;
+  padding: 10px !important;
+  border: 1px solid #b7c7dd !important;
+  border-radius: 14px !important;
+  background: #eaf3ff !important;
+  box-shadow: none !important;
+}
+
+.scan-review-left-pane .scan-workspace-tab-row {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-left-pane .scan-workspace-tab-btn {
+  min-height: 34px !important;
+  padding: 4px 7px !important;
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  line-height: 1.05 !important;
+  text-align: center !important;
+  white-space: normal !important;
+}
+
+.scan-review-left-pane .scan-workspace-tab-btn.active {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-controls-body {
+  padding-top: 8px !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-actions--rail {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  margin-top: 8px !important;
+}
+
+.scan-review-left-pane .scan-workspace-review-actions--rail button,
+.scan-review-left-pane #scanWorkspaceSaveBtn {
+  min-height: 32px !important;
+  padding: 0 12px !important;
+  border: 1px solid #bfd0e4 !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+}
+
+.scan-review-left-scroll {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  padding: 2px 2px 96px !important;
+  color: #0f172a !important;
+}
+
+.scan-review-left-scroll :is(.tailoring-section-title, .tailoring-card-title, .scan-workspace-taxonomy-title, .scan-workspace-taxonomy-group-title, .scan-workspace-issue-title) {
+  color: #0f172a !important;
+  background: transparent !important;
+  opacity: 1 !important;
+}
+
+.scan-review-left-scroll :is(.tailoring-card-copy, .tailoring-card-meta, .tailoring-info-label, .tailoring-edit-card-label, .scan-workspace-issue-meta, .scan-workspace-issue-signals, .scan-workspace-taxonomy-group-summary) {
+  color: #475569 !important;
+  opacity: 1 !important;
+}
+
+.scan-review-left-scroll :is(.scan-workspace-taxonomy-panel, .scan-workspace-taxonomy-summary, .scan-workspace-taxonomy-group, .tailoring-empty-state, .tailoring-section-block) {
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-left-scroll .scan-workspace-issue-row {
+  min-height: 48px !important;
+  padding: 10px 12px !important;
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.scan-review-left-scroll .scan-workspace-issue-row.is-active,
+.scan-review-left-scroll .scan-workspace-issue-row:hover {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+}
+
+.scan-review-left-scroll .scan-workspace-issue-exclude-btn {
+  border: 1px solid #ef4444 !important;
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  font-weight: 900 !important;
+  opacity: 1 !important;
+}
+
+.scan-review-toolbar {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+  flex: 0 0 auto !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.scan-workspace-review-toolbar-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 8px 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-v2 .scan-workspace-review-nav {
+  display: flex !important;
+  align-items: center !important;
+  flex: 1 1 360px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-surface-tabs {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  max-width: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-surface-tabs .scan-workspace-surface-tab {
+  min-height: 34px !important;
+  padding: 0 12px !important;
+  border: 1px solid #bfd0e4 !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: none !important;
+}
+
+.scan-review-surface-tabs .scan-workspace-surface-tab.is-active {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.scan-review-surface-tabs .scan-workspace-surface-tab:disabled,
+.scan-review-surface-tabs .scan-workspace-surface-tab[aria-disabled="true"] {
+  border-color: #d7e0ec !important;
+  background: #f1f5f9 !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+}
+
+.scan-review-surface-tabs .scan-workspace-surface-tab::after {
+  content: none !important;
+}
+
+.scan-review-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  flex: 0 1 auto !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+.scan-review-actions .scan-workspace-toolbar-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 0 11px !important;
+  border: 1px solid #8aa7cc !important;
+  border-radius: 10px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+  box-shadow: none !important;
+}
+
+.scan-review-actions .scan-workspace-toolbar-btn:not(:disabled):hover {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+}
+
+.scan-review-actions #scanWorkspaceUndoBtn,
+.scan-review-actions #scanWorkspaceRedoBtn {
+  width: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  font-size: 0 !important;
+}
+
+.scan-review-actions #scanWorkspaceUndoBtn::before,
+.scan-review-actions #scanWorkspaceRedoBtn::before {
+  display: block !important;
+  width: 1em !important;
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: 18px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  opacity: 1 !important;
+}
+
+.scan-review-actions .scan-workspace-toolbar-icon {
+  width: 15px !important;
+  height: 15px !important;
+  opacity: 1 !important;
+  filter: brightness(0) saturate(100%) invert(16%) sepia(25%) saturate(1338%) hue-rotate(179deg) brightness(91%) contrast(92%) !important;
+}
+
+.scan-review-workflow {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  flex-wrap: wrap !important;
+  gap: 8px 12px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-workflow .scan-workspace-workflow-step {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  min-height: 30px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+  line-height: 1.15 !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.scan-review-workflow .scan-workspace-workflow-step-number {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  flex: 0 0 28px !important;
+  border-radius: 999px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18) !important;
+}
+
+.scan-review-preview-area {
+  display: flex !important;
+  flex: 1 1 auto !important;
+  flex-direction: column !important;
+  gap: 0 !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+}
+
+.scan-review-preview-area .scan-workspace-annotation-topbar {
+  display: none !important;
+}
+
+.scan-review-preview-area .scan-workspace-annotation-stage {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 14px !important;
+  background: #eef5fd !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+.scan-review-preview-area .scan-workspace-review-preview-shell,
+.scan-review-preview-area .tailoring-preview-canvas--pdfjs {
+  height: 100% !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  background: #eef5fd !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.scan-review-preview-area .tailoring-workspace-preview-header {
+  margin: 0 0 10px !important;
+  padding: 10px 12px !important;
+  border: 1px solid #bfd0e4 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+#scanWorkspaceLiveDraftPreview {
+  position: relative !important;
+  flex: 1 1 auto !important;
+  min-height: 560px !important;
+  padding: 10px !important;
+  overflow: hidden !important;
+  background: #eef5fd !important;
+}
+
+.scan-workspace-pdf-toolbar {
+  position: absolute !important;
+  top: 18px !important;
+  right: 18px !important;
+  z-index: 8 !important;
+  display: inline-flex !important;
+  gap: 4px !important;
+  width: auto !important;
+  padding: 4px !important;
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12) !important;
+}
+
+.scan-workspace-pdf-toolbar .ghost-btn {
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+.scan-workspace-pdf-toolbar #scanWorkspaceZoomResetBtn {
+  width: 48px !important;
+  min-width: 48px !important;
+}
+
+.scan-workspace-pdf-preview-shell {
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 8px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: #eef5fd !important;
+  overflow: hidden !important;
+  box-shadow: none !important;
+}
+
+.scan-workspace-pdf-preview-shell .tailoring-workspace-pdf-scroller {
+  height: 100% !important;
+  min-height: 520px !important;
+  max-height: calc(100vh - 246px) !important;
+  padding: 18px 18px 120px !important;
+  overflow-y: auto !important;
+  background: #eef5fd !important;
+}
+
+.scan-review-preview-area .tailoring-workspace-pdf-page-shell {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-preview-area .tailoring-workspace-pdf-page-canvas,
+.scan-review-preview-area .tailoring-workspace-doc-page {
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.12) !important;
+}
+
+.scan-workspace-job-description-panel {
+  border: 1px solid #cbd8e8 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.scan-workspace-job-description-panel pre {
+  color: #334155 !important;
+  background: #f8fafc !important;
+}
+
+@media (max-width: 1380px) {
+  .scan-review-v2 {
+    grid-template-columns: minmax(330px, var(--scan-review-left)) 14px minmax(0, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  .scan-review-left-pane .scan-workspace-tab-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .scan-workspace-page .scan-workspace-header-copy h1,
+  .scan-workspace-page .page-header h1 {
+    font-size: clamp(26px, 2.8vw, 38px) !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .scan-workspace-page .scan-workspace-header-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .scan-workspace-page .scan-workspace-header-copy h1 {
+    white-space: normal !important;
+  }
+
+  .scan-workspace-page .scan-workspace-header-actions {
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+    min-width: 0 !important;
+  }
+
+  .scan-review-v2 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .scan-review-resizer {
+    display: none !important;
+  }
+
+  .scan-review-left-pane {
+    position: static !important;
+    max-height: none !important;
+  }
+
+  .scan-review-left-scroll,
+  .scan-workspace-pdf-preview-shell .tailoring-workspace-pdf-scroller {
+    max-height: none !important;
+  }
+}

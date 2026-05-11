@@ -11094,7 +11094,7 @@ function applyScanWorkspaceSplitPercent(percent, { persist = true } = {}) {
   const layout = document.querySelector(".scan-workspace-review-shell");
   if (!layout || window.innerWidth <= 1180) return;
 
-  const safePercent = clampToRange(Number(percent) || 31, 22, 48);
+  const safePercent = clampToRange(Number(percent) || 40, 24, 52);
   layout.style.setProperty("--scan-workspace-left-width", `${safePercent}%`);
 
   if (persist) {
@@ -11116,7 +11116,7 @@ function bindScanWorkspaceDivider() {
     }
 
     const saved = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY));
-    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 31, { persist: false });
+    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 40, { persist: false });
   };
 
   const refreshAfterResize = () => {
@@ -11156,7 +11156,7 @@ function bindScanWorkspaceDivider() {
 
     event.preventDefault();
 
-    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "31");
+    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "40");
     const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
 
     applyScanWorkspaceSplitPercent(next);

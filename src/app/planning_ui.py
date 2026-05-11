@@ -1233,8 +1233,7 @@ def scan_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v23" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_1" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_7" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1694,7 +1693,13 @@ def scan_workspace(
                   aria-label="Undo scan change"
                   aria-disabled="true"
                 >
-                  Undo
+                  <img
+                    class="scan-workspace-toolbar-icon"
+                    src="/static/media/undo.svg"
+                    alt=""
+                    aria-hidden="true"
+                  />
+                  <span class="visually-hidden">Undo</span>
                 </button>
 
               <button
@@ -1704,7 +1709,13 @@ def scan_workspace(
                 aria-label="Redo scan change"
                 aria-disabled="true"
               >
-                Redo
+                <img
+                  class="scan-workspace-toolbar-icon"
+                  src="/static/media/redo.svg"
+                  alt=""
+                  aria-hidden="true"
+                />
+                <span class="visually-hidden">Redo</span>
               </button>
 
               <button
@@ -2040,7 +2051,7 @@ def scan_workspace(
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v17"></script>
-  <script src="/static/planning.js?v=planning_ui_20260511_scan_split2"></script>
+  <script src="/static/planning.js?v=planning_ui_20260511_scan_split3"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_compact_preview1"></script>
 </body>
 </html>

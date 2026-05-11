@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
+from urllib.parse import urlparse, urlunparse
 import csv
 import hashlib
 import json
@@ -3738,7 +3739,36 @@ _WORKSPACE_PERSONAL_DETAIL_FIELDS = (
     "contact",
     "email",
     "linkedin",
+    "github",
 )
+
+
+def _normalize_workspace_profile_url(value: Any, expected_host: str) -> str:
+    raw = _clean_text(value)
+    if not raw:
+        return ""
+
+    candidate = raw if re.match(r"^https?://", raw, flags=re.IGNORECASE) else f"https://{raw}"
+    try:
+        parsed = urlparse(candidate)
+    except Exception:
+        return ""
+
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    path = (parsed.path or "").rstrip("/")
+
+    if expected_host == "linkedin":
+        if host != "linkedin.com" or not re.match(r"^/in/[^/]+$", path, flags=re.IGNORECASE):
+            return ""
+        if "github" in path.lower():
+            return ""
+    elif expected_host == "github":
+        if host != "github.com" or not re.match(r"^/[A-Za-z0-9-]+$", path):
+            return ""
+
+    return urlunparse(("https", host, path, "", "", ""))
 
 
 def _normalize_workspace_personal_details(value: Any) -> Dict[str, str]:
@@ -3763,6 +3793,8 @@ def _normalize_workspace_personal_details(value: Any) -> Dict[str, str]:
 
     state = normalized["state"].upper()
     normalized["state"] = state if state in _US_STATE_ABBREVIATIONS else state[:2]
+    normalized["linkedin"] = _normalize_workspace_profile_url(normalized["linkedin"], "linkedin")
+    normalized["github"] = _normalize_workspace_profile_url(normalized["github"], "github")
     return normalized
 
 
@@ -3781,7 +3813,8 @@ def _extract_resume_personal_details(resume_evidence: Any) -> Dict[str, str]:
                 uri = _clean_text(link_item.get("uri"))
                 if uri and ("linkedin" in label or "linkedin.com" in uri.lower()):
                     details["linkedin"] = uri
-                    break
+                if uri and ("github" in label or "github.com" in uri.lower()):
+                    details["github"] = uri
         except Exception:
             pass
 
@@ -3823,6 +3856,14 @@ def _extract_resume_personal_details(resume_evidence: Any) -> Dict[str, str]:
         )
         if compact_linkedin_match:
             details["linkedin"] = f"linkedin.com/in/{compact_linkedin_match.group(1).strip('/')}"
+
+    github_match = re.search(
+        r"(?:https?://)?(?:www\.)?github\.com/[A-Za-z0-9-]+",
+        raw_text,
+        flags=re.IGNORECASE,
+    )
+    if github_match:
+        details["github"] = github_match.group(0).strip().rstrip(".")
 
     section_headings = {
         "summary", "experience", "work experience", "professional experience",
@@ -3873,6 +3914,7 @@ def _workspace_personal_details_contact_text(details: Dict[str, str]) -> str:
             safe_details.get("contact", ""),
             safe_details.get("email", ""),
             "LinkedIn" if _clean_text(safe_details.get("linkedin")) else "",
+            "GitHub" if _clean_text(safe_details.get("github")) else "",
         ]
         if _clean_text(item)
     )
@@ -3880,10 +3922,14 @@ def _workspace_personal_details_contact_text(details: Dict[str, str]) -> str:
 
 def _workspace_personal_details_link_items(details: Dict[str, str]) -> List[Dict[str, str]]:
     safe_details = _normalize_workspace_personal_details(details)
+    link_items: List[Dict[str, str]] = []
     linkedin_url = _clean_text(safe_details.get("linkedin"))
-    if not linkedin_url:
-        return []
-    return [{"label": "LinkedIn", "uri": linkedin_url}]
+    github_url = _clean_text(safe_details.get("github"))
+    if linkedin_url:
+        link_items.append({"label": "LinkedIn", "uri": linkedin_url})
+    if github_url:
+        link_items.append({"label": "GitHub", "uri": github_url})
+    return link_items
 
 
 def _scan_resume_bullet_texts(resume_evidence: Any) -> List[str]:

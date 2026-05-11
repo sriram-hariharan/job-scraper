@@ -106,7 +106,7 @@ const scanWorkspaceState = {
   isSaving: false,
 };
 
-const SCAN_WORKSPACE_PERSONAL_DETAIL_FIELDS = ["name", "city", "state", "contact", "email", "linkedin"];
+const SCAN_WORKSPACE_PERSONAL_DETAIL_FIELDS = ["name", "city", "state", "contact", "email", "linkedin", "github"];
 const SCAN_WORKSPACE_US_STATES = [
   ["", "State"],
   ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"],
@@ -8976,6 +8976,32 @@ function getScanWorkspacePayload() {
     : null;
 }
 
+function normalizeScanWorkspaceProfileUrl(value, expectedHost) {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+
+  const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+  let parsed = null;
+  try {
+    parsed = new URL(candidate);
+  } catch {
+    return "";
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  const path = parsed.pathname.replace(/\/+$/, "");
+  if (expectedHost === "linkedin") {
+    if (host !== "linkedin.com" || !/^\/in\/[^/]+$/i.test(path)) return "";
+    if (/github/i.test(path)) return "";
+  } else if (expectedHost === "github") {
+    if (host !== "github.com" || !/^\/[A-Za-z0-9-]+$/i.test(path)) return "";
+  }
+
+  parsed.hash = "";
+  parsed.search = "";
+  return parsed.toString().replace(/\/$/, "");
+}
+
 function normalizeScanWorkspacePersonalDetails(value) {
   const raw = value && typeof value === "object" ? value : {};
   const normalized = {};
@@ -8983,6 +9009,8 @@ function normalizeScanWorkspacePersonalDetails(value) {
     normalized[field] = String(raw[field] || "").trim();
   });
   normalized.state = normalized.state.toUpperCase().slice(0, 2);
+  normalized.linkedin = normalizeScanWorkspaceProfileUrl(normalized.linkedin, "linkedin");
+  normalized.github = normalizeScanWorkspaceProfileUrl(normalized.github, "github");
   return normalized;
 }
 
@@ -9017,10 +9045,17 @@ function setScanWorkspacePersonalDetailField(field, value) {
     ...normalizeScanWorkspacePersonalDetails(scanWorkspaceState.personalDetails || {}),
     [safeField]: String(value || "").trim(),
   };
+  scanWorkspaceState.personalDetails = normalizeScanWorkspacePersonalDetails(
+    scanWorkspaceState.personalDetails
+  );
   scanWorkspaceState.previewPayload = null;
 
   if (window.scanWorkspacePhase1?.renderPersistenceStatus) {
     window.scanWorkspacePhase1.renderPersistenceStatus();
+  }
+
+  if (window.scanWorkspacePhase1?.renderLiveDraftPreview) {
+    window.scanWorkspacePhase1.renderLiveDraftPreview();
   }
 }
 
@@ -9157,6 +9192,11 @@ function toggleScanWorkspaceCandidateSelection(candidateId) {
 
   scanWorkspaceState.previewPayload = null;
   renderScanWorkspaceView();
+  syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+  syncScanWorkspaceActiveCandidateToAnnotation(safeCandidateId);
+  if (window.scanWorkspacePhase1?.renderLiveDraftPreview) {
+    window.scanWorkspacePhase1.renderLiveDraftPreview();
+  }
 }
 
 function setScanWorkspaceReviewDecision(candidateId, state, note = "") {
@@ -9176,6 +9216,11 @@ function setScanWorkspaceReviewDecision(candidateId, state, note = "") {
   scanWorkspaceState.rewriteReviewDecisions = next;
   scanWorkspaceState.previewPayload = null;
   renderScanWorkspaceView();
+  syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+  syncScanWorkspaceActiveCandidateToAnnotation(safeCandidateId);
+  if (window.scanWorkspacePhase1?.renderLiveDraftPreview) {
+    window.scanWorkspacePhase1.renderLiveDraftPreview();
+  }
 }
 
 function buildScanWorkspaceScoreSummary() {
@@ -9980,6 +10025,7 @@ function renderScanWorkspacePersonalDetailsPanel(panel) {
         ${input("contact", "Contact", "tel")}
         ${input("email", "Email", "email")}
         ${input("linkedin", "LinkedIn")}
+        ${input("github", "GitHub")}
       </div>
     </div>
   `;
@@ -10788,6 +10834,11 @@ function setScanWorkspaceSuggestionDecision(candidateId, action) {
   scanWorkspaceState.previewPayload = null;
 
   renderScanWorkspaceView();
+  syncScanWorkspaceAnnotationMarkers(scanWorkspaceState.preloadPayload);
+  syncScanWorkspaceActiveCandidateToAnnotation(safeCandidateId);
+  if (window.scanWorkspacePhase1?.renderLiveDraftPreview) {
+    window.scanWorkspacePhase1.renderLiveDraftPreview();
+  }
 }
 
 function renderScanWorkspaceActiveInspector(payload = getScanWorkspacePayload()) {
@@ -11131,6 +11182,7 @@ function bindScanWorkspaceDivider() {
     if (window.innerWidth <= 1180) return;
 
     event.preventDefault();
+    window.dispatchEvent(new CustomEvent("scan-workspace-split-resize-start"));
     document.body.classList.add("scan-workspace-resizing");
 
     const move = (moveEvent) => {
@@ -11159,6 +11211,7 @@ function bindScanWorkspaceDivider() {
     const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "40");
     const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
 
+    window.dispatchEvent(new CustomEvent("scan-workspace-split-resize-start"));
     applyScanWorkspaceSplitPercent(next);
     refreshAfterResize();
   });

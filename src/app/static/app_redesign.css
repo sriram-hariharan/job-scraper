@@ -795,6 +795,210 @@ html[data-theme="light"] .table-wrap-loading-overlay {
   }
 }
 
+/* ui_redesign_v21: compact page controls/cards and scheduler polish. */
+body .app-shell ~ .page,
+body.app-shell-collapsed .app-shell ~ .page {
+  padding-top: 16px !important;
+}
+
+body .app-shell ~ .page > .page-header,
+body.app-shell-collapsed .app-shell ~ .page > .page-header,
+body .page > .page-header {
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 40px !important;
+  margin: 0 0 12px !important;
+  padding: 0 min(620px, calc(max(0px, 100vw - var(--app-shell-collapsed-width, 68px) - 640px))) 0 0 !important;
+  text-align: left !important;
+}
+
+body .page > .page-header > div:first-child,
+body .page > .page-header .page-header-main {
+  width: 100% !important;
+  max-width: min(760px, 100%) !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+body .page > .page-header h1,
+body .scan-workspace-page.page > .page-header h1,
+body .scan-workspace-page.page > .page-header .scan-workspace-header-copy h1,
+body .tailoring-workspace-page.page > .page-header h1 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: clamp(26px, 2vw, 34px) !important;
+  font-weight: 900 !important;
+  line-height: 1.04 !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body .page > .page-header p,
+body .page > .page-header .subtext {
+  margin-top: 5px !important;
+  font-size: clamp(12px, 0.85vw, 14px) !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+}
+
+body .controls-card,
+body .filters-card,
+body .table-card,
+body .scheduler-table-card,
+body .saved-scans-card,
+body .profile-card,
+body .card {
+  border-radius: 14px !important;
+}
+
+body .controls-card,
+body .filters-card {
+  padding: 18px 20px !important;
+}
+
+body .stats-grid {
+  gap: 14px !important;
+}
+
+body .stat-card {
+  min-height: 104px !important;
+  padding: 18px 20px !important;
+  border-radius: 14px !important;
+}
+
+body .stat-label {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+}
+
+body .stat-value,
+body .stat-card-value {
+  font-size: clamp(30px, 3vw, 52px) !important;
+  line-height: 0.95 !important;
+}
+
+body .control-group {
+  gap: 6px !important;
+}
+
+body .control-group label {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+}
+
+body .control-group input,
+body .control-group select,
+body .control-group textarea {
+  min-height: 38px !important;
+  padding: 8px 12px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+}
+
+body button,
+body .ghost-btn,
+body .btn-sm {
+  min-height: 34px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+}
+
+body .scheduler-page {
+  background:
+    linear-gradient(135deg, rgba(191, 219, 254, 0.86) 0%, rgba(236, 254, 255, 0.82) 46%, rgba(248, 250, 252, 0.96) 100%),
+    #edf7ff !important;
+}
+
+body .scheduler-page .page-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+  padding-right: min(520px, calc(max(0px, 100vw - var(--app-shell-collapsed-width, 68px) - 760px))) !important;
+}
+
+body .scheduler-page .header-actions {
+  justify-self: end !important;
+  align-self: center !important;
+}
+
+body .scheduler-page #refreshSchedulerSummaryBtn {
+  border: 1px solid #0891b2 !important;
+  background: #06b6d4 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
+}
+
+body .scheduler-page #schedulerOpsMeta {
+  display: inline-flex !important;
+  width: auto !important;
+  margin: 0 0 12px !important;
+  padding: 7px 12px !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 999px !important;
+  background: #dbeafe !important;
+  color: #334155 !important;
+}
+
+body .scheduler-page .scheduler-table-card {
+  background: #ffffff !important;
+}
+
+body .scheduler-page .scheduler-table-tabs {
+  border-color: #bae6fd !important;
+  background: #e0f2fe !important;
+}
+
+/* ui_redesign_v20: final compact title owner for every page header. */
+body .app-shell ~ .page > .page-header,
+body.app-shell-collapsed .app-shell ~ .page > .page-header,
+body .page > .page-header {
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 46px !important;
+  margin: 0 0 14px !important;
+  padding: 0 min(620px, calc(max(0px, 100vw - var(--app-shell-collapsed-width, 68px) - 640px))) 0 0 !important;
+  text-align: left !important;
+}
+
+body .page > .page-header > div:first-child,
+body .page > .page-header .page-header-main {
+  width: 100% !important;
+  max-width: min(760px, 100%) !important;
+  margin: 0 !important;
+  text-align: left !important;
+}
+
+body .page > .page-header h1,
+body .scan-workspace-page.page > .page-header h1,
+body .scan-workspace-page.page > .page-header .scan-workspace-header-copy h1,
+body .tailoring-workspace-page.page > .page-header h1 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: clamp(28px, 2.35vw, 38px) !important;
+  font-weight: 900 !important;
+  line-height: 1.04 !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+body .page > .page-header p,
+body .page > .page-header .subtext {
+  margin-top: 6px !important;
+  font-size: clamp(13px, 0.95vw, 16px) !important;
+  line-height: 1.35 !important;
+  text-align: left !important;
+}
+
 @media (max-width: 760px) {
   h1 {
     font-size: clamp(34px, 12vw, 52px) !important;
@@ -2141,4 +2345,175 @@ html[data-theme="dark"] .stats-grid .stat-card .stat-value {
   display: none !important;
   opacity: 0 !important;
   pointer-events: none !important;
+}
+
+/* ui_redesign_v18: align page titles with the fixed top-right app controls. */
+.app-shell ~ .page,
+body.app-shell-collapsed .app-shell ~ .page {
+  padding-top: 18px !important;
+}
+
+.page-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 12px !important;
+  min-height: 64px !important;
+  width: 100% !important;
+  max-width: none !important;
+  margin: 0 0 14px !important;
+  padding-right: min(760px, calc(100vw - var(--app-shell-collapsed-width, 68px) - 560px)) !important;
+  text-align: left !important;
+}
+
+.page-header h1,
+.scan-workspace-page .page-header h1,
+.tailoring-workspace-page .page-header h1 {
+  font-size: clamp(28px, 2.8vw, 44px) !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+@media (max-width: 1180px) {
+  .app-shell ~ .page,
+  body.app-shell-collapsed .app-shell ~ .page {
+    padding-top: 86px !important;
+  }
+
+  .page-header {
+    min-height: auto !important;
+    padding-right: 0 !important;
+    flex-wrap: wrap !important;
+  }
+}
+
+/* ui_redesign_v22: final end-of-file compact owner after legacy blocks. */
+body .app-shell ~ .page,
+body.app-shell-collapsed .app-shell ~ .page {
+  padding-top: 16px !important;
+}
+
+body .app-shell ~ .page > .page-header,
+body.app-shell-collapsed .app-shell ~ .page > .page-header,
+body .page > .page-header {
+  justify-content: flex-start !important;
+  align-items: flex-start !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 40px !important;
+  margin: 0 0 12px !important;
+  padding: 0 min(620px, calc(max(0px, 100vw - var(--app-shell-collapsed-width, 68px) - 640px))) 0 0 !important;
+  text-align: left !important;
+}
+
+body .page > .page-header h1,
+body .scan-workspace-page.page > .page-header h1,
+body .scan-workspace-page.page > .page-header .scan-workspace-header-copy h1,
+body .tailoring-workspace-page.page > .page-header h1 {
+  margin: 0 !important;
+  color: #0f172a !important;
+  font-size: clamp(26px, 2vw, 34px) !important;
+  font-weight: 900 !important;
+  line-height: 1.04 !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+}
+
+body .page > .page-header p,
+body .page > .page-header .subtext {
+  margin-top: 5px !important;
+  font-size: clamp(12px, 0.85vw, 14px) !important;
+  line-height: 1.35 !important;
+}
+
+body .controls-card,
+body .filters-card {
+  padding: 18px 20px !important;
+}
+
+body .stats-grid {
+  gap: 14px !important;
+}
+
+body .stat-card {
+  min-height: 104px !important;
+  padding: 18px 20px !important;
+  border-radius: 14px !important;
+}
+
+body .stat-label {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+}
+
+body .stat-value,
+body .stat-card-value {
+  font-size: clamp(30px, 3vw, 52px) !important;
+  line-height: 0.95 !important;
+}
+
+body .control-group input,
+body .control-group select,
+body .control-group textarea {
+  min-height: 38px !important;
+  padding: 8px 12px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+}
+
+body .control-group label {
+  font-size: 11px !important;
+  line-height: 1.1 !important;
+}
+
+body button,
+body .ghost-btn,
+body .btn-sm {
+  min-height: 34px !important;
+  border-radius: 9px !important;
+  font-size: 13px !important;
+}
+
+body .scheduler-page {
+  background:
+    linear-gradient(135deg, rgba(191, 219, 254, 0.86) 0%, rgba(236, 254, 255, 0.82) 46%, rgba(248, 250, 252, 0.96) 100%),
+    #edf7ff !important;
+}
+
+body .scheduler-page .page-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  align-items: start !important;
+  padding-right: min(520px, calc(max(0px, 100vw - var(--app-shell-collapsed-width, 68px) - 760px))) !important;
+}
+
+body .scheduler-page .header-actions {
+  justify-self: end !important;
+  align-self: center !important;
+}
+
+body .scheduler-page #refreshSchedulerSummaryBtn {
+  border: 1px solid #0891b2 !important;
+  background: #06b6d4 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
+}
+
+body .scheduler-page #schedulerOpsMeta {
+  display: inline-flex !important;
+  width: auto !important;
+  margin: 0 0 12px !important;
+  padding: 7px 12px !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 999px !important;
+  background: #dbeafe !important;
+  color: #334155 !important;
+}
+
+body .scheduler-page .scheduler-table-tabs {
+  border-color: #bae6fd !important;
+  background: #e0f2fe !important;
 }

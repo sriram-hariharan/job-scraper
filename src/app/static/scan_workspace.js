@@ -1433,7 +1433,7 @@ function normalizeScanWorkspacePersistencePersonalDetails(value) {
   }
 
   const raw = value && typeof value === "object" ? value : {};
-  const fields = ["name", "city", "state", "contact", "email", "linkedin"];
+  const fields = ["name", "city", "state", "contact", "email", "linkedin", "github"];
   const normalized = {};
   fields.forEach((field) => {
     normalized[field] = String(raw[field] || "").trim();
@@ -1453,6 +1453,13 @@ function getCurrentScanWorkspacePersonalDetails() {
 function getSavedScanWorkspacePersonalDetails() {
   const draft = scanWorkspacePersistenceState.loadResponse?.draft || {};
   return normalizeScanWorkspacePersistencePersonalDetails(draft.personal_details || {});
+}
+
+function getEffectiveScanWorkspacePersonalDetails() {
+  if (typeof getCurrentScanWorkspacePersonalDetails === "function") {
+    return normalizeScanWorkspacePersistencePersonalDetails(getCurrentScanWorkspacePersonalDetails());
+  }
+  return getSavedScanWorkspacePersonalDetails();
 }
 
 function hasScanWorkspacePersonalDetailsValue(details) {
@@ -1626,8 +1633,6 @@ function renderScanWorkspacePersistenceStatus() {
   const exportBtn = getScanWorkspaceInput("scanWorkspaceExportBtn");
   const rescanBtn = getScanWorkspaceInput("scanWorkspaceRescanBtn");
 
-  if (!statusNode) return;
-
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
   const isSavedNewScan = Boolean(String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim());
@@ -1636,36 +1641,38 @@ function renderScanWorkspacePersistenceStatus() {
   const canPersist = hasContext || isSavedNewScan;
   const isDirty = Boolean(canPersist && currentSignature !== savedSignature);
 
-  statusNode.classList.remove("is-warning", "is-success", "is-danger");
+  if (statusNode) {
+    statusNode.classList.remove("is-warning", "is-success", "is-danger");
 
-  if (!canPersist) {
-    statusNode.textContent = "Workspace-draft persistence is unavailable for this scan.";
-    statusNode.classList.add("is-danger");
-  } else if (scanWorkspacePersistenceState.isLoading) {
-    statusNode.textContent = "Loading saved scan decisions from the workspace draft...";
-  } else if (scanWorkspacePersistenceState.isSaving) {
-    statusNode.textContent = "Saving scan decisions into the workspace draft...";
-  } else if (scanWorkspacePersistenceState.isExporting) {
-    statusNode.textContent = "Exporting optimized draft...";
-  } else if (scanWorkspacePersistenceState.lastError) {
-    statusNode.textContent = scanWorkspacePersistenceState.lastError;
-    statusNode.classList.add(
-      scanWorkspacePersistenceState.lastError.startsWith("Export completed with warnings")
-        ? "is-warning"
-        : "is-danger"
-    );
-  } else if (isDirty) {
-    statusNode.textContent = "You have unsaved scan decisions.";
-    statusNode.classList.add("is-warning");
-  } else if (scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
-    const savedAt = String(scanWorkspacePersistenceState.loadResponse?.draft?.saved_at || "").trim();
-    const savedAtLabel = formatScanWorkspaceSavedAt(savedAt);
-    statusNode.textContent = savedAt
-      ? `Scan decisions saved. Saved ${savedAtLabel}.`
-      : "Scan decisions are saved into the workspace draft.";
-    statusNode.classList.add("is-success");
-  } else {
-    statusNode.textContent = "Scan decisions are not saved yet.";
+    if (!canPersist) {
+      statusNode.textContent = "Workspace-draft persistence is unavailable for this scan.";
+      statusNode.classList.add("is-danger");
+    } else if (scanWorkspacePersistenceState.isLoading) {
+      statusNode.textContent = "Loading saved scan decisions from the workspace draft...";
+    } else if (scanWorkspacePersistenceState.isSaving) {
+      statusNode.textContent = "Saving scan decisions into the workspace draft...";
+    } else if (scanWorkspacePersistenceState.isExporting) {
+      statusNode.textContent = "Exporting optimized draft...";
+    } else if (scanWorkspacePersistenceState.lastError) {
+      statusNode.textContent = scanWorkspacePersistenceState.lastError;
+      statusNode.classList.add(
+        scanWorkspacePersistenceState.lastError.startsWith("Export completed with warnings")
+          ? "is-warning"
+          : "is-danger"
+      );
+    } else if (isDirty) {
+      statusNode.textContent = "You have unsaved scan decisions.";
+      statusNode.classList.add("is-warning");
+    } else if (scanWorkspacePersistenceState.loadResponse?.has_saved_draft) {
+      const savedAt = String(scanWorkspacePersistenceState.loadResponse?.draft?.saved_at || "").trim();
+      const savedAtLabel = formatScanWorkspaceSavedAt(savedAt);
+      statusNode.textContent = savedAt
+        ? `Scan decisions saved. Saved ${savedAtLabel}.`
+        : "Scan decisions are saved into the workspace draft.";
+      statusNode.classList.add("is-success");
+    } else {
+      statusNode.textContent = "Scan decisions are not saved yet.";
+    }
   }
 
   if (saveBtn) {
@@ -1673,11 +1680,11 @@ function renderScanWorkspacePersistenceStatus() {
       !canPersist ||
       scanWorkspacePersistenceState.isLoading ||
       scanWorkspacePersistenceState.isSaving ||
-      scanWorkspacePersistenceState.isExporting ||
-      !isDirty;
+      scanWorkspacePersistenceState.isExporting;
     saveBtn.textContent = scanWorkspacePersistenceState.isSaving
       ? "Saving..."
-      : "Save Scan State";
+      : "Continue";
+    saveBtn.classList.toggle("has-unsaved-changes", isDirty);
   }
 
   if (rescanBtn) {
@@ -2149,18 +2156,20 @@ function buildScanWorkspacePersonalDetailsContactLine(details) {
     safeDetails.contact,
     safeDetails.email,
     safeDetails.linkedin ? "LinkedIn" : "",
+    safeDetails.github ? "GitHub" : "",
   ].filter(Boolean).join(" | ");
 }
 
 function buildScanWorkspacePersonalDetailsLinkItems(details) {
   const safeDetails = normalizeScanWorkspacePersistencePersonalDetails(details);
-  return safeDetails.linkedin
-    ? [{ label: "LinkedIn", uri: safeDetails.linkedin }]
-    : [];
+  return [
+    safeDetails.linkedin ? { label: "LinkedIn", uri: safeDetails.linkedin } : null,
+    safeDetails.github ? { label: "GitHub", uri: safeDetails.github } : null,
+  ].filter(Boolean);
 }
 
 function applySavedScanWorkspacePersonalDetailsToRows(rows) {
-  const savedDetails = getSavedScanWorkspacePersonalDetails();
+  const savedDetails = getEffectiveScanWorkspacePersonalDetails();
   if (!Object.values(savedDetails).some(Boolean)) {
     return rows;
   }
@@ -2350,17 +2359,6 @@ function renderScanWorkspaceLiveDraftPreviewInto() {
   }
 
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
-  const pdfResumeName = acceptedIds.length ? "" : getScanWorkspacePdfResumeName();
-  if (pdfResumeName && typeof setScanWorkspaceResumePreview === "function") {
-    root.innerHTML = renderScanWorkspacePdfPreviewShell();
-    if (typeof bindScanWorkspacePreviewControls === "function") {
-      bindScanWorkspacePreviewControls();
-    }
-    window.setTimeout(() => {
-      setScanWorkspaceResumePreview(pdfResumeName);
-    }, 0);
-    return;
-  }
 
   const noteText = acceptedIds.length
     ? `Read-only reconstructed draft from the export model using ${acceptedIds.length} accepted linked suggestion(s).`
@@ -2699,8 +2697,9 @@ async function exportScanWorkspaceDraft(format = "pdf") {
 
   try {
     if (isDirty) {
-      const saved = await saveScanWorkspaceDraftState();
-      if (!saved) return false;
+      scanWorkspacePersistenceState.lastError = "Click Continue to save scan decisions before exporting.";
+      renderScanWorkspacePersistenceStatus();
+      return false;
     }
 
     const response = await fetch("/planning/export-workspace-draft", {
@@ -2884,62 +2883,70 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
   const targetRow = getScanWorkspacePreviewMarkerTargetById(marker?.id);
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
 
-  const viewportPadding = 16;
-  const topSafePadding = 96;
-  const gap = 12;
+  const viewportPadding = 14;
+  const gap = 10;
+  const scrollerRect = getScanWorkspacePreviewScroller()?.getBoundingClientRect();
+  const paneTop = Math.max(
+    64,
+    Number(scrollerRect?.top || 0) + 12,
+    viewportPadding
+  );
+  const paneBottom = Math.min(
+    window.innerHeight - viewportPadding,
+    Number(scrollerRect?.bottom || window.innerHeight) - 12
+  );
 
   const measuredRect = popover?.getBoundingClientRect();
-  const measuredWidth = Math.max(300, Number(measuredRect?.width || popover?.offsetWidth || 360));
-  const measuredHeight = Math.max(260, Number(measuredRect?.height || popover?.offsetHeight || 380));
+  const measuredWidth = Math.max(340, Number(measuredRect?.width || popover?.offsetWidth || 390));
+  const measuredHeight = Math.max(300, Number(measuredRect?.height || popover?.offsetHeight || 420));
 
   const width = Math.min(
+    420,
     Math.max(360, measuredWidth),
     window.innerWidth - viewportPadding * 2
   );
 
   if (targetRow) {
     const targetRect = targetRow.getBoundingClientRect();
-
-    const preferredLeft =
-      targetRect.left + Math.min(420, Math.max(180, targetRect.width * 0.42));
-
-    const left = Math.max(
-      viewportPadding,
-      Math.min(window.innerWidth - width - viewportPadding, preferredLeft)
+    const horizontalMin = Math.max(viewportPadding, Number(scrollerRect?.left || 0) + 18);
+    const horizontalMax = Math.min(
+      window.innerWidth - width - viewportPadding,
+      Number(scrollerRect?.right || window.innerWidth) - width - 18
     );
 
-    const belowSpace = window.innerHeight - targetRect.bottom - viewportPadding - gap;
-    const aboveSpace = targetRect.top - topSafePadding - gap;
+    const preferredLeft =
+      targetRect.left + Math.min(340, Math.max(120, targetRect.width * 0.35));
 
-    let placement = "below";
-    if (belowSpace < Math.min(measuredHeight, 300) && aboveSpace > belowSpace) {
-      placement = "above";
-    }
+    const left = Math.max(
+      horizontalMin,
+      Math.min(Math.max(horizontalMin, horizontalMax), preferredLeft)
+    );
 
-    const availableHeight =
-      placement === "above"
-        ? Math.max(140, aboveSpace)
-        : Math.max(140, belowSpace);
+    const aboveSpace = Math.max(0, targetRect.top - paneTop - gap);
+    const belowSpace = Math.max(0, paneBottom - targetRect.bottom - gap);
+    const preferAbove = aboveSpace >= 160 || aboveSpace >= belowSpace;
+    const placement = preferAbove ? "above" : "below";
+    const availableHeight = placement === "above" ? aboveSpace : belowSpace;
 
     const maxHeight = Math.max(
-      140,
-      Math.min(760, availableHeight, window.innerHeight - topSafePadding - viewportPadding)
+      160,
+      Math.min(520, availableHeight || paneBottom - paneTop)
     );
 
     const renderedHeight = Math.min(measuredHeight, maxHeight);
 
     const top =
       placement === "above"
-        ? Math.max(topSafePadding, targetRect.top - gap - renderedHeight)
+        ? Math.max(paneTop, targetRect.top - gap - renderedHeight)
         : Math.min(
-            window.innerHeight - viewportPadding - renderedHeight,
+            paneBottom - renderedHeight,
             targetRect.bottom + gap
           );
 
     return {
-      top: `${Math.max(topSafePadding, top)}px`,
+      top: `${Math.max(paneTop, top)}px`,
       left: `${left}px`,
-      width: `${Math.min(width, measuredWidth)}px`,
+      width: `${width}px`,
       minWidth: "320px",
       maxHeight: `${maxHeight}px`,
       placement,
@@ -2947,11 +2954,11 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
   }
 
   return {
-    top: `${topSafePadding}px`,
-    left: `${Math.max(viewportPadding, window.innerWidth - 380)}px`,
+    top: `${paneTop}px`,
+    left: `${Math.max(viewportPadding, window.innerWidth - width - viewportPadding)}px`,
     width: `${width}px`,
     minWidth: "320px",
-    maxHeight: `${Math.min(760, window.innerHeight - topSafePadding - viewportPadding)}px`,
+    maxHeight: `${Math.min(520, paneBottom - paneTop)}px`,
     placement: "floating",
   };
 }
@@ -3687,15 +3694,8 @@ async function saveScanWorkspaceGuidanceEditForActiveMarker() {
   decorateScanWorkspacePreviewSuggestionTargets();
   refreshScanWorkspaceGuidanceSaveButton(marker);
   refreshScanWorkspaceScorePreview();
-
-  const saved = await saveScanWorkspaceDraftState();
-  if (saved) {
-    decorateScanWorkspacePreviewSuggestionTargets();
-    renderScanWorkspaceSuggestionPopover();
-    refreshScanWorkspaceScorePreview();
-  } else {
-    refreshScanWorkspaceGuidanceSaveButton(marker);
-  }
+  renderScanWorkspacePersistenceStatus();
+  renderScanWorkspaceSuggestionPopover();
 }
 
 async function revertScanWorkspaceGuidanceEditForActiveMarker() {
@@ -3716,13 +3716,7 @@ async function revertScanWorkspaceGuidanceEditForActiveMarker() {
   decorateScanWorkspacePreviewSuggestionTargets();
   renderScanWorkspaceSuggestionPopover();
   refreshScanWorkspaceScorePreview();
-
-  const saved = await saveScanWorkspaceDraftState();
-  if (saved) {
-    decorateScanWorkspacePreviewSuggestionTargets();
-    renderScanWorkspaceSuggestionPopover();
-    refreshScanWorkspaceScorePreview();
-  }
+  renderScanWorkspacePersistenceStatus();
 }
 
 async function generateScanWorkspacePhrasesForActiveMarker() {
@@ -4028,6 +4022,10 @@ function bindScanWorkspaceAnnotationShell() {
 
       positionScanWorkspaceSuggestionPopover(marker);
     });
+
+    window.addEventListener("scan-workspace-split-resize-start", () => {
+      closeScanWorkspaceSuggestionPopover();
+    });
   }
 }
 
@@ -4185,12 +4183,73 @@ function bindScanWorkspaceCompareShell() {
   renderScanWorkspaceCompareShell();
 }
 
+function openScanWorkspaceContinueModal() {
+  const modal = getScanWorkspaceInput("scanWorkspaceContinueModal");
+  if (!modal) return;
+  modal.classList.remove("hidden");
+  document.body.classList.add("scan-workspace-modal-open");
+
+  const primary = getScanWorkspaceInput("scanWorkspaceContinueToEditBtn");
+  if (primary) {
+    window.setTimeout(() => primary.focus(), 0);
+  }
+}
+
+function closeScanWorkspaceContinueModal() {
+  const modal = getScanWorkspaceInput("scanWorkspaceContinueModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  document.body.classList.remove("scan-workspace-modal-open");
+}
+
+async function continueScanWorkspaceAfterReview() {
+  const saved = await saveScanWorkspaceDraftState();
+  if (saved) {
+    openScanWorkspaceContinueModal();
+  }
+}
+
 function bindScanWorkspacePersistenceControls() {
   const saveBtn = getScanWorkspaceInput("scanWorkspaceSaveBtn");
   if (saveBtn && saveBtn.dataset.bound !== "true") {
     saveBtn.dataset.bound = "true";
     saveBtn.addEventListener("click", async () => {
-      await saveScanWorkspaceDraftState();
+      await continueScanWorkspaceAfterReview();
+    });
+  }
+
+  const continueModal = getScanWorkspaceInput("scanWorkspaceContinueModal");
+  if (continueModal && continueModal.dataset.bound !== "true") {
+    continueModal.dataset.bound = "true";
+    continueModal.addEventListener("click", (event) => {
+      const closeTarget = event.target instanceof Element
+        ? event.target.closest("[data-scan-continue-close]")
+        : null;
+      if (closeTarget) closeScanWorkspaceContinueModal();
+    });
+  }
+
+  const continueCloseBtn = getScanWorkspaceInput("scanWorkspaceContinueModalCloseBtn");
+  if (continueCloseBtn && continueCloseBtn.dataset.bound !== "true") {
+    continueCloseBtn.dataset.bound = "true";
+    continueCloseBtn.addEventListener("click", closeScanWorkspaceContinueModal);
+  }
+
+  const continueToEditBtn = getScanWorkspaceInput("scanWorkspaceContinueToEditBtn");
+  if (continueToEditBtn && continueToEditBtn.dataset.bound !== "true") {
+    continueToEditBtn.dataset.bound = "true";
+    continueToEditBtn.addEventListener("click", () => {
+      if (typeof buildScanWorkspaceBackToTailoringUrl === "function") {
+        window.location.href = buildScanWorkspaceBackToTailoringUrl();
+      }
+    });
+  }
+
+  const continueDownloadBtn = getScanWorkspaceInput("scanWorkspaceContinueDownloadBtn");
+  if (continueDownloadBtn && continueDownloadBtn.dataset.bound !== "true") {
+    continueDownloadBtn.dataset.bound = "true";
+    continueDownloadBtn.addEventListener("click", async () => {
+      await exportScanWorkspaceDraft("pdf");
     });
   }
 
@@ -4254,6 +4313,7 @@ function bindScanWorkspaceGlobalShortcuts() {
     if (event.key === "Escape") {
       closeScanWorkspaceSuggestionPopover();
       closeScanWorkspaceExportMenu();
+      closeScanWorkspaceContinueModal();
     }
   });
 
@@ -4320,6 +4380,7 @@ window.addEventListener("DOMContentLoaded", () => {
       updateScanWorkspaceProcessingView();
     },
     refreshLiveDraftPreview: () => ensureScanWorkspaceDocumentPreviewLoaded({ force: true }),
+    renderLiveDraftPreview: () => renderScanWorkspaceLiveDraftPreviewInto(),
     refreshCompare: () => ensureScanWorkspaceCompareLoaded({ force: true }),
     setAnnotationMarkers: (markers) => {
       setScanWorkspaceAnnotationMarkers(markers);

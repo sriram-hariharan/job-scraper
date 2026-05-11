@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -724,7 +724,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v23" />
 </head>
 <body>
@@ -1232,8 +1232,8 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_7" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_16" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1583,46 +1583,6 @@ def scan_workspace(
               </div>
             </div>
 
-            <div class="scan-workspace-review-controls-body">
-              <div
-                class="subtext tailoring-workspace-selection-status"
-                id="scanWorkspaceSelectionStatus"
-              >
-                No scan actions selected yet.
-              </div>
-
-              <div class="scan-workspace-review-actions scan-workspace-review-actions--rail">
-                <button
-                  type="button"
-                  class="scan-workspace-rescan-btn"
-                  id="scanWorkspaceRescanBtn"
-                  disabled
-                  hidden
-                >
-                  <img
-                    src="/static/media/re-scan_img.svg"
-                    alt=""
-                    aria-hidden="true"
-                  />
-                  <span>Rescan</span>
-                </button>
-                <button
-                  type="button"
-                  class="ghost-btn btn-sm"
-                  id="scanWorkspaceSaveBtn"
-                >
-                  Save
-                </button>
-              </div>
-
-              <div
-                class="subtext scan-workspace-persist-status"
-                id="scanWorkspacePersistStatus"
-                aria-live="polite"
-              >
-                Scan decisions are not saved yet.
-              </div>
-            </div>
           </section>
 
           <div class="scan-workspace-review-rail-body scan-review-left-scroll">
@@ -1755,12 +1715,12 @@ def scan_workspace(
                     data-scan-export-format="pdf"
                     role="menuitem"
                   >
-                    <span
+                    <img
                       class="scan-workspace-export-format-icon"
+                      src="/static/media/pdf-icon.svg"
+                      alt=""
                       aria-hidden="true"
-                    >
-                      PDF
-                    </span>
+                    />
                     <span>PDF</span>
                   </button>
 
@@ -1770,12 +1730,12 @@ def scan_workspace(
                     data-scan-export-format="word"
                     role="menuitem"
                   >
-                    <span
+                    <img
                       class="scan-workspace-export-format-icon"
+                      src="/static/media/doc-icon.svg"
+                      alt=""
                       aria-hidden="true"
-                    >
-                      DOC
-                    </span>
+                    />
                     <span>DOCX</span>
                   </button>
                 </div>
@@ -1788,29 +1748,43 @@ def scan_workspace(
               >
                 Compare
               </button>
+
+              <button
+                type="button"
+                class="btn-sm scan-workspace-toolbar-btn scan-workspace-continue-btn"
+                id="scanWorkspaceSaveBtn"
+              >
+                Continue
+              </button>
               </div>
             </div>
 
-            <div
-              class="scan-workspace-workflow-row scan-review-workflow"
-              aria-label="Resume optimization workflow"
-            >
-              <div
-                class="scan-workspace-workflow-step is-active"
-                id="scanWorkspaceAiSuggestionStep"
-              >
-                <span class="scan-workspace-workflow-step-number">1</span>
-                <span id="scanWorkspaceAiSuggestionStepLabel">AI Suggestions (0/0)</span>
+            <div class="scan-workspace-toolbar-context">
+              <div class="scan-workspace-toolbar-resume-name">
+                {resume_display_safe}
               </div>
 
               <div
-                class="scan-workspace-workflow-step is-disabled"
-                id="scanWorkspaceEditStep"
-                aria-disabled="true"
-                title="Edit step will unlock after backend scan editing is connected."
+                class="scan-workspace-workflow-row scan-review-workflow"
+                aria-label="Resume optimization workflow"
               >
-                <span class="scan-workspace-workflow-step-number">2</span>
-                <span>Edit</span>
+                <div
+                  class="scan-workspace-workflow-step is-active"
+                  id="scanWorkspaceAiSuggestionStep"
+                >
+                  <span class="scan-workspace-workflow-step-number">1</span>
+                  <span id="scanWorkspaceAiSuggestionStepLabel">AI Suggestions (0/0)</span>
+                </div>
+
+                <div
+                  class="scan-workspace-workflow-step is-disabled"
+                  id="scanWorkspaceEditStep"
+                  aria-disabled="true"
+                  title="Edit step will unlock after backend scan editing is connected."
+                >
+                  <span class="scan-workspace-workflow-step-number">2</span>
+                  <span>Edit</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1955,6 +1929,63 @@ def scan_workspace(
                 </div>
               </div>
             </div>
+
+            <div
+              class="scan-workspace-continue-modal hidden"
+              id="scanWorkspaceContinueModal"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="scanWorkspaceContinueModalTitle"
+            >
+              <div class="scan-workspace-continue-modal-backdrop" data-scan-continue-close="true"></div>
+
+              <div class="scan-workspace-continue-modal-card">
+                <button
+                  type="button"
+                  class="scan-workspace-continue-modal-close"
+                  id="scanWorkspaceContinueModalCloseBtn"
+                  aria-label="Close continue dialog"
+                >
+                  ×
+                </button>
+
+                <div class="scan-workspace-continue-modal-icon" aria-hidden="true">
+                  ✓
+                </div>
+
+                <h2 id="scanWorkspaceContinueModalTitle">
+                  Great progress! AI suggestions applied.
+                </h2>
+
+                <p>
+                  Your scan decisions are saved. Continue to Edit Mode to keep editing, or download the optimized draft.
+                </p>
+
+                <div class="scan-workspace-continue-modal-actions">
+                  <button
+                    type="button"
+                    class="scan-workspace-continue-modal-primary"
+                    id="scanWorkspaceContinueToEditBtn"
+                  >
+                    Continue to edit
+                  </button>
+
+                  <button
+                    type="button"
+                    class="scan-workspace-continue-modal-secondary"
+                    id="scanWorkspaceContinueDownloadBtn"
+                  >
+                    <img
+                      class="scan-workspace-toolbar-icon"
+                      src="/static/media/download_img.svg"
+                      alt=""
+                      aria-hidden="true"
+                    />
+                    <span>Download</span>
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
         </section>
       </section>
@@ -2051,8 +2082,8 @@ def scan_workspace(
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v17"></script>
-  <script src="/static/planning.js?v=planning_ui_20260511_scan_split3"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_compact_preview1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260511_scan_contact_preview1"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_preview_popover_anchor1"></script>
 </body>
 </html>
     """.strip()

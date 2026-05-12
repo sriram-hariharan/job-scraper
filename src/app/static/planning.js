@@ -10387,9 +10387,15 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                     : ""
                 }
 
-                <span class="scan-workspace-issue-count ${isScoreBubble ? "scan-workspace-issue-count--score" : ""} ${isScoreBubble && scoreImpact > 0 ? "is-positive" : ""} ${isScoreBubble && scoreImpact < 0 ? "is-negative" : ""}">
-                  ${escapeHtml(countLabel)}
-                </span>
+                ${
+                  countLabel
+                    ? `
+                      <span class="scan-workspace-issue-count ${isScoreBubble ? "scan-workspace-issue-count--score" : ""} ${isScoreBubble && scoreImpact > 0 ? "is-positive" : ""} ${isScoreBubble && scoreImpact < 0 ? "is-negative" : ""}">
+                        ${escapeHtml(countLabel)}
+                      </span>
+                    `
+                    : ""
+                }
               </span>
             </button>
           `;
@@ -11145,7 +11151,7 @@ function applyScanWorkspaceSplitPercent(percent, { persist = true } = {}) {
   const layout = document.querySelector(".scan-workspace-review-shell");
   if (!layout || window.innerWidth <= 1180) return;
 
-  const safePercent = clampToRange(Number(percent) || 40, 24, 52);
+  const safePercent = clampToRange(Number(percent) || 34, 28, 38);
   layout.style.setProperty("--scan-workspace-left-width", `${safePercent}%`);
 
   if (persist) {
@@ -11167,7 +11173,7 @@ function bindScanWorkspaceDivider() {
     }
 
     const saved = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY));
-    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 40, { persist: false });
+    applyScanWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 34, { persist: false });
   };
 
   const refreshAfterResize = () => {
@@ -11180,6 +11186,7 @@ function bindScanWorkspaceDivider() {
 
   divider.addEventListener("pointerdown", (event) => {
     if (window.innerWidth <= 1180) return;
+    if (divider.getAttribute("aria-disabled") === "true") return;
 
     event.preventDefault();
     window.dispatchEvent(new CustomEvent("scan-workspace-split-resize-start"));
@@ -11208,7 +11215,7 @@ function bindScanWorkspaceDivider() {
 
     event.preventDefault();
 
-    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "40");
+    const current = Number(localStorage.getItem(SCAN_WORKSPACE_SPLIT_STORAGE_KEY) || "34");
     const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
 
     window.dispatchEvent(new CustomEvent("scan-workspace-split-resize-start"));

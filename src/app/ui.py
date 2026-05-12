@@ -17,7 +17,7 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v24" />
 </head>
 <body>
   {render_top_shell("/")}
@@ -704,7 +704,7 @@ def scheduler_dashboard() -> str:
   <title>Scheduler Ops Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v24" />
 </head>
 <body>
   {render_top_shell("/scheduler")}
@@ -715,9 +715,6 @@ def scheduler_dashboard() -> str:
         <p class="subtext">Operational view for scheduler health, persistence status, and recent runs.</p>
       </div>
 
-      <div class="header-actions">
-        <button class="ghost-btn" id="refreshSchedulerSummaryBtn" type="button">Refresh</button>
-      </div>
     </header>
 
     <div class="subtext pipeline-run-meta" id="schedulerOpsMeta">
@@ -746,6 +743,9 @@ def scheduler_dashboard() -> str:
         <div class="scheduler-table-title-wrap">
           <h2 id="schedulerTableTitle">Contract Health</h2>
           <div class="subtext" id="schedulerTableSubtitle">Artifact drift and scheduler contract checks.</div>
+        </div>
+        <div class="scheduler-table-header-right">
+          <button class="ghost-btn" id="refreshSchedulerSummaryBtn" type="button">Refresh</button>
         </div>
       </div>
 

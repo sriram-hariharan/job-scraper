@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v23" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -724,8 +724,8 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=ui_redesign_v23" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v23" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_review_polish2" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -1232,8 +1232,8 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v22" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_16" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v23" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_30" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1860,8 +1860,9 @@ def scan_workspace(
                     type="button"
                     class="ghost-btn btn-sm scan-workspace-suggestion-popover-close"
                     id="scanWorkspaceSuggestionPopoverCloseBtn"
+                    aria-label="Close suggestion dialog"
                   >
-                    Close
+                    X
                   </button>
                 </div>
 
@@ -2083,7 +2084,7 @@ def scan_workspace(
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v17"></script>
   <script src="/static/planning.js?v=planning_ui_20260511_scan_contact_preview1"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_preview_popover_anchor1"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal12"></script>
 </body>
 </html>
     """.strip()

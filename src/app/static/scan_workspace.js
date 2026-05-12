@@ -1905,6 +1905,37 @@ function coerceScanWorkspaceScore100(value) {
   return Math.max(0, Math.min(100, Math.round(displayScore)));
 }
 
+function getScanWorkspaceLoadedScanScorePoints() {
+  const preload = getScanWorkspacePreloadPayloadForSurface() || {};
+  const scanScore = preload?.scan_score && typeof preload.scan_score === "object"
+    ? preload.scan_score
+    : {};
+  const preloadScorePreview = preload?.score_preview && typeof preload.score_preview === "object"
+    ? preload.score_preview
+    : {};
+
+  const values = [
+    scanScore.score,
+    preloadScorePreview.projected_score_points,
+    preloadScorePreview.projected_score,
+    preloadScorePreview.original_score_points,
+    preloadScorePreview.original_score,
+  ];
+
+  for (const value of values) {
+    const points = coerceScanWorkspaceScore100(value);
+    if (points !== null) return points;
+  }
+
+  return null;
+}
+
+function getScanWorkspaceDisplayedScorePoints() {
+  const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
+  const displayed = coerceScanWorkspaceScore100(scoreValue?.textContent);
+  return displayed ?? getScanWorkspaceLoadedScanScorePoints();
+}
+
 function updateScanWorkspaceScoreValue(score, { label = "Optimization score", source = "backend" } = {}) {
   const scoreValue = getScanWorkspaceInput("scanWorkspaceScoreValue");
   const displayScore = coerceScanWorkspaceScore100(score);
@@ -2081,7 +2112,13 @@ async function refreshScanWorkspaceScorePreview() {
     response?.original_score ??
     response?.original_final_score ??
     null;
-  const nextScore = projectedScore ?? originalScore;
+  const loadedScanScore = getScanWorkspaceLoadedScanScorePoints();
+  const displayedScore = getScanWorkspaceDisplayedScorePoints();
+  const nextScore = projectedScore ?? (
+    hasAcceptedRewrites || hasManualEdits
+      ? (displayedScore ?? loadedScanScore ?? originalScore)
+      : (loadedScanScore ?? originalScore)
+  );
 
   if (nextScore === null || nextScore === undefined) return;
 
@@ -2091,8 +2128,8 @@ async function refreshScanWorkspaceScorePreview() {
     : "";
 
   updateScanWorkspaceScoreValue(nextScore, {
-    label: acceptedIds.length
-      ? `Projected score after ${acceptedIds.length} accepted replacement${acceptedIds.length === 1 ? "" : "s"}${deltaLabel}`
+    label: hasAcceptedRewrites || hasManualEdits
+      ? `Projected score after current scan decisions${deltaLabel}`
       : "Original optimization score",
     source: "backend",
   });
@@ -2245,12 +2282,23 @@ function normalizeScanWorkspacePreviewPages(preview) {
   });
 }
 
+function normalizeScanWorkspacePreviewText(value) {
+  return String(value || "")
+    .replace(/^•\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
 function renderScanWorkspaceDocumentMirrorFromPayload(
   preview,
   {
     isLoading = false,
     emptyMessage = "Draft preview is not available.",
     noteText = "",
+    compareSide = "",
+    removedTexts = [],
+    removedPositions = [],
   } = {}
 ) {
   if (isLoading && !preview) {
@@ -2279,6 +2327,59 @@ function renderScanWorkspaceDocumentMirrorFromPayload(
       ? renderTailoringWorkspaceStructuredRow
       : fallbackRenderScanWorkspaceStructuredRow;
 
+  const removedTextKeys = new Set(
+    (Array.isArray(removedTexts) ? removedTexts : [])
+      .map((value) => normalizeScanWorkspacePreviewText(value))
+      .filter(Boolean)
+  );
+  const removedPositionKeys = new Set(
+    (Array.isArray(removedPositions) ? removedPositions : [])
+      .map((value) => String(value || "").trim())
+      .filter(Boolean)
+  );
+
+  const getCompareRenderRow = (row) => {
+    const safeSide = String(compareSide || "").trim();
+    if (!safeSide || !row || typeof row !== "object") return row;
+
+    const rawIndent = Number(row.left_indent_pt || 0);
+    if (!Number.isFinite(rawIndent) || rawIndent <= 0) return row;
+
+    return {
+      ...row,
+      left_indent_pt: Math.round(Math.max(0, rawIndent * 0.06)),
+    };
+  };
+
+  const addCompareClassToRowHtml = (html, row, pageIndex, rowIndex) => {
+    const safeSide = String(compareSide || "").trim();
+    if (!safeSide || !html) return html;
+
+    const rowText = normalizeScanWorkspacePreviewText(row?.text || row?.current_text || row?.original_text || "");
+    const rowPositionKey = `${pageIndex}:${rowIndex}`;
+    const isRemoved =
+      safeSide === "before" &&
+      (
+        removedPositionKeys.has(rowPositionKey) ||
+        (
+          rowText &&
+          Array.from(removedTextKeys).some((text) => text && (rowText === text || rowText.includes(text) || text.includes(rowText)))
+        )
+      );
+    const isAdded = safeSide === "after" && Boolean(row?.patched);
+    const diffClass = isRemoved
+      ? "tailoring-workspace-doc-line--compare-removed"
+      : isAdded
+        ? "tailoring-workspace-doc-line--compare-added"
+        : "";
+
+    if (!diffClass) return html;
+    return html.replace(
+      "tailoring-workspace-doc-line",
+      `tailoring-workspace-doc-line ${diffClass}`
+    );
+  };
+
   const changedCount = pages.reduce(
     (count, page) =>
       count +
@@ -2290,14 +2391,16 @@ function renderScanWorkspaceDocumentMirrorFromPayload(
 
   return `
     <div class="tailoring-workspace-doc-mirror">
-      <div class="tailoring-workspace-doc-mirror-note" style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
-        ${scanWorkspaceEscapeHtml(noteText)}
-        ${changedCount ? ` ${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
-      </div>
+      ${noteText ? `
+        <div class="tailoring-workspace-doc-mirror-note" style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
+          ${scanWorkspaceEscapeHtml(noteText)}
+          ${changedCount ? ` ${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
+        </div>
+      ` : ""}
 
       ${pages
         .map(
-          (page) => `
+          (page, pageIndex) => `
         <section class="tailoring-workspace-doc-page">
           ${pages.length > 1 ? `
             <div class="tailoring-workspace-doc-page-header">
@@ -2309,7 +2412,15 @@ function renderScanWorkspaceDocumentMirrorFromPayload(
 
           <div class="tailoring-workspace-doc-page-body">
             ${(Array.isArray(page.presentation_rows) ? page.presentation_rows : [])
-              .map((row) => renderRowFn(row))
+              .map((row, rowIndex) => {
+                const renderRow = getCompareRenderRow(row);
+                return addCompareClassToRowHtml(
+                  renderRowFn(renderRow),
+                  renderRow,
+                  page.page_index ?? pageIndex,
+                  rowIndex
+                );
+              })
               .join("")}
           </div>
         </section>
@@ -2637,9 +2748,13 @@ async function saveScanWorkspaceDraftState({ navigateAfterSave = false } = {}) {
     if (typeof renderScanWorkspaceView === "function") {
       renderScanWorkspaceView();
     }
-    refreshScanWorkspaceScorePreview();
-    if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+    await refreshScanWorkspaceScorePreview();
+    const currentMode = normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "");
+    if (currentMode === "review") {
       ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+    }
+    if (currentMode === "compare") {
+      ensureScanWorkspaceCompareLoaded({ force: true });
     }
 
     return true;
@@ -2967,21 +3082,19 @@ function positionScanWorkspaceSuggestionPopover(marker) {
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
   if (!popover || !marker) return;
 
-  const position = getScanWorkspaceSuggestionPopoverPosition(marker);
-
   popover.style.position = "fixed";
-  popover.style.top = position.top;
-  popover.style.left = position.left;
+  popover.style.top = "50%";
+  popover.style.left = "50%";
   popover.style.right = "auto";
   popover.style.bottom = "auto";
-  popover.style.width = position.width;
-  popover.style.minWidth = position.minWidth || "";
-  popover.style.maxHeight = position.maxHeight;
+  popover.style.transform = "translate(-50%, -50%)";
+  popover.style.width = "min(740px, calc(100vw - 48px))";
+  popover.style.minWidth = "0";
+  popover.style.maxWidth = "calc(100vw - 48px)";
+  popover.style.maxHeight = "min(720px, calc(100vh - 48px))";
 
-  popover.classList.toggle("is-above", position.placement === "above");
-  popover.classList.toggle("is-below", position.placement === "below");
-  popover.classList.toggle("is-clamped", position.placement === "clamped");
-  popover.classList.toggle("is-floating", position.placement === "floating");
+  popover.classList.remove("is-above", "is-below", "is-clamped", "is-floating");
+  popover.classList.add("is-centered-modal");
 }
 
 function getScanWorkspacePreviewScroller() {
@@ -3138,7 +3251,10 @@ function renderScanWorkspacePhraseOptionsHtml(marker) {
               class="scan-workspace-phrase-option"
               data-scan-phrase-option="${scanWorkspaceEscapeHtml(String(option?.option_id || index))}"
             >
-              ${scanWorkspaceEscapeHtml(String(option?.text || "").trim())}
+              <span class="scan-workspace-phrase-option-index">${index + 1}</span>
+              <span class="scan-workspace-phrase-option-text">
+                ${scanWorkspaceEscapeHtml(String(option?.text || "").trim())}
+              </span>
             </button>
           `).join("")}
         </div>
@@ -3438,26 +3554,20 @@ function renderScanWorkspaceSuggestionPopoverCopyHtml(marker) {
 
   return `
     <div class="scan-workspace-guidance-editor">
-      ${suggestedText ? `
-        <div class="scan-workspace-guidance-tip">
-          <span class="scan-workspace-guidance-label">AI guidance</span>
-          <div>${scanWorkspaceEscapeHtml(suggestedText)}</div>
-        </div>
-      ` : ""}
-      <label class="scan-workspace-guidance-textarea-label" for="scanWorkspaceGuidanceTextarea">
-        Edit draft bullet
-      </label>
-      <textarea
-        class="scan-workspace-guidance-textarea"
-        id="scanWorkspaceGuidanceTextarea"
-        data-scan-guidance-textarea="true"
-        rows="5"
-        placeholder="Rewrite this bullet using the guidance above."
-      >${scanWorkspaceEscapeHtml(getScanWorkspaceManualTextForMarker(marker) || originalText)}</textarea>
+      <section class="scan-workspace-best-draft">
+        <textarea
+          class="scan-workspace-guidance-textarea"
+          id="scanWorkspaceGuidanceTextarea"
+          data-scan-guidance-textarea="true"
+          rows="4"
+          aria-label="Edit draft bullet"
+          placeholder="Rewrite this bullet using the guidance above."
+        >${scanWorkspaceEscapeHtml(getScanWorkspaceManualTextForMarker(marker) || originalText)}</textarea>
+      </section>
       ${renderScanWorkspacePhraseOptionsHtml(marker)}
     </div>
     ${reasonText && reasonText !== suggestedText ? `
-      <div class="scan-workspace-suggestion-reason" style="margin-top: 10px;">
+      <div class="scan-workspace-suggestion-reason">
         ${scanWorkspaceEscapeHtml(reasonText)}
       </div>
     ` : ""}
@@ -3522,7 +3632,6 @@ function renderScanWorkspaceSuggestionPopover() {
     return;
   }
 
-  const position = getScanWorkspaceSuggestionPopoverPosition(marker);
   const decision = normalizeScanWorkspaceAnnotationDecision(marker.decision);
   const sourceLabel = String(marker.sourceLabel || "AI suggested").trim();
   const reasonText = String(marker.reasonText || "").trim();
@@ -3530,10 +3639,15 @@ function renderScanWorkspaceSuggestionPopover() {
   popover.classList.remove("hidden");
   popover.style.visibility = "hidden";
   popover.style.position = "fixed";
-  popover.style.top = "16px";
-  popover.style.left = "16px";
+  popover.style.top = "50%";
+  popover.style.left = "50%";
   popover.style.right = "auto";
   popover.style.bottom = "auto";
+  popover.style.transform = "translate(-50%, -50%)";
+  popover.style.width = "min(740px, calc(100vw - 48px))";
+  popover.style.minWidth = "0";
+  popover.style.maxWidth = "calc(100vw - 48px)";
+  popover.style.maxHeight = "min(720px, calc(100vh - 48px))";
 
   title.textContent = sourceLabel;
   if (kicker) {
@@ -3541,9 +3655,8 @@ function renderScanWorkspaceSuggestionPopover() {
   }
 
   copy.innerHTML = renderScanWorkspaceSuggestionPopoverCopyHtml(marker);
-  
   positionScanWorkspaceSuggestionPopover(marker);
-
+  
   window.requestAnimationFrame(() => {
     positionScanWorkspaceSuggestionPopover(marker);
     popover.style.visibility = "";
@@ -3693,7 +3806,13 @@ async function saveScanWorkspaceGuidanceEditForActiveMarker() {
 
   decorateScanWorkspacePreviewSuggestionTargets();
   refreshScanWorkspaceGuidanceSaveButton(marker);
-  refreshScanWorkspaceScorePreview();
+  await refreshScanWorkspaceScorePreview();
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+    ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+  }
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+    ensureScanWorkspaceCompareLoaded({ force: true });
+  }
   renderScanWorkspacePersistenceStatus();
   renderScanWorkspaceSuggestionPopover();
 }
@@ -3715,7 +3834,13 @@ async function revertScanWorkspaceGuidanceEditForActiveMarker() {
 
   decorateScanWorkspacePreviewSuggestionTargets();
   renderScanWorkspaceSuggestionPopover();
-  refreshScanWorkspaceScorePreview();
+  await refreshScanWorkspaceScorePreview();
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "review") {
+    ensureScanWorkspaceDocumentPreviewLoaded({ force: true });
+  }
+  if (normalizeScanWorkspaceMode(getScanWorkspacePageRoot()?.dataset.scanMode || "") === "compare") {
+    ensureScanWorkspaceCompareLoaded({ force: true });
+  }
   renderScanWorkspacePersistenceStatus();
 }
 
@@ -4069,6 +4194,101 @@ function buildScanWorkspaceCompareSummaryHtml() {
     .join("");
 }
 
+function getScanWorkspaceCompareScorePoints(kind) {
+  const scorePreview = scanWorkspacePreviewState.scorePreviewPayload || {};
+  const preload = getScanWorkspacePreloadPayloadForSurface() || {};
+  const preloadScorePreview = preload?.score_preview && typeof preload.score_preview === "object"
+    ? preload.score_preview
+    : {};
+  const loadedScanScore = getScanWorkspaceLoadedScanScorePoints();
+  const displayedScore = getScanWorkspaceDisplayedScorePoints();
+
+  const values =
+    kind === "after"
+      ? [
+          scorePreview.projected_score_points,
+          scorePreview.projected_score,
+          displayedScore,
+          loadedScanScore,
+          preloadScorePreview.projected_score_points,
+          preloadScorePreview.projected_score,
+        ]
+      : [
+          loadedScanScore,
+          preloadScorePreview.original_score_points,
+          preloadScorePreview.original_score,
+          scorePreview.original_score_points,
+          scorePreview.original_score,
+        ];
+
+  for (const value of values) {
+    const points = coerceScanWorkspaceScore100(value);
+    if (points !== null) return points;
+  }
+  return null;
+}
+
+function renderScanWorkspaceCompareScoreBadge(kind, score) {
+  const safeKind = kind === "after" ? "after" : "before";
+  const safeScore = Number.isFinite(Number(score)) ? Math.round(Number(score)) : null;
+  const label = safeKind === "after"
+    ? "Score with AI changes"
+    : "Baseline score";
+
+  if (safeScore === null) {
+    return `
+      <span class="scan-workspace-compare-score-badge scan-workspace-compare-score-badge--${safeKind}">
+        <span class="scan-workspace-compare-score-value">--</span>
+        <span class="scan-workspace-compare-score-label">${scanWorkspaceEscapeHtml(label)}</span>
+      </span>
+    `;
+  }
+
+  return `
+    <span class="scan-workspace-compare-score-badge scan-workspace-compare-score-badge--${safeKind}">
+      <span class="scan-workspace-compare-score-value">${scanWorkspaceEscapeHtml(String(safeScore))}</span>
+      <span class="scan-workspace-compare-score-label">${scanWorkspaceEscapeHtml(label)}: ${safeScore}%</span>
+    </span>
+  `;
+}
+
+function getScanWorkspaceCompareRemovedTexts() {
+  const acceptedTexts = scanWorkspaceAnnotationState.markers
+    .filter((marker) => normalizeScanWorkspaceAnnotationDecision(marker?.decision) === "accepted")
+    .flatMap((marker) => [
+      marker?.originalText,
+      marker?.anchorText,
+    ]);
+  const fragmentTexts = Array.isArray(scanWorkspacePreviewState.draftFragmentsPayload?.changed_bullets)
+    ? scanWorkspacePreviewState.draftFragmentsPayload.changed_bullets.flatMap((fragment) => [
+        fragment?.original_text,
+        fragment?.source_raw_text,
+      ])
+    : [];
+  const manualEditTexts = Object.keys(getScanWorkspaceManualBulletEdits())
+    .map((key) => key.startsWith("text:") ? key.slice(5) : "");
+
+  return Array.from(new Set([
+    ...acceptedTexts,
+    ...fragmentTexts,
+    ...manualEditTexts,
+  ].filter((text) => String(text || "").trim())));
+}
+
+function getScanWorkspaceCompareChangedPositions(preview) {
+  const pages = normalizeScanWorkspacePreviewPages(preview);
+  const positions = [];
+
+  pages.forEach((page, pageIndex) => {
+    const rows = Array.isArray(page.presentation_rows) ? page.presentation_rows : [];
+    rows.forEach((row, rowIndex) => {
+      if (row?.patched) positions.push(`${page.page_index ?? pageIndex}:${rowIndex}`);
+    });
+  });
+
+  return positions;
+}
+
 function renderScanWorkspaceCompareShell() {
   const summary = getScanWorkspaceInput("scanWorkspaceCompareSummary");
   const status = getScanWorkspaceInput("scanWorkspaceCompareStatus");
@@ -4081,6 +4301,14 @@ function renderScanWorkspaceCompareShell() {
 
   const acceptedIds = getEffectiveAcceptedCompareCandidateIds();
   const hasDraftChanges = hasScanWorkspaceCurrentDraftChanges();
+  const beforeScore = getScanWorkspaceCompareScorePoints("before");
+  const afterScore = hasDraftChanges
+    ? getScanWorkspaceCompareScorePoints("after")
+    : null;
+  const removedTexts = getScanWorkspaceCompareRemovedTexts();
+  const removedPositions = hasDraftChanges
+    ? getScanWorkspaceCompareChangedPositions(scanWorkspaceCompareState.afterPayload)
+    : [];
   summary.innerHTML = buildScanWorkspaceCompareSummaryHtml();
 
   status.textContent = scanWorkspaceCompareState.isLoading
@@ -4089,21 +4317,26 @@ function renderScanWorkspaceCompareShell() {
       ? "Comparing the baseline draft against the current accepted and manual draft state."
       : "Compare the baseline draft against the current accepted AI decision set.";
 
-  beforeMeta.textContent = scanWorkspaceCompareState.isLoading
-    ? "Loading baseline preview..."
-    : "Baseline draft with no accepted AI suggestions.";
+  beforeMeta.innerHTML = `
+    ${renderScanWorkspaceCompareScoreBadge("before", beforeScore)}
+  `;
 
   beforePane.innerHTML = renderScanWorkspaceDocumentMirrorFromPayload(
     scanWorkspaceCompareState.beforePayload,
     {
       isLoading: scanWorkspaceCompareState.isLoading,
       emptyMessage: "Baseline compare preview is not available for this scan.",
-      noteText: "Baseline reconstructed draft from the export model with no accepted AI suggestions.",
+      noteText: "",
+      compareSide: "before",
+      removedTexts,
+      removedPositions,
     }
   );
 
   if (!hasDraftChanges) {
-    afterMeta.textContent = "Accept a suggestion or save a manual edit to generate the after preview.";
+    afterMeta.innerHTML = `
+      ${renderScanWorkspaceCompareScoreBadge("after", afterScore)}
+    `;
     afterPane.innerHTML = `
       <div class="tailoring-empty-state">
         Accept a suggestion or save a manual edit to generate the after preview.
@@ -4112,16 +4345,17 @@ function renderScanWorkspaceCompareShell() {
     return;
   }
 
-  afterMeta.textContent = scanWorkspaceCompareState.isLoading
-    ? "Loading accepted decision preview..."
-    : "Current accepted and manual draft state applied to the after preview.";
+  afterMeta.innerHTML = `
+    ${renderScanWorkspaceCompareScoreBadge("after", afterScore)}
+  `;
 
   afterPane.innerHTML = renderScanWorkspaceDocumentMirrorFromPayload(
     scanWorkspaceCompareState.afterPayload,
     {
       isLoading: scanWorkspaceCompareState.isLoading,
       emptyMessage: "After compare preview is not available for this scan.",
-      noteText: "Reconstructed draft preview using current accepted replacements and manual edits.",
+      noteText: "",
+      compareSide: "after",
     }
   );
 }
@@ -4146,6 +4380,12 @@ async function ensureScanWorkspaceCompareLoaded({ force = false } = {}) {
   renderScanWorkspaceCompareShell();
 
   const requestSeq = ++scanWorkspaceCompareState.requestSeq;
+
+  if (force || !scanWorkspacePreviewState.scorePreviewPayload) {
+    await refreshScanWorkspaceScorePreview();
+    if (requestSeq !== scanWorkspaceCompareState.requestSeq) return;
+    renderScanWorkspaceCompareShell();
+  }
 
   const [beforePayload, afterPayload] = await Promise.all([
     requestScanWorkspaceDocumentPreview([], { manualBulletEdits: {} }),
@@ -4239,9 +4479,9 @@ function bindScanWorkspacePersistenceControls() {
   if (continueToEditBtn && continueToEditBtn.dataset.bound !== "true") {
     continueToEditBtn.dataset.bound = "true";
     continueToEditBtn.addEventListener("click", () => {
-      if (typeof buildScanWorkspaceBackToTailoringUrl === "function") {
-        window.location.href = buildScanWorkspaceBackToTailoringUrl();
-      }
+      closeScanWorkspaceContinueModal();
+      setScanWorkspaceMode("review");
+      ensureScanWorkspaceDocumentPreviewLoaded({ force: false });
     });
   }
 

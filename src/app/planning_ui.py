@@ -667,7 +667,7 @@ def planning_dashboard() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v18"></script>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs2"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs5"></script>
 </body>
 </html>
     """.strip()
@@ -725,7 +725,7 @@ def tailoring_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_v9" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v3" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -850,7 +850,7 @@ def tailoring_workspace(
           </div>
         </div>
 
-        <section class="card tailoring-workspace-subcard hidden">
+        <section id="tailoringWorkspaceSavedSelectionCard" class="card tailoring-workspace-subcard hidden">
           <div class="section-header section-header--compact">
             <div>
               <h3>Saved selection</h3>
@@ -1123,7 +1123,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs2"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs5"></script>
 </body>
 </html>
     """.strip()
@@ -2076,7 +2076,7 @@ def scan_workspace(
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v18"></script>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs2"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs5"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal12"></script>
 </body>
 </html>

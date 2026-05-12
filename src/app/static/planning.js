@@ -4618,6 +4618,11 @@ function clearTailoringWorkspaceSavedSelectionSection() {
   if (root) {
     root.innerHTML = "";
   }
+  const card = qs("tailoringWorkspaceSavedSelectionCard");
+  if (card) {
+    card.classList.add("hidden");
+    return;
+  }
   setTailoringSectionVisible("tailoringWorkspaceSavedSelectionShell", false);
 }
 
@@ -5685,11 +5690,6 @@ function renderTailoringWorkspaceDocumentMirror() {
 
   return `
     <div class="tailoring-workspace-doc-mirror">
-      <div class="tailoring-workspace-doc-mirror-note" style="white-space:normal; overflow-wrap:anywhere; line-height:1.35;">
-        Read-only reconstructed draft from the export model. Changes from the left pane appear here immediately and match the downloadable Word/PDF output.
-        ${changedCount ? `${changedCount} changed line${changedCount === 1 ? "" : "s"} currently reflected.` : ""}
-      </div>
-
       ${normalizedPages.map((page) => `
         <section class="tailoring-workspace-doc-page">
           ${showPageLabel ? `
@@ -6562,6 +6562,11 @@ function renderTailoringWorkspaceSavedSelectionSection(payload) {
   const root = qs("tailoringWorkspaceSavedSelectionShell");
   if (!root) return;
 
+  if (String(tailoringWorkspaceState.selectedTab || "ready").trim() !== "ready") {
+    clearTailoringWorkspaceSavedSelectionSection();
+    return;
+  }
+
   const selectedIds = normalizeTailoringWorkspaceCandidateIdList(
     payload && Array.isArray(payload.selected_patch_candidate_ids)
       ? payload.selected_patch_candidate_ids
@@ -6609,7 +6614,12 @@ function renderTailoringWorkspaceSavedSelectionSection(payload) {
     }) : ""}
   `;
 
-  setTailoringSectionVisible("tailoringWorkspaceSavedSelectionShell", true);
+  const card = qs("tailoringWorkspaceSavedSelectionCard");
+  if (card) {
+    card.classList.remove("hidden");
+  } else {
+    setTailoringSectionVisible("tailoringWorkspaceSavedSelectionShell", true);
+  }
 }
 
 function syncTailoringWorkspaceSavedSelectionIntoArtifact(payload) {

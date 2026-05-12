@@ -30,7 +30,7 @@ function updateThemeToggle(theme) {
 
   const icon = themeToggleBtn.querySelector(".theme-toggle-icon");
   if (icon) {
-    icon.src = isLight ? "/static/media/light_mode.svg" : "/static/media/dark_mode.svg";
+    icon.src = isLight ? "/static/media/dark_mode.svg" : "/static/media/light_mode.svg";
   }
 }
 
@@ -362,8 +362,32 @@ window.addEventListener("DOMContentLoaded", () => {
     notificationButton.setAttribute("aria-expanded", "false");
   }
 
+  function positionNotificationDropdown() {
+    if (!notificationDropdown || !notificationButton) return;
+
+    const buttonRect = notificationButton.getBoundingClientRect();
+    const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
+    const gutter = 14;
+    const dropdownWidth = Math.min(440, Math.max(280, viewportWidth - gutter * 2));
+    const centeredLeft = buttonRect.left + buttonRect.width / 2 - dropdownWidth / 2;
+    const left = Math.min(Math.max(gutter, centeredLeft), viewportWidth - dropdownWidth - gutter);
+    const top = Math.min(
+      buttonRect.bottom + 12,
+      Math.max(gutter, viewportHeight - 160)
+    );
+    const maxHeight = Math.max(220, viewportHeight - top - gutter);
+
+    notificationDropdown.style.setProperty("width", `${dropdownWidth}px`, "important");
+    notificationDropdown.style.setProperty("left", `${left}px`, "important");
+    notificationDropdown.style.setProperty("top", `${top}px`, "important");
+    notificationDropdown.style.setProperty("right", "auto", "important");
+    notificationDropdown.style.setProperty("max-height", `${maxHeight}px`, "important");
+  }
+
   function openNotifications() {
     if (!notificationDropdown || !notificationButton) return;
+    positionNotificationDropdown();
     notificationDropdown.classList.remove("hidden");
     notificationButton.setAttribute("aria-expanded", "true");
   }
@@ -563,6 +587,12 @@ window.addEventListener("DOMContentLoaded", () => {
     if (event.key === "Escape") {
       closeProfileMenu();
       closeNotifications();
+    }
+  });
+
+  window.addEventListener("resize", () => {
+    if (notificationDropdown && !notificationDropdown.classList.contains("hidden")) {
+      positionNotificationDropdown();
     }
   });
 

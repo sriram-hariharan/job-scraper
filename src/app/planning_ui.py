@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v31" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -666,8 +666,8 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v18"></script>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs5"></script>
+  <script src="/static/shell.js?v=ui_redesign_v21"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
 </body>
 </html>
     """.strip()
@@ -724,8 +724,8 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v3" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v31" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -863,15 +863,6 @@ def tailoring_workspace(
           <div id="tailoringWorkspaceSavedSelectionShell"></div>
         </section>
       </section>
-      <div
-        class="tailoring-workspace-divider"
-        id="tailoringWorkspaceDivider"
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize workspace panes"
-        tabindex="0"
-      ></div>
-
       <section class="card tailoring-workspace-pane tailoring-workspace-pane--right">
         <div class="section-header">
           <div>
@@ -1048,7 +1039,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v18"></script>
+  <script src="/static/shell.js?v=ui_redesign_v21"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1123,7 +1114,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs5"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
 </body>
 </html>
     """.strip()
@@ -1225,8 +1216,8 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_33" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v31" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_36" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -2075,8 +2066,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v18"></script>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs5"></script>
+  <script src="/static/shell.js?v=ui_redesign_v21"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal12"></script>
 </body>
 </html>

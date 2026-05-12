@@ -4201,3 +4201,235 @@ body .scan-workspace-page .scan-workspace-header-copy h1 {
 .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab.is-active::after {
   background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
 }
+
+/* scan_review_v2_34: dark owner for AI Optimize Scan review mode. */
+html[data-theme="dark"] body .scan-workspace-page.page {
+  background:
+    radial-gradient(circle at 10% -12%, rgba(96, 165, 250, 0.16), transparent 32%),
+    radial-gradient(circle at 88% 2%, rgba(34, 211, 238, 0.1), transparent 28%),
+    linear-gradient(135deg, #050914 0%, #08101f 48%, #060914 100%) !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] body .scan-workspace-page .page-header h1,
+html[data-theme="dark"] body .scan-workspace-page .scan-workspace-header-copy h1 {
+  color: #f8fafc !important;
+  max-width: none !important;
+  opacity: 1 !important;
+  text-shadow: 0 10px 34px rgba(96, 165, 250, 0.16) !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-review-left-pane,
+html[data-theme="dark"] .scan-review-v2 .scan-review-right-pane {
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  background:
+    linear-gradient(180deg, rgba(20, 30, 49, 0.96), rgba(12, 19, 33, 0.97)),
+    #111827 !important;
+  color: #f8fafc !important;
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.34) !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-review-score-card,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-review-score-card {
+  border-color: rgba(34, 211, 238, 0.35) !important;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(16, 185, 129, 0.1)),
+    #111c2f !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-review-score-ring {
+  background:
+    linear-gradient(#0f172a, #0f172a) padding-box,
+    conic-gradient(#60a5fa 0deg 150deg, #22d3ee 150deg 230deg, #f59e0b 230deg 302deg, #334155 302deg 360deg) border-box !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-review-score-title,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-review-toolbar-resume-name,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-workflow-step,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-review-main h2,
+html[data-theme="dark"] .scan-review-v2 #scanWorkspaceInteractiveSummary h2,
+html[data-theme="dark"] .scan-review-v2 #scanWorkspaceInteractiveSummary h3 {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-review-context-line,
+html[data-theme="dark"] .scan-review-left-pane #scanWorkspaceMeta,
+html[data-theme="dark"] .scan-review-v2 .subtext,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-annotation-status {
+  color: #a8b6cc !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-review-inline-metric {
+  background: #0f172a !important;
+  color: #dbeafe !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-review-controls,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-review-controls,
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-tab-row {
+  border-color: rgba(96, 165, 250, 0.26) !important;
+  background: #0f172a !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-tab-btn {
+  background: #111c2f !important;
+  color: #dbeafe !important;
+}
+
+html[data-theme="dark"] .scan-review-left-pane .scan-workspace-tab-btn.active {
+  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary * {
+  color: inherit !important;
+}
+
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-row,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-card,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-section-block,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-edit-card,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-inventory-card {
+  border-color: rgba(96, 165, 250, 0.24) !important;
+  background: #111c2f !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-section-title,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-card-title,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-edit-card-title,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-title,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-title,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-title,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-name,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-value,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-right,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-info-value {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-meta,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-card-copy,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-card-meta,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-info-block,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-info-label,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .tailoring-edit-card-label,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-signals,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-jd-context,
+html[data-theme="dark"] #scanWorkspaceInteractiveSummary .scan-workspace-taxonomy-group-summary {
+  color: #a8b6cc !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-review-main-actions .ghost-btn,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-btn {
+  border-color: rgba(96, 165, 250, 0.28) !important;
+  background: #111c2f !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab,
+html[data-theme="dark"] .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab.is-active,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-surface-tab {
+  background: transparent !important;
+  color: #dbeafe !important;
+}
+
+html[data-theme="dark"] .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:not(.is-active),
+html[data-theme="dark"] .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab[aria-disabled="true"],
+html[data-theme="dark"] .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:disabled {
+  color: #8fa1bb !important;
+}
+
+html[data-theme="dark"] .scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab.is-active::after,
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-surface-tab.is-active::after {
+  background: linear-gradient(90deg, #60a5fa, #22d3ee) !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-review-preview-area .scan-workspace-annotation-stage,
+html[data-theme="dark"] .scan-review-preview-area .scan-workspace-annotation-stage,
+html[data-theme="dark"] .scan-review-preview-area .scan-workspace-review-preview-shell,
+html[data-theme="dark"] .scan-review-preview-area .tailoring-preview-canvas--pdfjs,
+html[data-theme="dark"] .scan-review-v2 .tailoring-workspace-doc-mirror,
+html[data-theme="dark"] #scanWorkspaceLiveDraftPreview {
+  border-color: rgba(96, 165, 250, 0.22) !important;
+  background: #0b1220 !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .tailoring-workspace-doc-mirror-note {
+  border-bottom-color: rgba(148, 163, 184, 0.18) !important;
+  background: #111c2f !important;
+  color: #a8b6cc !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .tailoring-workspace-doc-page {
+  background: #ffffff !important;
+  color: #111827 !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-job-description-panel {
+  border-color: rgba(96, 165, 250, 0.26) !important;
+  background:
+    linear-gradient(180deg, rgba(17, 28, 47, 0.98), rgba(11, 18, 32, 0.98)),
+    #111c2f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28) !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-job-description-kicker {
+  color: #60a5fa !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-job-description-panel h3 {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-review-v2 .scan-workspace-job-description-panel pre {
+  border-color: rgba(96, 165, 250, 0.24) !important;
+  background: #0b1220 !important;
+  color: #dbeafe !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-backdrop {
+  background: rgba(3, 7, 18, 0.72) !important;
+  backdrop-filter: blur(5px) !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-card {
+  border-color: rgba(96, 165, 250, 0.34) !important;
+  background:
+    linear-gradient(180deg, rgba(17, 28, 47, 0.98), rgba(11, 18, 32, 0.98)),
+    #111c2f !important;
+  color: #f8fafc !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.52) !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-close {
+  border: 1px solid rgba(96, 165, 250, 0.32) !important;
+  background: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-close:hover {
+  background: #1e293b !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-card h2 {
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-card p {
+  color: #b7c4d8 !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-primary,
+html[data-theme="dark"] .scan-workspace-continue-modal-secondary {
+  border-color: rgba(96, 165, 250, 0.34) !important;
+  background: #17233a !important;
+  color: #f8fafc !important;
+}
+
+html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace-toolbar-icon {
+  filter: invert(1) brightness(1.35) !important;
+}

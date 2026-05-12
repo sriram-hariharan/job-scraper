@@ -17,7 +17,7 @@ def applied_jobs_dashboard() -> str:
   <title>Applied Jobs</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v31" />
 </head>
 <body>
   {render_top_shell("/applied")}
@@ -134,7 +134,7 @@ def applied_jobs_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v18"></script>
+  <script src="/static/shell.js?v=ui_redesign_v21"></script>
   <script src="/static/application_views.js"></script>
 </body>
 </html>

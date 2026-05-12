@@ -1,5 +1,4 @@
 const PENDING_APPLICATION_STORAGE_KEY = "job_operator_pending_application";
-const TAILORING_WORKSPACE_SPLIT_STORAGE_KEY = "tailoring_workspace_left_width_pct";
 const SCAN_WORKSPACE_SPLIT_STORAGE_KEY = "scan_workspace_left_width_pct";
 
 let currentTailoringMarkdownRaw = "";
@@ -2076,6 +2075,7 @@ function buildTailoringWorkspacePdfBlockIndex(lines) {
 
     const startsBullet = bulletStartPattern.test(safeText);
     const isSectionHeading = isTailoringWorkspacePdfSectionHeading(safeText);
+    const isDateHeading = Boolean(splitTailoringWorkspaceTrailingDateRange(safeText));
     const prevLine =
       currentBlock && currentBlock.lines.length
         ? currentBlock.lines[currentBlock.lines.length - 1]
@@ -2097,6 +2097,7 @@ function buildTailoringWorkspacePdfBlockIndex(lines) {
       Boolean(prevLine) &&
       !startsBullet &&
       !isSectionHeading &&
+      !isDateHeading &&
       !prevIsSectionHeading &&
       verticalGap <= 18 &&
       Number(line.bbox.left || 0) >= Number(currentBlock.anchorLeft || 0) - 12;
@@ -2131,6 +2132,7 @@ function buildTailoringWorkspacePdfBlockIndex(lines) {
 
     return {
       blockId: block.blockId,
+      matchKind: "block",
       text,
       normalizedText: normalizeTailoringWorkspaceText(text),
       bbox: {
@@ -2170,7 +2172,8 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
   const safeTarget = String(targetText || "").trim();
   if (!safeTarget) return null;
 
-  let best = null;
+  let bestBlock = null;
+  let bestLine = null;
 
   tailoringWorkspacePdfState.pageTextIndex.forEach((pageEntry) => {
     (pageEntry.blocks || []).forEach((block) => {
@@ -2180,13 +2183,14 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
       const candidate = {
         pageNumber: pageEntry.pageNumber,
         blockId: block.blockId,
+        matchKind: "block",
         lineText: block.text,
         bbox: block.bbox,
         score,
       };
 
-      if (shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, best)) {
-        best = candidate;
+      if (shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, bestBlock)) {
+        bestBlock = candidate;
       }
     });
 
@@ -2197,18 +2201,39 @@ function findTailoringWorkspaceBestPdfMatch(targetText) {
       const candidate = {
         pageNumber: pageEntry.pageNumber,
         lineId: line.lineId,
+        matchKind: "line",
         lineText: line.text,
         bbox: line.bbox,
         score,
       };
 
-      if (shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, best)) {
-        best = candidate;
+      if (shouldReplaceTailoringWorkspaceBestPdfMatch(candidate, bestLine)) {
+        bestLine = candidate;
       }
     });
   });
 
-  return best && best.score >= 50 ? best : null;
+  if (bestBlock && bestBlock.score >= 50) return bestBlock;
+  return bestLine && bestLine.score >= 50 ? bestLine : null;
+}
+
+function findTailoringWorkspaceBestPdfMatchFromTargets(targetTexts) {
+  const targets = (Array.isArray(targetTexts) ? targetTexts : [])
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
+
+  let best = null;
+
+  targets.forEach((targetText) => {
+    const match = findTailoringWorkspaceBestPdfMatch(targetText);
+    if (!match) return;
+
+    if (shouldReplaceTailoringWorkspaceBestPdfMatch(match, best)) {
+      best = match;
+    }
+  });
+
+  return best;
 }
 
 function getTailoringWorkspaceDisplayZoomPercent() {
@@ -2315,17 +2340,20 @@ function focusTailoringWorkspaceBulletKeyInPreview(bulletKey, candidateId = "") 
 
   if (!tailoringWorkspacePdfState.pdfDoc) return;
 
-  const targetText =
-    String(row.currentText || "").trim() ||
-    String(row.baseText || "").trim() ||
-    String(row.originalText || "").trim();
+  const targetTexts = [
+    row.currentText,
+    row.baseText,
+    row.originalText,
+  ]
+    .map((value) => String(value || "").trim())
+    .filter(Boolean);
 
-  if (!targetText) {
+  if (!targetTexts.length) {
     clearTailoringWorkspacePdfHighlight();
     return;
   }
 
-  const match = findTailoringWorkspaceBestPdfMatch(targetText);
+  const match = findTailoringWorkspaceBestPdfMatchFromTargets(targetTexts);
   if (!match) {
     clearTailoringWorkspacePdfHighlight({ restoreMeta: false });
     setTailoringWorkspacePreviewMeta("Could not find a matching bullet in the current PDF preview.");
@@ -2517,85 +2545,6 @@ function scheduleTailoringWorkspaceFitPageRerender() {
     tailoringWorkspacePdfState.resizeTimer = null;
     await applyTailoringWorkspaceFitPageScale();
   }, 80);
-}
-
-function applyTailoringWorkspaceSplitPercent(percent, { persist = true } = {}) {
-  const layout = document.querySelector(".tailoring-workspace-layout");
-  if (!layout || window.innerWidth <= 1280) return;
-
-  const safePercent = clampToRange(Number(percent) || 42, 30, 68);
-  layout.style.setProperty("--tailoring-workspace-left-width", `${safePercent}%`);
-
-  if (persist) {
-    localStorage.setItem(TAILORING_WORKSPACE_SPLIT_STORAGE_KEY, String(safePercent));
-  }
-}
-
-function bindTailoringWorkspaceDivider() {
-  const divider = qs("tailoringWorkspaceDivider");
-  const layout = document.querySelector(".tailoring-workspace-layout");
-
-  if (!divider || !layout || divider.dataset.bound === "true") return;
-  divider.dataset.bound = "true";
-
-  const restoreSavedSplit = () => {
-    if (window.innerWidth <= 1280) {
-      layout.style.removeProperty("--tailoring-workspace-left-width");
-      return;
-    }
-
-    const saved = Number(localStorage.getItem(TAILORING_WORKSPACE_SPLIT_STORAGE_KEY));
-    applyTailoringWorkspaceSplitPercent(Number.isFinite(saved) ? saved : 42, { persist: false });
-  };
-
-  const rerenderAfterResize = async () => {
-    if (!tailoringWorkspacePdfState.pdfDoc) return;
-
-    if (tailoringWorkspacePdfState.isFitPage) {
-      await applyTailoringWorkspaceFitPageScale();
-    } else {
-      await renderTailoringWorkspacePdfPages();
-    }
-  };
-
-  divider.addEventListener("pointerdown", (event) => {
-    if (window.innerWidth <= 1280) return;
-
-    event.preventDefault();
-    document.body.classList.add("tailoring-workspace-resizing");
-
-    const move = (moveEvent) => {
-      const rect = layout.getBoundingClientRect();
-      const rawPercent = ((moveEvent.clientX - rect.left) / rect.width) * 100;
-      applyTailoringWorkspaceSplitPercent(rawPercent);
-    };
-
-    const stop = async () => {
-      window.removeEventListener("pointermove", move);
-      window.removeEventListener("pointerup", stop);
-      document.body.classList.remove("tailoring-workspace-resizing");
-      await rerenderAfterResize();
-    };
-
-    window.addEventListener("pointermove", move);
-    window.addEventListener("pointerup", stop, { once: true });
-  });
-
-  divider.addEventListener("keydown", async (event) => {
-    if (window.innerWidth <= 1280) return;
-    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-
-    event.preventDefault();
-
-    const current = Number(localStorage.getItem(TAILORING_WORKSPACE_SPLIT_STORAGE_KEY) || "42");
-    const next = event.key === "ArrowLeft" ? current - 2 : current + 2;
-
-    applyTailoringWorkspaceSplitPercent(next);
-    await rerenderAfterResize();
-  });
-
-  window.addEventListener("resize", restoreSavedSplit);
-  restoreSavedSplit();
 }
 
 async function getTailoringWorkspacePdfJs() {
@@ -11985,7 +11934,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     bindTailoringWorkspaceSelectionHandlers();
     bindTailoringWorkspaceActionBar();
     bindTailoringWorkspaceExportModal();
-    bindTailoringWorkspaceDivider();
     await initTailoringWorkspacePage();
     return;
   }

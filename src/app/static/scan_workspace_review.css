@@ -4079,3 +4079,125 @@ body .scan-workspace-page .scan-workspace-header-copy h1 {
     font-size: 8.6pt !important;
   }
 }
+
+/* scan_review_v2_31: final underline-only surface tabs. */
+.scan-review-v2 .scan-review-surface-tabs,
+.scan-review-v2 .scan-workspace-review-surface-tabs {
+  display: inline-flex !important;
+  align-items: flex-end !important;
+  gap: 22px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-review-v2 .scan-workspace-surface-tab {
+  position: relative !important;
+  min-width: 0 !important;
+  min-height: 44px !important;
+  height: auto !important;
+  padding: 0 2px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+  white-space: nowrap !important;
+}
+
+.scan-review-v2 .scan-workspace-surface-tab::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+.scan-review-v2 .scan-workspace-surface-tab.is-active {
+  background: transparent !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+.scan-review-v2 .scan-workspace-surface-tab.is-active::after {
+  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+}
+
+.scan-review-v2 .scan-workspace-surface-tab:disabled,
+.scan-review-v2 .scan-workspace-surface-tab[aria-disabled="true"] {
+  background: transparent !important;
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+/* scan_review_v2_32: concrete surface tabs, no surrounding button boxes. */
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs {
+  display: inline-flex !important;
+  align-items: flex-end !important;
+  gap: 28px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab,
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab.is-active,
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:focus,
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:focus-visible,
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:hover {
+  appearance: none !important;
+  position: relative !important;
+  min-width: 0 !important;
+  min-height: 34px !important;
+  height: auto !important;
+  padding: 0 0 4px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+  white-space: nowrap !important;
+}
+
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:not(.is-active) {
+  color: #475569 !important;
+}
+
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab[aria-disabled="true"],
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab:disabled {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+.scan-workspace-review-surface-tabs.scan-review-surface-tabs .scan-workspace-surface-tab.is-active::after {
+  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+}

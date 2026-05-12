@@ -2992,3 +2992,212 @@ body .scheduler-page .scheduler-table-tabs {
   border-color: #bae6fd !important;
   background: #e0f2fe !important;
 }
+/* ui_redesign_v24_eof: final tab/dropdown override. */
+body .multi-select-menu {
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  padding: 8px !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.98)) !important;
+  box-shadow: 0 24px 54px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(191, 219, 254, 0.42) !important;
+}
+
+body .multi-select-option {
+  display: grid !important;
+  grid-template-columns: 28px minmax(0, 1fr) !important;
+  gap: 10px !important;
+  align-items: center !important;
+  min-height: 44px !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 9px 12px !important;
+  border: 0 !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 850 !important;
+  line-height: 1.2 !important;
+  text-align: left !important;
+  white-space: normal !important;
+  word-break: break-word !important;
+  box-shadow: none !important;
+}
+
+body .multi-select-option + .multi-select-option {
+  margin-top: 4px !important;
+}
+
+body .multi-select-option:hover,
+body .multi-select-option:focus-visible {
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+body .multi-select-option.is-selected {
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+}
+
+body .multi-select-option-check {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 22px !important;
+  height: 22px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 999px !important;
+  background: #ffffff !important;
+  color: transparent !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+}
+
+body .multi-select-option.is-selected .multi-select-option-check {
+  border-color: #22c55e !important;
+  background: #22c55e !important;
+  color: #ffffff !important;
+}
+
+body .multi-select-option-label {
+  min-width: 0 !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+body .application-tabs,
+body .scheduler-page .scheduler-table-tabs,
+body .scheduler-tab-row {
+  display: inline-flex !important;
+  align-items: flex-end !important;
+  gap: 22px !important;
+  width: auto !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body .application-tab,
+body .scheduler-page .scheduler-table-tab,
+body .scheduler-tab {
+  position: relative !important;
+  min-height: 44px !important;
+  padding: 0 2px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #475569 !important;
+  box-shadow: none !important;
+  font-size: 15px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+body .application-tab::after,
+body .scheduler-page .scheduler-table-tab::after,
+body .scheduler-tab::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+body .application-tab.active,
+body .scheduler-page .scheduler-table-tab.is-active,
+body .scheduler-tab.is-active {
+  background: transparent !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+body .application-tab.active::after,
+body .scheduler-page .scheduler-table-tab.is-active::after,
+body .scheduler-tab.is-active::after {
+  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+}
+
+/* ui_redesign_v25: remove remaining tab button chrome on concrete pages. */
+body #applicationViewRoot .application-tabs {
+  display: inline-flex !important;
+  align-items: flex-end !important;
+  gap: 28px !important;
+  margin-bottom: 14px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+body #applicationViewRoot .application-tab,
+body #applicationViewRoot .application-tab.active,
+body #applicationViewRoot .application-tab:focus,
+body #applicationViewRoot .application-tab:focus-visible,
+body #applicationViewRoot .application-tab:hover {
+  appearance: none !important;
+  position: relative !important;
+  min-height: 34px !important;
+  padding: 0 0 4px !important;
+  border: 0 !important;
+  outline: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+body #applicationViewRoot .application-tab:not(.active) {
+  color: #475569 !important;
+}
+
+body #applicationViewRoot .application-tab::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  height: 4px !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+}
+
+body #applicationViewRoot .application-tab.active::after {
+  background: linear-gradient(90deg, #2563eb, #06b6d4) !important;
+}
+
+/* ui_redesign_v27: icon-only theme toggle. */
+body .theme-toggle-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 92px !important;
+  width: auto !important;
+  padding: 6px 12px !important;
+}
+
+body .theme-toggle-icon {
+  display: block !important;
+  width: 22px !important;
+  height: 22px !important;
+  color: #f8fafc !important;
+  flex: 0 0 22px !important;
+}
+
+html[data-theme="light"] body .theme-toggle-icon {
+  color: #0f172a !important;
+}
+
+body .theme-toggle-label {
+  display: none !important;
+}

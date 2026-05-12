@@ -154,11 +154,20 @@ function getMultiSelectRoot(id) {
   return qs(id);
 }
 
+function getMultiSelectMenu(root) {
+  return root?._multiSelectMenu || root?.querySelector(".multi-select-menu") || null;
+}
+
+function getMultiSelectOptions(root, selector = ".multi-select-option") {
+  const menu = getMultiSelectMenu(root);
+  return Array.from((menu || root)?.querySelectorAll(selector) || []);
+}
+
 function getMultiSelectValues(id) {
   const root = getMultiSelectRoot(id);
   if (!root) return [];
 
-  return Array.from(root.querySelectorAll(".multi-select-option.is-selected"))
+  return getMultiSelectOptions(root, ".multi-select-option.is-selected")
     .map((option) => String(option.dataset.value || "").trim())
     .filter(Boolean);
 }
@@ -173,7 +182,7 @@ function updateMultiSelectLabel(root) {
   const label = root.querySelector(".multi-select-trigger-label");
   if (!label) return;
 
-  const selected = Array.from(root.querySelectorAll(".multi-select-option.is-selected"));
+  const selected = getMultiSelectOptions(root, ".multi-select-option.is-selected");
   const placeholder = root.dataset.placeholder || "All";
 
   if (!selected.length) {
@@ -190,19 +199,75 @@ function setMultiSelectOpen(root, isOpen) {
   if (!root) return;
 
   const trigger = root.querySelector(".multi-select-trigger");
-  const menu = root.querySelector(".multi-select-menu");
+  const menu = getMultiSelectMenu(root);
   if (!trigger || !menu) return;
 
   root.classList.toggle("is-open", isOpen);
   trigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
-  menu.hidden = !isOpen;
+  if (isOpen) {
+    menu.hidden = false;
+    menu.dataset.multiSelectOwner = root.id || "";
+    if (menu.parentElement !== document.body) {
+      document.body.appendChild(menu);
+    }
+    positionMultiSelectMenu(root);
+  } else {
+    menu.hidden = true;
+    resetMultiSelectMenuPosition(menu);
+    if (menu.parentElement !== root) {
+      root.appendChild(menu);
+    }
+  }
+}
+
+function resetMultiSelectMenuPosition(menu) {
+  if (!menu) return;
+
+  ["position", "left", "right", "top", "bottom", "width", "max-height", "z-index"].forEach((name) => {
+    menu.style.removeProperty(name);
+  });
+}
+
+function positionMultiSelectMenu(root) {
+  if (!root) return;
+
+  const trigger = root.querySelector(".multi-select-trigger");
+  const menu = getMultiSelectMenu(root);
+  if (!trigger || !menu || menu.hidden) return;
+
+  const rect = trigger.getBoundingClientRect();
+  const viewportPadding = 16;
+  const preferredWidth = Math.max(rect.width, 280);
+  const width = Math.min(preferredWidth, window.innerWidth - viewportPadding * 2);
+  const left = Math.min(
+    Math.max(rect.left, viewportPadding),
+    window.innerWidth - width - viewportPadding
+  );
+  const availableBelow = window.innerHeight - rect.bottom - viewportPadding;
+  const availableAbove = rect.top - viewportPadding;
+  const openAbove = availableBelow < 190 && availableAbove > availableBelow;
+  const availableSpace = openAbove ? availableAbove : availableBelow;
+  const maxHeight = Math.max(168, Math.min(380, availableSpace - 8));
+
+  menu.style.setProperty("position", "fixed", "important");
+  menu.style.setProperty("left", `${left}px`, "important");
+  menu.style.setProperty("right", "auto", "important");
+  menu.style.setProperty("width", `${width}px`, "important");
+  menu.style.setProperty("max-height", `${maxHeight}px`, "important");
+  menu.style.setProperty("z-index", "10000", "important");
+  menu.style.setProperty("top", openAbove ? "auto" : `${rect.bottom + 8}px`, "important");
+  menu.style.setProperty(
+    "bottom",
+    openAbove ? `${window.innerHeight - rect.top + 8}px` : "auto",
+    "important"
+  );
 }
 
 function clearMultiSelect(id) {
   const root = getMultiSelectRoot(id);
   if (!root) return;
 
-  root.querySelectorAll(".multi-select-option").forEach((option) => {
+  getMultiSelectOptions(root).forEach((option) => {
     option.classList.remove("is-selected");
     option.setAttribute("aria-checked", "false");
   });
@@ -218,6 +283,7 @@ function initMultiSelect(id) {
   const menu = root.querySelector(".multi-select-menu");
   if (!trigger || !menu) return;
 
+  root._multiSelectMenu = menu;
   root.dataset.bound = "true";
   updateMultiSelectLabel(root);
 
@@ -234,7 +300,7 @@ function initMultiSelect(id) {
     setMultiSelectOpen(root, willOpen);
   });
 
-  root.querySelectorAll(".multi-select-option").forEach((option) => {
+  getMultiSelectOptions(root).forEach((option) => {
     option.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -799,6 +865,14 @@ function attachDecisionHandlers() {
       }
     });
   });
+
+  const repositionOpenMultiSelects = () => {
+    document.querySelectorAll(".multi-select.is-open").forEach((root) => {
+      positionMultiSelectMenu(root);
+    });
+  };
+  window.addEventListener("resize", repositionOpenMultiSelects);
+  window.addEventListener("scroll", repositionOpenMultiSelects, true);
 
   window.addEventListener("focus", () => {
     const pending = loadPendingApplicationFromStorage();

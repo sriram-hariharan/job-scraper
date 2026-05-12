@@ -154,7 +154,12 @@ def render_top_shell(active_href: str) -> str:
     <span class="theme-toggle-track" aria-hidden="true">
       <span class="theme-toggle-knob"></span>
     </span>
-    <span class="theme-toggle-label">Dark</span>
+    <img
+      class="theme-toggle-icon"
+      src="/static/media/dark_mode.svg"
+      alt=""
+      aria-hidden="true"
+    />
   </button>
 
   <a

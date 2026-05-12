@@ -8176,3 +8176,1029 @@ html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-issue-
     grid-template-columns: 1fr !important;
   }
 }
+/* tailoring_workspace_v3: compact, calmer workspace chrome. */
+html[data-theme="light"] .tailoring-workspace-page {
+  --tw-ink: #0f172a;
+  --tw-muted: #64748b;
+  --tw-border: #bfd3ea;
+  --tw-blue: #2563eb;
+  --tw-cyan: #0891b2;
+  --tw-green: #059669;
+  --tw-amber: #d97706;
+  background:
+    linear-gradient(135deg, rgba(191, 219, 254, 0.62) 0%, rgba(236, 254, 255, 0.68) 48%, rgba(248, 250, 252, 0.96) 100%) !important;
+  color: var(--tw-ink) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-page .page-header {
+  margin-bottom: 14px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-page .page-header h1 {
+  font-size: clamp(34px, 3.5vw, 54px) !important;
+  line-height: 0.98 !important;
+  letter-spacing: 0 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-page .subtext {
+  color: var(--tw-muted) !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero {
+  margin-bottom: 20px !important;
+  padding: 14px 18px !important;
+  border: 1px solid var(--tw-border) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow: 0 18px 46px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair {
+  min-height: 92px !important;
+  padding: 16px 18px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 12px !important;
+  background: #f8fafc !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(1) {
+  border-color: #bfdbfe !important;
+  background: #eff6ff !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(2) {
+  border-color: #a5f3fc !important;
+  background: #ecfeff !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(3) {
+  border-color: #bbf7d0 !important;
+  background: #f0fdf4 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(4) {
+  border-color: #fde68a !important;
+  background: #fffbeb !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair .label {
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.035em !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair span:not(.label) {
+  color: var(--tw-ink) !important;
+  font-size: 15px !important;
+  font-weight: 650 !important;
+  line-height: 1.25 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-layout {
+  gap: 14px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane {
+  padding: 18px !important;
+  border: 1px solid var(--tw-border) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left,
+html[data-theme="light"] .tailoring-workspace-pane--right {
+  border-color: var(--tw-border) !important;
+  background: rgba(255, 255, 255, 0.8) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left > .section-header,
+html[data-theme="light"] .tailoring-workspace-pane--right > .section-header {
+  margin: 0 0 14px !important;
+  padding: 14px 16px !important;
+  border: 1px solid #d7e4f5 !important;
+  border-radius: 14px !important;
+  background: #f8fbff !important;
+  box-shadow: inset 4px 0 0 var(--tw-blue) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left > .section-header {
+  box-shadow: inset 4px 0 0 var(--tw-amber) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane h2 {
+  color: var(--tw-ink) !important;
+  font-size: clamp(24px, 2vw, 36px) !important;
+  font-weight: 950 !important;
+  line-height: 1.02 !important;
+  letter-spacing: 0 !important;
+}
+
+html[data-theme="light"] .tailoring-section-title-row {
+  gap: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-ai-optimize-btn {
+  min-height: 38px !important;
+  padding: 7px 12px !important;
+  border: 1px solid #fbbf24 !important;
+  border-radius: 11px !important;
+  background: #ffffff !important;
+  color: #92400e !important;
+  font-size: 13px !important;
+  box-shadow: 0 8px 18px rgba(217, 119, 6, 0.12) !important;
+}
+
+html[data-theme="light"] .tailoring-ai-optimize-btn-icon-wrap {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-selected-tabs {
+  margin-bottom: 14px !important;
+  padding: 8px !important;
+  border: 1px solid #d7e4f5 !important;
+  border-radius: 14px !important;
+  background: #f8fbff !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn {
+  min-height: 40px !important;
+  padding: 8px 14px !important;
+  border-radius: 10px !important;
+  font-size: 13px !important;
+}
+
+html[data-theme="light"] .tailoring-preview-canvas,
+html[data-theme="light"] .tailoring-workspace-pdf-scroller {
+  border: 1px solid #cbdff3 !important;
+  background: #f8fbff !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header {
+  margin: 0 0 12px !important;
+  padding: 14px 16px !important;
+  border: 1px solid #d7e4f5 !important;
+  border-radius: 14px !important;
+  background: #f8fbff !important;
+  box-shadow: inset 4px 0 0 var(--tw-blue) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-name {
+  font-size: 17px !important;
+  font-weight: 900 !important;
+  line-height: 1.2 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-toolbar {
+  padding: 8px 10px !important;
+  border: 1px solid #d7e4f5 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+}
+
+@media (min-width: 1281px) {
+  html[data-theme="light"] .tailoring-workspace-layout {
+    grid-template-columns: minmax(380px, var(--tailoring-workspace-left-width, 42%)) 14px minmax(620px, 1fr) !important;
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  html[data-theme="light"] .tailoring-workspace-hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+/* tailoring_workspace_v4: denser left rail and earlier resume preview. */
+html[data-theme="light"] .tailoring-workspace-page .page-header h1 {
+  font-size: clamp(26px, 2vw, 34px) !important;
+  line-height: 1.04 !important;
+  letter-spacing: 0 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-page .page-header {
+  margin-bottom: 10px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero {
+  margin-bottom: 14px !important;
+  padding: 10px 14px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair {
+  min-height: 76px !important;
+  padding: 12px 14px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-layout {
+  gap: 10px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane {
+  padding: 12px !important;
+  border-radius: 16px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left > .section-header,
+html[data-theme="light"] .tailoring-workspace-pane--right > .section-header {
+  margin: 0 0 10px !important;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane h2 {
+  font-size: clamp(22px, 1.55vw, 30px) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left > .section-header .subtext,
+html[data-theme="light"] .tailoring-workspace-pane--right > .section-header .subtext {
+  margin-top: 4px !important;
+  font-size: 13px !important;
+  line-height: 1.32 !important;
+}
+
+html[data-theme="light"] .tailoring-section-title-row {
+  align-items: center !important;
+}
+
+html[data-theme="light"] .tailoring-ai-optimize-btn {
+  min-height: 34px !important;
+  padding: 6px 10px !important;
+  font-size: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-ai-optimize-btn-icon-wrap {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-selected-tabs {
+  margin-bottom: 10px !important;
+  padding: 6px !important;
+  border-radius: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tabs-shell,
+html[data-theme="light"] .tailoring-selected-tab-row {
+  gap: 8px !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn {
+  min-height: 34px !important;
+  padding: 6px 11px !important;
+  border-radius: 9px !important;
+  font-size: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-count {
+  min-width: 24px !important;
+  height: 24px !important;
+  padding: 0 8px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-content .tailoring-section-block,
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-section-block {
+  margin-top: 10px !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-section-title {
+  font-size: clamp(20px, 1.5vw, 28px) !important;
+  line-height: 1.06 !important;
+}
+
+html[data-theme="light"] .tailoring-preview-shell,
+html[data-theme="light"] .tailoring-preview-canvas {
+  padding: 10px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+  align-items: start !important;
+  margin-bottom: 8px !important;
+  padding: 10px 12px !important;
+  border-radius: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-name {
+  font-size: 15px !important;
+  line-height: 1.2 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-mode-toggle {
+  min-height: 34px !important;
+  height: 34px !important;
+  padding: 4px 8px !important;
+  border-radius: 10px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 7px !important;
+  padding-top: 22px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-icon-btn {
+  width: 34px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 !important;
+  border-radius: 10px !important;
+}
+
+html[data-theme="light"] #tailoringWorkspacePreviewMeta {
+  display: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-toolbar {
+  min-height: 0 !important;
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-toolbar-left {
+  gap: 6px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-toolbar .ghost-btn {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 9px !important;
+  border-radius: 9px !important;
+  font-size: 12px !important;
+}
+
+@media (min-width: 1281px) {
+  html[data-theme="light"] .tailoring-workspace-layout {
+    grid-template-columns: minmax(360px, var(--tailoring-workspace-left-width, 40%)) 12px minmax(620px, 1fr) !important;
+  }
+}
+/* tailoring_workspace_v5: flatten nested controls and align panes. */
+html[data-theme="light"] .tailoring-workspace-layout {
+  align-items: start !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left,
+html[data-theme="light"] .tailoring-workspace-pane--right {
+  align-self: start !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left > .section-header,
+html[data-theme="light"] .tailoring-workspace-pane--right > .section-header {
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane--left > .section-header > div,
+html[data-theme="light"] .tailoring-workspace-pane--right > .section-header > div {
+  width: 100% !important;
+}
+
+html[data-theme="light"] .tailoring-section-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-pane h2 {
+  font-size: clamp(20px, 1.35vw, 26px) !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceMeta {
+  margin-top: 4px !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-selected-tabs {
+  margin: 0 0 10px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tabs-shell,
+html[data-theme="light"] .tailoring-selected-tab-row {
+  width: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-row {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  flex-wrap: wrap !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn {
+  min-height: 30px !important;
+  padding: 4px 8px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: #334155 !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn.active {
+  border-radius: 999px !important;
+  padding: 5px 10px !important;
+  background: #059669 !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-count {
+  min-width: 22px !important;
+  height: 22px !important;
+  padding: 0 7px !important;
+  font-size: 12px !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-section-title,
+html[data-theme="light"] .tailoring-workspace-content .tailoring-section-title {
+  font-size: clamp(18px, 1.25vw, 24px) !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-section-subtitle,
+html[data-theme="light"] .tailoring-workspace-content .tailoring-section-subtitle {
+  margin-top: 3px !important;
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+}
+
+html[data-theme="light"] .tailoring-edit-card {
+  margin-top: 8px !important;
+}
+
+html[data-theme="light"] .tailoring-preview-shell,
+html[data-theme="light"] .tailoring-preview-canvas {
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header {
+  margin: 0 0 8px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header-main {
+  display: grid !important;
+  gap: 4px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header-main > .subtext:first-child {
+  display: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-title-row {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 10px !important;
+  align-items: center !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-selection-status {
+  font-size: 12px !important;
+  line-height: 1.25 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-header-actions {
+  padding-top: 0 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-preview-toolbar {
+  display: flex !important;
+  justify-content: flex-end !important;
+  margin-bottom: 6px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-mode-body {
+  margin-top: 0 !important;
+}
+/* tailoring_workspace_v6: keep primary tabs visible, compact filters and hero cards. */
+html[data-theme="light"] .tailoring-workspace-hero-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+  overflow: visible !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair {
+  min-width: 0 !important;
+  min-height: 62px !important;
+  padding: 9px 10px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(1) {
+  background: #bfdbfe !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(2) {
+  background: #99f6e4 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(3) {
+  background: #86efac !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(4) {
+  background: #fcd34d !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair .label {
+  font-size: 10px !important;
+  line-height: 1 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair span:not(.label) {
+  font-size: 12px !important;
+  line-height: 1.15 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-selected-tabs {
+  display: block !important;
+  overflow: visible !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-row {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn,
+html[data-theme="light"] .tailoring-selected-tab-btn.active {
+  display: inline-flex !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  min-width: 0 !important;
+  min-height: 28px !important;
+  width: 100% !important;
+  padding: 4px 8px !important;
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 9px !important;
+  background: #e2e8f0 !important;
+  color: #0f172a !important;
+  font-size: 11px !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn.active {
+  border-color: #047857 !important;
+  background: #059669 !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-count {
+  min-width: 18px !important;
+  height: 18px !important;
+  padding: 0 5px !important;
+  font-size: 10px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-review-telemetry {
+  margin: 6px 0 10px !important;
+  overflow: visible !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-review-telemetry.hidden {
+  display: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-review-telemetry-row {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 6px !important;
+  width: 100% !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip {
+  min-width: 0 !important;
+  min-height: 28px !important;
+  width: 100% !important;
+  padding: 4px 6px !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  line-height: 1.1 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--caution {
+  background: #d97706 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--safe {
+  background: #059669 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--neutral {
+  background: #2563eb !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--danger {
+  background: #dc2626 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--muted {
+  background: #64748b !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip.is-active {
+  outline: 2px solid #1d4ed8 !important;
+  outline-offset: 2px !important;
+}
+
+@media (max-width: 1220px) {
+  html[data-theme="light"] .tailoring-workspace-hero-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+/* tailoring_workspace_v7: compact filter chips and tighten control stack. */
+html[data-theme="light"] .tailoring-workspace-selected-tabs {
+  margin: 0 0 6px !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-row {
+  gap: 6px !important;
+}
+
+html[data-theme="light"] .tailoring-selected-tab-btn,
+html[data-theme="light"] .tailoring-selected-tab-btn.active {
+  min-height: 30px !important;
+  padding: 5px 8px !important;
+  font-size: 12px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-review-telemetry {
+  margin: 4px 0 6px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-review-telemetry-row {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 5px !important;
+  align-items: stretch !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 0 !important;
+  min-height: 32px !important;
+  width: 100% !important;
+  padding: 5px 4px !important;
+  border: 1px solid transparent !important;
+  border-radius: 9px !important;
+  color: #ffffff !important;
+  font-size: clamp(8px, 0.58vw, 10px) !important;
+  font-weight: 950 !important;
+  line-height: 1.05 !important;
+  letter-spacing: 0 !important;
+  text-align: center !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--caution {
+  background: #b45309 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--safe {
+  background: #047857 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--neutral {
+  background: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--danger {
+  background: #b91c1c !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--muted {
+  background: #475569 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip.is-active {
+  border-color: #ffffff !important;
+  outline: 2px solid #2563eb !important;
+  outline-offset: 1px !important;
+}
+
+html[data-theme="light"] .tailoring-status-badge {
+  min-height: 28px !important;
+  padding: 5px 10px !important;
+  border-radius: 999px !important;
+  font-size: 11px !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-section-block,
+html[data-theme="light"] .tailoring-workspace-content .tailoring-section-block {
+  margin-top: 6px !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-section-title,
+html[data-theme="light"] .tailoring-workspace-content .tailoring-section-title {
+  margin-top: 0 !important;
+}
+
+html[data-theme="light"] #tailoringWorkspaceInteractiveSummary .tailoring-edit-card:first-of-type,
+html[data-theme="light"] .tailoring-workspace-content .tailoring-edit-card:first-of-type {
+  margin-top: 6px !important;
+}
+/* tailoring_workspace_v8: softer complementary tile and chip colors. */
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(1) {
+  background: #dbeafe !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(2) {
+  background: #ccfbf1 !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(3) {
+  background: #dcfce7 !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-hero .info-pair:nth-child(4) {
+  background: #fef3c7 !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--caution {
+  background: #fde68a !important;
+  border-color: #fbbf24 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--safe {
+  background: #bbf7d0 !important;
+  border-color: #4ade80 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--neutral {
+  background: #bfdbfe !important;
+  border-color: #60a5fa !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--danger {
+  background: #fecaca !important;
+  border-color: #f87171 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--muted {
+  background: #e2e8f0 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip.is-active {
+  color: #0f172a !important;
+  border-color: #2563eb !important;
+  outline: 2px solid rgba(37, 99, 235, 0.28) !important;
+}
+/* tailoring_workspace_v9: app-aligned export modal. */
+html[data-theme="light"] .tailoring-workspace-export-modal-card {
+  max-width: 860px !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 22px !important;
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f8fbff 100%) !important;
+  box-shadow: 0 30px 80px rgba(15, 23, 42, 0.22) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-modal-card .modal-header {
+  padding-bottom: 16px !important;
+  border-bottom: 1px solid #dbeafe !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-modal-card .modal-header h3 {
+  color: #0f172a !important;
+  font-size: clamp(28px, 2.6vw, 42px) !important;
+  font-weight: 950 !important;
+  letter-spacing: 0 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-modal-card .modal-close-btn {
+  border-color: #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-shell {
+  display: grid !important;
+  gap: 18px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-summary {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-summary .info-pair {
+  min-height: 86px !important;
+  padding: 16px 18px !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 14px !important;
+  background: #eff6ff !important;
+  box-shadow: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-summary .info-pair:nth-child(2) {
+  border-color: #99f6e4 !important;
+  background: #ccfbf1 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-summary .info-pair .label {
+  color: #334155 !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+  letter-spacing: 0.04em !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-summary .info-pair span:not(.label) {
+  color: #0f172a !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-note {
+  display: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-grid {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 14px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-btn {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  grid-template-areas:
+    "icon title"
+    "icon copy" !important;
+  align-items: center !important;
+  column-gap: 14px !important;
+  min-height: 104px !important;
+  padding: 18px !important;
+  border: 1px solid #bfdbfe !important;
+  border-radius: 16px !important;
+  background:
+    linear-gradient(135deg, #2563eb 0%, #06b6d4 100%) !important;
+  color: #ffffff !important;
+  text-align: left !important;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.18) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-btn:nth-child(2) {
+  border-color: #86efac !important;
+  background:
+    linear-gradient(135deg, #059669 0%, #14b8a6 100%) !important;
+  box-shadow: 0 16px 34px rgba(5, 150, 105, 0.18) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-btn:hover,
+html[data-theme="light"] .tailoring-workspace-export-format-btn:focus-visible {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 20px 42px rgba(15, 23, 42, 0.2) !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-title {
+  display: contents !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-title img {
+  grid-area: icon !important;
+  width: 40px !important;
+  height: 40px !important;
+  min-width: 40px !important;
+  min-height: 40px !important;
+  padding: 8px !important;
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.92) !important;
+  filter: none !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-title span {
+  grid-area: title !important;
+  color: #ffffff !important;
+  font-size: 24px !important;
+  font-weight: 950 !important;
+  line-height: 1.05 !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-export-format-copy {
+  grid-area: copy !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  font-size: 13px !important;
+  font-weight: 750 !important;
+  line-height: 1.25 !important;
+}
+/* tailoring_workspace_v10: no gap between tab rows and highlighted counts. */
+html[data-theme="light"] .tailoring-workspace-selected-tabs {
+  margin-bottom: 2px !important;
+}
+
+html[data-theme="light"] .tailoring-workspace-review-telemetry {
+  margin: 0 0 6px !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip {
+  gap: 4px !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip-label {
+  min-width: 0 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip-count {
+  display: inline-grid !important;
+  place-items: center !important;
+  min-width: 20px !important;
+  height: 20px !important;
+  padding: 0 6px !important;
+  border-radius: 999px !important;
+  background: rgba(255, 255, 255, 0.82) !important;
+  color: #0f172a !important;
+  font-size: 12px !important;
+  font-weight: 950 !important;
+  line-height: 1 !important;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--caution .tailoring-review-filter-chip-count {
+  color: #92400e !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--safe .tailoring-review-filter-chip-count {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--neutral .tailoring-review-filter-chip-count {
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--danger .tailoring-review-filter-chip-count {
+  color: #b91c1c !important;
+}
+
+html[data-theme="light"] .tailoring-review-filter-chip--muted .tailoring-review-filter-chip-count {
+  color: #475569 !important;
+}

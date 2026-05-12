@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v23" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -666,8 +666,8 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v17"></script>
-  <script src="/static/planning.js?v=planning_ui_20260506_declutter1"></script>
+  <script src="/static/shell.js?v=ui_redesign_v18"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs2"></script>
 </body>
 </html>
     """.strip()
@@ -724,8 +724,8 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v23" />
-  <link rel="stylesheet" href="/static/scan_workspace.css?v=scan_workspace_review_polish2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
+  <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_v9" />
 </head>
 <body>
 {render_top_shell("/tailoring-workspace")}
@@ -1048,7 +1048,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v17"></script>
+  <script src="/static/shell.js?v=ui_redesign_v18"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1078,13 +1078,6 @@ def tailoring_workspace(
             <span class="label">Export status</span>
             <span id="tailoringWorkspaceExportStatus">-</span>
           </div>
-        </div>
-
-        <div
-          class="tailoring-workspace-export-note"
-          id="tailoringWorkspaceExportHint"
-        >
-          Save changes before exporting.
         </div>
 
         <div class="tailoring-workspace-export-format-grid">
@@ -1130,7 +1123,7 @@ def tailoring_workspace(
         </div>
     </div>
   </section>
-  <script src="/static/planning.js?v=planning_ui_20260506_declutter1"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs2"></script>
 </body>
 </html>
     """.strip()
@@ -1232,8 +1225,8 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v23" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_30" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_33" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1627,20 +1620,20 @@ def scan_workspace(
                   <button
                     type="button"
                     class="scan-workspace-surface-tab"
-                    data-scan-surface="cover_letter"
-                    disabled
-                    aria-disabled="true"
+                    data-scan-surface="job_description"
+                    aria-disabled="false"
                   >
-                    Cover Letter
+                    Job Description
                   </button>
 
                   <button
                     type="button"
                     class="scan-workspace-surface-tab"
-                    data-scan-surface="job_description"
-                    aria-disabled="false"
+                    data-scan-surface="cover_letter"
+                    disabled
+                    aria-disabled="true"
                   >
-                    Job Description
+                    Cover Letter
                   </button>
                 </div>
               </div>
@@ -2082,8 +2075,8 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v17"></script>
-  <script src="/static/planning.js?v=planning_ui_20260511_scan_contact_preview1"></script>
+  <script src="/static/shell.js?v=ui_redesign_v18"></script>
+  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs2"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal12"></script>
 </body>
 </html>

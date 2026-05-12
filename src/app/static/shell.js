@@ -28,9 +28,9 @@ function updateThemeToggle(theme) {
   themeToggleBtn.setAttribute("aria-pressed", isLight ? "true" : "false");
   themeToggleBtn.title = nextLabel;
 
-  const label = themeToggleBtn.querySelector(".theme-toggle-label");
-  if (label) {
-    label.textContent = isLight ? "Light" : "Dark";
+  const icon = themeToggleBtn.querySelector(".theme-toggle-icon");
+  if (icon) {
+    icon.src = isLight ? "/static/media/light_mode.svg" : "/static/media/dark_mode.svg";
   }
 }
 

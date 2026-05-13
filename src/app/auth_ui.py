@@ -196,7 +196,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
         display_name_field = """
         <label class="auth-field">
           <span>Name</span>
-          <input id="displayNameInput" type="text" autocomplete="name" placeholder="Sriram" />
+          <input id="displayNameInput" type="text" autocomplete="name" placeholder="John Doe" />
         </label>
         """
 

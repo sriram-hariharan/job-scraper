@@ -81,6 +81,12 @@ from src.storage.saved_scans.read_postgres import (
     get_saved_scans_postgres_payload,
     save_saved_scan_draft_postgres_payload,
 )
+from src.storage.profile_resumes.store import (
+    delete_profile_resume_postgres_payload,
+    get_profile_resume_blob_postgres_payload,
+    get_profile_resumes_postgres_payload,
+    upsert_profile_resume_postgres_payload,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -274,33 +280,22 @@ def _sanitize_scan_upload_filename(value: str) -> str:
     return safe
 
 
-def _resume_payload_for_path(path: Path) -> Dict[str, Any]:
-    stat = path.stat()
-    return {
-        "resume_name": path.name,
-        "path": str(path),
-        "size_bytes": stat.st_size,
-        "modified_at": datetime.fromtimestamp(
-            stat.st_mtime,
-            tz=timezone.utc,
-        ).isoformat(timespec="seconds"),
-    }
-
-
 def profile_resumes_payload(
     *,
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
-    resume_dir = _get_resume_dir(owner_user_id=owner_user_id)
-
-    pdf_paths = [path for path in resume_dir.iterdir() if path.is_file() and path.suffix.lower() == ".pdf"]
-    pdf_paths.sort(key=lambda path: (-path.stat().st_mtime, path.name.lower()))
-
-    resumes = [_resume_payload_for_path(path) for path in pdf_paths]
-
+    payload = get_profile_resumes_postgres_payload(
+        owner_user_id=_clean_text(owner_user_id),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    resumes = list(payload.get("resumes", []) or [])
     return {
         "ok": True,
-        "resume_dir": str(resume_dir),
+        "resume_dir": "",
+        "storage": "postgres",
         "count": len(resumes),
         "resumes": resumes,
     }
@@ -312,22 +307,29 @@ def profile_upload_resume_payload(
     *,
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
-    resume_dir = _get_resume_dir(owner_user_id=owner_user_id)
     safe_name = _sanitize_resume_filename(filename)
 
     if not file_bytes:
         raise ValueError("Uploaded file is empty.")
 
-    target_path = resume_dir / safe_name
-    if target_path.exists():
+    payload = upsert_profile_resume_postgres_payload(
+        owner_user_id=_clean_text(owner_user_id),
+        resume_name=safe_name,
+        original_filename=safe_name,
+        content_type="application/pdf",
+        file_bytes=file_bytes,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    if not bool(payload.get("inserted", False)):
         raise ValueError(f"Resume already exists: {safe_name}")
-
-    target_path.write_bytes(file_bytes)
 
     return {
         "ok": True,
         "message": "Resume uploaded.",
-        "resume": _resume_payload_for_path(target_path),
+        "resume": payload.get("resume", {}),
     }
 
 
@@ -336,23 +338,71 @@ def profile_delete_resume_payload(
     *,
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
-    resume_dir = _get_resume_dir(owner_user_id=owner_user_id)
     safe_name = _sanitize_resume_filename(resume_name)
-    target_path = resume_dir / safe_name
-
-    if not target_path.exists():
+    payload = delete_profile_resume_postgres_payload(
+        owner_user_id=_clean_text(owner_user_id),
+        resume_name=safe_name,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    if not bool(payload.get("deleted", False)):
         raise ValueError(f"Resume not found: {safe_name}")
-
-    if not target_path.is_file():
-        raise ValueError(f"Resume is not a file: {safe_name}")
-
-    target_path.unlink()
 
     return {
         "ok": True,
         "message": "Resume deleted.",
         "resume_name": safe_name,
     }
+
+
+def profile_resume_file_payload(
+    resume_name: str,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    safe_name = _sanitize_resume_filename(resume_name)
+    payload = get_profile_resume_blob_postgres_payload(
+        owner_user_id=_clean_text(owner_user_id),
+        resume_name=safe_name,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+    )
+    file_bytes = bytes(payload.get("file_bytes", b"") or b"")
+    if not file_bytes:
+        raise ValueError(f"Resume not found: {safe_name}")
+
+    resume = dict(payload.get("resume", {}) or {})
+    return {
+        "ok": True,
+        "resume_name": safe_name,
+        "content_type": _clean_text(resume.get("content_type")) or "application/pdf",
+        "size_bytes": len(file_bytes),
+        "file_bytes": file_bytes,
+        "resume": resume,
+    }
+
+
+def _materialize_profile_resume_temp_path(
+    resume_name: str,
+    *,
+    owner_user_id: str = "",
+) -> Path:
+    safe_name = _sanitize_resume_filename(resume_name)
+    payload = profile_resume_file_payload(safe_name, owner_user_id=owner_user_id)
+    file_bytes = bytes(payload.get("file_bytes", b"") or b"")
+    digest = hashlib.sha256(
+        (_clean_text(owner_user_id) + "\0" + safe_name).encode("utf-8") + file_bytes
+    ).hexdigest()
+    temp_dir = Path(tempfile.gettempdir()) / "applylens_profile_resume_previews" / _safe_owner_dir_name(owner_user_id)
+    temp_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = temp_dir / f"{digest[:24]}_{safe_name}"
+    if not temp_path.exists() or temp_path.stat().st_size != len(file_bytes):
+        temp_path.write_bytes(file_bytes)
+    return temp_path
 
 
 def _scan_upload_mime_type(filename: str, fallback: str = "") -> str:
@@ -935,6 +985,7 @@ def create_saved_scan_payload(
     resume_name = ""
     resume_filename = ""
     resume_file_path = ""
+    resume_processing_path = ""
     resume_file_mime_type = ""
     resume_size_bytes = 0
 
@@ -946,19 +997,26 @@ def create_saved_scan_payload(
         resume_name = Path(safe_upload_name).stem
         resume_filename = safe_upload_name
         resume_file_path = str(target_path)
+        resume_processing_path = str(target_path)
         resume_file_mime_type = _scan_upload_mime_type(safe_upload_name, upload_content_type)
         resume_size_bytes = len(upload_bytes)
     elif _clean_text(saved_resume_name):
         safe_saved_resume = _sanitize_resume_filename(saved_resume_name)
+        saved_resume_payload = profile_resume_file_payload(
+            safe_saved_resume,
+            owner_user_id=owner_user_id,
+        )
+        saved_resume_temp_path = _materialize_profile_resume_temp_path(
+            safe_saved_resume,
+            owner_user_id=owner_user_id,
+        )
         resume_source = "saved_resume"
         resume_name = safe_saved_resume
         resume_filename = safe_saved_resume
-        resume_file_path = str((_get_resume_dir(owner_user_id=owner_user_id) / safe_saved_resume).resolve())
-        resume_file_mime_type = "application/pdf"
-        try:
-            resume_size_bytes = (_get_resume_dir(owner_user_id=owner_user_id) / safe_saved_resume).stat().st_size
-        except FileNotFoundError:
-            resume_size_bytes = 0
+        resume_file_path = f"postgres://profile_resumes/{_clean_text(owner_user_id)}/{safe_saved_resume}"
+        resume_processing_path = str(saved_resume_temp_path)
+        resume_file_mime_type = _clean_text(saved_resume_payload.get("content_type")) or "application/pdf"
+        resume_size_bytes = int(saved_resume_payload.get("size_bytes", 0) or 0)
     elif safe_resume_text:
         resume_source = "pasted_text"
         resume_name = "Pasted resume"
@@ -1013,7 +1071,7 @@ def create_saved_scan_payload(
         scan_id=row["scan_id"],
         scan_timestamp=scan_timestamp,
         resume_name=resume_name or resume_filename or "New scan resume",
-        resume_file_path=resume_file_path,
+        resume_file_path=resume_processing_path or resume_file_path,
         resume_text=safe_resume_text,
         job_record=job_record,
         owner_user_id=owner_user_id,
@@ -5977,6 +6035,20 @@ def _resolve_resume_preview_path(
     owner_dir_name = _safe_owner_dir_name(owner_user_id)
     cache_key = f"{owner_dir_name}:{safe_name}" if owner_dir_name else safe_name
 
+    if owner_dir_name:
+        cached = _RESUME_PREVIEW_PATH_CACHE.get(cache_key, "")
+        if cached:
+            cached_path = Path(cached)
+            if cached_path.exists() and cached_path.is_file():
+                return cached_path
+
+        resolved = _materialize_profile_resume_temp_path(
+            safe_name,
+            owner_user_id=owner_user_id,
+        )
+        _RESUME_PREVIEW_PATH_CACHE[cache_key] = str(resolved)
+        return resolved
+
     cached = _RESUME_PREVIEW_PATH_CACHE.get(cache_key, "")
     if cached:
         cached_path = Path(cached)
@@ -5984,11 +6056,6 @@ def _resolve_resume_preview_path(
             return cached_path
 
     candidate_paths: List[Path] = []
-    if owner_dir_name:
-        candidate_paths.append(_get_resume_dir(owner_user_id=owner_user_id) / safe_name)
-
-    # Legacy/global fallback keeps existing planning artifacts usable,
-    # but authenticated users do not get repo-wide rglob access.
     candidate_paths.append(_get_resume_dir() / safe_name)
 
     for profile_path in candidate_paths:
@@ -5996,9 +6063,6 @@ def _resolve_resume_preview_path(
             resolved = profile_path.resolve()
             _RESUME_PREVIEW_PATH_CACHE[cache_key] = str(resolved)
             return resolved
-
-    if owner_dir_name:
-        raise ValueError(f"Resume preview file not found: {safe_name}")
 
     ignore_dirs = {
         ".git",
@@ -6848,13 +6912,17 @@ def user_workspace_state_payload(owner_user_id: str = "") -> Dict[str, Any]:
     operator_decision_count = 0
 
     if safe_owner:
-        resume_dir = _get_resume_dir(owner_user_id=safe_owner)
-        if resume_dir.exists():
-            resume_count = sum(
-                1
-                for path in resume_dir.iterdir()
-                if path.is_file() and not path.name.startswith(".")
+        try:
+            resume_payload = get_profile_resumes_postgres_payload(
+                owner_user_id=safe_owner,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
             )
+            resume_count = int(resume_payload.get("count", 0) or 0)
+        except Exception:
+            resume_count = 0
 
         try:
             scans_payload = get_saved_scans_postgres_payload(

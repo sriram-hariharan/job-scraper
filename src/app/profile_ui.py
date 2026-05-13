@@ -68,7 +68,7 @@ def profile_page() -> str:
             </div>
 
             <div class="control-help field-help-wide">
-              Uploaded files go directly into the configured RESUME_DIR and become available to the existing resume loader.
+              Uploaded files are stored securely in your profile and become available to matching and scan workflows.
             </div>
           </div>
         </section>

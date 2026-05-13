@@ -2161,7 +2161,7 @@ function attachApplicationHandlers() {
       });
     }
 
-  qs("closePipelineConfigModalBtn").addEventListener("click", closePipelineConfigModal);
+  qs("closePipelineConfigModalBtn")?.addEventListener("click", closePipelineConfigModal);
   qs("cancelPipelineConfigBtn").addEventListener("click", closePipelineConfigModal);
 
   qs("openPipelineConfirmBtn").addEventListener("click", () => {
@@ -2391,8 +2391,6 @@ async function init() {
 
     if (window.sessionStorage.getItem("applylens_open_live_pipeline") === "1") {
       window.sessionStorage.removeItem("applylens_open_live_pipeline");
-      window.localStorage.removeItem("applylens_new_user_empty_state");
-      document.body.classList.remove("app-new-user-empty");
       openPipelineConfigModal();
     }
   } catch (err) {

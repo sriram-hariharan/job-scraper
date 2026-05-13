@@ -2,7 +2,7 @@ from pathlib import Path
 import base64
 import binascii
 from fastapi import Body, FastAPI, HTTPException, Query, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from src.app import services
 from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
@@ -671,16 +671,16 @@ def planning_resume_preview(
     resume_name: str = Query(..., min_length=1),
 ):
     try:
-        preview_path = services.planning_resume_preview_path(
+        payload = services.profile_resume_file_payload(
             resume_name,
             owner_user_id=_auth_owner_user_id(http_request),
         )
-        return FileResponse(
-            path=str(preview_path),
-            media_type="application/pdf",
+        return Response(
+            content=payload["file_bytes"],
+            media_type=payload.get("content_type", "application/pdf"),
             headers={"Content-Disposition": 'inline; filename="resume.pdf"'},
         )
-    except ValueError as exc:
+    except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.get("/decisions")
@@ -981,9 +981,12 @@ def rag_answer(
 
 @app.get("/profile/resumes")
 def profile_resumes(http_request: Request):
-    return services.profile_resumes_payload(
-        owner_user_id=_auth_owner_user_id(http_request),
-    )
+    try:
+        return services.profile_resumes_payload(
+            owner_user_id=_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.get("/profile/saved-scans/data")
 def profile_saved_scans(http_request: Request, limit: int = 25):
@@ -1006,7 +1009,7 @@ def profile_upload_resume(
             file_bytes=file_bytes,
             owner_user_id=_auth_owner_user_id(http_request),
         )
-    except ValueError as exc:
+    except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
@@ -1017,5 +1020,5 @@ def profile_delete_resume(resume_name: str, http_request: Request):
             resume_name,
             owner_user_id=_auth_owner_user_id(http_request),
         )
-    except ValueError as exc:
+    except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

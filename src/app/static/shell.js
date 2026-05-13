@@ -376,9 +376,6 @@ window.addEventListener("DOMContentLoaded", () => {
   }
 
   function openLivePipelineFromShell() {
-    storageRemove(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY);
-    document.body.classList.remove("app-new-user-empty");
-
     if (window.location.pathname !== "/") {
       storageSet(window.sessionStorage, APPLYLENS_OPEN_PIPELINE_KEY, "1");
       window.location.href = "/";
@@ -402,6 +399,7 @@ window.addEventListener("DOMContentLoaded", () => {
   function ensureNewUserEmptyState() {
     if (storageGet(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY) !== "1") return;
     if (document.body.classList.contains("auth-page")) return;
+    if (window.location.pathname === "/profile") return;
 
     const page = document.querySelector(".page");
     if (!page || page.querySelector(".new-user-empty-state")) return;
@@ -431,6 +429,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function refreshNewUserWorkspaceState() {
     if (document.body.classList.contains("auth-page")) return;
+    if (window.location.pathname === "/profile") return;
 
     try {
       const response = await fetch("/user/workspace-state", {
@@ -472,9 +471,6 @@ window.addEventListener("DOMContentLoaded", () => {
       modal.innerHTML = `
         <div class="first-run-prompt-backdrop"></div>
         <div class="first-run-prompt-card">
-          <div class="first-run-prompt-mark" aria-hidden="true">
-            <img src="/static/media/app-logo.svg" alt="" />
-          </div>
           <div class="first-run-prompt-copy">
             <div class="first-run-prompt-kicker">First setup</div>
             <h2 id="firstRunPromptTitle">Run live scraper to start?</h2>

@@ -298,7 +298,6 @@ def executive_dashboard() -> str:
           <h3>Run live pipeline</h3>
           <div class="subtext">Choose limits and options before starting the run.</div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="closePipelineConfigModalBtn" type="button">Close</button>
       </div>
 
       <div class="pipeline-modal-scroll">

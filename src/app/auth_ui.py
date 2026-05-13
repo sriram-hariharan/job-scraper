@@ -468,6 +468,65 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       caret-color: #101828;
     }}
 
+
+    .auth-password-control {{
+      position: relative;
+      display: flex;
+      align-items: center;
+    }}
+
+    .auth-password-control input {{
+      padding-right: 52px;
+    }}
+
+    .auth-password-toggle {{
+      position: absolute;
+      right: 10px;
+      top: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      min-width: 34px;
+      height: 34px;
+      min-height: 34px;
+      margin: 0;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 0;
+      background: transparent !important;
+      box-shadow: none !important;
+      color: #111827;
+      cursor: pointer;
+      transform: translateY(-50%) !important;
+      appearance: none;
+      -webkit-appearance: none;
+      transition: opacity 140ms ease;
+    }}
+
+    .auth-password-toggle:hover,
+    .auth-password-toggle:focus,
+    .auth-password-toggle:active,
+    .auth-password-toggle.is-visible {{
+      background: transparent !important;
+      color: #111827;
+      transform: translateY(-50%) !important;
+      box-shadow: none !important;
+      outline: none !important;
+    }}
+
+    .auth-password-toggle img {{
+      display: block;
+      width: 20px;
+      height: 20px;
+      opacity: 1;
+      pointer-events: none;
+    }}
+
+    .auth-password-toggle:hover img {{
+      opacity: 0.78;
+    }}
+
     .auth-error {{
       display: none;
       border: 1px solid rgba(248, 113, 113, 0.35);
@@ -634,7 +693,19 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
           <label class="auth-field">
             <span>Password</span>
-            <input id="passwordInput" type="password" autocomplete="{"new-password" if is_register else "current-password"}" placeholder="Enter your password" required />
+            <div class="auth-password-control">
+              <input id="passwordInput" type="password" autocomplete="{"new-password" if is_register else "current-password"}" placeholder="Enter your password" required />
+              <button
+                id="passwordToggleBtn"
+                class="auth-password-toggle"
+                type="button"
+                aria-label="Show password"
+                aria-pressed="false"
+                title="Show password"
+              >
+                <img id="passwordToggleIcon" src="/static/media/eye-closed.svg" alt="" aria-hidden="true" />
+              </button>
+            </div>
           </label>
 
           <button id="authSubmitBtn" class="auth-submit" type="submit">
@@ -653,10 +724,30 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     const form = document.getElementById("authForm");
     const errorEl = document.getElementById("authError");
     const submitBtn = document.getElementById("authSubmitBtn");
+    const passwordInput = document.getElementById("passwordInput");
+    const passwordToggleBtn = document.getElementById("passwordToggleBtn");
+    const passwordToggleIcon = document.getElementById("passwordToggleIcon");
+    const passwordVisibleIconPath = "/static/media/eye.svg";
+    const passwordHiddenIconPath = "/static/media/eye-closed.svg";
 
     function showError(message) {{
       errorEl.textContent = message || "Request failed.";
       errorEl.classList.add("is-visible");
+    }}
+
+    if (passwordInput && passwordToggleBtn) {{
+      passwordToggleBtn.addEventListener("click", () => {{
+        const shouldShow = passwordInput.type === "password";
+        passwordInput.type = shouldShow ? "text" : "password";
+        passwordToggleBtn.classList.toggle("is-visible", shouldShow);
+        passwordToggleBtn.setAttribute("aria-pressed", shouldShow ? "true" : "false");
+        passwordToggleBtn.setAttribute("aria-label", shouldShow ? "Hide password" : "Show password");
+        passwordToggleBtn.title = shouldShow ? "Hide password" : "Show password";
+        if (passwordToggleIcon) {{
+          passwordToggleIcon.src = shouldShow ? passwordVisibleIconPath : passwordHiddenIconPath;
+        }}
+        passwordInput.focus();
+      }});
     }}
 
     form.addEventListener("submit", async (event) => {{

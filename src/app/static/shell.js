@@ -343,6 +343,9 @@ window.addEventListener("DOMContentLoaded", () => {
   const menuShell = qs("profileMenuShell");
   const menuButton = qs("profileMenuButton");
   const dropdown = qs("profileDropdown");
+  const profileDropdownName = qs("profileDropdownName");
+  const profileDropdownEmail = qs("profileDropdownEmail");
+  const profileLogoutBtn = qs("profileLogoutBtn");
 
   function closeProfileMenu() {
     if (!dropdown || !menuButton) return;
@@ -354,6 +357,65 @@ window.addEventListener("DOMContentLoaded", () => {
     if (!dropdown || !menuButton) return;
     dropdown.classList.remove("hidden");
     menuButton.setAttribute("aria-expanded", "true");
+  }
+
+    function userInitialFromName(name, email) {
+    const source = String(name || email || "A").trim();
+    return source ? source.charAt(0).toUpperCase() : "A";
+  }
+
+  function setProfileShellUser(user) {
+    const displayName = String(user?.display_name || user?.email || "Account").trim();
+    const email = String(user?.email || "").trim();
+    const initial = userInitialFromName(displayName, email);
+
+    if (menuButton) {
+      menuButton.textContent = initial;
+      menuButton.title = displayName;
+      menuButton.setAttribute("aria-label", displayName);
+    }
+
+    if (profileDropdownName) {
+      profileDropdownName.textContent = displayName;
+    }
+
+    if (profileDropdownEmail) {
+      profileDropdownEmail.textContent = email;
+      profileDropdownEmail.classList.toggle("hidden", !email);
+    }
+  }
+
+  async function loadProfileShellUser() {
+    try {
+      const payload = await fetchJson("/auth/me");
+      if (payload?.ok && payload?.user) {
+        setProfileShellUser(payload.user);
+      }
+    } catch (_) {
+      setProfileShellUser({
+        display_name: "Account",
+        email: "",
+      });
+    }
+  }
+
+  async function logoutProfileShellUser() {
+    if (!profileLogoutBtn) return;
+
+    profileLogoutBtn.setAttribute("disabled", "disabled");
+
+    try {
+      const payload = await fetchJson("/auth/logout", {
+        method: "POST",
+      });
+
+      window.location.href = payload.redirect_to || "/login";
+    } catch (error) {
+      window.alert(
+        `Could not log out. ${error instanceof Error ? error.message : ""}`.trim()
+      );
+      profileLogoutBtn.removeAttribute("disabled");
+    }
   }
 
   function closeNotifications() {
@@ -571,6 +633,14 @@ window.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+    if (profileLogoutBtn) {
+    profileLogoutBtn.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      await logoutProfileShellUser();
+    });
+  }
+
   document.addEventListener("click", (event) => {
     const target = event.target;
 
@@ -596,5 +666,6 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
+  loadProfileShellUser();
   loadUnreadCount();
 });

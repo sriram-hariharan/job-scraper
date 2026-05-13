@@ -25,3 +25,4 @@ pymupdf
 reportlab 
 python-docx
 pdf2docx
+bcrypt

@@ -9,8 +9,8 @@ NAV_ITEMS = [
     ("Scheduler", "/scheduler", "S"),
 ]
 
-USER_NAME = "Sriram"
-USER_INITIAL = USER_NAME[:1].upper()
+DEFAULT_USER_NAME = "Account"
+DEFAULT_USER_INITIAL = "A"
 
 
 def render_top_shell(active_href: str) -> str:
@@ -184,13 +184,14 @@ def render_top_shell(active_href: str) -> str:
       id="profileMenuButton"
       aria-expanded="false"
       aria-haspopup="true"
-      title="{escape(USER_NAME)}"
+      title="{escape(DEFAULT_USER_NAME)}"
     >
-      {escape(USER_INITIAL)}
+      {escape(DEFAULT_USER_INITIAL)}
     </button>
 
     <div class="profile-dropdown hidden" id="profileDropdown">
-      <div class="profile-dropdown-name">{escape(USER_NAME)}</div>
+      <div class="profile-dropdown-name" id="profileDropdownName">{escape(DEFAULT_USER_NAME)}</div>
+      <div class="subtext" id="profileDropdownEmail"></div>
       <div class="profile-dropdown-actions">
         <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
           <span class="profile-dropdown-nav-copy">
@@ -208,7 +209,7 @@ def render_top_shell(active_href: str) -> str:
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>
 
-        <button type="button" class="profile-dropdown-danger-btn" disabled>
+        <button type="button" class="profile-dropdown-danger-btn" id="profileLogoutBtn">
           Log out
         </button>
       </div>

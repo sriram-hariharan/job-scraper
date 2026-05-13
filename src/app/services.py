@@ -38,6 +38,11 @@ from src.matching.job_adapter import build_job_evidence
 from src.matching.models import MatchPrefilterResult
 from src.matching.prefilter import run_prefilter
 from src.matching.scorer import score_resume_job_match
+from src.tailoring.signal_family_matcher import (
+    scan_issue_group_id_for_signals as _signal_family_group_id_for_signals,
+    scan_issue_skill_type as _signal_family_skill_type,
+    scan_issue_term_family as _signal_family_term_family,
+)
 from src.resume.evidence_builder import build_resume_evidence
 from src.resume.models import ResumeDocument, ResumeExperienceEntry
 from src.storage.application_actions.store import (
@@ -2787,35 +2792,14 @@ def _scan_issue_title(row: Dict[str, Any], *, fallback_label: str) -> str:
     return fallback_label
 
 def _scan_issue_group_id_for_row(row: Dict[str, Any], *, lane: str) -> str:
-    raw_signals = {
-        _clean_text(value).lower()
-        for value in (
-            list(row.get("supported_jd_signals", []) or [])
-            + list(row.get("jd_signal_terms", []) or [])
-            + list(row.get("supported_terms", []) or [])
-            + list(row.get("matched_signals", []) or [])
-            + list(row.get("likely_impacted_dimensions", []) or [])
-        )
-        if _clean_text(value)
-    }
-
-    normalized_signals = {
-        value.replace("-", "_").replace(" ", "_")
-        for value in raw_signals
-    }
-
-    all_signals = raw_signals | normalized_signals
-
-    if all_signals & set(_SCAN_RECRUITER_TIPS_SIGNAL_KEYS):
-        return "recruiter_tips"
-
-    if all_signals & set(_SCAN_SKILLS_SIGNAL_KEYS):
-        return "skills"
-
-    if lane == "direction_only":
-        return "recruiter_tips"
-
-    return "skills"
+    return _signal_family_group_id_for_signals(
+        list(row.get("supported_jd_signals", []) or [])
+        + list(row.get("jd_signal_terms", []) or [])
+        + list(row.get("supported_terms", []) or [])
+        + list(row.get("matched_signals", []) or []),
+        likely_impacted_dimensions=list(row.get("likely_impacted_dimensions", []) or []),
+        lane=lane,
+    )
 
 def _scan_issue_unique_display_labels(values: List[Any]) -> List[str]:
     output: List[str] = []
@@ -2838,19 +2822,7 @@ def _scan_issue_canonical_term(value: Any) -> str:
 
 
 def _scan_issue_term_family(value: Any, dimensions: List[Any] | None = None) -> str:
-    key = _scan_issue_normalized_key(value)
-    dimension_keys = {_scan_issue_normalized_key(item) for item in list(dimensions or [])}
-    keys = {key} | dimension_keys
-
-    if keys & set(_SCAN_RECRUITER_TIPS_SIGNAL_KEYS):
-        return "recruiter_tips"
-    if keys & {"tooling_alignment", "required_skills_alignment", "preferred_skills_alignment"}:
-        return "tooling"
-    if keys & {"analytics_ml_depth", "ml_match", "experimentation_depth"}:
-        return "methods"
-    if keys & {"workflow_alignment", "title_alignment", "ats_match"}:
-        return "skills"
-    return "skills"
+    return _signal_family_term_family(value, dimensions or [])
 
 
 _SCAN_SOFT_SKILL_TERMS = {
@@ -2886,25 +2858,7 @@ _SCAN_OTHER_KEYWORD_TERMS = {
 
 
 def _scan_issue_skill_type(value: Any, dimensions: List[Any] | None = None) -> Tuple[str, str]:
-    key = _scan_issue_normalized_key(value)
-    display_key = _clean_text(value).strip().lower()
-    dimension_keys = {_scan_issue_normalized_key(item) for item in list(dimensions or [])}
-
-    if key in {_scan_issue_normalized_key(term) for term in _SCAN_SOFT_SKILL_TERMS} or display_key in _SCAN_SOFT_SKILL_TERMS:
-        return "soft_skill", "Soft skill"
-
-    if key in {_scan_issue_normalized_key(term) for term in _SCAN_OTHER_KEYWORD_TERMS}:
-        return "other_keyword", "Other keyword"
-
-    if dimension_keys & {
-        "business_context",
-        "ownership_scope",
-        "human_recruiter_match",
-        "believability",
-    }:
-        return "other_keyword", "Other keyword"
-
-    return "hard_skill", "Hard skill"
+    return _signal_family_skill_type(value, dimensions or [])
 
 
 def _scan_summary_has_advanced_degree_requirement(summary: Dict[str, Any] | None = None) -> bool:

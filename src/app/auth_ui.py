@@ -201,80 +201,285 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     return f"""
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>{escape(title)} · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v28" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v32" />
   <style>
     body {{
       min-height: 100vh;
+      margin: 0;
+      padding: clamp(16px, 3vw, 34px);
+      background:
+        radial-gradient(circle at 12% 12%, rgba(37, 99, 235, 0.14), transparent 32%),
+        radial-gradient(circle at 88% 8%, rgba(8, 145, 178, 0.14), transparent 30%),
+        linear-gradient(135deg, #f4f8ff 0%, #eef7fb 48%, #f8fbff 100%);
+      color: #101828;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow-x: hidden;
+    }}
+
+    .auth-shell {{
       display: grid;
+      grid-template-columns: minmax(0, 1.06fr) minmax(360px, 460px);
+      align-items: stretch;
+      width: min(1120px, 100%);
+      min-height: min(690px, calc(100vh - clamp(32px, 6vw, 68px)));
+      margin: 0 auto;
+      border: 1px solid rgba(71, 94, 132, 0.16);
+      border-radius: 30px;
+      background: #ffffff;
+      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.13);
+      overflow: hidden;
+    }}
+
+    .auth-hero {{
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-width: 0;
+      padding: clamp(30px, 4vw, 54px);
+      background:
+        radial-gradient(circle at 24% 20%, rgba(37, 99, 235, 0.16), transparent 34%),
+        radial-gradient(circle at 78% 28%, rgba(6, 182, 212, 0.18), transparent 32%),
+        linear-gradient(135deg, #f8fbff 0%, #eaf5ff 52%, #ecfeff 100%);
+      border-right: 1px solid rgba(71, 94, 132, 0.14);
+    }}
+
+    .auth-hero::before {{
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      border-radius: 24px;
+      pointer-events: none;
+    }}
+
+    .auth-brand-lockup {{
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      width: fit-content;
+      color: #101828;
+      font-weight: 900;
+      letter-spacing: 0;
+    }}
+
+    .auth-logo-mark {{
+      position: relative;
+      display: inline-grid;
       place-items: center;
-      padding: 24px;
-      background: #070b13;
+      width: 50px;
+      height: 50px;
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      border-radius: 16px;
+      background: linear-gradient(135deg, #ffffff, #eef6ff);
+      box-shadow: 0 16px 36px rgba(37, 99, 235, 0.16);
+    }}
+
+    .auth-logo-mark::before {{
+      content: "";
+      width: 20px;
+      height: 20px;
+      border: 5px solid #2563eb;
+      border-radius: 50%;
+      background: #dff7ff;
+      box-shadow: inset 0 0 0 3px #ffffff;
+    }}
+
+    .auth-logo-mark::after {{
+      content: "";
+      position: absolute;
+      right: 11px;
+      bottom: 10px;
+      width: 15px;
+      height: 5px;
+      border-radius: 999px;
+      background: #06b6d4;
+      transform: rotate(45deg);
+      transform-origin: center;
+    }}
+
+    .auth-brand-text {{
+      display: grid;
+      gap: 1px;
+      font-size: 19px;
+      line-height: 1;
+    }}
+
+    .auth-brand-text small {{
+      color: #2563eb;
+      font-size: 11px;
+      font-weight: 850;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+    }}
+
+    .auth-hero-copy {{
+      position: relative;
+      display: grid;
+      gap: 16px;
+      max-width: 520px;
+      margin: clamp(48px, 8vw, 98px) 0;
+    }}
+
+    .auth-hero-kicker {{
+      width: fit-content;
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: #ffffff;
+      color: #2563eb;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.08);
+    }}
+
+    .auth-hero-title {{
+      margin: 0;
+      max-width: 560px;
+      color: #101828 !important;
+      font-size: clamp(42px, 4.6vw, 64px) !important;
+      font-weight: 950 !important;
+      line-height: 1 !important;
+      letter-spacing: 0 !important;
+    }}
+
+    .auth-hero-title span {{
+      color: #2563eb !important;
+    }}
+
+    .auth-hero-subtitle {{
+      max-width: 500px;
+      margin: 0;
+      color: #56657c;
+      font-size: 16px;
+      line-height: 1.65;
+    }}
+
+    .auth-proof-row {{
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }}
+
+    .auth-proof {{
+      min-width: 0;
+      border: 1px solid rgba(71, 94, 132, 0.14);
+      border-radius: 16px;
+      padding: 12px;
+      background: rgba(255, 255, 255, 0.74);
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+    }}
+
+    .auth-proof strong {{
+      display: block;
+      color: #101828;
+      font-size: 15px;
+      line-height: 1.1;
+    }}
+
+    .auth-proof span {{
+      display: block;
+      margin-top: 5px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
     }}
 
     .auth-card {{
-      width: min(440px, 100%);
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      border-radius: 24px;
-      padding: 28px;
-      background: rgba(15, 23, 42, 0.92);
-      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      width: 100%;
+      min-width: 0;
+      padding: clamp(30px, 4vw, 52px);
+      background: #ffffff;
+    }}
+
+    .auth-form-card {{
+      width: min(430px, 100%);
+      margin: 0 auto;
     }}
 
     .auth-brand {{
-      font-size: 13px;
-      letter-spacing: 0.08em;
+      width: fit-content;
+      margin-bottom: 16px;
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      border-radius: 999px;
+      padding: 7px 12px;
+      background: #eff6ff;
+      color: #2563eb;
+      font-size: 12px;
+      font-weight: 900;
+      letter-spacing: 0.13em;
       text-transform: uppercase;
-      color: #93c5fd;
-      margin-bottom: 14px;
-      font-weight: 700;
     }}
 
     .auth-title {{
       margin: 0;
-      font-size: 28px;
-      line-height: 1.15;
-      color: #f8fafc;
+      color: #101828 !important;
+      font-size: clamp(38px, 4vw, 54px) !important;
+      font-weight: 950 !important;
+      line-height: 1 !important;
+      letter-spacing: 0 !important;
     }}
 
     .auth-subtitle {{
-      margin: 10px 0 22px;
-      color: #94a3b8;
-      line-height: 1.5;
+      margin: 12px 0 24px;
+      color: #56657c;
+      font-size: 16px;
+      line-height: 1.55;
     }}
 
     .auth-form {{
       display: grid;
-      gap: 14px;
+      gap: 16px;
     }}
 
     .auth-field {{
       display: grid;
       gap: 8px;
-      color: #cbd5e1;
+      color: #334155;
       font-size: 13px;
-      font-weight: 650;
+      font-weight: 850;
+      letter-spacing: 0.01em;
     }}
 
     .auth-field input {{
       width: 100%;
-      border: 1px solid rgba(148, 163, 184, 0.32);
-      border-radius: 14px;
-      padding: 12px 14px;
-      background: rgba(2, 6, 23, 0.7);
-      color: #f8fafc;
+      border: 1px solid rgba(71, 94, 132, 0.22);
+      border-radius: 16px;
+      padding: 15px 16px;
+      background: #f8fbff;
+      color: #101828;
       outline: none;
+      font-size: 16px;
+      font-weight: 700;
+      transition:
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        background 140ms ease;
+    }}
+
+    .auth-field input::placeholder {{
+      color: #94a3b8;
     }}
 
     .auth-field input:focus {{
-      border-color: rgba(96, 165, 250, 0.9);
-      box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.18);
+      border-color: rgba(37, 99, 235, 0.62);
+      background: #ffffff;
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
     }}
 
     .auth-error {{
@@ -282,8 +487,8 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       border: 1px solid rgba(248, 113, 113, 0.35);
       border-radius: 14px;
       padding: 10px 12px;
-      background: rgba(127, 29, 29, 0.25);
-      color: #fecaca;
+      background: #fff1f2;
+      color: #b91c1c;
       font-size: 13px;
       line-height: 1.45;
     }}
@@ -293,15 +498,27 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-submit {{
-      margin-top: 4px;
+      margin-top: 6px;
       width: 100%;
       border: 0;
-      border-radius: 14px;
-      padding: 12px 14px;
-      font-weight: 750;
-      background: #3b82f6;
-      color: white;
+      border-radius: 16px;
+      padding: 15px 16px;
+      background: linear-gradient(135deg, #2563eb, #0891b2);
+      color: #ffffff;
       cursor: pointer;
+      font-size: 16px;
+      font-weight: 900;
+      box-shadow: 0 18px 34px rgba(37, 99, 235, 0.22);
+      transition:
+        transform 140ms ease,
+        box-shadow 140ms ease,
+        filter 140ms ease;
+    }}
+
+    .auth-submit:hover:not(:disabled) {{
+      transform: translateY(-1px);
+      filter: brightness(1.03);
+      box-shadow: 0 22px 42px rgba(37, 99, 235, 0.3);
     }}
 
     .auth-submit:disabled {{
@@ -310,47 +527,137 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-alt {{
-      display: block;
-      margin-top: 18px;
-      color: #93c5fd;
+      display: inline-flex;
+      margin-top: 22px;
+      color: #2563eb;
       text-decoration: none;
-      font-size: 14px;
+      font-size: 15px;
+      font-weight: 800;
+    }}
+
+    .auth-alt:hover {{
+      color: #0891b2;
+    }}
+
+    @media (max-width: 900px) {{
+      .auth-shell {{
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }}
+
+      .auth-hero {{
+        padding: 24px;
+      }}
+
+      .auth-hero-copy {{
+        margin: 38px 0;
+      }}
+
+      .auth-proof-row {{
+        grid-template-columns: 1fr;
+      }}
+
+      .auth-card {{
+        border-left: 0;
+        border-top: 1px solid rgba(71, 94, 132, 0.12);
+      }}
+    }}
+
+    @media (max-width: 560px) {{
+      body {{
+        padding: 12px;
+      }}
+
+      .auth-shell {{
+        border-radius: 24px;
+      }}
+
+      .auth-card,
+      .auth-hero {{
+        padding: 22px;
+      }}
+
+      .auth-logo-mark {{
+        width: 46px;
+        height: 46px;
+      }}
+
+      .auth-brand-text {{
+        font-size: 16px;
+      }}
     }}
   </style>
 </head>
 <body>
-  <main class="auth-card">
-    <div class="auth-brand">ApplyLens AI</div>
-    <h1 class="auth-title">{escape(title)}</h1>
-    <p class="auth-subtitle">{escape(subtitle)}</p>
+  <main class="auth-shell">
+    <section class="auth-hero" aria-label="ApplyLens AI product overview">
+      <div class="auth-brand-lockup">
+        <span class="auth-logo-mark" aria-hidden="true"></span>
+        <span class="auth-brand-text">
+          ApplyLens AI
+          <small>Resume intelligence</small>
+        </span>
+      </div>
 
-    <div id="authError" class="auth-error {"is-visible" if error_message else ""}">
-      {escape(error_message)}
-    </div>
+      <div class="auth-hero-copy">
+        <div class="auth-hero-kicker">AI job match workspace</div>
+        <h2 class="auth-hero-title">Scan, tailor, and compare with <span>clarity.</span></h2>
+        <p class="auth-hero-subtitle">
+          Review resume fit, apply targeted edits, and keep every saved draft tied to the job it was built for.
+        </p>
+      </div>
 
-    <form id="authForm" class="auth-form" data-mode="{escape(mode)}">
-      <input id="nextInput" type="hidden" value="{escape(next_path)}" />
+      <div class="auth-proof-row" aria-label="ApplyLens AI highlights">
+        <div class="auth-proof">
+          <strong>Scan</strong>
+          <span>Find match gaps fast</span>
+        </div>
+        <div class="auth-proof">
+          <strong>Tailor</strong>
+          <span>Save job-ready drafts</span>
+        </div>
+        <div class="auth-proof">
+          <strong>Compare</strong>
+          <span>See exactly what changed</span>
+        </div>
+      </div>
+    </section>
 
-      {display_name_field}
+    <section class="auth-card" aria-label="{escape(title)} form">
+      <div class="auth-form-card">
+        <div class="auth-brand">ApplyLens AI</div>
+        <h1 class="auth-title">{escape(title)}</h1>
+        <p class="auth-subtitle">{escape(subtitle)}</p>
 
-      <label class="auth-field">
-        <span>Email</span>
-        <input id="emailInput" type="email" autocomplete="email" required />
-      </label>
+        <div id="authError" class="auth-error {"is-visible" if error_message else ""}">
+          {escape(error_message)}
+        </div>
 
-      <label class="auth-field">
-        <span>Password</span>
-        <input id="passwordInput" type="password" autocomplete="{"new-password" if is_register else "current-password"}" required />
-      </label>
+        <form id="authForm" class="auth-form" data-mode="{escape(mode)}">
+          <input id="nextInput" type="hidden" value="{escape(next_path)}" />
 
-      <button id="authSubmitBtn" class="auth-submit" type="submit">
-        {escape(submit_label)}
-      </button>
-    </form>
+          {display_name_field}
 
-    <a class="auth-alt" href="{alternate_href}">
-      {escape(alternate_label)}
-    </a>
+          <label class="auth-field">
+            <span>Email</span>
+            <input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com" required />
+          </label>
+
+          <label class="auth-field">
+            <span>Password</span>
+            <input id="passwordInput" type="password" autocomplete="{"new-password" if is_register else "current-password"}" placeholder="Enter your password" required />
+          </label>
+
+          <button id="authSubmitBtn" class="auth-submit" type="submit">
+            {escape(submit_label)}
+          </button>
+        </form>
+
+        <a class="auth-alt" href="{alternate_href}">
+          {escape(alternate_label)}
+        </a>
+      </div>
+    </section>
   </main>
 
   <script>

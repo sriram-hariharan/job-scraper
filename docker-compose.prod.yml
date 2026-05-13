@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-job_scraper}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-job_scraper} -d $${POSTGRES_DB:-job_scraper_ops}"]
       interval: 10s

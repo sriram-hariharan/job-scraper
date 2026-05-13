@@ -271,6 +271,7 @@ textarea:focus,
 
 .app-shell {
   width: var(--app-shell-width, 268px) !important;
+  padding: 24px 18px !important;
   border-right: 1px solid var(--app-border) !important;
   background:
     radial-gradient(circle at 0% 0%, rgba(124, 156, 255, 0.16), transparent 38%),
@@ -279,8 +280,49 @@ textarea:focus,
 
 html[data-theme="light"] .app-shell {
   background:
-    radial-gradient(circle at 0% 0%, rgba(37, 99, 235, 0.12), transparent 38%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(245, 249, 255, 0.98)) !important;
+    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, 0.1), transparent 34%),
+    linear-gradient(180deg, rgba(250, 253, 255, 0.98), rgba(244, 249, 255, 0.98)) !important;
+}
+
+.app-shell-brand-row {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  min-width: 0 !important;
+  min-height: 118px !important;
+  margin: 0 0 30px !important;
+  padding: 8px 54px 18px 4px !important;
+  border: 0 !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-shell-brand {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 246px !important;
+  height: 98px !important;
+  min-width: 0 !important;
+  overflow: visible !important;
+  text-decoration: none !important;
+}
+
+.app-shell-brand::before,
+.app-shell-brand::after {
+  content: none !important;
+  display: none !important;
+}
+
+.app-shell-brand-logo {
+  display: block !important;
+  width: 246px !important;
+  max-width: 246px !important;
+  height: 98px !important;
+  object-fit: contain !important;
+  object-position: left center !important;
 }
 
 .app-shell ~ .page {
@@ -292,16 +334,61 @@ body.app-shell-collapsed .app-shell ~ .page {
   margin-left: var(--app-shell-collapsed-width, 68px) !important;
 }
 
+.app-shell-nav {
+  display: grid !important;
+  gap: 8px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
 .app-shell-nav-link {
-  border-radius: var(--app-radius-md) !important;
+  position: relative !important;
+  display: flex !important;
+  align-items: center !important;
+  min-height: 52px !important;
+  padding: 0 18px !important;
+  border: 1px solid transparent !important;
+  border-radius: 16px !important;
   color: var(--app-muted) !important;
+  font-size: 17px !important;
+  font-weight: 850 !important;
+  letter-spacing: 0 !important;
+  text-decoration: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
 }
 
 .app-shell-nav-link:hover,
 .app-shell-nav-link.active,
 .app-shell-nav-link[aria-current="page"] {
-  background: rgba(124, 156, 255, 0.12) !important;
+  border-color: rgba(96, 165, 250, 0.24) !important;
+  background: rgba(96, 165, 250, 0.1) !important;
   color: var(--app-text) !important;
+}
+
+.app-shell-nav-link.active::before,
+.app-shell-nav-link[aria-current="page"]::before {
+  content: "" !important;
+  position: absolute !important;
+  left: -18px !important;
+  top: 10px !important;
+  bottom: 10px !important;
+  width: 4px !important;
+  border-radius: 999px !important;
+  background: linear-gradient(180deg, #2563eb, #06b6d4) !important;
+}
+
+.app-shell-nav-short {
+  display: none !important;
+}
+
+.app-shell-nav-label {
+  display: block !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
 }
 
 .app-shell-top-right {
@@ -706,8 +793,7 @@ html[data-theme="light"] .profile-dropdown-danger-btn:focus-visible {
   color: #ffffff !important;
 }
 
-.pipeline-run-meta,
-#schedulerOpsMeta {
+.pipeline-run-meta:not(#schedulerOpsMeta) {
   display: inline-flex;
   width: fit-content;
   max-width: 100%;
@@ -1211,17 +1297,6 @@ body .scheduler-page #refreshSchedulerSummaryBtn {
   background: #06b6d4 !important;
   color: #ffffff !important;
   box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
-}
-
-html[data-theme="light"] body .scheduler-page #schedulerOpsMeta {
-  display: inline-flex !important;
-  width: auto !important;
-  margin: 0 0 12px !important;
-  padding: 7px 12px !important;
-  border: 1px solid #bfdbfe !important;
-  border-radius: 999px !important;
-  background: #dbeafe !important;
-  color: #334155 !important;
 }
 
 html[data-theme="light"] body .scheduler-page .scheduler-table-card {
@@ -2533,28 +2608,28 @@ html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link[aria-curre
 
 /* ui_redesign_v13: compact shell chrome, quieter headings, richer simple queue cells. */
 .app-shell-menu-btn {
-  left: calc(var(--app-shell-width, 268px) - 72px) !important;
+  left: calc(var(--app-shell-width, 268px) - 66px) !important;
   right: auto !important;
-  top: 30px !important;
-  width: 42px !important;
-  height: 42px !important;
-  min-width: 42px !important;
-  min-height: 42px !important;
-  padding: 7px !important;
-  border: 0 !important;
-  border-radius: 10px !important;
-  background: transparent !important;
-  box-shadow: none !important;
+  top: 32px !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  padding: 9px !important;
+  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  border-radius: 14px !important;
+  background: rgba(255, 255, 255, 0.72) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
 }
 
 .app-shell-menu-btn:hover,
 .app-shell-menu-btn:focus-visible {
-  background: rgba(124, 156, 255, 0.12) !important;
-  box-shadow: none !important;
+  background: #ffffff !important;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.14) !important;
 }
 
 .app-shell-menu-btn-line {
-  width: 24px !important;
+  width: 22px !important;
   height: 3px !important;
   border-radius: 999px !important;
   background: var(--app-text) !important;
@@ -2737,8 +2812,8 @@ html[data-theme="dark"] .queue-simple-action {
 /* ui_redesign_v14: final shell pinning and calmer type scale. */
 body:not(.app-shell-collapsed) .app-shell-menu-btn {
   position: fixed !important;
-  top: 30px !important;
-  left: calc(var(--app-shell-width, 268px) - 62px) !important;
+  top: 32px !important;
+  left: calc(var(--app-shell-width, 268px) - 66px) !important;
   right: auto !important;
   z-index: 180 !important;
 }
@@ -3257,17 +3332,6 @@ body .scheduler-page #refreshSchedulerSummaryBtn {
   box-shadow: 0 10px 24px rgba(6, 182, 212, 0.22) !important;
 }
 
-html[data-theme="light"] body .scheduler-page #schedulerOpsMeta {
-  display: inline-flex !important;
-  width: auto !important;
-  margin: 0 0 12px !important;
-  padding: 7px 12px !important;
-  border: 1px solid #bfdbfe !important;
-  border-radius: 999px !important;
-  background: #dbeafe !important;
-  color: #334155 !important;
-}
-
 html[data-theme="light"] body .scheduler-page .scheduler-table-tabs {
   border-color: #bae6fd !important;
   background: #e0f2fe !important;
@@ -3507,17 +3571,6 @@ html[data-theme="dark"] body .scheduler-page {
     linear-gradient(135deg, #050914 0%, #08101f 48%, #060914 100%) !important;
 }
 
-html[data-theme="dark"] body .scheduler-page #schedulerOpsMeta {
-  display: inline-flex !important;
-  width: auto !important;
-  margin: 0 0 12px !important;
-  padding: 7px 12px !important;
-  border: 1px solid rgba(96, 165, 250, 0.34) !important;
-  border-radius: 999px !important;
-  background: rgba(30, 41, 59, 0.9) !important;
-  color: #d7e3f5 !important;
-}
-
 html[data-theme="dark"] body .scheduler-page .scheduler-table-card {
   border-color: rgba(96, 165, 250, 0.28) !important;
   background:
@@ -3647,4 +3700,166 @@ body .notification-dropdown {
 
 body .notification-dropdown.hidden {
   display: none !important;
+}
+
+/* New user onboarding: one shared empty state and first-run prompt for authenticated pages. */
+body.app-new-user-empty .page {
+  min-height: calc(100vh - 48px);
+  display: grid;
+  place-items: center;
+}
+
+body.app-new-user-empty .page > :not(.new-user-empty-state) {
+  display: none !important;
+}
+
+.new-user-empty-state {
+  width: min(720px, calc(100vw - 48px));
+  margin: 0 auto;
+}
+
+.new-user-empty-card,
+.first-run-prompt-card {
+  border: 1px solid rgba(96, 165, 250, 0.24);
+  background:
+    radial-gradient(circle at 16% 0%, rgba(34, 211, 238, 0.16), transparent 34%),
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.94));
+  color: #0f172a;
+  box-shadow: 0 26px 70px rgba(15, 23, 42, 0.18);
+}
+
+.new-user-empty-card {
+  border-radius: 30px;
+  padding: clamp(32px, 5vw, 58px);
+  text-align: center;
+}
+
+.new-user-empty-kicker,
+.first-run-prompt-kicker {
+  margin-bottom: 12px;
+  color: #2563eb;
+  font-size: 0.82rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.new-user-empty-card h2,
+.first-run-prompt-card h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  line-height: 0.98;
+  font-weight: 950;
+}
+
+.new-user-empty-card p,
+.first-run-prompt-card p {
+  margin: 18px auto 0;
+  max-width: 560px;
+  color: #52627a;
+  font-size: 1.05rem;
+  line-height: 1.55;
+  font-weight: 650;
+}
+
+.new-user-empty-actions,
+.first-run-prompt-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+.new-user-empty-primary,
+.first-run-prompt-primary,
+.first-run-prompt-secondary {
+  min-height: 52px;
+  border-radius: 16px;
+  padding: 0 24px;
+  font-weight: 900;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+}
+
+.new-user-empty-primary,
+.first-run-prompt-primary {
+  background: linear-gradient(135deg, #2563eb, #0891b2);
+  color: #ffffff;
+  box-shadow: 0 16px 30px rgba(37, 99, 235, 0.22);
+}
+
+.first-run-prompt-secondary {
+  background: #ffffff;
+  color: #334155;
+}
+
+.first-run-prompt-modal.hidden {
+  display: none;
+}
+
+.first-run-prompt-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.first-run-prompt-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.54);
+  backdrop-filter: blur(12px);
+}
+
+.first-run-prompt-card {
+  position: relative;
+  width: min(560px, calc(100vw - 48px));
+  border-radius: 28px;
+  padding: 34px;
+  text-align: center;
+}
+
+.first-run-prompt-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  margin-bottom: 20px;
+  border-radius: 24px;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.16), rgba(34, 211, 238, 0.18));
+}
+
+.first-run-prompt-mark img {
+  width: 58px;
+  height: 58px;
+  object-fit: contain;
+}
+
+html[data-theme="dark"] .new-user-empty-card,
+html[data-theme="dark"] .first-run-prompt-card {
+  border-color: rgba(96, 165, 250, 0.32);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(34, 211, 238, 0.18), transparent 36%),
+    linear-gradient(135deg, #111c2f, #0f172a);
+  color: #f8fafc;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.42);
+}
+
+html[data-theme="dark"] .new-user-empty-card h2,
+html[data-theme="dark"] .first-run-prompt-card h2 {
+  color: #f8fafc;
+}
+
+html[data-theme="dark"] .new-user-empty-card p,
+html[data-theme="dark"] .first-run-prompt-card p {
+  color: #a8b6cc;
+}
+
+html[data-theme="dark"] .first-run-prompt-secondary {
+  border-color: rgba(148, 163, 184, 0.28);
+  background: #17243a;
+  color: #dbeafe;
 }

@@ -17,7 +17,7 @@ def intelligence_dashboard() -> str:
   <title>Job Intelligence Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v32" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
 </head>
 <body>
 {render_top_shell("/intelligence")}
@@ -191,7 +191,7 @@ def intelligence_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v22"></script>
+  <script src="/static/shell.js?v=ui_redesign_v23"></script>
   <script src="/static/intelligence.js"></script>
 </body>
 </html>

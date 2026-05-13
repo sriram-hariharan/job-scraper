@@ -266,6 +266,9 @@ def auth_user_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
     created_at = _clean_text(record.get("created_at")) or _utc_now_iso()
     updated_at = _clean_text(record.get("updated_at")) or created_at
     display_name = _clean_text(record.get("display_name")) or _default_display_name(email)
+    access_level = _clean_text(record.get("access_level")).lower() or "user"
+    if access_level not in {"admin", "user", "executive"}:
+        access_level = "user"
 
     return {
         "user_id": _clean_text(record.get("user_id")) or uuid.uuid4().hex,
@@ -273,6 +276,7 @@ def auth_user_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
         "normalized_email": normalized_email,
         "password_hash": password_hash,
         "display_name": display_name,
+        "access_level": access_level,
         "is_active": bool(record.get("is_active", True)),
         "is_admin": bool(record.get("is_admin", False)),
         "created_at": created_at,
@@ -324,6 +328,7 @@ def auth_table_specs() -> Dict[str, Any]:
                 {"name": "normalized_email", "type": "text", "nullable": False},
                 {"name": "password_hash", "type": "text", "nullable": False},
                 {"name": "display_name", "type": "text", "nullable": False},
+                {"name": "access_level", "type": "text", "nullable": False},
                 {"name": "is_active", "type": "boolean", "nullable": False},
                 {"name": "is_admin", "type": "boolean", "nullable": False},
                 {"name": "created_at", "type": "timestamptz", "nullable": False},
@@ -373,12 +378,16 @@ def render_auth_schema_sql() -> str:
             "    normalized_email TEXT NOT NULL UNIQUE,",
             "    password_hash TEXT NOT NULL,",
             "    display_name TEXT NOT NULL,",
+            "    access_level TEXT NOT NULL DEFAULT 'user',",
             "    is_active BOOLEAN NOT NULL DEFAULT TRUE,",
             "    is_admin BOOLEAN NOT NULL DEFAULT FALSE,",
             "    created_at TIMESTAMPTZ NOT NULL,",
             "    updated_at TIMESTAMPTZ NOT NULL,",
             "    last_login_at TIMESTAMPTZ",
             ");",
+            "",
+            "ALTER TABLE auth_users",
+            "ADD COLUMN IF NOT EXISTS access_level TEXT NOT NULL DEFAULT 'user';",
             "",
             "CREATE INDEX IF NOT EXISTS idx_auth_users_active",
             "ON auth_users (is_active);",
@@ -467,6 +476,7 @@ def _build_create_user_sql(row: Dict[str, Any], *, ensure_schema: bool) -> str:
             "        normalized_email,",
             "        password_hash,",
             "        display_name,",
+            "        access_level,",
             "        is_active,",
             "        is_admin,",
             "        created_at,",
@@ -479,6 +489,7 @@ def _build_create_user_sql(row: Dict[str, Any], *, ensure_schema: bool) -> str:
             f"        {_sql_quote_text(row['normalized_email'])},",
             f"        {_sql_quote_text(row['password_hash'])},",
             f"        {_sql_quote_text(row['display_name'])},",
+            f"        {_sql_quote_text(row['access_level'])},",
             f"        {_sql_bool_literal(row['is_active'])},",
             f"        {_sql_bool_literal(row['is_admin'])},",
             f"        {_sql_quote_text(row['created_at'])}::timestamptz,",
@@ -491,6 +502,7 @@ def _build_create_user_sql(row: Dict[str, Any], *, ensure_schema: bool) -> str:
             "        email,",
             "        normalized_email,",
             "        display_name,",
+            "        access_level,",
             "        is_active,",
             "        is_admin,",
             "        created_at,",
@@ -503,6 +515,7 @@ def _build_create_user_sql(row: Dict[str, Any], *, ensure_schema: bool) -> str:
             "        email,",
             "        normalized_email,",
             "        display_name,",
+            "        access_level,",
             "        is_active,",
             "        is_admin,",
             "        created_at,",
@@ -515,6 +528,7 @@ def _build_create_user_sql(row: Dict[str, Any], *, ensure_schema: bool) -> str:
             "        email,",
             "        normalized_email,",
             "        display_name,",
+            "        access_level,",
             "        is_active,",
             "        is_admin,",
             "        created_at,",

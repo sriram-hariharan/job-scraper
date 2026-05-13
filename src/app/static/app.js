@@ -1523,6 +1523,8 @@ function openPipelineConfigModal() {
   getPipelineConfigModal().classList.remove("hidden");
 }
 
+window.openApplyLensPipelineConfig = openPipelineConfigModal;
+
 function closePipelineConfigModal() {
   getPipelineConfigModal().classList.add("hidden");
 }
@@ -2186,6 +2188,8 @@ function attachApplicationHandlers() {
       const config = state.pendingPipelineConfig || collectPipelineConfig();
       closePipelineConfirmModal();
       markPipelinePendingSuccess();
+      window.localStorage.removeItem("applylens_new_user_empty_state");
+      document.body.classList.remove("app-new-user-empty");
 
       showPageLoadingOverlay("Running live pipeline...", "Starting pipeline run...", {
         status: "running",
@@ -2383,6 +2387,13 @@ async function init() {
     const pipelineData = await fetchJson("/pipeline/status");
     if (pipelineData.pipeline && pipelineData.pipeline.is_running) {
       startPipelinePolling();
+    }
+
+    if (window.sessionStorage.getItem("applylens_open_live_pipeline") === "1") {
+      window.sessionStorage.removeItem("applylens_open_live_pipeline");
+      window.localStorage.removeItem("applylens_new_user_empty_state");
+      document.body.classList.remove("app-new-user-empty");
+      openPipelineConfigModal();
     }
   } catch (err) {
     console.error(err);

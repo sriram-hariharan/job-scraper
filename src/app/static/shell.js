@@ -1,5 +1,8 @@
 const APP_SHELL_COLLAPSED_KEY = "job_stack_app_shell_collapsed";
 const JOBSTACK_THEME_KEY = "jobstack.theme";
+const APPLYLENS_FIRST_RUN_PROMPT_KEY = "applylens_first_run_prompt";
+const APPLYLENS_NEW_USER_EMPTY_KEY = "applylens_new_user_empty_state";
+const APPLYLENS_OPEN_PIPELINE_KEY = "applylens_open_live_pipeline";
 
 function qs(id) {
   return document.getElementById(id);
@@ -348,6 +351,162 @@ window.addEventListener("DOMContentLoaded", () => {
   const profileDropdownEmail = qs("profileDropdownEmail");
   const profileLogoutBtn = qs("profileLogoutBtn");
 
+  function storageGet(storage, key) {
+    try {
+      return storage.getItem(key);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function storageSet(storage, key, value) {
+    try {
+      storage.setItem(key, value);
+    } catch (_) {
+      // Storage may be unavailable; the current click still proceeds.
+    }
+  }
+
+  function storageRemove(storage, key) {
+    try {
+      storage.removeItem(key);
+    } catch (_) {
+      // Storage may be unavailable; ignore.
+    }
+  }
+
+  function openLivePipelineFromShell() {
+    storageRemove(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY);
+    document.body.classList.remove("app-new-user-empty");
+
+    if (window.location.pathname !== "/") {
+      storageSet(window.sessionStorage, APPLYLENS_OPEN_PIPELINE_KEY, "1");
+      window.location.href = "/";
+      return;
+    }
+
+    if (typeof window.openApplyLensPipelineConfig === "function") {
+      window.openApplyLensPipelineConfig();
+      return;
+    }
+
+    const runPipelineBtn = qs("runPipelineBtn");
+    if (runPipelineBtn) {
+      runPipelineBtn.click();
+      return;
+    }
+
+    storageSet(window.sessionStorage, APPLYLENS_OPEN_PIPELINE_KEY, "1");
+  }
+
+  function ensureNewUserEmptyState() {
+    if (storageGet(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY) !== "1") return;
+    if (document.body.classList.contains("auth-page")) return;
+
+    const page = document.querySelector(".page");
+    if (!page || page.querySelector(".new-user-empty-state")) return;
+
+    document.body.classList.add("app-new-user-empty");
+
+    const emptyState = document.createElement("section");
+    emptyState.className = "new-user-empty-state";
+    emptyState.setAttribute("aria-live", "polite");
+    emptyState.innerHTML = `
+      <div class="new-user-empty-card">
+        <div class="new-user-empty-kicker">Welcome to ApplyLens AI</div>
+        <h2>Start by running the live scraper.</h2>
+        <p>New users need a first job scrape before dashboards, scans, applications, and saved drafts can show useful data.</p>
+        <div class="new-user-empty-actions">
+          <button type="button" class="new-user-empty-primary" id="newUserRunPipelineBtn">Run live scraper</button>
+        </div>
+      </div>
+    `;
+    page.appendChild(emptyState);
+
+    const runBtn = qs("newUserRunPipelineBtn");
+    if (runBtn) {
+      runBtn.addEventListener("click", openLivePipelineFromShell);
+    }
+  }
+
+  async function refreshNewUserWorkspaceState() {
+    if (document.body.classList.contains("auth-page")) return;
+
+    try {
+      const response = await fetch("/user/workspace-state", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      if (!response.ok) return;
+
+      const payload = await response.json();
+      if (payload && payload.has_owned_data === false) {
+        storageSet(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY, "1");
+        ensureNewUserEmptyState();
+        return;
+      }
+
+      clearNewUserOnboardingState();
+    } catch (_) {
+      ensureNewUserEmptyState();
+    }
+  }
+
+  function closeFirstRunPrompt(modal) {
+    storageRemove(window.sessionStorage, APPLYLENS_FIRST_RUN_PROMPT_KEY);
+    modal.classList.add("hidden");
+    modal.setAttribute("aria-hidden", "true");
+  }
+
+  function showFirstRunPrompt() {
+    if (storageGet(window.sessionStorage, APPLYLENS_FIRST_RUN_PROMPT_KEY) !== "1") return;
+
+    let modal = qs("firstRunPromptModal");
+    if (!modal) {
+      modal = document.createElement("section");
+      modal.id = "firstRunPromptModal";
+      modal.className = "first-run-prompt-modal hidden";
+      modal.setAttribute("role", "dialog");
+      modal.setAttribute("aria-modal", "true");
+      modal.setAttribute("aria-labelledby", "firstRunPromptTitle");
+      modal.innerHTML = `
+        <div class="first-run-prompt-backdrop"></div>
+        <div class="first-run-prompt-card">
+          <div class="first-run-prompt-mark" aria-hidden="true">
+            <img src="/static/media/app-logo.svg" alt="" />
+          </div>
+          <div class="first-run-prompt-copy">
+            <div class="first-run-prompt-kicker">First setup</div>
+            <h2 id="firstRunPromptTitle">Run live scraper to start?</h2>
+            <p>This will open the live pipeline setup so ApplyLens AI can build your first job queue and scan data.</p>
+          </div>
+          <div class="first-run-prompt-actions">
+            <button type="button" class="first-run-prompt-secondary" id="firstRunPromptNoBtn">No, go home</button>
+            <button type="button" class="first-run-prompt-primary" id="firstRunPromptYesBtn">Yes, open scraper</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(modal);
+
+      qs("firstRunPromptNoBtn")?.addEventListener("click", () => {
+        closeFirstRunPrompt(modal);
+        storageSet(window.localStorage, APPLYLENS_NEW_USER_EMPTY_KEY, "1");
+        ensureNewUserEmptyState();
+        if (window.location.pathname !== "/") {
+          window.location.href = "/";
+        }
+      });
+
+      qs("firstRunPromptYesBtn")?.addEventListener("click", () => {
+        closeFirstRunPrompt(modal);
+        openLivePipelineFromShell();
+      });
+    }
+
+    modal.classList.remove("hidden");
+    modal.setAttribute("aria-hidden", "false");
+  }
+
   function closeProfileMenu() {
     if (!dropdown || !menuButton) return;
     dropdown.classList.add("hidden");
@@ -673,4 +832,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   loadProfileShellUser();
   loadUnreadCount();
+  refreshNewUserWorkspaceState();
+  showFirstRunPrompt();
 });

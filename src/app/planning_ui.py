@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v32" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -666,7 +666,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v22"></script>
+  <script src="/static/shell.js?v=ui_redesign_v23"></script>
   <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
 </body>
 </html>
@@ -724,7 +724,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v32" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
@@ -1039,7 +1039,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v22"></script>
+  <script src="/static/shell.js?v=ui_redesign_v23"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1216,7 +1216,7 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v32" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_36" />
 </head>
 <body>
@@ -2066,7 +2066,7 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v22"></script>
+  <script src="/static/shell.js?v=ui_redesign_v23"></script>
   <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal12"></script>
 </body>

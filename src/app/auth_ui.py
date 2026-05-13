@@ -149,6 +149,7 @@ def _public_user_payload(user: Dict[str, Any]) -> Dict[str, Any]:
         "user_id": _clean_text(user.get("user_id")),
         "email": _clean_text(user.get("email")),
         "display_name": _clean_text(user.get("display_name")),
+        "access_level": _clean_text(user.get("access_level")) or "user",
         "is_active": bool(user.get("is_active", False)),
         "is_admin": bool(user.get("is_admin", False)),
         "created_at": _clean_text(user.get("created_at")),
@@ -182,9 +183,9 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     is_register = mode == "register"
     title = "Create account" if is_register else "Log in"
     subtitle = (
-        "Create your ApplyLens AI dashboard account."
+        "Create your workspace to scrape jobs, scan resume fit, and save tailored drafts."
         if is_register
-        else "Log in to continue to ApplyLens AI."
+        else "Log in to scrape jobs, scan fit, and continue tailoring with ApplyLens AI."
     )
     submit_label = "Create account" if is_register else "Log in"
     alternate_href = f"/login?next={escape(next_path)}" if is_register else f"/register?next={escape(next_path)}"
@@ -208,133 +209,91 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
   <title>{escape(title)} · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v32" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
   <style>
     body {{
       min-height: 100vh;
       margin: 0;
-      padding: clamp(16px, 3vw, 34px);
+      padding: clamp(18px, 3vw, 36px);
       background:
-        radial-gradient(circle at 12% 12%, rgba(37, 99, 235, 0.14), transparent 32%),
-        radial-gradient(circle at 88% 8%, rgba(8, 145, 178, 0.14), transparent 30%),
-        linear-gradient(135deg, #f4f8ff 0%, #eef7fb 48%, #f8fbff 100%);
-      color: #101828;
+        radial-gradient(circle at 12% 10%, rgba(37, 99, 235, 0.14), transparent 30%),
+        radial-gradient(circle at 90% 12%, rgba(14, 165, 233, 0.14), transparent 28%),
+        linear-gradient(135deg, #f6f9ff 0%, #eef7ff 46%, #fbfdff 100%);
+      color: #111827;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       overflow-x: hidden;
     }}
 
     .auth-shell {{
       display: grid;
-      grid-template-columns: minmax(0, 1.06fr) minmax(360px, 460px);
-      align-items: stretch;
+      grid-template-columns: minmax(0, 1.02fr) minmax(370px, 470px);
       width: min(1120px, 100%);
-      min-height: min(690px, calc(100vh - clamp(32px, 6vw, 68px)));
+      min-height: min(700px, calc(100vh - clamp(36px, 6vw, 72px)));
       margin: 0 auto;
-      border: 1px solid rgba(71, 94, 132, 0.16);
-      border-radius: 30px;
-      background: #ffffff;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 32px;
+      background: rgba(255, 255, 255, 0.9);
       box-shadow: 0 28px 80px rgba(15, 23, 42, 0.13);
       overflow: hidden;
     }}
 
     .auth-hero {{
       position: relative;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: clamp(26px, 5vw, 60px);
       min-width: 0;
-      padding: clamp(30px, 4vw, 54px);
+      padding: clamp(32px, 4.5vw, 60px);
       background:
-        radial-gradient(circle at 24% 20%, rgba(37, 99, 235, 0.16), transparent 34%),
-        radial-gradient(circle at 78% 28%, rgba(6, 182, 212, 0.18), transparent 32%),
-        linear-gradient(135deg, #f8fbff 0%, #eaf5ff 52%, #ecfeff 100%);
-      border-right: 1px solid rgba(71, 94, 132, 0.14);
-    }}
-
-    .auth-hero::before {{
-      content: "";
-      position: absolute;
-      inset: 18px;
-      border: 1px solid rgba(37, 99, 235, 0.12);
-      border-radius: 24px;
-      pointer-events: none;
+        radial-gradient(circle at 20% 16%, rgba(37, 99, 235, 0.16), transparent 30%),
+        radial-gradient(circle at 86% 10%, rgba(34, 211, 238, 0.2), transparent 32%),
+        linear-gradient(135deg, #f9fbff 0%, #eef7ff 54%, #effdff 100%);
+      border-right: 1px solid rgba(148, 163, 184, 0.24);
     }}
 
     .auth-brand-lockup {{
       position: relative;
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 12px;
       width: fit-content;
-      color: #101828;
-      font-weight: 900;
-      letter-spacing: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
     }}
 
-    .auth-logo-mark {{
-      position: relative;
-      display: inline-grid;
-      place-items: center;
-      width: 50px;
-      height: 50px;
-      border: 1px solid rgba(37, 99, 235, 0.16);
-      border-radius: 16px;
-      background: linear-gradient(135deg, #ffffff, #eef6ff);
-      box-shadow: 0 16px 36px rgba(37, 99, 235, 0.16);
-    }}
-
-    .auth-logo-mark::before {{
-      content: "";
-      width: 20px;
-      height: 20px;
-      border: 5px solid #2563eb;
-      border-radius: 50%;
-      background: #dff7ff;
-      box-shadow: inset 0 0 0 3px #ffffff;
-    }}
-
-    .auth-logo-mark::after {{
-      content: "";
-      position: absolute;
-      right: 11px;
-      bottom: 10px;
-      width: 15px;
-      height: 5px;
-      border-radius: 999px;
-      background: #06b6d4;
-      transform: rotate(45deg);
-      transform-origin: center;
+    .auth-brand-logo {{
+      display: block;
+      width: clamp(260px, 31vw, 380px);
+      height: clamp(84px, 10vw, 122px);
+      object-fit: contain;
+      object-position: left center;
+      filter: drop-shadow(0 18px 30px rgba(37, 99, 235, 0.12));
     }}
 
     .auth-brand-text {{
-      display: grid;
-      gap: 1px;
-      font-size: 19px;
-      line-height: 1;
+      display: none;
     }}
 
     .auth-brand-text small {{
-      color: #2563eb;
-      font-size: 11px;
-      font-weight: 850;
-      letter-spacing: 0.15em;
-      text-transform: uppercase;
+      display: none;
     }}
 
     .auth-hero-copy {{
       position: relative;
+      align-self: center;
       display: grid;
       gap: 16px;
-      max-width: 520px;
-      margin: clamp(48px, 8vw, 98px) 0;
+      max-width: 560px;
     }}
 
     .auth-hero-kicker {{
       width: fit-content;
-      border: 1px solid rgba(37, 99, 235, 0.16);
+      border: 1px solid rgba(37, 99, 235, 0.18);
       border-radius: 999px;
       padding: 7px 12px;
-      background: #ffffff;
+      background: rgba(255, 255, 255, 0.88);
       color: #2563eb;
       font-size: 12px;
       font-weight: 900;
@@ -345,11 +304,10 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     .auth-hero-title {{
       margin: 0;
-      max-width: 560px;
-      color: #101828 !important;
-      font-size: clamp(42px, 4.6vw, 64px) !important;
+      color: #111827 !important;
+      font-size: clamp(42px, 5vw, 68px) !important;
       font-weight: 950 !important;
-      line-height: 1 !important;
+      line-height: 1.02 !important;
       letter-spacing: 0 !important;
     }}
 
@@ -358,11 +316,30 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     }}
 
     .auth-hero-subtitle {{
-      max-width: 500px;
+      max-width: 520px;
       margin: 0;
-      color: #56657c;
+      color: #475569;
       font-size: 16px;
-      line-height: 1.65;
+      line-height: 1.6;
+      font-weight: 650;
+    }}
+
+    .auth-hero-bullets {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 4px;
+    }}
+
+    .auth-hero-bullet {{
+      border: 1px solid rgba(37, 99, 235, 0.16);
+      border-radius: 999px;
+      padding: 8px 12px;
+      background: rgba(255, 255, 255, 0.82);
+      color: #274160;
+      font-size: 13px;
+      font-weight: 850;
+      box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
     }}
 
     .auth-proof-row {{
@@ -374,16 +351,16 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     .auth-proof {{
       min-width: 0;
-      border: 1px solid rgba(71, 94, 132, 0.14);
-      border-radius: 16px;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.74);
+      border: 1px solid rgba(148, 163, 184, 0.22);
+      border-radius: 18px;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.7);
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
     }}
 
     .auth-proof strong {{
       display: block;
-      color: #101828;
+      color: #111827;
       font-size: 15px;
       line-height: 1.1;
     }}
@@ -393,7 +370,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       margin-top: 5px;
       color: #64748b;
       font-size: 12px;
-      font-weight: 700;
+      font-weight: 750;
       line-height: 1.35;
     }}
 
@@ -403,41 +380,42 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       justify-content: center;
       width: 100%;
       min-width: 0;
-      padding: clamp(30px, 4vw, 52px);
+      padding: clamp(34px, 4vw, 56px);
       background: #ffffff;
     }}
 
     .auth-form-card {{
-      width: min(430px, 100%);
+      width: min(420px, 100%);
       margin: 0 auto;
     }}
 
-    .auth-brand {{
-      width: fit-content;
-      margin-bottom: 16px;
-      border: 1px solid rgba(37, 99, 235, 0.16);
-      border-radius: 999px;
-      padding: 7px 12px;
-      background: #eff6ff;
-      color: #2563eb;
-      font-size: 12px;
-      font-weight: 900;
-      letter-spacing: 0.13em;
-      text-transform: uppercase;
+    .auth-form-brand {{
+      display: none;
+    }}
+
+    .auth-form-logo {{
+      display: block;
+      width: 190px;
+      height: 72px;
+      object-fit: contain;
+    }}
+
+    .auth-form-brand span {{
+      display: none;
     }}
 
     .auth-title {{
       margin: 0;
-      color: #101828 !important;
-      font-size: clamp(38px, 4vw, 54px) !important;
+      color: #111827 !important;
+      font-size: clamp(40px, 4vw, 56px) !important;
       font-weight: 950 !important;
       line-height: 1 !important;
       letter-spacing: 0 !important;
     }}
 
     .auth-subtitle {{
-      margin: 12px 0 24px;
-      color: #56657c;
+      margin: 12px 0 26px;
+      color: #475569;
       font-size: 16px;
       line-height: 1.55;
     }}
@@ -450,7 +428,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
     .auth-field {{
       display: grid;
       gap: 8px;
-      color: #334155;
+      color: #1f2937;
       font-size: 13px;
       font-weight: 850;
       letter-spacing: 0.01em;
@@ -462,10 +440,10 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       border-radius: 16px;
       padding: 15px 16px;
       background: #f8fbff;
-      color: #101828;
+      color: #111827;
       outline: none;
       font-size: 16px;
-      font-weight: 700;
+      font-weight: 750;
       transition:
         border-color 140ms ease,
         box-shadow 140ms ease,
@@ -480,6 +458,14 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       border-color: rgba(37, 99, 235, 0.62);
       background: #ffffff;
       box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+    }}
+
+    .auth-field input:-webkit-autofill,
+    .auth-field input:-webkit-autofill:hover,
+    .auth-field input:-webkit-autofill:focus {{
+      -webkit-text-fill-color: #101828;
+      box-shadow: 0 0 0 1000px #f8fbff inset;
+      caret-color: #101828;
     }}
 
     .auth-error {{
@@ -550,7 +536,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       }}
 
       .auth-hero-copy {{
-        margin: 38px 0;
+        margin: 0;
       }}
 
       .auth-proof-row {{
@@ -577,13 +563,8 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
         padding: 22px;
       }}
 
-      .auth-logo-mark {{
-        width: 46px;
-        height: 46px;
-      }}
-
       .auth-brand-text {{
-        font-size: 16px;
+        font-size: 18px;
       }}
     }}
   </style>
@@ -592,10 +573,10 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
   <main class="auth-shell">
     <section class="auth-hero" aria-label="ApplyLens AI product overview">
       <div class="auth-brand-lockup">
-        <span class="auth-logo-mark" aria-hidden="true"></span>
+        <img class="auth-brand-logo" src="/static/media/app-logo.svg" alt="ApplyLens AI" />
         <span class="auth-brand-text">
           ApplyLens AI
-          <small>Resume intelligence</small>
+          <small>Job intelligence</small>
         </span>
       </div>
 
@@ -603,11 +584,20 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
         <div class="auth-hero-kicker">AI job match workspace</div>
         <h2 class="auth-hero-title">Scan, tailor, and compare with <span>clarity.</span></h2>
         <p class="auth-hero-subtitle">
-          Review resume fit, apply targeted edits, and keep every saved draft tied to the job it was built for.
+          Scrape live jobs, review resume fit, apply targeted edits, and keep every saved draft tied to the role it was built for.
         </p>
+        <div class="auth-hero-bullets" aria-label="ApplyLens AI workflow">
+          <span class="auth-hero-bullet">Live job scraper</span>
+          <span class="auth-hero-bullet">AI resume scan</span>
+          <span class="auth-hero-bullet">Diff-ready tailoring</span>
+        </div>
       </div>
 
       <div class="auth-proof-row" aria-label="ApplyLens AI highlights">
+        <div class="auth-proof">
+          <strong>Scrape</strong>
+          <span>Build your live job queue</span>
+        </div>
         <div class="auth-proof">
           <strong>Scan</strong>
           <span>Find match gaps fast</span>
@@ -616,16 +606,15 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
           <strong>Tailor</strong>
           <span>Save job-ready drafts</span>
         </div>
-        <div class="auth-proof">
-          <strong>Compare</strong>
-          <span>See exactly what changed</span>
-        </div>
       </div>
     </section>
 
     <section class="auth-card" aria-label="{escape(title)} form">
       <div class="auth-form-card">
-        <div class="auth-brand">ApplyLens AI</div>
+        <div class="auth-form-brand">
+          <img class="auth-form-logo" src="/static/media/app-logo.svg" alt="" />
+          <span>ApplyLens AI</span>
+        </div>
         <h1 class="auth-title">{escape(title)}</h1>
         <p class="auth-subtitle">{escape(subtitle)}</p>
 
@@ -699,6 +688,11 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
         const payload = await response.json().catch(() => ({{}}));
         if (!response.ok || !payload.ok) {{
           throw new Error(payload.detail || "Request failed.");
+        }}
+
+        if (payload.first_login) {{
+          window.sessionStorage.setItem("applylens_first_run_prompt", "1");
+          window.localStorage.setItem("applylens_new_user_empty_state", "1");
         }}
 
         window.location.href = payload.redirect_to || "/";
@@ -802,6 +796,7 @@ def register(request: Request, payload: AuthRegisterRequest = Body(...)):
                 "ok": True,
                 "user": _public_user_payload(dict(touched.get("user", {}) or user)),
                 "redirect_to": _safe_next_path(payload.next),
+                "first_login": True,
             }
         )
         _set_session_cookie(response, session_token)
@@ -833,6 +828,8 @@ def login(request: Request, payload: AuthLoginRequest = Body(...)):
         if not verify_password(payload.password, str(user.get("password_hash", "") or "")):
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
+        is_first_login = not _clean_text(user.get("last_login_at"))
+
         session_token, session_record = new_auth_session_record(
             user_id=str(user.get("user_id", "") or ""),
             user_agent=_clean_text(request.headers.get("user-agent")),
@@ -853,6 +850,7 @@ def login(request: Request, payload: AuthLoginRequest = Body(...)):
                 "ok": True,
                 "user": _public_user_payload(dict(touched.get("user", {}) or user)),
                 "redirect_to": _safe_next_path(payload.next),
+                "first_login": is_first_login,
             }
         )
         _set_session_cookie(response, session_token)

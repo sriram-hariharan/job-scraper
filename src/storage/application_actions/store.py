@@ -137,6 +137,7 @@ def _application_action_key(record: Dict[str, Any]) -> str:
 
 def _build_action_id(normalized_row: Dict[str, Any]) -> str:
     signature_payload = {
+        "owner_user_id": normalized_row["owner_user_id"],
         "action_timestamp": normalized_row["action_timestamp"],
         "action_key": normalized_row["action_key"],
         "job_doc_id": normalized_row["job_doc_id"],
@@ -160,6 +161,7 @@ def application_action_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Application action record is missing required field: action_timestamp")
 
     normalized_row = {
+        "owner_user_id": _clean_text(record.get("owner_user_id")),
         "action_timestamp": action_timestamp,
         "job_doc_id": _clean_text(record.get("job_doc_id")),
         "job_url": _clean_text(record.get("job_url")),
@@ -188,6 +190,7 @@ def application_actions_table_specs() -> Dict[str, Any]:
             "primary_key": ["action_id"],
             "columns": [
                 {"name": "action_id", "type": "text", "nullable": False},
+                {"name": "owner_user_id", "type": "text", "nullable": False},
                 {"name": "action_key", "type": "text", "nullable": False},
                 {"name": "action_timestamp", "type": "timestamptz", "nullable": False},
                 {"name": "job_doc_id", "type": "text", "nullable": False},
@@ -202,6 +205,7 @@ def application_actions_table_specs() -> Dict[str, Any]:
                 {"name": "idx_application_actions_action_key_timestamp", "columns": ["action_key", "action_timestamp"]},
                 {"name": "idx_application_actions_status_timestamp", "columns": ["application_status", "action_timestamp"]},
                 {"name": "idx_application_actions_company_title", "columns": ["job_company", "job_title"]},
+                {"name": "idx_application_actions_owner_key_timestamp", "columns": ["owner_user_id", "action_key", "action_timestamp"]},
             ],
         }
     }
@@ -212,6 +216,7 @@ def render_application_actions_schema_sql() -> str:
         [
             "CREATE TABLE IF NOT EXISTS application_actions (",
             "    action_id TEXT PRIMARY KEY,",
+            "    owner_user_id TEXT NOT NULL DEFAULT '',",
             "    action_key TEXT NOT NULL,",
             "    action_timestamp TIMESTAMPTZ NOT NULL,",
             "    job_doc_id TEXT NOT NULL,",
@@ -223,6 +228,9 @@ def render_application_actions_schema_sql() -> str:
             "    note TEXT NOT NULL",
             ");",
             "",
+            "ALTER TABLE application_actions",
+            "ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';",
+            "",
             "CREATE INDEX IF NOT EXISTS idx_application_actions_action_key_timestamp",
             "ON application_actions (action_key, action_timestamp DESC);",
             "",
@@ -231,6 +239,9 @@ def render_application_actions_schema_sql() -> str:
             "",
             "CREATE INDEX IF NOT EXISTS idx_application_actions_company_title",
             "ON application_actions (job_company, job_title);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_application_actions_owner_key_timestamp",
+            "ON application_actions (owner_user_id, action_key, action_timestamp DESC);",
         ]
     )
 
@@ -285,6 +296,7 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
         [
             "INSERT INTO application_actions (",
             "    action_id,",
+            "    owner_user_id,",
             "    action_key,",
             "    action_timestamp,",
             "    job_doc_id,",
@@ -297,6 +309,7 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
             ")",
             "VALUES (",
             f"    {_sql_quote_text(row['action_id'])},",
+            f"    {_sql_quote_text(row['owner_user_id'])},",
             f"    {_sql_quote_text(row['action_key'])},",
             f"    {_sql_quote_text(row['action_timestamp'])}::timestamptz,",
             f"    {_sql_quote_text(row['job_doc_id'])},",

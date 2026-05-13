@@ -51,8 +51,8 @@ def render_top_shell(active_href: str) -> str:
 
 <aside class="app-shell" id="appShell">
   <div class="app-shell-brand-row">
-    <a class="app-shell-brand" href="/" aria-label="Job Stack home">
-      <span class="app-shell-brand-text">ApplyLens AI</span>
+    <a class="app-shell-brand" href="/" aria-label="ApplyLens AI home">
+      <img class="app-shell-brand-logo" src="/static/media/app-logo.svg" alt="ApplyLens AI" />
     </a>
   </div>
 

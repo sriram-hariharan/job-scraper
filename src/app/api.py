@@ -169,8 +169,16 @@ def health():
     return services.health_payload()
 
 
+@app.get("/user/workspace-state")
+def user_workspace_state(http_request: Request):
+    return services.user_workspace_state_payload(
+        owner_user_id=_auth_owner_user_id(http_request),
+    )
+
+
 @app.get("/status")
 def status(
+    http_request: Request,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     job_corpus: str = str(services.DEFAULT_CORPUS_PATH),
     top_k: int = 10,
@@ -179,6 +187,7 @@ def status(
         output_dir=Path(output_dir),
         job_corpus=Path(job_corpus),
         top_k=top_k,
+        owner_user_id=_auth_owner_user_id(http_request),
     )
 
 @app.get("/pipeline/status")
@@ -458,6 +467,7 @@ def run_live_pipeline(payload: dict = Body(...)):
     
 @app.get("/browse")
 def browse(
+    http_request: Request,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     action: list[str] | None = Query(default=None),
     needs_review: str = "",
@@ -484,11 +494,13 @@ def browse(
         undecided_only=undecided_only,
         limit=limit,
         page=page,
+        owner_user_id=_auth_owner_user_id(http_request),
     )
 
 
 @app.get("/review")
 def review(
+    http_request: Request,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     action: str = "",
     queue_rank: int | None = None,
@@ -509,11 +521,13 @@ def review(
         include_non_review=include_non_review,
         undecided_only=undecided_only,
         limit=limit,
+        owner_user_id=_auth_owner_user_id(http_request),
     )
 
 
 @app.get("/workflow")
 def workflow(
+    http_request: Request,
     view: str = Query(
         ...,
         pattern="^(undecided_apply_review|undecided_maybe_tailor|runner_up_selected|direct_apply_pending)$",
@@ -525,11 +539,13 @@ def workflow(
         view=view,
         limit=limit,
         output_dir=Path(output_dir),
+        owner_user_id=_auth_owner_user_id(http_request),
     )
 
 
 @app.get("/planner")
 def planner(
+    http_request: Request,
     request: str,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
     limit: int = 20,
@@ -539,6 +555,7 @@ def planner(
             request=request,
             limit=limit,
             output_dir=Path(output_dir),
+            owner_user_id=_auth_owner_user_id(http_request),
         )
     except SystemExit as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -668,6 +685,7 @@ def planning_resume_preview(
     
 @app.get("/decisions")
 def decisions(
+    http_request: Request,
     queue_rank: int | None = None,
     decision: list[str] | None = Query(default=None),
     selected_resume: str = "",
@@ -684,10 +702,12 @@ def decisions(
         title_contains=title_contains,
         limit=limit,
         page=page,
+        owner_user_id=_auth_owner_user_id(http_request),
     )
 
 @app.post("/planning/select-resume")
 def planning_select_resume(
+    http_request: Request,
     payload: dict = Body(...),
 ):
     try:
@@ -704,6 +724,7 @@ def planning_select_resume(
             runner_up_resume=str(payload.get("runner_up_resume", "") or ""),
             runner_up_score=str(payload.get("runner_up_score", "") or ""),
             note=str(payload.get("note", "") or ""),
+            owner_user_id=_auth_owner_user_id(http_request),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -880,6 +901,7 @@ def export_workspace_draft(
 
 @app.post("/application-actions")
 def record_application_action(
+    http_request: Request,
     payload: dict = Body(...),
 ):
     try:
@@ -891,6 +913,7 @@ def record_application_action(
             application_status=str(payload.get("application_status", "") or ""),
             source_view=str(payload.get("source_view", "") or ""),
             note=str(payload.get("note", "") or ""),
+            owner_user_id=_auth_owner_user_id(http_request),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -898,6 +921,7 @@ def record_application_action(
 
 @app.get("/applied-jobs")
 def applied_jobs(
+    http_request: Request,
     company_contains: str = "",
     title_contains: str = "",
     page: int = 1,
@@ -908,6 +932,7 @@ def applied_jobs(
         title_contains=title_contains,
         limit=limit,
         page=page,
+        owner_user_id=_auth_owner_user_id(http_request),
     )
 
 @app.get("/rag/search")

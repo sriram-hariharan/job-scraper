@@ -176,7 +176,7 @@ def _owner_visibility_clause(owner_user_id: str, *, prefix: str = "WHERE") -> st
 
     return (
         f"{prefix} "
-        f"(owner_user_id = {_sql_quote_text(safe_owner_user_id)} OR owner_user_id = '')"
+        f"owner_user_id = {_sql_quote_text(safe_owner_user_id)}"
     )
 
 def _build_saved_scan_by_id_sql(scan_id: str, owner_user_id: str = "") -> str:

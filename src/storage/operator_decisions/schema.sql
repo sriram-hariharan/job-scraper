@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS operator_decisions (
     decision_id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL DEFAULT '',
     decision_key TEXT NOT NULL,
     decision_timestamp TIMESTAMPTZ NOT NULL,
     queue_rank TEXT NOT NULL,
@@ -16,8 +17,14 @@ CREATE TABLE IF NOT EXISTS operator_decisions (
     note TEXT NOT NULL
 );
 
+ALTER TABLE operator_decisions
+ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS idx_operator_decisions_key_timestamp
 ON operator_decisions (decision_key, decision_timestamp DESC);
+
+CREATE INDEX IF NOT EXISTS idx_operator_decisions_owner_key_timestamp
+ON operator_decisions (owner_user_id, decision_key, decision_timestamp DESC);
 
 CREATE INDEX IF NOT EXISTS idx_operator_decisions_queue_rank
 ON operator_decisions (queue_rank);

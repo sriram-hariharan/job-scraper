@@ -1289,6 +1289,7 @@
   min-width: 0;
   display: -webkit-box;
   -webkit-box-orient: vertical;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
   overflow: hidden;
   color: #eef4ff;
@@ -7844,6 +7845,8 @@ html[data-theme="light"] .scan-workspace-review-context-line {
   font-size: clamp(14px, 4.5cqw, 22px) !important;
   font-weight: 600 !important;
   line-height: 1.18 !important;
+  line-clamp: 3;
+  /* stylelint-disable-next-line property-no-unknown */
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
 }
@@ -7856,6 +7859,8 @@ html[data-theme="light"] #scanWorkspaceMeta {
   font-size: clamp(13px, 4cqw, 20px) !important;
   font-weight: 650 !important;
   line-height: 1.22 !important;
+  line-clamp: 2;
+  /* stylelint-disable-next-line property-no-unknown */
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }

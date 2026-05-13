@@ -11913,12 +11913,12 @@ tbody tr:hover td.apply-cell {
   background: var(--app-primary-soft) !important;
 }
 
-.pipeline-run-meta {
+.pipeline-run-meta:not(#schedulerOpsMeta) {
   margin: 18px 0 26px;
   padding: 0 2px;
 }
 
-.controls-card + .pipeline-run-meta {
+.controls-card + .pipeline-run-meta:not(#schedulerOpsMeta) {
   margin-top: 18px;
 }
 
@@ -12320,8 +12320,7 @@ html[data-theme="light"] tbody tr:hover td.apply-cell {
   background: rgba(124, 156, 255, 0.12) !important;
 }
 
-.pipeline-run-meta,
-#schedulerOpsMeta {
+.pipeline-run-meta:not(#schedulerOpsMeta) {
   display: inline-flex;
   align-items: center;
   gap: 8px;

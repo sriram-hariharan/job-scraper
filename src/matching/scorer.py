@@ -9,12 +9,10 @@ from src.config.consts import (
     EXPERIMENTATION_SIGNAL_PATTERNS,
     QUERY_STOPWORDS,
     ROLE_WORD_HINTS,
-    TITLE_CANONICAL,
     TITLE_NOISE_TOKENS,
     TOOLING_SIGNAL_PATTERNS,
     _ANALYTICS_ML_GENERIC_SIGNALS,
     _ANALYTICS_ML_SIGNAL_CANONICAL,
-    _SKILL_ALIASES,
 )
 from src.matching.dimensions import get_match_dimensions
 from src.matching.job_models import JobEvidence
@@ -26,6 +24,7 @@ from src.matching.models import (
     ResumeJobPair,
 )
 from src.matching.prefilter import run_prefilter
+from src.tailoring.signal_family_matcher import canonical_signal_term
 from src.resume.models import ResumeEvidence
 
 
@@ -180,17 +179,7 @@ def _role_family_title_adjustment(role_family: str, title: str) -> Tuple[float, 
     return adjustment, reasons
 
 def _normalize_text(value: str) -> str:
-    text = str(value or "").lower().strip()
-    if not text:
-        return ""
-
-    for source, target in TITLE_CANONICAL.items():
-        text = re.sub(rf"\b{re.escape(source)}\b", target, text)
-
-    text = text.replace("&", " and ")
-    text = re.sub(r"[^a-z0-9+/\-\s]", " ", text)
-    text = re.sub(r"\s+", " ", text).strip()
-    return _SKILL_ALIASES.get(text, text)
+    return canonical_signal_term(value)
 
 
 def _unique_preserve_order(values: List[str]) -> List[str]:

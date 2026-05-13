@@ -6598,18 +6598,20 @@ def _application_action_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
     )
 
 
-def _load_latest_application_actions() -> List[Dict[str, str]]:
+def _load_latest_application_actions(owner_user_id: str = "") -> List[Dict[str, str]]:
     postgres_payload = get_latest_application_actions_rows(
         database_url="",
         database_url_env="DATABASE_URL",
         psql_bin="psql",
         print_only=False,
+        owner_user_id=_clean_text(owner_user_id),
     )
     postgres_rows = list(postgres_payload.get("rows", []) or [])
 
     normalized_rows: List[Dict[str, str]] = []
     for row in postgres_rows:
         normalized_rows.append({
+            "owner_user_id": _clean_text(row.get("owner_user_id")),
             "action_timestamp": _clean_text(row.get("action_timestamp")),
             "job_doc_id": _clean_text(row.get("job_doc_id")),
             "job_url": _clean_text(row.get("job_url")),
@@ -6666,8 +6668,8 @@ def _application_overlay_from_row(action_row: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _load_latest_application_action_overlay() -> Dict[str, Dict[str, Any]]:
-    latest_rows = _load_latest_application_actions()
+def _load_latest_application_action_overlay(owner_user_id: str = "") -> Dict[str, Dict[str, Any]]:
+    latest_rows = _load_latest_application_actions(owner_user_id=owner_user_id)
     latest_by_key: Dict[str, Dict[str, Any]] = {}
 
     for row in latest_rows:
@@ -6680,8 +6682,9 @@ def _load_latest_application_action_overlay() -> Dict[str, Dict[str, Any]]:
 
 def _overlay_application_actions(
     rows: List[Dict[str, Any]],
+    owner_user_id: str = "",
 ) -> List[Dict[str, Any]]:
-    latest_by_key = _load_latest_application_action_overlay()
+    latest_by_key = _load_latest_application_action_overlay(owner_user_id=owner_user_id)
 
     overlaid_rows: List[Dict[str, Any]] = []
     for row in rows:
@@ -6837,17 +6840,94 @@ def health_payload() -> Dict[str, Any]:
     }
 
 
+def user_workspace_state_payload(owner_user_id: str = "") -> Dict[str, Any]:
+    safe_owner = _clean_text(owner_user_id)
+    resume_count = 0
+    saved_scan_count = 0
+    application_action_count = 0
+    operator_decision_count = 0
+
+    if safe_owner:
+        resume_dir = _get_resume_dir(owner_user_id=safe_owner)
+        if resume_dir.exists():
+            resume_count = sum(
+                1
+                for path in resume_dir.iterdir()
+                if path.is_file() and not path.name.startswith(".")
+            )
+
+        try:
+            scans_payload = get_saved_scans_postgres_payload(
+                limit=1,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                owner_user_id=safe_owner,
+            )
+            saved_scan_count = int(scans_payload.get("count", 0) or 0)
+        except Exception:
+            saved_scan_count = 0
+
+        try:
+            action_payload = get_latest_application_actions_rows(
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                owner_user_id=safe_owner,
+            )
+            application_action_count = int(action_payload.get("count", 0) or 0)
+        except Exception:
+            application_action_count = 0
+
+        try:
+            decision_payload = get_operator_decisions_postgres_status_payload(
+                limit=1,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                owner_user_id=safe_owner,
+            )
+            operator_decision_count = int(
+                dict(decision_payload.get("postgres", {}) or {}).get("latest_state_count", 0) or 0
+            )
+        except Exception:
+            operator_decision_count = 0
+
+    total_owned_items = (
+        resume_count
+        + saved_scan_count
+        + application_action_count
+        + operator_decision_count
+    )
+
+    return {
+        "ok": True,
+        "owner_user_id": safe_owner,
+        "has_owned_data": total_owned_items > 0,
+        "counts": {
+            "resumes": resume_count,
+            "saved_scans": saved_scan_count,
+            "application_actions": application_action_count,
+            "operator_decisions": operator_decision_count,
+        },
+    }
+
+
 def status_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     job_corpus: Path = DEFAULT_CORPUS_PATH,
     top_k: int = 10,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
     best_rows = ja._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
     shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
     queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
     manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
-    decision_rows = _load_latest_operator_decision_rows()
+    decision_rows = _load_latest_operator_decision_rows(owner_user_id=owner_user_id)
 
     merged_rows = ja._build_job_index(output_dir)
     undecided_review_counts = ja._count_undecided_review_rows(merged_rows)
@@ -6874,7 +6954,7 @@ def status_payload(
     )
 
     latest_by_key = ja._load_latest_decision_overlay()
-    application_overlay_by_key = _load_latest_application_action_overlay()
+    application_overlay_by_key = _load_latest_application_action_overlay(owner_user_id=owner_user_id)
     job_metadata_by_key = _load_job_metadata_overlay_from_corpus(job_corpus)
 
     top_rows = sorted(
@@ -6957,6 +7037,7 @@ def status_payload(
 
 def browse_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
+    owner_user_id: str = "",
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
@@ -6995,7 +7076,7 @@ def browse_payload(
         args = _make_args(**selection_filters)
         selected = ja._select_browse_rows(rows, args)
 
-        selected = _overlay_application_actions(selected)
+        selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
 
         selected = _exclude_applied_rows(selected)
 
@@ -7067,6 +7148,7 @@ def browse_payload(
 
 def review_payload(
     output_dir: Path = DEFAULT_OUTPUT_DIR,
+    owner_user_id: str = "",
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
@@ -7087,7 +7169,7 @@ def review_payload(
     args = _make_args(**resolved_filters)
     selected = ja._select_review_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-    selected = _overlay_application_actions(selected)
+    selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
     selected = _exclude_applied_rows(selected)
 
     return {
@@ -7101,12 +7183,13 @@ def workflow_payload(
     view: str,
     limit: int = 20,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
     rows = ja._build_job_index(output_dir)
     selected = ja._workflow_view_rows(rows, view)[:limit]
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-    selected = _overlay_application_actions(selected)
+    selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
     selected = _exclude_applied_rows(selected)
     return {
         "view": view,
@@ -7119,13 +7202,14 @@ def planner_payload(
     request: str,
     limit: int = 20,
     output_dir: Path = DEFAULT_OUTPUT_DIR,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
     view = ja._infer_planner_view(request)
     rows = ja._build_job_index(output_dir)
     selected = ja._workflow_view_rows(rows, view)[:limit]
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-    selected = _overlay_application_actions(selected)
+    selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
     return {
         "request": request,
         "resolved_view": view,
@@ -7359,13 +7443,14 @@ def _operator_decision_latest_sort_key(row: Dict[str, Any]) -> Tuple[str, str]:
         str(normalized.get("decision_id", "") or ""),
     )
 
-def _load_latest_operator_decision_rows() -> List[Dict[str, Any]]:
+def _load_latest_operator_decision_rows(owner_user_id: str = "") -> List[Dict[str, Any]]:
     meta_payload = get_operator_decisions_postgres_status_payload(
         limit=1,
         database_url="",
         database_url_env="DATABASE_URL",
         psql_bin="psql",
         print_only=False,
+        owner_user_id=_clean_text(owner_user_id),
     )
     meta_block = dict(meta_payload.get("postgres", {}) or {})
     query_limit = max(int(meta_block.get("latest_state_count", 0) or 0), 1)
@@ -7376,6 +7461,7 @@ def _load_latest_operator_decision_rows() -> List[Dict[str, Any]]:
         database_url_env="DATABASE_URL",
         psql_bin="psql",
         print_only=False,
+        owner_user_id=_clean_text(owner_user_id),
     )
     postgres_block = dict(postgres_payload.get("postgres", {}) or {})
     postgres_rows = list(postgres_block.get("latest_rows", []) or [])
@@ -7383,6 +7469,7 @@ def _load_latest_operator_decision_rows() -> List[Dict[str, Any]]:
     normalized_rows: List[Dict[str, Any]] = []
     for row in postgres_rows:
         normalized = operator_decision_db_row({
+            "owner_user_id": row.get("owner_user_id", ""),
             "decision_timestamp": row.get("decision_timestamp", ""),
             "queue_rank": row.get("queue_rank", ""),
             "job_doc_id": row.get("job_doc_id", ""),
@@ -7414,9 +7501,10 @@ def decisions_payload(
     title_contains: str = "",
     limit: int = 15,
     page: int = 1,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = _load_latest_operator_decision_rows()
+    rows = _load_latest_operator_decision_rows(owner_user_id=owner_user_id)
 
     resolved_filters = {
         "queue_rank": queue_rank,
@@ -7439,7 +7527,7 @@ def decisions_payload(
     args = _make_args(**selection_filters)
     selected = ja._select_decision_rows(rows, args)
     selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
-    selected = _overlay_application_actions(selected)
+    selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
 
     selected = selected[:requested_limit]
 
@@ -7530,6 +7618,7 @@ def record_operator_resume_selection_payload(
     runner_up_resume: str = "",
     runner_up_score: str = "",
     note: str = "",
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
 
@@ -7548,6 +7637,7 @@ def record_operator_resume_selection_payload(
         )
 
     row = {
+        "owner_user_id": _clean_text(owner_user_id),
         "decision_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
         "queue_rank": _clean_text(queue_rank),
         "job_doc_id": _clean_text(job_doc_id),
@@ -13308,9 +13398,11 @@ def record_application_action_payload(
     application_status: str = "",
     source_view: str = "",
     note: str = "",
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     row = application_action_db_row(
         {
+            "owner_user_id": _clean_text(owner_user_id),
             "action_timestamp": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
             "job_doc_id": _clean_text(job_doc_id),
             "job_url": _clean_text(job_url),
@@ -13338,9 +13430,10 @@ def application_actions_payload(
     title_contains: str = "",
     limit: int = 15,
     page: int = 1,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = _load_latest_application_actions()
+    rows = _load_latest_application_actions(owner_user_id=owner_user_id)
 
     if application_status:
         status_target = _normalize_application_status(application_status)
@@ -13400,6 +13493,7 @@ def applied_jobs_payload(
     title_contains: str = "",
     limit: int = 15,
     page: int = 1,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     return application_actions_payload(
         application_status="APPLIED",
@@ -13407,6 +13501,7 @@ def applied_jobs_payload(
         title_contains=title_contains,
         limit=limit,
         page=page,
+        owner_user_id=owner_user_id,
     )
 
 def jobs_search_lite_payload(

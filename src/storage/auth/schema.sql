@@ -4,12 +4,16 @@ CREATE TABLE IF NOT EXISTS auth_users (
     normalized_email TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     display_name TEXT NOT NULL,
+    access_level TEXT NOT NULL DEFAULT 'user',
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     is_admin BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL,
     last_login_at TIMESTAMPTZ
 );
+
+ALTER TABLE auth_users
+ADD COLUMN IF NOT EXISTS access_level TEXT NOT NULL DEFAULT 'user';
 
 CREATE INDEX IF NOT EXISTS idx_auth_users_active
 ON auth_users (is_active);

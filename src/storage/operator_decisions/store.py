@@ -131,6 +131,7 @@ def _operator_decision_key(record: Dict[str, Any]) -> str:
 
 def _build_decision_id(normalized_row: Dict[str, Any]) -> str:
     signature_payload = {
+        "owner_user_id": normalized_row["owner_user_id"],
         "decision_timestamp": normalized_row["decision_timestamp"],
         "decision_key": normalized_row["decision_key"],
         "queue_rank": normalized_row["queue_rank"],
@@ -163,6 +164,7 @@ def operator_decision_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("Operator decision record is missing required field: selected_resume")
 
     normalized_row = {
+        "owner_user_id": _clean_text(record.get("owner_user_id")),
         "decision_timestamp": decision_timestamp,
         "queue_rank": _clean_text(record.get("queue_rank")),
         "job_doc_id": _clean_text(record.get("job_doc_id")),
@@ -196,6 +198,7 @@ def operator_decisions_table_specs() -> Dict[str, Any]:
             "primary_key": ["decision_id"],
             "columns": [
                 {"name": "decision_id", "type": "text", "nullable": False},
+                {"name": "owner_user_id", "type": "text", "nullable": False},
                 {"name": "decision_key", "type": "text", "nullable": False},
                 {"name": "decision_timestamp", "type": "timestamptz", "nullable": False},
                 {"name": "queue_rank", "type": "text", "nullable": False},
@@ -213,6 +216,7 @@ def operator_decisions_table_specs() -> Dict[str, Any]:
             ],
             "indexes": [
                 {"name": "idx_operator_decisions_key_timestamp", "columns": ["decision_key", "decision_timestamp"]},
+                {"name": "idx_operator_decisions_owner_key_timestamp", "columns": ["owner_user_id", "decision_key", "decision_timestamp"]},
                 {"name": "idx_operator_decisions_queue_rank", "columns": ["queue_rank"]},
                 {"name": "idx_operator_decisions_selected_resume", "columns": ["selected_resume"]},
             ],
@@ -225,6 +229,7 @@ def render_operator_decisions_schema_sql() -> str:
         [
             "CREATE TABLE IF NOT EXISTS operator_decisions (",
             "    decision_id TEXT PRIMARY KEY,",
+            "    owner_user_id TEXT NOT NULL DEFAULT '',",
             "    decision_key TEXT NOT NULL,",
             "    decision_timestamp TIMESTAMPTZ NOT NULL,",
             "    queue_rank TEXT NOT NULL,",
@@ -241,8 +246,14 @@ def render_operator_decisions_schema_sql() -> str:
             "    note TEXT NOT NULL",
             ");",
             "",
+            "ALTER TABLE operator_decisions",
+            "ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';",
+            "",
             "CREATE INDEX IF NOT EXISTS idx_operator_decisions_key_timestamp",
             "ON operator_decisions (decision_key, decision_timestamp DESC);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_operator_decisions_owner_key_timestamp",
+            "ON operator_decisions (owner_user_id, decision_key, decision_timestamp DESC);",
             "",
             "CREATE INDEX IF NOT EXISTS idx_operator_decisions_queue_rank",
             "ON operator_decisions (queue_rank);",
@@ -303,6 +314,7 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
         [
             "INSERT INTO operator_decisions (",
             "    decision_id,",
+            "    owner_user_id,",
             "    decision_key,",
             "    decision_timestamp,",
             "    queue_rank,",
@@ -320,6 +332,7 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
             ")",
             "VALUES (",
             f"    {_sql_quote_text(row['decision_id'])},",
+            f"    {_sql_quote_text(row['owner_user_id'])},",
             f"    {_sql_quote_text(row['decision_key'])},",
             f"    {_sql_quote_text(row['decision_timestamp'])}::timestamptz,",
             f"    {_sql_quote_text(row['queue_rank'])},",

@@ -9,6 +9,11 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
+from src.storage.application_actions.store import (
+    _sql_quote_text,
+    application_actions_schema_sql_text,
+)
+
 
 def _load_local_dotenv_if_present(dotenv_path: Path = Path(".env")) -> None:
     path = dotenv_path.expanduser()
@@ -102,11 +107,20 @@ def _redact_database_url(value: str) -> str:
     )
 
 
-def _build_application_actions_status_sql(limit: int) -> str:
+def _owner_where_clause(owner_user_id: str, *, prefix: str = "WHERE") -> str:
+    safe_owner_user_id = str(owner_user_id or "").strip()
+    if not safe_owner_user_id:
+        return ""
+    return f"{prefix} owner_user_id = {_sql_quote_text(safe_owner_user_id)}"
+
+
+def _build_application_actions_status_sql(limit: int, owner_user_id: str = "") -> str:
+    owner_where = _owner_where_clause(owner_user_id, prefix="WHERE")
     return f"""
 WITH latest_rows AS (
     SELECT DISTINCT ON (action_key)
         action_id,
+        owner_user_id,
         action_key,
         action_timestamp,
         job_doc_id,
@@ -117,11 +131,13 @@ WITH latest_rows AS (
         source_view,
         note
     FROM application_actions
+    {owner_where}
     ORDER BY action_key, action_timestamp DESC, action_id DESC
 ),
 latest_rows_limited AS (
     SELECT
         action_id,
+        owner_user_id,
         action_key,
         action_timestamp,
         job_doc_id,
@@ -138,6 +154,7 @@ latest_rows_limited AS (
 recent_rows AS (
     SELECT
         action_id,
+        owner_user_id,
         action_key,
         action_timestamp,
         job_doc_id,
@@ -148,6 +165,7 @@ recent_rows AS (
         source_view,
         note
     FROM application_actions
+    {owner_where}
     ORDER BY action_timestamp DESC, action_id DESC
     LIMIT {limit}
 ),
@@ -163,10 +181,11 @@ raw_status_counts AS (
         application_status,
         COUNT(*) AS count
     FROM application_actions
+    {owner_where}
     GROUP BY application_status
 )
 SELECT json_build_object(
-    'total_row_count', (SELECT COUNT(*) FROM application_actions),
+    'total_row_count', (SELECT COUNT(*) FROM application_actions {owner_where}),
     'latest_state_count', (SELECT COUNT(*) FROM latest_rows),
     'raw_status_counts',
         COALESCE(
@@ -260,11 +279,68 @@ def _run_psql_json_query(
     payload["data"] = data
     return payload
 
-def _build_latest_application_actions_rows_sql() -> str:
-    return """
+
+def _run_psql_command(
+    *,
+    sql: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    database_url_value = _resolve_database_url(
+        database_url,
+        database_url_env,
+        allow_placeholder=bool(print_only),
+    )
+
+    cmd: List[str] = [
+        str(psql_bin),
+        database_url_value,
+        "-X",
+        "-v",
+        "ON_ERROR_STOP=1",
+        "-c",
+        sql,
+    ]
+
+    redacted_cmd = list(cmd)
+    redacted_cmd[1] = _redact_database_url(redacted_cmd[1])
+
+    payload: Dict[str, Any] = {
+        "command": redacted_cmd,
+        "command_text": shlex.join(redacted_cmd),
+        "stdout": "",
+        "stderr": "",
+    }
+
+    if print_only:
+        return payload
+
+    if shutil.which(str(psql_bin)) is None:
+        raise SystemExit(
+            f"psql executable not found on PATH: {psql_bin!r}. "
+            "Install psql or pass --psql-bin with the correct executable path."
+        )
+
+    completed = subprocess.run(
+        cmd,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload["stdout"] = completed.stdout
+    payload["stderr"] = completed.stderr
+    return payload
+
+def _build_latest_application_actions_rows_sql(owner_user_id: str = "") -> str:
+    owner_where = _owner_where_clause(owner_user_id, prefix="WHERE")
+    return f"""
 WITH latest_rows AS (
     SELECT DISTINCT ON (action_key)
         action_id,
+        owner_user_id,
         action_key,
         action_timestamp,
         job_doc_id,
@@ -275,11 +351,13 @@ WITH latest_rows AS (
         source_view,
         note
     FROM application_actions
+    {owner_where}
     ORDER BY action_key, action_timestamp DESC, action_id DESC
 ),
 latest_rows_ordered AS (
     SELECT
         action_id,
+        owner_user_id,
         action_key,
         action_timestamp,
         job_doc_id,
@@ -313,8 +391,19 @@ def get_latest_application_actions_rows(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     print_only: bool = False,
+    owner_user_id: str = "",
+    ensure_schema: bool = True,
 ) -> Dict[str, Any]:
-    sql = _build_latest_application_actions_rows_sql()
+    if ensure_schema:
+        _run_psql_command(
+            sql=application_actions_schema_sql_text(),
+            database_url=database_url,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            print_only=print_only,
+        )
+
+    sql = _build_latest_application_actions_rows_sql(owner_user_id=owner_user_id)
 
     query_payload = _run_psql_json_query(
         sql=sql,
@@ -341,9 +430,20 @@ def get_application_actions_postgres_status_payload(
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
     print_only: bool = False,
+    owner_user_id: str = "",
+    ensure_schema: bool = True,
 ) -> Dict[str, Any]:
     normalized_limit = _normalize_positive_int(limit, "limit")
-    sql = _build_application_actions_status_sql(normalized_limit)
+    if ensure_schema:
+        _run_psql_command(
+            sql=application_actions_schema_sql_text(),
+            database_url=database_url,
+            database_url_env=database_url_env,
+            psql_bin=psql_bin,
+            print_only=print_only,
+        )
+
+    sql = _build_application_actions_status_sql(normalized_limit, owner_user_id=owner_user_id)
 
     query_payload = _run_psql_json_query(
         sql=sql,

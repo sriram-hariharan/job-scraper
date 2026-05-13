@@ -735,6 +735,7 @@ def _build_new_scan_review_payload(
     resume_file_path: str,
     resume_text: str,
     job_record: Dict[str, Any],
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     from src.tailoring.llm import tailoring_llm_model_config_payload
 
@@ -758,7 +759,10 @@ def _build_new_scan_review_payload(
         job_evidence=job_evidence,
         match_result=match_result,
     )
-    personal_details = _extract_resume_personal_details(resume_evidence)
+    personal_details = _extract_resume_personal_details(
+        resume_evidence,
+        owner_user_id=owner_user_id,
+    )
     if not personal_details.get("linkedin") and resume_file_path:
         try:
             for link_item in _workspace_export_extract_pdf_header_link_items(Path(resume_file_path)):
@@ -1007,6 +1011,7 @@ def create_saved_scan_payload(
         resume_file_path=resume_file_path,
         resume_text=safe_resume_text,
         job_record=job_record,
+        owner_user_id=owner_user_id,
     )
     scan_score = int(dict(review_payload.get("scan_score", {}) or {}).get("score", 0) or 0)
     row = saved_scan_db_row(
@@ -3849,7 +3854,11 @@ def _normalize_workspace_personal_details(value: Any) -> Dict[str, str]:
     return normalized
 
 
-def _extract_resume_personal_details(resume_evidence: Any) -> Dict[str, str]:
+def _extract_resume_personal_details(
+    resume_evidence: Any,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, str]:
     details = _normalize_workspace_personal_details({})
     if resume_evidence is None:
         return details
@@ -3858,7 +3867,10 @@ def _extract_resume_personal_details(resume_evidence: Any) -> Dict[str, str]:
     resume_name = _clean_text(getattr(document, "resume_name", ""))
     if resume_name:
         try:
-            resume_pdf_path = planning_resume_preview_path(resume_name)
+            resume_pdf_path = planning_resume_preview_path(
+                resume_name,
+                owner_user_id=owner_user_id,
+            )
             for link_item in _workspace_export_extract_pdf_header_link_items(resume_pdf_path):
                 label = _clean_text(link_item.get("label")).lower()
                 uri = _clean_text(link_item.get("uri"))
@@ -7231,6 +7243,7 @@ def tailoring_scan_preload_payload(
     *,
     tailoring_json_path: str = "",
     selected_resume: str = "",
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     from src.tailoring.llm import tailoring_llm_model_config_payload
 
@@ -7262,6 +7275,7 @@ def tailoring_scan_preload_payload(
         output_dir=output_dir,
         tailoring_json_path=str(artifact_path),
         selected_resume=selected_resume,
+        owner_user_id=owner_user_id,
     )
 
     selection = dict(payload_data.get("selection", {}) or {})
@@ -7292,10 +7306,14 @@ def tailoring_scan_preload_payload(
     try:
         scan_resume_evidence = _load_resume_evidence_for_workspace_preview(
             effective_selected_resume,
+            owner_user_id=owner_user_id,
         )
     except Exception:
         scan_resume_evidence = None
-    extracted_personal_details = _extract_resume_personal_details(scan_resume_evidence)
+    extracted_personal_details = _extract_resume_personal_details(
+        scan_resume_evidence,
+        owner_user_id=owner_user_id,
+    )
     saved_personal_details = _normalize_workspace_personal_details(
         draft.get("personal_details", {})
     )
@@ -8483,17 +8501,28 @@ def _resolve_workspace_preview_job_record(
         f"Workspace draft preview could not resolve a job record with substantive scoring context for job_doc_id: {job_doc_id or '<missing>'}"
     )
 
-def _load_resume_evidence_for_workspace_preview(resume_name: str):
-    from src.resume.document_store import load_resume_documents_by_name
+def _load_resume_evidence_for_workspace_preview(
+    resume_name: str,
+    *,
+    owner_user_id: str = "",
+):
     from src.resume.evidence_builder import build_resume_evidence
 
     safe_resume_name = _sanitize_resume_filename(resume_name)
-    documents = load_resume_documents_by_name([safe_resume_name])
+    resume_pdf_path = planning_resume_preview_path(
+        safe_resume_name,
+        owner_user_id=owner_user_id,
+    )
+    resume_document = _new_scan_resume_document(
+        resume_name=safe_resume_name,
+        resume_file_path=str(resume_pdf_path),
+        resume_text="",
+    )
 
-    if not documents:
-        raise ValueError(f"Could not load resume document: {safe_resume_name}")
+    if not _clean_text(resume_document.raw_text):
+        raise ValueError(f"Could not load resume document text: {safe_resume_name}")
 
-    return build_resume_evidence(documents[0])
+    return build_resume_evidence(resume_document)
 
 
 def _workspace_preview_dimension_deltas(
@@ -8566,6 +8595,7 @@ def preview_tailoring_workspace_draft_payload(
     *,
     tailoring_json_path: str = "",
     selected_resume: str = "",
+    owner_user_id: str = "",
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
     rewrite_review_decisions: Any = None,
@@ -8668,7 +8698,10 @@ def preview_tailoring_workspace_draft_payload(
     manual_edit_count = len(effective_manual_edits)
 
     try:
-        original_resume = _load_resume_evidence_for_workspace_preview(effective_selected_resume)
+        original_resume = _load_resume_evidence_for_workspace_preview(
+            effective_selected_resume,
+            owner_user_id=owner_user_id,
+        )
 
         job_record = _resolve_workspace_preview_job_record(
             job,
@@ -12556,6 +12589,7 @@ def _build_tailoring_workspace_export_context(
     *,
     tailoring_json_path: str = "",
     selected_resume: str = "",
+    owner_user_id: str = "",
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
     require_saved_draft: bool = False,
@@ -12631,7 +12665,10 @@ def _build_tailoring_workspace_export_context(
         manual_bullet_edits=effective_manual_bullet_edits,
     )
 
-    resume_pdf_path = planning_resume_preview_path(effective_selected_resume)
+    resume_pdf_path = planning_resume_preview_path(
+        effective_selected_resume,
+        owner_user_id=owner_user_id,
+    )
     exported_pages = _extract_resume_pdf_paragraph_pages_for_export(resume_pdf_path)
     if not exported_pages:
         raise ValueError("Could not extract resume text for export.")
@@ -13167,6 +13204,7 @@ def render_tailoring_workspace_draft_preview_payload(
     *,
     tailoring_json_path: str = "",
     selected_resume: str = "",
+    owner_user_id: str = "",
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
 ) -> Dict[str, Any]:
@@ -13174,6 +13212,7 @@ def render_tailoring_workspace_draft_preview_payload(
         output_dir=output_dir,
         tailoring_json_path=tailoring_json_path,
         selected_resume=selected_resume,
+        owner_user_id=owner_user_id,
         selected_patch_candidate_ids=selected_patch_candidate_ids,
         manual_bullet_edits=manual_bullet_edits,
         require_saved_draft=False,
@@ -13212,6 +13251,7 @@ def export_tailoring_workspace_draft_payload(
     *,
     tailoring_json_path: str = "",
     selected_resume: str = "",
+    owner_user_id: str = "",
     format: str = "pdf",
 ) -> Dict[str, Any]:
     export_format = _normalize_workspace_export_format(format)
@@ -13220,6 +13260,7 @@ def export_tailoring_workspace_draft_payload(
         output_dir=output_dir,
         tailoring_json_path=tailoring_json_path,
         selected_resume=selected_resume,
+        owner_user_id=owner_user_id,
         require_saved_draft=True,
     )
 

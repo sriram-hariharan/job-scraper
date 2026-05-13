@@ -556,8 +556,10 @@ def planning_artifact(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
 @app.post("/planning/scan-preload")
 def planning_scan_preload(
+    http_request: Request,
     request: PlanningScanPreloadRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
@@ -566,6 +568,7 @@ def planning_scan_preload(
             output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
+            owner_user_id=_auth_owner_user_id(http_request),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -784,8 +787,10 @@ def save_workspace_draft(request: PlanningWorkspaceDraftSaveRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+
 @app.post("/planning/preview-workspace-draft")
 def preview_workspace_draft(
+    http_request: Request,
     request: PlanningWorkspaceDraftPreviewRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
@@ -794,6 +799,7 @@ def preview_workspace_draft(
             output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
+            owner_user_id=_auth_owner_user_id(http_request),
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,
             manual_bullet_edits=request.manual_bullet_edits,
             rewrite_review_decisions=request.rewrite_review_decisions,
@@ -801,8 +807,10 @@ def preview_workspace_draft(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
 @app.post("/planning/render-workspace-draft-preview")
 def render_workspace_draft_preview(
+    http_request: Request,
     request: PlanningWorkspaceDraftRenderRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
@@ -811,6 +819,7 @@ def render_workspace_draft_preview(
             output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
+            owner_user_id=_auth_owner_user_id(http_request),
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,
             manual_bullet_edits=request.manual_bullet_edits,
         )
@@ -835,8 +844,10 @@ def generate_scan_phrases(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
+
 @app.post("/planning/export-workspace-draft")
 def export_workspace_draft(
+    http_request: Request,
     request: PlanningWorkspaceDraftExportRequest,
     output_dir: str = str(services.DEFAULT_OUTPUT_DIR),
 ):
@@ -845,6 +856,7 @@ def export_workspace_draft(
             output_dir=Path(output_dir),
             tailoring_json_path=request.tailoring_json_path,
             selected_resume=request.selected_resume,
+            owner_user_id=_auth_owner_user_id(http_request),
             format=request.format,
         )
         return FileResponse(
@@ -865,22 +877,6 @@ def export_workspace_draft(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-        
-@app.get("/application-actions")
-def application_actions(
-    application_status: str = "",
-    company_contains: str = "",
-    title_contains: str = "",
-    page: int = 1,
-    limit: int = 15,
-):
-    return services.application_actions_payload(
-        application_status=application_status,
-        company_contains=company_contains,
-        title_contains=title_contains,
-        limit=limit,
-        page=page,
-    )
 
 @app.post("/application-actions")
 def record_application_action(

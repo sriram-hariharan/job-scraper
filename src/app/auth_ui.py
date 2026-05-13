@@ -7,6 +7,11 @@ from fastapi import APIRouter, Body, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
+from src.config.consts import (
+    AUTH_FIRST_USER_ADMIN_ENABLED,
+    AUTH_REGISTRATION_ENABLED,
+)
+
 from src.auth.password import hash_password, validate_new_password, verify_password
 from src.auth.session import (
     auth_cookie_name,
@@ -17,6 +22,7 @@ from src.auth.session import (
     new_auth_session_record,
 )
 from src.storage.auth.read_postgres import (
+    get_auth_postgres_status_payload,
     get_auth_user_by_email_postgres_payload,
     get_auth_user_for_session_token_hash_postgres_payload,
     revoke_auth_session_postgres_payload,
@@ -43,6 +49,74 @@ class AuthLoginRequest(BaseModel):
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    import os
+
+    raw = _clean_text(os.environ.get(name)).lower()
+    if not raw:
+        return bool(default)
+
+    if raw in {"1", "true", "yes", "y", "on"}:
+        return True
+
+    if raw in {"0", "false", "no", "n", "off"}:
+        return False
+
+    return bool(default)
+
+
+def _registration_enabled() -> bool:
+    return _env_bool(
+        "JOB_STACK_AUTH_REGISTRATION_ENABLED",
+        bool(AUTH_REGISTRATION_ENABLED),
+    )
+
+
+def _first_user_admin_enabled() -> bool:
+    return _env_bool(
+        "JOB_STACK_AUTH_FIRST_USER_ADMIN_ENABLED",
+        bool(AUTH_FIRST_USER_ADMIN_ENABLED),
+    )
+
+
+def _auth_user_counts() -> Dict[str, int]:
+    try:
+        payload = get_auth_postgres_status_payload(
+            limit=1,
+            ensure_schema=True,
+        )
+    except Exception:
+        return {
+            "user_count": 0,
+            "active_user_count": 0,
+        }
+
+    postgres = dict(payload.get("postgres", {}) or {})
+    return {
+        "user_count": int(postgres.get("user_count", 0) or 0),
+        "active_user_count": int(postgres.get("active_user_count", 0) or 0),
+    }
+
+
+def _can_register() -> bool:
+    if _registration_enabled():
+        return True
+
+    if not _first_user_admin_enabled():
+        return False
+
+    counts = _auth_user_counts()
+    return int(counts.get("active_user_count", 0) or 0) == 0
+
+
+def _should_create_admin_user() -> bool:
+    if not _first_user_admin_enabled():
+        return False
+
+    counts = _auth_user_counts()
+    return int(counts.get("active_user_count", 0) or 0) == 0
 
 
 def _safe_next_path(value: str) -> str:
@@ -376,6 +450,15 @@ def register_page(request: Request, next: str = "/"):
     if _current_user_from_request(request):
         return RedirectResponse(url=next_path, status_code=303)
 
+    if not _can_register():
+        return HTMLResponse(
+            _auth_page_html(
+                mode="login",
+                next_path=next_path,
+                error_message="Registration is currently disabled.",
+            )
+        )
+
     return HTMLResponse(
         _auth_page_html(
             mode="register",
@@ -387,14 +470,21 @@ def register_page(request: Request, next: str = "/"):
 @router.post("/auth/register")
 def register(request: Request, payload: AuthRegisterRequest = Body(...)):
     try:
+        if not _can_register():
+            raise HTTPException(
+                status_code=403,
+                detail="Registration is currently disabled.",
+            )
+
         validate_new_password(payload.password)
+        make_admin = _should_create_admin_user()
         created = create_auth_user_postgres_payload(
             record={
                 "email": payload.email,
                 "password_hash": hash_password(payload.password),
                 "display_name": payload.display_name,
                 "is_active": True,
-                "is_admin": False,
+                "is_admin": make_admin,
             },
             ensure_schema=True,
         )

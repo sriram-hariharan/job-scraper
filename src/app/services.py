@@ -214,8 +214,18 @@ def _tailoring_workspace_button_state_cache_key(
         packet_size,
     )
 
-def _get_resume_dir() -> Path:
-    resume_dir = DEFAULT_PROFILE_RESUME_DIR
+def _safe_owner_dir_name(owner_user_id: str = "") -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", _clean_text(owner_user_id)).strip("._-")
+    return safe[:80]
+
+
+def _get_resume_dir(owner_user_id: str = "") -> Path:
+    owner_dir = _safe_owner_dir_name(owner_user_id)
+    resume_dir = (
+        DEFAULT_PROFILE_RESUME_DIR / "users" / owner_dir
+        if owner_dir
+        else DEFAULT_PROFILE_RESUME_DIR
+    )
     resume_dir.mkdir(parents=True, exist_ok=True)
     return resume_dir
 
@@ -272,8 +282,11 @@ def _resume_payload_for_path(path: Path) -> Dict[str, Any]:
     }
 
 
-def profile_resumes_payload() -> Dict[str, Any]:
-    resume_dir = _get_resume_dir()
+def profile_resumes_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    resume_dir = _get_resume_dir(owner_user_id=owner_user_id)
 
     pdf_paths = [path for path in resume_dir.iterdir() if path.is_file() and path.suffix.lower() == ".pdf"]
     pdf_paths.sort(key=lambda path: (-path.stat().st_mtime, path.name.lower()))
@@ -288,8 +301,13 @@ def profile_resumes_payload() -> Dict[str, Any]:
     }
 
 
-def profile_upload_resume_payload(filename: str, file_bytes: bytes) -> Dict[str, Any]:
-    resume_dir = _get_resume_dir()
+def profile_upload_resume_payload(
+    filename: str,
+    file_bytes: bytes,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    resume_dir = _get_resume_dir(owner_user_id=owner_user_id)
     safe_name = _sanitize_resume_filename(filename)
 
     if not file_bytes:
@@ -308,8 +326,12 @@ def profile_upload_resume_payload(filename: str, file_bytes: bytes) -> Dict[str,
     }
 
 
-def profile_delete_resume_payload(resume_name: str) -> Dict[str, Any]:
-    resume_dir = _get_resume_dir()
+def profile_delete_resume_payload(
+    resume_name: str,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    resume_dir = _get_resume_dir(owner_user_id=owner_user_id)
     safe_name = _sanitize_resume_filename(resume_name)
     target_path = resume_dir / safe_name
 
@@ -922,10 +944,10 @@ def create_saved_scan_payload(
         resume_source = "saved_resume"
         resume_name = safe_saved_resume
         resume_filename = safe_saved_resume
-        resume_file_path = str((_get_resume_dir() / safe_saved_resume).resolve())
+        resume_file_path = str((_get_resume_dir(owner_user_id=owner_user_id) / safe_saved_resume).resolve())
         resume_file_mime_type = "application/pdf"
         try:
-            resume_size_bytes = (_get_resume_dir() / safe_saved_resume).stat().st_size
+            resume_size_bytes = (_get_resume_dir(owner_user_id=owner_user_id) / safe_saved_resume).stat().st_size
         except FileNotFoundError:
             resume_size_bytes = 0
     elif safe_resume_text:

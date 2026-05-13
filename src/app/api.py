@@ -953,10 +953,12 @@ def rag_answer(
         include_diagnostics=include_diagnostics,
     )
 
-@app.get("/profile/resumes")
-def profile_resumes():
-    return services.profile_resumes_payload()
 
+@app.get("/profile/resumes")
+def profile_resumes(http_request: Request):
+    return services.profile_resumes_payload(
+        owner_user_id=_auth_owner_user_id(http_request),
+    )
 
 @app.get("/profile/saved-scans/data")
 def profile_saved_scans(http_request: Request, limit: int = 25):
@@ -966,8 +968,10 @@ def profile_saved_scans(http_request: Request, limit: int = 25):
     )
 
 
+
 @app.post("/profile/resumes/upload")
 def profile_upload_resume(
+    http_request: Request,
     filename: str = Query(..., min_length=1),
     file_bytes: bytes = Body(...),
 ):
@@ -975,15 +979,18 @@ def profile_upload_resume(
         return services.profile_upload_resume_payload(
             filename=filename,
             file_bytes=file_bytes,
+            owner_user_id=_auth_owner_user_id(http_request),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.delete("/profile/resumes/{resume_name}")
-def profile_delete_resume(resume_name: str):
+def profile_delete_resume(resume_name: str, http_request: Request):
     try:
-        return services.profile_delete_resume_payload(resume_name=resume_name)
+        return services.profile_delete_resume_payload(
+            resume_name,
+            owner_user_id=_auth_owner_user_id(http_request),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    

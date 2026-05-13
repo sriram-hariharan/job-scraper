@@ -51,7 +51,7 @@ def _safe_next_path(value: str) -> str:
     if not raw.startswith("/") or raw.startswith("//"):
         return "/"
 
-    if raw.startswith("/auth/") or raw in {"/login", "/register"}:
+    if raw.startswith("/auth/") or raw in {"/login", "/register", "/logout"}:
         return "/"
 
     return raw
@@ -329,7 +329,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 """.strip()
 
 
-async def _current_user_from_request(request: Request) -> Dict[str, Any]:
+def _current_user_from_request(request: Request) -> Dict[str, Any]:
     session_token = _clean_text(request.cookies.get(auth_cookie_name()))
     if not session_token:
         return {}
@@ -352,19 +352,33 @@ async def _current_user_from_request(request: Request) -> Dict[str, Any]:
     return user
 
 
-@router.get("/login", response_class=HTMLResponse)
-def login_page(next: str = "/") -> str:
-    return _auth_page_html(
-        mode="login",
-        next_path=_safe_next_path(next),
+@router.get("/login")
+def login_page(request: Request, next: str = "/"):
+    next_path = _safe_next_path(next)
+
+    if _current_user_from_request(request):
+        return RedirectResponse(url=next_path, status_code=303)
+
+    return HTMLResponse(
+        _auth_page_html(
+            mode="login",
+            next_path=next_path,
+        )
     )
 
 
-@router.get("/register", response_class=HTMLResponse)
-def register_page(next: str = "/") -> str:
-    return _auth_page_html(
-        mode="register",
-        next_path=_safe_next_path(next),
+@router.get("/register")
+def register_page(request: Request, next: str = "/"):
+    next_path = _safe_next_path(next)
+
+    if _current_user_from_request(request):
+        return RedirectResponse(url=next_path, status_code=303)
+
+    return HTMLResponse(
+        _auth_page_html(
+            mode="register",
+            next_path=next_path,
+        )
     )
 
 
@@ -493,8 +507,8 @@ def logout(request: Request):
 
 
 @router.get("/auth/me")
-async def auth_me(request: Request):
-    user = await _current_user_from_request(request)
+def auth_me(request: Request):
+    user = _current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated.")
 
@@ -505,5 +519,18 @@ async def auth_me(request: Request):
 
 
 @router.get("/logout")
-def logout_redirect():
-    return RedirectResponse(url="/login", status_code=303)
+def logout_redirect(request: Request):
+    session_token = _clean_text(request.cookies.get(auth_cookie_name()))
+
+    if session_token:
+        try:
+            revoke_auth_session_postgres_payload(
+                session_token_hash=hash_session_token(session_token),
+                ensure_schema=True,
+            )
+        except Exception:
+            pass
+
+    response = RedirectResponse(url="/login", status_code=303)
+    _clear_session_cookie(response)
+    return response

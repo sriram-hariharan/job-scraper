@@ -1,5 +1,7 @@
 CREATE TABLE IF NOT EXISTS saved_scans (
     scan_id TEXT PRIMARY KEY,
+    owner_user_id TEXT NOT NULL DEFAULT '',
+    owner_email TEXT NOT NULL DEFAULT '',
     scan_timestamp TIMESTAMPTZ NOT NULL,
     scan_source TEXT NOT NULL,
     scan_status TEXT NOT NULL,
@@ -21,6 +23,12 @@ CREATE TABLE IF NOT EXISTS saved_scans (
     payload_json JSONB NOT NULL
 );
 
+ALTER TABLE saved_scans
+ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';
+
+ALTER TABLE saved_scans
+ADD COLUMN IF NOT EXISTS owner_email TEXT NOT NULL DEFAULT '';
+
 CREATE INDEX IF NOT EXISTS idx_saved_scans_timestamp
 ON saved_scans (scan_timestamp DESC);
 
@@ -29,3 +37,6 @@ ON saved_scans (job_company, job_title);
 
 CREATE INDEX IF NOT EXISTS idx_saved_scans_resume_name
 ON saved_scans (resume_name);
+
+CREATE INDEX IF NOT EXISTS idx_saved_scans_owner_user_id_timestamp
+ON saved_scans (owner_user_id, scan_timestamp DESC);

@@ -76,6 +76,8 @@ def _build_saved_scans_sql(limit: int) -> str:
 WITH recent_rows AS (
     SELECT
         scan_id,
+        owner_user_id,
+        owner_email,
         scan_timestamp,
         scan_source,
         scan_status,
@@ -174,6 +176,8 @@ SELECT COALESCE(
         FROM (
             SELECT
                 scan_id,
+                owner_user_id,
+                owner_email,
                 scan_timestamp,
                 scan_source,
                 scan_status,

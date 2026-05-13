@@ -121,6 +121,11 @@ def _build_scan_id(row: Dict[str, Any]) -> str:
         "job_title": row["job_title"],
         "job_description_text": row["job_description_text"],
     }
+
+    owner_user_id = _clean_text(row.get("owner_user_id"))
+    if owner_user_id:
+        signature_payload["owner_user_id"] = owner_user_id
+
     return hashlib.sha1(_json_compact(signature_payload).encode("utf-8")).hexdigest()
 
 
@@ -141,6 +146,8 @@ def saved_scan_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
         raise ValueError("resume_source must be saved_resume, pasted_text, or uploaded_file.")
 
     normalized = {
+        "owner_user_id": _clean_text(record.get("owner_user_id")),
+        "owner_email": _clean_text(record.get("owner_email")),
         "scan_timestamp": scan_timestamp,
         "scan_source": _clean_text(record.get("scan_source")) or "scan_workspace_new_scan",
         "scan_status": _clean_text(record.get("scan_status")) or "report_pending",
@@ -172,6 +179,8 @@ def saved_scans_table_specs() -> Dict[str, Any]:
             "primary_key": ["scan_id"],
             "columns": [
                 {"name": "scan_id", "type": "text", "nullable": False},
+                {"name": "owner_user_id", "type": "text", "nullable": False},
+                {"name": "owner_email", "type": "text", "nullable": False},
                 {"name": "scan_timestamp", "type": "timestamptz", "nullable": False},
                 {"name": "scan_source", "type": "text", "nullable": False},
                 {"name": "scan_status", "type": "text", "nullable": False},
@@ -193,6 +202,7 @@ def saved_scans_table_specs() -> Dict[str, Any]:
                 {"name": "payload_json", "type": "jsonb", "nullable": False},
             ],
             "indexes": [
+                {"name": "idx_saved_scans_owner_user_id_timestamp", "columns": ["owner_user_id", "scan_timestamp"]},
                 {"name": "idx_saved_scans_timestamp", "columns": ["scan_timestamp"]},
                 {"name": "idx_saved_scans_company_title", "columns": ["job_company", "job_title"]},
                 {"name": "idx_saved_scans_resume_name", "columns": ["resume_name"]},
@@ -206,6 +216,8 @@ def render_saved_scans_schema_sql() -> str:
         [
             "CREATE TABLE IF NOT EXISTS saved_scans (",
             "    scan_id TEXT PRIMARY KEY,",
+            "    owner_user_id TEXT NOT NULL DEFAULT '',",
+            "    owner_email TEXT NOT NULL DEFAULT '',",
             "    scan_timestamp TIMESTAMPTZ NOT NULL,",
             "    scan_source TEXT NOT NULL,",
             "    scan_status TEXT NOT NULL,",
@@ -227,6 +239,12 @@ def render_saved_scans_schema_sql() -> str:
             "    payload_json JSONB NOT NULL",
             ");",
             "",
+            "ALTER TABLE saved_scans",
+            "ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';",
+            "",
+            "ALTER TABLE saved_scans",
+            "ADD COLUMN IF NOT EXISTS owner_email TEXT NOT NULL DEFAULT '';",
+            "",
             "CREATE INDEX IF NOT EXISTS idx_saved_scans_timestamp",
             "ON saved_scans (scan_timestamp DESC);",
             "",
@@ -235,6 +253,9 @@ def render_saved_scans_schema_sql() -> str:
             "",
             "CREATE INDEX IF NOT EXISTS idx_saved_scans_resume_name",
             "ON saved_scans (resume_name);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_saved_scans_owner_user_id_timestamp",
+            "ON saved_scans (owner_user_id, scan_timestamp DESC);",
         ]
     )
 
@@ -270,18 +291,20 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
     return "\n".join(
         [
             "INSERT INTO saved_scans (",
-            "    scan_id, scan_timestamp, scan_source, scan_status, resume_source,",
+            "    scan_id, owner_user_id, owner_email, scan_timestamp, scan_source, scan_status, resume_source,",
             "    resume_name, resume_filename, resume_file_path, resume_file_mime_type,",
             "    resume_size_bytes, resume_text, job_doc_id, job_url, job_company,",
             "    job_title, job_description_text, match_rate, tailoring_json_path, note, payload_json",
             ")",
             "VALUES (",
-            f"    {_sql_quote_text(row['scan_id'])}, {_sql_quote_text(row['scan_timestamp'])}::timestamptz, {_sql_quote_text(row['scan_source'])}, {_sql_quote_text(row['scan_status'])}, {_sql_quote_text(row['resume_source'])},",
+            f"    {_sql_quote_text(row['scan_id'])}, {_sql_quote_text(row['owner_user_id'])}, {_sql_quote_text(row['owner_email'])}, {_sql_quote_text(row['scan_timestamp'])}::timestamptz, {_sql_quote_text(row['scan_source'])}, {_sql_quote_text(row['scan_status'])}, {_sql_quote_text(row['resume_source'])},",
             f"    {_sql_quote_text(row['resume_name'])}, {_sql_quote_text(row['resume_filename'])}, {_sql_quote_text(row['resume_file_path'])}, {_sql_quote_text(row['resume_file_mime_type'])},",
             f"    {int(row['resume_size_bytes'])}, {_sql_quote_text(row['resume_text'])}, {_sql_quote_text(row['job_doc_id'])}, {_sql_quote_text(row['job_url'])}, {_sql_quote_text(row['job_company'])},",
             f"    {_sql_quote_text(row['job_title'])}, {_sql_quote_text(row['job_description_text'])}, {_sql_quote_numeric_or_null(row['match_rate'])}, {_sql_quote_text(row['tailoring_json_path'])}, {_sql_quote_text(row['note'])}, {_sql_quote_jsonb(row['payload_json'])}",
             ")",
             "ON CONFLICT (scan_id) DO UPDATE SET",
+            "    owner_user_id = EXCLUDED.owner_user_id,",
+            "    owner_email = EXCLUDED.owner_email,",
             "    scan_timestamp = EXCLUDED.scan_timestamp,",
             "    scan_source = EXCLUDED.scan_source,",
             "    scan_status = EXCLUDED.scan_status,",

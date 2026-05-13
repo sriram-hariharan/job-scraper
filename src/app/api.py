@@ -142,6 +142,18 @@ async def require_dashboard_auth(request: Request, call_next):
     return await call_next(request)
 
 
+
+def _auth_user_from_request(request: Request) -> dict:
+    return dict(getattr(request.state, "auth_user", {}) or {})
+
+
+def _auth_owner_user_id(request: Request) -> str:
+    return str(_auth_user_from_request(request).get("user_id", "") or "").strip()
+
+
+def _auth_owner_email(request: Request) -> str:
+    return str(_auth_user_from_request(request).get("email", "") or "").strip()
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -559,13 +571,15 @@ def planning_scan_preload(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.post("/planning/start-scan")
-def planning_start_scan(request: PlanningStartScanRequest):
+def planning_start_scan(http_request: Request, request: PlanningStartScanRequest):
     try:
         upload_bytes = None
         if request.upload_base64:
             upload_bytes = base64.b64decode(request.upload_base64)
         return services.create_saved_scan_payload(
             scan_id=request.scan_id,
+            owner_user_id=_auth_owner_user_id(http_request),
+            owner_email=_auth_owner_email(http_request),
             company=request.company,
             role=request.role,
             job_description_text=request.job_description_text,
@@ -582,17 +596,25 @@ def planning_start_scan(request: PlanningStartScanRequest):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.get("/planning/saved-scan/{scan_id}")
-def planning_saved_scan(scan_id: str):
+def planning_saved_scan(scan_id: str, http_request: Request):
     try:
-        return services.saved_scan_report_payload(scan_id)
+        return services.saved_scan_report_payload(
+            scan_id,
+            owner_user_id=_auth_owner_user_id(http_request),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 @app.post("/planning/saved-scan/{scan_id}/state")
-def planning_save_saved_scan_state(scan_id: str, request: PlanningSavedScanStateRequest):
+def planning_save_saved_scan_state(
+    scan_id: str,
+    http_request: Request,
+    request: PlanningSavedScanStateRequest,
+):
     try:
         return services.save_saved_scan_state_payload(
             scan_id=scan_id,
+            owner_user_id=_auth_owner_user_id(http_request),
             selected_patch_candidate_ids=request.selected_patch_candidate_ids,
             manual_bullet_edits=request.manual_bullet_edits,
             rewrite_review_decisions=request.rewrite_review_decisions,
@@ -603,9 +625,12 @@ def planning_save_saved_scan_state(scan_id: str, request: PlanningSavedScanState
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 @app.delete("/profile/saved-scans/{scan_id}")
-def profile_delete_saved_scan(scan_id: str):
+def profile_delete_saved_scan(scan_id: str, http_request: Request):
     try:
-        return services.delete_saved_scan_payload(scan_id)
+        return services.delete_saved_scan_payload(
+            scan_id,
+            owner_user_id=_auth_owner_user_id(http_request),
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -934,8 +959,11 @@ def profile_resumes():
 
 
 @app.get("/profile/saved-scans/data")
-def profile_saved_scans(limit: int = 25):
-    return services.profile_saved_scans_payload(limit=limit)
+def profile_saved_scans(http_request: Request, limit: int = 25):
+    return services.profile_saved_scans_payload(
+        limit=limit,
+        owner_user_id=_auth_owner_user_id(http_request),
+    )
 
 
 @app.post("/profile/resumes/upload")

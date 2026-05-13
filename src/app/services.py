@@ -866,6 +866,8 @@ def _build_new_scan_review_payload(
 def create_saved_scan_payload(
     *,
     scan_id: str = "",
+    owner_user_id: str = "",
+    owner_email: str = "",
     company: str = "",
     role: str = "",
     job_description_text: str = "",
@@ -944,6 +946,8 @@ def create_saved_scan_payload(
     row = saved_scan_db_row(
         {
             **({"scan_id": safe_scan_id} if safe_scan_id else {}),
+            "owner_user_id": _clean_text(owner_user_id),
+            "owner_email": _clean_text(owner_email),
             "scan_timestamp": scan_timestamp,
             "scan_source": "scan_workspace_new_scan",
             "scan_status": "processing",
@@ -993,6 +997,8 @@ def create_saved_scan_payload(
                 "version": "saved_scan_report_v1",
                 "scan_review_payload": review_payload,
             },
+            "owner_user_id": _clean_text(owner_user_id),
+            "owner_email": _clean_text(owner_email),
         }
     )
     postgres_write = (
@@ -1132,9 +1138,16 @@ def scan_workspace_job_context_payload(
     return context
 
 
-def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
+def profile_saved_scans_payload(
+    limit: int = 25,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
     try:
-        payload = get_saved_scans_postgres_payload(limit=limit)
+        payload = get_saved_scans_postgres_payload(
+            limit=limit,
+            owner_user_id=owner_user_id,
+        )
         return {
             "ok": True,
             "source": "postgres",
@@ -1155,12 +1168,19 @@ def profile_saved_scans_payload(limit: int = 25) -> Dict[str, Any]:
         }
 
 
-def saved_scan_report_payload(scan_id: str) -> Dict[str, Any]:
+def saved_scan_report_payload(
+    scan_id: str,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
         raise ValueError("scan_id is required.")
 
-    payload = get_saved_scan_postgres_payload(scan_id=safe_scan_id)
+    payload = get_saved_scan_postgres_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=owner_user_id,
+    )
     row = dict(payload.get("scan", {}) or {})
     if not row:
         raise ValueError("Saved scan was not found.")
@@ -1177,12 +1197,19 @@ def saved_scan_report_payload(scan_id: str) -> Dict[str, Any]:
     }
 
 
-def delete_saved_scan_payload(scan_id: str) -> Dict[str, Any]:
+def delete_saved_scan_payload(
+    scan_id: str,
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
     safe_scan_id = _clean_text(scan_id)
     if not safe_scan_id:
         raise ValueError("scan_id is required.")
 
-    payload = delete_saved_scan_postgres_payload(scan_id=safe_scan_id)
+    payload = delete_saved_scan_postgres_payload(
+        scan_id=safe_scan_id,
+        owner_user_id=owner_user_id,
+    )
     return {
         "ok": bool(payload.get("ok", False)),
         "scan_id": safe_scan_id,
@@ -1192,6 +1219,7 @@ def delete_saved_scan_payload(scan_id: str) -> Dict[str, Any]:
 def save_saved_scan_state_payload(
     *,
     scan_id: str,
+    owner_user_id: str = "",
     selected_patch_candidate_ids: Any = None,
     manual_bullet_edits: Any = None,
     rewrite_review_decisions: Any = None,
@@ -1226,6 +1254,7 @@ def save_saved_scan_state_payload(
     payload = save_saved_scan_draft_postgres_payload(
         scan_id=safe_scan_id,
         draft=draft,
+        owner_user_id=owner_user_id,
     )
     return {
         "ok": bool(payload.get("ok", False)),

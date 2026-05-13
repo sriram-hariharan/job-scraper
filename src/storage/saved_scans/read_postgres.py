@@ -71,7 +71,8 @@ def _redact_database_url(value: str) -> str:
     return urlunsplit((parts.scheme, f"{redacted_userinfo}@{hostinfo}", parts.path, parts.query, parts.fragment))
 
 
-def _build_saved_scans_sql(limit: int) -> str:
+def _build_saved_scans_sql(limit: int, owner_user_id: str = "") -> str:
+    owner_where = _owner_visibility_clause(owner_user_id, prefix="WHERE")
     return f"""
 WITH recent_rows AS (
     SELECT
@@ -98,11 +99,12 @@ WITH recent_rows AS (
         LEFT(resume_text, 160) AS resume_text_preview,
         payload_json
     FROM saved_scans
+    {owner_where}
     ORDER BY scan_timestamp DESC, scan_id DESC
     LIMIT {limit}
 )
 SELECT json_build_object(
-    'total_row_count', (SELECT COUNT(*) FROM saved_scans),
+    'total_row_count', (SELECT COUNT(*) FROM saved_scans {owner_where}),
     'recent_rows',
         COALESCE(
             (SELECT json_agg(row_to_json(recent_rows) ORDER BY recent_rows.scan_timestamp DESC, recent_rows.scan_id DESC) FROM recent_rows),
@@ -167,8 +169,18 @@ def _run_psql_command(
 def _sql_quote_text(value: Any) -> str:
     return "'" + str(value or "").replace("'", "''") + "'"
 
+def _owner_visibility_clause(owner_user_id: str, *, prefix: str = "WHERE") -> str:
+    safe_owner_user_id = str(owner_user_id or "").strip()
+    if not safe_owner_user_id:
+        return ""
 
-def _build_saved_scan_by_id_sql(scan_id: str) -> str:
+    return (
+        f"{prefix} "
+        f"(owner_user_id = {_sql_quote_text(safe_owner_user_id)} OR owner_user_id = '')"
+    )
+
+def _build_saved_scan_by_id_sql(scan_id: str, owner_user_id: str = "") -> str:
+    owner_and = _owner_visibility_clause(owner_user_id, prefix="AND")
     return f"""
 SELECT COALESCE(
     (
@@ -199,6 +211,7 @@ SELECT COALESCE(
                 payload_json
             FROM saved_scans
             WHERE scan_id = {_sql_quote_text(scan_id)}
+            {owner_and}
             LIMIT 1
         ) row_data
     ),
@@ -215,6 +228,7 @@ def get_saved_scan_postgres_payload(
     psql_bin: str = "psql",
     print_only: bool = False,
     ensure_schema: bool = True,
+    owner_user_id: str = "",    
 ) -> Dict[str, Any]:
     safe_scan_id = str(scan_id or "").strip()
     if not safe_scan_id:
@@ -231,7 +245,7 @@ def get_saved_scan_postgres_payload(
         )
 
     query_payload = _run_psql_json_query(
-        sql=_build_saved_scan_by_id_sql(safe_scan_id),
+        sql=_build_saved_scan_by_id_sql(safe_scan_id, owner_user_id=owner_user_id),
         database_url=database_url,
         database_url_env=database_url_env,
         psql_bin=psql_bin,
@@ -256,12 +270,18 @@ def delete_saved_scan_postgres_payload(
     psql_bin: str = "psql",
     print_only: bool = False,
     ensure_schema: bool = True,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = str(scan_id or "").strip()
     if not safe_scan_id:
         raise ValueError("scan_id is required.")
 
-    sql = f"DELETE FROM saved_scans WHERE scan_id = {_sql_quote_text(safe_scan_id)};"
+    owner_and = _owner_visibility_clause(owner_user_id, prefix="AND")
+    sql = f"""
+DELETE FROM saved_scans
+WHERE scan_id = {_sql_quote_text(safe_scan_id)}
+{owner_and};
+""".strip()
     schema_sql = saved_scans_schema_sql_text() + "\n\n" if ensure_schema else ""
     payload = _run_psql_command(
         sql=schema_sql + sql,
@@ -287,12 +307,14 @@ def save_saved_scan_draft_postgres_payload(
     psql_bin: str = "psql",
     print_only: bool = False,
     ensure_schema: bool = True,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     safe_scan_id = str(scan_id or "").strip()
     if not safe_scan_id:
         raise ValueError("scan_id is required.")
     safe_draft = draft if isinstance(draft, dict) else {}
     draft_json = json.dumps(safe_draft, sort_keys=True).replace("'", "''")
+    owner_and = _owner_visibility_clause(owner_user_id, prefix="AND")
     sql = f"""
 UPDATE saved_scans
 SET payload_json = jsonb_set(
@@ -307,7 +329,8 @@ SET payload_json = jsonb_set(
         true
     ),
     note = 'Saved scan state updated from AI Optimize scan.'
-WHERE scan_id = {_sql_quote_text(safe_scan_id)};
+WHERE scan_id = {_sql_quote_text(safe_scan_id)}
+{owner_and};
 """.strip()
     schema_sql = saved_scans_schema_sql_text() + "\n\n" if ensure_schema else ""
     payload = _run_psql_command(
@@ -334,6 +357,7 @@ def get_saved_scans_postgres_payload(
     psql_bin: str = "psql",
     print_only: bool = False,
     ensure_schema: bool = True,
+    owner_user_id: str = "",
 ) -> Dict[str, Any]:
     normalized_limit = _normalize_positive_int(limit, "limit")
     schema_payload: Dict[str, Any] = {}
@@ -347,7 +371,7 @@ def get_saved_scans_postgres_payload(
         )
 
     query_payload = _run_psql_json_query(
-        sql=_build_saved_scans_sql(normalized_limit),
+        sql=_build_saved_scans_sql(normalized_limit, owner_user_id=owner_user_id),
         database_url=database_url,
         database_url_env=database_url_env,
         psql_bin=psql_bin,

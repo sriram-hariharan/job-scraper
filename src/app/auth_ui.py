@@ -13,6 +13,7 @@ from src.config.consts import (
 )
 
 from src.auth.password import hash_password, validate_new_password, verify_password
+from src.auth.runtime import current_user_from_request
 from src.auth.session import (
     auth_cookie_name,
     auth_cookie_samesite,
@@ -24,7 +25,6 @@ from src.auth.session import (
 from src.storage.auth.read_postgres import (
     get_auth_postgres_status_payload,
     get_auth_user_by_email_postgres_payload,
-    get_auth_user_for_session_token_hash_postgres_payload,
     revoke_auth_session_postgres_payload,
     touch_auth_user_last_login_postgres_payload,
 )
@@ -87,7 +87,7 @@ def _auth_user_counts() -> Dict[str, int]:
             limit=1,
             ensure_schema=True,
         )
-    except Exception:
+    except (Exception, SystemExit):
         return {
             "user_count": 0,
             "active_user_count": 0,
@@ -173,6 +173,8 @@ def _clear_session_cookie(response: Response) -> None:
     response.delete_cookie(
         key=auth_cookie_name(),
         path="/",
+        secure=auth_cookie_secure(),
+        samesite=auth_cookie_samesite(),
     )
 
 
@@ -405,34 +407,11 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 """.strip()
 
 
-def _current_user_from_request(request: Request) -> Dict[str, Any]:
-    session_token = _clean_text(request.cookies.get(auth_cookie_name()))
-    if not session_token:
-        return {}
-
-    try:
-        payload = get_auth_user_for_session_token_hash_postgres_payload(
-            session_token_hash=hash_session_token(session_token),
-            ensure_schema=True,
-        )
-    except Exception:
-        return {}
-
-    if not payload.get("ok"):
-        return {}
-
-    user = dict(payload.get("user", {}) or {})
-    if not user:
-        return {}
-
-    return user
-
-
 @router.get("/login")
 def login_page(request: Request, next: str = "/"):
     next_path = _safe_next_path(next)
 
-    if _current_user_from_request(request):
+    if current_user_from_request(request):
         return RedirectResponse(url=next_path, status_code=303)
 
     return HTMLResponse(
@@ -447,7 +426,7 @@ def login_page(request: Request, next: str = "/"):
 def register_page(request: Request, next: str = "/"):
     next_path = _safe_next_path(next)
 
-    if _current_user_from_request(request):
+    if current_user_from_request(request):
         return RedirectResponse(url=next_path, status_code=303)
 
     if not _can_register():
@@ -506,7 +485,7 @@ def register(request: Request, payload: AuthRegisterRequest = Body(...)):
             record=session_record,
             ensure_schema=True,
         )
-        touch_auth_user_last_login_postgres_payload(
+        touched = touch_auth_user_last_login_postgres_payload(
             user_id=str(user.get("user_id", "") or ""),
             ensure_schema=True,
         )
@@ -514,7 +493,7 @@ def register(request: Request, payload: AuthRegisterRequest = Body(...)):
         response = JSONResponse(
             {
                 "ok": True,
-                "user": _public_user_payload(user),
+                "user": _public_user_payload(dict(touched.get("user", {}) or user)),
                 "redirect_to": _safe_next_path(payload.next),
             }
         )
@@ -590,7 +569,7 @@ def logout(request: Request):
                 session_token_hash=hash_session_token(session_token),
                 ensure_schema=True,
             )
-        except Exception:
+        except (Exception, SystemExit):
             pass
 
     response = JSONResponse({"ok": True, "redirect_to": "/login"})
@@ -600,7 +579,7 @@ def logout(request: Request):
 
 @router.get("/auth/me")
 def auth_me(request: Request):
-    user = _current_user_from_request(request)
+    user = current_user_from_request(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated.")
 
@@ -620,7 +599,7 @@ def logout_redirect(request: Request):
                 session_token_hash=hash_session_token(session_token),
                 ensure_schema=True,
             )
-        except Exception:
+        except (Exception, SystemExit):
             pass
 
     response = RedirectResponse(url="/login", status_code=303)

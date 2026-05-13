@@ -343,6 +343,7 @@ window.addEventListener("DOMContentLoaded", () => {
   const menuShell = qs("profileMenuShell");
   const menuButton = qs("profileMenuButton");
   const dropdown = qs("profileDropdown");
+  const profileDropdownAvatar = qs("profileDropdownAvatar");
   const profileDropdownName = qs("profileDropdownName");
   const profileDropdownEmail = qs("profileDropdownEmail");
   const profileLogoutBtn = qs("profileLogoutBtn");
@@ -373,6 +374,10 @@ window.addEventListener("DOMContentLoaded", () => {
       menuButton.textContent = initial;
       menuButton.title = displayName;
       menuButton.setAttribute("aria-label", displayName);
+    }
+
+    if (profileDropdownAvatar) {
+      profileDropdownAvatar.textContent = initial;
     }
 
     if (profileDropdownName) {

@@ -51,6 +51,10 @@ def auth_session_ttl_seconds() -> int:
 
 
 def auth_cookie_secure() -> bool:
+    # Browsers reject SameSite=None cookies unless Secure is also set.
+    if auth_cookie_samesite() == "none":
+        return True
+
     raw = _clean_text(os.environ.get("JOB_STACK_AUTH_COOKIE_SECURE")).lower()
     if not raw:
         return bool(AUTH_SESSION_COOKIE_SECURE)

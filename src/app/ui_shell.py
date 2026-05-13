@@ -190,10 +190,20 @@ def render_top_shell(active_href: str) -> str:
     </button>
 
     <div class="profile-dropdown hidden" id="profileDropdown">
-      <div class="profile-dropdown-name" id="profileDropdownName">{escape(DEFAULT_USER_NAME)}</div>
-      <div class="subtext" id="profileDropdownEmail"></div>
+      <div class="profile-dropdown-identity">
+        <span class="profile-dropdown-avatar" id="profileDropdownAvatar" aria-hidden="true">
+          {escape(DEFAULT_USER_INITIAL)}
+        </span>
+        <span class="profile-dropdown-identity-copy">
+          <span class="profile-dropdown-name" id="profileDropdownName">{escape(DEFAULT_USER_NAME)}</span>
+          <span class="profile-dropdown-email subtext" id="profileDropdownEmail"></span>
+        </span>
+      </div>
       <div class="profile-dropdown-actions">
         <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
+            <img src="/static/media/preview_img.svg" alt="" />
+          </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Saved Scans</span>
             <span class="profile-dropdown-nav-subtitle">Resume scan history and match snapshots</span>
@@ -202,6 +212,9 @@ def render_top_shell(active_href: str) -> str:
         </a>
 
         <a class="profile-dropdown-nav-btn" href="/profile">
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
+            <img src="/static/media/edit-mode-img.svg" alt="" />
+          </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">My Profile</span>
             <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>

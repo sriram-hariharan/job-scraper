@@ -647,10 +647,14 @@ def planning_extract_resume_upload(request: PlanningExtractResumeUploadRequest):
      
 @app.get("/planning/resume-preview")
 def planning_resume_preview(
+    http_request: Request,
     resume_name: str = Query(..., min_length=1),
 ):
     try:
-        preview_path = services.planning_resume_preview_path(resume_name)
+        preview_path = services.planning_resume_preview_path(
+            resume_name,
+            owner_user_id=_auth_owner_user_id(http_request),
+        )
         return FileResponse(
             path=str(preview_path),
             media_type="application/pdf",

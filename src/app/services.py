@@ -6002,20 +6002,37 @@ def _validate_operator_decision_identity(row: Dict[str, Any]) -> None:
         )
 
 
-def _resolve_resume_preview_path(resume_name: str) -> Path:
+def _resolve_resume_preview_path(
+    resume_name: str,
+    *,
+    owner_user_id: str = "",
+) -> Path:
     safe_name = _sanitize_resume_filename(resume_name)
+    owner_dir_name = _safe_owner_dir_name(owner_user_id)
+    cache_key = f"{owner_dir_name}:{safe_name}" if owner_dir_name else safe_name
 
-    cached = _RESUME_PREVIEW_PATH_CACHE.get(safe_name, "")
+    cached = _RESUME_PREVIEW_PATH_CACHE.get(cache_key, "")
     if cached:
         cached_path = Path(cached)
         if cached_path.exists() and cached_path.is_file():
             return cached_path
 
-    profile_path = _get_resume_dir() / safe_name
-    if profile_path.exists() and profile_path.is_file():
-        resolved = profile_path.resolve()
-        _RESUME_PREVIEW_PATH_CACHE[safe_name] = str(resolved)
-        return resolved
+    candidate_paths: List[Path] = []
+    if owner_dir_name:
+        candidate_paths.append(_get_resume_dir(owner_user_id=owner_user_id) / safe_name)
+
+    # Legacy/global fallback keeps existing planning artifacts usable,
+    # but authenticated users do not get repo-wide rglob access.
+    candidate_paths.append(_get_resume_dir() / safe_name)
+
+    for profile_path in candidate_paths:
+        if profile_path.exists() and profile_path.is_file():
+            resolved = profile_path.resolve()
+            _RESUME_PREVIEW_PATH_CACHE[cache_key] = str(resolved)
+            return resolved
+
+    if owner_dir_name:
+        raise ValueError(f"Resume preview file not found: {safe_name}")
 
     ignore_dirs = {
         ".git",
@@ -6044,12 +6061,18 @@ def _resolve_resume_preview_path(resume_name: str) -> Path:
 
     matches.sort(key=lambda path: (len(path.parts), len(str(path))))
     chosen = matches[0]
-    _RESUME_PREVIEW_PATH_CACHE[safe_name] = str(chosen)
+    _RESUME_PREVIEW_PATH_CACHE[cache_key] = str(chosen)
     return chosen
 
-
-def planning_resume_preview_path(resume_name: str) -> Path:
-    return _resolve_resume_preview_path(resume_name)
+def planning_resume_preview_path(
+    resume_name: str,
+    *,
+    owner_user_id: str = "",
+) -> Path:
+    return _resolve_resume_preview_path(
+        resume_name,
+        owner_user_id=owner_user_id,
+    )
 
 def _slugify_text(value: Any, max_len: int = 80) -> str:
     text = _clean_text(value).lower()

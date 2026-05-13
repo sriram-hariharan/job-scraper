@@ -1864,3 +1864,15 @@ _SCAN_SEARCHABILITY_DIMENSIONS = {
     "tooling_alignment",
     "workflow_alignment",
 }
+
+# ============================================================
+# AUTH / SESSION SETTINGS
+# ============================================================
+
+AUTH_PASSWORD_MIN_LENGTH = 8
+AUTH_PASSWORD_MAX_BYTES = 72
+AUTH_BCRYPT_ROUNDS = 12
+
+AUTH_SESSION_TOKEN_BYTES = 32
+AUTH_SESSION_TTL_SECONDS = 60 * 60 * 24 * 7
+AUTH_SESSION_COOKIE_NAME = "jobstack_session"

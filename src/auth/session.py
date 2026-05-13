@@ -8,6 +8,8 @@ from typing import Any, Dict, Tuple
 
 from src.config.consts import (
     AUTH_SESSION_COOKIE_NAME,
+    AUTH_SESSION_COOKIE_SAMESITE,
+    AUTH_SESSION_COOKIE_SECURE,
     AUTH_SESSION_TOKEN_BYTES,
     AUTH_SESSION_TTL_SECONDS,
 )
@@ -46,6 +48,23 @@ def auth_session_ttl_seconds() -> int:
         return int(AUTH_SESSION_TTL_SECONDS)
 
     return parsed
+
+
+def auth_cookie_secure() -> bool:
+    raw = _clean_text(os.environ.get("JOB_STACK_AUTH_COOKIE_SECURE")).lower()
+    if not raw:
+        return bool(AUTH_SESSION_COOKIE_SECURE)
+
+    return raw in {"1", "true", "yes", "y", "on"}
+
+
+def auth_cookie_samesite() -> str:
+    raw = _clean_text(os.environ.get("JOB_STACK_AUTH_COOKIE_SAMESITE")).lower()
+    if raw in {"lax", "strict", "none"}:
+        return raw
+
+    default_value = _clean_text(AUTH_SESSION_COOKIE_SAMESITE).lower()
+    return default_value if default_value in {"lax", "strict", "none"} else "lax"
 
 
 def generate_session_token() -> str:

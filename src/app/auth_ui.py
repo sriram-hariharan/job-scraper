@@ -10,6 +10,8 @@ from pydantic import BaseModel
 from src.auth.password import hash_password, validate_new_password, verify_password
 from src.auth.session import (
     auth_cookie_name,
+    auth_cookie_samesite,
+    auth_cookie_secure,
     auth_session_ttl_seconds,
     hash_session_token,
     new_auth_session_record,
@@ -87,8 +89,8 @@ def _set_session_cookie(response: Response, session_token: str) -> None:
         value=session_token,
         max_age=auth_session_ttl_seconds(),
         httponly=True,
-        secure=False,
-        samesite="lax",
+        secure=auth_cookie_secure(),
+        samesite=auth_cookie_samesite(),
         path="/",
     )
 

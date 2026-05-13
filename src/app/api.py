@@ -1,9 +1,10 @@
 from pathlib import Path
 import base64
 import binascii
-from fastapi import Body, FastAPI, HTTPException, Query
+from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse
 from src.app import services
+from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
 from src.app.ui import router as ui_router
@@ -130,6 +131,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.mount("/static", StaticFiles(directory="src/app/static"), name="static")
+
+
+@app.middleware("http")
+async def require_dashboard_auth(request: Request, call_next):
+    guard_response = auth_guard_response(request)
+    if guard_response is not None:
+        return guard_response
+
+    return await call_next(request)
+
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)

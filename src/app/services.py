@@ -3100,6 +3100,7 @@ def run_live_pipeline_payload(
 
     canonical_log_path = _derive_pipeline_log_path(output_dir)
     canonical_status_path = _derive_pipeline_status_path(output_dir)
+    pipeline_job_corpus_path = output_dir / "current_run_job_corpus.jsonl"
 
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
@@ -3173,6 +3174,7 @@ def run_live_pipeline_payload(
             "requested_output_dir": str(requested_output_dir),
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
+            "job_corpus_path": str(pipeline_job_corpus_path),
         },
     }
     canonical_status_path.write_text(
@@ -3190,6 +3192,7 @@ def run_live_pipeline_payload(
         child_env["JOB_STACK_OWNER_USER_ID"] = owner_for_pipeline_gate
         child_env["JOB_STACK_USER_PIPELINE_RUN_ID"] = run_id
         child_env["JOB_STACK_SEEN_JOBS_BACKEND"] = "postgres"
+        child_env["JOB_STACK_JOB_CORPUS_PATH"] = str(pipeline_job_corpus_path)
 
     try:
         process = subprocess.Popen(

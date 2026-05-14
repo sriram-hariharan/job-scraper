@@ -20,6 +20,13 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+DEFAULT_JOB_CORPUS_PATH = "data/rag/job_corpus.jsonl"
+
+
+def _job_corpus_path_from_env(default: str = DEFAULT_JOB_CORPUS_PATH) -> str:
+    return str(os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "") or default).strip()
+
+
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="Run the main scraping pipeline and optionally trigger downstream application planning."
@@ -108,12 +115,14 @@ def _write_current_run_planning_corpus(jobs, output_dir):
     return str(path)
 
 
-def _run_application_planning(args, job_corpus_path="data/rag/job_corpus.jsonl"):
+def _run_application_planning(args, job_corpus_path=None):
+    resolved_job_corpus_path = str(job_corpus_path or _job_corpus_path_from_env()).strip()
+
     cmd = [
         sys.executable,
         "run_application_planning.py",
         "--job-corpus",
-        job_corpus_path,
+        resolved_job_corpus_path,
         "--job-limit",
         str(args.application_planning_job_limit),
         "--job-packet-limit",
@@ -479,7 +488,7 @@ async def main_async(args):
         logger.info("APPLICATION PLANNING")
         logger.info("=============================")
 
-        corpus_path = "data/rag/job_corpus.jsonl"
+        corpus_path = _job_corpus_path_from_env()
         planning_corpus_path = corpus_path
         if jobs and not args.application_planning_only:
             planning_corpus_path = _write_current_run_planning_corpus(
@@ -499,10 +508,12 @@ async def main_async(args):
             )
 
     if not jobs and application_planning_ran and args.application_planning_only:
-        jobs = _load_jobs_from_corpus("data/rag/job_corpus.jsonl")
+        planning_corpus_path = _job_corpus_path_from_env()
+        jobs = _load_jobs_from_corpus(planning_corpus_path)
         logger.info(
-            "Loaded %s jobs from data/rag/job_corpus.jsonl for planning-only sheet refresh",
+            "Loaded %s jobs from %s for planning-only sheet refresh",
             len(jobs),
+            planning_corpus_path,
         )
 
     if jobs and application_planning_ran:

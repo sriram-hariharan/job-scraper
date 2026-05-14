@@ -1,6 +1,7 @@
 from collections import Counter
 from typing import Any, Dict, List
 import asyncio
+import os
 import time
 from uuid import uuid4
 from pathlib import Path
@@ -337,7 +338,10 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
 
-    corpus_path = "data/rag/job_corpus.jsonl"
+    corpus_path = str(
+        os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
+        or "data/rag/job_corpus.jsonl"
+    ).strip()
     corpus_file = Path(corpus_path)
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")

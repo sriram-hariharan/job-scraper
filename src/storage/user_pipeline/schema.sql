@@ -23,6 +23,29 @@ ON user_pipeline_runs (status, started_at DESC);
 CREATE INDEX IF NOT EXISTS idx_user_pipeline_runs_owner_status_started
 ON user_pipeline_runs (owner_user_id, status, started_at DESC);
 
+CREATE TABLE IF NOT EXISTS user_pipeline_active_runs (
+    owner_user_id TEXT PRIMARY KEY,
+    run_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'running',
+    reserved_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    process_pid TEXT NOT NULL DEFAULT '',
+    worker_id TEXT NOT NULL DEFAULT '',
+    output_dir TEXT NOT NULL DEFAULT '',
+    status_path TEXT NOT NULL DEFAULT '',
+    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_user_pipeline_active_runs_run_id
+ON user_pipeline_active_runs (run_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_pipeline_active_runs_status_expires
+ON user_pipeline_active_runs (status, expires_at);
+
+CREATE INDEX IF NOT EXISTS idx_user_pipeline_active_runs_updated
+ON user_pipeline_active_runs (updated_at DESC);
+
 CREATE TABLE IF NOT EXISTS user_seen_jobs (
     owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,
     seen_key TEXT NOT NULL,

@@ -67,6 +67,22 @@ def user_pipeline_table_specs() -> Dict[str, Any]:
                 {"name": "metadata_json", "type": "jsonb", "nullable": False},
             ],
         },
+        "user_pipeline_active_runs": {
+            "primary_key": ["owner_user_id"],
+            "required_columns": [
+                "owner_user_id",
+                "run_id",
+                "status",
+                "reserved_at",
+                "updated_at",
+                "expires_at",
+                "process_pid",
+                "worker_id",
+                "output_dir",
+                "status_path",
+                "metadata_json",
+            ],
+        },
         "user_pipeline_artifacts": {
             "description": "Owner-scoped generated pipeline artifacts stored durably in Postgres.",
             "primary_key": ["artifact_id"],
@@ -114,6 +130,29 @@ def render_user_pipeline_schema_sql() -> str:
             "",
             "CREATE INDEX IF NOT EXISTS idx_user_pipeline_runs_owner_status_started",
             "ON user_pipeline_runs (owner_user_id, status, started_at DESC);",
+            "",
+            "CREATE TABLE IF NOT EXISTS user_pipeline_active_runs (",
+            "    owner_user_id TEXT PRIMARY KEY,",
+            "    run_id TEXT NOT NULL,",
+            "    status TEXT NOT NULL DEFAULT 'running',",
+            "    reserved_at TIMESTAMPTZ NOT NULL,",
+            "    updated_at TIMESTAMPTZ NOT NULL,",
+            "    expires_at TIMESTAMPTZ NOT NULL,",
+            "    process_pid TEXT NOT NULL DEFAULT '',",
+            "    worker_id TEXT NOT NULL DEFAULT '',",
+            "    output_dir TEXT NOT NULL DEFAULT '',",
+            "    status_path TEXT NOT NULL DEFAULT '',",
+            "    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb",
+            ");",
+            "",
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_user_pipeline_active_runs_run_id",
+            "ON user_pipeline_active_runs (run_id);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_user_pipeline_active_runs_status_expires",
+            "ON user_pipeline_active_runs (status, expires_at);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_user_pipeline_active_runs_updated",
+            "ON user_pipeline_active_runs (updated_at DESC);",
             "",
             "CREATE TABLE IF NOT EXISTS user_seen_jobs (",
             "    owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,",
@@ -1026,4 +1065,288 @@ SELECT json_build_object(
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
         "table_name": "user_pipeline_artifacts",
+    }
+
+
+def _safe_positive_int(value: Any, *, default: int, minimum: int = 1, maximum: int = 1000000) -> int:
+    try:
+        parsed = int(value)
+    except Exception:
+        parsed = int(default)
+    return max(minimum, min(parsed, maximum))
+
+
+def reserve_user_pipeline_active_run_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    max_active_runs: int = 2,
+    ttl_seconds: int = 21600,
+    process_pid: Any = "",
+    worker_id: str = "",
+    output_dir: str = "",
+    status_path: str = "",
+    metadata_json: Any = None,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _require_run_id(run_id)
+    safe_max = _safe_positive_int(max_active_runs, default=2, minimum=1, maximum=1000)
+    safe_ttl = _safe_positive_int(ttl_seconds, default=21600, minimum=60, maximum=604800)
+    safe_pid = _clean_text(process_pid)
+    safe_worker_id = _clean_text(worker_id)
+    safe_output_dir = _clean_text(output_dir)
+    safe_status_path = _clean_text(status_path)
+    safe_metadata = metadata_json if isinstance(metadata_json, dict) else {}
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH lock AS (
+    SELECT pg_advisory_xact_lock(927461337) AS locked
+),
+cleanup AS (
+    DELETE FROM user_pipeline_active_runs
+    WHERE (SELECT COUNT(*) FROM lock) = 1
+      AND (
+        expires_at < now()
+        OR status IN ('succeeded', 'failed', 'cancelled')
+      )
+    RETURNING owner_user_id
+),
+existing_owner AS (
+    SELECT owner_user_id, run_id, status, expires_at
+    FROM user_pipeline_active_runs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND status = 'running'
+      AND expires_at >= now()
+    LIMIT 1
+),
+active_count AS (
+    SELECT COUNT(*)::int AS count
+    FROM user_pipeline_active_runs
+    WHERE status = 'running'
+      AND expires_at >= now()
+),
+inserted AS (
+    INSERT INTO user_pipeline_active_runs (
+        owner_user_id,
+        run_id,
+        status,
+        reserved_at,
+        updated_at,
+        expires_at,
+        process_pid,
+        worker_id,
+        output_dir,
+        status_path,
+        metadata_json
+    )
+    SELECT
+        {_sql_quote_text(owner)},
+        {_sql_quote_text(safe_run_id)},
+        'running',
+        now(),
+        now(),
+        now() + ({safe_ttl} || ' seconds')::interval,
+        {_sql_quote_text(safe_pid)},
+        {_sql_quote_text(safe_worker_id)},
+        {_sql_quote_text(safe_output_dir)},
+        {_sql_quote_text(safe_status_path)},
+        {_sql_jsonb(safe_metadata)}
+    WHERE NOT EXISTS (SELECT 1 FROM existing_owner)
+      AND (SELECT count FROM active_count) < {safe_max}
+    ON CONFLICT (owner_user_id) DO NOTHING
+    RETURNING
+        owner_user_id,
+        run_id,
+        status,
+        reserved_at,
+        updated_at,
+        expires_at,
+        process_pid,
+        worker_id,
+        output_dir,
+        status_path,
+        metadata_json
+)
+SELECT json_build_object(
+    'reserved', EXISTS (SELECT 1 FROM inserted),
+    'reason',
+        CASE
+            WHEN EXISTS (SELECT 1 FROM inserted) THEN ''
+            WHEN EXISTS (SELECT 1 FROM existing_owner) THEN 'owner_already_running'
+            WHEN (SELECT count FROM active_count) >= {safe_max} THEN 'capacity_full'
+            ELSE 'reservation_conflict'
+        END,
+    'active_count_before', COALESCE((SELECT count FROM active_count), 0),
+    'active_count_after',
+        COALESCE((SELECT count FROM active_count), 0)
+        + CASE WHEN EXISTS (SELECT 1 FROM inserted) THEN 1 ELSE 0 END,
+    'max_active_runs', {safe_max},
+    'ttl_seconds', {safe_ttl},
+    'active_run', COALESCE((SELECT row_to_json(inserted) FROM inserted LIMIT 1), '{{}}'::json),
+    'existing_owner_run', COALESCE((SELECT row_to_json(existing_owner) FROM existing_owner LIMIT 1), '{{}}'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(payload.get("data", {}) or {})
+    return {
+        "ok": bool(data.get("reserved", False)),
+        "reserved": bool(data.get("reserved", False)),
+        "reason": _clean_text(data.get("reason")),
+        "active_count_before": int(data.get("active_count_before") or 0),
+        "active_count_after": int(data.get("active_count_after") or 0),
+        "max_active_runs": int(data.get("max_active_runs") or safe_max),
+        "ttl_seconds": int(data.get("ttl_seconds") or safe_ttl),
+        "active_run": dict(data.get("active_run", {}) or {}),
+        "existing_owner_run": dict(data.get("existing_owner_run", {}) or {}),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_pipeline_active_runs",
+    }
+
+
+def get_user_pipeline_active_run_postgres_payload(
+    *,
+    owner_user_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH lock AS (
+    SELECT pg_advisory_xact_lock(927461337) AS locked
+),
+cleanup AS (
+    DELETE FROM user_pipeline_active_runs
+    WHERE (SELECT COUNT(*) FROM lock) = 1
+      AND (
+        expires_at < now()
+        OR status IN ('succeeded', 'failed', 'cancelled')
+      )
+    RETURNING owner_user_id
+),
+active_run AS (
+    SELECT
+        owner_user_id,
+        run_id,
+        status,
+        reserved_at,
+        updated_at,
+        expires_at,
+        process_pid,
+        worker_id,
+        output_dir,
+        status_path,
+        metadata_json
+    FROM user_pipeline_active_runs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND status = 'running'
+      AND expires_at >= now()
+    ORDER BY updated_at DESC
+    LIMIT 1
+)
+SELECT json_build_object(
+    'found', EXISTS (SELECT 1 FROM active_run),
+    'active_run', COALESCE((SELECT row_to_json(active_run) FROM active_run LIMIT 1), '{{}}'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "found": bool(data.get("found", False)),
+        "active_run": dict(data.get("active_run", {}) or {}),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_pipeline_active_runs",
+    }
+
+
+def release_user_pipeline_active_run_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str = "",
+    terminal_status: str = "",
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    safe_terminal_status = _clean_text(terminal_status) or "released"
+
+    run_filter = ""
+    if safe_run_id:
+        run_filter = f"AND run_id = {_sql_quote_text(safe_run_id)}"
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH deleted AS (
+    DELETE FROM user_pipeline_active_runs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      {run_filter}
+    RETURNING
+        owner_user_id,
+        run_id,
+        status,
+        reserved_at,
+        updated_at,
+        expires_at,
+        process_pid,
+        worker_id,
+        output_dir,
+        status_path,
+        metadata_json
+)
+SELECT json_build_object(
+    'released', EXISTS (SELECT 1 FROM deleted),
+    'terminal_status', {_sql_quote_text(safe_terminal_status)},
+    'deleted_count', (SELECT COUNT(*) FROM deleted),
+    'released_run', COALESCE((SELECT row_to_json(deleted) FROM deleted LIMIT 1), '{{}}'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "released": bool(data.get("released", False)),
+        "deleted_count": int(data.get("deleted_count") or 0),
+        "terminal_status": _clean_text(data.get("terminal_status")),
+        "released_run": dict(data.get("released_run", {}) or {}),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_pipeline_active_runs",
     }

@@ -94,6 +94,9 @@ from src.storage.user_pipeline.read_postgres import (
     get_user_pipeline_runs_postgres_payload,
 )
 from src.storage.user_pipeline.store import (
+    get_user_pipeline_active_run_postgres_payload,
+    release_user_pipeline_active_run_postgres_payload,
+    reserve_user_pipeline_active_run_postgres_payload,
     upsert_user_pipeline_artifact_postgres_payload,
     upsert_user_pipeline_run_postgres_payload,
 )
@@ -1609,6 +1612,68 @@ def _max_concurrent_user_pipeline_runs() -> int:
         return 2
 
 
+def _active_pipeline_reservation_ttl_seconds() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_ACTIVE_PIPELINE_TTL_SECONDS")) or "21600"
+    try:
+        return max(60, int(raw))
+    except ValueError:
+        return 21600
+
+
+def _active_pipeline_worker_id() -> str:
+    return f"pid:{os.getpid()}"
+
+
+def _release_user_pipeline_active_run(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    terminal_status: str = "",
+) -> None:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+
+    if not owner:
+        return
+
+    try:
+        release_user_pipeline_active_run_postgres_payload(
+            owner_user_id=owner,
+            run_id=safe_run_id,
+            terminal_status=terminal_status,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to release user pipeline active run owner_user_id=%s run_id=%s: %s",
+            owner,
+            safe_run_id,
+            exc,
+        )
+
+
+def _clear_owner_active_pipeline_state(owner_user_id: str, run_id: str = "") -> None:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+
+    if not owner:
+        return
+
+    with _PIPELINE_ACTIVE_RUNS_LOCK:
+        state = _PIPELINE_ACTIVE_RUNS.get(owner)
+        if not isinstance(state, dict):
+            return
+
+        if safe_run_id and _clean_text(state.get("run_id")) != safe_run_id:
+            return
+
+        _PIPELINE_ACTIVE_RUNS.pop(owner, None)
+
+
 def _active_user_pipeline_run_count() -> int:
     count = 0
 
@@ -2257,6 +2322,78 @@ def _ingest_pipeline_run_artifacts_to_postgres(
     _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS.add(ingestion_key)
     return result
 
+
+def _owner_db_active_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return {}
+
+    try:
+        active_payload = get_user_pipeline_active_run_postgres_payload(
+            owner_user_id=owner,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Failed to read Postgres active pipeline run for owner_user_id=%s: %s",
+            owner,
+            exc,
+        )
+        return {}
+
+    active_run = dict(active_payload.get("active_run", {}) or {})
+    if not active_run:
+        return {}
+
+    state = _new_pipeline_run_state()
+    state["status"] = _clean_text(active_run.get("status")) or "running"
+    state["started_at"] = _clean_text(active_run.get("reserved_at"))
+    state["finished_at"] = ""
+    state["return_code"] = None
+    state["command"] = []
+    state["output_dir"] = _clean_text(active_run.get("output_dir"))
+    state["log_path"] = ""
+    state["status_path"] = _clean_text(active_run.get("status_path"))
+    state["run_id"] = _clean_text(active_run.get("run_id"))
+    state["child_pid"] = _clean_text(active_run.get("process_pid")) or None
+    state["error"] = ""
+    state["owner_user_id"] = owner
+
+    payload = pipeline_status_payload(owner_user_id=owner, state=state)
+    pipeline = dict(payload.get("pipeline", {}) or {})
+
+    _persist_user_pipeline_status_snapshot(
+        owner_user_id=owner,
+        status_payload=pipeline,
+    )
+
+    if _clean_text(pipeline.get("status")) in _pipeline_terminal_statuses():
+        artifact_ingestion = _ingest_pipeline_run_artifacts_to_postgres(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            output_dir=_clean_text(pipeline.get("output_dir")),
+            status_payload=pipeline,
+        )
+        pipeline["artifact_ingestion"] = artifact_ingestion
+        payload["pipeline"] = pipeline
+
+        _persist_user_pipeline_status_snapshot(
+            owner_user_id=owner,
+            status_payload=pipeline,
+        )
+
+        _release_user_pipeline_active_run(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            terminal_status=_clean_text(pipeline.get("status")),
+        )
+
+    return payload
+
 def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
@@ -2264,6 +2401,9 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
 
     state = _owner_active_pipeline_state(owner)
     if not state:
+        db_active_payload = _owner_db_active_pipeline_status_payload(owner_user_id=owner)
+        if db_active_payload:
+            return db_active_payload
         return _latest_owner_pipeline_status_payload(owner_user_id=owner)
 
     payload = pipeline_status_payload(owner_user_id=owner, state=state)
@@ -2287,6 +2427,16 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
         _persist_user_pipeline_status_snapshot(
             owner_user_id=owner,
             status_payload=pipeline,
+        )
+
+        _release_user_pipeline_active_run(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            terminal_status=_clean_text(pipeline.get("status")),
+        )
+        _clear_owner_active_pipeline_state(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
         )
 
     return payload
@@ -3117,12 +3267,6 @@ def run_live_pipeline_payload(
         if owner_state and _pipeline_status_snapshot(state=owner_state).get("is_running"):
             raise ValueError("A live pipeline run is already in progress for this user.")
 
-        active_count = _active_user_pipeline_run_count()
-        max_count = _max_concurrent_user_pipeline_runs()
-        if active_count >= max_count:
-            raise ValueError(
-                f"Live Pipeline capacity is currently full ({active_count}/{max_count}). Try again after a run finishes."
-            )
     else:
         snapshot = _pipeline_status_snapshot()
         if snapshot.get("is_running"):
@@ -3225,6 +3369,52 @@ def run_live_pipeline_payload(
 
     log_handle = canonical_log_path.open("w", encoding="utf-8", buffering=1)
 
+    active_run_reserved = False
+    if owner_for_pipeline_gate:
+        reservation_payload = reserve_user_pipeline_active_run_postgres_payload(
+            owner_user_id=owner_for_pipeline_gate,
+            run_id=run_id,
+            max_active_runs=_max_concurrent_user_pipeline_runs(),
+            ttl_seconds=_active_pipeline_reservation_ttl_seconds(),
+            process_pid="",
+            worker_id=_active_pipeline_worker_id(),
+            output_dir=str(output_dir),
+            status_path=str(canonical_status_path),
+            metadata_json={
+                "storage_mode": "postgres_active_run_admission",
+                "requested_output_dir": str(requested_output_dir),
+            },
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+
+        if not bool(reservation_payload.get("reserved", False)):
+            reason = _clean_text(reservation_payload.get("reason"))
+            active_count = reservation_payload.get("active_count_before")
+            max_count = reservation_payload.get("max_active_runs")
+
+            if reason == "owner_already_running":
+                raise ValueError("A live pipeline run is already in progress for this user.")
+
+            if reason == "capacity_full":
+                raise ValueError(
+                    f"Live Pipeline capacity is currently full ({active_count}/{max_count}). Try again after a run finishes."
+                )
+
+            raise ValueError("Unable to reserve Live Pipeline capacity. Try again.")
+
+        active_run_reserved = True
+        runtime_payload["config"]["active_run_reservation"] = {
+            "reserved": True,
+            "active_count_after": reservation_payload.get("active_count_after"),
+            "max_active_runs": reservation_payload.get("max_active_runs"),
+            "ttl_seconds": reservation_payload.get("ttl_seconds"),
+        }
+
+
     child_env = dict(os.environ)
     child_env["JOB_APP_PIPELINE_STATUS_PATH"] = str(canonical_status_path)
     child_env["JOB_APP_PIPELINE_RUN_ID"] = run_id
@@ -3245,6 +3435,13 @@ def run_live_pipeline_payload(
         )
     except Exception as exc:
         log_handle.close()
+        if owner_for_pipeline_gate and active_run_reserved:
+            _release_user_pipeline_active_run(
+                owner_user_id=owner_for_pipeline_gate,
+                run_id=run_id,
+                terminal_status="failed",
+            )
+
         runtime_payload["status"] = "failed"
         runtime_payload["finished_at"] = _utc_now()
         runtime_payload["return_code"] = 1

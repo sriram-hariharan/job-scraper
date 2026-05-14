@@ -89,6 +89,11 @@ from src.storage.profile_resumes.store import (
     get_profile_resumes_postgres_payload,
     upsert_profile_resume_postgres_payload,
 )
+from src.storage.auth.read_postgres import (
+    delete_non_admin_auth_user_postgres_payload,
+    get_non_admin_auth_users_postgres_payload,
+    update_non_admin_auth_user_access_postgres_payload,
+)
 from src.storage.user_pipeline.read_postgres import (
     get_latest_user_pipeline_run_postgres_payload,
     get_user_pipeline_runs_postgres_payload,
@@ -347,6 +352,79 @@ def profile_resumes_payload(
         "storage": "postgres",
         "count": len(resumes),
         "resumes": resumes,
+    }
+
+
+def _public_admin_user_row(user: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "user_id": _clean_text(user.get("user_id")),
+        "email": _clean_text(user.get("email")),
+        "normalized_email": _clean_text(user.get("normalized_email")),
+        "display_name": _clean_text(user.get("display_name")),
+        "access_level": _clean_text(user.get("access_level")) or "user",
+        "is_active": bool(user.get("is_active", False)),
+        "is_admin": bool(user.get("is_admin", False)),
+        "created_at": _clean_text(user.get("created_at")),
+        "updated_at": _clean_text(user.get("updated_at")),
+        "last_login_at": _clean_text(user.get("last_login_at")),
+    }
+
+
+def admin_profile_users_payload(limit: int = 100) -> Dict[str, Any]:
+    payload = get_non_admin_auth_users_postgres_payload(
+        limit=limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    users = [_public_admin_user_row(user) for user in list(payload.get("users", []) or [])]
+    return {
+        "ok": True,
+        "count": len(users),
+        "total_count": int(payload.get("total_count", len(users)) or len(users)),
+        "users": users,
+    }
+
+
+def admin_profile_update_user_access_payload(user_id: str, is_active: bool) -> Dict[str, Any]:
+    payload = update_non_admin_auth_user_access_postgres_payload(
+        user_id=_clean_text(user_id),
+        is_active=bool(is_active),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    if not bool(payload.get("updated", False)):
+        raise ValueError("User not found or admin users cannot be modified here.")
+
+    return {
+        "ok": True,
+        "updated": True,
+        "user": _public_admin_user_row(dict(payload.get("user", {}) or {})),
+        "revoked_session_count": int(payload.get("revoked_session_count", 0) or 0),
+    }
+
+
+def admin_profile_delete_user_payload(user_id: str) -> Dict[str, Any]:
+    payload = delete_non_admin_auth_user_postgres_payload(
+        user_id=_clean_text(user_id),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    if not bool(payload.get("deleted", False)):
+        raise ValueError("User not found or admin users cannot be deleted here.")
+
+    return {
+        "ok": True,
+        "deleted": True,
+        "user": _public_admin_user_row(dict(payload.get("user", {}) or {})),
     }
 
 

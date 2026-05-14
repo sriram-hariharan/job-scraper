@@ -154,6 +154,16 @@ def _auth_owner_user_id(request: Request) -> str:
 def _auth_owner_email(request: Request) -> str:
     return str(_auth_user_from_request(request).get("email", "") or "").strip()
 
+
+def _require_admin_user(request: Request) -> dict:
+    user = _auth_user_from_request(request)
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    if not bool(user.get("is_admin", False)) and access_level != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+    return user
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -988,6 +998,40 @@ def profile_resumes(http_request: Request):
         return services.profile_resumes_payload(
             owner_user_id=_auth_owner_user_id(http_request),
         )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/profile/admin/users")
+def profile_admin_users(http_request: Request, limit: int = 100):
+    _require_admin_user(http_request)
+    try:
+        return services.admin_profile_users_payload(limit=limit)
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/profile/admin/users/{user_id}/access")
+def profile_admin_update_user_access(
+    user_id: str,
+    http_request: Request,
+    payload: dict = Body(...),
+):
+    _require_admin_user(http_request)
+    try:
+        return services.admin_profile_update_user_access_payload(
+            user_id=user_id,
+            is_active=bool(payload.get("is_active", False)),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/profile/admin/users/{user_id}")
+def profile_admin_delete_user(user_id: str, http_request: Request):
+    _require_admin_user(http_request)
+    try:
+        return services.admin_profile_delete_user_payload(user_id=user_id)
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

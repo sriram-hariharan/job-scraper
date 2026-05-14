@@ -1,6 +1,11 @@
 const profileState = {
   pendingDeleteResumeName: null,
   pendingDeleteScanId: null,
+  currentUser: null,
+  adminUsers: [],
+  pendingAccessUserId: null,
+  pendingAccessValue: null,
+  pendingDeleteUserId: null,
 };
 
 function qs(id) {
@@ -69,6 +74,217 @@ function clearStatus() {
   const banner = qs("resumeStatusBanner");
   banner.textContent = "";
   banner.className = "profile-inline-status hidden";
+}
+
+function setAdminUsersStatus(message, tone = "info") {
+  const banner = qs("adminUsersStatusBanner");
+  if (!banner) return;
+  banner.textContent = message || "";
+  banner.className = `profile-inline-status ${tone}`;
+  if (!message) {
+    banner.classList.add("hidden");
+  }
+}
+
+function isCurrentUserAdmin(user) {
+  const accessLevel = String(user?.access_level || "").trim().toLowerCase();
+  return Boolean(user?.is_admin) || accessLevel === "admin";
+}
+
+async function loadCurrentUser() {
+  const data = await fetchJson("/auth/me");
+  const user = data.user || null;
+  profileState.currentUser = user;
+  return user;
+}
+
+function adminUserDisplayName(user) {
+  return String(user?.display_name || user?.email || "User").trim();
+}
+
+function getAdminUserById(userId) {
+  return profileState.adminUsers.find((user) => String(user.user_id || "") === String(userId || ""));
+}
+
+function renderAccessSwitch(user) {
+  const userId = escapeHtml(user.user_id || "");
+  const active = Boolean(user.is_active);
+  return `
+    <button
+      type="button"
+      class="admin-user-access-switch ${active ? "is-authorized" : "is-revoked"}"
+      role="switch"
+      aria-checked="${active ? "true" : "false"}"
+      data-admin-user-access="${userId}"
+      data-next-active="${active ? "false" : "true"}"
+    >
+      <span class="admin-user-access-knob"></span>
+      <span class="admin-user-access-label">${active ? "Authorized" : "Revoked"}</span>
+    </button>
+  `;
+}
+
+function renderAdminUsers(users) {
+  const section = qs("profileAdminUsersSection");
+  const tabs = qs("profileAdminTabs");
+  const tbody = qs("adminUsersTableBody");
+  const meta = qs("adminUsersMeta");
+  if (!section || !tbody || !meta) return;
+
+  const items = Array.isArray(users) ? users : [];
+  profileState.adminUsers = items;
+  if (tabs) tabs.classList.remove("hidden");
+  meta.textContent = `${items.length} non-admin user${items.length === 1 ? "" : "s"} shown`;
+
+  if (!items.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="admin-users-empty-cell">No non-admin users found.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = items.map((user) => {
+    const active = Boolean(user.is_active);
+    return `
+      <tr data-admin-user-id="${escapeHtml(user.user_id || "")}">
+        <td>
+          <div class="admin-user-name">${escapeHtml(adminUserDisplayName(user))}</div>
+          <div class="admin-user-id">${escapeHtml(user.user_id || "")}</div>
+        </td>
+        <td>${escapeHtml(user.email || "-")}</td>
+        <td>${escapeHtml(user.access_level || "user")}</td>
+        <td>
+          <span class="admin-user-status ${active ? "is-active" : "is-revoked"}">
+            ${active ? "Active" : "Revoked"}
+          </span>
+        </td>
+        <td>${escapeHtml(formatDateTime(user.created_at || ""))}</td>
+        <td>${escapeHtml(formatDateTime(user.last_login_at || "")) || "-"}</td>
+        <td>${renderAccessSwitch(user)}</td>
+        <td>
+          <button
+            type="button"
+            class="admin-user-delete-btn"
+            data-admin-user-delete="${escapeHtml(user.user_id || "")}"
+          >
+            Delete
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadAdminUsers() {
+  const section = qs("profileAdminUsersSection");
+  if (!section) return;
+
+  let user = profileState.currentUser;
+  if (!user) {
+    try {
+      user = await loadCurrentUser();
+    } catch {
+      qs("profileAdminTabs")?.remove();
+      section.remove();
+      return;
+    }
+  }
+  if (!isCurrentUserAdmin(user)) {
+    qs("profileAdminTabs")?.remove();
+    section.remove();
+    return;
+  }
+
+  const meta = qs("adminUsersMeta");
+  const tbody = qs("adminUsersTableBody");
+  if (meta) meta.textContent = "Loading users...";
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="8" class="admin-users-empty-cell">Loading users...</td></tr>`;
+  }
+  setAdminUsersStatus("");
+
+  const data = await fetchJson("/profile/admin/users?limit=100");
+  renderAdminUsers(data.users || []);
+}
+
+function openAdminUserAccessModal(userId, nextActive) {
+  const user = getAdminUserById(userId);
+  if (!user) return;
+
+  profileState.pendingAccessUserId = String(userId || "");
+  profileState.pendingAccessValue = Boolean(nextActive);
+
+  const action = nextActive ? "authorize" : "revoke";
+  qs("adminUserAccessTitle").textContent = `${nextActive ? "Authorize" : "Revoke"} user access`;
+  qs("adminUserAccessSubtitle").textContent = "Confirm before changing this account.";
+  qs("adminUserAccessMessage").innerHTML = `
+    ${action === "revoke"
+      ? "Revoking access will disable this user and revoke their active sessions."
+      : "Authorizing access will reactivate this user account."}
+    <br />
+    <strong>${escapeHtml(adminUserDisplayName(user))}</strong>
+    <span>${escapeHtml(user.email || "")}</span>
+  `;
+  qs("adminUserAccessConfirmBtn").textContent = nextActive ? "Authorize" : "Revoke";
+  qs("adminUserAccessConfirmBtn").classList.toggle("admin-user-revoke-confirm-btn", !nextActive);
+  qs("adminUserAccessConfirmBtn").classList.toggle("admin-user-authorize-confirm-btn", nextActive);
+  qs("adminUserAccessModal").classList.remove("hidden");
+}
+
+function closeAdminUserAccessModal() {
+  profileState.pendingAccessUserId = null;
+  profileState.pendingAccessValue = null;
+  qs("adminUserAccessModal")?.classList.add("hidden");
+}
+
+function openAdminUserDeleteModal(userId) {
+  const user = getAdminUserById(userId);
+  if (!user) return;
+
+  profileState.pendingDeleteUserId = String(userId || "");
+  qs("adminUserDeleteMessage").innerHTML = `
+    You are about to permanently delete
+    <strong>${escapeHtml(adminUserDisplayName(user))}</strong>
+    <span>${escapeHtml(user.email || "")}</span>
+    from the backend users table.
+  `;
+  qs("adminUserDeleteModal").classList.remove("hidden");
+}
+
+function closeAdminUserDeleteModal() {
+  profileState.pendingDeleteUserId = null;
+  qs("adminUserDeleteModal")?.classList.add("hidden");
+}
+
+async function confirmAdminUserAccessChange() {
+  const userId = profileState.pendingAccessUserId;
+  const isActive = Boolean(profileState.pendingAccessValue);
+  if (!userId) return;
+
+  await fetchJson(`/profile/admin/users/${encodeURIComponent(userId)}/access`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  closeAdminUserAccessModal();
+  await loadAdminUsers();
+  setAdminUsersStatus(`User access ${isActive ? "authorized" : "revoked"}.`, "success");
+}
+
+async function confirmAdminUserDelete() {
+  const userId = profileState.pendingDeleteUserId;
+  if (!userId) return;
+
+  await fetchJson(`/profile/admin/users/${encodeURIComponent(userId)}`, {
+    method: "DELETE",
+  });
+  closeAdminUserDeleteModal();
+  await loadAdminUsers();
+  setAdminUsersStatus("User deleted.", "success");
 }
 
 
@@ -159,7 +375,6 @@ function renderResumeList(items) {
         <div class="resume-name">${escapeHtml(resume.resume_name || "")}</div>
         <div class="resume-meta">
           <span>${escapeHtml(formatBytes(resume.size_bytes || 0))}</span>
-          <span>•</span>
           <span>${escapeHtml(formatDateTime(resume.modified_at || ""))}</span>
         </div>
       </div>
@@ -557,6 +772,78 @@ function bindDeleteInteractions() {
   });
 }
 
+function bindAdminUsersInteractions() {
+  const section = qs("profileAdminUsersSection");
+  if (!section) return;
+
+  qs("profileAdminTabs")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-profile-tab-target]");
+    if (!button) return;
+
+    const targetId = button.dataset.profileTabTarget || "";
+    const target = qs(targetId);
+    if (!target) return;
+
+    document.querySelectorAll(".profile-tab-btn").forEach((tab) => {
+      tab.classList.toggle("is-active", tab === button);
+    });
+    document.querySelectorAll("[data-profile-tab-panel]").forEach((panel) => {
+      panel.classList.toggle("hidden", panel.id !== targetId);
+    });
+  });
+
+  qs("refreshAdminUsersBtn")?.addEventListener("click", () => {
+    loadAdminUsers().catch((err) => {
+      setAdminUsersStatus(err.message, "error");
+    });
+  });
+
+  qs("adminUsersTableBody")?.addEventListener("click", (event) => {
+    const accessBtn = event.target.closest("[data-admin-user-access]");
+    if (accessBtn) {
+      const userId = accessBtn.dataset.adminUserAccess || "";
+      const nextActive = accessBtn.dataset.nextActive === "true";
+      openAdminUserAccessModal(userId, nextActive);
+      return;
+    }
+
+    const deleteBtn = event.target.closest("[data-admin-user-delete]");
+    if (deleteBtn) {
+      openAdminUserDeleteModal(deleteBtn.dataset.adminUserDelete || "");
+    }
+  });
+
+  qs("adminUserAccessCloseBtn")?.addEventListener("click", closeAdminUserAccessModal);
+  qs("adminUserAccessConfirmBtn")?.addEventListener("click", async () => {
+    try {
+      await confirmAdminUserAccessChange();
+    } catch (err) {
+      setAdminUsersStatus(err.message, "error");
+      closeAdminUserAccessModal();
+    }
+  });
+  qs("adminUserAccessModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("adminUserAccessModal")) {
+      closeAdminUserAccessModal();
+    }
+  });
+
+  qs("adminUserDeleteCloseBtn")?.addEventListener("click", closeAdminUserDeleteModal);
+  qs("adminUserDeleteConfirmBtn")?.addEventListener("click", async () => {
+    try {
+      await confirmAdminUserDelete();
+    } catch (err) {
+      setAdminUsersStatus(err.message, "error");
+      closeAdminUserDeleteModal();
+    }
+  });
+  qs("adminUserDeleteModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("adminUserDeleteModal")) {
+      closeAdminUserDeleteModal();
+    }
+  });
+}
+
 function bindSavedScansPage() {
   const refreshBtn = qs("refreshSavedScansBtn");
   if (refreshBtn) {
@@ -622,9 +909,18 @@ async function initProfilePage() {
 
     if (isProfileResumePage()) {
       clearStatus();
+      try {
+        await loadCurrentUser();
+      } catch {
+        profileState.currentUser = null;
+      }
       bindUploadInteractions();
       bindDeleteInteractions();
+      bindAdminUsersInteractions();
+      qs("resumeSection")?.setAttribute("data-profile-tab-panel", "");
+      qs("profileAdminUsersSection")?.setAttribute("data-profile-tab-panel", "");
       await loadResumes();
+      await loadAdminUsers();
     }
   } catch (err) {
     if (isSavedScansPage()) {

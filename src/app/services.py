@@ -3192,6 +3192,7 @@ def run_live_pipeline_payload(
         child_env["JOB_STACK_USER_PIPELINE_RUN_ID"] = run_id
         child_env["JOB_STACK_SEEN_JOBS_BACKEND"] = "postgres"
         child_env["JOB_STACK_JOB_CORPUS_PATH"] = str(pipeline_job_corpus_path)
+        child_env["JOB_STACK_USER_PIPELINE_MODE"] = "true"
 
     try:
         process = subprocess.Popen(

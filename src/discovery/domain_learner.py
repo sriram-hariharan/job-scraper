@@ -2,6 +2,7 @@ from urllib.parse import urlparse
 import os
 
 from src.utils.logging import get_logger
+from src.utils.file_lock import exclusive_file_lock
 
 logger = get_logger("domain_learner")
 
@@ -82,38 +83,41 @@ def learn_domains_from_jobs(jobs):
     if not jobs:
         return
 
-    existing = set()
+    with exclusive_file_lock(f"{DOMAIN_FILE}.lock"):
+        existing = set()
 
-    if os.path.exists(DOMAIN_FILE):
-        with open(DOMAIN_FILE) as f:
-            existing = {line.strip() for line in f if line.strip()}
+        if os.path.exists(DOMAIN_FILE):
+            with open(DOMAIN_FILE, encoding="utf-8") as f:
+                existing = {line.strip() for line in f if line.strip()}
 
-    learned = set()
+        learned = set()
 
-    for job in jobs:
+        for job in jobs:
 
-        url = job.get("url")
+            url = job.get("url")
 
-        domain = extract_domain(url)
+            domain = extract_domain(url)
 
-        if domain and domain not in existing:
-            learned.add(domain)
+            if domain and domain not in existing:
+                learned.add(domain)
 
-        # learn company from ATS path
-        company_slug = extract_company_from_ats(url)
+            # learn company from ATS path
+            company_slug = extract_company_from_ats(url)
 
-        if company_slug:
-            guessed_domain = f"{company_slug}.com"
+            if company_slug:
+                guessed_domain = f"{company_slug}.com"
 
-            if guessed_domain not in existing:
-                learned.add(guessed_domain)
+                if guessed_domain not in existing:
+                    learned.add(guessed_domain)
 
-    if not learned:
-        return
+        learned = learned - existing
 
-    with open(DOMAIN_FILE, "a") as f:
-        for d in sorted(learned):
-            f.write(d + "\n")
+        if not learned:
+            return
+
+        with open(DOMAIN_FILE, "a", encoding="utf-8") as f:
+            for d in sorted(learned):
+                f.write(d + "\n")
 
     logger.info(f"{len(learned)} new company domains learned")
 

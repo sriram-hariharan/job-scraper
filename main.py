@@ -398,6 +398,15 @@ def _owner_user_id_from_env() -> str:
     return str(os.environ.get("JOB_STACK_OWNER_USER_ID", "") or "").strip()
 
 
+def _is_user_pipeline_mode() -> bool:
+    return str(os.environ.get("JOB_STACK_USER_PIPELINE_MODE", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+
+
 def _clear_seen_jobs_for_current_backend() -> None:
     backend = _seen_jobs_backend_from_env()
     owner_user_id = _owner_user_id_from_env()
@@ -456,13 +465,24 @@ async def main_async(args):
     if delete_seen_data == "yes":
         _clear_seen_jobs_for_current_backend()
 
-    start_stage("startup", "Initializing metrics store")
+    if _is_user_pipeline_mode():
+        start_stage("startup", "Skipping global metrics store for user pipeline run")
+        logger.info("Skipping global metrics store initialization for user pipeline run.")
+        complete_stage(
+            "startup",
+            counts={
+                "initialized_metrics": False,
+                "skipped_global_metrics": True,
+            },
+        )
+    else:
+        start_stage("startup", "Initializing metrics store")
 
-    logger.info("Initializing metrics store...")
-    from src.storage.metrics_store import init_metrics_db
+        logger.info("Initializing metrics store...")
+        from src.storage.metrics_store import init_metrics_db
 
-    init_metrics_db()
-    complete_stage("startup", counts={"initialized_metrics": True})
+        init_metrics_db()
+        complete_stage("startup", counts={"initialized_metrics": True})
 
     logger.info("Skipping eager embedding preload; model will load lazily when first needed.")
 

@@ -13,6 +13,15 @@ from src.utils.logging import get_logger
 logger = get_logger("collector")
 
 
+def _is_user_pipeline_mode() -> bool:
+    return str(os.environ.get("JOB_STACK_USER_PIPELINE_MODE", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+
+
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
     from src.intelligence.market_insights import (
         detect_ai_hiring_surges,
@@ -376,9 +385,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     pipeline_runtime = round(time.time() - start_total, 2)
     logger.info(f"Total pipeline runtime: {pipeline_runtime}s")
 
-    prev_run = get_last_run()
-    prev_ats_counts = get_last_ats_counts("SCRAPED")
-
     current_metrics = {
         "scraped": len(all_jobs),
         "filtered": len(filtered_jobs),
@@ -388,39 +394,49 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         "drop_pct": drop_pct,
     }
 
-    check_ats_failure(prev_ats_counts, scraped_counts, logger)
+    if _is_user_pipeline_mode():
+        section("PIPELINE HEALTH", logger)
+        logger.info(
+            "Skipping global pipeline metrics store for user pipeline run. "
+            "User run status is persisted in user_pipeline_runs."
+        )
+    else:
+        prev_run = get_last_run()
+        prev_ats_counts = get_last_ats_counts("SCRAPED")
 
-    section("PIPELINE HEALTH", logger)
-    check_pipeline_regression(prev_run, current_metrics, logger)
+        check_ats_failure(prev_ats_counts, scraped_counts, logger)
 
-    run_id = record_pipeline_run(
-        runtime=pipeline_runtime,
-        scraped=len(all_jobs),
-        filtered=len(filtered_jobs),
-        deduped=len(deduped_jobs),
-        ranked=len(ranked_jobs),
-        details=len(detailed_jobs),
-        new_jobs=len(new_jobs),
-        drop_pct=drop_pct,
-    )
+        section("PIPELINE HEALTH", logger)
+        check_pipeline_regression(prev_run, current_metrics, logger)
 
-    record_company_hiring(run_id, deduped_jobs)
+        run_id = record_pipeline_run(
+            runtime=pipeline_runtime,
+            scraped=len(all_jobs),
+            filtered=len(filtered_jobs),
+            deduped=len(deduped_jobs),
+            ranked=len(ranked_jobs),
+            details=len(detailed_jobs),
+            new_jobs=len(new_jobs),
+            drop_pct=drop_pct,
+        )
 
-    record_ats_counts(run_id, "SCRAPED", scraped_counts)
-    record_ats_counts(run_id, "FILTERED", filtered_counts)
-    record_ats_counts(run_id, "DEDUPED", deduped_counts)
-    record_ats_counts(run_id, "RANKED", log_stage_metrics("RANKED", ranked_jobs))
-    record_ats_counts(run_id, "DETAILS", details_counts)
+        record_company_hiring(run_id, deduped_jobs)
 
-    logger.info("Pipeline metrics stored")
+        record_ats_counts(run_id, "SCRAPED", scraped_counts)
+        record_ats_counts(run_id, "FILTERED", filtered_counts)
+        record_ats_counts(run_id, "DEDUPED", deduped_counts)
+        record_ats_counts(run_id, "RANKED", log_stage_metrics("RANKED", ranked_jobs))
+        record_ats_counts(run_id, "DETAILS", details_counts)
 
-    momentum = get_hiring_momentum()
-    if momentum:
-        logger.info("")
-        logger.info("HIRING MOMENTUM")
-        logger.info("----------------")
+        logger.info("Pipeline metrics stored")
 
-        for company, ats, prev, curr, delta in momentum[:10]:
-            logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
+        momentum = get_hiring_momentum()
+        if momentum:
+            logger.info("")
+            logger.info("HIRING MOMENTUM")
+            logger.info("----------------")
+
+            for company, ats, prev, curr, delta in momentum[:10]:
+                logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
 
     return scored_jobs

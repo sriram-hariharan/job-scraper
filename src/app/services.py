@@ -87,6 +87,9 @@ from src.storage.profile_resumes.store import (
     get_profile_resumes_postgres_payload,
     upsert_profile_resume_postgres_payload,
 )
+from src.storage.user_pipeline.read_postgres import (
+    get_user_pipeline_runs_postgres_payload,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -298,6 +301,57 @@ def profile_resumes_payload(
         "storage": "postgres",
         "count": len(resumes),
         "resumes": resumes,
+    }
+
+
+def user_pipeline_gate_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    resumes_payload = profile_resumes_payload(owner_user_id=owner)
+    resume_count = int(resumes_payload.get("count", 0) or 0)
+    has_resumes = resume_count > 0
+
+    successful_runs_payload = get_user_pipeline_runs_postgres_payload(
+        owner_user_id=owner,
+        status="succeeded",
+        limit=1,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    has_successful_pipeline_run = (
+        int(successful_runs_payload.get("total_row_count", 0) or 0) > 0
+        or bool(successful_runs_payload.get("rows", []) or [])
+    )
+
+    can_run_live_pipeline = has_resumes
+    can_delete_seen_data = has_resumes and has_successful_pipeline_run
+
+    return {
+        "ok": True,
+        "owner_user_id": owner,
+        "resume_count": resume_count,
+        "has_resumes": has_resumes,
+        "requires_resume_upload": not has_resumes,
+        "can_run_live_pipeline": can_run_live_pipeline,
+        "can_delete_seen_data": can_delete_seen_data,
+        "has_successful_pipeline_run": has_successful_pipeline_run,
+        "profile_resume_upload_url": "/profile?onboarding=resume_upload",
+        "live_pipeline_block_reason": (
+            "" if can_run_live_pipeline else "Upload at least one resume before running Live Pipeline."
+        ),
+        "delete_seen_data_block_reason": (
+            ""
+            if can_delete_seen_data
+            else "Delete seen data is disabled until this user has completed at least one successful Live Pipeline run."
+        ),
     }
 
 
@@ -1700,7 +1754,7 @@ def _runtime_status_is_stale_startup(
 
     return True
 
-def pipeline_status_payload() -> Dict[str, Any]:
+def pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
     snapshot = _pipeline_status_snapshot()
     runtime_status = _load_runtime_status_file(snapshot.get("status_path", ""))
 
@@ -1744,6 +1798,7 @@ def pipeline_status_payload() -> Dict[str, Any]:
 
     return {
         "ok": True,
+        "pipeline_gate": user_pipeline_gate_payload(owner_user_id=owner_user_id) if _clean_text(owner_user_id) else {},
         "pipeline": merged,
     }
 
@@ -2487,6 +2542,7 @@ def scheduler_storage_contract_payload(
     return payload
 
 def run_live_pipeline_payload(
+    owner_user_id: str = "",
     output_dir: Path = DEFAULT_OUTPUT_DIR,
     log_path: Path = DEFAULT_PIPELINE_LOG_PATH,
     job_limit: int = 50,
@@ -2500,6 +2556,26 @@ def run_live_pipeline_payload(
     planning_only: bool = False,
     delete_seen_data: str = "no",
 ) -> Dict[str, Any]:
+    owner_for_pipeline_gate = _clean_text(owner_user_id)
+    if owner_for_pipeline_gate:
+        pipeline_gate = user_pipeline_gate_payload(owner_user_id=owner_for_pipeline_gate)
+
+        if not bool(pipeline_gate.get("can_run_live_pipeline", False)):
+            raise ValueError(
+                _clean_text(pipeline_gate.get("live_pipeline_block_reason"))
+                or "Upload at least one resume before running Live Pipeline."
+            )
+
+        requested_delete_seen_data = _clean_text(delete_seen_data).lower()
+        if (
+            requested_delete_seen_data in {"yes", "true", "1", "y"}
+            and not bool(pipeline_gate.get("can_delete_seen_data", False))
+        ):
+            raise ValueError(
+                _clean_text(pipeline_gate.get("delete_seen_data_block_reason"))
+                or "Delete seen data is disabled until this user has completed at least one successful Live Pipeline run."
+            )
+
     snapshot = _pipeline_status_snapshot()
     if snapshot.get("is_running"):
         raise ValueError("A live pipeline run is already in progress.")
@@ -6973,6 +7049,7 @@ def user_workspace_state_payload(owner_user_id: str = "") -> Dict[str, Any]:
 
     return {
         "ok": True,
+        "pipeline_gate": user_pipeline_gate_payload(owner_user_id=owner_user_id),
         "owner_user_id": safe_owner,
         "has_owned_data": total_owned_items > 0,
         "counts": {

@@ -191,8 +191,10 @@ def status(
     )
 
 @app.get("/pipeline/status")
-def pipeline_status():
-    return services.pipeline_status_payload()
+def pipeline_status(http_request: Request):
+    return services.pipeline_status_payload(
+        owner_user_id=_auth_owner_user_id(http_request),
+    )
 
 @app.get("/scheduler/jobs")
 def scheduler_jobs():
@@ -446,9 +448,10 @@ def notifications_read_state(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     
 @app.post("/pipeline/run")
-def run_live_pipeline(payload: dict = Body(...)):
+def run_live_pipeline(http_request: Request, payload: dict = Body(...)):
     try:
         return services.run_live_pipeline_payload(
+            owner_user_id=_auth_owner_user_id(http_request),
         output_dir=Path(str(payload.get("output_dir", services.DEFAULT_OUTPUT_DIR))),
         log_path=Path(str(payload.get("log_path", services.DEFAULT_PIPELINE_LOG_PATH))),
         job_limit=int(payload.get("job_limit", 50)),

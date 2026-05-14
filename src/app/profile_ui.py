@@ -1,13 +1,116 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
 from src.app.ui_shell import render_top_shell
+from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
 
 
 @router.get("/profile", response_class=HTMLResponse)
-def profile_page() -> str:
+def profile_page(request: Request) -> str:
+    user = dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
+    access_level = str(user.get("access_level", "") or "").strip().lower()
+    is_admin = bool(user.get("is_admin", False)) or access_level == "admin"
+    admin_tabs_html = (
+        """
+    <nav class="profile-tabs" id="profileAdminTabs" aria-label="Profile sections">
+      <button type="button" class="profile-tab-btn is-active" data-profile-tab-target="resumeSection">Resumes</button>
+      <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">User access</button>
+    </nav>
+"""
+        if is_admin
+        else ""
+    )
+    admin_users_section_html = (
+        """
+    <section class="card profile-section-card profile-admin-users-section hidden" id="profileAdminUsersSection" data-profile-tab-panel>
+      <div class="section-header">
+        <div>
+          <h2>User access</h2>
+          <div class="subtext" id="adminUsersMeta">Loading users...</div>
+        </div>
+        <button type="button" class="ghost-btn btn-sm" id="refreshAdminUsersBtn">
+          Refresh
+        </button>
+      </div>
+
+      <div class="profile-inline-status hidden" id="adminUsersStatusBanner"></div>
+
+      <div class="admin-users-table-wrap">
+        <table class="admin-users-table">
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Access level</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Last login</th>
+              <th>Access</th>
+              <th>Delete user</th>
+            </tr>
+          </thead>
+          <tbody id="adminUsersTableBody">
+            <tr>
+              <td colspan="8">Loading users...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+"""
+        if is_admin
+        else ""
+    )
+    admin_modals_html = (
+        """
+  <section class="modal-backdrop hidden" id="adminUserAccessModal">
+    <div class="modal-card admin-user-confirm-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="adminUserAccessTitle">Change access</h3>
+          <div class="subtext" id="adminUserAccessSubtitle">Confirm this user access change.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="adminUserAccessCloseBtn" type="button">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="admin-user-confirm-copy" id="adminUserAccessMessage"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" id="adminUserAccessConfirmBtn">Confirm</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="modal-backdrop hidden" id="adminUserDeleteModal">
+    <div class="modal-card admin-user-confirm-card admin-user-danger-card">
+      <div class="modal-header">
+        <div>
+          <h3>Delete user</h3>
+          <div class="subtext">This permanently removes the user account.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="adminUserDeleteCloseBtn" type="button">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="admin-user-high-warning">
+          High warning: this action permanently deletes the user from the backend users table and removes their active sessions. This cannot be undone.
+        </div>
+        <div class="admin-user-confirm-copy" id="adminUserDeleteMessage"></div>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="admin-user-delete-confirm-btn" id="adminUserDeleteConfirmBtn">Yes, delete user</button>
+      </div>
+    </div>
+  </section>
+"""
+        if is_admin
+        else ""
+    )
     return f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -17,7 +120,7 @@ def profile_page() -> str:
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_admin_users_v6" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -30,7 +133,9 @@ def profile_page() -> str:
       </div>
     </header>
 
-    <section class="card profile-section-card">
+    {admin_tabs_html}
+
+    <section class="card profile-section-card" id="resumeSection" data-profile-tab-panel>
       <div class="section-header">
         <div>
           <h2>Resumes</h2>
@@ -78,6 +183,8 @@ def profile_page() -> str:
         </section>
       </div>
     </section>
+
+    {admin_users_section_html}
   </div>
 
   <section class="modal-backdrop hidden" id="resumeDeleteModal">
@@ -122,9 +229,11 @@ def profile_page() -> str:
   </div>
 </section>
 
+  {admin_modals_html}
+
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
+  <script src="/static/profile.js?v=profile_admin_users_v7"></script>
 </body>
 </html>
     """.strip()
@@ -234,7 +343,7 @@ def saved_scans_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
+  <script src="/static/profile.js?v=profile_onboarding_gate_v1"></script>
 </body>
 </html>
     """.strip()

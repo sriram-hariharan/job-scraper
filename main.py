@@ -20,6 +20,13 @@ from src.utils.logging import get_logger
 logger = get_logger(__name__)
 
 
+DEFAULT_JOB_CORPUS_PATH = "data/rag/job_corpus.jsonl"
+
+
+def _job_corpus_path_from_env(default: str = DEFAULT_JOB_CORPUS_PATH) -> str:
+    return str(os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "") or default).strip()
+
+
 def _parse_args():
     parser = argparse.ArgumentParser(
         description="Run the main scraping pipeline and optionally trigger downstream application planning."
@@ -108,12 +115,14 @@ def _write_current_run_planning_corpus(jobs, output_dir):
     return str(path)
 
 
-def _run_application_planning(args, job_corpus_path="data/rag/job_corpus.jsonl"):
+def _run_application_planning(args, job_corpus_path=None):
+    resolved_job_corpus_path = str(job_corpus_path or _job_corpus_path_from_env()).strip()
+
     cmd = [
         sys.executable,
         "run_application_planning.py",
         "--job-corpus",
-        job_corpus_path,
+        resolved_job_corpus_path,
         "--job-limit",
         str(args.application_planning_job_limit),
         "--job-packet-limit",
@@ -381,6 +390,53 @@ def _resolve_delete_seen_data(args) -> str:
     return "yes" if delete_seen_data in {"y", "yes"} else "no"
 
 
+def _seen_jobs_backend_from_env() -> str:
+    return str(os.environ.get("JOB_STACK_SEEN_JOBS_BACKEND", "") or "").strip().lower()
+
+
+def _owner_user_id_from_env() -> str:
+    return str(os.environ.get("JOB_STACK_OWNER_USER_ID", "") or "").strip()
+
+
+def _is_user_pipeline_mode() -> bool:
+    return str(os.environ.get("JOB_STACK_USER_PIPELINE_MODE", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+
+
+def _clear_seen_jobs_for_current_backend() -> None:
+    backend = _seen_jobs_backend_from_env()
+    owner_user_id = _owner_user_id_from_env()
+
+    if backend == "postgres" and owner_user_id:
+        from src.storage.user_pipeline.store import clear_user_seen_jobs_postgres_payload
+
+        payload = clear_user_seen_jobs_postgres_payload(
+            owner_user_id=owner_user_id,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        logger.info(
+            "Deleted seen data from Postgres for owner_user_id=%s deleted_count=%s",
+            owner_user_id,
+            payload.get("deleted_count", 0),
+        )
+        return
+
+    seen_file = os.path.join(os.getcwd(), "data", "seen_job_ids.txt")
+    if os.path.exists(seen_file):
+        os.remove(seen_file)
+        logger.info(f"Deleted seen data: {seen_file}")
+    else:
+        logger.info(f"Seen file not found: {seen_file}")
+
+
 async def main_async(args):
     logger.info("Starting main pipeline entrypoint...")
 
@@ -407,20 +463,26 @@ async def main_async(args):
     )
 
     if delete_seen_data == "yes":
-        seen_file = os.path.join(os.getcwd(), "data", "seen_job_ids.txt")
-        if os.path.exists(seen_file):
-            os.remove(seen_file)
-            logger.info(f"Deleted seen data: {seen_file}")
-        else:
-            logger.info(f"Seen file not found: {seen_file}")
+        _clear_seen_jobs_for_current_backend()
 
-    start_stage("startup", "Initializing metrics store")
+    if _is_user_pipeline_mode():
+        start_stage("startup", "Skipping global metrics store for user pipeline run")
+        logger.info("Skipping global metrics store initialization for user pipeline run.")
+        complete_stage(
+            "startup",
+            counts={
+                "initialized_metrics": False,
+                "skipped_global_metrics": True,
+            },
+        )
+    else:
+        start_stage("startup", "Initializing metrics store")
 
-    logger.info("Initializing metrics store...")
-    from src.storage.metrics_store import init_metrics_db
+        logger.info("Initializing metrics store...")
+        from src.storage.metrics_store import init_metrics_db
 
-    init_metrics_db()
-    complete_stage("startup", counts={"initialized_metrics": True})
+        init_metrics_db()
+        complete_stage("startup", counts={"initialized_metrics": True})
 
     logger.info("Skipping eager embedding preload; model will load lazily when first needed.")
 
@@ -446,7 +508,7 @@ async def main_async(args):
         logger.info("APPLICATION PLANNING")
         logger.info("=============================")
 
-        corpus_path = "data/rag/job_corpus.jsonl"
+        corpus_path = _job_corpus_path_from_env()
         planning_corpus_path = corpus_path
         if jobs and not args.application_planning_only:
             planning_corpus_path = _write_current_run_planning_corpus(
@@ -466,10 +528,12 @@ async def main_async(args):
             )
 
     if not jobs and application_planning_ran and args.application_planning_only:
-        jobs = _load_jobs_from_corpus("data/rag/job_corpus.jsonl")
+        planning_corpus_path = _job_corpus_path_from_env()
+        jobs = _load_jobs_from_corpus(planning_corpus_path)
         logger.info(
-            "Loaded %s jobs from data/rag/job_corpus.jsonl for planning-only sheet refresh",
+            "Loaded %s jobs from %s for planning-only sheet refresh",
             len(jobs),
+            planning_corpus_path,
         )
 
     if jobs and application_planning_ran:
@@ -491,14 +555,6 @@ async def main_async(args):
             Path(args.application_planning_output_dir) / "application_execution_queue.csv",
             Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
         )
-
-    if jobs:
-        start_stage("sheet_export", f"Writing {len(jobs)} jobs to sheet")
-
-        from src.pipeline.excel_writer import write_jobs_to_sheet
-
-        write_jobs_to_sheet(jobs)
-        complete_stage("sheet_export", counts={"final_jobs": len(jobs)})
 
     start_stage("finalization", f"Final jobs: {len(jobs)}")
     logger.info("Final jobs: %s", len(jobs))

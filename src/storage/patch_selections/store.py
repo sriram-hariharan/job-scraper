@@ -169,6 +169,7 @@ def patch_selection_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
 
     normalized_row = {
         "selection_timestamp": selection_timestamp,
+        "owner_user_id": _clean_text(record.get("owner_user_id")),
         "job_doc_id": _clean_text(record.get("job_doc_id")),
         "queue_rank": _clean_text(record.get("queue_rank")),
         "job_company": _clean_text(record.get("job_company")),
@@ -194,6 +195,7 @@ def patch_selections_table_specs() -> Dict[str, Any]:
             "columns": [
                 {"name": "selection_id", "type": "text", "nullable": False},
                 {"name": "selection_timestamp", "type": "timestamptz", "nullable": False},
+                {"name": "owner_user_id", "type": "text", "nullable": False},
                 {"name": "job_doc_id", "type": "text", "nullable": False},
                 {"name": "queue_rank", "type": "text", "nullable": False},
                 {"name": "job_company", "type": "text", "nullable": False},
@@ -208,6 +210,8 @@ def patch_selections_table_specs() -> Dict[str, Any]:
                 {"name": "idx_patch_selections_path_timestamp", "columns": ["tailoring_json_path", "selection_timestamp"]},
                 {"name": "idx_patch_selections_job_doc_id", "columns": ["job_doc_id"]},
                 {"name": "idx_patch_selections_queue_rank", "columns": ["queue_rank"]},
+                {"name": "idx_patch_selections_owner_timestamp", "columns": ["owner_user_id", "selection_timestamp"]},
+                {"name": "idx_patch_selections_owner_job_doc_id", "columns": ["owner_user_id", "job_doc_id"]},
             ],
         }
     }
@@ -219,6 +223,7 @@ def render_patch_selections_schema_sql() -> str:
             "CREATE TABLE IF NOT EXISTS patch_selections (",
             "    selection_id TEXT PRIMARY KEY,",
             "    selection_timestamp TIMESTAMPTZ NOT NULL,",
+            "    owner_user_id TEXT NOT NULL DEFAULT '',",
             "    job_doc_id TEXT NOT NULL,",
             "    queue_rank TEXT NOT NULL,",
             "    job_company TEXT NOT NULL,",
@@ -238,6 +243,15 @@ def render_patch_selections_schema_sql() -> str:
             "",
             "CREATE INDEX IF NOT EXISTS idx_patch_selections_queue_rank",
             "ON patch_selections (queue_rank);",
+            "",
+            "ALTER TABLE patch_selections",
+            "ADD COLUMN IF NOT EXISTS owner_user_id TEXT NOT NULL DEFAULT '';",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_patch_selections_owner_timestamp",
+            "ON patch_selections (owner_user_id, selection_timestamp DESC);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_patch_selections_owner_job_doc_id",
+            "ON patch_selections (owner_user_id, job_doc_id);",
         ]
     )
 
@@ -293,6 +307,7 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
             "INSERT INTO patch_selections (",
             "    selection_id,",
             "    selection_timestamp,",
+            "    owner_user_id,",
             "    job_doc_id,",
             "    queue_rank,",
             "    job_company,",
@@ -306,6 +321,7 @@ def _build_insert_sql(row: Dict[str, Any]) -> str:
             "VALUES (",
             f"    {_sql_quote_text(row['selection_id'])},",
             f"    {_sql_quote_text(row['selection_timestamp'])}::timestamptz,",
+            f"    {_sql_quote_text(row['owner_user_id'])},",
             f"    {_sql_quote_text(row['job_doc_id'])},",
             f"    {_sql_quote_text(row['queue_rank'])},",
             f"    {_sql_quote_text(row['job_company'])},",

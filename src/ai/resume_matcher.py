@@ -1,7 +1,22 @@
+import os
 import numpy as np
 from typing import Dict
 from tqdm import tqdm
+from src.utils.logging import get_logger
 from src.config.resume_registry import get_candidate_resumes
+
+logger = get_logger("resume_matcher")
+
+def _legacy_filesystem_resume_matching_enabled() -> bool:
+    return str(
+        os.environ.get("JOB_STACK_ENABLE_LEGACY_RESUME_MATCHING", "") or ""
+    ).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
+
 
 def build_job_embedding_text(job: Dict) -> str:
     """
@@ -73,15 +88,55 @@ def match_resume_for_job(job, job_embedding, resume_matrix, resume_names):
     }
 
 
+def _apply_neutral_resume_prior(jobs, *, reason: str = ""):
+    if reason:
+        logger.info("Skipping legacy filesystem resume matching: %s", reason)
+
+    for job in jobs:
+        job.setdefault("embedding_resume_prior", None)
+        job.setdefault("embedding_resume_prior_score", None)
+
+    return jobs
+
+
 def match_resumes(jobs):
+    if not jobs:
+        return jobs
+
+    if not _legacy_filesystem_resume_matching_enabled():
+        return _apply_neutral_resume_prior(
+            jobs,
+            reason=(
+                "legacy filesystem resume matching disabled; "
+                "profile resumes are Postgres-backed"
+            ),
+        )
+
+    from src.resume.resume_loader import load_resumes
+
+    try:
+        resumes = load_resumes()
+    except RuntimeError as exc:
+        return _apply_neutral_resume_prior(jobs, reason=str(exc))
+
+    candidate_resume_names = [r["resume_name"] for r in resumes]
+
+    if not candidate_resume_names:
+        return _apply_neutral_resume_prior(
+            jobs,
+            reason="no legacy filesystem resumes available",
+        )
 
     from src.resume.resume_embeddings import get_embedding_matrix
-    from src.resume.resume_loader import load_resumes
     from src.ai.embedding_model import get_model
-    
-    resumes = load_resumes()
-    candidate_resume_names = [r["resume_name"] for r in resumes]
+
     resume_matrix, resume_names = get_embedding_matrix(candidate_resume_names)
+
+    if resume_matrix is None or not resume_names:
+        return _apply_neutral_resume_prior(
+            jobs,
+            reason="legacy resume embedding matrix unavailable",
+        )
 
     job_texts = [
         build_job_embedding_text(job)

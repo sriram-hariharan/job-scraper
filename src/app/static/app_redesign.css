@@ -3847,3 +3847,319 @@ html[data-theme="dark"] .first-run-prompt-secondary {
   background: #17243a;
   color: #dbeafe;
 }
+
+/* ui_redesign_v37: Live pipeline modal readability and theme parity. */
+.pipeline-modal-card {
+  width: min(1120px, calc(100vw - 40px)) !important;
+}
+
+.pipeline-modal-card .modal-header {
+  border-bottom-color: var(--app-border) !important;
+}
+
+.pipeline-modal-card .modal-header h3,
+.pipeline-option-title,
+.pipeline-toggle-name {
+  color: var(--app-text) !important;
+}
+
+.pipeline-modal-card .control-group label,
+.pipeline-inline-helper-label,
+.pipeline-toggle-help,
+.pipeline-modal-card .control-help {
+  color: var(--app-muted) !important;
+}
+
+.pipeline-form-grid,
+.pipeline-toggle-group,
+.pipeline-toggle-item {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-2) !important;
+}
+
+.pipeline-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.pipeline-support-row {
+  margin-top: 14px !important;
+}
+
+.pipeline-toggle-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+}
+
+.pipeline-toggle-item {
+  min-height: 104px;
+  gap: 18px !important;
+}
+
+.pipeline-toggle-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pipeline-toggle-name {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.pipeline-toggle-item .binary-toggle {
+  flex: 0 0 auto;
+}
+
+.pipeline-overlay-success,
+.pipeline-overlay-failure {
+  color: var(--app-text) !important;
+}
+
+.pipeline-success-title,
+.pipeline-overlay-failure .pipeline-success-title {
+  color: var(--app-text) !important;
+}
+
+.pipeline-success-text,
+.pipeline-success-summary-text {
+  color: var(--app-text-2) !important;
+}
+
+.pipeline-success-summary {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-2) !important;
+  color: var(--app-text) !important;
+}
+
+.pipeline-overlay-failure .pipeline-success-summary,
+#pipelineFailureSummary,
+#pipelineFailureReason {
+  color: var(--app-text) !important;
+}
+
+.pipeline-overlay-failure .pipeline-success-visual {
+  background: color-mix(in srgb, var(--app-danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--app-danger) 34%, var(--app-border)) !important;
+}
+
+.pipeline-overlay-failure .pipeline-success-static-check {
+  color: var(--app-danger) !important;
+}
+
+#pipelineSuccessOkBtn,
+#pipelineFailureOkBtn {
+  min-width: 120px;
+}
+
+html[data-theme="light"] .pipeline-overlay-failure .pipeline-success-static-check {
+  text-shadow: none !important;
+}
+
+.pipeline-confirm-card {
+  width: min(1120px, calc(100vw - 40px)) !important;
+}
+
+.pipeline-confirm-hero,
+.pipeline-confirm-panel,
+.pipeline-confirm-stat,
+.pipeline-confirm-flag {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-2) !important;
+}
+
+.pipeline-confirm-hero-title,
+.pipeline-confirm-panel-title,
+.pipeline-confirm-stat-value,
+.pipeline-confirm-meta-value,
+.pipeline-confirm-flag-label {
+  color: var(--app-text) !important;
+  opacity: 1 !important;
+}
+
+.pipeline-confirm-hero-copy,
+.pipeline-confirm-stat-label,
+.pipeline-confirm-meta-label {
+  color: var(--app-muted) !important;
+  opacity: 1 !important;
+}
+
+.pipeline-confirm-hero-badge,
+.pipeline-confirm-chip {
+  border-color: color-mix(in srgb, var(--app-primary) 42%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface-2)) !important;
+  color: var(--app-primary-strong) !important;
+  opacity: 1 !important;
+}
+
+.pipeline-confirm-grid {
+  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr) !important;
+}
+
+.pipeline-confirm-actions {
+  border-top-color: var(--app-border) !important;
+  background: var(--app-surface) !important;
+}
+
+#backToPipelineConfigBtn {
+  background: var(--app-surface-2) !important;
+  color: var(--app-text) !important;
+}
+
+#confirmPipelineRunBtn {
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .pipeline-confirm-hero,
+html[data-theme="light"] .pipeline-confirm-panel,
+html[data-theme="light"] .pipeline-confirm-stat,
+html[data-theme="light"] .pipeline-confirm-flag {
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] .pipeline-confirm-flag.is-enabled .pipeline-confirm-flag-pill {
+  background: #ecfdf5 !important;
+  border-color: #86efac !important;
+  color: #065f46 !important;
+}
+
+html[data-theme="light"] .pipeline-confirm-flag.is-disabled .pipeline-confirm-flag-pill {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #7f1d1d !important;
+}
+
+/* ui_redesign_v38: crisp light-mode pipeline review surface. */
+html[data-theme="light"] #pipelineConfirmModal.modal-backdrop {
+  background: rgba(15, 23, 42, 0.42) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-card {
+  border: 1px solid #d6deea !important;
+  background: #ffffff !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .modal-header {
+  border-bottom: 1px solid #dbe3ef !important;
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .modal-header h3 {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .modal-header .subtext {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-scroll {
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero {
+  border: 1px solid #bfdbfe !important;
+  background:
+    linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero-badge {
+  border: 1px solid #93c5fd !important;
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero-title {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero-copy {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-stat {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-stat-label,
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-meta-label {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-stat-value,
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-meta-value {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-panel {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-panel-title {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-chip {
+  border: 1px solid #bfdbfe !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-panel--flags {
+  background: #f8fafc !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-flag {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-flag-label {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-actions {
+  border-top: 1px solid #dbe3ef !important;
+  background: #ffffff !important;
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal #backToPipelineConfigBtn {
+  border-color: #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal #confirmPipelineRunBtn {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.22) !important;
+}
+
+@media (max-width: 760px) {
+  .pipeline-modal-card {
+    width: min(100vw - 16px, 1120px) !important;
+  }
+
+  .pipeline-confirm-card {
+    width: min(100vw - 16px, 1120px) !important;
+  }
+
+  .pipeline-form-grid,
+  .pipeline-toggle-grid,
+  .pipeline-confirm-grid,
+  .pipeline-confirm-hero-stats,
+  .pipeline-confirm-flag-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pipeline-toggle-item {
+    align-items: stretch !important;
+  }
+}

@@ -1590,12 +1590,13 @@ function collectPipelineConfig() {
   if (!llmActions.length) {
     throw new Error("Select at least one LLM action.");
   }
+  const paths = derivePipelinePaths(DEFAULT_OUTPUT_DIR);
 
   return {
     job_limit: Number(qs("pipelineJobLimitInput").value || 50),
     job_packet_limit: Number(qs("pipelineJobPacketLimitInput").value || 0),
-    output_dir: qs("pipelineOutputDirInput").value.trim() || "outputs/application_planning",
-    log_path: qs("pipelineLogPathInput").value.trim() || "outputs/application_planning/live_pipeline_run.log",
+    output_dir: paths.output_dir,
+    log_path: paths.log_path,
     llm_actions: llmActions,
     planning_only: getBinaryToggleBool("pipelinePlanningOnly"),
     generate_tailoring: getBinaryToggleBool("pipelineGenerateTailoring"),
@@ -1656,8 +1657,6 @@ function renderPipelineConfirmSummary(config) {
           <div class="pipeline-confirm-panel-title">Run scope</div>
           ${buildMetaRow("Job limit", config.job_limit)}
           ${buildMetaRow("Job packet limit", config.job_packet_limit)}
-          ${buildMetaRow("Output directory", config.output_dir, "pipeline-confirm-meta-value--path")}
-          ${buildMetaRow("Log path", config.log_path, "pipeline-confirm-meta-value--path")}
         </section>
 
         <section class="pipeline-confirm-panel pipeline-confirm-panel--actions">
@@ -2266,7 +2265,10 @@ function attachApplicationHandlers() {
 }
 
 function attachPipelineConfigHandlers() {
-  qs("pipelineOutputDirInput").addEventListener("input", syncPipelinePathPreview);
+  const outputDirInput = qs("pipelineOutputDirInput");
+  if (outputDirInput) {
+    outputDirInput.addEventListener("input", syncPipelinePathPreview);
+  }
 
   qs("pipelineSelectAllActionsBtn").addEventListener("click", () => {
     setPipelineLlmActions(["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR", "SKIP_FOR_NOW"]);

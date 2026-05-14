@@ -8,6 +8,7 @@ import csv
 import hashlib
 import json
 import logging
+import threading
 import os
 import re
 import subprocess
@@ -164,7 +165,11 @@ _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "run_id": "",
     "child_pid": None,
     "error": "",
+    "owner_user_id": "",
 }
+
+_PIPELINE_ACTIVE_RUNS: Dict[str, Dict[str, Any]] = {}
+_PIPELINE_ACTIVE_RUNS_LOCK = threading.RLock()
 
 _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS: set[str] = set()
 _PIPELINE_ARTIFACT_MAX_BYTES = int(
@@ -1526,7 +1531,7 @@ def _derive_pipeline_status_path(output_dir: Path) -> Path:
 
 
 def _new_run_id() -> str:
-    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    return datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
 
 
 def _load_runtime_status_file(path: str) -> Dict[str, Any]:
@@ -1576,43 +1581,107 @@ def _normalize_delete_seen_data(value: Any) -> str:
     return "no"
 
 
-def _pipeline_status_snapshot() -> Dict[str, Any]:
-    process = _PIPELINE_RUN_STATE.get("process")
-    log_handle = _PIPELINE_RUN_STATE.get("log_handle")
+
+def _new_pipeline_run_state() -> Dict[str, Any]:
+    return {
+        "process": None,
+        "log_handle": None,
+        "status": "idle",
+        "started_at": "",
+        "finished_at": "",
+        "return_code": None,
+        "command": [],
+        "output_dir": str(DEFAULT_OUTPUT_DIR),
+        "log_path": str(DEFAULT_PIPELINE_LOG_PATH),
+        "status_path": str(DEFAULT_PIPELINE_STATUS_PATH),
+        "run_id": "",
+        "child_pid": None,
+        "error": "",
+        "owner_user_id": "",
+    }
+
+
+def _max_concurrent_user_pipeline_runs() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_MAX_CONCURRENT_USER_PIPELINES")) or "2"
+    try:
+        return max(1, int(raw))
+    except ValueError:
+        return 2
+
+
+def _active_user_pipeline_run_count() -> int:
+    count = 0
+
+    with _PIPELINE_ACTIVE_RUNS_LOCK:
+        states = list(_PIPELINE_ACTIVE_RUNS.values())
+
+    for state in states:
+        if _is_pipeline_process_running(state.get("process")):
+            count += 1
+
+    return count
+
+
+def _owner_active_pipeline_state(owner_user_id: str) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return {}
+
+    with _PIPELINE_ACTIVE_RUNS_LOCK:
+        state = _PIPELINE_ACTIVE_RUNS.get(owner)
+
+    if not isinstance(state, dict):
+        return {}
+
+    return state
+
+
+def _set_owner_active_pipeline_state(owner_user_id: str, state: Dict[str, Any]) -> None:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return
+
+    with _PIPELINE_ACTIVE_RUNS_LOCK:
+        _PIPELINE_ACTIVE_RUNS[owner] = state
+
+def _pipeline_status_snapshot(state: Any = None) -> Dict[str, Any]:
+    run_state = state if isinstance(state, dict) else _PIPELINE_RUN_STATE
+
+    process = run_state.get("process")
+    log_handle = run_state.get("log_handle")
 
     if process is not None:
         return_code = process.poll()
         if return_code is None:
-            _PIPELINE_RUN_STATE["status"] = "running"
+            run_state["status"] = "running"
         else:
-            _PIPELINE_RUN_STATE["status"] = "succeeded" if return_code == 0 else "failed"
-            _PIPELINE_RUN_STATE["finished_at"] = (
-                _PIPELINE_RUN_STATE.get("finished_at") or _utc_now()
-            )
-            _PIPELINE_RUN_STATE["return_code"] = return_code
-            _PIPELINE_RUN_STATE["process"] = None
-            _PIPELINE_RUN_STATE["child_pid"] = None
+            run_state["status"] = "succeeded" if return_code == 0 else "failed"
+            run_state["finished_at"] = run_state.get("finished_at") or _utc_now()
+            run_state["return_code"] = return_code
+            run_state["process"] = None
+            run_state["child_pid"] = None
 
             if log_handle is not None:
                 try:
                     log_handle.close()
                 except Exception:
                     pass
-                _PIPELINE_RUN_STATE["log_handle"] = None
+                run_state["log_handle"] = None
 
-    status = _PIPELINE_RUN_STATE.get("status", "idle")
+    status = run_state.get("status", "idle")
     return {
         "status": status,
-        "started_at": _PIPELINE_RUN_STATE.get("started_at", ""),
-        "finished_at": _PIPELINE_RUN_STATE.get("finished_at", ""),
-        "return_code": _PIPELINE_RUN_STATE.get("return_code"),
-        "command": _PIPELINE_RUN_STATE.get("command", []),
-        "output_dir": _PIPELINE_RUN_STATE.get("output_dir", str(DEFAULT_OUTPUT_DIR)),
-        "log_path": _PIPELINE_RUN_STATE.get("log_path", str(DEFAULT_PIPELINE_LOG_PATH)),
-        "status_path": _PIPELINE_RUN_STATE.get("status_path", str(DEFAULT_PIPELINE_STATUS_PATH)),
-        "run_id": _PIPELINE_RUN_STATE.get("run_id", ""),
-        "child_pid": _PIPELINE_RUN_STATE.get("child_pid"),
-        "error": _PIPELINE_RUN_STATE.get("error", ""),
+        "started_at": run_state.get("started_at", ""),
+        "finished_at": run_state.get("finished_at", ""),
+        "return_code": run_state.get("return_code"),
+        "command": run_state.get("command", []),
+        "output_dir": run_state.get("output_dir", str(DEFAULT_OUTPUT_DIR)),
+        "log_path": run_state.get("log_path", str(DEFAULT_PIPELINE_LOG_PATH)),
+        "status_path": run_state.get("status_path", str(DEFAULT_PIPELINE_STATUS_PATH)),
+        "run_id": run_state.get("run_id", ""),
+        "child_pid": run_state.get("child_pid"),
+        "error": run_state.get("error", ""),
+        "owner_user_id": run_state.get("owner_user_id", ""),
         "is_running": status == "running",
     }
 
@@ -1805,30 +1874,6 @@ def _is_pipeline_process_running(process: Any) -> bool:
 
 def _pipeline_terminal_statuses() -> set:
     return {"succeeded", "failed", "cancelled"}
-
-
-def _safe_pipeline_busy_payload(*, owner_user_id: str) -> Dict[str, Any]:
-    return {
-        "ok": True,
-        "pipeline_gate": user_pipeline_gate_payload(owner_user_id=owner_user_id)
-        if _clean_text(owner_user_id)
-        else {},
-        "status": "busy",
-        "running": False,
-        "can_start": False,
-        "blocked_by_other_user": True,
-        "message": "Another Live Pipeline run is currently active. Try again after it finishes.",
-        "started_at": "",
-        "finished_at": "",
-        "return_code": None,
-        "command": [],
-        "output_dir": "",
-        "log_path": "",
-        "status_path": "",
-        "run_id": "",
-        "child_pid": None,
-        "error": "",
-    }
 
 
 def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, Any]:
@@ -2217,19 +2262,13 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
     if not owner:
         return pipeline_status_payload(owner_user_id=owner_user_id)
 
-    active_owner = _clean_text(_PIPELINE_RUN_STATE.get("owner_user_id"))
-    active_process = _PIPELINE_RUN_STATE.get("process")
-    active_is_running = _is_pipeline_process_running(active_process)
-
-    if active_owner and active_owner != owner:
-        if active_is_running:
-            return _safe_pipeline_busy_payload(owner_user_id=owner)
+    state = _owner_active_pipeline_state(owner)
+    if not state:
         return _latest_owner_pipeline_status_payload(owner_user_id=owner)
 
-    payload = pipeline_status_payload(owner_user_id=owner)
+    payload = pipeline_status_payload(owner_user_id=owner, state=state)
     pipeline = dict(payload.get("pipeline", {}) or {})
 
-    # Persist the run row first. user_pipeline_artifacts has a FK to user_pipeline_runs(run_id).
     _persist_user_pipeline_status_snapshot(
         owner_user_id=owner,
         status_payload=pipeline,
@@ -2245,7 +2284,6 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
         pipeline["artifact_ingestion"] = artifact_ingestion
         payload["pipeline"] = pipeline
 
-        # Persist again so the run row captures artifact_ingestion metadata.
         _persist_user_pipeline_status_snapshot(
             owner_user_id=owner,
             status_payload=pipeline,
@@ -2253,8 +2291,8 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
 
     return payload
 
-def pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
-    snapshot = _pipeline_status_snapshot()
+def pipeline_status_payload(*, owner_user_id: str = "", state: Any = None) -> Dict[str, Any]:
+    snapshot = _pipeline_status_snapshot(state=state)
     runtime_status = _load_runtime_status_file(snapshot.get("status_path", ""))
 
     if runtime_status and _runtime_status_is_stale_startup(snapshot, runtime_status):
@@ -3075,16 +3113,20 @@ def run_live_pipeline_payload(
                 or "Delete seen data is disabled until this user has completed at least one successful Live Pipeline run."
             )
 
-        active_process = _PIPELINE_RUN_STATE.get("process")
-        active_owner = _clean_text(_PIPELINE_RUN_STATE.get("owner_user_id"))
-        if _is_pipeline_process_running(active_process) and active_owner and active_owner != owner_for_pipeline_gate:
-            raise ValueError(
-                "Another Live Pipeline run is currently active. Try again after it finishes."
-            )
+        owner_state = _owner_active_pipeline_state(owner_for_pipeline_gate)
+        if owner_state and _pipeline_status_snapshot(state=owner_state).get("is_running"):
+            raise ValueError("A live pipeline run is already in progress for this user.")
 
-    snapshot = _pipeline_status_snapshot()
-    if snapshot.get("is_running"):
-        raise ValueError("A live pipeline run is already in progress.")
+        active_count = _active_user_pipeline_run_count()
+        max_count = _max_concurrent_user_pipeline_runs()
+        if active_count >= max_count:
+            raise ValueError(
+                f"Live Pipeline capacity is currently full ({active_count}/{max_count}). Try again after a run finishes."
+            )
+    else:
+        snapshot = _pipeline_status_snapshot()
+        if snapshot.get("is_running"):
+            raise ValueError("A live pipeline run is already in progress.")
 
     requested_output_dir = Path(output_dir).expanduser()
     run_id = _new_run_id()
@@ -3216,31 +3258,42 @@ def run_live_pipeline_payload(
     
     runtime_payload["child_pid"] = process.pid
     _write_runtime_status_file(canonical_status_path, runtime_payload)
-    _PIPELINE_RUN_STATE["process"] = process
-    _PIPELINE_RUN_STATE["log_handle"] = log_handle
-    _PIPELINE_RUN_STATE["status"] = "running"
-    _PIPELINE_RUN_STATE["started_at"] = _utc_now()
-    _PIPELINE_RUN_STATE["finished_at"] = ""
-    _PIPELINE_RUN_STATE["return_code"] = None
-    _PIPELINE_RUN_STATE["command"] = cmd
-    _PIPELINE_RUN_STATE["output_dir"] = str(output_dir)
-    _PIPELINE_RUN_STATE["log_path"] = str(canonical_log_path)
-    _PIPELINE_RUN_STATE["status_path"] = str(canonical_status_path)
-    _PIPELINE_RUN_STATE["run_id"] = run_id
-    _PIPELINE_RUN_STATE["child_pid"] = process.pid
-    _PIPELINE_RUN_STATE["error"] = ""
-    _PIPELINE_RUN_STATE["owner_user_id"] = owner_for_pipeline_gate
+
+    target_state = _new_pipeline_run_state()
+    target_state["process"] = process
+    target_state["log_handle"] = log_handle
+    target_state["status"] = "running"
+    target_state["started_at"] = _utc_now()
+    target_state["finished_at"] = ""
+    target_state["return_code"] = None
+    target_state["command"] = cmd
+    target_state["output_dir"] = str(output_dir)
+    target_state["log_path"] = str(canonical_log_path)
+    target_state["status_path"] = str(canonical_status_path)
+    target_state["run_id"] = run_id
+    target_state["child_pid"] = process.pid
+    target_state["error"] = ""
+    target_state["owner_user_id"] = owner_for_pipeline_gate
 
     if owner_for_pipeline_gate:
+        _set_owner_active_pipeline_state(owner_for_pipeline_gate, target_state)
+        started_payload = pipeline_status_payload(
+            owner_user_id=owner_for_pipeline_gate,
+            state=target_state,
+        )
         _persist_user_pipeline_status_snapshot(
             owner_user_id=owner_for_pipeline_gate,
-            status_payload=pipeline_status_payload(owner_user_id=owner_for_pipeline_gate),
+            status_payload=started_payload.get("pipeline", {}),
         )
+    else:
+        _PIPELINE_RUN_STATE.clear()
+        _PIPELINE_RUN_STATE.update(target_state)
+        started_payload = pipeline_status_payload()
 
     return {
         "ok": True,
         "message": "Live pipeline started.",
-        "pipeline": pipeline_status_payload()["pipeline"],
+        "pipeline": started_payload["pipeline"],
     }
 
 def _clean_text(value: Any) -> str:

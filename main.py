@@ -536,14 +536,6 @@ async def main_async(args):
             Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
         )
 
-    if jobs:
-        start_stage("sheet_export", f"Writing {len(jobs)} jobs to sheet")
-
-        from src.pipeline.excel_writer import write_jobs_to_sheet
-
-        write_jobs_to_sheet(jobs)
-        complete_stage("sheet_export", counts={"final_jobs": len(jobs)})
-
     start_stage("finalization", f"Final jobs: {len(jobs)}")
     logger.info("Final jobs: %s", len(jobs))
 

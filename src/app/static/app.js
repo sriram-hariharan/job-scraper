@@ -55,7 +55,6 @@ const DEFAULT_STAGE_ORDER = [
   "application_priority",
   "rag_export",
   "planning",
-  "sheet_export",
   "finalization",
 ];
 
@@ -75,7 +74,6 @@ const STAGE_LABELS = {
   application_priority: "Application Priority",
   rag_export: "RAG Export",
   planning: "Planning",
-  sheet_export: "Sheet Export",
   finalization: "Finalization",
 };
 

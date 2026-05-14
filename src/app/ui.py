@@ -687,7 +687,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/app.js?v=ui_redesign_v21"></script>
+  <script src="/static/app.js?v=pipeline_onboarding_gate_v1"></script>
   </body>
 </html>
     """.strip()

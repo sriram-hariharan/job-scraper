@@ -71,6 +71,56 @@ function clearStatus() {
   banner.className = "profile-inline-status hidden";
 }
 
+
+function isResumeOnboardingMode() {
+  const params = new URLSearchParams(window.location.search);
+  return params.get("onboarding") === "resume_upload";
+}
+
+function ensureResumeOnboardingBanner() {
+  let banner = qs("resumeOnboardingBanner");
+  if (banner) return banner;
+
+  const sectionCard = document.querySelector(".profile-section-card");
+  if (!sectionCard) return null;
+
+  banner = document.createElement("div");
+  banner.id = "resumeOnboardingBanner";
+  banner.className = "profile-inline-status hidden";
+  sectionCard.insertBefore(banner, qs("resumeStatusBanner") || sectionCard.firstChild);
+  return banner;
+}
+
+function renderResumeOnboardingState(resumes) {
+  const banner = ensureResumeOnboardingBanner();
+  if (!banner) return;
+
+  const resumeCount = Array.isArray(resumes) ? resumes.length : 0;
+  const isOnboarding = isResumeOnboardingMode();
+
+  if (!isOnboarding && resumeCount > 0) {
+    banner.className = "profile-inline-status hidden";
+    banner.innerHTML = "";
+    return;
+  }
+
+  if (resumeCount <= 0) {
+    banner.className = "profile-inline-status info";
+    banner.innerHTML = `
+      <strong>Resume required.</strong>
+      Upload at least one PDF resume to unlock Live Pipeline.
+    `;
+    return;
+  }
+
+  banner.className = "profile-inline-status success";
+  banner.innerHTML = `
+    <strong>Resume uploaded.</strong>
+    Live Pipeline is now unlocked.
+    <a class="ghost-btn btn-sm" href="/">Continue to Live Pipeline</a>
+  `;
+}
+
 function getResumeDeleteModal() {
   return qs("resumeDeleteModal");
 }
@@ -135,7 +185,9 @@ async function loadResumes() {
   listEl.innerHTML = `<div class="resume-empty-state">Loading...</div>`;
 
   const data = await fetchJson("/profile/resumes");
-  renderResumeList(data.resumes || []);
+  const resumes = data.resumes || [];
+  renderResumeList(resumes);
+  renderResumeOnboardingState(resumes);
 }
 
 function normalizeSavedScanSource(value) {

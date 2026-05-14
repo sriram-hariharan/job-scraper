@@ -11,6 +11,7 @@ const state = {
   currentPipelineFailureKey: null,
   acknowledgedPipelineSuccessKey: null,
   lastPipelineTableRefreshKey: "",
+  pipelineGate: null,
 };
 
 const queueTableState = {
@@ -2400,3 +2401,183 @@ async function init() {
 }
 
 window.addEventListener("DOMContentLoaded", init);
+
+function getPipelineGate() {
+  return state.pipelineGate || {};
+}
+
+function ensurePipelineGateBanner() {
+  let banner = qs("pipelineGateBanner");
+  if (banner) return banner;
+
+  const pageHeader = document.querySelector(".page-header");
+  if (!pageHeader || !pageHeader.parentElement) return null;
+
+  banner = document.createElement("section");
+  banner.id = "pipelineGateBanner";
+  banner.className = "profile-inline-status hidden pipeline-gate-banner";
+  pageHeader.insertAdjacentElement("afterend", banner);
+  return banner;
+}
+
+function forcePipelineDeleteSeenDataNo() {
+  document.querySelectorAll("input[name='pipelineDeleteSeenData']").forEach((input) => {
+    input.checked = input.value === "no";
+  });
+}
+
+function setPipelineDeleteSeenDataDisabled(isDisabled, reason = "") {
+  document.querySelectorAll("input[name='pipelineDeleteSeenData']").forEach((input) => {
+    if (input.value === "yes") {
+      input.disabled = Boolean(isDisabled);
+      input.closest(".binary-toggle-option")?.classList.toggle("is-disabled", Boolean(isDisabled));
+    }
+  });
+
+  if (isDisabled) {
+    forcePipelineDeleteSeenDataNo();
+  }
+
+  const helper = document.querySelector(".pipeline-toggle-group .control-help");
+  if (helper && reason) {
+    helper.textContent = reason;
+  }
+}
+
+function applyPipelineGateUi(gate) {
+  const safeGate = gate || {};
+  const runButton = qs("runPipelineBtn");
+  const banner = ensurePipelineGateBanner();
+  const meta = qs("pipelineRunMeta");
+
+  if (!safeGate.can_run_live_pipeline) {
+    const message =
+      safeGate.live_pipeline_block_reason ||
+      "Upload at least one resume before running Live Pipeline.";
+
+    if (runButton) {
+      runButton.disabled = true;
+      runButton.setAttribute("aria-disabled", "true");
+      runButton.title = message;
+    }
+
+    if (banner) {
+      banner.className = "profile-inline-status info pipeline-gate-banner";
+      banner.innerHTML = `
+        <strong>Resume required.</strong>
+        ${escapeHtml(message)}
+        <a class="ghost-btn btn-sm" href="${escapeHtml(safeGate.profile_resume_upload_url || "/profile?onboarding=resume_upload")}">
+          Upload resume
+        </a>
+      `;
+    }
+
+    if (meta) {
+      meta.textContent = message;
+    }
+  } else {
+    if (runButton) {
+      runButton.disabled = false;
+      runButton.removeAttribute("aria-disabled");
+      runButton.title = "";
+    }
+
+    if (banner) {
+      banner.className = "profile-inline-status hidden pipeline-gate-banner";
+      banner.innerHTML = "";
+    }
+  }
+
+  const deleteSeenBlocked = !safeGate.can_delete_seen_data;
+  setPipelineDeleteSeenDataDisabled(
+    deleteSeenBlocked,
+    deleteSeenBlocked
+      ? safeGate.delete_seen_data_block_reason ||
+          "Delete seen data is available after your first successful Live Pipeline run."
+      : "No keeps the seen-job cache. Yes reruns jobs that were already seen before."
+  );
+}
+
+function redirectToResumeOnboardingIfRequired(gate) {
+  const safeGate = gate || {};
+  if (!safeGate.requires_resume_upload) return;
+  if (window.location.pathname !== "/") return;
+
+  const target = safeGate.profile_resume_upload_url || "/profile?onboarding=resume_upload";
+  window.location.href = target;
+}
+
+async function loadPipelineGateForDashboard() {
+  const workspaceState = await fetchJson("/user/workspace-state");
+  const gate = workspaceState.pipeline_gate || {};
+  state.pipelineGate = gate;
+  applyPipelineGateUi(gate);
+  redirectToResumeOnboardingIfRequired(gate);
+  return gate;
+}
+
+function bindPipelineGateGuards() {
+  document.addEventListener(
+    "click",
+    (event) => {
+      const gate = getPipelineGate();
+      const blocked = gate && gate.can_run_live_pipeline === false;
+
+      const runTrigger = event.target.closest(
+        "#runPipelineBtn, #openPipelineConfirmBtn, #confirmPipelineRunBtn"
+      );
+
+      if (blocked && runTrigger) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        window.location.href = gate.profile_resume_upload_url || "/profile?onboarding=resume_upload";
+        return;
+      }
+
+      const deleteSeenYes = event.target.closest(
+        "input[name='pipelineDeleteSeenData'][value='yes']"
+      );
+
+      if (deleteSeenYes && gate && gate.can_delete_seen_data === false) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        forcePipelineDeleteSeenDataNo();
+      }
+    },
+    true
+  );
+
+  document.addEventListener(
+    "change",
+    (event) => {
+      const gate = getPipelineGate();
+      const deleteSeenYes = event.target.closest?.(
+        "input[name='pipelineDeleteSeenData'][value='yes']"
+      );
+
+      if (deleteSeenYes && gate && gate.can_delete_seen_data === false) {
+        event.preventDefault();
+        forcePipelineDeleteSeenDataNo();
+      }
+    },
+    true
+  );
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  bindPipelineGateGuards();
+
+  loadPipelineGateForDashboard().catch((err) => {
+    const banner = ensurePipelineGateBanner();
+    if (banner) {
+      banner.className = "profile-inline-status error pipeline-gate-banner";
+      banner.textContent = `Could not load pipeline access state: ${err.message}`;
+    }
+  });
+
+  window.setInterval(() => {
+    if (state.pipelineGate) {
+      applyPipelineGateUi(state.pipelineGate);
+    }
+  }, 1500);
+});

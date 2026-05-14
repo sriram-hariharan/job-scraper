@@ -124,7 +124,7 @@ def profile_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
+  <script src="/static/profile.js?v=profile_onboarding_gate_v1"></script>
 </body>
 </html>
     """.strip()
@@ -234,7 +234,7 @@ def saved_scans_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon"></script>
+  <script src="/static/profile.js?v=profile_onboarding_gate_v1"></script>
 </body>
 </html>
     """.strip()

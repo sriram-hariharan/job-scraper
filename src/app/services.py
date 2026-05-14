@@ -7,6 +7,7 @@ from urllib.parse import urlparse, urlunparse
 import csv
 import hashlib
 import json
+import logging
 import os
 import re
 import subprocess
@@ -128,6 +129,8 @@ from src.tailoring.score_utils import (
     score_delta_to_points,
     score_to_points,
 )
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)

@@ -140,6 +140,9 @@ DEFAULT_PROFILE_RESUME_DIR = Path(
 DEFAULT_SCAN_UPLOAD_DIR = Path(
     os.environ.get("SCAN_UPLOAD_DIR", "data/scan_uploads")
 ).expanduser()
+DEFAULT_PIPELINE_SCRATCH_DIR = Path(
+    os.environ.get("JOB_STACK_PIPELINE_SCRATCH_DIR", "tmp/pipeline_runs")
+).expanduser()
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
 
@@ -252,6 +255,28 @@ def _get_scan_upload_dir() -> Path:
     upload_dir = DEFAULT_SCAN_UPLOAD_DIR
     upload_dir.mkdir(parents=True, exist_ok=True)
     return upload_dir
+
+
+def _safe_run_dir_name(run_id: str = "") -> str:
+    safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", _clean_text(run_id)).strip("._-")
+    return safe[:120] or "run"
+
+
+def _pipeline_scratch_output_dir(
+    *,
+    owner_user_id: str,
+    run_id: str,
+) -> Path:
+    owner_dir = _safe_owner_dir_name(owner_user_id) or "anonymous"
+    run_dir = _safe_run_dir_name(run_id)
+    output_dir = (
+        DEFAULT_PIPELINE_SCRATCH_DIR
+        / owner_dir
+        / run_dir
+        / "application_planning"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    return output_dir
 
 
 def _sanitize_resume_filename(value: str) -> str:
@@ -2759,12 +2784,20 @@ def run_live_pipeline_payload(
     if snapshot.get("is_running"):
         raise ValueError("A live pipeline run is already in progress.")
 
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    requested_output_dir = Path(output_dir).expanduser()
+    run_id = _new_run_id()
+
+    if owner_for_pipeline_gate:
+        output_dir = _pipeline_scratch_output_dir(
+            owner_user_id=owner_for_pipeline_gate,
+            run_id=run_id,
+        )
+    else:
+        output_dir = requested_output_dir
+        output_dir.mkdir(parents=True, exist_ok=True)
 
     canonical_log_path = _derive_pipeline_log_path(output_dir)
     canonical_status_path = _derive_pipeline_status_path(output_dir)
-    run_id = _new_run_id()
 
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
@@ -2835,6 +2868,9 @@ def run_live_pipeline_payload(
             "generate_llm_fallback": bool(generate_llm_fallback),
             "generate_llm_adjudication": effective_generate_llm_adjudication,
             "delete_seen_data": normalized_delete_seen_data,
+            "requested_output_dir": str(requested_output_dir),
+            "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
+            "owner_user_id": owner_for_pipeline_gate,
         },
     }
     canonical_status_path.write_text(

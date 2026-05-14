@@ -192,7 +192,7 @@ def status(
 
 @app.get("/pipeline/status")
 def pipeline_status(http_request: Request):
-    return services.pipeline_status_payload(
+    return services.owner_pipeline_status_payload(
         owner_user_id=_auth_owner_user_id(http_request),
     )
 

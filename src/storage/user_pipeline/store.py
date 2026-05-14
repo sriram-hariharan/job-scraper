@@ -822,7 +822,7 @@ def get_user_seen_jobs_postgres_payload(
     ensure_schema: bool = True,
 ) -> Dict[str, Any]:
     owner = _require_owner_user_id(owner_user_id)
-    safe_limit = max(1, min(int(limit), 1000))
+    safe_limit = max(1, min(int(limit), 250000))
 
     sql = _schema_prefix(ensure_schema) + f"""
 WITH seen_rows AS (

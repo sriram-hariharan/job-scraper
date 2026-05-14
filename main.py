@@ -381,6 +381,44 @@ def _resolve_delete_seen_data(args) -> str:
     return "yes" if delete_seen_data in {"y", "yes"} else "no"
 
 
+def _seen_jobs_backend_from_env() -> str:
+    return str(os.environ.get("JOB_STACK_SEEN_JOBS_BACKEND", "") or "").strip().lower()
+
+
+def _owner_user_id_from_env() -> str:
+    return str(os.environ.get("JOB_STACK_OWNER_USER_ID", "") or "").strip()
+
+
+def _clear_seen_jobs_for_current_backend() -> None:
+    backend = _seen_jobs_backend_from_env()
+    owner_user_id = _owner_user_id_from_env()
+
+    if backend == "postgres" and owner_user_id:
+        from src.storage.user_pipeline.store import clear_user_seen_jobs_postgres_payload
+
+        payload = clear_user_seen_jobs_postgres_payload(
+            owner_user_id=owner_user_id,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        logger.info(
+            "Deleted seen data from Postgres for owner_user_id=%s deleted_count=%s",
+            owner_user_id,
+            payload.get("deleted_count", 0),
+        )
+        return
+
+    seen_file = os.path.join(os.getcwd(), "data", "seen_job_ids.txt")
+    if os.path.exists(seen_file):
+        os.remove(seen_file)
+        logger.info(f"Deleted seen data: {seen_file}")
+    else:
+        logger.info(f"Seen file not found: {seen_file}")
+
+
 async def main_async(args):
     logger.info("Starting main pipeline entrypoint...")
 
@@ -407,12 +445,7 @@ async def main_async(args):
     )
 
     if delete_seen_data == "yes":
-        seen_file = os.path.join(os.getcwd(), "data", "seen_job_ids.txt")
-        if os.path.exists(seen_file):
-            os.remove(seen_file)
-            logger.info(f"Deleted seen data: {seen_file}")
-        else:
-            logger.info(f"Seen file not found: {seen_file}")
+        _clear_seen_jobs_for_current_backend()
 
     start_stage("startup", "Initializing metrics store")
 

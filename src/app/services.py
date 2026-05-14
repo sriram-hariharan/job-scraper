@@ -3186,6 +3186,11 @@ def run_live_pipeline_payload(
     child_env["JOB_APP_PIPELINE_STATUS_PATH"] = str(canonical_status_path)
     child_env["JOB_APP_PIPELINE_RUN_ID"] = run_id
 
+    if owner_for_pipeline_gate:
+        child_env["JOB_STACK_OWNER_USER_ID"] = owner_for_pipeline_gate
+        child_env["JOB_STACK_USER_PIPELINE_RUN_ID"] = run_id
+        child_env["JOB_STACK_SEEN_JOBS_BACKEND"] = "postgres"
+
     try:
         process = subprocess.Popen(
             cmd,

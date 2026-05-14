@@ -7,12 +7,14 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-RESUME_DIR = os.getenv("RESUME_DIR")
+LEGACY_RESUME_DIR_ENV = "RESUME_DIR"
 
-if not RESUME_DIR:
-    raise RuntimeError("RESUME_DIR not set in environment")
 
-RESUME_DIR = Path(RESUME_DIR)
+def _legacy_resume_dir_from_env() -> Path:
+    raw = str(os.getenv(LEGACY_RESUME_DIR_ENV, "") or "").strip()
+    if not raw:
+        raise RuntimeError(f"{LEGACY_RESUME_DIR_ENV} not set in environment")
+    return Path(raw).expanduser()
 
 
 def normalize_text(text: str) -> str:
@@ -61,11 +63,12 @@ def extract_resume_texts(pdf_path: Path) -> Dict[str, str]:
 
 def load_resumes() -> List[Dict]:
     resumes = []
+    resume_dir = _legacy_resume_dir_from_env()
 
-    if not RESUME_DIR.exists():
-        raise RuntimeError(f"Resume directory not found: {RESUME_DIR}")
+    if not resume_dir.exists():
+        raise RuntimeError(f"Resume directory not found: {resume_dir}")
 
-    for file in RESUME_DIR.iterdir():
+    for file in resume_dir.iterdir():
         if file.suffix.lower() != ".pdf":
             continue
 
@@ -88,9 +91,10 @@ def load_resumes() -> List[Dict]:
 
 def load_resumes_by_name(names: List[str]) -> List[Dict]:
     resumes = []
+    resume_dir = _legacy_resume_dir_from_env()
 
     for name in names:
-        path = RESUME_DIR / name
+        path = resume_dir / name
 
         if not path.exists():
             print(f"Resume missing: {name}")

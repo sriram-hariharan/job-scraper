@@ -3847,3 +3847,672 @@ html[data-theme="dark"] .first-run-prompt-secondary {
   background: #17243a;
   color: #dbeafe;
 }
+
+/* profile_admin_users_v1: admin-only user access management. */
+.profile-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 18px;
+  padding: 5px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-surface-2);
+}
+
+.profile-tab-btn {
+  min-height: 38px;
+  border-radius: 999px !important;
+  border: 0 !important;
+  padding: 0 16px;
+  background: transparent !important;
+  color: var(--app-muted) !important;
+  box-shadow: none !important;
+}
+
+.profile-tab-btn.is-active {
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+}
+
+.profile-admin-users-section {
+  margin-top: 24px;
+}
+
+/* profile_admin_users_v3: flatten resume manager panels; keep only useful controls framed. */
+.resume-upload-panel,
+.resume-list-panel {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.resume-manager-grid {
+  align-items: start !important;
+}
+
+.resume-list-panel {
+  overflow: visible !important;
+}
+
+html[data-theme="light"] .resume-upload-panel,
+html[data-theme="light"] .resume-list-panel {
+  background: transparent !important;
+}
+
+/* profile_admin_users_v4: remove decorative box from resume delete actions. */
+.resume-row .resume-delete-btn {
+  width: auto !important;
+  height: auto !important;
+  min-height: 0 !important;
+  display: inline-flex !important;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  padding: 8px 10px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: #fb7185 !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+}
+
+.resume-row .resume-delete-btn:hover {
+  border: 0 !important;
+  background: rgba(251, 113, 133, 0.12) !important;
+  box-shadow: none !important;
+  color: #f43f5e !important;
+  transform: none !important;
+}
+
+.resume-row .resume-delete-btn::before {
+  content: none !important;
+  display: none !important;
+}
+
+html[data-theme="light"] .resume-row .resume-delete-btn {
+  color: #b91c1c !important;
+}
+
+html[data-theme="light"] .resume-row .resume-delete-btn:hover {
+  background: #fef2f2 !important;
+  color: #991b1b !important;
+}
+
+.admin-users-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 18px;
+  background: var(--app-surface-2);
+}
+
+.admin-users-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 980px;
+}
+
+.admin-users-table th,
+.admin-users-table td {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--app-border);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.admin-users-table th {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  background: var(--app-inset);
+}
+
+.admin-users-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.admin-user-name {
+  color: var(--app-text);
+  font-weight: 850;
+}
+
+.admin-user-id {
+  margin-top: 3px;
+  color: var(--app-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.admin-user-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 76px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-user-status.is-active {
+  border: 1px solid rgba(52, 211, 153, 0.38);
+  background: rgba(52, 211, 153, 0.14);
+  color: #bbf7d0;
+}
+
+.admin-user-status.is-revoked {
+  border: 1px solid rgba(251, 113, 133, 0.38);
+  background: rgba(251, 113, 133, 0.14);
+  color: #fecdd3;
+}
+
+.admin-user-access-switch {
+  min-width: 132px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 4px 12px 4px 5px;
+  border-radius: 999px !important;
+  border: 1px solid var(--app-border-2) !important;
+  background: var(--app-inset) !important;
+  color: var(--app-text) !important;
+}
+
+.admin-user-access-knob {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.92;
+}
+
+.admin-user-access-switch.is-authorized {
+  border-color: rgba(52, 211, 153, 0.48) !important;
+  background: rgba(52, 211, 153, 0.14) !important;
+  color: var(--app-success) !important;
+}
+
+.admin-user-access-switch.is-revoked {
+  border-color: #fb7185 !important;
+  background: #be123c !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(190, 18, 60, 0.28) !important;
+}
+
+.admin-user-access-label {
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.admin-user-delete-btn,
+.admin-user-delete-confirm-btn,
+.admin-user-revoke-confirm-btn {
+  border: 1px solid #fb7185 !important;
+  background: #be123c !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(190, 18, 60, 0.28) !important;
+}
+
+.admin-user-authorize-confirm-btn {
+  border: 1px solid #34d399 !important;
+  background: #047857 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(4, 120, 87, 0.25) !important;
+}
+
+.admin-user-delete-btn {
+  min-height: 38px;
+}
+
+.admin-user-confirm-card {
+  width: min(560px, calc(100vw - 32px)) !important;
+}
+
+.admin-user-confirm-card .modal-actions {
+  justify-content: flex-end;
+}
+
+.admin-user-confirm-copy {
+  display: grid;
+  gap: 8px;
+  color: var(--app-text-2);
+  line-height: 1.5;
+}
+
+.admin-user-confirm-copy strong {
+  color: var(--app-text);
+  font-size: 18px;
+}
+
+.admin-user-confirm-copy span {
+  color: var(--app-muted);
+}
+
+.admin-user-high-warning {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border: 1px solid rgba(251, 113, 133, 0.5);
+  border-radius: 14px;
+  background: rgba(251, 113, 133, 0.12);
+  color: #fecdd3;
+  font-weight: 850;
+  line-height: 1.45;
+}
+
+.admin-users-empty-cell {
+  color: var(--app-muted);
+  text-align: center !important;
+}
+
+html[data-theme="light"] .admin-users-table-wrap,
+html[data-theme="light"] .admin-users-table td {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .profile-tabs {
+  border-color: #cbd5e1;
+  background: #ffffff;
+}
+
+html[data-theme="light"] .profile-tab-btn {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .profile-tab-btn.is-active {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .admin-users-table th {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+html[data-theme="light"] .admin-user-name,
+html[data-theme="light"] .admin-user-access-label,
+html[data-theme="light"] .admin-user-confirm-copy strong {
+  color: #0f172a;
+}
+
+html[data-theme="light"] .admin-user-id,
+html[data-theme="light"] .admin-user-confirm-copy,
+html[data-theme="light"] .admin-user-confirm-copy span {
+  color: #475569;
+}
+
+html[data-theme="light"] .admin-user-status.is-active {
+  border-color: #86efac;
+  background: #ecfdf5;
+  color: #065f46;
+}
+
+html[data-theme="light"] .admin-user-status.is-revoked {
+  border-color: #fca5a5;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+html[data-theme="light"] .admin-user-access-switch.is-authorized {
+  border-color: #86efac !important;
+  background: #ecfdf5 !important;
+  color: #059669 !important;
+}
+
+html[data-theme="light"] .admin-user-access-switch.is-revoked {
+  border-color: #b91c1c !important;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.2) !important;
+}
+
+html[data-theme="light"] .admin-user-delete-btn,
+html[data-theme="light"] .admin-user-delete-confirm-btn,
+html[data-theme="light"] .admin-user-revoke-confirm-btn {
+  border-color: #b91c1c !important;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18) !important;
+}
+
+html[data-theme="light"] .admin-user-authorize-confirm-btn {
+  border-color: #047857 !important;
+  background: #059669 !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(5, 150, 105, 0.18) !important;
+}
+
+html[data-theme="light"] .admin-user-high-warning {
+  border-color: #f87171;
+  background: #fef2f2;
+  color: #7f1d1d;
+}
+
+/* ui_redesign_v37: Live pipeline modal readability and theme parity. */
+.pipeline-modal-card {
+  width: min(1120px, calc(100vw - 40px)) !important;
+}
+
+.pipeline-modal-card .modal-header {
+  border-bottom-color: var(--app-border) !important;
+}
+
+.pipeline-modal-card .modal-header h3,
+.pipeline-option-title,
+.pipeline-toggle-name {
+  color: var(--app-text) !important;
+}
+
+.pipeline-modal-card .control-group label,
+.pipeline-inline-helper-label,
+.pipeline-toggle-help,
+.pipeline-modal-card .control-help {
+  color: var(--app-muted) !important;
+}
+
+.pipeline-form-grid,
+.pipeline-toggle-group,
+.pipeline-toggle-item {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-2) !important;
+}
+
+.pipeline-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+}
+
+.pipeline-support-row {
+  margin-top: 14px !important;
+}
+
+.pipeline-toggle-grid {
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)) !important;
+}
+
+.pipeline-toggle-item {
+  min-height: 104px;
+  gap: 18px !important;
+}
+
+.pipeline-toggle-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.pipeline-toggle-name {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.pipeline-toggle-item .binary-toggle {
+  flex: 0 0 auto;
+}
+
+.pipeline-overlay-success,
+.pipeline-overlay-failure {
+  color: var(--app-text) !important;
+}
+
+.pipeline-success-title,
+.pipeline-overlay-failure .pipeline-success-title {
+  color: var(--app-text) !important;
+}
+
+.pipeline-success-text,
+.pipeline-success-summary-text {
+  color: var(--app-text-2) !important;
+}
+
+.pipeline-success-summary {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-2) !important;
+  color: var(--app-text) !important;
+}
+
+.pipeline-overlay-failure .pipeline-success-summary,
+#pipelineFailureSummary,
+#pipelineFailureReason {
+  color: var(--app-text) !important;
+}
+
+.pipeline-overlay-failure .pipeline-success-visual {
+  background: color-mix(in srgb, var(--app-danger) 12%, transparent) !important;
+  border-color: color-mix(in srgb, var(--app-danger) 34%, var(--app-border)) !important;
+}
+
+.pipeline-overlay-failure .pipeline-success-static-check {
+  color: var(--app-danger) !important;
+}
+
+#pipelineSuccessOkBtn,
+#pipelineFailureOkBtn {
+  min-width: 120px;
+}
+
+html[data-theme="light"] .pipeline-overlay-failure .pipeline-success-static-check {
+  text-shadow: none !important;
+}
+
+.pipeline-confirm-card {
+  width: min(1120px, calc(100vw - 40px)) !important;
+}
+
+.pipeline-confirm-hero,
+.pipeline-confirm-panel,
+.pipeline-confirm-stat,
+.pipeline-confirm-flag {
+  border-color: var(--app-border-2) !important;
+  background: var(--app-surface-2) !important;
+}
+
+.pipeline-confirm-hero-title,
+.pipeline-confirm-panel-title,
+.pipeline-confirm-stat-value,
+.pipeline-confirm-meta-value,
+.pipeline-confirm-flag-label {
+  color: var(--app-text) !important;
+  opacity: 1 !important;
+}
+
+.pipeline-confirm-hero-copy,
+.pipeline-confirm-stat-label,
+.pipeline-confirm-meta-label {
+  color: var(--app-muted) !important;
+  opacity: 1 !important;
+}
+
+.pipeline-confirm-hero-badge,
+.pipeline-confirm-chip {
+  border-color: color-mix(in srgb, var(--app-primary) 42%, var(--app-border)) !important;
+  background: color-mix(in srgb, var(--app-primary) 12%, var(--app-surface-2)) !important;
+  color: var(--app-primary-strong) !important;
+  opacity: 1 !important;
+}
+
+.pipeline-confirm-grid {
+  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.3fr) !important;
+}
+
+.pipeline-confirm-actions {
+  border-top-color: var(--app-border) !important;
+  background: var(--app-surface) !important;
+}
+
+#backToPipelineConfigBtn {
+  background: var(--app-surface-2) !important;
+  color: var(--app-text) !important;
+}
+
+#confirmPipelineRunBtn {
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+}
+
+html[data-theme="light"] .pipeline-confirm-hero,
+html[data-theme="light"] .pipeline-confirm-panel,
+html[data-theme="light"] .pipeline-confirm-stat,
+html[data-theme="light"] .pipeline-confirm-flag {
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] .pipeline-confirm-flag.is-enabled .pipeline-confirm-flag-pill {
+  background: #ecfdf5 !important;
+  border-color: #86efac !important;
+  color: #065f46 !important;
+}
+
+html[data-theme="light"] .pipeline-confirm-flag.is-disabled .pipeline-confirm-flag-pill {
+  background: #fef2f2 !important;
+  border-color: #fca5a5 !important;
+  color: #7f1d1d !important;
+}
+
+/* ui_redesign_v38: crisp light-mode pipeline review surface. */
+html[data-theme="light"] #pipelineConfirmModal.modal-backdrop {
+  background: rgba(15, 23, 42, 0.42) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-card {
+  border: 1px solid #d6deea !important;
+  background: #ffffff !important;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .modal-header {
+  border-bottom: 1px solid #dbe3ef !important;
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .modal-header h3 {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .modal-header .subtext {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-scroll {
+  background: #ffffff !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero {
+  border: 1px solid #bfdbfe !important;
+  background:
+    linear-gradient(135deg, #eff6ff 0%, #ffffff 58%, #f8fafc 100%) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero-badge {
+  border: 1px solid #93c5fd !important;
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero-title {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-hero-copy {
+  color: #334155 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-stat {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-stat-label,
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-meta-label {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-stat-value,
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-meta-value {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-panel {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-panel-title {
+  color: #1e293b !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-chip {
+  border: 1px solid #bfdbfe !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-panel--flags {
+  background: #f8fafc !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-flag {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.05) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-flag-label {
+  color: #111827 !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal .pipeline-confirm-actions {
+  border-top: 1px solid #dbe3ef !important;
+  background: #ffffff !important;
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.06) !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal #backToPipelineConfigBtn {
+  border-color: #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] #pipelineConfirmModal #confirmPipelineRunBtn {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.22) !important;
+}
+
+@media (max-width: 760px) {
+  .pipeline-modal-card {
+    width: min(100vw - 16px, 1120px) !important;
+  }
+
+  .pipeline-confirm-card {
+    width: min(100vw - 16px, 1120px) !important;
+  }
+
+  .pipeline-form-grid,
+  .pipeline-toggle-grid,
+  .pipeline-confirm-grid,
+  .pipeline-confirm-hero-stats,
+  .pipeline-confirm-flag-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pipeline-toggle-item {
+    align-items: stretch !important;
+  }
+}

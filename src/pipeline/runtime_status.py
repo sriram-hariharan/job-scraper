@@ -24,7 +24,6 @@ STAGE_ORDER = [
     "application_priority",
     "rag_export",
     "planning",
-    "sheet_export",
     "finalization",
 ]
 

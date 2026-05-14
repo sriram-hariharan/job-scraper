@@ -6,6 +6,7 @@ from src.storage.auth.store import (
     _clean_text,
     _normalize_email,
     _run_psql_json_query,
+    _sql_bool_literal,
     _sql_quote_text,
     auth_schema_sql_text,
 )
@@ -330,6 +331,202 @@ def get_auth_user_for_session_token_hash_postgres_payload(
         "ok": bool(user and session),
         "user": user,
         "session": session,
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def _auth_user_admin_safe_where(alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    return f"{prefix}is_admin = FALSE AND COALESCE({prefix}access_level, 'user') <> 'admin'"
+
+
+def _auth_user_public_select_columns(alias: str = "") -> str:
+    prefix = f"{alias}." if alias else ""
+    return ",\n        ".join(
+        [
+            f"{prefix}user_id",
+            f"{prefix}email",
+            f"{prefix}normalized_email",
+            f"{prefix}display_name",
+            f"{prefix}access_level",
+            f"{prefix}is_active",
+            f"{prefix}is_admin",
+            f"{prefix}created_at",
+            f"{prefix}updated_at",
+            f"{prefix}last_login_at",
+        ]
+    )
+
+
+def _build_non_admin_users_sql(limit: int, *, ensure_schema: bool) -> str:
+    safe_limit = _normalize_positive_int(limit, "limit")
+    return _schema_prefix(ensure_schema) + f"""
+WITH non_admin_users AS (
+    SELECT
+        {_auth_user_public_select_columns()}
+    FROM auth_users
+    WHERE {_auth_user_admin_safe_where()}
+    ORDER BY created_at DESC, user_id DESC
+    LIMIT {safe_limit}
+)
+SELECT json_build_object(
+    'users',
+        COALESCE(
+            (SELECT json_agg(row_to_json(non_admin_users) ORDER BY non_admin_users.created_at DESC, non_admin_users.user_id DESC) FROM non_admin_users),
+            '[]'::json
+        ),
+    'count', (SELECT COUNT(*) FROM non_admin_users),
+    'total_count', (SELECT COUNT(*) FROM auth_users WHERE {_auth_user_admin_safe_where()})
+);
+""".strip()
+
+
+def _build_update_non_admin_user_access_sql(
+    user_id: str,
+    is_active: bool,
+    *,
+    ensure_schema: bool,
+) -> str:
+    revoke_sessions_sql = ""
+    if not is_active:
+        revoke_sessions_sql = """,
+revoked_sessions AS (
+    UPDATE auth_sessions
+    SET revoked_at = now()
+    WHERE user_id IN (SELECT user_id FROM updated_user)
+      AND revoked_at IS NULL
+    RETURNING session_id
+)"""
+
+    return _schema_prefix(ensure_schema) + f"""
+WITH updated_user AS (
+    UPDATE auth_users
+    SET
+        is_active = {_sql_bool_literal(is_active)},
+        updated_at = now()
+    WHERE user_id = {_sql_quote_text(user_id)}
+      AND {_auth_user_admin_safe_where()}
+    RETURNING
+        {_auth_user_public_select_columns()}
+){revoke_sessions_sql}
+SELECT json_build_object(
+    'updated', EXISTS (SELECT 1 FROM updated_user),
+    'user', COALESCE((SELECT row_to_json(updated_user) FROM updated_user LIMIT 1), '{{}}'::json),
+    'revoked_session_count', {("(SELECT COUNT(*) FROM revoked_sessions)" if not is_active else "0")}
+);
+""".strip()
+
+
+def _build_delete_non_admin_user_sql(user_id: str, *, ensure_schema: bool) -> str:
+    return _schema_prefix(ensure_schema) + f"""
+WITH deleted_user AS (
+    DELETE FROM auth_users
+    WHERE user_id = {_sql_quote_text(user_id)}
+      AND {_auth_user_admin_safe_where()}
+    RETURNING
+        {_auth_user_public_select_columns()}
+)
+SELECT json_build_object(
+    'deleted', EXISTS (SELECT 1 FROM deleted_user),
+    'user', COALESCE((SELECT row_to_json(deleted_user) FROM deleted_user LIMIT 1), '{{}}'::json)
+);
+""".strip()
+
+
+def get_non_admin_auth_users_postgres_payload(
+    *,
+    limit: int = 100,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    query_payload = _run_psql_json_query(
+        sql=_build_non_admin_users_sql(limit, ensure_schema=ensure_schema),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(query_payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "users": list(data.get("users", []) or []),
+        "count": int(data.get("count", 0) or 0),
+        "total_count": int(data.get("total_count", 0) or 0),
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def update_non_admin_auth_user_access_postgres_payload(
+    *,
+    user_id: str,
+    is_active: bool,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_user_id = _clean_text(user_id)
+    if not safe_user_id:
+        raise ValueError("user_id is required.")
+
+    query_payload = _run_psql_json_query(
+        sql=_build_update_non_admin_user_access_sql(
+            safe_user_id,
+            bool(is_active),
+            ensure_schema=ensure_schema,
+        ),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(query_payload.get("data", {}) or {})
+    user = dict(data.get("user", {}) or {})
+    return {
+        "ok": bool(data.get("updated", False)),
+        "updated": bool(data.get("updated", False)),
+        "user": user,
+        "revoked_session_count": int(data.get("revoked_session_count", 0) or 0),
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def delete_non_admin_auth_user_postgres_payload(
+    *,
+    user_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_user_id = _clean_text(user_id)
+    if not safe_user_id:
+        raise ValueError("user_id is required.")
+
+    query_payload = _run_psql_json_query(
+        sql=_build_delete_non_admin_user_sql(safe_user_id, ensure_schema=ensure_schema),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(query_payload.get("data", {}) or {})
+    user = dict(data.get("user", {}) or {})
+    return {
+        "ok": bool(data.get("deleted", False)),
+        "deleted": bool(data.get("deleted", False)),
+        "user": user,
         "command": query_payload["command"],
         "command_text": query_payload["command_text"],
     }

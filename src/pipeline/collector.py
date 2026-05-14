@@ -1,6 +1,7 @@
 from collections import Counter
 from typing import Any, Dict, List
 import asyncio
+import os
 import time
 from uuid import uuid4
 from pathlib import Path
@@ -10,6 +11,15 @@ from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
 logger = get_logger("collector")
+
+
+def _is_user_pipeline_mode() -> bool:
+    return str(os.environ.get("JOB_STACK_USER_PIPELINE_MODE", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+    }
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
@@ -324,11 +334,36 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
 
     section("EMBEDDING RESUME PRIOR", logger)
-    start_stage("resume_matching", f"Computing embedding resume prior for {len(ai_jobs)} AI-evaluated jobs")
 
-    ai_jobs = match_resumes(ai_jobs)
-    logger.info("Embedding resume prior completed")
-    complete_stage("resume_matching", counts={"resume_matched_jobs": len(ai_jobs)})
+    if _is_user_pipeline_mode():
+        start_stage(
+            "resume_matching",
+            "Skipping legacy filesystem resume prior for user pipeline run",
+        )
+        for job in ai_jobs:
+            job.setdefault("embedding_resume_prior", None)
+            job.setdefault("embedding_resume_prior_score", None)
+        logger.info(
+            "Skipping legacy filesystem resume matching for user pipeline run; "
+            "profile resumes are stored in Postgres."
+        )
+        complete_stage(
+            "resume_matching",
+            counts={
+                "resume_matched_jobs": 0,
+                "skipped_legacy_resume_dir": True,
+                "ai_jobs": len(ai_jobs),
+            },
+        )
+    else:
+        start_stage(
+            "resume_matching",
+            f"Computing embedding resume prior for {len(ai_jobs)} AI-evaluated jobs",
+        )
+
+        ai_jobs = match_resumes(ai_jobs)
+        logger.info("Embedding resume prior completed")
+        complete_stage("resume_matching", counts={"resume_matched_jobs": len(ai_jobs)})
 
     section("APPLICATION PRIORITY", logger)
     start_stage("application_priority", f"Scoring {len(ai_jobs)} jobs for application priority")
@@ -337,7 +372,10 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
 
-    corpus_path = "data/rag/job_corpus.jsonl"
+    corpus_path = str(
+        os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
+        or "data/rag/job_corpus.jsonl"
+    ).strip()
     corpus_file = Path(corpus_path)
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
@@ -372,9 +410,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     pipeline_runtime = round(time.time() - start_total, 2)
     logger.info(f"Total pipeline runtime: {pipeline_runtime}s")
 
-    prev_run = get_last_run()
-    prev_ats_counts = get_last_ats_counts("SCRAPED")
-
     current_metrics = {
         "scraped": len(all_jobs),
         "filtered": len(filtered_jobs),
@@ -384,39 +419,49 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         "drop_pct": drop_pct,
     }
 
-    check_ats_failure(prev_ats_counts, scraped_counts, logger)
+    if _is_user_pipeline_mode():
+        section("PIPELINE HEALTH", logger)
+        logger.info(
+            "Skipping global pipeline metrics store for user pipeline run. "
+            "User run status is persisted in user_pipeline_runs."
+        )
+    else:
+        prev_run = get_last_run()
+        prev_ats_counts = get_last_ats_counts("SCRAPED")
 
-    section("PIPELINE HEALTH", logger)
-    check_pipeline_regression(prev_run, current_metrics, logger)
+        check_ats_failure(prev_ats_counts, scraped_counts, logger)
 
-    run_id = record_pipeline_run(
-        runtime=pipeline_runtime,
-        scraped=len(all_jobs),
-        filtered=len(filtered_jobs),
-        deduped=len(deduped_jobs),
-        ranked=len(ranked_jobs),
-        details=len(detailed_jobs),
-        new_jobs=len(new_jobs),
-        drop_pct=drop_pct,
-    )
+        section("PIPELINE HEALTH", logger)
+        check_pipeline_regression(prev_run, current_metrics, logger)
 
-    record_company_hiring(run_id, deduped_jobs)
+        run_id = record_pipeline_run(
+            runtime=pipeline_runtime,
+            scraped=len(all_jobs),
+            filtered=len(filtered_jobs),
+            deduped=len(deduped_jobs),
+            ranked=len(ranked_jobs),
+            details=len(detailed_jobs),
+            new_jobs=len(new_jobs),
+            drop_pct=drop_pct,
+        )
 
-    record_ats_counts(run_id, "SCRAPED", scraped_counts)
-    record_ats_counts(run_id, "FILTERED", filtered_counts)
-    record_ats_counts(run_id, "DEDUPED", deduped_counts)
-    record_ats_counts(run_id, "RANKED", log_stage_metrics("RANKED", ranked_jobs))
-    record_ats_counts(run_id, "DETAILS", details_counts)
+        record_company_hiring(run_id, deduped_jobs)
 
-    logger.info("Pipeline metrics stored")
+        record_ats_counts(run_id, "SCRAPED", scraped_counts)
+        record_ats_counts(run_id, "FILTERED", filtered_counts)
+        record_ats_counts(run_id, "DEDUPED", deduped_counts)
+        record_ats_counts(run_id, "RANKED", log_stage_metrics("RANKED", ranked_jobs))
+        record_ats_counts(run_id, "DETAILS", details_counts)
 
-    momentum = get_hiring_momentum()
-    if momentum:
-        logger.info("")
-        logger.info("HIRING MOMENTUM")
-        logger.info("----------------")
+        logger.info("Pipeline metrics stored")
 
-        for company, ats, prev, curr, delta in momentum[:10]:
-            logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
+        momentum = get_hiring_momentum()
+        if momentum:
+            logger.info("")
+            logger.info("HIRING MOMENTUM")
+            logger.info("----------------")
+
+            for company, ats, prev, curr, delta in momentum[:10]:
+                logger.info(f"{company:25} {ats:12} {prev} → {curr}  (+{delta})")
 
     return scored_jobs

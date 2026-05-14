@@ -9,9 +9,15 @@ from pydantic import BaseModel
 
 from src.config.consts import (
     AUTH_FIRST_USER_ADMIN_ENABLED,
+    AUTH_REGISTRATION_APPROVAL_REQUIRED,
     AUTH_REGISTRATION_ENABLED,
 )
 
+from src.auth.approval_email import (
+    build_auth_registration_admin_email_payload,
+    build_auth_registration_user_decision_email_payload,
+    deliver_auth_approval_email_payload,
+)
 from src.auth.password import hash_password, validate_new_password, verify_password
 from src.auth.runtime import current_user_from_request
 from src.auth.session import (
@@ -24,11 +30,21 @@ from src.auth.session import (
 )
 from src.storage.auth.read_postgres import (
     get_auth_postgres_status_payload,
+    get_auth_registration_request_by_id_postgres_payload,
+    get_pending_auth_registration_requests_postgres_payload,
     get_auth_user_by_email_postgres_payload,
     revoke_auth_session_postgres_payload,
     touch_auth_user_last_login_postgres_payload,
 )
-from src.storage.auth.store import create_auth_session_postgres_payload, create_auth_user_postgres_payload
+from src.storage.auth.store import (
+    approve_auth_registration_request_postgres_payload,
+    create_auth_registration_request_postgres_payload,
+    create_auth_session_postgres_payload,
+    create_auth_user_postgres_payload,
+    mark_auth_registration_admin_notified_postgres_payload,
+    mark_auth_registration_user_notified_postgres_payload,
+    reject_auth_registration_request_postgres_payload,
+)
 
 
 router = APIRouter()
@@ -45,6 +61,10 @@ class AuthLoginRequest(BaseModel):
     email: str
     password: str
     next: str = "/"
+
+
+class AuthRegistrationDecisionRequest(BaseModel):
+    decision_note: str = ""
 
 
 def _clean_text(value: Any) -> str:
@@ -71,6 +91,13 @@ def _registration_enabled() -> bool:
     return _env_bool(
         "JOB_STACK_AUTH_REGISTRATION_ENABLED",
         bool(AUTH_REGISTRATION_ENABLED),
+    )
+
+
+def _registration_approval_required() -> bool:
+    return _env_bool(
+        "JOB_STACK_AUTH_REGISTRATION_APPROVAL_REQUIRED",
+        bool(AUTH_REGISTRATION_APPROVAL_REQUIRED),
     )
 
 
@@ -102,6 +129,9 @@ def _auth_user_counts() -> Dict[str, int]:
 
 def _can_register() -> bool:
     if _registration_enabled():
+        return True
+
+    if _registration_approval_required():
         return True
 
     if not _first_user_admin_enabled():
@@ -542,6 +572,12 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
       display: block;
     }}
 
+    .auth-error.is-success {{
+      border-color: rgba(34, 197, 94, 0.35);
+      background: #f0fdf4;
+      color: #166534;
+    }}
+
     .auth-submit {{
       margin-top: 6px;
       width: 100%;
@@ -732,6 +768,13 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     function showError(message) {{
       errorEl.textContent = message || "Request failed.";
+      errorEl.classList.remove("is-success");
+      errorEl.classList.add("is-visible");
+    }}
+
+    function showStatus(message) {{
+      errorEl.textContent = message || "Request submitted.";
+      errorEl.classList.add("is-success");
       errorEl.classList.add("is-visible");
     }}
 
@@ -781,6 +824,12 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
           throw new Error(payload.detail || "Request failed.");
         }}
 
+        if (payload.pending_approval) {{
+          showStatus(payload.message || "Registration request submitted. You will receive an email after admin review.");
+          form.reset();
+          return;
+        }}
+
         if (payload.first_login) {{
           window.sessionStorage.setItem("applylens_first_run_prompt", "1");
           window.localStorage.setItem("applylens_new_user_empty_state", "1");
@@ -797,6 +846,439 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 </body>
 </html>
 """.strip()
+
+
+def _require_admin_user(request: Request) -> Dict[str, Any]:
+    user = current_user_from_request(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+
+    user_payload = dict(user)
+    if not bool(user_payload.get("is_admin", False)) and _clean_text(user_payload.get("access_level")) != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required.")
+
+    return user_payload
+
+
+def _admin_registration_requests_page_html(*, selected_request_id: str = "") -> str:
+    selected = escape(_clean_text(selected_request_id))
+    return f"""
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Registration Requests · ApplyLens AI</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <style>
+    body {{
+      min-height: 100vh;
+      margin: 0;
+      background: #f6f9ff;
+      color: #111827;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+
+    .admin-shell {{
+      width: min(1120px, calc(100% - 32px));
+      margin: 32px auto;
+      display: grid;
+      gap: 18px;
+    }}
+
+    .admin-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 24px;
+      padding: 20px;
+      background: #ffffff;
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.08);
+    }}
+
+    .admin-header h1 {{
+      margin: 0;
+      font-size: 26px;
+      font-weight: 950;
+      color: #111827;
+    }}
+
+    .admin-header p {{
+      margin: 6px 0 0;
+      color: #64748b;
+      font-size: 14px;
+      font-weight: 650;
+    }}
+
+    .admin-link {{
+      color: #2563eb;
+      font-weight: 850;
+      text-decoration: none;
+    }}
+
+    .request-list {{
+      display: grid;
+      gap: 14px;
+    }}
+
+    .request-card {{
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 22px;
+      padding: 18px;
+      background: #ffffff;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, 0.07);
+    }}
+
+    .request-card.is-selected {{
+      border-color: rgba(37, 99, 235, 0.55);
+      box-shadow: 0 18px 44px rgba(37, 99, 235, 0.14);
+    }}
+
+    .request-main {{
+      display: grid;
+      gap: 8px;
+    }}
+
+    .request-title {{
+      margin: 0;
+      color: #111827;
+      font-size: 18px;
+      font-weight: 950;
+    }}
+
+    .request-meta {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: #475569;
+      font-size: 13px;
+      font-weight: 700;
+    }}
+
+    .request-pill {{
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 999px;
+      padding: 5px 9px;
+      background: #f8fafc;
+    }}
+
+    .request-note {{
+      width: 100%;
+      min-height: 72px;
+      margin-top: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      border-radius: 14px;
+      padding: 10px 12px;
+      font: inherit;
+      resize: vertical;
+      outline: none;
+    }}
+
+    .request-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 12px;
+    }}
+
+    .request-button {{
+      border: 0;
+      border-radius: 13px;
+      padding: 10px 14px;
+      cursor: pointer;
+      color: #ffffff;
+      font-weight: 900;
+    }}
+
+    .request-button.approve {{
+      background: #16a34a;
+    }}
+
+    .request-button.reject {{
+      background: #dc2626;
+    }}
+
+    .request-button:disabled {{
+      opacity: 0.6;
+      cursor: not-allowed;
+    }}
+
+    .empty-state,
+    .status-box {{
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: 20px;
+      padding: 18px;
+      background: #ffffff;
+      color: #475569;
+      font-weight: 750;
+    }}
+
+    .status-box.is-error {{
+      border-color: rgba(248, 113, 113, 0.35);
+      background: #fff1f2;
+      color: #b91c1c;
+    }}
+
+    .status-box.is-success {{
+      border-color: rgba(34, 197, 94, 0.35);
+      background: #f0fdf4;
+      color: #166534;
+    }}
+  </style>
+</head>
+<body>
+  <main class="admin-shell">
+    <section class="admin-header">
+      <div>
+        <h1>Registration Requests</h1>
+        <p>Approve or reject pending ApplyLens account requests.</p>
+      </div>
+      <a class="admin-link" href="/">Back to app</a>
+    </section>
+
+    <section id="statusBox" class="status-box" hidden></section>
+    <section id="requestList" class="request-list" data-selected-request-id="{selected}"></section>
+  </main>
+
+  <script>
+    const listEl = document.getElementById("requestList");
+    const statusEl = document.getElementById("statusBox");
+    const selectedRequestId = listEl.dataset.selectedRequestId || "";
+
+    function setStatus(message, kind = "") {{
+      statusEl.textContent = message || "";
+      statusEl.hidden = !message;
+      statusEl.classList.toggle("is-error", kind === "error");
+      statusEl.classList.toggle("is-success", kind === "success");
+    }}
+
+    function escapeHtml(value) {{
+      return String(value || "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }}
+
+    function renderRequests(requests) {{
+      if (!requests.length) {{
+        listEl.innerHTML = '<div class="empty-state">No pending registration requests.</div>';
+        return;
+      }}
+
+      listEl.innerHTML = requests.map((request) => {{
+        const requestId = escapeHtml(request.request_id);
+        const isSelected = selectedRequestId && selectedRequestId === request.request_id;
+        return `
+          <article class="request-card ${{isSelected ? "is-selected" : ""}}" data-request-id="${{requestId}}">
+            <div class="request-main">
+              <h2 class="request-title">${{escapeHtml(request.display_name || request.email)}}</h2>
+              <div class="request-meta">
+                <span class="request-pill">${{escapeHtml(request.email)}}</span>
+                <span class="request-pill">Status: ${{escapeHtml(request.status)}}</span>
+                <span class="request-pill">Requested: ${{escapeHtml(request.requested_at)}}</span>
+                <span class="request-pill">IP: ${{escapeHtml(request.request_ip_address)}}</span>
+              </div>
+              <div class="request-meta">
+                <span>User agent: ${{escapeHtml(request.request_user_agent)}}</span>
+              </div>
+            </div>
+            <textarea class="request-note" placeholder="Optional decision note"></textarea>
+            <div class="request-actions">
+              <button class="request-button approve" type="button" data-action="approve">Approve</button>
+              <button class="request-button reject" type="button" data-action="reject">Reject</button>
+            </div>
+          </article>
+        `;
+      }}).join("");
+    }}
+
+    async function loadRequests() {{
+      setStatus("Loading pending requests...");
+      const response = await fetch("/admin/registration-requests/data");
+      const payload = await response.json().catch(() => ({{}}));
+      if (!response.ok || !payload.ok) {{
+        throw new Error(payload.detail || "Failed to load registration requests.");
+      }}
+      renderRequests(payload.requests || []);
+      setStatus("");
+    }}
+
+    async function decide(requestId, action, note, button) {{
+      button.disabled = true;
+      setStatus(`${{action === "approve" ? "Approving" : "Rejecting"}} request...`);
+
+      try {{
+        const response = await fetch(`/admin/registration-requests/${{encodeURIComponent(requestId)}}/${{action}}`, {{
+          method: "POST",
+          headers: {{"Content-Type": "application/json"}},
+          body: JSON.stringify({{decision_note: note || ""}}),
+        }});
+
+        const payload = await response.json().catch(() => ({{}}));
+        if (!response.ok || !payload.ok) {{
+          throw new Error(payload.detail || "Request failed.");
+        }}
+
+        setStatus(payload.message || "Decision saved.", "success");
+        await loadRequests();
+      }} catch (error) {{
+        setStatus(error instanceof Error ? error.message : "Request failed.", "error");
+      }} finally {{
+        button.disabled = false;
+      }}
+    }}
+
+    listEl.addEventListener("click", (event) => {{
+      const button = event.target.closest("button[data-action]");
+      if (!button) {{
+        return;
+      }}
+
+      const card = button.closest(".request-card");
+      const requestId = card?.dataset?.requestId || "";
+      const note = card?.querySelector(".request-note")?.value || "";
+      const action = button.dataset.action;
+
+      if (!requestId || !action) {{
+        setStatus("Missing request id or action.", "error");
+        return;
+      }}
+
+      decide(requestId, action, note, button);
+    }});
+
+    loadRequests().catch((error) => {{
+      setStatus(error instanceof Error ? error.message : "Failed to load registration requests.", "error");
+    }});
+  </script>
+</body>
+</html>
+""".strip()
+
+
+@router.get("/admin/registration-requests")
+def admin_registration_requests_page(request: Request, request_id: str = ""):
+    try:
+        _require_admin_user(request)
+    except HTTPException as exc:
+        if exc.status_code == 401:
+            return RedirectResponse(url="/login?next=/admin/registration-requests", status_code=303)
+        raise
+
+    return HTMLResponse(
+        _admin_registration_requests_page_html(
+            selected_request_id=request_id,
+        )
+    )
+
+
+@router.get("/admin/registration-requests/data")
+def admin_registration_requests_data(request: Request, limit: int = 50):
+    _require_admin_user(request)
+    payload = get_pending_auth_registration_requests_postgres_payload(
+        limit=limit,
+        ensure_schema=True,
+    )
+    return JSONResponse(
+        {
+            "ok": True,
+            "request_count": int(payload.get("request_count", 0) or 0),
+            "requests": list(payload.get("requests", []) or []),
+        }
+    )
+
+
+@router.post("/admin/registration-requests/{request_id}/approve")
+def approve_registration_request(
+    request: Request,
+    request_id: str,
+    payload: AuthRegistrationDecisionRequest = Body(...),
+):
+    admin_user = _require_admin_user(request)
+    result = approve_auth_registration_request_postgres_payload(
+        request_id=request_id,
+        decided_by_user_id=_clean_text(admin_user.get("user_id")),
+        decision_note=payload.decision_note,
+        ensure_schema=True,
+    )
+
+    if not result.get("request_found", False):
+        raise HTTPException(status_code=404, detail="Pending registration request not found.")
+
+    if result.get("existing_user", False):
+        raise HTTPException(status_code=409, detail="An account already exists for this email.")
+
+    if not result.get("approved", False):
+        raise HTTPException(status_code=409, detail="Registration request could not be approved.")
+
+    request_payload = dict(result.get("request", {}) or {})
+    user_email_payload = build_auth_registration_user_decision_email_payload(
+        request_payload,
+        approved=True,
+    )
+    delivery = deliver_auth_approval_email_payload(user_email_payload)
+
+    if delivery.get("ok", False):
+        mark_auth_registration_user_notified_postgres_payload(
+            request_id=str(request_payload.get("request_id", "") or ""),
+            ensure_schema=True,
+        )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "approved": True,
+            "message": "Registration request approved. The user has been notified.",
+            "request": request_payload,
+            "user": dict(result.get("user", {}) or {}),
+        }
+    )
+
+
+@router.post("/admin/registration-requests/{request_id}/reject")
+def reject_registration_request(
+    request: Request,
+    request_id: str,
+    payload: AuthRegistrationDecisionRequest = Body(...),
+):
+    admin_user = _require_admin_user(request)
+    result = reject_auth_registration_request_postgres_payload(
+        request_id=request_id,
+        decided_by_user_id=_clean_text(admin_user.get("user_id")),
+        decision_note=payload.decision_note,
+        ensure_schema=True,
+    )
+
+    if not result.get("rejected", False):
+        raise HTTPException(status_code=404, detail="Pending registration request not found.")
+
+    request_payload = dict(result.get("request", {}) or {})
+    user_email_payload = build_auth_registration_user_decision_email_payload(
+        request_payload,
+        approved=False,
+    )
+    delivery = deliver_auth_approval_email_payload(user_email_payload)
+
+    if delivery.get("ok", False):
+        mark_auth_registration_user_notified_postgres_payload(
+            request_id=str(request_payload.get("request_id", "") or ""),
+            ensure_schema=True,
+        )
+
+    return JSONResponse(
+        {
+            "ok": True,
+            "rejected": True,
+            "message": "Registration request rejected. The user has been notified.",
+            "request": request_payload,
+        }
+    )
 
 
 @router.get("/login")
@@ -848,50 +1330,119 @@ def register(request: Request, payload: AuthRegisterRequest = Body(...)):
             )
 
         validate_new_password(payload.password)
+
         make_admin = _should_create_admin_user()
-        created = create_auth_user_postgres_payload(
-            record={
-                "email": payload.email,
-                "password_hash": hash_password(payload.password),
-                "display_name": payload.display_name,
-                "is_active": True,
-                "is_admin": make_admin,
-            },
-            ensure_schema=True,
+        should_create_direct_user = make_admin or (
+            _registration_enabled() and not _registration_approval_required()
         )
 
-        if not created.get("inserted", False):
+        if should_create_direct_user:
+            created = create_auth_user_postgres_payload(
+                record={
+                    "email": payload.email,
+                    "password_hash": hash_password(payload.password),
+                    "display_name": payload.display_name,
+                    "access_level": "admin" if make_admin else "user",
+                    "is_active": True,
+                    "is_admin": make_admin,
+                },
+                ensure_schema=True,
+            )
+
+            if not created.get("inserted", False):
+                raise HTTPException(
+                    status_code=409,
+                    detail="An account already exists for this email.",
+                )
+
+            user = dict(created.get("user", {}) or {})
+            session_token, session_record = new_auth_session_record(
+                user_id=str(user.get("user_id", "") or ""),
+                user_agent=_clean_text(request.headers.get("user-agent")),
+                ip_address=_request_ip_address(request),
+            )
+
+            create_auth_session_postgres_payload(
+                record=session_record,
+                ensure_schema=True,
+            )
+            touched = touch_auth_user_last_login_postgres_payload(
+                user_id=str(user.get("user_id", "") or ""),
+                ensure_schema=True,
+            )
+
+            response = JSONResponse(
+                {
+                    "ok": True,
+                    "user": _public_user_payload(dict(touched.get("user", {}) or user)),
+                    "redirect_to": _safe_next_path(payload.next),
+                    "first_login": True,
+                }
+            )
+            _set_session_cookie(response, session_token)
+            return response
+
+        existing_user = get_auth_user_by_email_postgres_payload(
+            email=payload.email,
+            ensure_schema=True,
+        )
+        if dict(existing_user.get("user", {}) or {}):
             raise HTTPException(
                 status_code=409,
                 detail="An account already exists for this email.",
             )
 
-        user = dict(created.get("user", {}) or {})
-        session_token, session_record = new_auth_session_record(
-            user_id=str(user.get("user_id", "") or ""),
-            user_agent=_clean_text(request.headers.get("user-agent")),
-            ip_address=_request_ip_address(request),
-        )
-
-        create_auth_session_postgres_payload(
-            record=session_record,
-            ensure_schema=True,
-        )
-        touched = touch_auth_user_last_login_postgres_payload(
-            user_id=str(user.get("user_id", "") or ""),
+        created_request = create_auth_registration_request_postgres_payload(
+            record={
+                "email": payload.email,
+                "password_hash": hash_password(payload.password),
+                "display_name": payload.display_name,
+                "status": "pending",
+                "request_user_agent": _clean_text(request.headers.get("user-agent")),
+                "request_ip_address": _request_ip_address(request),
+            },
             ensure_schema=True,
         )
 
-        response = JSONResponse(
+        if created_request.get("existing_user", False):
+            raise HTTPException(
+                status_code=409,
+                detail="An account already exists for this email.",
+            )
+
+        request_payload = dict(created_request.get("request", {}) or {})
+
+        if not created_request.get("inserted", False):
+            if created_request.get("pending_exists", False):
+                return JSONResponse(
+                    {
+                        "ok": True,
+                        "pending_approval": True,
+                        "message": "A registration request is already pending for this email. You will receive an email after admin review.",
+                    }
+                )
+
+            raise HTTPException(
+                status_code=409,
+                detail="Could not create registration request.",
+            )
+
+        admin_email_payload = build_auth_registration_admin_email_payload(request_payload)
+        delivery = deliver_auth_approval_email_payload(admin_email_payload)
+
+        if delivery.get("ok", False):
+            mark_auth_registration_admin_notified_postgres_payload(
+                request_id=str(request_payload.get("request_id", "") or ""),
+                ensure_schema=True,
+            )
+
+        return JSONResponse(
             {
                 "ok": True,
-                "user": _public_user_payload(dict(touched.get("user", {}) or user)),
-                "redirect_to": _safe_next_path(payload.next),
-                "first_login": True,
+                "pending_approval": True,
+                "message": "Registration request submitted. You will receive an email after admin review.",
             }
         )
-        _set_session_cookie(response, session_token)
-        return response
 
     except HTTPException:
         raise

@@ -41,3 +41,34 @@ ON auth_sessions (session_token_hash);
 
 CREATE INDEX IF NOT EXISTS idx_auth_sessions_expires_at
 ON auth_sessions (expires_at);
+
+CREATE TABLE IF NOT EXISTS auth_registration_requests (
+    request_id TEXT PRIMARY KEY,
+    email TEXT NOT NULL,
+    normalized_email TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending',
+    requested_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
+    decided_at TIMESTAMPTZ,
+    decided_by_user_id TEXT REFERENCES auth_users(user_id) ON DELETE SET NULL,
+    decision_note TEXT NOT NULL DEFAULT '',
+    admin_notified_at TIMESTAMPTZ,
+    user_notified_at TIMESTAMPTZ,
+    request_user_agent TEXT NOT NULL DEFAULT '',
+    request_ip_address TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_auth_registration_requests_status_requested_at
+ON auth_registration_requests (status, requested_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_auth_registration_requests_normalized_email
+ON auth_registration_requests (normalized_email);
+
+CREATE INDEX IF NOT EXISTS idx_auth_registration_requests_decided_by_user_id
+ON auth_registration_requests (decided_by_user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_registration_requests_pending_email_unique
+ON auth_registration_requests (normalized_email)
+WHERE status = 'pending';

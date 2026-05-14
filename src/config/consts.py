@@ -1881,3 +1881,13 @@ AUTH_SESSION_COOKIE_SAMESITE = "lax"
 AUTH_REGISTRATION_ENABLED = True
 AUTH_FIRST_USER_ADMIN_ENABLED = True
 
+# ============================================================
+# AUTH REGISTRATION APPROVAL
+# ============================================================
+
+AUTH_REGISTRATION_APPROVAL_REQUIRED = False
+AUTH_APPROVAL_EMAIL_MODE = "outbox_only"
+AUTH_APPROVAL_ADMIN_EMAILS = ""
+AUTH_APPROVAL_EMAIL_FROM = "noreply@applylensjobs.com"
+AUTH_APPROVAL_EMAIL_REPLY_TO = ""
+PUBLIC_BASE_URL = "https://applylensjobs.com"

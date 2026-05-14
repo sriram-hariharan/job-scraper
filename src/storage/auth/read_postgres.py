@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from src.storage.auth.store import (
     _clean_text,
@@ -422,3 +422,248 @@ def get_auth_postgres_status_payload(
         "command": query_payload["command"],
         "command_text": query_payload["command_text"],
     }
+
+
+_AUTH_REGISTRATION_REQUEST_STATUSES = {
+    "pending",
+    "approved",
+    "rejected",
+    "expired",
+}
+
+
+def _normalize_optional_registration_status(value: Any) -> str:
+    status = _clean_text(value).lower()
+    if not status:
+        return ""
+
+    if status not in _AUTH_REGISTRATION_REQUEST_STATUSES:
+        allowed = ", ".join(sorted(_AUTH_REGISTRATION_REQUEST_STATUSES))
+        raise ValueError(f"Unsupported auth registration request status={status!r}. Allowed: {allowed}")
+
+    return status
+
+
+def _registration_request_public_columns() -> List[str]:
+    return [
+        "request_id",
+        "email",
+        "normalized_email",
+        "display_name",
+        "status",
+        "requested_at",
+        "updated_at",
+        "decided_at",
+        "decided_by_user_id",
+        "decision_note",
+        "admin_notified_at",
+        "user_notified_at",
+        "request_user_agent",
+        "request_ip_address",
+    ]
+
+
+def _registration_request_public_select(prefix: str = "") -> str:
+    safe_prefix = _clean_text(prefix)
+    if safe_prefix and not safe_prefix.endswith("."):
+        safe_prefix += "."
+
+    return ",\n                ".join(
+        f"{safe_prefix}{column}" for column in _registration_request_public_columns()
+    )
+
+
+def _build_registration_request_by_id_sql(request_id: str, *, ensure_schema: bool) -> str:
+    columns = _registration_request_public_select()
+    return _schema_prefix(ensure_schema) + f"""
+SELECT COALESCE(
+    (
+        SELECT row_to_json(row_data)
+        FROM (
+            SELECT
+                {columns}
+            FROM auth_registration_requests
+            WHERE request_id = {_sql_quote_text(request_id)}
+            LIMIT 1
+        ) row_data
+    ),
+    '{{}}'::json
+);
+""".strip()
+
+
+def _build_registration_request_by_email_sql(email: str, *, ensure_schema: bool) -> str:
+    normalized_email = _normalize_email(email)
+    columns = _registration_request_public_select()
+
+    return _schema_prefix(ensure_schema) + f"""
+SELECT COALESCE(
+    (
+        SELECT row_to_json(row_data)
+        FROM (
+            SELECT
+                {columns}
+            FROM auth_registration_requests
+            WHERE normalized_email = {_sql_quote_text(normalized_email)}
+            ORDER BY requested_at DESC, request_id DESC
+            LIMIT 1
+        ) row_data
+    ),
+    '{{}}'::json
+);
+""".strip()
+
+
+def _build_registration_requests_sql(
+    *,
+    status: str,
+    limit: int,
+    ensure_schema: bool,
+) -> str:
+    columns = _registration_request_public_select()
+    status_filter = ""
+    if status:
+        status_filter = f"WHERE status = {_sql_quote_text(status)}"
+
+    return _schema_prefix(ensure_schema) + f"""
+WITH matching_requests AS (
+    SELECT
+        {columns}
+    FROM auth_registration_requests
+    {status_filter}
+    ORDER BY requested_at DESC, request_id DESC
+    LIMIT {limit}
+)
+SELECT json_build_object(
+    'request_count', (
+        SELECT COUNT(*)
+        FROM auth_registration_requests
+        {status_filter}
+    ),
+    'requests',
+        COALESCE(
+            (
+                SELECT json_agg(row_to_json(matching_requests) ORDER BY matching_requests.requested_at DESC, matching_requests.request_id DESC)
+                FROM matching_requests
+            ),
+            '[]'::json
+        )
+);
+""".strip()
+
+
+def get_auth_registration_request_by_id_postgres_payload(
+    *,
+    request_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_request_id = _clean_text(request_id)
+    if not safe_request_id:
+        raise ValueError("request_id is required.")
+
+    query_payload = _run_psql_json_query(
+        sql=_build_registration_request_by_id_sql(safe_request_id, ensure_schema=ensure_schema),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    request_payload = dict(query_payload.get("data", {}) or {})
+    return {
+        "ok": bool(request_payload),
+        "request": request_payload,
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def get_auth_registration_request_by_email_postgres_payload(
+    *,
+    email: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_email = _clean_text(email)
+    if not safe_email:
+        raise ValueError("email is required.")
+
+    query_payload = _run_psql_json_query(
+        sql=_build_registration_request_by_email_sql(safe_email, ensure_schema=ensure_schema),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    request_payload = dict(query_payload.get("data", {}) or {})
+    return {
+        "ok": bool(request_payload),
+        "request": request_payload,
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def get_auth_registration_requests_postgres_payload(
+    *,
+    status: str = "",
+    limit: int = 50,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    normalized_limit = _normalize_positive_int(limit, "limit")
+    normalized_status = _normalize_optional_registration_status(status)
+
+    query_payload = _run_psql_json_query(
+        sql=_build_registration_requests_sql(
+            status=normalized_status,
+            limit=normalized_limit,
+            ensure_schema=ensure_schema,
+        ),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(query_payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "status": normalized_status,
+        "query_limit": normalized_limit,
+        "request_count": int(data.get("request_count", 0) or 0),
+        "requests": list(data.get("requests", []) or []),
+        "command": query_payload["command"],
+        "command_text": query_payload["command_text"],
+    }
+
+
+def get_pending_auth_registration_requests_postgres_payload(
+    *,
+    limit: int = 50,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    return get_auth_registration_requests_postgres_payload(
+        status="pending",
+        limit=limit,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+        ensure_schema=ensure_schema,
+    )

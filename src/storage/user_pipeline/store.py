@@ -900,3 +900,130 @@ SELECT json_build_object(
         "command_text": payload.get("command_text", ""),
         "table_name": "user_seen_jobs",
     }
+
+
+def _sql_nullable_jsonb(value: Any) -> str:
+    if value is None:
+        return "NULL"
+    return _sql_jsonb(value)
+
+
+def _build_user_pipeline_artifact_id(row: Dict[str, Any]) -> str:
+    payload = {
+        "owner_user_id": _clean_text(row.get("owner_user_id")),
+        "run_id": _clean_text(row.get("run_id")),
+        "artifact_kind": _clean_text(row.get("artifact_kind")),
+        "artifact_name": _clean_text(row.get("artifact_name")),
+    }
+    blob = _json_compact(payload)
+    return hashlib.sha1(blob.encode("utf-8")).hexdigest()
+
+
+def user_pipeline_artifact_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(record, dict):
+        raise ValueError("User pipeline artifact record must be a dictionary.")
+
+    owner_user_id = _require_owner_user_id(record.get("owner_user_id"))
+    run_id = _require_run_id(record.get("run_id"))
+    artifact_kind = _clean_text(record.get("artifact_kind"))
+    artifact_name = _clean_text(record.get("artifact_name"))
+
+    if not artifact_kind:
+        raise ValueError("artifact_kind is required.")
+    if not artifact_name:
+        raise ValueError("artifact_name is required.")
+
+    row = {
+        "artifact_id": _clean_text(record.get("artifact_id")),
+        "owner_user_id": owner_user_id,
+        "run_id": run_id,
+        "artifact_kind": artifact_kind,
+        "artifact_name": artifact_name,
+        "content_type": _clean_text(record.get("content_type")) or "application/json",
+        "content_json": record.get("content_json"),
+        "content_text": _clean_text(record.get("content_text")),
+        "created_at": _clean_text(record.get("created_at")) or _utc_now_iso(),
+    }
+
+    if not row["artifact_id"]:
+        row["artifact_id"] = _build_user_pipeline_artifact_id(row)
+
+    return row
+
+
+def upsert_user_pipeline_artifact_postgres_payload(
+    *,
+    record: Dict[str, Any],
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    row = user_pipeline_artifact_db_row(record)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH upserted AS (
+    INSERT INTO user_pipeline_artifacts (
+        artifact_id,
+        owner_user_id,
+        run_id,
+        artifact_kind,
+        artifact_name,
+        content_type,
+        content_json,
+        content_text,
+        content_bytes,
+        created_at
+    )
+    VALUES (
+        {_sql_quote_text(row['artifact_id'])},
+        {_sql_quote_text(row['owner_user_id'])},
+        {_sql_quote_text(row['run_id'])},
+        {_sql_quote_text(row['artifact_kind'])},
+        {_sql_quote_text(row['artifact_name'])},
+        {_sql_quote_text(row['content_type'])},
+        {_sql_nullable_jsonb(row['content_json'])},
+        {_sql_quote_text(row['content_text'])},
+        NULL,
+        {_sql_quote_text(row['created_at'])}::timestamptz
+    )
+    ON CONFLICT (artifact_id) DO UPDATE SET
+        artifact_kind = EXCLUDED.artifact_kind,
+        artifact_name = EXCLUDED.artifact_name,
+        content_type = EXCLUDED.content_type,
+        content_json = EXCLUDED.content_json,
+        content_text = EXCLUDED.content_text,
+        content_bytes = EXCLUDED.content_bytes,
+        created_at = EXCLUDED.created_at
+    RETURNING
+        artifact_id,
+        owner_user_id,
+        run_id,
+        artifact_kind,
+        artifact_name,
+        content_type,
+        created_at
+)
+SELECT json_build_object(
+    'upserted', EXISTS (SELECT 1 FROM upserted),
+    'artifact', COALESCE((SELECT row_to_json(upserted) FROM upserted LIMIT 1), '{{}}'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    return {
+        "ok": bool(payload.get("data", {}).get("upserted", False)),
+        "upserted": bool(payload.get("data", {}).get("upserted", False)),
+        "artifact": dict(payload.get("data", {}).get("artifact", {}) or {}),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_pipeline_artifacts",
+    }

@@ -92,6 +92,7 @@ from src.storage.user_pipeline.read_postgres import (
     get_user_pipeline_runs_postgres_payload,
 )
 from src.storage.user_pipeline.store import (
+    upsert_user_pipeline_artifact_postgres_payload,
     upsert_user_pipeline_run_postgres_payload,
 )
 from src.pipeline.scheduler import (
@@ -161,6 +162,11 @@ _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "child_pid": None,
     "error": "",
 }
+
+_PIPELINE_ARTIFACT_INGESTED_RUN_KEYS: set[str] = set()
+_PIPELINE_ARTIFACT_MAX_BYTES = int(
+    os.environ.get("JOB_STACK_PIPELINE_ARTIFACT_MAX_BYTES", "5242880") or "5242880"
+)
 
 ALLOWED_APPLICATION_STATUSES = {
     "OPENED",
@@ -1889,6 +1895,9 @@ def _persist_user_pipeline_status_snapshot(
     if not owner:
         return
 
+    if isinstance(status_payload.get("pipeline"), dict):
+        status_payload = dict(status_payload.get("pipeline") or {})
+
     run_id = _clean_text(status_payload.get("run_id"))
     if not run_id:
         return
@@ -1916,6 +1925,8 @@ def _persist_user_pipeline_status_snapshot(
                     "log_path": _clean_text(status_payload.get("log_path")),
                     "status_path": _clean_text(status_payload.get("status_path")),
                     "child_pid": status_payload.get("child_pid"),
+                    "config": status_payload.get("config") or {},
+                    "artifact_ingestion": status_payload.get("artifact_ingestion") or {},
                 },
                 "status_json": status_payload,
                 "error": _clean_text(status_payload.get("error")),
@@ -1929,6 +1940,274 @@ def _persist_user_pipeline_status_snapshot(
     except Exception as exc:
         logger.warning("Failed to persist user pipeline status snapshot: %s", exc)
 
+
+
+def _pipeline_artifact_ingestion_key(*, owner_user_id: str, run_id: str) -> str:
+    return f"{_clean_text(owner_user_id)}:{_clean_text(run_id)}"
+
+
+def _pipeline_artifact_candidate_paths(output_dir: Path) -> List[Path]:
+    root = Path(output_dir).expanduser()
+    if not root.exists() or not root.is_dir():
+        return []
+
+    candidates: List[Path] = []
+    root_names = {
+        "live_pipeline_status.json",
+        "live_pipeline_run.log",
+        "current_run_job_corpus.jsonl",
+        "best_resume_variant_by_job.csv",
+        "application_shortlist_by_job.csv",
+        "application_execution_queue.csv",
+        "job_packet_manifest.csv",
+    }
+
+    for name in sorted(root_names):
+        candidate = root / name
+        if candidate.exists() and candidate.is_file():
+            candidates.append(candidate)
+
+    packet_dir = root / "job_packets"
+    if packet_dir.exists() and packet_dir.is_dir():
+        for candidate in sorted(packet_dir.rglob("*")):
+            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl", ".md", ".txt"}:
+                candidates.append(candidate)
+
+    return candidates
+
+
+def _pipeline_artifact_name(*, output_dir: Path, path: Path) -> str:
+    try:
+        return path.relative_to(output_dir).as_posix()
+    except ValueError:
+        return path.name
+
+
+def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
+    name = _pipeline_artifact_name(output_dir=output_dir, path=path)
+    filename = path.name
+    suffix = path.suffix.lower()
+
+    root_kind_by_name = {
+        "live_pipeline_status.json": "live_pipeline_status",
+        "live_pipeline_run.log": "live_pipeline_log",
+        "current_run_job_corpus.jsonl": "current_run_job_corpus",
+        "best_resume_variant_by_job.csv": "best_resume_variant_by_job",
+        "application_shortlist_by_job.csv": "application_shortlist_by_job",
+        "application_execution_queue.csv": "application_execution_queue",
+        "job_packet_manifest.csv": "job_packet_manifest",
+    }
+
+    if name in root_kind_by_name:
+        return root_kind_by_name[name]
+
+    if name.startswith("job_packets/"):
+        if filename.endswith("__tailoring_llm.json"):
+            return "job_packet_tailoring_llm_json"
+        if filename.endswith("__tailoring.json"):
+            return "job_packet_tailoring_json"
+        if filename.endswith("__tailoring.md"):
+            return "job_packet_tailoring_markdown"
+        if suffix == ".json":
+            return "job_packet_json"
+        if suffix == ".jsonl":
+            return "job_packet_jsonl"
+        if suffix == ".md":
+            return "job_packet_markdown"
+        return "job_packet_text"
+
+    if suffix == ".json":
+        return "json_artifact"
+    if suffix == ".jsonl":
+        return "jsonl_artifact"
+    if suffix == ".csv":
+        return "csv_artifact"
+    if suffix in {".log", ".txt", ".md"}:
+        return "text_artifact"
+    return "pipeline_artifact"
+
+
+def _pipeline_artifact_content_type(path: Path) -> str:
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        return "application/json"
+    if suffix == ".jsonl":
+        return "application/x-jsonlines"
+    if suffix == ".csv":
+        return "text/csv"
+    if suffix == ".md":
+        return "text/markdown"
+    if suffix in {".log", ".txt"}:
+        return "text/plain"
+    return "application/octet-stream"
+
+
+def _read_pipeline_artifact_record(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    output_dir: Path,
+    path: Path,
+) -> Dict[str, Any]:
+    size_bytes = path.stat().st_size
+    if size_bytes > _PIPELINE_ARTIFACT_MAX_BYTES:
+        raise ValueError(
+            f"artifact too large: {path} ({size_bytes} bytes > {_PIPELINE_ARTIFACT_MAX_BYTES})"
+        )
+
+    raw_text = path.read_text(encoding="utf-8", errors="replace")
+    content_json = None
+
+    if path.suffix.lower() == ".json":
+        try:
+            content_json = json.loads(raw_text)
+        except json.JSONDecodeError:
+            content_json = None
+
+    return {
+        "owner_user_id": owner_user_id,
+        "run_id": run_id,
+        "artifact_kind": _pipeline_artifact_kind(output_dir=output_dir, path=path),
+        "artifact_name": _pipeline_artifact_name(output_dir=output_dir, path=path),
+        "content_type": _pipeline_artifact_content_type(path),
+        "content_json": content_json,
+        "content_text": "" if content_json is not None else raw_text,
+        "created_at": _utc_now(),
+    }
+
+
+def _ingest_pipeline_run_artifacts_to_postgres(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    output_dir: str,
+    status_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+
+    if not owner or not safe_run_id:
+        return {
+            "ok": False,
+            "attempted": False,
+            "reason": "missing_owner_or_run_id",
+            "ingested_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+        }
+
+    ingestion_key = _pipeline_artifact_ingestion_key(
+        owner_user_id=owner,
+        run_id=safe_run_id,
+    )
+
+    if ingestion_key in _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS:
+        return {
+            "ok": True,
+            "attempted": False,
+            "already_ingested": True,
+            "ingested_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+        }
+
+    root = Path(_clean_text(output_dir)).expanduser()
+    if not root.exists() or not root.is_dir():
+        return {
+            "ok": False,
+            "attempted": False,
+            "reason": "output_dir_missing",
+            "output_dir": str(root),
+            "ingested_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+        }
+
+    ingested: List[Dict[str, Any]] = []
+    skipped: List[Dict[str, Any]] = []
+    errors: List[Dict[str, Any]] = []
+
+    for artifact_path in _pipeline_artifact_candidate_paths(root):
+        artifact_name = _pipeline_artifact_name(output_dir=root, path=artifact_path)
+
+        try:
+            record = _read_pipeline_artifact_record(
+                owner_user_id=owner,
+                run_id=safe_run_id,
+                output_dir=root,
+                path=artifact_path,
+            )
+            payload = upsert_user_pipeline_artifact_postgres_payload(
+                record=record,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            artifact = dict(payload.get("artifact", {}) or {})
+            ingested.append(
+                {
+                    "artifact_id": _clean_text(artifact.get("artifact_id")),
+                    "artifact_kind": _clean_text(artifact.get("artifact_kind")) or record["artifact_kind"],
+                    "artifact_name": _clean_text(artifact.get("artifact_name")) or record["artifact_name"],
+                    "content_type": record["content_type"],
+                    "size_bytes": artifact_path.stat().st_size,
+                }
+            )
+        except ValueError as exc:
+            skipped.append({"artifact_name": artifact_name, "reason": str(exc)})
+        except Exception as exc:
+            errors.append(
+                {
+                    "artifact_name": artifact_name,
+                    "error_type": exc.__class__.__name__,
+                    "error": str(exc),
+                }
+            )
+
+    result = {
+        "ok": len(errors) == 0,
+        "attempted": True,
+        "already_ingested": False,
+        "owner_user_id": owner,
+        "run_id": safe_run_id,
+        "output_dir": str(root),
+        "ingested_count": len(ingested),
+        "skipped_count": len(skipped),
+        "error_count": len(errors),
+        "ingested": ingested,
+        "skipped": skipped,
+        "errors": errors,
+        "ingested_at": _utc_now(),
+    }
+
+    try:
+        upsert_user_pipeline_artifact_postgres_payload(
+            record={
+                "owner_user_id": owner,
+                "run_id": safe_run_id,
+                "artifact_kind": "artifact_ingestion_manifest",
+                "artifact_name": "artifact_ingestion_manifest.json",
+                "content_type": "application/json",
+                "content_json": result,
+                "content_text": "",
+                "created_at": _utc_now(),
+            },
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        result["manifest_written"] = True
+    except Exception as exc:
+        result["manifest_written"] = False
+        result["manifest_error"] = str(exc)
+        result["ok"] = False
+
+    _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS.add(ingestion_key)
+    return result
 
 def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
@@ -1945,10 +2224,30 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
         return _latest_owner_pipeline_status_payload(owner_user_id=owner)
 
     payload = pipeline_status_payload(owner_user_id=owner)
+    pipeline = dict(payload.get("pipeline", {}) or {})
+
+    # Persist the run row first. user_pipeline_artifacts has a FK to user_pipeline_runs(run_id).
     _persist_user_pipeline_status_snapshot(
         owner_user_id=owner,
-        status_payload=payload,
+        status_payload=pipeline,
     )
+
+    if _clean_text(pipeline.get("status")) in _pipeline_terminal_statuses():
+        artifact_ingestion = _ingest_pipeline_run_artifacts_to_postgres(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            output_dir=_clean_text(pipeline.get("output_dir")),
+            status_payload=pipeline,
+        )
+        pipeline["artifact_ingestion"] = artifact_ingestion
+        payload["pipeline"] = pipeline
+
+        # Persist again so the run row captures artifact_ingestion metadata.
+        _persist_user_pipeline_status_snapshot(
+            owner_user_id=owner,
+            status_payload=pipeline,
+        )
+
     return payload
 
 def pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:

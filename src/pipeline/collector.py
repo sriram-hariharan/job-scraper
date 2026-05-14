@@ -334,11 +334,36 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     )
 
     section("EMBEDDING RESUME PRIOR", logger)
-    start_stage("resume_matching", f"Computing embedding resume prior for {len(ai_jobs)} AI-evaluated jobs")
 
-    ai_jobs = match_resumes(ai_jobs)
-    logger.info("Embedding resume prior completed")
-    complete_stage("resume_matching", counts={"resume_matched_jobs": len(ai_jobs)})
+    if _is_user_pipeline_mode():
+        start_stage(
+            "resume_matching",
+            "Skipping legacy filesystem resume prior for user pipeline run",
+        )
+        for job in ai_jobs:
+            job.setdefault("embedding_resume_prior", None)
+            job.setdefault("embedding_resume_prior_score", None)
+        logger.info(
+            "Skipping legacy filesystem resume matching for user pipeline run; "
+            "profile resumes are stored in Postgres."
+        )
+        complete_stage(
+            "resume_matching",
+            counts={
+                "resume_matched_jobs": 0,
+                "skipped_legacy_resume_dir": True,
+                "ai_jobs": len(ai_jobs),
+            },
+        )
+    else:
+        start_stage(
+            "resume_matching",
+            f"Computing embedding resume prior for {len(ai_jobs)} AI-evaluated jobs",
+        )
+
+        ai_jobs = match_resumes(ai_jobs)
+        logger.info("Embedding resume prior completed")
+        complete_stage("resume_matching", counts={"resume_matched_jobs": len(ai_jobs)})
 
     section("APPLICATION PRIORITY", logger)
     start_stage("application_priority", f"Scoring {len(ai_jobs)} jobs for application priority")

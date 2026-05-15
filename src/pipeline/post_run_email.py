@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
+
 
 DEFAULT_POST_RUN_EMAIL_OUTBOX_DIR = Path("outputs/scheduler_logs/post_run_email_outbox")
 
@@ -282,16 +284,20 @@ def write_post_run_email_outbox_artifact(
         summary,
         output_dir=output_dir,
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp_path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    artifact = upsert_scheduler_artifact(
+        run_id=_clean_text(payload.get("run_id")),
+        job_name=_clean_text(payload.get("job_name")),
+        artifact_kind="post_run_email_outbox",
+        artifact_name=output_path.name,
+        payload_json=payload,
     )
-    tmp_path.replace(output_path)
+
+    payload["outbox_path"] = artifact["artifact_ref"]
 
     return {
-        "path": str(output_path),
+        "path": artifact["artifact_ref"],
         "payload": payload,
+        "artifact_id": artifact["artifact_id"],
+        "storage_backend": "postgres",
     }

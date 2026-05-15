@@ -1,11 +1,11 @@
-from pathlib import Path
-from typing import List, Dict, Any
+import os
 from functools import lru_cache
+from pathlib import Path
 from time import perf_counter
+from typing import Any, Dict, List
 
 from src.utils.logging import get_logger
 
-INDEX_DIR = Path("data/rag/index")
 EMBED_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
 logger = get_logger("rag.retriever")
@@ -16,24 +16,47 @@ _SEMANTIC_STATUS: Dict[str, Any] = {
     "warming": False,
     "last_error": "",
     "embed_model_name": EMBED_MODEL_NAME,
-    "index_dir": str(INDEX_DIR),
+    "index_dir": "",
     "warmed_top_ks": [],
     "last_warm_seconds": None,
+    "legacy_rag_index_enabled": False,
 }
+
+
+def _legacy_rag_index_enabled() -> bool:
+    return str(os.environ.get("JOB_STACK_ENABLE_LEGACY_RAG_INDEX", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def _legacy_index_dir() -> Path:
+    return Path(os.environ.get("JOB_STACK_LEGACY_RAG_INDEX_DIR", "data/rag/index"))
+
 
 @lru_cache(maxsize=1)
 def _get_embed_model():
     from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
     return HuggingFaceEmbedding(model_name=EMBED_MODEL_NAME)
 
 
 @lru_cache(maxsize=1)
 def _load_index():
+    if not _legacy_rag_index_enabled():
+        raise RuntimeError(
+            "Legacy filesystem RAG index is disabled. "
+            "Semantic vector retrieval will move to pgvector/vector DB in 6B.16."
+        )
+
     from llama_index.core import Settings, StorageContext, load_index_from_storage
 
     Settings.embed_model = _get_embed_model()
     storage_context = StorageContext.from_defaults(
-        persist_dir=str(INDEX_DIR)
+        persist_dir=str(_legacy_index_dir())
     )
     return load_index_from_storage(storage_context)
 
@@ -46,8 +69,12 @@ def get_retriever(top_k: int = 5):
     index = _load_index()
     return index.as_retriever(similarity_top_k=top_k)
 
+
 def get_semantic_status() -> Dict[str, Any]:
-    return dict(_SEMANTIC_STATUS)
+    status = dict(_SEMANTIC_STATUS)
+    status["legacy_rag_index_enabled"] = _legacy_rag_index_enabled()
+    status["index_dir"] = str(_legacy_index_dir()) if _legacy_rag_index_enabled() else ""
+    return status
 
 
 def warm_semantic_retrieval(top_ks: tuple[int, ...] = (5, 15)) -> Dict[str, Any]:
@@ -56,6 +83,14 @@ def warm_semantic_retrieval(top_ks: tuple[int, ...] = (5, 15)) -> Dict[str, Any]
     _SEMANTIC_STATUS["last_error"] = ""
 
     try:
+        if not _legacy_rag_index_enabled():
+            _SEMANTIC_STATUS["ready"] = False
+            _SEMANTIC_STATUS["last_error"] = (
+                "Legacy filesystem RAG index disabled; vector backend pending 6B.16."
+            )
+            logger.info(_SEMANTIC_STATUS["last_error"])
+            return get_semantic_status()
+
         _get_embed_model()
         _load_index()
 
@@ -83,6 +118,7 @@ def warm_semantic_retrieval(top_ks: tuple[int, ...] = (5, 15)) -> Dict[str, Any]
         _SEMANTIC_STATUS["last_warm_seconds"] = round(perf_counter() - start, 3)
 
     return get_semantic_status()
+
 
 def retrieve_jobs(query: str, top_k: int = 5) -> List[Dict[str, Any]]:
     retriever = get_retriever(top_k=top_k)

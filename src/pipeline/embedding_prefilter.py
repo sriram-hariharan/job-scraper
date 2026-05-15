@@ -40,7 +40,25 @@ def prefilter_jobs_by_embedding(
     model = get_model()
     logger.info("[embedding_prefilter] embedding model ready")
     logger.info("[embedding_prefilter] loading resume embedding matrix")
-    resume_matrix, resume_names = get_embedding_matrix()
+    try:
+        resume_matrix, resume_names = get_embedding_matrix()
+    except RuntimeError as exc:
+        logger.info(
+            "[embedding_prefilter] skipped because legacy resume embeddings are unavailable: %s",
+            exc,
+        )
+        for job in jobs:
+            job["prefilter_similarity"] = 0
+        return jobs
+
+    if resume_matrix is None or not resume_names:
+        logger.info(
+            "[embedding_prefilter] skipped because no legacy resume embedding matrix is available"
+        )
+        for job in jobs:
+            job["prefilter_similarity"] = 0
+        return jobs
+
     logger.info("[embedding_prefilter] resume embedding matrix ready | resumes=%s | shape=%s", len(resume_names), getattr(resume_matrix, "shape", None))
     scored_jobs = []
     logger.info("[embedding_prefilter] starting per-job scoring loop")

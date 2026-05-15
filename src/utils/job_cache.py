@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Any, Dict, Iterable, List, Set
 
-CACHE_FILE = Path("data/seen_job_ids.txt")
 
 
 def _clean_text(value: Any) -> str:
@@ -27,23 +25,11 @@ def _run_id_from_env() -> str:
 
 
 def _legacy_load_seen_job_ids() -> Set[str]:
-    if not CACHE_FILE.exists():
-        return set()
-
-    with open(CACHE_FILE, encoding="utf-8") as f:
-        return set(line.strip() for line in f if line.strip())
+    return set()
 
 
 def _legacy_save_new_job_ids(job_ids: Iterable[str]) -> None:
-    values = [_clean_text(item) for item in job_ids if _clean_text(item)]
-    if not values:
-        return
-
-    CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-    with open(CACHE_FILE, "a", encoding="utf-8") as f:
-        for job_id in values:
-            f.write(job_id + "\n")
+    return
 
 
 def _parse_seen_key(seen_key: str) -> Dict[str, str]:

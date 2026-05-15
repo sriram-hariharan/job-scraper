@@ -16,6 +16,7 @@ from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
 from src.resume.evidence_builder import build_resume_evidence
+from src.storage.redis_cache import cache_get_json, cache_set_json
 
 from src.config.settings import SCORER_V2_POLICY
 
@@ -34,12 +35,7 @@ LLM_FALLBACK_MODEL = os.getenv(
 LLM_FALLBACK_MAX_TOKENS = int(os.getenv("LLM_FALLBACK_MAX_TOKENS", "900"))
 LLM_FALLBACK_TEMPERATURE = float(os.getenv("LLM_FALLBACK_TEMPERATURE", "0"))
 LLM_FALLBACK_PROMPT_VERSION = "v1"
-LLM_FALLBACK_CACHE_DIR = Path(
-    os.getenv(
-        "LLM_FALLBACK_CACHE_DIR",
-        "outputs/application_planning/llm_fallback_cache",
-    )
-)
+LLM_FALLBACK_CACHE_NAMESPACE = "selector:llm_fallback:v1"
 
 LLM_FALLBACK_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -72,12 +68,7 @@ LLM_ADJUDICATION_MODEL = os.getenv(
 LLM_ADJUDICATION_MAX_TOKENS = int(os.getenv("LLM_ADJUDICATION_MAX_TOKENS", "700"))
 LLM_ADJUDICATION_TEMPERATURE = float(os.getenv("LLM_ADJUDICATION_TEMPERATURE", "0"))
 LLM_ADJUDICATION_PROMPT_VERSION = "v1"
-LLM_ADJUDICATION_CACHE_DIR = Path(
-    os.getenv(
-        "LLM_ADJUDICATION_CACHE_DIR",
-        "outputs/application_planning/llm_adjudication_cache",
-    )
-)
+LLM_ADJUDICATION_CACHE_NAMESPACE = "selector:llm_adjudication:v1"
 
 LLM_ADJUDICATION_RESPONSE_SCHEMA = {
     "type": "OBJECT",
@@ -92,6 +83,46 @@ LLM_ADJUDICATION_RESPONSE_SCHEMA = {
         "reason",
     ],
 }
+
+def _selector_llm_cache_ttl_seconds() -> int:
+    raw = str(os.getenv("JOB_STACK_SELECTOR_LLM_CACHE_TTL_SECONDS", "") or "").strip()
+    try:
+        ttl = int(raw)
+    except Exception:
+        ttl = 86400
+
+    return max(60, min(ttl, 604800))
+
+
+def _selector_cache_get_json(key: str) -> Optional[Dict[str, Any]]:
+    try:
+        payload = cache_get_json(key)
+    except Exception:
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+
+    return dict(payload)
+
+
+def _selector_cache_set_json(key: str, payload: Dict[str, Any]) -> None:
+    try:
+        cache_set_json(
+            key,
+            payload,
+            ttl_seconds=_selector_llm_cache_ttl_seconds(),
+        )
+    except Exception:
+        return
+
+
+def _llm_fallback_cache_redis_key(cache_key: str) -> str:
+    return f"{LLM_FALLBACK_CACHE_NAMESPACE}:{cache_key}"
+
+
+def _llm_adjudication_cache_redis_key(cache_key: str) -> str:
+    return f"{LLM_ADJUDICATION_CACHE_NAMESPACE}:{cache_key}"
 
 def _load_job_records(job_corpus_path: Path, limit: int) -> List[dict]:
     if not job_corpus_path.exists():
@@ -552,34 +583,24 @@ def _llm_fallback_cache_key(
 
 
 def _llm_fallback_cache_path(cache_key: str) -> Path:
-    return LLM_FALLBACK_CACHE_DIR / f"{cache_key}.json"
-
+    raise RuntimeError("Filesystem LLM fallback cache is disabled; Redis is the cache backend.")
 
 def _load_llm_fallback_cache(cache_key: str) -> Optional[Dict[str, Any]]:
-    path = _llm_fallback_cache_path(cache_key)
-    if not path.exists():
-        return None
-
-    with path.open("r", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    if not isinstance(payload, dict):
+    payload = _selector_cache_get_json(_llm_fallback_cache_redis_key(cache_key))
+    if payload is None:
         return None
 
     payload["status"] = "cached"
     payload["cache_hit"] = True
     return payload
 
-
 def _write_llm_fallback_cache(cache_key: str, payload: Dict[str, Any]) -> None:
-    LLM_FALLBACK_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = _llm_fallback_cache_path(cache_key)
-
     cached_payload = dict(payload)
     cached_payload["cache_hit"] = False
-
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(cached_payload, f, indent=2, ensure_ascii=False)
+    _selector_cache_set_json(
+        _llm_fallback_cache_redis_key(cache_key),
+        cached_payload,
+    )
 
 def _normalize_llm_fallback_parsed(
     parsed: Dict[str, Any],
@@ -891,35 +912,24 @@ def _llm_adjudication_cache_key(
 
 
 def _llm_adjudication_cache_path(cache_key: str) -> Path:
-    return LLM_ADJUDICATION_CACHE_DIR / f"{cache_key}.json"
-
+    raise RuntimeError("Filesystem LLM adjudication cache is disabled; Redis is the cache backend.")
 
 def _load_llm_adjudication_cache(cache_key: str) -> Optional[Dict[str, Any]]:
-    path = _llm_adjudication_cache_path(cache_key)
-    if not path.exists():
-        return None
-
-    with path.open("r", encoding="utf-8") as f:
-        payload = json.load(f)
-
-    if not isinstance(payload, dict):
+    payload = _selector_cache_get_json(_llm_adjudication_cache_redis_key(cache_key))
+    if payload is None:
         return None
 
     payload["status"] = "cached"
     payload["cache_hit"] = True
     return payload
 
-
 def _write_llm_adjudication_cache(cache_key: str, payload: Dict[str, Any]) -> None:
-    LLM_ADJUDICATION_CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    path = _llm_adjudication_cache_path(cache_key)
-
     cached_payload = dict(payload)
     cached_payload["cache_hit"] = False
-
-    with path.open("w", encoding="utf-8") as f:
-        json.dump(cached_payload, f, indent=2, ensure_ascii=False)
-
+    _selector_cache_set_json(
+        _llm_adjudication_cache_redis_key(cache_key),
+        cached_payload,
+    )
 
 def _normalize_llm_adjudication_parsed(
     parsed: Dict[str, Any],

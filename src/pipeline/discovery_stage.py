@@ -91,11 +91,11 @@ async def discover_from_existing_boards():
                     return
 
         ATS_BOARD_URLS = {
-            "greenhouse": ("data/greenhouse_companies.txt", "https://boards.greenhouse.io/{}"),
-            "lever": ("data/lever_companies.txt", "https://jobs.lever.co/{}"),
-            "ashby": ("data/ashby_companies.txt", "https://jobs.ashbyhq.com/{}"),
-            "workable": ("data/workable_companies.txt", "https://apply.workable.com/{}"),
-            "jobvite": ("data/jobvite_companies.txt", "https://jobs.jobvite.com/{}")
+            "greenhouse": ("discovery://ats/greenhouse", "https://boards.greenhouse.io/{}"),
+            "lever": ("discovery://ats/lever", "https://jobs.lever.co/{}"),
+            "ashby": ("discovery://ats/ashby", "https://jobs.ashbyhq.com/{}"),
+            "workable": ("discovery://ats/workable", "https://apply.workable.com/{}"),
+            "jobvite": ("discovery://ats/jobvite", "https://jobs.jobvite.com/{}")
         }
 
         tasks = []
@@ -119,7 +119,7 @@ def run_discovery():
 
     section("ATS DISCOVERY", logger)
 
-    domains = load_lines("data/company_domains.txt")
+    domains = load_lines("discovery://company_domains")
     learned = get_learned()
 
     summary = {
@@ -182,7 +182,7 @@ def run_discovery():
     logger.info("")
     logger.info("Greenhouse embed graph discovery")
 
-    greenhouse_companies = load_lines("data/greenhouse_companies.txt")
+    greenhouse_companies = load_lines("discovery://ats/greenhouse")
     batch = get_next_batch(greenhouse_companies, "greenhouse_embed", batch_size=50)
 
     logger.info(f"{'greenhouse':15} scanning {len(batch)} companies for embed discovery")

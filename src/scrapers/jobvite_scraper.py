@@ -124,7 +124,7 @@ def fetch_company_jobs(company):
 
 def scrape_all_jobvite():
 
-    companies = load_lines("data/jobvite_companies.txt")
+    companies = load_lines("discovery://ats/jobvite")
     schedule = load_schedule()
 
     companies = [

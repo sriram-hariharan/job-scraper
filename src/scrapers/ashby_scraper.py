@@ -122,7 +122,7 @@ def fetch_company_jobs(company):
 
 
 def scrape_all_ashby():
-    companies = load_lines("data/ashby_companies.txt")
+    companies = load_lines("discovery://ats/ashby")
     schedule = load_schedule()
 
     companies = [

@@ -285,25 +285,41 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     start_stage("embedding_prefilter", f"Embedding-prefiltering {len(evaluable_jobs)} evaluable jobs")
 
     prefilter_input_count = len(evaluable_jobs)
-    evaluable_jobs = prefilter_jobs_by_embedding(
-        evaluable_jobs,
-        top_n=None,
-    )
-    prefilter_output_count = len(evaluable_jobs)
 
-    logger.info(
-        f"Embedding prefilter reduced AI candidates: "
-        f"{prefilter_input_count} -> {prefilter_output_count}"
-    )
-
-    if prefilter_input_count:
-        reduction_pct = round(
-            (1 - prefilter_output_count / prefilter_input_count) * 100,
-            2,
+    if _is_user_pipeline_mode():
+        logger.info(
+            "Skipping legacy filesystem embedding prefilter for user pipeline run; "
+            "profile resumes are stored in Postgres."
         )
-        logger.info(f"AI candidate reduction rate: {reduction_pct}%")
+        prefilter_output_count = len(evaluable_jobs)
+        complete_stage(
+            "embedding_prefilter",
+            counts={
+                "prefilter_jobs": len(evaluable_jobs),
+                "skipped_legacy_resume_dir": True,
+                "reason": "user_pipeline_postgres_profile_resumes",
+            },
+        )
+    else:
+        evaluable_jobs = prefilter_jobs_by_embedding(
+            evaluable_jobs,
+            top_n=None,
+        )
+        prefilter_output_count = len(evaluable_jobs)
 
-    complete_stage("embedding_prefilter", counts={"prefilter_jobs": len(evaluable_jobs)})
+        logger.info(
+            f"Embedding prefilter reduced AI candidates: "
+            f"{prefilter_input_count} -> {prefilter_output_count}"
+        )
+
+        if prefilter_input_count:
+            reduction_pct = round(
+                (1 - prefilter_output_count / prefilter_input_count) * 100,
+                2,
+            )
+            logger.info(f"AI candidate reduction rate: {reduction_pct}%")
+
+        complete_stage("embedding_prefilter", counts={"prefilter_jobs": len(evaluable_jobs)})
 
     section("AI JOB EVALUATION", logger)
     start_stage("ai_evaluation", f"Evaluating {len(evaluable_jobs)} jobs with AI")

@@ -1068,6 +1068,89 @@ SELECT json_build_object(
     }
 
 
+def get_user_pipeline_artifacts_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    artifact_kind: str = "",
+    artifact_name: str = "",
+    limit: int = 10000,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _require_run_id(run_id)
+    safe_artifact_kind = _clean_text(artifact_kind)
+    safe_artifact_name = _clean_text(artifact_name)
+    safe_limit = max(1, min(int(limit), 100000))
+
+    kind_filter = (
+        f"AND artifact_kind = {_sql_quote_text(safe_artifact_kind)}"
+        if safe_artifact_kind
+        else ""
+    )
+    name_filter = (
+        f"AND artifact_name = {_sql_quote_text(safe_artifact_name)}"
+        if safe_artifact_name
+        else ""
+    )
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH artifact_rows AS (
+    SELECT
+        artifact_id,
+        owner_user_id,
+        run_id,
+        artifact_kind,
+        artifact_name,
+        content_type,
+        content_json,
+        content_text,
+        created_at
+    FROM user_pipeline_artifacts
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+      {kind_filter}
+      {name_filter}
+    ORDER BY artifact_kind ASC, artifact_name ASC
+    LIMIT {safe_limit}
+)
+SELECT json_build_object(
+    'total_row_count', (
+        SELECT COUNT(*)
+        FROM user_pipeline_artifacts
+        WHERE owner_user_id = {_sql_quote_text(owner)}
+          AND run_id = {_sql_quote_text(safe_run_id)}
+          {kind_filter}
+          {name_filter}
+    ),
+    'rows', COALESCE((SELECT json_agg(row_to_json(artifact_rows)) FROM artifact_rows), '[]'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    rows = list(payload.get("data", {}).get("rows", []) or [])
+    return {
+        "ok": True,
+        "artifacts": rows,
+        "rows": rows,
+        "count": len(rows),
+        "total_row_count": int(payload.get("data", {}).get("total_row_count", 0) or 0),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
 def _safe_positive_int(value: Any, *, default: int, minimum: int = 1, maximum: int = 1000000) -> int:
     try:
         parsed = int(value)

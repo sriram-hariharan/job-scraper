@@ -96,6 +96,7 @@ from src.storage.auth.read_postgres import (
 )
 from src.storage.user_pipeline.read_postgres import (
     get_latest_user_pipeline_run_postgres_payload,
+    get_user_pipeline_artifacts_postgres_payload,
     get_user_pipeline_runs_postgres_payload,
 )
 from src.storage.user_pipeline.store import (
@@ -7827,6 +7828,223 @@ def _overlay_job_metadata(
 
     return overlaid_rows
 
+def _csv_rows_from_text(text: Any) -> List[Dict[str, str]]:
+    raw = str(text or "")
+    if not raw.strip():
+        return []
+
+    reader = csv.DictReader(raw.splitlines())
+    return [dict(row or {}) for row in reader]
+
+
+def _jsonl_row_count_from_text(text: Any) -> int:
+    count = 0
+    for line in str(text or "").splitlines():
+        if line.strip():
+            count += 1
+    return count
+
+
+def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    return {
+        _clean_text(row.get("artifact_name")): dict(row or {})
+        for row in rows
+        if _clean_text(row.get("artifact_name"))
+    }
+
+
+def _artifact_text_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> str:
+    row = _artifact_row_by_name(rows).get(_clean_text(artifact_name), {})
+    return str(row.get("content_text", "") or "")
+
+
+def _build_job_index_from_planning_rows(
+    ja: Any,
+    *,
+    best_rows: List[Dict[str, str]],
+    queue_rows: List[Dict[str, str]],
+    manifest_rows: List[Dict[str, str]],
+) -> List[Dict[str, str]]:
+    merged: Dict[str, Dict[str, str]] = {}
+
+    for source_rows in [best_rows, queue_rows, manifest_rows]:
+        for row in source_rows:
+            job_doc_id = _clean_text(row.get("job_doc_id"))
+            company = _clean_text(row.get("job_company"))
+            title = _clean_text(row.get("job_title"))
+
+            key = job_doc_id or f"{ja._normalize_text(company)}||{ja._normalize_text(title)}"
+            if not key.strip("|"):
+                continue
+
+            if key not in merged:
+                merged[key] = {}
+            merged[key].update(row)
+
+    merged_rows = list(merged.values())
+    return ja._overlay_operator_decisions(merged_rows)
+
+
+def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for line in str(text or "").splitlines():
+        raw = line.strip()
+        if not raw:
+            continue
+
+        try:
+            record = json.loads(raw)
+        except Exception:
+            continue
+
+        metadata = record.get("metadata", {}) if isinstance(record.get("metadata"), dict) else {}
+
+        job_doc_id = _clean_text(
+            record.get("job_doc_id")
+            or record.get("doc_id")
+            or metadata.get("job_doc_id")
+            or metadata.get("doc_id")
+            or record.get("job_url")
+            or metadata.get("job_url")
+        )
+        job_url = _clean_text(
+            record.get("job_url")
+            or metadata.get("job_url")
+            or job_doc_id
+        )
+        job_company = _clean_text(
+            record.get("job_company")
+            or record.get("company")
+            or metadata.get("job_company")
+            or metadata.get("company")
+        )
+        job_title = _clean_text(
+            record.get("job_title")
+            or record.get("title")
+            or metadata.get("job_title")
+            or metadata.get("title")
+        )
+        posted_at = _clean_text(
+            record.get("posted_at")
+            or metadata.get("posted_at")
+        )
+
+        if not any([job_doc_id, job_url, job_company, job_title]):
+            continue
+
+        key_row = {
+            "job_doc_id": job_doc_id,
+            "job_url": job_url,
+            "job_company": job_company,
+            "job_title": job_title,
+        }
+        overlay = {
+            "posted_at": posted_at,
+            "job_url": job_url,
+        }
+
+        for key in _application_row_key_candidates(key_row):
+            if key:
+                latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _overlay_job_metadata_from_map(
+    rows: List[Dict[str, Any]],
+    latest_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    overlaid_rows: List[Dict[str, Any]] = []
+
+    for row in rows:
+        merged = dict(row)
+        merged["posted_at"] = _clean_text(merged.get("posted_at"))
+        merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
+
+        if latest_by_key:
+            for key in _application_row_key_candidates(merged):
+                overlay = latest_by_key.get(key)
+                if not overlay:
+                    continue
+
+                if overlay.get("posted_at"):
+                    merged["posted_at"] = overlay["posted_at"]
+                if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
+                    merged["job_url"] = overlay["job_url"]
+                break
+
+        overlaid_rows.append(merged)
+
+    return overlaid_rows
+
+
+def _latest_user_pipeline_artifact_context(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return {}
+
+    latest_payload = get_user_pipeline_runs_postgres_payload(
+        owner_user_id=owner,
+        limit=1,
+        status="succeeded",
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    runs = list(latest_payload.get("rows", []) or [])
+    if not runs:
+        return {}
+
+    run = dict(runs[0] or {})
+    run_id = _clean_text(run.get("run_id"))
+    if not run_id:
+        return {}
+
+    artifacts_payload = get_user_pipeline_artifacts_postgres_payload(
+        owner_user_id=owner,
+        run_id=run_id,
+        limit=100000,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    artifacts = list(artifacts_payload.get("rows", []) or [])
+    if not artifacts:
+        return {}
+
+    best_text = _artifact_text_by_name(artifacts, "best_resume_variant_by_job.csv")
+    shortlist_text = _artifact_text_by_name(artifacts, "application_shortlist_by_job.csv")
+    queue_text = _artifact_text_by_name(artifacts, "application_execution_queue.csv")
+    manifest_text = _artifact_text_by_name(artifacts, "job_packet_manifest.csv")
+    corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
+
+    if not any([best_text, queue_text, manifest_text]):
+        return {}
+
+    return {
+        "ok": True,
+        "artifact_source": "postgres:user_pipeline_artifacts",
+        "owner_user_id": owner,
+        "run_id": run_id,
+        "run": run,
+        "artifacts": artifacts,
+        "best_rows": _csv_rows_from_text(best_text),
+        "shortlist_rows": _csv_rows_from_text(shortlist_text),
+        "queue_rows": _csv_rows_from_text(queue_text),
+        "manifest_rows": _csv_rows_from_text(manifest_text),
+        "current_run_job_corpus_text": corpus_text,
+        "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
+    }
+
+
 def health_payload() -> Dict[str, Any]:
     from src.rag.retriever import get_semantic_status
 
@@ -7928,13 +8146,35 @@ def status_payload(
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
-    best_rows = ja._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
-    shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
-    queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
-    manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
-    decision_rows = _load_latest_operator_decision_rows(owner_user_id=owner_user_id)
+    artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
 
-    merged_rows = ja._build_job_index(output_dir)
+    if artifact_context:
+        best_rows = list(artifact_context.get("best_rows", []) or [])
+        shortlist_rows = list(artifact_context.get("shortlist_rows", []) or [])
+        queue_rows = list(artifact_context.get("queue_rows", []) or [])
+        manifest_rows = list(artifact_context.get("manifest_rows", []) or [])
+        merged_rows = _build_job_index_from_planning_rows(
+            ja,
+            best_rows=best_rows,
+            queue_rows=queue_rows,
+            manifest_rows=manifest_rows,
+        )
+        job_corpus_rows = int(artifact_context.get("job_corpus_rows", 0) or 0)
+        planning_output_dir_value = (
+            f"postgres:user_pipeline_artifacts/"
+            f"{artifact_context.get('owner_user_id', '')}/"
+            f"{artifact_context.get('run_id', '')}"
+        )
+    else:
+        best_rows = ja._load_csv_rows(output_dir / "best_resume_variant_by_job.csv")
+        shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
+        queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
+        manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
+        merged_rows = ja._build_job_index(output_dir)
+        job_corpus_rows = ja._count_jsonl_rows(job_corpus)
+        planning_output_dir_value = str(output_dir)
+
+    decision_rows = _load_latest_operator_decision_rows(owner_user_id=owner_user_id)
     undecided_review_counts = ja._count_undecided_review_rows(merged_rows)
 
     winner_bucket_counts = Counter(
@@ -7960,7 +8200,11 @@ def status_payload(
 
     latest_by_key = ja._load_latest_decision_overlay()
     application_overlay_by_key = _load_latest_application_action_overlay(owner_user_id=owner_user_id)
-    job_metadata_by_key = _load_job_metadata_overlay_from_corpus(job_corpus)
+    job_metadata_by_key = (
+        _job_metadata_overlay_from_jsonl_text(artifact_context.get("current_run_job_corpus_text", ""))
+        if artifact_context
+        else _load_job_metadata_overlay_from_corpus(job_corpus)
+    )
 
     top_rows = sorted(
         queue_rows,
@@ -8021,8 +8265,10 @@ def status_payload(
     return {
         "summary": {
             "job_corpus_path": str(job_corpus),
-            "job_corpus_rows": ja._count_jsonl_rows(job_corpus),
-            "planning_output_dir": str(output_dir),
+            "job_corpus_rows": job_corpus_rows,
+            "planning_output_dir": planning_output_dir_value,
+            "artifact_source": artifact_context.get("artifact_source", "filesystem") if artifact_context else "filesystem",
+            "pipeline_run_id": artifact_context.get("run_id", "") if artifact_context else "",
             "best_variant_rows": len(best_rows),
             "shortlist_rows": len(shortlist_rows),
             "execution_queue_rows": len(queue_rows),
@@ -8071,7 +8317,20 @@ def browse_payload(
     )
 
     try:
-        rows = ja._build_job_index(output_dir)
+        artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
+        if artifact_context:
+            rows = _build_job_index_from_planning_rows(
+                ja,
+                best_rows=list(artifact_context.get("best_rows", []) or []),
+                queue_rows=list(artifact_context.get("queue_rows", []) or []),
+                manifest_rows=list(artifact_context.get("manifest_rows", []) or []),
+            )
+            job_metadata_by_key = _job_metadata_overlay_from_jsonl_text(
+                artifact_context.get("current_run_job_corpus_text", "")
+            )
+        else:
+            rows = ja._build_job_index(output_dir)
+            job_metadata_by_key = {}
 
         selection_filters = dict(resolved_filters)
         selection_filters["limit"] = max(len(rows), 1)
@@ -8107,7 +8366,11 @@ def browse_payload(
         end = start + page_size
         page_rows = selected[start:end]
 
-        page_rows = _overlay_job_metadata(page_rows, job_corpus=DEFAULT_CORPUS_PATH)
+        page_rows = (
+            _overlay_job_metadata_from_map(page_rows, job_metadata_by_key)
+            if artifact_context
+            else _overlay_job_metadata(page_rows, job_corpus=DEFAULT_CORPUS_PATH)
+        )
 
         finalized_page_rows: List[Dict[str, Any]] = []
         for row in page_rows:
@@ -8157,7 +8420,20 @@ def review_payload(
     **filters: Any,
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._build_job_index(output_dir)
+    artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
+    if artifact_context:
+        rows = _build_job_index_from_planning_rows(
+            ja,
+            best_rows=list(artifact_context.get("best_rows", []) or []),
+            queue_rows=list(artifact_context.get("queue_rows", []) or []),
+            manifest_rows=list(artifact_context.get("manifest_rows", []) or []),
+        )
+        job_metadata_by_key = _job_metadata_overlay_from_jsonl_text(
+            artifact_context.get("current_run_job_corpus_text", "")
+        )
+    else:
+        rows = ja._build_job_index(output_dir)
+        job_metadata_by_key = {}
 
     resolved_filters = {
         "queue_rank": None,
@@ -8173,7 +8449,11 @@ def review_payload(
 
     args = _make_args(**resolved_filters)
     selected = ja._select_review_rows(rows, args)
-    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+    selected = (
+        _overlay_job_metadata_from_map(selected, job_metadata_by_key)
+        if artifact_context
+        else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+    )
     selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
     selected = _exclude_applied_rows(selected)
 
@@ -8191,9 +8471,27 @@ def workflow_payload(
     owner_user_id: str = "",
 ) -> Dict[str, Any]:
     ja = _job_app()
-    rows = ja._build_job_index(output_dir)
+    artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
+    if artifact_context:
+        rows = _build_job_index_from_planning_rows(
+            ja,
+            best_rows=list(artifact_context.get("best_rows", []) or []),
+            queue_rows=list(artifact_context.get("queue_rows", []) or []),
+            manifest_rows=list(artifact_context.get("manifest_rows", []) or []),
+        )
+        job_metadata_by_key = _job_metadata_overlay_from_jsonl_text(
+            artifact_context.get("current_run_job_corpus_text", "")
+        )
+    else:
+        rows = ja._build_job_index(output_dir)
+        job_metadata_by_key = {}
+
     selected = ja._workflow_view_rows(rows, view)[:limit]
-    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+    selected = (
+        _overlay_job_metadata_from_map(selected, job_metadata_by_key)
+        if artifact_context
+        else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+    )
     selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
     selected = _exclude_applied_rows(selected)
     return {
@@ -8211,9 +8509,27 @@ def planner_payload(
 ) -> Dict[str, Any]:
     ja = _job_app()
     view = ja._infer_planner_view(request)
-    rows = ja._build_job_index(output_dir)
+    artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
+    if artifact_context:
+        rows = _build_job_index_from_planning_rows(
+            ja,
+            best_rows=list(artifact_context.get("best_rows", []) or []),
+            queue_rows=list(artifact_context.get("queue_rows", []) or []),
+            manifest_rows=list(artifact_context.get("manifest_rows", []) or []),
+        )
+        job_metadata_by_key = _job_metadata_overlay_from_jsonl_text(
+            artifact_context.get("current_run_job_corpus_text", "")
+        )
+    else:
+        rows = ja._build_job_index(output_dir)
+        job_metadata_by_key = {}
+
     selected = ja._workflow_view_rows(rows, view)[:limit]
-    selected = _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+    selected = (
+        _overlay_job_metadata_from_map(selected, job_metadata_by_key)
+        if artifact_context
+        else _overlay_job_metadata(selected, job_corpus=DEFAULT_CORPUS_PATH)
+    )
     selected = _overlay_application_actions(selected, owner_user_id=owner_user_id)
     return {
         "request": request,

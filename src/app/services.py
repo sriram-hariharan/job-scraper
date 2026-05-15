@@ -105,6 +105,8 @@ from src.storage.user_pipeline.store import (
     reserve_user_pipeline_active_run_postgres_payload,
     upsert_user_pipeline_artifact_postgres_payload,
     upsert_user_pipeline_run_postgres_payload,
+    promote_user_seen_jobs_staging_postgres_payload,
+    clear_user_seen_jobs_staging_postgres_payload,
 )
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
@@ -2406,6 +2408,77 @@ def _truthy_env_value(value: Any) -> bool:
     return _clean_text(value).lower() in {"1", "true", "yes", "y", "on"}
 
 
+def _finalize_seen_jobs_staging_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    terminal_status: str,
+    artifact_ingestion: Dict[str, Any],
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    status = _clean_text(terminal_status).lower()
+    ingestion_ok = bool(dict(artifact_ingestion or {}).get("ok", False))
+
+    if not owner or not safe_run_id:
+        return {
+            "ok": False,
+            "attempted": False,
+            "action": "none",
+            "reason": "missing_owner_or_run_id",
+        }
+
+    try:
+        if status == "succeeded" and ingestion_ok:
+            payload = promote_user_seen_jobs_staging_postgres_payload(
+                owner_user_id=owner,
+                run_id=safe_run_id,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            return {
+                "ok": True,
+                "attempted": True,
+                "action": "promoted",
+                "status": status,
+                "artifact_ingestion_ok": ingestion_ok,
+                "staged_count": int(payload.get("staged_count", 0) or 0),
+                "promoted_count": int(payload.get("promoted_count", 0) or 0),
+                "deleted_count": int(payload.get("deleted_count", 0) or 0),
+            }
+
+        payload = clear_user_seen_jobs_staging_postgres_payload(
+            owner_user_id=owner,
+            run_id=safe_run_id,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        return {
+            "ok": True,
+            "attempted": True,
+            "action": "cleared",
+            "status": status,
+            "artifact_ingestion_ok": ingestion_ok,
+            "deleted_count": int(payload.get("deleted_count", 0) or 0),
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "attempted": True,
+            "action": "error",
+            "status": status,
+            "artifact_ingestion_ok": ingestion_ok,
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
+
+
 def _pipeline_scratch_cleanup_payload(
     *,
     owner_user_id: str,
@@ -2563,6 +2636,12 @@ def _owner_db_active_pipeline_status_payload(*, owner_user_id: str) -> Dict[str,
             output_dir=_clean_text(pipeline.get("output_dir")),
             artifact_ingestion=artifact_ingestion,
         )
+        pipeline["seen_job_finalization"] = _finalize_seen_jobs_staging_payload(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            terminal_status=_clean_text(pipeline.get("status")),
+            artifact_ingestion=artifact_ingestion,
+        )
         payload["pipeline"] = pipeline
 
         _persist_user_pipeline_status_snapshot(
@@ -2610,6 +2689,12 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
             owner_user_id=owner,
             run_id=_clean_text(pipeline.get("run_id")),
             output_dir=_clean_text(pipeline.get("output_dir")),
+            artifact_ingestion=artifact_ingestion,
+        )
+        pipeline["seen_job_finalization"] = _finalize_seen_jobs_staging_payload(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            terminal_status=_clean_text(pipeline.get("status")),
             artifact_ingestion=artifact_ingestion,
         )
         payload["pipeline"] = pipeline

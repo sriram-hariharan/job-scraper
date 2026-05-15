@@ -67,6 +67,23 @@ def user_pipeline_table_specs() -> Dict[str, Any]:
                 {"name": "metadata_json", "type": "jsonb", "nullable": False},
             ],
         },
+        "user_seen_jobs_staging": {
+            "description": "Run-scoped staged seen-job rows promoted only after successful user pipeline completion.",
+            "primary_key": ["owner_user_id", "run_id", "seen_key"],
+            "owner_column": "owner_user_id",
+            "columns": [
+                {"name": "owner_user_id", "type": "text", "nullable": False},
+                {"name": "run_id", "type": "text", "nullable": False},
+                {"name": "seen_key", "type": "text", "nullable": False},
+                {"name": "source", "type": "text", "nullable": False},
+                {"name": "job_url", "type": "text", "nullable": False},
+                {"name": "job_doc_id", "type": "text", "nullable": False},
+                {"name": "company", "type": "text", "nullable": False},
+                {"name": "title", "type": "text", "nullable": False},
+                {"name": "staged_at", "type": "timestamptz", "nullable": False},
+                {"name": "metadata_json", "type": "jsonb", "nullable": False},
+            ],
+        },
         "user_pipeline_active_runs": {
             "primary_key": ["owner_user_id"],
             "required_columns": [
@@ -178,6 +195,26 @@ def render_user_pipeline_schema_sql() -> str:
             "",
             "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_job_url",
             "ON user_seen_jobs (job_url);",
+            "",
+            "CREATE TABLE IF NOT EXISTS user_seen_jobs_staging (",
+            "    owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,",
+            "    run_id TEXT NOT NULL REFERENCES user_pipeline_runs(run_id) ON DELETE CASCADE,",
+            "    seen_key TEXT NOT NULL,",
+            "    source TEXT NOT NULL DEFAULT '',",
+            "    job_url TEXT NOT NULL DEFAULT '',",
+            "    job_doc_id TEXT NOT NULL DEFAULT '',",
+            "    company TEXT NOT NULL DEFAULT '',",
+            "    title TEXT NOT NULL DEFAULT '',",
+            "    staged_at TIMESTAMPTZ NOT NULL,",
+            "    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,",
+            "    PRIMARY KEY (owner_user_id, run_id, seen_key)",
+            ");",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_staging_owner_run",
+            "ON user_seen_jobs_staging (owner_user_id, run_id);",
+            "",
+            "CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_staging_owner_staged",
+            "ON user_seen_jobs_staging (owner_user_id, staged_at DESC);",
             "",
             "CREATE TABLE IF NOT EXISTS user_pipeline_artifacts (",
             "    artifact_id TEXT PRIMARY KEY,",
@@ -806,6 +843,239 @@ SELECT json_build_object(
         "command_text": payload.get("command_text", ""),
         "table_name": "user_seen_jobs",
     }
+
+
+def user_seen_job_staging_db_row(record: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(record, dict):
+        raise ValueError("User seen job staging record must be a dictionary.")
+
+    owner_user_id = _require_owner_user_id(record.get("owner_user_id"))
+    run_id = _require_run_id(record.get("run_id"))
+    seen_key = _seen_key_from_record(record)
+    now = _utc_now_iso()
+
+    return {
+        "owner_user_id": owner_user_id,
+        "run_id": run_id,
+        "seen_key": seen_key,
+        "source": _clean_text(record.get("source")),
+        "job_url": _clean_text(record.get("job_url")),
+        "job_doc_id": _clean_text(record.get("job_doc_id")),
+        "company": _clean_text(record.get("company")),
+        "title": _clean_text(record.get("title")),
+        "staged_at": _clean_text(record.get("staged_at")) or now,
+        "metadata_json": record.get("metadata_json") or {},
+    }
+
+
+def upsert_user_seen_job_staging_postgres_payload(
+    *,
+    record: Dict[str, Any],
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    row = user_seen_job_staging_db_row(record)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH upserted AS (
+    INSERT INTO user_seen_jobs_staging (
+        owner_user_id,
+        run_id,
+        seen_key,
+        source,
+        job_url,
+        job_doc_id,
+        company,
+        title,
+        staged_at,
+        metadata_json
+    )
+    VALUES (
+        {_sql_quote_text(row['owner_user_id'])},
+        {_sql_quote_text(row['run_id'])},
+        {_sql_quote_text(row['seen_key'])},
+        {_sql_quote_text(row['source'])},
+        {_sql_quote_text(row['job_url'])},
+        {_sql_quote_text(row['job_doc_id'])},
+        {_sql_quote_text(row['company'])},
+        {_sql_quote_text(row['title'])},
+        {_sql_quote_text(row['staged_at'])}::timestamptz,
+        {_sql_jsonb(row['metadata_json'])}
+    )
+    ON CONFLICT (owner_user_id, run_id, seen_key) DO UPDATE SET
+        source = COALESCE(NULLIF(EXCLUDED.source, ''), user_seen_jobs_staging.source),
+        job_url = COALESCE(NULLIF(EXCLUDED.job_url, ''), user_seen_jobs_staging.job_url),
+        job_doc_id = COALESCE(NULLIF(EXCLUDED.job_doc_id, ''), user_seen_jobs_staging.job_doc_id),
+        company = COALESCE(NULLIF(EXCLUDED.company, ''), user_seen_jobs_staging.company),
+        title = COALESCE(NULLIF(EXCLUDED.title, ''), user_seen_jobs_staging.title),
+        staged_at = EXCLUDED.staged_at,
+        metadata_json = user_seen_jobs_staging.metadata_json || EXCLUDED.metadata_json
+    RETURNING owner_user_id, run_id, seen_key, staged_at
+)
+SELECT json_build_object(
+    'upserted', EXISTS (SELECT 1 FROM upserted),
+    'row', COALESCE((SELECT row_to_json(upserted) FROM upserted LIMIT 1), '{{}}'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    return {
+        "ok": bool(payload.get("data", {}).get("upserted", False)),
+        "upserted": bool(payload.get("data", {}).get("upserted", False)),
+        "row": dict(payload.get("data", {}).get("row", {}) or {}),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_seen_jobs_staging",
+    }
+
+
+def promote_user_seen_jobs_staging_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _require_run_id(run_id)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH staged AS (
+    SELECT *
+    FROM user_seen_jobs_staging
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+),
+upserted AS (
+    INSERT INTO user_seen_jobs (
+        owner_user_id,
+        seen_key,
+        source,
+        job_url,
+        job_doc_id,
+        company,
+        title,
+        first_seen_at,
+        last_seen_at,
+        first_run_id,
+        last_run_id,
+        metadata_json
+    )
+    SELECT
+        owner_user_id,
+        seen_key,
+        source,
+        job_url,
+        job_doc_id,
+        company,
+        title,
+        staged_at,
+        staged_at,
+        run_id,
+        run_id,
+        metadata_json || jsonb_build_object(
+            'promoted_from_staging', true,
+            'promoted_run_id', run_id
+        )
+    FROM staged
+    ON CONFLICT (owner_user_id, seen_key) DO UPDATE SET
+        source = COALESCE(NULLIF(EXCLUDED.source, ''), user_seen_jobs.source),
+        job_url = COALESCE(NULLIF(EXCLUDED.job_url, ''), user_seen_jobs.job_url),
+        job_doc_id = COALESCE(NULLIF(EXCLUDED.job_doc_id, ''), user_seen_jobs.job_doc_id),
+        company = COALESCE(NULLIF(EXCLUDED.company, ''), user_seen_jobs.company),
+        title = COALESCE(NULLIF(EXCLUDED.title, ''), user_seen_jobs.title),
+        last_seen_at = EXCLUDED.last_seen_at,
+        last_run_id = COALESCE(NULLIF(EXCLUDED.last_run_id, ''), user_seen_jobs.last_run_id),
+        metadata_json = user_seen_jobs.metadata_json || EXCLUDED.metadata_json
+    RETURNING seen_key
+),
+deleted AS (
+    DELETE FROM user_seen_jobs_staging
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+    RETURNING seen_key
+)
+SELECT json_build_object(
+    'staged_count', (SELECT COUNT(*) FROM staged),
+    'promoted_count', (SELECT COUNT(*) FROM upserted),
+    'deleted_count', (SELECT COUNT(*) FROM deleted)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "staged_count": int(data.get("staged_count", 0) or 0),
+        "promoted_count": int(data.get("promoted_count", 0) or 0),
+        "deleted_count": int(data.get("deleted_count", 0) or 0),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_seen_jobs_staging",
+    }
+
+
+def clear_user_seen_jobs_staging_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _require_run_id(run_id)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH deleted AS (
+    DELETE FROM user_seen_jobs_staging
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+    RETURNING seen_key
+)
+SELECT json_build_object(
+    'deleted_count', (SELECT COUNT(*) FROM deleted)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    return {
+        "ok": True,
+        "deleted_count": int(payload.get("data", {}).get("deleted_count", 0) or 0),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+        "table_name": "user_seen_jobs_staging",
+    }
+
 
 
 def is_user_seen_job_postgres_payload(

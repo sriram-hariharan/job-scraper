@@ -42,9 +42,6 @@ services:
       REDIS_URL: redis://redis:6379/0
     ports:
       - "127.0.0.1:8000:8000"
-    volumes:
-      - ./outputs:/app/outputs
-      - ./data:/app/data
 
 volumes:
   postgres_data:

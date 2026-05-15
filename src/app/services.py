@@ -157,9 +157,6 @@ DEFAULT_OUTPUT_DIR = Path(
 DEFAULT_CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 DEFAULT_PIPELINE_LOG_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_run.log"
 DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
-DEFAULT_PROFILE_RESUME_DIR = Path(
-    os.environ.get("RESUME_DIR", "data/profile_resumes")
-).expanduser()
 DEFAULT_PIPELINE_SCRATCH_DIR = Path(
     os.environ.get("JOB_STACK_PIPELINE_SCRATCH_DIR", "tmp/pipeline_runs")
 ).expanduser()
@@ -267,17 +264,6 @@ def _tailoring_workspace_button_state_cache_key(
 def _safe_owner_dir_name(owner_user_id: str = "") -> str:
     safe = re.sub(r"[^A-Za-z0-9_.-]+", "_", _clean_text(owner_user_id)).strip("._-")
     return safe[:80]
-
-
-def _get_resume_dir(owner_user_id: str = "") -> Path:
-    owner_dir = _safe_owner_dir_name(owner_user_id)
-    resume_dir = (
-        DEFAULT_PROFILE_RESUME_DIR / "users" / owner_dir
-        if owner_dir
-        else DEFAULT_PROFILE_RESUME_DIR
-    )
-    resume_dir.mkdir(parents=True, exist_ok=True)
-    return resume_dir
 
 
 def _safe_run_dir_name(run_id: str = "") -> str:
@@ -7640,7 +7626,9 @@ def _resolve_resume_preview_path(
             return cached_path
 
     candidate_paths: List[Path] = []
-    candidate_paths.append(_get_resume_dir() / safe_name)
+    legacy_resume_dir = _clean_text(os.environ.get("RESUME_DIR"))
+    if legacy_resume_dir:
+        candidate_paths.append(Path(legacy_resume_dir).expanduser() / safe_name)
 
     for profile_path in candidate_paths:
         if profile_path.exists() and profile_path.is_file():

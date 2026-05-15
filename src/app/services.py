@@ -2402,6 +2402,105 @@ def _ingest_pipeline_run_artifacts_to_postgres(
     return result
 
 
+def _truthy_env_value(value: Any) -> bool:
+    return _clean_text(value).lower() in {"1", "true", "yes", "y", "on"}
+
+
+def _pipeline_scratch_cleanup_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    output_dir: str,
+    artifact_ingestion: Dict[str, Any],
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    raw_output_dir = _clean_text(output_dir)
+
+    if _truthy_env_value(os.environ.get("JOB_STACK_KEEP_PIPELINE_SCRATCH")):
+        return {
+            "ok": True,
+            "attempted": False,
+            "skipped": "keep_scratch_enabled",
+            "scratch_deleted": False,
+        }
+
+    if not bool(dict(artifact_ingestion or {}).get("ok", False)):
+        return {
+            "ok": False,
+            "attempted": False,
+            "skipped": "artifact_ingestion_not_ok",
+            "scratch_deleted": False,
+        }
+
+    if not owner or not safe_run_id or not raw_output_dir:
+        return {
+            "ok": False,
+            "attempted": False,
+            "skipped": "missing_owner_run_or_output_dir",
+            "scratch_deleted": False,
+        }
+
+    output_path = Path(raw_output_dir).expanduser()
+    parts = output_path.parts
+
+    # Only delete the canonical run-scoped scratch shape:
+    # tmp/pipeline_runs/<owner_user_id>/<run_id>/application_planning
+    if len(parts) < 5:
+        return {
+            "ok": False,
+            "attempted": False,
+            "skipped": "unsafe_output_dir_shape",
+            "output_dir": str(output_path),
+            "scratch_deleted": False,
+        }
+
+    if not (
+        parts[-1] == "application_planning"
+        and parts[-2] == safe_run_id
+        and parts[-3] == owner
+        and parts[-4] == "pipeline_runs"
+        and parts[-5] == "tmp"
+    ):
+        return {
+            "ok": False,
+            "attempted": False,
+            "skipped": "non_canonical_output_dir",
+            "output_dir": str(output_path),
+            "scratch_deleted": False,
+        }
+
+    run_root = output_path.parent
+
+    if not run_root.exists():
+        return {
+            "ok": True,
+            "attempted": False,
+            "skipped": "scratch_already_missing",
+            "scratch_dir": str(run_root),
+            "scratch_deleted": False,
+        }
+
+    try:
+        shutil.rmtree(run_root)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "attempted": True,
+            "scratch_dir": str(run_root),
+            "scratch_deleted": False,
+            "error_type": exc.__class__.__name__,
+            "error": str(exc),
+        }
+
+    return {
+        "ok": True,
+        "attempted": True,
+        "scratch_dir": str(run_root),
+        "scratch_deleted": True,
+    }
+
+
 def _owner_db_active_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
@@ -2458,6 +2557,12 @@ def _owner_db_active_pipeline_status_payload(*, owner_user_id: str) -> Dict[str,
             status_payload=pipeline,
         )
         pipeline["artifact_ingestion"] = artifact_ingestion
+        pipeline["scratch_cleanup"] = _pipeline_scratch_cleanup_payload(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            output_dir=_clean_text(pipeline.get("output_dir")),
+            artifact_ingestion=artifact_ingestion,
+        )
         payload["pipeline"] = pipeline
 
         _persist_user_pipeline_status_snapshot(
@@ -2501,6 +2606,12 @@ def owner_pipeline_status_payload(*, owner_user_id: str = "") -> Dict[str, Any]:
             status_payload=pipeline,
         )
         pipeline["artifact_ingestion"] = artifact_ingestion
+        pipeline["scratch_cleanup"] = _pipeline_scratch_cleanup_payload(
+            owner_user_id=owner,
+            run_id=_clean_text(pipeline.get("run_id")),
+            output_dir=_clean_text(pipeline.get("output_dir")),
+            artifact_ingestion=artifact_ingestion,
+        )
         payload["pipeline"] = pipeline
 
         _persist_user_pipeline_status_snapshot(

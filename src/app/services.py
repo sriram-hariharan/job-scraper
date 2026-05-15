@@ -108,6 +108,12 @@ from src.storage.user_pipeline.store import (
     promote_user_seen_jobs_staging_postgres_payload,
     clear_user_seen_jobs_staging_postgres_payload,
 )
+from src.storage.redis_locks import (
+    RedisLockHandle,
+    acquire_redis_lock,
+    redis_lock_key,
+    release_redis_lock,
+)
 from src.pipeline.scheduler import (
     DEFAULT_LAUNCHD_AGENT_DIR,
     DEFAULT_LAUNCHD_INTERVAL_SECONDS,
@@ -1705,6 +1711,131 @@ def _active_pipeline_worker_id() -> str:
     return f"pid:{os.getpid()}"
 
 
+def _user_pipeline_redis_admission_lock_enabled() -> bool:
+    raw = _clean_text(os.environ.get("JOB_STACK_USER_PIPELINE_REDIS_ADMISSION_LOCK_ENABLED"))
+    if raw:
+        return raw.lower() in {"1", "true", "yes", "y", "on"}
+
+    return bool(_clean_text(os.environ.get("REDIS_URL")))
+
+
+def _user_pipeline_redis_admission_lock_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    ttl_seconds: int,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+
+    if not owner or not safe_run_id:
+        return {
+            "attempted": False,
+            "acquired": False,
+            "skipped": "missing_owner_or_run_id",
+        }
+
+    if not _user_pipeline_redis_admission_lock_enabled():
+        return {
+            "attempted": False,
+            "acquired": False,
+            "skipped": "disabled",
+        }
+
+    lock_key = redis_lock_key("user_pipeline_admission", owner)
+
+    try:
+        handle = acquire_redis_lock(
+            lock_key,
+            ttl_seconds=ttl_seconds,
+            token=safe_run_id,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Redis user pipeline admission lock skipped owner_user_id=%s run_id=%s: %s",
+            owner,
+            safe_run_id,
+            exc,
+        )
+        return {
+            "attempted": True,
+            "acquired": False,
+            "skipped": "redis_error",
+            "error": repr(exc),
+            "key": lock_key,
+        }
+
+    return {
+        "attempted": True,
+        "acquired": bool(handle.acquired),
+        "skipped": "" if handle.acquired else "lock_held",
+        "key": handle.key,
+        "token": handle.token,
+        "ttl_seconds": handle.ttl_seconds,
+    }
+
+
+def _release_user_pipeline_redis_admission_lock_payload(lock_payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(lock_payload, dict):
+        return {
+            "attempted": False,
+            "released": False,
+            "skipped": "missing_payload",
+        }
+
+    if not bool(lock_payload.get("acquired", False)):
+        return {
+            "attempted": False,
+            "released": False,
+            "skipped": "not_acquired",
+        }
+
+    key = _clean_text(lock_payload.get("key"))
+    token = _clean_text(lock_payload.get("token"))
+    ttl_seconds = lock_payload.get("ttl_seconds") or _active_pipeline_reservation_ttl_seconds()
+
+    if not key or not token:
+        return {
+            "attempted": False,
+            "released": False,
+            "skipped": "missing_key_or_token",
+        }
+
+    try:
+        handle = RedisLockHandle(
+            key=key,
+            token=token,
+            acquired=True,
+            ttl_seconds=int(ttl_seconds),
+        )
+        released = release_redis_lock(handle)
+        return {
+            "attempted": True,
+            "released": bool(released),
+            "key": key,
+        }
+    except Exception as exc:
+        logger.warning("Failed to release Redis user pipeline admission lock key=%s: %s", key, exc)
+        return {
+            "attempted": True,
+            "released": False,
+            "key": key,
+            "error": repr(exc),
+        }
+
+
+def _active_run_redis_admission_lock_payload(active_run: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(active_run, dict):
+        return {}
+
+    metadata = active_run.get("metadata_json") or {}
+    if not isinstance(metadata, dict):
+        return {}
+
+    lock_payload = metadata.get("redis_admission_lock") or {}
+    return dict(lock_payload) if isinstance(lock_payload, dict) else {}
+
+
 def _release_user_pipeline_active_run(
     *,
     owner_user_id: str,
@@ -1716,6 +1847,25 @@ def _release_user_pipeline_active_run(
 
     if not owner:
         return
+
+    active_run: Dict[str, Any] = {}
+    try:
+        active_payload = get_user_pipeline_active_run_postgres_payload(
+            owner_user_id=owner,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        active_run = dict(active_payload.get("active_run", {}) or {})
+    except Exception as exc:
+        logger.warning(
+            "Failed to read user pipeline active run before release owner_user_id=%s run_id=%s: %s",
+            owner,
+            safe_run_id,
+            exc,
+        )
 
     try:
         release_user_pipeline_active_run_postgres_payload(
@@ -1736,6 +1886,9 @@ def _release_user_pipeline_active_run(
             exc,
         )
 
+    _release_user_pipeline_redis_admission_lock_payload(
+        _active_run_redis_admission_lock_payload(active_run)
+    )
 
 def _clear_owner_active_pipeline_state(owner_user_id: str, run_id: str = "") -> None:
     owner = _clean_text(owner_user_id)
@@ -2133,6 +2286,14 @@ def _persist_user_pipeline_status_snapshot(
         )
     except Exception as exc:
         logger.warning("Failed to persist user pipeline status snapshot: %s", exc)
+
+    if status in _pipeline_terminal_statuses():
+        _release_user_pipeline_active_run(
+            owner_user_id=owner,
+            run_id=run_id,
+            terminal_status=status,
+        )
+        _clear_owner_active_pipeline_state(owner, run_id)
 
 
 
@@ -3645,12 +3806,27 @@ def run_live_pipeline_payload(
     log_handle = canonical_log_path.open("w", encoding="utf-8", buffering=1)
 
     active_run_reserved = False
+    redis_admission_lock: Dict[str, Any] = {}
     if owner_for_pipeline_gate:
+        reservation_ttl_seconds = _active_pipeline_reservation_ttl_seconds()
+        redis_admission_lock = _user_pipeline_redis_admission_lock_payload(
+            owner_user_id=owner_for_pipeline_gate,
+            run_id=run_id,
+            ttl_seconds=reservation_ttl_seconds,
+        )
+
+        if (
+            bool(redis_admission_lock.get("attempted", False))
+            and not bool(redis_admission_lock.get("acquired", False))
+            and _clean_text(redis_admission_lock.get("skipped")) == "lock_held"
+        ):
+            raise ValueError("A live pipeline run is already being admitted for this user. Try again in a few seconds.")
+
         reservation_payload = reserve_user_pipeline_active_run_postgres_payload(
             owner_user_id=owner_for_pipeline_gate,
             run_id=run_id,
             max_active_runs=_max_concurrent_user_pipeline_runs(),
-            ttl_seconds=_active_pipeline_reservation_ttl_seconds(),
+            ttl_seconds=reservation_ttl_seconds,
             process_pid="",
             worker_id=_active_pipeline_worker_id(),
             output_dir=str(output_dir),
@@ -3658,6 +3834,7 @@ def run_live_pipeline_payload(
             metadata_json={
                 "storage_mode": "postgres_active_run_admission",
                 "requested_output_dir": str(requested_output_dir),
+                "redis_admission_lock": redis_admission_lock,
             },
             database_url="",
             database_url_env="DATABASE_URL",
@@ -3667,6 +3844,8 @@ def run_live_pipeline_payload(
         )
 
         if not bool(reservation_payload.get("reserved", False)):
+            _release_user_pipeline_redis_admission_lock_payload(redis_admission_lock)
+
             reason = _clean_text(reservation_payload.get("reason"))
             active_count = reservation_payload.get("active_count_before")
             max_count = reservation_payload.get("max_active_runs")
@@ -3687,6 +3866,13 @@ def run_live_pipeline_payload(
             "active_count_after": reservation_payload.get("active_count_after"),
             "max_active_runs": reservation_payload.get("max_active_runs"),
             "ttl_seconds": reservation_payload.get("ttl_seconds"),
+            "redis_admission_lock": {
+                "attempted": bool(redis_admission_lock.get("attempted", False)),
+                "acquired": bool(redis_admission_lock.get("acquired", False)),
+                "skipped": _clean_text(redis_admission_lock.get("skipped")),
+                "key": _clean_text(redis_admission_lock.get("key")),
+                "ttl_seconds": redis_admission_lock.get("ttl_seconds"),
+            },
         }
 
 

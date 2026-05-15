@@ -64,3 +64,7 @@ archive/
 data/profile_resumes/
 # Production secrets
 .env.production
+data/
+tmp/
+legacy_host_storage_removed/
+host_legacy_data_outputs_after_mount_removal_*.tar.gz

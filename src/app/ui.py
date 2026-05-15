@@ -17,7 +17,7 @@ def executive_dashboard() -> str:
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v38" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v39" />
 </head>
 <body>
   {render_top_shell("/")}
@@ -680,7 +680,7 @@ def scheduler_dashboard() -> str:
   <title>Scheduler Ops Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v38" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v39" />
 </head>
 <body>
   {render_top_shell("/scheduler")}

@@ -4495,6 +4495,58 @@ html[data-theme="light"] #pipelineConfirmModal #confirmPipelineRunBtn {
   box-shadow: 0 12px 26px rgba(37, 99, 235, 0.22) !important;
 }
 
+/* ui_redesign_v39: make live pipeline loading chips readable in dark mode. */
+html[data-theme="dark"] .page-loading-card {
+  background: #111936 !important;
+  border-color: rgba(124, 156, 255, 0.34) !important;
+}
+
+html[data-theme="dark"] .page-loading-title {
+  color: #f8fbff !important;
+}
+
+html[data-theme="dark"] .page-loading-text {
+  color: #c7d2ea !important;
+}
+
+html[data-theme="dark"] .pipeline-loading-meta {
+  color: #e6edff !important;
+}
+
+html[data-theme="dark"] .pipeline-count-chip {
+  border-color: rgba(148, 163, 184, 0.42) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #eef4ff !important;
+}
+
+html[data-theme="dark"] .pipeline-step {
+  border-color: rgba(148, 163, 184, 0.36) !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: #bac7df !important;
+}
+
+html[data-theme="dark"] .pipeline-step--current {
+  border-color: rgba(124, 156, 255, 0.72) !important;
+  background: rgba(124, 156, 255, 0.2) !important;
+  color: #f3f7ff !important;
+}
+
+html[data-theme="dark"] .pipeline-step--complete {
+  border-color: rgba(52, 211, 153, 0.58) !important;
+  background: rgba(20, 184, 166, 0.18) !important;
+  color: #dcfce7 !important;
+}
+
+html[data-theme="dark"] .pipeline-step--failed {
+  border-color: rgba(251, 113, 133, 0.58) !important;
+  background: rgba(190, 18, 60, 0.22) !important;
+  color: #ffe4e6 !important;
+}
+
+html[data-theme="dark"] .pipeline-step-marker {
+  color: currentColor !important;
+}
+
 @media (max-width: 760px) {
   .pipeline-modal-card {
     width: min(100vw - 16px, 1120px) !important;

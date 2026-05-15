@@ -4547,6 +4547,102 @@ html[data-theme="dark"] .pipeline-step-marker {
   color: currentColor !important;
 }
 
+/* ui_redesign_v40: light-mode pipeline overlays should not inherit the dark modal shell. */
+html[data-theme="light"] .page-loading-overlay {
+  background: rgba(15, 23, 42, 0.36) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+html[data-theme="light"] .page-loading-card {
+  background: #ffffff !important;
+  border: 1px solid #d8e2f0 !important;
+  box-shadow: 0 30px 90px rgba(15, 23, 42, 0.22) !important;
+}
+
+html[data-theme="light"] .page-loading-title,
+html[data-theme="light"] .pipeline-success-title {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .page-loading-text,
+html[data-theme="light"] .pipeline-success-text,
+html[data-theme="light"] .pipeline-loading-meta {
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .pipeline-count-chip {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .pipeline-count-empty {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .pipeline-step {
+  border-color: #cbd5e1 !important;
+  background: #f8fafc !important;
+  color: #475569 !important;
+}
+
+html[data-theme="light"] .pipeline-step--current {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+  color: #1d4ed8 !important;
+}
+
+html[data-theme="light"] .pipeline-step--complete {
+  border-color: #86efac !important;
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+}
+
+html[data-theme="light"] .pipeline-step--failed {
+  border-color: #fca5a5 !important;
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+}
+
+html[data-theme="light"] .pipeline-success-visual {
+  border-color: #bbf7d0 !important;
+  background: radial-gradient(circle at center, #dcfce7 0%, #f0fdf4 54%, transparent 74%) !important;
+  box-shadow: inset 0 0 38px rgba(34, 197, 94, 0.12) !important;
+}
+
+html[data-theme="light"] .pipeline-success-static-check {
+  color: #059669 !important;
+  text-shadow: none !important;
+}
+
+html[data-theme="light"] .pipeline-overlay-failure .pipeline-success-visual {
+  border-color: #fecaca !important;
+  background: radial-gradient(circle at center, #fee2e2 0%, #fef2f2 54%, transparent 74%) !important;
+  box-shadow: inset 0 0 38px rgba(220, 38, 38, 0.1) !important;
+}
+
+html[data-theme="light"] .pipeline-overlay-failure .pipeline-success-static-check,
+html[data-theme="light"] .pipeline-overlay-failure .pipeline-success-title {
+  color: #b91c1c !important;
+  text-shadow: none !important;
+}
+
+html[data-theme="light"] .pipeline-success-summary,
+html[data-theme="light"] #pipelineFailureReason {
+  border: 1px solid #d8e2f0 !important;
+  background: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .pipeline-success-summary-text,
+html[data-theme="light"] .pipeline-success-summary * {
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .pipeline-success-actions {
+  background: transparent !important;
+}
+
 @media (max-width: 760px) {
   .pipeline-modal-card {
     width: min(100vw - 16px, 1120px) !important;

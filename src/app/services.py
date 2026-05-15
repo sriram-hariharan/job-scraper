@@ -3801,6 +3801,126 @@ def scheduler_storage_contract_payload(
 
     return payload
 
+_PIPELINE_CHILD_ENV_EXACT_NAMES = {
+    "APP_ENV",
+    "DATABASE_URL",
+    "REDIS_URL",
+    "PATH",
+    "HOME",
+    "USER",
+    "LOGNAME",
+    "LANG",
+    "LC_ALL",
+    "TZ",
+    "PYTHONPATH",
+    "PYTHONUNBUFFERED",
+    "SSL_CERT_FILE",
+    "REQUESTS_CA_BUNDLE",
+    "CURL_CA_BUNDLE",
+    "TOKENIZERS_PARALLELISM",
+    "HF_HOME",
+    "TRANSFORMERS_CACHE",
+    "SENTENCE_TRANSFORMERS_HOME",
+}
+
+_PIPELINE_CHILD_ENV_PREFIXES = (
+    "JOB_STACK_",
+    "JOB_APP_",
+    "LLM_",
+    "TAILOR_",
+    "PATCH_REFINEMENT_",
+    "GROQ_",
+    "GEMINI_",
+    "OPENAI_",
+    "GOOGLE_",
+    "HF_",
+    "HUGGINGFACE_",
+    "POSTGRES_",
+    "DATABASE_",
+    "REDIS_",
+    "SMTP_",
+    "EMAIL_",
+    "AUTH_",
+    "SESSION_",
+)
+
+
+def _pipeline_child_env_max_value_bytes() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_PIPELINE_CHILD_ENV_MAX_VALUE_BYTES"))
+    try:
+        max_bytes = int(raw)
+    except Exception:
+        max_bytes = 32768
+
+    return max(1024, min(max_bytes, 262144))
+
+
+def _pipeline_child_env(
+    *,
+    extra_env: Dict[str, Any] | None = None,
+    base_env: Dict[str, Any] | None = None,
+) -> Dict[str, str]:
+    source = dict(base_env if base_env is not None else os.environ)
+    child_env: Dict[str, str] = {}
+    max_value_bytes = _pipeline_child_env_max_value_bytes()
+
+    for raw_key, raw_value in source.items():
+        key = _clean_text(raw_key)
+        if not key:
+            continue
+
+        allowed = key in _PIPELINE_CHILD_ENV_EXACT_NAMES or any(
+            key.startswith(prefix) for prefix in _PIPELINE_CHILD_ENV_PREFIXES
+        )
+        if not allowed:
+            continue
+
+        value = str(raw_value or "")
+        if len(value.encode("utf-8")) > max_value_bytes:
+            logger.warning(
+                "Skipping oversized pipeline child env var key=%s size_bytes=%s max_value_bytes=%s",
+                key,
+                len(value.encode("utf-8")),
+                max_value_bytes,
+            )
+            continue
+
+        child_env[key] = value
+
+    for raw_key, raw_value in dict(extra_env or {}).items():
+        key = _clean_text(raw_key)
+        if not key:
+            continue
+
+        value = str(raw_value or "")
+        if len(value.encode("utf-8")) > max_value_bytes:
+            logger.warning(
+                "Skipping oversized extra pipeline child env var key=%s size_bytes=%s max_value_bytes=%s",
+                key,
+                len(value.encode("utf-8")),
+                max_value_bytes,
+            )
+            continue
+
+        child_env[key] = value
+
+    child_env.setdefault("PYTHONUNBUFFERED", "1")
+
+    if "PATH" not in child_env and _clean_text(os.environ.get("PATH")):
+        child_env["PATH"] = _clean_text(os.environ.get("PATH"))
+
+    return child_env
+
+
+def _pipeline_child_env_summary(child_env: Dict[str, str]) -> Dict[str, Any]:
+    values = [str(value or "") for value in dict(child_env or {}).values()]
+    return {
+        "mode": "allowlist",
+        "env_var_count": len(child_env or {}),
+        "env_size_bytes": sum(len(value.encode("utf-8")) for value in values),
+        "max_value_bytes": _pipeline_child_env_max_value_bytes(),
+    }
+
 def run_live_pipeline_payload(
     owner_user_id: str = "",
     output_dir: Path = DEFAULT_OUTPUT_DIR,
@@ -4013,16 +4133,24 @@ def run_live_pipeline_payload(
         }
 
 
-    child_env = dict(os.environ)
-    child_env["JOB_APP_PIPELINE_STATUS_PATH"] = str(canonical_status_path)
-    child_env["JOB_APP_PIPELINE_RUN_ID"] = run_id
+    child_env_extra = {
+        "JOB_APP_PIPELINE_STATUS_PATH": str(canonical_status_path),
+        "JOB_APP_PIPELINE_RUN_ID": run_id,
+    }
 
     if owner_for_pipeline_gate:
-        child_env["JOB_STACK_OWNER_USER_ID"] = owner_for_pipeline_gate
-        child_env["JOB_STACK_USER_PIPELINE_RUN_ID"] = run_id
-        child_env["JOB_STACK_SEEN_JOBS_BACKEND"] = "postgres"
-        child_env["JOB_STACK_JOB_CORPUS_PATH"] = str(pipeline_job_corpus_path)
-        child_env["JOB_STACK_USER_PIPELINE_MODE"] = "true"
+        child_env_extra.update(
+            {
+                "JOB_STACK_OWNER_USER_ID": owner_for_pipeline_gate,
+                "JOB_STACK_USER_PIPELINE_RUN_ID": run_id,
+                "JOB_STACK_SEEN_JOBS_BACKEND": "postgres",
+                "JOB_STACK_JOB_CORPUS_PATH": str(pipeline_job_corpus_path),
+                "JOB_STACK_USER_PIPELINE_MODE": "true",
+            }
+        )
+
+    child_env = _pipeline_child_env(extra_env=child_env_extra)
+    runtime_payload["config"]["child_env"] = _pipeline_child_env_summary(child_env)
 
     try:
         process = subprocess.Popen(

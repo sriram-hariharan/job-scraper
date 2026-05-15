@@ -18,3 +18,5 @@ data/resume_embeddings/
 
 .DS_Store
 *.log
+data/
+tmp/

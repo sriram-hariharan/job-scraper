@@ -3039,6 +3039,9 @@ def pipeline_status_payload(*, owner_user_id: str = "", state: Any = None) -> Di
         if not merged.get("error"):
             merged["error"] = runtime_status.get("error", "")
 
+        merged_config = dict(merged.get("config") or {})
+        merged_config.update(dict(runtime_status.get("config") or {}))
+
         merged.update({
             "run_id": runtime_status.get("run_id", merged.get("run_id", "")),
             "output_dir": runtime_status.get("output_dir", merged.get("output_dir", "")),
@@ -3052,7 +3055,7 @@ def pipeline_status_payload(*, owner_user_id: str = "", state: Any = None) -> Di
             "counts": runtime_status.get("counts", {}),
             "summary_message": runtime_status.get("summary_message", ""),
             "final_job_count": runtime_status.get("final_job_count"),
-            "config": runtime_status.get("config", {}),
+            "config": merged_config,
         })
 
         merged["is_running"] = merged.get("status") == "running"

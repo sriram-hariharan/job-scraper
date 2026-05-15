@@ -9,6 +9,8 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.storage.auth_email_artifacts_store import upsert_auth_email_artifact
+
 
 DEFAULT_AUTH_APPROVAL_EMAIL_OUTBOX_DIR = Path("outputs/auth_approval_email_outbox")
 DEFAULT_AUTH_APPROVAL_EMAIL_DELIVERY_DIR = Path("outputs/auth_approval_email_delivery")
@@ -242,21 +244,22 @@ def write_auth_approval_email_outbox_artifact(
     output_dir: Any = DEFAULT_AUTH_APPROVAL_EMAIL_OUTBOX_DIR,
 ) -> Dict[str, Any]:
     output_path = _outbox_path(payload, output_dir=output_dir)
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp_path.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    artifact = upsert_auth_email_artifact(
+        request_id=_clean_text(payload.get("request_id")),
+        message_kind=_clean_text(payload.get("message_kind")),
+        artifact_kind="auth_approval_email_outbox",
+        artifact_name=output_path.name,
+        payload_json=payload,
     )
-    tmp_path.replace(output_path)
 
     return {
         "ok": True,
-        "path": str(output_path),
+        "path": artifact["artifact_ref"],
         "payload": payload,
+        "artifact_id": artifact["artifact_id"],
+        "storage_backend": "postgres",
     }
-
 
 def _smtp_config_from_env(payload: Dict[str, Any]) -> Dict[str, Any]:
     host = _clean_text(os.getenv("JOB_STACK_POST_RUN_EMAIL_SMTP_HOST"))
@@ -391,18 +394,20 @@ def deliver_auth_approval_email_payload(
         delivery_payload["delivery_error"] = repr(exc)
 
     delivery_path = _outbox_path(delivery_payload, output_dir=delivery_dir)
-    delivery_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = delivery_path.with_suffix(delivery_path.suffix + ".tmp")
-    tmp_path.write_text(
-        json.dumps(delivery_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    artifact = upsert_auth_email_artifact(
+        request_id=_clean_text(delivery_payload.get("request_id")),
+        message_kind=_clean_text(delivery_payload.get("source_message_kind")),
+        artifact_kind="auth_approval_email_delivery",
+        artifact_name=delivery_path.name,
+        payload_json=delivery_payload,
     )
-    tmp_path.replace(delivery_path)
 
     return {
         "ok": delivery_payload["delivery_status"] not in {"failed_smtp", "failed_delivery"},
-        "path": str(delivery_path),
+        "path": artifact["artifact_ref"],
         "payload": delivery_payload,
         "outbox_path": outbox_result["path"],
+        "artifact_id": artifact["artifact_id"],
+        "storage_backend": "postgres",
     }

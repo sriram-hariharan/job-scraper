@@ -8,7 +8,7 @@ logger = get_logger("sitemap_discovery")
 
 def run_sitemap_discovery():
 
-    domains = load_lines("data/company_domains.txt")
+    domains = load_lines("discovery://company_domains")
 
     logger.info(f"Sitemap discovery domains: {len(domains)}")
 

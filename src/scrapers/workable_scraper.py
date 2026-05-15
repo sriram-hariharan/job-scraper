@@ -205,7 +205,7 @@ def fetch_company_jobs(company):
 
 def scrape_all_workable():
 
-    companies = load_lines("data/workable_companies.txt")
+    companies = load_lines("discovery://ats/workable")
     schedule = load_schedule()
 
     companies = [

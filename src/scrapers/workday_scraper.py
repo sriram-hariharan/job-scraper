@@ -244,7 +244,7 @@ def scrape_company(board_url):
 
 def scrape_all_workday():
 
-    companies = load_lines("data/workday_companies.txt")
+    companies = load_lines("discovery://ats/workday")
     schedule = load_schedule()
 
     companies = [

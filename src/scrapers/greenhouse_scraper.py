@@ -74,7 +74,7 @@ async def run_company(session, company):
 
 async def scrape_all_greenhouse_async():
 
-    companies = sorted(set(load_lines("data/greenhouse_companies.txt")))
+    companies = sorted(set(load_lines("discovery://ats/greenhouse")))
 
     schedule = load_schedule()
 

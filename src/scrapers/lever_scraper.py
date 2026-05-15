@@ -75,7 +75,7 @@ async def fetch_company_jobs(session, company):
 
 async def scrape_all_lever_async():
 
-    companies = load_lines("data/lever_companies.txt")
+    companies = load_lines("discovery://ats/lever")
     schedule = load_schedule()
 
     companies = [

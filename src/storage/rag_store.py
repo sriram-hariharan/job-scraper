@@ -6,10 +6,77 @@ import subprocess
 from threading import Lock
 from typing import Any, Dict, Iterable, List
 
+from src.storage.redis_cache import cache_delete_prefix, cache_get_json, cache_set_json
+
 
 _init_lock = Lock()
 _db_initialized = False
 _db_write_lock = Lock()
+
+_RAG_JOB_DOCUMENTS_CACHE_PREFIX = "rag:job_documents:v1:"
+
+
+def _rag_cache_ttl_seconds() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_RAG_REDIS_TTL_SECONDS"))
+    try:
+        ttl = int(raw)
+    except Exception:
+        ttl = 120
+
+    return max(1, min(ttl, 900))
+
+
+def _rag_cache_max_bytes() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_RAG_REDIS_MAX_BYTES"))
+    try:
+        max_bytes = int(raw)
+    except Exception:
+        max_bytes = 5_000_000
+
+    return max(100_000, min(max_bytes, 50_000_000))
+
+
+def _rag_documents_cache_key(limit: int) -> str:
+    return f"{_RAG_JOB_DOCUMENTS_CACHE_PREFIX}{int(limit)}"
+
+
+def _cache_get_docs_safe(key: str):
+    try:
+        cached = cache_get_json(key)
+    except Exception:
+        return None
+
+    if isinstance(cached, list):
+        return cached
+
+    return None
+
+
+def _cache_set_docs_safe(key: str, docs: List[Dict[str, Any]]) -> None:
+    try:
+        payload = json.dumps(
+            docs,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if len(payload.encode("utf-8")) > _rag_cache_max_bytes():
+            return
+
+        cache_set_json(
+            key,
+            docs,
+            ttl_seconds=_rag_cache_ttl_seconds(),
+        )
+    except Exception:
+        return
+
+
+def _invalidate_rag_document_cache() -> None:
+    try:
+        cache_delete_prefix(_RAG_JOB_DOCUMENTS_CACHE_PREFIX)
+    except Exception:
+        return
 
 
 _RAG_SCHEMA_SQL = """
@@ -255,6 +322,8 @@ SELECT json_build_object(
             result = _run_psql_json_query(sql)
             upserted_total += int(result.get("upserted_count", 0) or 0)
 
+    _invalidate_rag_document_cache()
+
     return {
         "ok": True,
         "upserted_count": upserted_total,
@@ -263,14 +332,19 @@ SELECT json_build_object(
 
 
 def get_rag_job_documents(limit: int = 100000) -> List[Dict[str, Any]]:
-    init_rag_store()
-
     try:
         safe_limit = int(limit)
     except Exception:
         safe_limit = 100000
 
     safe_limit = max(1, min(safe_limit, 500000))
+    cache_key = _rag_documents_cache_key(safe_limit)
+
+    cached = _cache_get_docs_safe(cache_key)
+    if cached is not None:
+        return [dict(row or {}) for row in cached]
+
+    init_rag_store()
 
     sql = f"""
 WITH doc_rows AS (
@@ -285,7 +359,9 @@ SELECT json_build_object(
 """.strip()
 
     result = _run_psql_json_query(sql)
-    return [dict(row or {}) for row in list(result.get("rows", []) or [])]
+    docs = [dict(row or {}) for row in list(result.get("rows", []) or [])]
+    _cache_set_docs_safe(cache_key, docs)
+    return docs
 
 
 def count_rag_job_documents() -> int:

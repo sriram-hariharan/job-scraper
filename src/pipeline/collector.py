@@ -390,7 +390,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     corpus_path = str(
         os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
-        or "data/rag/job_corpus.jsonl"
+        or "postgres://rag_job_documents"
     ).strip()
     corpus_file = Path(corpus_path)
 

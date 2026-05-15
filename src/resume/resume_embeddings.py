@@ -1,64 +1,65 @@
-import os
-import json
+from __future__ import annotations
+
+from typing import Iterable, List, Optional, Tuple
+
 import numpy as np
 from tqdm import tqdm
 
-CACHE_DIR = "data/resume_embeddings"
-VECTOR_FILE = f"{CACHE_DIR}/vectors.npy"
-NAME_FILE = f"{CACHE_DIR}/names.json"
+
+def _clean_text(value) -> str:
+    return str(value or "").strip()
 
 
 def cache_exists():
-    return os.path.exists(VECTOR_FILE) and os.path.exists(NAME_FILE)
+    return False
 
 
 def load_cache():
-
-    vectors = np.load(VECTOR_FILE)
-
-    with open(NAME_FILE) as f:
-        names = json.load(f)
-
-    return vectors, names
+    return None, []
 
 
 def save_cache(vectors, names):
-
-    os.makedirs(CACHE_DIR, exist_ok=True)
-
-    np.save(VECTOR_FILE, vectors)
-
-    with open(NAME_FILE, "w") as f:
-        json.dump(names, f)
+    return
 
 
-def get_embedding_matrix(names=None):
+def _requested_names(names: Optional[Iterable[str]]) -> List[str]:
+    return [_clean_text(name) for name in list(names or []) if _clean_text(name)]
+
+
+def get_embedding_matrix(names=None) -> Tuple[Optional[np.ndarray], List[str]]:
     from src.ai.embedding_model import get_model
-    from src.resume.resume_loader import load_resumes
-    
-    if cache_exists():
-        print("Loaded resume embedding cache")
-        return load_cache()
+    from src.resume.resume_loader import load_resumes, load_resumes_by_name
+
+    requested_names = _requested_names(names)
+
+    if requested_names:
+        resumes = load_resumes_by_name(requested_names)
+    else:
+        resumes = load_resumes()
+
+    if not resumes:
+        return None, []
 
     model = get_model()
 
-    resumes = load_resumes()
-
     embeddings = []
-    names = []
+    resume_names = []
 
-    for r in tqdm(resumes, desc="Embedding resumes"):
+    for resume in tqdm(resumes, desc="Embedding resumes"):
+        text = _clean_text(resume.get("text"))
+        name = _clean_text(resume.get("resume_name"))
 
-        text = r["text"]
-        name = r["resume_name"]
+        if not text or not name:
+            continue
 
         vec = model.encode(text, normalize_embeddings=True)
 
         embeddings.append(vec)
-        names.append(name)
+        resume_names.append(name)
+
+    if not embeddings:
+        return None, []
 
     matrix = np.array(embeddings)
 
-    save_cache(matrix, names)
-
-    return matrix, names
+    return matrix, resume_names

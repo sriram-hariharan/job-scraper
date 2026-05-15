@@ -1,13 +1,10 @@
-import json
 from functools import lru_cache
-from pathlib import Path
 from typing import Any, Dict, List
 
+from src.storage.rag_store import get_rag_job_documents
 from src.utils.logging import get_logger
 
 logger = get_logger("rag.corpus_store")
-
-CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
 
 
 def _catalog_normalize(value: Any) -> str:
@@ -16,20 +13,8 @@ def _catalog_normalize(value: Any) -> str:
 
 @lru_cache(maxsize=1)
 def _load_job_corpus() -> List[Dict[str, Any]]:
-    if not CORPUS_PATH.exists():
-        logger.warning("RAG lexical corpus missing | path=%s", CORPUS_PATH)
-        return []
-
-    docs: List[Dict[str, Any]] = []
-
-    with CORPUS_PATH.open("r", encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            docs.append(json.loads(line))
-
-    logger.info("RAG lexical corpus loaded | path=%s | docs=%s", CORPUS_PATH, len(docs))
+    docs = get_rag_job_documents()
+    logger.info("RAG lexical corpus loaded from Postgres | docs=%s", len(docs))
     return docs
 
 
@@ -45,12 +30,16 @@ def _build_metadata_catalog() -> Dict[str, Any]:
     locations: Dict[str, str] = {}
 
     for doc in docs:
-        company = str(doc.get("company") or "").strip()
-        source = str(doc.get("source") or "").strip()
-        title = str(doc.get("title") or "").strip()
-        role_family = str(doc.get("role_family") or "").strip()
-        seniority = str(doc.get("seniority") or "").strip()
-        location = str(doc.get("location") or "").strip()
+        metadata = doc.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
+
+        company = str(doc.get("company") or metadata.get("company") or "").strip()
+        source = str(doc.get("source") or metadata.get("source") or "").strip()
+        title = str(doc.get("title") or metadata.get("title") or "").strip()
+        role_family = str(doc.get("role_family") or metadata.get("role_family") or "").strip()
+        seniority = str(doc.get("seniority") or metadata.get("seniority") or "").strip()
+        location = str(doc.get("location") or metadata.get("location") or "").strip()
 
         if company:
             companies[_catalog_normalize(company)] = company

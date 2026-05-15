@@ -24,3 +24,4 @@ reportlab
 python-docx
 pdf2docx
 bcrypt
+redis==5.0.8

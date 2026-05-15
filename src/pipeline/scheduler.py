@@ -1111,7 +1111,7 @@ def main() -> int:
         try:
             delivery_mode = _resolve_post_run_email_delivery_mode()
             post_run_email_delivery_payload = deliver_post_run_email_outbox(
-                post_run_email_payload["path"],
+                post_run_email_payload["payload"],
                 mode=delivery_mode,
             )
             record.setdefault("options", {})["post_run_email_delivery_mode"] = delivery_mode
@@ -1127,7 +1127,7 @@ def main() -> int:
     if post_run_email_delivery_payload:
         try:
             post_run_notification_payload = write_notification_record_artifact(
-                post_run_email_delivery_payload["path"],
+                post_run_email_delivery_payload["payload"],
             )
             record.setdefault("options", {})["post_run_notification_path"] = post_run_notification_payload["path"]
             print(f"post_run_notification_path={post_run_notification_payload['path']}")

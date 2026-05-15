@@ -159,9 +159,6 @@ DEFAULT_PIPELINE_STATUS_PATH = DEFAULT_OUTPUT_DIR / "live_pipeline_status.json"
 DEFAULT_PROFILE_RESUME_DIR = Path(
     os.environ.get("RESUME_DIR", "data/profile_resumes")
 ).expanduser()
-DEFAULT_SCAN_UPLOAD_DIR = Path(
-    os.environ.get("SCAN_UPLOAD_DIR", "data/scan_uploads")
-).expanduser()
 DEFAULT_PIPELINE_SCRATCH_DIR = Path(
     os.environ.get("JOB_STACK_PIPELINE_SCRATCH_DIR", "tmp/pipeline_runs")
 ).expanduser()
@@ -280,12 +277,6 @@ def _get_resume_dir(owner_user_id: str = "") -> Path:
     )
     resume_dir.mkdir(parents=True, exist_ok=True)
     return resume_dir
-
-
-def _get_scan_upload_dir() -> Path:
-    upload_dir = DEFAULT_SCAN_UPLOAD_DIR
-    upload_dir.mkdir(parents=True, exist_ok=True)
-    return upload_dir
 
 
 def _safe_run_dir_name(run_id: str = "") -> str:
@@ -601,14 +592,6 @@ def _scan_upload_mime_type(filename: str, fallback: str = "") -> str:
     if suffix == ".txt":
         return "text/plain"
     return _clean_text(fallback) or "application/octet-stream"
-
-
-def _scan_upload_target_path(filename: str, scan_timestamp: str) -> Path:
-    upload_dir = _get_scan_upload_dir()
-    safe_name = _sanitize_scan_upload_filename(filename)
-    stamp = re.sub(r"[^0-9A-Za-z]+", "_", scan_timestamp).strip("_")[:40] or "scan"
-    digest = hashlib.sha1(f"{scan_timestamp}:{safe_name}".encode("utf-8")).hexdigest()[:10]
-    return upload_dir / f"{stamp}_{digest}_{safe_name}"
 
 
 def _dual_write_saved_scan_postgres(row: Dict[str, Any]) -> Dict[str, Any]:

@@ -87,3 +87,18 @@ def cache_delete(key: str) -> int:
         return 0
 
     return int(redis_client().delete(safe_key) or 0)
+
+
+def cache_delete_prefix(prefix: str) -> int:
+    safe_prefix = _clean_text(prefix)
+    if not safe_prefix or not redis_enabled():
+        return 0
+
+    client = redis_client()
+    deleted = 0
+
+    for key in client.scan_iter(match=f"{safe_prefix}*"):
+        deleted += int(client.delete(key) or 0)
+
+    return deleted
+

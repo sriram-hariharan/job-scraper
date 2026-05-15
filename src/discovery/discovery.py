@@ -1,7 +1,5 @@
 from typing import Dict, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import os
-import json
 from src.discovery.ats_detector import (
     fetch_career_page,
     fetch_career_subdomain,
@@ -23,26 +21,16 @@ from src.discovery.ats_detector import (
     detect_ats_from_html
 )
 from src.config.consts import SUPPORTED_ATS
+from src.storage.discovery_store import load_ats_detection_cache, save_ats_detection_cache
 from tqdm import tqdm
 
-CACHE_PATH = "data/ats_cache.json"
 
 def load_cache():
+    return load_ats_detection_cache()
 
-    if not os.path.exists(CACHE_PATH):
-        return {}
-
-    try:
-        with open(CACHE_PATH) as f:
-            return json.load(f)
-    except:
-        return {}
 
 def save_cache(cache):
-
-    os.makedirs("data", exist_ok=True)
-    with open(CACHE_PATH, "w") as f:
-        json.dump(cache, f, indent=2)
+    save_ats_detection_cache(cache)
 
 def extract_slug(link, html, link_prefix, html_extractor):
     

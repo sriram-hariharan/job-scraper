@@ -141,7 +141,7 @@ def scrape_all_smartrecruiters():
     # -------------------------
     # 2. COMPANY BOARD SCRAPE   
     # -------------------------
-    companies = load_lines("data/smartrecruiters_companies.txt")
+    companies = load_lines("discovery://ats/smartrecruiters")
     companies = list(set(companies))
 
     results = run_parallel(

@@ -133,7 +133,7 @@ def run_company_discovery_agent():
         if not companies:
             continue
 
-        append_new_companies(f"data/{ats}_companies.txt", companies)
+        append_new_companies(f"discovery://ats/{ats}", companies)
 
         logger.info(f"{ats} → {len(companies)} companies added")
 

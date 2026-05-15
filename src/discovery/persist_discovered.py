@@ -4,13 +4,13 @@ import re
 from src.config.consts import INVALID_SLUGS
 
 ATS_FILES = {
-    "greenhouse": "data/greenhouse_companies.txt",
-    "lever": "data/lever_companies.txt",
-    "workday": "data/workday_companies.txt",
-    "ashby": "data/ashby_companies.txt",
-    "workable": "data/workable_companies.txt",
-    "jobvite": "data/jobvite_companies.txt",
-    "smartrecruiters": "data/smartrecruiters_companies.txt",
+    "greenhouse": "discovery://ats/greenhouse",
+    "lever": "discovery://ats/lever",
+    "workday": "discovery://ats/workday",
+    "ashby": "discovery://ats/ashby",
+    "workable": "discovery://ats/workable",
+    "jobvite": "discovery://ats/jobvite",
+    "smartrecruiters": "discovery://ats/smartrecruiters",
 }
 
 def normalize_company_slug(slug: str) -> str:

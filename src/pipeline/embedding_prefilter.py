@@ -29,16 +29,13 @@ def prefilter_jobs_by_embedding(
     top_n: int | None = None,
 ) -> List[Dict[str, Any]]:
     logger.info("[embedding_prefilter] entered | jobs=%s | top_n=%s", len(jobs), top_n)
-    logger.info("[embedding_prefilter] importing model + resume embedding dependencies")
-    from src.ai.embedding_model import get_model
+    logger.info("[embedding_prefilter] importing resume embedding dependencies")
     from src.resume.resume_embeddings import get_embedding_matrix
     logger.info("[embedding_prefilter] local imports completed")
     
     if not jobs:
         return jobs
-    logger.info("[embedding_prefilter] loading embedding model")
-    model = get_model()
-    logger.info("[embedding_prefilter] embedding model ready")
+
     logger.info("[embedding_prefilter] loading resume embedding matrix")
     try:
         resume_matrix, resume_names = get_embedding_matrix()
@@ -60,6 +57,12 @@ def prefilter_jobs_by_embedding(
         return jobs
 
     logger.info("[embedding_prefilter] resume embedding matrix ready | resumes=%s | shape=%s", len(resume_names), getattr(resume_matrix, "shape", None))
+
+    logger.info("[embedding_prefilter] loading embedding model")
+    from src.ai.embedding_model import get_model
+    model = get_model()
+    logger.info("[embedding_prefilter] embedding model ready")
+
     scored_jobs = []
     logger.info("[embedding_prefilter] starting per-job scoring loop")
     for job in jobs:

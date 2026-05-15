@@ -6,10 +6,61 @@ import subprocess
 from threading import Lock
 from typing import Any, Dict, Iterable, List, Set
 
+from src.storage.redis_cache import cache_delete, cache_get_json, cache_set_json
+
 
 _init_lock = Lock()
 _db_initialized = False
 _db_write_lock = Lock()
+
+_DISCOVERY_COMPANY_DOMAINS_CACHE_KEY = "discovery:company_domains:v1"
+_DISCOVERY_ATS_COMPANIES_CACHE_PREFIX = "discovery:ats_companies:v1"
+
+
+def _discovery_cache_ttl_seconds() -> int:
+    raw = _clean_text(os.environ.get("JOB_STACK_DISCOVERY_REDIS_TTL_SECONDS"))
+    try:
+        ttl = int(raw)
+    except Exception:
+        ttl = 300
+
+    return max(1, min(ttl, 3600))
+
+
+def _cache_get_list_safe(key: str):
+    try:
+        cached = cache_get_json(key)
+    except Exception:
+        return None
+
+    if isinstance(cached, list):
+        return cached
+
+    return None
+
+
+def _cache_set_list_safe(key: str, values: Iterable[str]) -> None:
+    try:
+        cache_set_json(
+            key,
+            sorted({_clean_text(value) for value in values if _clean_text(value)}),
+            ttl_seconds=_discovery_cache_ttl_seconds(),
+        )
+    except Exception:
+        return
+
+
+def _cache_delete_safe(*keys: str) -> None:
+    for key in keys:
+        try:
+            cache_delete(key)
+        except Exception:
+            continue
+
+
+def _ats_companies_cache_key(ats: str = "") -> str:
+    safe_ats = _clean_text(ats).lower() or "all"
+    return f"{_DISCOVERY_ATS_COMPANIES_CACHE_PREFIX}:{safe_ats}"
 
 
 _DISCOVERY_SCHEMA_SQL = """
@@ -142,6 +193,14 @@ def init_discovery_store() -> None:
 
 
 def get_company_domains() -> Set[str]:
+    cached = _cache_get_list_safe(_DISCOVERY_COMPANY_DOMAINS_CACHE_KEY)
+    if cached is not None:
+        return {
+            _clean_text(domain)
+            for domain in cached
+            if _clean_text(domain)
+        }
+
     init_discovery_store()
 
     sql = """
@@ -156,11 +215,13 @@ SELECT json_build_object(
 """.strip()
 
     payload = _run_psql_json_query(sql)
-    return {
+    domains = {
         _clean_text(domain)
         for domain in list(payload.get("domains", []) or [])
         if _clean_text(domain)
     }
+    _cache_set_list_safe(_DISCOVERY_COMPANY_DOMAINS_CACHE_KEY, domains)
+    return domains
 
 
 def upsert_company_domains(domains: Iterable[str], *, source: str = "") -> int:
@@ -227,13 +288,25 @@ SELECT json_build_object(
     with _db_write_lock:
         payload = _run_psql_json_query(sql)
 
+    _cache_delete_safe(_DISCOVERY_COMPANY_DOMAINS_CACHE_KEY)
+
     return int(payload.get("new_count", 0) or 0)
 
 
 def get_discovered_ats_companies(ats: str = "") -> Set[str]:
+    safe_ats = _clean_text(ats).lower()
+    cache_key = _ats_companies_cache_key(safe_ats)
+
+    cached = _cache_get_list_safe(cache_key)
+    if cached is not None:
+        return {
+            _clean_text(company)
+            for company in cached
+            if _clean_text(company)
+        }
+
     init_discovery_store()
 
-    safe_ats = _clean_text(ats).lower()
     ats_filter = f"WHERE ats = {_sql_quote_text(safe_ats)}" if safe_ats else ""
 
     sql = f"""
@@ -249,11 +322,13 @@ SELECT json_build_object(
 """.strip()
 
     payload = _run_psql_json_query(sql)
-    return {
+    companies = {
         _clean_text(company)
         for company in list(payload.get("companies", []) or [])
         if _clean_text(company)
     }
+    _cache_set_list_safe(cache_key, companies)
+    return companies
 
 
 def upsert_discovered_ats_companies(
@@ -327,6 +402,11 @@ SELECT json_build_object(
 
     with _db_write_lock:
         payload = _run_psql_json_query(sql)
+
+    _cache_delete_safe(
+        _ats_companies_cache_key(safe_ats),
+        _ats_companies_cache_key(""),
+    )
 
     return int(payload.get("new_count", 0) or 0)
 

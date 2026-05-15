@@ -5,6 +5,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
+
 
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path("outputs/scheduler_logs/notification_records")
 
@@ -144,16 +146,18 @@ def write_notification_record_artifact(
         notification_payload,
         output_dir=output_dir,
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp_path.write_text(
-        json.dumps(notification_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    artifact = upsert_scheduler_artifact(
+        run_id=_clean_text(notification_payload.get("run_id")),
+        job_name=_clean_text(notification_payload.get("job_name")),
+        artifact_kind="post_run_notification",
+        artifact_name=output_path.name,
+        payload_json=notification_payload,
     )
-    tmp_path.replace(output_path)
 
     return {
-        "path": str(output_path),
+        "path": artifact["artifact_ref"],
         "payload": notification_payload,
+        "artifact_id": artifact["artifact_id"],
+        "storage_backend": "postgres",
     }

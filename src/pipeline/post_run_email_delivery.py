@@ -9,6 +9,8 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
+
 
 DEFAULT_POST_RUN_EMAIL_DELIVERY_DIR = Path("outputs/scheduler_logs/post_run_email_delivery")
 ALLOWED_DELIVERY_MODES = {"outbox_only", "dry_run", "smtp"}
@@ -241,16 +243,20 @@ def deliver_post_run_email_outbox(
         outbox_payload,
         output_dir=output_dir,
     )
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    tmp_path = output_path.with_suffix(output_path.suffix + ".tmp")
-    tmp_path.write_text(
-        json.dumps(delivery_result_payload, indent=2, ensure_ascii=False),
-        encoding="utf-8",
+    artifact = upsert_scheduler_artifact(
+        run_id=_clean_text(delivery_result_payload.get("run_id")),
+        job_name=_clean_text(delivery_result_payload.get("job_name")),
+        artifact_kind="post_run_email_delivery",
+        artifact_name=output_path.name,
+        payload_json=delivery_result_payload,
     )
-    tmp_path.replace(output_path)
+
+    delivery_result_payload["source_delivery_path"] = artifact["artifact_ref"]
 
     return {
-        "path": str(output_path),
+        "path": artifact["artifact_ref"],
         "payload": delivery_result_payload,
+        "artifact_id": artifact["artifact_id"],
+        "storage_backend": "postgres",
     }

@@ -1,65 +1,65 @@
-import json
+import os
 from pathlib import Path
 from typing import List
 
-from llama_index.core import Document, Settings, StorageContext, VectorStoreIndex
-from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.core import Document
 
+from src.storage.rag_store import get_rag_job_documents
 
-CORPUS_PATH = Path("data/rag/job_corpus.jsonl")
-INDEX_DIR = Path("data/rag/index")
 EMBED_MODEL_NAME = "BAAI/bge-small-en-v1.5"
 
 
-def load_job_documents(corpus_path: Path) -> List[Document]:
+def _legacy_rag_index_enabled() -> bool:
+    return str(os.environ.get("JOB_STACK_ENABLE_LEGACY_RAG_INDEX", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "y",
+        "on",
+    }
+
+
+def load_job_documents(corpus_path: Path | None = None) -> List[Document]:
     documents: List[Document] = []
 
-    with corpus_path.open("r", encoding="utf-8") as f:
-        for line in f:
-            row = json.loads(line)
+    for row in get_rag_job_documents():
+        metadata = row.get("metadata") or {}
+        if not isinstance(metadata, dict):
+            metadata = {}
 
-            metadata = {
-                "doc_id": row.get("doc_id", ""),
-                "company": row.get("company", ""),
-                "title": row.get("title", ""),
-                "location": row.get("location", ""),
-                "source": row.get("source", ""),
-                "job_url": row.get("job_url", ""),
-                "posted_at": row.get("posted_at", ""),
-                "role_family": row.get("role_family", ""),
-                "seniority": row.get("seniority", ""),
-                "required_skills": row.get("required_skills", []),
-                "preferred_skills": row.get("preferred_skills", []),
-                "all_skills": row.get("all_skills", []),
-                "visa_sponsorship": row.get("visa_sponsorship", ""),
-                "ai_fit_score": row.get("ai_fit_score"),
-            }
-
-            documents.append(
-                Document(
-                    text=row.get("retrieval_text", ""),
-                    metadata=metadata,
-                    doc_id=row.get("doc_id", ""),
-                )
+        documents.append(
+            Document(
+                text=row.get("retrieval_text", "") or row.get("text", ""),
+                metadata=metadata,
+                doc_id=row.get("doc_id", ""),
             )
+        )
 
     return documents
 
 
 def build_rag_index(
-    corpus_path: Path = CORPUS_PATH,
-    index_dir: Path = INDEX_DIR,
+    corpus_path: Path | None = None,
+    index_dir: Path | None = None,
 ) -> int:
-    if not corpus_path.exists():
-        raise FileNotFoundError(f"Corpus file not found: {corpus_path}")
+    if not _legacy_rag_index_enabled():
+        raise RuntimeError(
+            "Legacy filesystem RAG index is disabled. "
+            "Use Postgres-backed RAG corpus now; semantic vector index will move to pgvector/vector DB in 6B.16."
+        )
+
+    from llama_index.core import Settings, VectorStoreIndex
+    from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+
+    target_index_dir = index_dir or Path(os.environ.get("JOB_STACK_LEGACY_RAG_INDEX_DIR", "data/rag/index"))
 
     Settings.embed_model = HuggingFaceEmbedding(model_name=EMBED_MODEL_NAME)
 
     documents = load_job_documents(corpus_path)
     index = VectorStoreIndex.from_documents(documents)
 
-    index_dir.mkdir(parents=True, exist_ok=True)
-    index.storage_context.persist(persist_dir=str(index_dir))
+    target_index_dir.mkdir(parents=True, exist_ok=True)
+    index.storage_context.persist(persist_dir=str(target_index_dir))
 
     return len(documents)
 

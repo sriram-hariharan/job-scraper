@@ -1315,14 +1315,26 @@ def create_saved_scan_payload(
 
     if upload_bytes:
         safe_upload_name = _sanitize_scan_upload_filename(upload_filename)
-        target_path = _scan_upload_target_path(safe_upload_name, scan_timestamp)
-        target_path.write_bytes(upload_bytes)
+        upload_text_payload = extract_scan_resume_upload_text_payload(
+            filename=safe_upload_name,
+            content_type=upload_content_type,
+            file_bytes=upload_bytes,
+        )
+        safe_resume_text = _clean_text(upload_text_payload.get("text"))
         resume_source = "uploaded_file"
         resume_name = Path(safe_upload_name).stem
         resume_filename = safe_upload_name
-        resume_file_path = str(target_path)
-        resume_processing_path = str(target_path)
-        resume_file_mime_type = _scan_upload_mime_type(safe_upload_name, upload_content_type)
+        resume_file_path = (
+            "transient://scan_uploads/"
+            + hashlib.sha1(f"{scan_timestamp}:{safe_upload_name}".encode("utf-8")).hexdigest()[:16]
+            + "/"
+            + safe_upload_name
+        )
+        resume_processing_path = ""
+        resume_file_mime_type = _clean_text(upload_text_payload.get("content_type")) or _scan_upload_mime_type(
+            safe_upload_name,
+            upload_content_type,
+        )
         resume_size_bytes = len(upload_bytes)
     elif _clean_text(saved_resume_name):
         safe_saved_resume = _sanitize_resume_filename(saved_resume_name)

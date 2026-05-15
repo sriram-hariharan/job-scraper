@@ -83,28 +83,52 @@ def _postgres_load_seen_job_ids(owner_user_id: str) -> Set[str]:
 
 
 def _postgres_save_new_job_ids(owner_user_id: str, job_ids: Iterable[str]) -> None:
-    from src.storage.user_pipeline.store import upsert_user_seen_job_postgres_payload
+    from src.storage.user_pipeline.store import (
+        upsert_user_seen_job_postgres_payload,
+        upsert_user_seen_job_staging_postgres_payload,
+    )
 
     run_id = _run_id_from_env()
     values = [_clean_text(item) for item in job_ids if _clean_text(item)]
     if not values:
         return
 
+    use_staging = bool(run_id)
+
     for seen_key in values:
         parsed = _parse_seen_key(seen_key)
+        record = {
+            "owner_user_id": owner_user_id,
+            "seen_key": parsed["seen_key"],
+            "source": parsed["source"],
+            "job_url": parsed["job_url"],
+            "job_doc_id": parsed["job_doc_id"],
+            "metadata_json": {
+                "storage_backend": "postgres",
+                "seen_key_source": "collector_cache_filter",
+                "staged_seen_job": use_staging,
+            },
+        }
+
+        if use_staging:
+            upsert_user_seen_job_staging_postgres_payload(
+                record={
+                    **record,
+                    "run_id": run_id,
+                },
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            continue
+
         upsert_user_seen_job_postgres_payload(
             record={
-                "owner_user_id": owner_user_id,
-                "seen_key": parsed["seen_key"],
-                "source": parsed["source"],
-                "job_url": parsed["job_url"],
-                "job_doc_id": parsed["job_doc_id"],
+                **record,
                 "first_run_id": run_id,
                 "last_run_id": run_id,
-                "metadata_json": {
-                    "storage_backend": "postgres",
-                    "seen_key_source": "collector_cache_filter",
-                },
             },
             database_url="",
             database_url_env="DATABASE_URL",

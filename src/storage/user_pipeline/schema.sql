@@ -71,6 +71,26 @@ ON user_seen_jobs (job_doc_id);
 CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_job_url
 ON user_seen_jobs (job_url);
 
+CREATE TABLE IF NOT EXISTS user_seen_jobs_staging (
+    owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,
+    run_id TEXT NOT NULL REFERENCES user_pipeline_runs(run_id) ON DELETE CASCADE,
+    seen_key TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT '',
+    job_url TEXT NOT NULL DEFAULT '',
+    job_doc_id TEXT NOT NULL DEFAULT '',
+    company TEXT NOT NULL DEFAULT '',
+    title TEXT NOT NULL DEFAULT '',
+    staged_at TIMESTAMPTZ NOT NULL,
+    metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+    PRIMARY KEY (owner_user_id, run_id, seen_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_staging_owner_run
+ON user_seen_jobs_staging (owner_user_id, run_id);
+
+CREATE INDEX IF NOT EXISTS idx_user_seen_jobs_staging_owner_staged
+ON user_seen_jobs_staging (owner_user_id, staged_at DESC);
+
 CREATE TABLE IF NOT EXISTS user_pipeline_artifacts (
     artifact_id TEXT PRIMARY KEY,
     owner_user_id TEXT NOT NULL REFERENCES auth_users(user_id) ON DELETE CASCADE,

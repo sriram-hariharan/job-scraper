@@ -97,6 +97,7 @@ from src.storage.auth.read_postgres import (
 from src.storage.user_pipeline.read_postgres import (
     get_latest_user_pipeline_run_postgres_payload,
     get_user_pipeline_artifacts_postgres_payload,
+    get_user_pipeline_run_postgres_payload,
     get_user_pipeline_runs_postgres_payload,
 )
 from src.storage.user_pipeline.store import (
@@ -429,6 +430,142 @@ def admin_profile_delete_user_payload(user_id: str) -> Dict[str, Any]:
         "deleted": True,
         "user": _public_admin_user_row(dict(payload.get("user", {}) or {})),
     }
+
+
+def _pipeline_run_public_row(run: Dict[str, Any]) -> Dict[str, Any]:
+    status_json = run.get("status_json") if isinstance(run.get("status_json"), dict) else {}
+    config_json = run.get("config_json") if isinstance(run.get("config_json"), dict) else {}
+    config = config_json.get("config") if isinstance(config_json.get("config"), dict) else {}
+    if not config and isinstance(status_json.get("config"), dict):
+        config = status_json.get("config") or {}
+    counts = status_json.get("counts") if isinstance(status_json.get("counts"), dict) else {}
+
+    return {
+        "run_id": _clean_text(run.get("run_id")),
+        "status": _clean_text(run.get("status")) or "unknown",
+        "current_stage": _clean_text(run.get("current_stage")),
+        "stage_message": _clean_text(run.get("stage_message")),
+        "summary_message": _clean_text(run.get("summary_message")),
+        "return_code": run.get("return_code"),
+        "started_at": _clean_text(run.get("started_at")),
+        "updated_at": _clean_text(run.get("updated_at")),
+        "completed_at": _clean_text(run.get("completed_at")),
+        "error": _clean_text(run.get("error")),
+        "final_job_count": status_json.get("final_job_count"),
+        "counts": counts,
+        "config": config,
+    }
+
+
+def profile_pipeline_runs_payload(
+    *,
+    owner_user_id: str = "",
+    limit: int = 50,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = get_user_pipeline_runs_postgres_payload(
+        owner_user_id=owner,
+        limit=limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+    return {
+        "ok": True,
+        "count": len(runs),
+        "total_row_count": int(payload.get("total_row_count", len(runs)) or len(runs)),
+        "runs": runs,
+    }
+
+
+def profile_pipeline_run_detail_payload(
+    *,
+    owner_user_id: str = "",
+    run_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    payload = get_user_pipeline_run_postgres_payload(
+        owner_user_id=owner,
+        run_id=safe_run_id,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    if not bool(payload.get("found", False)):
+        raise ValueError("Pipeline run not found.")
+
+    run = dict(payload.get("run", {}) or {})
+    return {
+        "ok": True,
+        "run": _pipeline_run_public_row(run),
+        "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
+        "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
+    }
+
+
+def _rerun_config_from_pipeline_record(run: Dict[str, Any]) -> Dict[str, Any]:
+    public = _pipeline_run_public_row(run)
+    config = public.get("config") if isinstance(public.get("config"), dict) else {}
+    requested_output_dir = _clean_text(config.get("requested_output_dir")) or str(DEFAULT_OUTPUT_DIR)
+
+    return {
+        "output_dir": Path(requested_output_dir),
+        "log_path": _derive_pipeline_log_path(Path(requested_output_dir)),
+        "job_limit": int(config.get("job_limit", 50) or 50),
+        "job_packet_limit": int(config.get("job_packet_limit", 0) or 0),
+        "llm_actions": config.get("llm_actions") or ["APPLY", "APPLY_REVIEW_VARIANTS"],
+        "planning_only": bool(config.get("planning_only", False)),
+        "generate_tailoring": bool(config.get("generate_tailoring", False)),
+        "generate_llm_tailoring": bool(config.get("generate_llm_tailoring", False)),
+        "refresh_llm_tailoring": bool(config.get("refresh_llm_tailoring", False)),
+        "generate_llm_fallback": bool(config.get("generate_llm_fallback", False)),
+        "generate_llm_adjudication": bool(config.get("generate_llm_adjudication", False)),
+        "delete_seen_data": _clean_text(config.get("delete_seen_data")) or "no",
+    }
+
+
+def profile_pipeline_rerun_payload(
+    *,
+    owner_user_id: str = "",
+    run_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    payload = get_user_pipeline_run_postgres_payload(
+        owner_user_id=owner,
+        run_id=safe_run_id,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    if not bool(payload.get("found", False)):
+        raise ValueError("Pipeline run not found.")
+
+    config = _rerun_config_from_pipeline_record(dict(payload.get("run", {}) or {}))
+    rerun_payload = run_live_pipeline_payload(owner_user_id=owner, **config)
+    rerun_payload["rerun_of_run_id"] = safe_run_id
+    return rerun_payload
 
 
 def user_pipeline_gate_payload(

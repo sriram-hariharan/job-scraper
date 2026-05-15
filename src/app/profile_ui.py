@@ -12,16 +12,18 @@ def profile_page(request: Request) -> str:
     user = dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
     access_level = str(user.get("access_level", "") or "").strip().lower()
     is_admin = bool(user.get("is_admin", False)) or access_level == "admin"
-    admin_tabs_html = (
+    admin_tab_html = (
         """
-    <nav class="profile-tabs" id="profileAdminTabs" aria-label="Profile sections">
-      <button type="button" class="profile-tab-btn is-active" data-profile-tab-target="resumeSection">Resumes</button>
-      <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">User access</button>
-    </nav>
-"""
+      <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">User access</button>"""
         if is_admin
         else ""
     )
+    profile_tabs_html = f"""
+    <nav class="profile-tabs" id="profileTabs" aria-label="Profile sections">
+      <button type="button" class="profile-tab-btn is-active" data-profile-tab-target="resumeSection">Resumes</button>
+      <button type="button" class="profile-tab-btn" data-profile-tab-target="profilePipelineRunsSection">Pipeline runs</button>{admin_tab_html}
+    </nav>
+"""
     admin_users_section_html = (
         """
     <section class="card profile-section-card profile-admin-users-section hidden" id="profileAdminUsersSection" data-profile-tab-panel>
@@ -63,6 +65,43 @@ def profile_page(request: Request) -> str:
         if is_admin
         else ""
     )
+    pipeline_runs_section_html = """
+    <section class="card profile-section-card profile-pipeline-runs-section hidden" id="profilePipelineRunsSection" data-profile-tab-panel>
+      <div class="section-header">
+        <div>
+          <h2>Pipeline runs</h2>
+          <div class="subtext" id="pipelineRunsMeta">Loading pipeline runs...</div>
+        </div>
+        <button type="button" class="ghost-btn btn-sm" id="refreshPipelineRunsBtn">
+          Refresh
+        </button>
+      </div>
+
+      <div class="profile-inline-status hidden" id="pipelineRunsStatusBanner"></div>
+
+      <div class="pipeline-runs-table-wrap">
+        <table class="pipeline-runs-table">
+          <thead>
+            <tr>
+              <th>Started</th>
+              <th>Status</th>
+              <th>Summary</th>
+              <th>Final jobs</th>
+              <th>Counts</th>
+              <th>Settings</th>
+              <th>View</th>
+              <th>Re-run</th>
+            </tr>
+          </thead>
+          <tbody id="pipelineRunsTableBody">
+            <tr>
+              <td colspan="8">Loading pipeline runs...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+"""
     admin_modals_html = (
         """
   <section class="modal-backdrop hidden" id="adminUserAccessModal">
@@ -120,7 +159,7 @@ def profile_page(request: Request) -> str:
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_admin_users_v6" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_pipeline_runs_v2" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -129,11 +168,11 @@ def profile_page(request: Request) -> str:
     <header class="page-header">
       <div>
         <h1>My Profile</h1>
-        <p class="subtext">Manage the resume files used by deterministic matching and application planning.</p>
+        <p class="subtext">Manage resume files and review persisted Live Pipeline runs.</p>
       </div>
     </header>
 
-    {admin_tabs_html}
+    {profile_tabs_html}
 
     <section class="card profile-section-card" id="resumeSection" data-profile-tab-panel>
       <div class="section-header">
@@ -185,6 +224,7 @@ def profile_page(request: Request) -> str:
     </section>
 
     {admin_users_section_html}
+    {pipeline_runs_section_html}
   </div>
 
   <section class="modal-backdrop hidden" id="resumeDeleteModal">
@@ -231,9 +271,25 @@ def profile_page(request: Request) -> str:
 
   {admin_modals_html}
 
+  <section class="modal-backdrop hidden" id="pipelineRunStatsModal">
+    <div class="modal-card pipeline-run-stats-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="pipelineRunStatsTitle">Pipeline run stats</h3>
+          <div class="subtext" id="pipelineRunStatsSubtitle">Persisted run details.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="pipelineRunStatsCloseBtn" type="button">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="pipelineRunStatsBody" class="pipeline-run-stats-body"></div>
+      </div>
+    </div>
+  </section>
+
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/profile.js?v=profile_admin_users_v7"></script>
+  <script src="/static/profile.js?v=profile_pipeline_runs_v2"></script>
 </body>
 </html>
     """.strip()

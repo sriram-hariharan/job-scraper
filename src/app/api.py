@@ -1035,6 +1035,39 @@ def profile_admin_delete_user(user_id: str, http_request: Request):
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
+@app.get("/profile/pipeline-runs")
+def profile_pipeline_runs(http_request: Request, limit: int = 50):
+    try:
+        return services.profile_pipeline_runs_payload(
+            owner_user_id=_auth_owner_user_id(http_request),
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/profile/pipeline-runs/{run_id}")
+def profile_pipeline_run_detail(run_id: str, http_request: Request):
+    try:
+        return services.profile_pipeline_run_detail_payload(
+            owner_user_id=_auth_owner_user_id(http_request),
+            run_id=run_id,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/profile/pipeline-runs/{run_id}/rerun")
+def profile_pipeline_run_rerun(run_id: str, http_request: Request):
+    try:
+        return services.profile_pipeline_rerun_payload(
+            owner_user_id=_auth_owner_user_id(http_request),
+            run_id=run_id,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 @app.get("/profile/saved-scans/data")
 def profile_saved_scans(http_request: Request, limit: int = 25):
     return services.profile_saved_scans_payload(

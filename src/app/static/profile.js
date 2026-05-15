@@ -3,6 +3,7 @@ const profileState = {
   pendingDeleteScanId: null,
   currentUser: null,
   adminUsers: [],
+  pipelineRuns: [],
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
@@ -38,6 +39,16 @@ async function fetchJson(url, options = {}) {
   }
 
   return response.json();
+}
+
+async function postJson(url, payload = {}) {
+  return fetchJson(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 function formatBytes(bytes) {
@@ -78,6 +89,16 @@ function clearStatus() {
 
 function setAdminUsersStatus(message, tone = "info") {
   const banner = qs("adminUsersStatusBanner");
+  if (!banner) return;
+  banner.textContent = message || "";
+  banner.className = `profile-inline-status ${tone}`;
+  if (!message) {
+    banner.classList.add("hidden");
+  }
+}
+
+function setPipelineRunsStatus(message, tone = "info") {
+  const banner = qs("pipelineRunsStatusBanner");
   if (!banner) return;
   banner.textContent = message || "";
   banner.className = `profile-inline-status ${tone}`;
@@ -285,6 +306,278 @@ async function confirmAdminUserDelete() {
   closeAdminUserDeleteModal();
   await loadAdminUsers();
   setAdminUsersStatus("User deleted.", "success");
+}
+
+
+function getPipelineRunById(runId) {
+  return profileState.pipelineRuns.find((run) => String(run.run_id || "") === String(runId || ""));
+}
+
+function pipelineRunStatusLabel(status) {
+  const value = String(status || "unknown").trim().toLowerCase();
+  if (value === "succeeded") return "Succeeded";
+  if (value === "failed") return "Failed";
+  if (value === "cancelled") return "Cancelled";
+  if (value === "running") return "Running";
+  if (value === "queued") return "Queued";
+  if (value === "starting") return "Starting";
+  return value ? value.charAt(0).toUpperCase() + value.slice(1) : "Unknown";
+}
+
+function pipelineRunStatusTone(status) {
+  const value = String(status || "").trim().toLowerCase();
+  if (value === "succeeded") return "success";
+  if (value === "failed" || value === "cancelled") return "danger";
+  if (value === "running" || value === "queued" || value === "starting") return "running";
+  return "muted";
+}
+
+const PIPELINE_RUN_OUTCOME_METRICS = [
+  { keys: ["scraped_jobs", "scraped"], label: "Scraped Jobs", tone: "blue" },
+  { keys: ["filtered_jobs", "filtered"], label: "Filtered Jobs", tone: "cyan" },
+  { keys: ["deduped_jobs", "deduped"], label: "Unique Jobs", tone: "violet" },
+  { keys: ["ranked_jobs", "ranked"], label: "Ranked Jobs", tone: "indigo" },
+  { keys: ["new_jobs", "new"], label: "New Jobs", tone: "emerald" },
+  { keys: ["detailed_jobs", "detailed"], label: "Detailed Jobs", tone: "sky" },
+  { keys: ["intelligent_jobs", "intelligence"], label: "Intelligence Reviews", tone: "purple" },
+  { keys: ["ai_jobs", "evaluable_jobs", "ai_eligible"], label: "AI Eligible Jobs", tone: "teal" },
+  { keys: ["prefilter_jobs", "prefilter"], label: "Prefiltered Jobs", tone: "amber" },
+  { keys: ["resume_matched_jobs", "resume_matched"], label: "Resume Matched Jobs", tone: "pink" },
+  { keys: ["scored_jobs", "scored"], label: "Scored Jobs", tone: "lime" },
+  { keys: ["rag_export_count", "rag_exported"], label: "RAG Exports", tone: "orange" },
+  { keys: ["planning_packets_total"], label: "Planning Packets", tone: "slate" },
+  { keys: ["planning_packets_generated"], label: "Generated Packets", tone: "green" },
+  { keys: ["planning_packets_completed"], label: "Completed Packets", tone: "emerald" },
+  { keys: ["planning_llm_generated"], label: "Generated Plans", tone: "blue" },
+  { keys: ["planning_llm_failed"], label: "Failed Plans", tone: "rose" },
+  { keys: ["planning_pending_variants"], label: "Pending Variants", tone: "amber" },
+  { keys: ["planning_unresolved_missing_resume"], label: "Missing Resume Matches", tone: "rose" },
+  { keys: ["planning_unresolved_no_credible_match"], label: "No Credible Match", tone: "rose" },
+];
+
+function getFirstMetricValue(counts, keys) {
+  const source = counts && typeof counts === "object" ? counts : {};
+  for (const key of keys) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
+      return source[key];
+    }
+  }
+  return undefined;
+}
+
+function isDisplayableMetricValue(value) {
+  if (typeof value === "boolean") return false;
+  if (value === undefined || value === null || value === "") return false;
+  if (typeof value === "number") return Number.isFinite(value);
+  const text = String(value).trim();
+  return /^-?\d+(\.\d+)?$/.test(text);
+}
+
+function formatMetricValue(value) {
+  if (typeof value === "number") return String(value);
+  const number = Number(String(value || "").trim());
+  return Number.isFinite(number) ? String(number) : String(value || "-");
+}
+
+function getPipelineRunOutcomeMetrics(counts) {
+  return PIPELINE_RUN_OUTCOME_METRICS
+    .map((metric) => ({
+      ...metric,
+      value: getFirstMetricValue(counts, metric.keys),
+    }))
+    .filter((metric) => isDisplayableMetricValue(metric.value));
+}
+
+function pipelineRunCountsSummary(counts) {
+  const source = counts && typeof counts === "object" ? counts : {};
+  const parts = [
+    { keys: ["scraped_jobs", "scraped"], label: "Scraped" },
+    { keys: ["filtered_jobs", "filtered"], label: "Filtered" },
+    { keys: ["new_jobs", "new"], label: "New" },
+    { keys: ["planning_llm_generated", "planning_packets_completed"], label: "Plans" },
+  ]
+    .map((metric) => ({
+      label: metric.label,
+      value: getFirstMetricValue(source, metric.keys),
+    }))
+    .filter((metric) => isDisplayableMetricValue(metric.value))
+    .map((metric) => `${metric.label}: ${formatMetricValue(metric.value)}`);
+  return parts.length ? parts.join(" · ") : "-";
+}
+
+function pipelineRunSettingsSummary(config) {
+  const source = config && typeof config === "object" ? config : {};
+  const actions = Array.isArray(source.llm_actions) ? source.llm_actions.join(", ") : String(source.llm_actions || "");
+  return [
+    `jobs ${source.job_limit ?? 50}`,
+    `packets ${source.job_packet_limit ?? 0}`,
+    actions ? `actions ${actions}` : "",
+  ].filter(Boolean).join(" · ");
+}
+
+function renderPipelineRuns(runs) {
+  const tbody = qs("pipelineRunsTableBody");
+  const meta = qs("pipelineRunsMeta");
+  if (!tbody || !meta) return;
+
+  const items = Array.isArray(runs) ? runs : [];
+  profileState.pipelineRuns = items;
+  meta.textContent = `${items.length} pipeline run${items.length === 1 ? "" : "s"} shown`;
+
+  if (!items.length) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="8" class="pipeline-runs-empty-cell">No pipeline runs yet.</td>
+      </tr>
+    `;
+    return;
+  }
+
+  tbody.innerHTML = items.map((run) => {
+    const runId = escapeHtml(run.run_id || "");
+    const tone = pipelineRunStatusTone(run.status);
+    const summary = run.summary_message || run.stage_message || run.error || "-";
+    const finalJobs = run.final_job_count ?? run.counts?.final_jobs ?? "-";
+    return `
+      <tr data-pipeline-run-id="${runId}">
+        <td>
+          <div class="pipeline-run-date">${escapeHtml(formatDateTime(run.started_at || "")) || "-"}</div>
+          <div class="pipeline-run-id">${runId}</div>
+        </td>
+        <td>
+          <span class="pipeline-run-status is-${escapeHtml(tone)}">
+            ${escapeHtml(pipelineRunStatusLabel(run.status))}
+          </span>
+        </td>
+        <td class="pipeline-run-summary-cell">${escapeHtml(summary)}</td>
+        <td>${escapeHtml(String(finalJobs))}</td>
+        <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunCountsSummary(run.counts))}</td>
+        <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunSettingsSummary(run.config))}</td>
+        <td>
+          <button type="button" class="ghost-btn btn-sm" data-pipeline-run-view="${runId}">View</button>
+        </td>
+        <td>
+          <button type="button" class="pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
+}
+
+async function loadPipelineRuns() {
+  const tbody = qs("pipelineRunsTableBody");
+  const meta = qs("pipelineRunsMeta");
+  if (!tbody || !meta) return;
+
+  meta.textContent = "Loading pipeline runs...";
+  tbody.innerHTML = `<tr><td colspan="8" class="pipeline-runs-empty-cell">Loading pipeline runs...</td></tr>`;
+  setPipelineRunsStatus("");
+
+  const data = await fetchJson("/profile/pipeline-runs?limit=200");
+  renderPipelineRuns(data.runs || []);
+  if (meta && Number(data.total_row_count || 0) > profileState.pipelineRuns.length) {
+    meta.textContent = `${profileState.pipelineRuns.length} of ${data.total_row_count} pipeline runs shown`;
+  }
+}
+
+function renderKeyValueList(items) {
+  return items.map(([label, value]) => `
+    <div class="pipeline-run-detail-row">
+      <div class="pipeline-run-detail-label">${escapeHtml(label)}</div>
+      <div class="pipeline-run-detail-value">${escapeHtml(value === undefined || value === null || value === "" ? "-" : String(value))}</div>
+    </div>
+  `).join("");
+}
+
+function renderPipelineRunDetail(data) {
+  const run = data.run || {};
+  const statusJson = data.status_json || {};
+  const configJson = data.config_json || {};
+  const config = run.config || statusJson.config || configJson.config || {};
+  const counts = run.counts || statusJson.counts || {};
+  const outcomeMetrics = getPipelineRunOutcomeMetrics(counts);
+  const stageOrder = Array.isArray(statusJson.stage_order) ? statusJson.stage_order : [];
+  const completedStages = new Set(Array.isArray(statusJson.completed_stages) ? statusJson.completed_stages : []);
+
+  qs("pipelineRunStatsTitle").textContent = "Pipeline run stats";
+  qs("pipelineRunStatsSubtitle").textContent = run.run_id || "Persisted run details.";
+  qs("pipelineRunStatsBody").innerHTML = `
+    <section class="pipeline-run-detail-panel">
+      <h4>Run</h4>
+      ${renderKeyValueList([
+        ["Status", pipelineRunStatusLabel(run.status)],
+        ["Started", formatDateTime(run.started_at || "")],
+        ["Completed", formatDateTime(run.completed_at || "")],
+        ["Current stage", run.current_stage || ""],
+        ["Summary", run.summary_message || statusJson.summary_message || ""],
+        ["Error", run.error || statusJson.error || ""],
+      ])}
+    </section>
+
+    <section class="pipeline-run-detail-panel">
+      <h4>Run outcomes</h4>
+      <div class="pipeline-run-count-grid">
+        ${outcomeMetrics.length
+          ? outcomeMetrics.map((metric) => `
+              <div class="pipeline-run-count-tile is-${escapeHtml(metric.tone)}">
+                <span>${escapeHtml(metric.label)}</span>
+                <strong>${escapeHtml(formatMetricValue(metric.value))}</strong>
+              </div>
+            `).join("")
+          : `<div class="pipeline-runs-empty-cell">No user-facing outcome metrics were persisted for this run.</div>`}
+      </div>
+    </section>
+
+    <section class="pipeline-run-detail-panel">
+      <h4>Settings</h4>
+      ${renderKeyValueList([
+        ["Job limit", config.job_limit ?? 50],
+        ["Packet limit", config.job_packet_limit ?? 0],
+        ["LLM actions", Array.isArray(config.llm_actions) ? config.llm_actions.join(", ") : config.llm_actions],
+        ["Planning only", config.planning_only ? "Yes" : "No"],
+        ["Generate tailoring", config.generate_tailoring ? "Yes" : "No"],
+        ["Generate LLM tailoring", config.generate_llm_tailoring ? "Yes" : "No"],
+        ["Refresh LLM tailoring", config.refresh_llm_tailoring ? "Yes" : "No"],
+        ["Generate LLM fallback", config.generate_llm_fallback ? "Yes" : "No"],
+        ["Generate LLM adjudication", config.generate_llm_adjudication ? "Yes" : "No"],
+        ["Delete seen data", config.delete_seen_data || "no"],
+      ])}
+    </section>
+
+    <section class="pipeline-run-detail-panel">
+      <h4>Stages</h4>
+      <div class="pipeline-run-stage-list">
+        ${stageOrder.length
+          ? stageOrder.map((stage) => `
+              <span class="pipeline-run-stage-chip ${completedStages.has(stage) ? "is-complete" : ""}">
+                ${completedStages.has(stage) ? "✓" : "○"} ${escapeHtml(stage)}
+              </span>
+            `).join("")
+          : `<span class="pipeline-runs-empty-cell">No stage list persisted for this run.</span>`}
+      </div>
+    </section>
+  `;
+}
+
+async function openPipelineRunStatsModal(runId) {
+  qs("pipelineRunStatsBody").innerHTML = `<div class="pipeline-runs-empty-cell">Loading run details...</div>`;
+  qs("pipelineRunStatsModal").classList.remove("hidden");
+  const data = await fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
+  renderPipelineRunDetail(data);
+}
+
+function closePipelineRunStatsModal() {
+  qs("pipelineRunStatsModal")?.classList.add("hidden");
+}
+
+async function rerunPipelineRun(runId) {
+  const run = getPipelineRunById(runId);
+  const label = run?.started_at ? formatDateTime(run.started_at) : runId;
+  setPipelineRunsStatus(`Starting re-run from ${label}...`, "info");
+  const data = await postJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/rerun`, {});
+  const newRunId = data?.pipeline?.run_id || "new run";
+  await loadPipelineRuns();
+  setPipelineRunsStatus(`Pipeline re-run started (${newRunId}). Open Executive Queue to watch live progress.`, "success");
 }
 
 
@@ -772,11 +1065,8 @@ function bindDeleteInteractions() {
   });
 }
 
-function bindAdminUsersInteractions() {
-  const section = qs("profileAdminUsersSection");
-  if (!section) return;
-
-  qs("profileAdminTabs")?.addEventListener("click", (event) => {
+function bindProfileTabs() {
+  qs("profileTabs")?.addEventListener("click", (event) => {
     const button = event.target.closest("[data-profile-tab-target]");
     if (!button) return;
 
@@ -790,7 +1080,60 @@ function bindAdminUsersInteractions() {
     document.querySelectorAll("[data-profile-tab-panel]").forEach((panel) => {
       panel.classList.toggle("hidden", panel.id !== targetId);
     });
+
+    if (targetId === "profilePipelineRunsSection" && !profileState.pipelineRuns.length) {
+      loadPipelineRuns().catch((err) => {
+        setPipelineRunsStatus(err.message, "error");
+      });
+    }
+
+    if (targetId === "profileAdminUsersSection" && !profileState.adminUsers.length) {
+      loadAdminUsers().catch((err) => {
+        setAdminUsersStatus(err.message, "error");
+      });
+    }
   });
+}
+
+function bindPipelineRunsInteractions() {
+  const section = qs("profilePipelineRunsSection");
+  if (!section) return;
+
+  qs("refreshPipelineRunsBtn")?.addEventListener("click", () => {
+    loadPipelineRuns().catch((err) => {
+      setPipelineRunsStatus(err.message, "error");
+    });
+  });
+
+  qs("pipelineRunsTableBody")?.addEventListener("click", (event) => {
+    const viewBtn = event.target.closest("[data-pipeline-run-view]");
+    if (viewBtn) {
+      openPipelineRunStatsModal(viewBtn.dataset.pipelineRunView || "").catch((err) => {
+        setPipelineRunsStatus(err.message, "error");
+        closePipelineRunStatsModal();
+      });
+      return;
+    }
+
+    const rerunBtn = event.target.closest("[data-pipeline-run-rerun]");
+    if (rerunBtn) {
+      rerunPipelineRun(rerunBtn.dataset.pipelineRunRerun || "").catch((err) => {
+        setPipelineRunsStatus(err.message, "error");
+      });
+    }
+  });
+
+  qs("pipelineRunStatsCloseBtn")?.addEventListener("click", closePipelineRunStatsModal);
+  qs("pipelineRunStatsModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("pipelineRunStatsModal")) {
+      closePipelineRunStatsModal();
+    }
+  });
+}
+
+function bindAdminUsersInteractions() {
+  const section = qs("profileAdminUsersSection");
+  if (!section) return;
 
   qs("refreshAdminUsersBtn")?.addEventListener("click", () => {
     loadAdminUsers().catch((err) => {
@@ -916,11 +1259,16 @@ async function initProfilePage() {
       }
       bindUploadInteractions();
       bindDeleteInteractions();
+      bindProfileTabs();
+      bindPipelineRunsInteractions();
       bindAdminUsersInteractions();
       qs("resumeSection")?.setAttribute("data-profile-tab-panel", "");
+      qs("profilePipelineRunsSection")?.setAttribute("data-profile-tab-panel", "");
       qs("profileAdminUsersSection")?.setAttribute("data-profile-tab-panel", "");
       await loadResumes();
-      await loadAdminUsers();
+      if (qs("profileAdminUsersSection")) {
+        await loadAdminUsers();
+      }
     }
   } catch (err) {
     if (isSavedScansPage()) {

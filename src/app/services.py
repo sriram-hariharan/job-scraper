@@ -2118,6 +2118,7 @@ def _pipeline_status_snapshot(state: Any = None) -> Dict[str, Any]:
         "child_pid": run_state.get("child_pid"),
         "error": run_state.get("error", ""),
         "owner_user_id": run_state.get("owner_user_id", ""),
+        "config": run_state.get("config") or {},
         "is_running": status == "running",
     }
 
@@ -4197,6 +4198,7 @@ def run_live_pipeline_payload(
     target_state["child_pid"] = process.pid
     target_state["error"] = ""
     target_state["owner_user_id"] = owner_for_pipeline_gate
+    target_state["config"] = runtime_payload.get("config") or {}
 
     if owner_for_pipeline_gate:
         _set_owner_active_pipeline_state(owner_for_pipeline_gate, target_state)

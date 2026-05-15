@@ -1,31 +1,16 @@
-import json
-import os
 import time
 
-SCHEDULE_FILE = "data/company_crawl_state.json"
+from src.storage.discovery_store import load_discovery_crawl_schedule, save_discovery_crawl_schedule
+
 CRAWL_INTERVAL = 6 * 3600  # 6 hours
 
 
 def load_schedule():
-    if not os.path.exists(SCHEDULE_FILE):
-        return {}
-
-    try:
-        with open(SCHEDULE_FILE, "r") as f:
-            data = json.load(f)
-
-        if isinstance(data, dict):
-            return data
-
-    except Exception:
-        pass
-
-    return {}
+    return load_discovery_crawl_schedule()
 
 
 def save_schedule(schedule):
-    with open(SCHEDULE_FILE, "w") as f:
-        json.dump(schedule, f, indent=2, sort_keys=True)
+    save_discovery_crawl_schedule(schedule)
 
 
 def should_scrape(company, schedule):

@@ -1,12 +1,10 @@
 from urllib.parse import urlparse
-import os
 
 from src.utils.logging import get_logger
-from src.utils.file_lock import exclusive_file_lock
+from src.storage.discovery_store import get_company_domains, upsert_company_domains
 
 logger = get_logger("domain_learner")
 
-DOMAIN_FILE = "data/company_domains.txt"
 
 ATS_DOMAINS = {
     "boards.greenhouse.io",
@@ -83,41 +81,33 @@ def learn_domains_from_jobs(jobs):
     if not jobs:
         return
 
-    with exclusive_file_lock(f"{DOMAIN_FILE}.lock"):
-        existing = set()
+    existing = get_company_domains()
+    learned = set()
 
-        if os.path.exists(DOMAIN_FILE):
-            with open(DOMAIN_FILE, encoding="utf-8") as f:
-                existing = {line.strip() for line in f if line.strip()}
+    for job in jobs:
 
-        learned = set()
+        url = job.get("url")
 
-        for job in jobs:
+        domain = extract_domain(url)
 
-            url = job.get("url")
+        if domain and domain not in existing:
+            learned.add(domain)
 
-            domain = extract_domain(url)
+        # learn company from ATS path
+        company_slug = extract_company_from_ats(url)
 
-            if domain and domain not in existing:
-                learned.add(domain)
+        if company_slug:
+            guessed_domain = f"{company_slug}.com"
 
-            # learn company from ATS path
-            company_slug = extract_company_from_ats(url)
+            if guessed_domain not in existing:
+                learned.add(guessed_domain)
 
-            if company_slug:
-                guessed_domain = f"{company_slug}.com"
+    learned = learned - existing
 
-                if guessed_domain not in existing:
-                    learned.add(guessed_domain)
+    if not learned:
+        return
 
-        learned = learned - existing
+    new_count = upsert_company_domains(learned, source="job_pipeline")
 
-        if not learned:
-            return
-
-        with open(DOMAIN_FILE, "a", encoding="utf-8") as f:
-            for d in sorted(learned):
-                f.write(d + "\n")
-
-    logger.info(f"{len(learned)} new company domains learned")
+    logger.info(f"{new_count} new company domains learned")
 

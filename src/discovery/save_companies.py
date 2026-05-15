@@ -1,14 +1,18 @@
-import os
 import re
 
-from src.utils.file_lock import exclusive_file_lock
 from src.utils.logging import get_logger
+from src.storage.discovery_store import get_discovered_ats_companies, upsert_discovered_ats_companies
 
 logger = get_logger("discovery_persist")
 
 
+def _ats_from_file_path(file_path):
+    name = str(file_path or "").split("/")[-1]
+    return name.replace("_companies.txt", "").strip().lower()
+
+
 def append_new_companies(file_path, companies):
-    ats = os.path.basename(file_path).replace("_companies.txt", "")
+    ats = _ats_from_file_path(file_path)
 
     if not companies:
         return
@@ -16,7 +20,7 @@ def append_new_companies(file_path, companies):
     companies = {c.strip() for c in companies if c and c.strip()}
 
     # ---- VALIDATION FIREWALL ----
-    if "workday" in file_path:
+    if "workday" in str(file_path):
         companies = {
             c
             for c in companies
@@ -27,22 +31,17 @@ def append_new_companies(file_path, companies):
         logger.info(f"{ats:15} 0 new companies persisted")
         return
 
-    lock_path = f"{file_path}.lock"
+    existing = get_discovered_ats_companies(ats)
+    new = companies - existing
 
-    with exclusive_file_lock(lock_path):
-        existing = set()
-        if os.path.exists(file_path):
-            with open(file_path, encoding="utf-8") as f:
-                existing = {line.strip() for line in f if line.strip()}
+    if not new:
+        logger.info(f"{ats:15} 0 new companies persisted")
+        return
 
-        new = companies - existing
+    new_count = upsert_discovered_ats_companies(
+        ats,
+        new,
+        source="persist_discovered_companies",
+    )
 
-        if not new:
-            logger.info(f"{ats:15} 0 new companies persisted")
-            return
-
-        with open(file_path, "a", encoding="utf-8") as f:
-            for c in sorted(new):
-                f.write(c + "\n")
-
-    logger.info(f"{ats:15} {len(new)} new companies persisted")
+    logger.info(f"{ats:15} {new_count} new companies persisted")

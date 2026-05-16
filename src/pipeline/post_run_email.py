@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
 
 
-DEFAULT_POST_RUN_EMAIL_OUTBOX_DIR = Path("outputs/scheduler_logs/post_run_email_outbox")
+DEFAULT_POST_RUN_EMAIL_OUTBOX_DIR = Path("postgres_artifacts/scheduler/post_run_email_outbox")
 
 
 def _utc_now() -> str:

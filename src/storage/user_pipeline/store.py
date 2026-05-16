@@ -640,6 +640,7 @@ def get_user_pipeline_runs_postgres_payload(
     *,
     owner_user_id: str,
     limit: int = 20,
+    offset: int = 0,
     status: str = "",
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
@@ -649,6 +650,7 @@ def get_user_pipeline_runs_postgres_payload(
 ) -> Dict[str, Any]:
     owner = _require_owner_user_id(owner_user_id)
     safe_limit = max(1, min(int(limit), 200))
+    safe_offset = max(0, int(offset or 0))
     safe_status = _clean_text(status)
 
     status_filter = (
@@ -665,6 +667,7 @@ WITH run_rows AS (
     {status_filter}
     ORDER BY started_at DESC
     LIMIT {safe_limit}
+    OFFSET {safe_offset}
 )
 SELECT json_build_object(
     'total_row_count', (
@@ -720,6 +723,54 @@ def get_latest_user_pipeline_run_postgres_payload(
         "ok": True,
         "found": bool(rows),
         "run": dict(rows[0] or {}) if rows else {},
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
+def get_user_pipeline_run_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _require_run_id(run_id)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+SELECT json_build_object(
+    'found', EXISTS (
+        SELECT 1
+        FROM user_pipeline_runs
+        WHERE owner_user_id = {_sql_quote_text(owner)}
+          AND run_id = {_sql_quote_text(safe_run_id)}
+    ),
+    'run', COALESCE((
+        SELECT row_to_json(user_pipeline_runs)
+        FROM user_pipeline_runs
+        WHERE owner_user_id = {_sql_quote_text(owner)}
+          AND run_id = {_sql_quote_text(safe_run_id)}
+        LIMIT 1
+    ), '{{}}'::json)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    return {
+        "ok": True,
+        "found": bool(payload.get("data", {}).get("found", False)),
+        "run": dict(payload.get("data", {}).get("run", {}) or {}),
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
     }
@@ -1416,6 +1467,85 @@ SELECT json_build_object(
         "rows": rows,
         "count": len(rows),
         "total_row_count": int(payload.get("data", {}).get("total_row_count", 0) or 0),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
+def rollback_user_pipeline_run_postgres_payload(
+    *,
+    owner_user_id: str,
+    run_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    safe_run_id = _require_run_id(run_id)
+
+    sql = _schema_prefix(ensure_schema) + f"""
+WITH deleted_staging AS (
+    DELETE FROM user_seen_jobs_staging
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+    RETURNING seen_key
+),
+deleted_artifacts AS (
+    DELETE FROM user_pipeline_artifacts
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+    RETURNING artifact_id
+),
+deleted_new_seen AS (
+    DELETE FROM user_seen_jobs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND first_run_id = {_sql_quote_text(safe_run_id)}
+      AND last_run_id = {_sql_quote_text(safe_run_id)}
+    RETURNING seen_key
+),
+updated_seen AS (
+    UPDATE user_seen_jobs
+    SET
+        last_run_id = '',
+        metadata_json = metadata_json - 'promoted_run_id' - 'promoted_from_staging'
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND last_run_id = {_sql_quote_text(safe_run_id)}
+      AND first_run_id <> {_sql_quote_text(safe_run_id)}
+    RETURNING seen_key
+),
+released_active AS (
+    DELETE FROM user_pipeline_active_runs
+    WHERE owner_user_id = {_sql_quote_text(owner)}
+      AND run_id = {_sql_quote_text(safe_run_id)}
+    RETURNING run_id
+)
+SELECT json_build_object(
+    'staging_deleted_count', (SELECT COUNT(*) FROM deleted_staging),
+    'artifacts_deleted_count', (SELECT COUNT(*) FROM deleted_artifacts),
+    'new_seen_deleted_count', (SELECT COUNT(*) FROM deleted_new_seen),
+    'seen_updated_count', (SELECT COUNT(*) FROM updated_seen),
+    'active_released_count', (SELECT COUNT(*) FROM released_active)
+);
+""".strip()
+
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+    data = dict(payload.get("data", {}) or {})
+    return {
+        "ok": True,
+        "staging_deleted_count": int(data.get("staging_deleted_count", 0) or 0),
+        "artifacts_deleted_count": int(data.get("artifacts_deleted_count", 0) or 0),
+        "new_seen_deleted_count": int(data.get("new_seen_deleted_count", 0) or 0),
+        "seen_updated_count": int(data.get("seen_updated_count", 0) or 0),
+        "active_released_count": int(data.get("active_released_count", 0) or 0),
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
     }

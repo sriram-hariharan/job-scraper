@@ -12,7 +12,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
 
 
-DEFAULT_POST_RUN_EMAIL_DELIVERY_DIR = Path("outputs/scheduler_logs/post_run_email_delivery")
+DEFAULT_POST_RUN_EMAIL_DELIVERY_DIR = Path("postgres_artifacts/scheduler/post_run_email_delivery")
 ALLOWED_DELIVERY_MODES = {"outbox_only", "dry_run", "smtp"}
 
 

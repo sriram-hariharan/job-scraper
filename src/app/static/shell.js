@@ -3,6 +3,8 @@ const JOBSTACK_THEME_KEY = "jobstack.theme";
 const APPLYLENS_FIRST_RUN_PROMPT_KEY = "applylens_first_run_prompt";
 const APPLYLENS_NEW_USER_EMPTY_KEY = "applylens_new_user_empty_state";
 const APPLYLENS_OPEN_PIPELINE_KEY = "applylens_open_live_pipeline";
+const APPLYLENS_DEFAULT_IDLE_TIMEOUT_SECONDS = 1800;
+const APPLYLENS_DEFAULT_IDLE_WARNING_SECONDS = 60;
 
 function qs(id) {
   return document.getElementById(id);
@@ -306,6 +308,133 @@ function clearTableWrapLoading(target) {
 
 window.setTableWrapLoading = setTableWrapLoading;
 window.clearTableWrapLoading = clearTableWrapLoading;
+
+
+function currentPathForLoginNext() {
+  const path = window.location.pathname || "/";
+  const query = window.location.search || "";
+  return `${path}${query}`;
+}
+
+function redirectToLoginAfterIdle() {
+  const next = encodeURIComponent(currentPathForLoginNext());
+  window.location.href = `/login?next=${next}`;
+}
+
+async function logoutAfterInactivity() {
+  try {
+    await fetch("/auth/logout", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+      },
+    });
+  } catch (_) {
+    // Redirect anyway. The server-side session may already be expired.
+  }
+
+  redirectToLoginAfterIdle();
+}
+
+function initAuthInactivityLogout() {
+  if (document.body.classList.contains("auth-page")) return;
+
+  let idleTimeoutSeconds = APPLYLENS_DEFAULT_IDLE_TIMEOUT_SECONDS;
+  let idleTimer = null;
+  let isLoggingOut = false;
+  let lastActivityAt = Date.now();
+
+  function idleLimitMs() {
+    return Math.max(1, Number(idleTimeoutSeconds || APPLYLENS_DEFAULT_IDLE_TIMEOUT_SECONDS)) * 1000;
+  }
+
+  function hasExceededIdleLimit() {
+    return Date.now() - lastActivityAt >= idleLimitMs();
+  }
+
+  function triggerIdleLogout() {
+    if (isLoggingOut) return;
+    isLoggingOut = true;
+
+    if (idleTimer) {
+      window.clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+
+    logoutAfterInactivity();
+  }
+
+  function armIdleTimer() {
+    if (isLoggingOut) return;
+
+    if (idleTimer) {
+      window.clearTimeout(idleTimer);
+    }
+
+    const remainingMs = Math.max(1, idleLimitMs() - (Date.now() - lastActivityAt));
+    idleTimer = window.setTimeout(() => {
+      triggerIdleLogout();
+    }, remainingMs);
+  }
+
+  function recordUserActivity() {
+    if (isLoggingOut) return;
+
+    if (hasExceededIdleLimit()) {
+      triggerIdleLogout();
+      return;
+    }
+
+    lastActivityAt = Date.now();
+    armIdleTimer();
+  }
+
+  const activityEvents = [
+    "click",
+    "keydown",
+    "mousedown",
+    "scroll",
+    "touchstart",
+    "pointerdown",
+  ];
+
+  activityEvents.forEach((eventName) => {
+    window.addEventListener(eventName, recordUserActivity, {
+      passive: true,
+      capture: true,
+    });
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && hasExceededIdleLimit()) {
+      triggerIdleLogout();
+    }
+  });
+
+  fetch("/auth/session-config", {
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+    },
+  })
+    .then((response) => response.ok ? response.json() : {})
+    .then((payload) => {
+      const configuredTimeout = Number(payload.idle_timeout_seconds || 0);
+      if (Number.isFinite(configuredTimeout) && configuredTimeout > 0) {
+        idleTimeoutSeconds = configuredTimeout;
+      }
+      lastActivityAt = Date.now();
+      armIdleTimer();
+    })
+    .catch(() => {
+      lastActivityAt = Date.now();
+      armIdleTimer();
+    });
+
+  armIdleTimer();
+}
+
 
 window.addEventListener("DOMContentLoaded", () => {
   const menuBtn = qs("appShellMenuBtn");
@@ -829,5 +958,6 @@ window.addEventListener("DOMContentLoaded", () => {
   loadProfileShellUser();
   loadUnreadCount();
   refreshNewUserWorkspaceState();
+  initAuthInactivityLogout();
   showFirstRunPrompt();
 });

@@ -10,6 +10,8 @@ from src.config.consts import (
     AUTH_SESSION_COOKIE_NAME,
     AUTH_SESSION_COOKIE_SAMESITE,
     AUTH_SESSION_COOKIE_SECURE,
+    AUTH_SESSION_IDLE_TIMEOUT_SECONDS,
+    AUTH_SESSION_INACTIVITY_WARNING_SECONDS,
     AUTH_SESSION_TOKEN_BYTES,
     AUTH_SESSION_TTL_SECONDS,
 )
@@ -34,20 +36,41 @@ def auth_cookie_name() -> str:
     )
 
 
-def auth_session_ttl_seconds() -> int:
-    raw = _clean_text(os.environ.get("JOB_STACK_AUTH_SESSION_TTL_SECONDS"))
+def _positive_env_int(name: str, default_value: int) -> int:
+    raw = _clean_text(os.environ.get(name))
     if not raw:
-        return int(AUTH_SESSION_TTL_SECONDS)
+        return int(default_value)
 
     try:
         parsed = int(raw)
     except ValueError:
-        return int(AUTH_SESSION_TTL_SECONDS)
+        return int(default_value)
 
     if parsed <= 0:
-        return int(AUTH_SESSION_TTL_SECONDS)
+        return int(default_value)
 
     return parsed
+
+
+def auth_session_ttl_seconds() -> int:
+    return _positive_env_int(
+        "JOB_STACK_AUTH_SESSION_TTL_SECONDS",
+        int(AUTH_SESSION_TTL_SECONDS),
+    )
+
+
+def auth_session_idle_timeout_seconds() -> int:
+    return _positive_env_int(
+        "JOB_STACK_AUTH_SESSION_IDLE_TIMEOUT_SECONDS",
+        int(AUTH_SESSION_IDLE_TIMEOUT_SECONDS),
+    )
+
+
+def auth_session_inactivity_warning_seconds() -> int:
+    return _positive_env_int(
+        "JOB_STACK_AUTH_INACTIVITY_WARNING_SECONDS",
+        int(AUTH_SESSION_INACTIVITY_WARNING_SECONDS),
+    )
 
 
 def auth_cookie_secure() -> bool:

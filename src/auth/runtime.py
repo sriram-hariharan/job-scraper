@@ -7,7 +7,11 @@ from urllib.parse import quote
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse, Response
 
-from src.auth.session import auth_cookie_name, hash_session_token
+from src.auth.session import (
+    auth_cookie_name,
+    auth_session_idle_timeout_seconds,
+    hash_session_token,
+)
 from src.storage.auth.read_postgres import get_auth_user_for_session_token_hash_postgres_payload
 
 
@@ -19,6 +23,7 @@ PUBLIC_AUTH_EXACT_PATHS = {
     "/auth/login",
     "/auth/register",
     "/auth/logout",
+    "/auth/session-config",
     "/auth/me",
     "/favicon.ico",
 }
@@ -98,6 +103,7 @@ def current_user_from_request(request: Request) -> Dict[str, Any]:
     try:
         payload = get_auth_user_for_session_token_hash_postgres_payload(
             session_token_hash=hash_session_token(session_token),
+            idle_timeout_seconds=auth_session_idle_timeout_seconds(),
             ensure_schema=False,
         )
     except Exception:

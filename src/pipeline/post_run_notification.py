@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional, Tuple
 from src.storage.scheduler_artifacts_store import upsert_scheduler_artifact
 
 
-DEFAULT_NOTIFICATION_RECORDS_DIR = Path("outputs/scheduler_logs/notification_records")
+DEFAULT_NOTIFICATION_RECORDS_DIR = Path("postgres_artifacts/scheduler/post_run_notification")
 
 
 def _utc_now() -> str:

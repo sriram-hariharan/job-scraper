@@ -12,8 +12,8 @@ from typing import Any, Dict, List
 from src.storage.auth_email_artifacts_store import upsert_auth_email_artifact
 
 
-DEFAULT_AUTH_APPROVAL_EMAIL_OUTBOX_DIR = Path("outputs/auth_approval_email_outbox")
-DEFAULT_AUTH_APPROVAL_EMAIL_DELIVERY_DIR = Path("outputs/auth_approval_email_delivery")
+DEFAULT_AUTH_APPROVAL_EMAIL_OUTBOX_DIR = Path("postgres_artifacts/auth_email/auth_approval_email_outbox")
+DEFAULT_AUTH_APPROVAL_EMAIL_DELIVERY_DIR = Path("postgres_artifacts/auth_email/auth_approval_email_delivery")
 
 AUTH_APPROVAL_EMAIL_MODES = {"outbox_only", "dry_run", "smtp"}
 

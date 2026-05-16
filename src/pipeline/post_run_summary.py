@@ -14,7 +14,7 @@ DEFAULT_AGENT_DISCOVERY_SUMMARY_PATH = Path(
 DEFAULT_LIVE_PIPELINE_OUTPUT_DIR = Path(
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
 ).expanduser()
-DEFAULT_POST_RUN_SUMMARY_DIR = Path("outputs/scheduler_logs/post_run_summaries")
+DEFAULT_POST_RUN_SUMMARY_DIR = Path("postgres_artifacts/scheduler/post_run_summary")
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()

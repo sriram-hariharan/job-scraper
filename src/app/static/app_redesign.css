@@ -271,29 +271,75 @@ textarea:focus,
 
 .app-shell {
   width: var(--app-shell-width, 268px) !important;
-  padding: 24px 18px !important;
-  border-right: 1px solid var(--app-border) !important;
+  padding: 22px 18px !important;
+  border-right: 1px solid rgba(125, 170, 255, 0.18) !important;
   background:
-    radial-gradient(circle at 0% 0%, rgba(124, 156, 255, 0.16), transparent 38%),
-    linear-gradient(180deg, rgba(11, 16, 32, 0.96), rgba(8, 13, 26, 0.98)) !important;
+    linear-gradient(180deg, rgba(125, 170, 255, 0.14), transparent 22%),
+    radial-gradient(circle at 8% 0%, rgba(56, 189, 248, 0.22), transparent 32%),
+    radial-gradient(circle at 100% 18%, rgba(52, 211, 153, 0.09), transparent 28%),
+    linear-gradient(180deg, #111c34 0%, #091226 50%, #060b18 100%) !important;
+  box-shadow:
+    18px 0 54px rgba(0, 0, 0, 0.34),
+    inset -1px 0 0 rgba(255, 255, 255, 0.04) !important;
 }
 
 html[data-theme="light"] .app-shell {
   background:
     radial-gradient(circle at 18% 0%, rgba(37, 99, 235, 0.1), transparent 34%),
     linear-gradient(180deg, rgba(250, 253, 255, 0.98), rgba(244, 249, 255, 0.98)) !important;
+  border-right-color: rgba(148, 163, 184, 0.28) !important;
+  box-shadow:
+    18px 0 46px rgba(15, 23, 42, 0.08),
+    inset -1px 0 0 rgba(255, 255, 255, 0.84) !important;
+}
+
+html[data-theme="light"] .app-shell-brand {
+  border-color: rgba(148, 163, 184, 0.24) !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(239, 246, 255, 0.96)) !important;
+  box-shadow:
+    0 18px 38px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(37, 99, 235, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.96) !important;
+}
+
+html[data-theme="light"] .app-shell-nav-link {
+  color: #64748b !important;
+}
+
+html[data-theme="light"] .app-shell-nav-link:hover {
+  border-color: rgba(37, 99, 235, 0.12) !important;
+  background: rgba(37, 99, 235, 0.06) !important;
+  color: #0f172a !important;
+}
+
+html[data-theme="light"] .app-shell-nav-link.active,
+html[data-theme="light"] .app-shell-nav-link[aria-current="page"] {
+  border-color: rgba(37, 99, 235, 0.2) !important;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(20, 184, 166, 0.07)) !important;
+  color: #0f172a !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.76),
+    0 12px 26px rgba(37, 99, 235, 0.08) !important;
+}
+
+html[data-theme="light"] .app-shell-nav-short {
+  border-color: rgba(37, 99, 235, 0.12) !important;
+  background: rgba(37, 99, 235, 0.06) !important;
+  color: #475569 !important;
 }
 
 .app-shell-brand-row {
   display: flex !important;
   align-items: center !important;
-  justify-content: flex-start !important;
+  justify-content: center !important;
   min-width: 0 !important;
-  min-height: 118px !important;
-  margin: 0 0 30px !important;
-  padding: 8px 54px 18px 4px !important;
+  min-height: 152px !important;
+  margin: 0 0 22px !important;
+  padding: 48px 0 18px !important;
   border: 0 !important;
-  border-bottom: 1px solid rgba(148, 163, 184, 0.2) !important;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16) !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
@@ -302,11 +348,19 @@ html[data-theme="light"] .app-shell {
 .app-shell-brand {
   display: inline-flex !important;
   align-items: center !important;
-  justify-content: flex-start !important;
-  width: 246px !important;
-  height: 98px !important;
+  justify-content: center !important;
+  width: 208px !important;
+  height: 92px !important;
   min-width: 0 !important;
-  overflow: visible !important;
+  overflow: hidden !important;
+  border: 1px solid rgba(203, 213, 225, 0.38) !important;
+  border-radius: 22px !important;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(235, 246, 255, 0.92)) !important;
+  box-shadow:
+    0 20px 42px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(125, 170, 255, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95) !important;
   text-decoration: none !important;
 }
 
@@ -318,11 +372,12 @@ html[data-theme="light"] .app-shell {
 
 .app-shell-brand-logo {
   display: block !important;
-  width: 246px !important;
-  max-width: 246px !important;
-  height: 98px !important;
+  width: 204px !important;
+  max-width: 204px !important;
+  height: 92px !important;
   object-fit: contain !important;
-  object-position: left center !important;
+  object-position: center !important;
+  filter: drop-shadow(0 10px 18px rgba(15, 23, 42, 0.1)) !important;
 }
 
 .app-shell ~ .page {
@@ -336,7 +391,7 @@ body.app-shell-collapsed .app-shell ~ .page {
 
 .app-shell-nav {
   display: grid !important;
-  gap: 8px !important;
+  gap: 7px !important;
   margin: 0 !important;
   padding: 0 !important;
 }
@@ -345,26 +400,43 @@ body.app-shell-collapsed .app-shell ~ .page {
   position: relative !important;
   display: flex !important;
   align-items: center !important;
-  min-height: 52px !important;
-  padding: 0 18px !important;
+  gap: 12px !important;
+  min-height: 48px !important;
+  padding: 0 14px !important;
   border: 1px solid transparent !important;
-  border-radius: 16px !important;
-  color: var(--app-muted) !important;
-  font-size: 17px !important;
-  font-weight: 850 !important;
+  border-radius: 14px !important;
+  color: #a9b8ce !important;
+  font-size: 15px !important;
+  font-weight: 820 !important;
   letter-spacing: 0 !important;
   text-decoration: none !important;
   background: transparent !important;
   box-shadow: none !important;
-  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+  transition:
+    background 140ms ease,
+    border-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
 }
 
-.app-shell-nav-link:hover,
+.app-shell-nav-link:hover {
+  border-color: rgba(148, 163, 184, 0.18) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: #edf4ff !important;
+  transform: translateX(2px) !important;
+}
+
 .app-shell-nav-link.active,
 .app-shell-nav-link[aria-current="page"] {
-  border-color: rgba(96, 165, 250, 0.24) !important;
-  background: rgba(96, 165, 250, 0.1) !important;
-  color: var(--app-text) !important;
+  border-color: rgba(125, 170, 255, 0.34) !important;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.24), rgba(14, 165, 233, 0.1)) !important;
+  color: #eef5ff !important;
+  transform: none !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 28px rgba(14, 165, 233, 0.12) !important;
 }
 
 .app-shell-nav-link.active::before,
@@ -372,15 +444,33 @@ body.app-shell-collapsed .app-shell ~ .page {
   content: "" !important;
   position: absolute !important;
   left: -18px !important;
-  top: 10px !important;
-  bottom: 10px !important;
-  width: 4px !important;
+  top: 12px !important;
+  bottom: 12px !important;
+  width: 3px !important;
   border-radius: 999px !important;
-  background: linear-gradient(180deg, #2563eb, #06b6d4) !important;
+  background: linear-gradient(180deg, #7c9cff, #22d3ee) !important;
+  box-shadow: 0 0 18px rgba(34, 211, 238, 0.38) !important;
 }
 
 .app-shell-nav-short {
-  display: none !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  border: 1px solid rgba(148, 163, 184, 0.16) !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  color: #c6d2e5 !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+.app-shell-nav-link.active .app-shell-nav-short,
+.app-shell-nav-link[aria-current="page"] .app-shell-nav-short {
+  border-color: rgba(34, 211, 238, 0.24) !important;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.5), rgba(20, 184, 166, 0.24)) !important;
+  color: #ffffff !important;
 }
 
 .app-shell-nav-label {
@@ -2610,29 +2700,49 @@ html[data-theme="light"] body.app-shell-collapsed .app-shell-nav-link[aria-curre
 .app-shell-menu-btn {
   left: calc(var(--app-shell-width, 268px) - 66px) !important;
   right: auto !important;
-  top: 32px !important;
-  width: 44px !important;
-  height: 44px !important;
-  min-width: 44px !important;
-  min-height: 44px !important;
+  top: 22px !important;
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  min-height: 42px !important;
   padding: 9px !important;
-  border: 1px solid rgba(148, 163, 184, 0.24) !important;
+  border: 1px solid rgba(148, 163, 184, 0.2) !important;
   border-radius: 14px !important;
-  background: rgba(255, 255, 255, 0.72) !important;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
+  background:
+    linear-gradient(145deg, rgba(30, 41, 59, 0.82), rgba(15, 23, 42, 0.68)) !important;
+  box-shadow:
+    0 14px 28px rgba(2, 8, 23, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(14px) !important;
 }
 
 .app-shell-menu-btn:hover,
 .app-shell-menu-btn:focus-visible {
-  background: #ffffff !important;
-  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.14) !important;
+  border-color: rgba(125, 170, 255, 0.48) !important;
+  background:
+    linear-gradient(145deg, rgba(37, 99, 235, 0.34), rgba(15, 23, 42, 0.86)) !important;
+  box-shadow:
+    0 20px 40px rgba(37, 99, 235, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
 }
 
 .app-shell-menu-btn-line {
-  width: 22px !important;
+  width: 19px !important;
   height: 3px !important;
   border-radius: 999px !important;
-  background: var(--app-text) !important;
+  background: #f8fbff !important;
+}
+
+html[data-theme="light"] .app-shell-menu-btn {
+  border-color: rgba(148, 163, 184, 0.3) !important;
+  background: rgba(255, 255, 255, 0.78) !important;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .app-shell-menu-btn:hover,
+html[data-theme="light"] .app-shell-menu-btn:focus-visible {
+  background: #ffffff !important;
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.14) !important;
 }
 
 html[data-theme="light"] .app-shell-menu-btn-line {
@@ -2642,7 +2752,7 @@ html[data-theme="light"] .app-shell-menu-btn-line {
 body.app-shell-collapsed .app-shell-menu-btn {
   left: 13px !important;
   right: auto !important;
-  top: 30px !important;
+  top: 24px !important;
 }
 
 .app-shell-top-right {

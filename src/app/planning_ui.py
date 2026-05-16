@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -724,7 +724,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
@@ -1216,7 +1216,7 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
   <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_36" />
 </head>
 <body>

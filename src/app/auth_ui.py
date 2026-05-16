@@ -239,7 +239,7 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
   <title>{escape(title)} · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
   <style>
     body {{
       min-height: 100vh;
@@ -295,8 +295,8 @@ def _auth_page_html(*, mode: str, next_path: str, error_message: str = "") -> st
 
     .auth-brand-logo {{
       display: block;
-      width: clamp(260px, 31vw, 380px);
-      height: clamp(84px, 10vw, 122px);
+      width: clamp(340px, 39vw, 520px);
+      height: clamp(110px, 13vw, 168px);
       object-fit: contain;
       object-position: left center;
       filter: drop-shadow(0 18px 30px rgba(37, 99, 235, 0.12));
@@ -871,7 +871,7 @@ def _admin_registration_requests_page_html(*, selected_request_id: str = "") -> 
   <title>Registration Requests · ApplyLens AI</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
   <style>
     body {{
       min-height: 100vh;

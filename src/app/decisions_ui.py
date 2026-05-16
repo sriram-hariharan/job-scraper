@@ -17,7 +17,7 @@ def decisions_dashboard() -> str:
   <title>Decisions Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v36" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
 </head>
 <body>
 {render_top_shell("/decisions-ui")}

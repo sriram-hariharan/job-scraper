@@ -72,9 +72,15 @@ def profile_page(request: Request) -> str:
           <h2>Pipeline runs</h2>
           <div class="subtext" id="pipelineRunsMeta">Loading pipeline runs...</div>
         </div>
-        <button type="button" class="ghost-btn btn-sm" id="refreshPipelineRunsBtn">
-          Refresh
-        </button>
+        <div class="profile-section-header-right">
+          <div class="application-pagination-inline pipeline-runs-pagination-inline" id="pipelineRunsPaginationInline">
+            <div class="application-pagination-meta" id="pipelineRunsPaginationMeta">Loading...</div>
+            <div class="application-pagination-actions" id="pipelineRunsPaginationActions"></div>
+          </div>
+          <button type="button" class="ghost-btn btn-sm" id="refreshPipelineRunsBtn">
+            Refresh
+          </button>
+        </div>
       </div>
 
       <div class="profile-inline-status hidden" id="pipelineRunsStatusBanner"></div>
@@ -101,10 +107,6 @@ def profile_page(request: Request) -> str:
         </table>
       </div>
 
-      <div class="application-pagination-inline pipeline-runs-pagination-inline" id="pipelineRunsPaginationInline">
-        <div class="application-pagination-meta" id="pipelineRunsPaginationMeta">Loading...</div>
-        <div class="application-pagination-actions" id="pipelineRunsPaginationActions"></div>
-      </div>
     </section>
 """
     admin_modals_html = (

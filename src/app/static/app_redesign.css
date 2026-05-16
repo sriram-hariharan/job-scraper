@@ -4206,6 +4206,15 @@ html[data-theme="light"] .admin-user-high-warning {
   margin-top: 24px;
 }
 
+.profile-section-header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
 .pipeline-runs-table-wrap {
   width: 100%;
   overflow-x: auto;

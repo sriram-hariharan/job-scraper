@@ -640,6 +640,7 @@ def get_user_pipeline_runs_postgres_payload(
     *,
     owner_user_id: str,
     limit: int = 20,
+    offset: int = 0,
     status: str = "",
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
@@ -649,6 +650,7 @@ def get_user_pipeline_runs_postgres_payload(
 ) -> Dict[str, Any]:
     owner = _require_owner_user_id(owner_user_id)
     safe_limit = max(1, min(int(limit), 200))
+    safe_offset = max(0, int(offset or 0))
     safe_status = _clean_text(status)
 
     status_filter = (
@@ -665,6 +667,7 @@ WITH run_rows AS (
     {status_filter}
     ORDER BY started_at DESC
     LIMIT {safe_limit}
+    OFFSET {safe_offset}
 )
 SELECT json_build_object(
     'total_row_count', (

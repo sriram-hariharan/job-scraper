@@ -1037,11 +1037,16 @@ def profile_admin_delete_user(user_id: str, http_request: Request):
 
 
 @app.get("/profile/pipeline-runs")
-def profile_pipeline_runs(http_request: Request, limit: int = 50):
+def profile_pipeline_runs(
+    http_request: Request,
+    page: int = 1,
+    page_size: int = 15,
+):
     try:
         return services.profile_pipeline_runs_payload(
             owner_user_id=_auth_owner_user_id(http_request),
-            limit=limit,
+            page=page,
+            page_size=page_size,
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

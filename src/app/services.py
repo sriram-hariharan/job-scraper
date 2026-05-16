@@ -443,15 +443,20 @@ def _pipeline_run_public_row(run: Dict[str, Any]) -> Dict[str, Any]:
 def profile_pipeline_runs_payload(
     *,
     owner_user_id: str = "",
-    limit: int = 50,
+    page: int = 1,
+    page_size: int = 15,
 ) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
         raise ValueError("Authenticated user is required.")
+    safe_page_size = max(1, min(int(page_size or 15), 15))
+    requested_page = max(1, int(page or 1))
+    offset = (requested_page - 1) * safe_page_size
 
     payload = get_user_pipeline_runs_postgres_payload(
         owner_user_id=owner,
-        limit=limit,
+        limit=safe_page_size,
+        offset=offset,
         database_url="",
         database_url_env="DATABASE_URL",
         psql_bin="psql",
@@ -459,10 +464,35 @@ def profile_pipeline_runs_payload(
         ensure_schema=True,
     )
     runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+    total_row_count = int(payload.get("total_row_count", len(runs)) or len(runs))
+    total_pages = max((total_row_count + safe_page_size - 1) // safe_page_size, 1)
+    current_page = min(requested_page, total_pages)
+
+    if requested_page != current_page:
+        offset = (current_page - 1) * safe_page_size
+        payload = get_user_pipeline_runs_postgres_payload(
+            owner_user_id=owner,
+            limit=safe_page_size,
+            offset=offset,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+        total_row_count = int(payload.get("total_row_count", total_row_count) or total_row_count)
+        total_pages = max((total_row_count + safe_page_size - 1) // safe_page_size, 1)
+
     return {
         "ok": True,
         "count": len(runs),
-        "total_row_count": int(payload.get("total_row_count", len(runs)) or len(runs)),
+        "page": current_page,
+        "page_size": safe_page_size,
+        "total_pages": total_pages,
+        "total_row_count": total_row_count,
+        "has_previous": current_page > 1,
+        "has_next": current_page < total_pages,
         "runs": runs,
     }
 

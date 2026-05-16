@@ -100,6 +100,11 @@ def profile_page(request: Request) -> str:
           </tbody>
         </table>
       </div>
+
+      <div class="application-pagination-inline pipeline-runs-pagination-inline" id="pipelineRunsPaginationInline">
+        <div class="application-pagination-meta" id="pipelineRunsPaginationMeta">Loading...</div>
+        <div class="application-pagination-actions" id="pipelineRunsPaginationActions"></div>
+      </div>
     </section>
 """
     admin_modals_html = (
@@ -159,7 +164,7 @@ def profile_page(request: Request) -> str:
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_pipeline_runs_v2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_pipeline_runs_v3" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -289,7 +294,7 @@ def profile_page(request: Request) -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/profile.js?v=profile_pipeline_runs_v2"></script>
+  <script src="/static/profile.js?v=profile_pipeline_runs_v3"></script>
 </body>
 </html>
     """.strip()

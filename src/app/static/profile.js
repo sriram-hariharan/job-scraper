@@ -4,6 +4,12 @@ const profileState = {
   currentUser: null,
   adminUsers: [],
   pipelineRuns: [],
+  pipelineRunsPage: 1,
+  pipelineRunsPageSize: 15,
+  pipelineRunsTotalCount: 0,
+  pipelineRunsTotalPages: 1,
+  pipelineRunsHasPrevious: false,
+  pipelineRunsHasNext: false,
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
@@ -464,20 +470,121 @@ function renderPipelineRuns(runs) {
   }).join("");
 }
 
-async function loadPipelineRuns() {
+function buildPaginationSequence(currentPage, totalPages) {
+  const pages = [];
+  if (totalPages <= 7) {
+    for (let page = 1; page <= totalPages; page += 1) {
+      pages.push(page);
+    }
+    return pages;
+  }
+
+  pages.push(1);
+
+  const start = Math.max(2, currentPage - 1);
+  const end = Math.min(totalPages - 1, currentPage + 1);
+
+  if (start > 2) pages.push("ellipsis-left");
+  for (let page = start; page <= end; page += 1) {
+    pages.push(page);
+  }
+  if (end < totalPages - 1) pages.push("ellipsis-right");
+
+  pages.push(totalPages);
+  return pages;
+}
+
+function renderPipelineRunsPagination() {
+  const metaEl = qs("pipelineRunsPaginationMeta");
+  const actionsEl = qs("pipelineRunsPaginationActions");
+  if (!metaEl || !actionsEl) return;
+
+  const totalCount = profileState.pipelineRunsTotalCount || 0;
+  const totalPages = Math.max(profileState.pipelineRunsTotalPages || 1, 1);
+  const currentPage = Math.min(Math.max(profileState.pipelineRunsPage || 1, 1), totalPages);
+  const pageSize = Math.max(profileState.pipelineRunsPageSize || 15, 1);
+
+  if (totalCount === 0) {
+    metaEl.textContent = "No pages";
+    actionsEl.innerHTML = "";
+    return;
+  }
+
+  const startRow = (currentPage - 1) * pageSize + 1;
+  const endRow = Math.min(startRow + (profileState.pipelineRuns.length || 0) - 1, totalCount);
+  metaEl.textContent = `Showing ${startRow}-${endRow} of ${totalCount} · Page ${currentPage} of ${totalPages}`;
+
+  const buttons = [];
+  buttons.push(`
+    <button
+      type="button"
+      class="application-pagination-btn"
+      data-pipeline-runs-page="${currentPage - 1}"
+      ${profileState.pipelineRunsHasPrevious ? "" : "disabled"}
+    >
+      Prev
+    </button>
+  `);
+
+  buildPaginationSequence(currentPage, totalPages).forEach((item) => {
+    if (typeof item === "string" && item.startsWith("ellipsis")) {
+      buttons.push(`<span class="application-pagination-ellipsis">…</span>`);
+      return;
+    }
+
+    buttons.push(`
+      <button
+        type="button"
+        class="application-pagination-btn ${item === currentPage ? "is-active" : ""}"
+        data-pipeline-runs-page="${item}"
+      >
+        ${item}
+      </button>
+    `);
+  });
+
+  buttons.push(`
+    <button
+      type="button"
+      class="application-pagination-btn"
+      data-pipeline-runs-page="${currentPage + 1}"
+      ${profileState.pipelineRunsHasNext ? "" : "disabled"}
+    >
+      Next
+    </button>
+  `);
+
+  actionsEl.innerHTML = buttons.join("");
+}
+
+function applyPipelineRunsPaginationPayload(data) {
+  profileState.pipelineRunsPage = Number(data.page || 1);
+  profileState.pipelineRunsPageSize = Number(data.page_size || 15);
+  profileState.pipelineRunsTotalCount = Number(data.total_row_count || 0);
+  profileState.pipelineRunsTotalPages = Math.max(Number(data.total_pages || 1), 1);
+  profileState.pipelineRunsHasPrevious = Boolean(data.has_previous);
+  profileState.pipelineRunsHasNext = Boolean(data.has_next);
+}
+
+async function loadPipelineRuns(page = profileState.pipelineRunsPage || 1) {
   const tbody = qs("pipelineRunsTableBody");
   const meta = qs("pipelineRunsMeta");
   if (!tbody || !meta) return;
 
   meta.textContent = "Loading pipeline runs...";
   tbody.innerHTML = `<tr><td colspan="8" class="pipeline-runs-empty-cell">Loading pipeline runs...</td></tr>`;
+  const paginationMeta = qs("pipelineRunsPaginationMeta");
+  const paginationActions = qs("pipelineRunsPaginationActions");
+  if (paginationMeta) paginationMeta.textContent = "Loading...";
+  if (paginationActions) paginationActions.innerHTML = "";
   setPipelineRunsStatus("");
 
-  const data = await fetchJson("/profile/pipeline-runs?limit=200");
+  const targetPage = Math.max(1, Number(page || 1));
+  const pageSize = Math.max(1, Number(profileState.pipelineRunsPageSize || 15));
+  const data = await fetchJson(`/profile/pipeline-runs?page=${encodeURIComponent(targetPage)}&page_size=${encodeURIComponent(pageSize)}`);
+  applyPipelineRunsPaginationPayload(data);
   renderPipelineRuns(data.runs || []);
-  if (meta && Number(data.total_row_count || 0) > profileState.pipelineRuns.length) {
-    meta.textContent = `${profileState.pipelineRuns.length} of ${data.total_row_count} pipeline runs shown`;
-  }
+  renderPipelineRunsPagination();
 }
 
 function renderKeyValueList(items) {
@@ -1100,7 +1207,19 @@ function bindPipelineRunsInteractions() {
   if (!section) return;
 
   qs("refreshPipelineRunsBtn")?.addEventListener("click", () => {
-    loadPipelineRuns().catch((err) => {
+    loadPipelineRuns(profileState.pipelineRunsPage).catch((err) => {
+      setPipelineRunsStatus(err.message, "error");
+    });
+  });
+
+  qs("pipelineRunsPaginationActions")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-pipeline-runs-page]");
+    if (!button || button.disabled) return;
+
+    const targetPage = Number(button.dataset.pipelineRunsPage || 1);
+    if (!Number.isFinite(targetPage) || targetPage < 1) return;
+
+    loadPipelineRuns(targetPage).catch((err) => {
       setPipelineRunsStatus(err.message, "error");
     });
   });

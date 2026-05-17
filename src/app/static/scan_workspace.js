@@ -2143,6 +2143,15 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
   const isHeading = Boolean(row?.is_heading || row?.is_section_heading);
   const patched = Boolean(row?.patched);
   const patchSource = String(row?.patch_source || "").trim();
+  const decision = normalizeScanWorkspaceAnnotationDecision(
+    row?.decision || row?.scan_decision || row?.review_state || row?.state
+  );
+  const isManualEdit = patchSource === "manual_edit";
+  const isRejected = decision === "rejected" || patchSource === "rejected";
+  const isDirectReplacement =
+    patchSource === "selected_patch" ||
+    patchSource === "direct_replacement" ||
+    String(row?.row_action_type || row?.action_type || "").trim() === "direct_replacement";
 
   if (String(row?.kind || "").trim() === "paired_row") {
     return `
@@ -2158,8 +2167,9 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
     isHeading ? "tailoring-workspace-doc-line--heading" : "",
     isBullet ? "tailoring-workspace-doc-line--bullet" : "",
     patched ? "tailoring-workspace-doc-line--changed" : "",
-    patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
-    patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",
+    isManualEdit ? "tailoring-workspace-doc-line--manual" : "",
+    isRejected ? "tailoring-workspace-doc-line--rejected" : "",
+    isDirectReplacement ? "tailoring-workspace-doc-line--selected" : "",
   ].filter(Boolean).join(" ");
 
   if (isBullet) {

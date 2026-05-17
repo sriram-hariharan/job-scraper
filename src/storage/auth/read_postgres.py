@@ -86,7 +86,13 @@ SELECT COALESCE(
 """.strip()
 
 
-def _build_active_session_user_sql(session_token_hash: str, *, ensure_schema: bool) -> str:
+def _build_active_session_user_sql(
+    session_token_hash: str,
+    *,
+    idle_timeout_seconds: int,
+    ensure_schema: bool,
+) -> str:
+    safe_idle_timeout_seconds = max(1, int(idle_timeout_seconds or 1))
     return _schema_prefix(ensure_schema) + f"""
 WITH matched_session AS (
     SELECT
@@ -102,6 +108,7 @@ WITH matched_session AS (
     WHERE session_token_hash = {_sql_quote_text(session_token_hash)}
       AND revoked_at IS NULL
       AND expires_at > now()
+      AND COALESCE(last_seen_at, created_at) > now() - make_interval(secs => {safe_idle_timeout_seconds})
     LIMIT 1
 ),
 touched_session AS (
@@ -305,6 +312,7 @@ def get_auth_user_by_id_postgres_payload(
 def get_auth_user_for_session_token_hash_postgres_payload(
     *,
     session_token_hash: str,
+    idle_timeout_seconds: int = 1800,
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
     psql_bin: str = "psql",
@@ -316,7 +324,11 @@ def get_auth_user_for_session_token_hash_postgres_payload(
         raise ValueError("session_token_hash is required.")
 
     query_payload = _run_psql_json_query(
-        sql=_build_active_session_user_sql(safe_token_hash, ensure_schema=ensure_schema),
+        sql=_build_active_session_user_sql(
+            safe_token_hash,
+            idle_timeout_seconds=max(1, int(idle_timeout_seconds or 1)),
+            ensure_schema=ensure_schema,
+        ),
         database_url=database_url,
         database_url_env=database_url_env,
         psql_bin=psql_bin,

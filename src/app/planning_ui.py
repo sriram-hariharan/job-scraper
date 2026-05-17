@@ -21,7 +21,7 @@ def planning_dashboard() -> str:
   <title>Planning Detail Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
 </head>
 <body>
 {render_top_shell("/planning")}
@@ -724,7 +724,7 @@ def tailoring_workspace(
   <title>Tailoring Workspace</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
   <link rel="stylesheet" href="/static/scan_workspace.css?v=tailoring_workspace_consolidated_v11" />
 </head>
 <body>
@@ -1216,8 +1216,8 @@ def scan_workspace(
   <title>AI Optimize Scan</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_62_compare_dark" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_64_intake_actions" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1274,7 +1274,7 @@ def scan_workspace(
         </div>
 
         <div class="scan-workspace-intake-grid">
-          <section class="scan-workspace-intake-panel">
+          <section class="scan-workspace-intake-panel scan-workspace-intake-panel--resume">
             <div class="scan-workspace-intake-panel-header">
               <h3>Resume</h3>
               <div class="subtext">
@@ -1299,7 +1299,7 @@ def scan_workspace(
             </div>
           </section>
 
-          <section class="scan-workspace-intake-panel">
+          <section class="scan-workspace-intake-panel scan-workspace-intake-panel--job">
             <div class="scan-workspace-intake-panel-header">
               <h3>Job Description</h3>
               <div class="subtext">
@@ -1307,7 +1307,7 @@ def scan_workspace(
               </div>
             </div>
 
-            <label class="scan-workspace-input-group">
+            <label class="scan-workspace-input-group scan-workspace-input-group--company">
               <span class="scan-workspace-input-label">Company</span>
               <input
                 type="text"
@@ -1319,7 +1319,7 @@ def scan_workspace(
               <span class="scan-workspace-field-error" id="scanWorkspaceCompanyError"></span>
             </label>
 
-            <label class="scan-workspace-input-group">
+            <label class="scan-workspace-input-group scan-workspace-input-group--role">
               <span class="scan-workspace-input-label">Role</span>
               <input
                 type="text"
@@ -1331,7 +1331,7 @@ def scan_workspace(
               <span class="scan-workspace-field-error" id="scanWorkspaceRoleError"></span>
             </label>
 
-            <label class="scan-workspace-input-group">
+            <label class="scan-workspace-input-group scan-workspace-input-group--url">
               <span class="scan-workspace-input-label">Job posting URL</span>
               <input
                 type="url"
@@ -1343,7 +1343,10 @@ def scan_workspace(
               <span class="scan-workspace-field-error" id="scanWorkspaceJobUrlError"></span>
             </label>
 
-            <label class="scan-workspace-input-group">
+          </section>
+
+          <section class="scan-workspace-intake-panel scan-workspace-intake-panel--jd">
+            <label class="scan-workspace-input-group scan-workspace-input-group--jd">
               <span class="scan-workspace-input-label">Job description</span>
               <textarea
                 id="scanWorkspaceJobDescriptionInput"

@@ -2922,7 +2922,7 @@ html[data-theme="dark"] .queue-simple-action {
 /* ui_redesign_v14: final shell pinning and calmer type scale. */
 body:not(.app-shell-collapsed) .app-shell-menu-btn {
   position: fixed !important;
-  top: 32px !important;
+  top: 14px !important;
   left: calc(var(--app-shell-width, 268px) - 66px) !important;
   right: auto !important;
   z-index: 180 !important;

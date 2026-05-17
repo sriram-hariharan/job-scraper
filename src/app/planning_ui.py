@@ -1217,7 +1217,7 @@ def scan_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_64_intake_actions" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_66_preview_page_margins" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1747,7 +1747,7 @@ def scan_workspace(
             </div>
 
             <div class="scan-workspace-toolbar-context">
-              <div class="scan-workspace-toolbar-resume-name">
+              <div class="scan-workspace-toolbar-resume-name" id="scanWorkspaceToolbarResumeName">
                 {resume_display_safe}
               </div>
 
@@ -2071,7 +2071,7 @@ def scan_workspace(
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
   <script src="/static/planning.js?v=planning_ui_20260516_scan_marks1"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal13"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_preview_source2"></script>
 </body>
 </html>
     """.strip()

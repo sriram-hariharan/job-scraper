@@ -957,11 +957,15 @@ function applyNewScanWorkspaceReviewPayload(payload) {
     const resumeName = firstNonEmptyScanWorkspaceText(
       payload.resume_name,
       payload.selected_resume,
-      payload?.selection?.selected_resume
+      payload?.selection?.selected_resume,
+      payload?.draft?.selected_resume,
+      payload?.scan_session?.selected_resume,
+      root.dataset.resumeName
     );
     if (company) root.dataset.jobCompany = company;
     if (title) root.dataset.jobTitle = title;
     if (resumeName) root.dataset.resumeName = resumeName;
+    syncScanWorkspacePreviewName();
   }
 
   if (typeof updateScanWorkspaceContextLine === "function") {
@@ -2173,12 +2177,13 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
   ].filter(Boolean).join(" ");
 
   if (isBullet) {
+    const bulletText = rawText.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "");
     return `
       <div class="${extraClasses}" style="margin-top:${gapBefore}px;">
         <div class="tailoring-workspace-doc-bullet-row" style="padding-left:${indent}px;">
           <div class="tailoring-workspace-doc-bullet-marker">•</div>
           <div class="tailoring-workspace-doc-line-copy tailoring-workspace-doc-bullet-copy">
-            <span class="scan-workspace-preview-line-text">${scanWorkspaceEscapeHtml(rawText.replace(/^•\s*/, ""))}</span>
+            <span class="scan-workspace-preview-line-text">${scanWorkspaceEscapeHtml(bulletText)}</span>
           </div>
         </div>
       </div>
@@ -2452,6 +2457,36 @@ function getScanWorkspacePdfResumeName() {
   return resumeName.toLowerCase().endsWith(".pdf") ? resumeName : "";
 }
 
+function getScanWorkspacePreviewDisplayResumeName() {
+  const payload = getScanWorkspacePreloadPayloadForSurface();
+  const preview = scanWorkspacePreviewState.documentPreviewPayload || payload?.document_preview || {};
+  return firstNonEmptyScanWorkspaceText(
+    payload?.resume_name,
+    payload?.selected_resume,
+    payload?.selection?.selected_resume,
+    payload?.draft?.selected_resume,
+    payload?.scan_session?.selected_resume,
+    preview?.resume_name,
+    preview?.selected_resume,
+    getScanWorkspacePageRoot()?.dataset?.resumeName
+  );
+}
+
+function syncScanWorkspacePreviewName() {
+  const previewName = getScanWorkspaceInput("scanWorkspacePreviewName");
+  const toolbarName = getScanWorkspaceInput("scanWorkspaceToolbarResumeName");
+  if (!previewName && !toolbarName) return;
+
+  const resumeName = getScanWorkspacePreviewDisplayResumeName();
+  const displayName =
+    typeof humanizeResumeDisplayName === "function"
+      ? humanizeResumeDisplayName(resumeName || "")
+      : String(resumeName || "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+  const label = displayName || "Generated resume preview";
+  if (previewName) previewName.textContent = label;
+  if (toolbarName) toolbarName.textContent = label;
+}
+
 function renderScanWorkspacePdfPreviewShell() {
   return `
     <div class="scan-workspace-pdf-toolbar" aria-label="Resume PDF preview controls">
@@ -2473,6 +2508,8 @@ function renderScanWorkspacePdfPreviewShell() {
 function renderScanWorkspaceLiveDraftPreviewInto() {
   const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
   if (!root) return;
+
+  syncScanWorkspacePreviewName();
 
   if (scanWorkspacePreviewState.activeSurface === "job_description") {
     renderScanWorkspaceJobDescriptionSurfaceInto();

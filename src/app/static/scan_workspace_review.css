@@ -271,6 +271,258 @@
   box-shadow: none;
 }
 
+.scan-workspace-processing-card {
+  display: grid;
+  gap: 18px;
+  min-height: 620px;
+  color: var(--scan-text);
+}
+
+.scan-workspace-processing-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.scan-workspace-processing-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--scan-border-strong);
+  border-radius: 999px;
+  background: var(--scan-process-pill-bg);
+  color: var(--scan-primary);
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-processing-back-btn {
+  background: var(--scan-process-back-bg);
+  color: var(--scan-process-back-text);
+}
+
+.scan-workspace-processing-shell {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--scan-border);
+  border-radius: 18px;
+  background: var(--scan-process-hero-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.38);
+}
+
+.scan-workspace-processing-title {
+  max-width: 820px;
+  color: var(--scan-text);
+  font-size: clamp(28px, 4vw, 46px);
+  font-weight: 950;
+  line-height: 0.98;
+  letter-spacing: 0;
+}
+
+.scan-workspace-processing-subtitle {
+  max-width: 760px;
+  color: var(--scan-muted);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.45;
+}
+
+.scan-workspace-processing-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scan-workspace-processing-summary-card {
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid var(--scan-border);
+  border-radius: 14px;
+  background: var(--scan-panel-strong);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+}
+
+.scan-workspace-processing-summary-label {
+  margin-bottom: 5px;
+  color: var(--scan-muted);
+  font-size: 11px;
+  font-weight: 950;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.scan-workspace-processing-summary-value {
+  overflow: hidden;
+  color: var(--scan-text);
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scan-workspace-processing-bar {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--scan-process-pill-bg);
+}
+
+.scan-workspace-processing-bar-fill {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--scan-primary), var(--scan-primary-2));
+}
+
+.scan-workspace-processing-step-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.scan-workspace-processing-step {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  gap: 12px;
+  min-height: 148px;
+  padding: 16px;
+  border: 1px solid var(--scan-border);
+  border-radius: 16px;
+  background: var(--scan-process-step-bg);
+}
+
+.scan-workspace-processing-step.is-current {
+  border-color: var(--scan-primary);
+  background: var(--scan-process-step-current-bg);
+}
+
+.scan-workspace-processing-step.is-complete {
+  border-color: rgba(34, 197, 94, 0.48);
+  background: var(--scan-process-step-complete-bg);
+}
+
+.scan-workspace-processing-step-title {
+  color: var(--scan-text);
+  font-size: 15px;
+  font-weight: 950;
+  line-height: 1.2;
+}
+
+.scan-workspace-processing-step-text {
+  margin-top: 6px;
+  color: var(--scan-muted);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.scan-workspace-processing-step-pill {
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--scan-border);
+  border-radius: 999px;
+  background: var(--scan-process-pill-bg);
+  color: var(--scan-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.scan-workspace-processing-step.is-current .scan-workspace-processing-step-pill {
+  border-color: var(--scan-primary);
+  color: var(--scan-primary);
+}
+
+.scan-workspace-processing-step.is-complete .scan-workspace-processing-step-pill {
+  border-color: rgba(34, 197, 94, 0.52);
+  color: var(--scan-success);
+}
+
+.scan-workspace-processing-note {
+  padding: 13px 14px;
+  border: 1px solid var(--scan-border);
+  border-radius: 14px;
+  background: var(--scan-panel-strong);
+  color: var(--scan-muted);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.scan-workspace-processing-complete {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid rgba(34, 197, 94, 0.48);
+  border-radius: 16px;
+  background: var(--scan-process-step-complete-bg);
+}
+
+.scan-workspace-processing-complete[hidden] {
+  display: none;
+}
+
+.scan-workspace-processing-check {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #22c55e, #14b8a6);
+  box-shadow: 0 12px 24px rgba(20, 184, 166, 0.22);
+}
+
+.scan-workspace-processing-complete-title {
+  color: var(--scan-text);
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1.15;
+}
+
+.scan-workspace-processing-ok-btn {
+  min-height: 40px;
+  padding: 0 22px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  background: var(--scan-process-ok-bg);
+  color: var(--scan-process-ok-text);
+  font-size: 14px;
+  font-weight: 950;
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.18);
+}
+
+@media (max-width: 1100px) {
+  .scan-workspace-processing-summary,
+  .scan-workspace-processing-step-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .scan-workspace-processing-card {
+    min-height: 0;
+  }
+
+  .scan-workspace-processing-shell {
+    padding: 16px;
+  }
+
+  .scan-workspace-processing-summary,
+  .scan-workspace-processing-step-list,
+  .scan-workspace-processing-complete {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 /* Scan review module owner: one source for review layout, light/dark colors, tabs, cards, JD, and continue modal. */
 .scan-workspace-page {
@@ -302,6 +554,17 @@
   --scan-start-btn-disabled-bg: #e8eef7;
   --scan-start-btn-disabled-border: #cbd5e1;
   --scan-start-btn-disabled-text: #7c8798;
+  --scan-process-hero-bg:
+    radial-gradient(circle at 12% 0%, rgba(37, 99, 235, 0.12), transparent 32%),
+    linear-gradient(135deg, rgba(239, 246, 255, 0.96), rgba(236, 254, 255, 0.9));
+  --scan-process-step-bg: #ffffff;
+  --scan-process-step-complete-bg: #f0fdf4;
+  --scan-process-step-current-bg: #eff6ff;
+  --scan-process-pill-bg: #eef4fb;
+  --scan-process-ok-bg: linear-gradient(135deg, #2563eb, #06b6d4);
+  --scan-process-ok-text: #ffffff;
+  --scan-process-back-bg: #ffffff;
+  --scan-process-back-text: #334155;
   --scan-shadow: 0 10px 26px rgba(15, 23, 42, 0.07);
   display: block !important;
   width: min(100%, 1920px) !important;
@@ -349,6 +612,17 @@ body[data-theme="dark"] .scan-workspace-page,
   --scan-start-btn-disabled-bg: #101827;
   --scan-start-btn-disabled-border: rgba(148, 163, 184, 0.28);
   --scan-start-btn-disabled-text: #718096;
+  --scan-process-hero-bg:
+    radial-gradient(circle at 8% 0%, rgba(96, 165, 250, 0.16), transparent 34%),
+    linear-gradient(135deg, #101827, #0b1220);
+  --scan-process-step-bg: #0f172a;
+  --scan-process-step-complete-bg: rgba(20, 83, 45, 0.34);
+  --scan-process-step-current-bg: rgba(37, 99, 235, 0.24);
+  --scan-process-pill-bg: rgba(148, 163, 184, 0.12);
+  --scan-process-ok-bg: linear-gradient(135deg, #3b82f6, #22d3ee);
+  --scan-process-ok-text: #f8fafc;
+  --scan-process-back-bg: #0f172a;
+  --scan-process-back-text: #e2e8f0;
   --scan-shadow: 0 22px 54px rgba(0, 0, 0, 0.34);
 }
 
@@ -1111,7 +1385,7 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
   width: min(100%, 840px);
   min-height: 1060px;
   margin: 0 auto;
-  padding: 54px 62px;
+  padding: 54px 46px;
   border-radius: 4px;
   background: #ffffff;
   color: #111827;
@@ -3258,6 +3532,7 @@ html[data-theme="dark"] .scan-workspace-continue-modal-secondary .scan-workspace
   width: min(100%, 1180px) !important;
   min-height: 1060px !important;
   margin: 0 auto !important;
+  padding: 54px 46px !important;
 }
 
 .scan-review-v2 #scanWorkspaceLiveDraftPreview .tailoring-workspace-doc-line--header-name,

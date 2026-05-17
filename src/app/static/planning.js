@@ -5505,6 +5505,18 @@ function renderTailoringWorkspaceStructuredRow(row) {
   const alignment = String(row?.alignment || "left").trim().toLowerCase();
   const patched = Boolean(row?.patched);
   const patchSource = String(row?.patch_source || "").trim();
+  const decision =
+    typeof normalizeScanWorkspaceAnnotationDecision === "function"
+      ? normalizeScanWorkspaceAnnotationDecision(
+          row?.decision || row?.scan_decision || row?.review_state || row?.state
+        )
+      : String(row?.decision || row?.scan_decision || row?.review_state || row?.state || "").trim().toLowerCase();
+  const isManualEdit = patchSource === "manual_edit";
+  const isRejected = decision === "rejected" || patchSource === "rejected";
+  const isDirectReplacement =
+    patchSource === "selected_patch" ||
+    patchSource === "direct_replacement" ||
+    String(row?.row_action_type || row?.action_type || "").trim() === "direct_replacement";
   const isHeading = Boolean(row?.is_section_heading);
   const isBullet = Boolean(row?.is_bullet);
   const presentationRole = String(row?.presentation_role || "").trim();
@@ -5523,8 +5535,9 @@ function renderTailoringWorkspaceStructuredRow(row) {
       ? `tailoring-workspace-doc-line--${normalizedPresentationRole}`
       : "",
     patched ? "tailoring-workspace-doc-line--changed" : "",
-    patchSource === "manual_edit" ? "tailoring-workspace-doc-line--manual" : "",
-    patchSource === "selected_patch" ? "tailoring-workspace-doc-line--selected" : "",
+    isManualEdit ? "tailoring-workspace-doc-line--manual" : "",
+    isRejected ? "tailoring-workspace-doc-line--rejected" : "",
+    isDirectReplacement ? "tailoring-workspace-doc-line--selected" : "",
     row?.focused ? "tailoring-workspace-doc-line--focused" : "",
   ].filter(Boolean).join(" ");
 
@@ -9940,15 +9953,18 @@ function renderScanWorkspaceTaxonomySummary(panel) {
           : `
             <div class="scan-workspace-taxonomy-counts">
               <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--matched">
-                Matched ${panel.matchedCount}
+                <span class="scan-workspace-taxonomy-count-label">Matched</span>
+                <span class="scan-workspace-taxonomy-count-value">${panel.matchedCount}</span>
               </span>
 
               <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--missing">
-                Missing ${panel.missingCount}
+                <span class="scan-workspace-taxonomy-count-label">Missing</span>
+                <span class="scan-workspace-taxonomy-count-value">${panel.missingCount}</span>
               </span>
 
               <span class="scan-workspace-taxonomy-count scan-workspace-taxonomy-count--ai">
-                AI ${panel.aiCount}
+                <span class="scan-workspace-taxonomy-count-label">AI</span>
+                <span class="scan-workspace-taxonomy-count-value">${panel.aiCount}</span>
               </span>
             </div>
           `
@@ -10322,6 +10338,9 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const jdContext = getScanWorkspaceIssueJdContext(item);
           const meta = getScanWorkspaceIssueMetaForItem(item, bucket);
           const countLabel = getScanWorkspaceIssueRightLabel(item, bucket);
+          const visibleCountLabel = meta && countLabel && meta.toLowerCase() === countLabel.toLowerCase()
+            ? ""
+            : countLabel;
           const toneClass = getScanWorkspaceIssueToneClassForItem(item, bucket);
           const scoreTitle = getScanWorkspaceIssueScoreTitle(item);
           const scoreImpact = getScanWorkspaceIssueScoreImpact(item);
@@ -10333,6 +10352,15 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
             item?.row_action_type === "matched" ||
             bucket === "matched";
           const canExclude = isScanWorkspaceIssueExcludable(item);
+          const tokenClass = (value) => String(value || "review")
+            .trim()
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/^-+|-+$/g, "") || "review";
+          const metaIcon = hasAiBadge ? "✦" : "";
+          const countIcon = !metaIcon && showFlagIcon ? "⚑" : "";
+          const shouldShowStandaloneIcon = (hasAiBadge || showFlagIcon) && !meta && !visibleCountLabel;
+          const shouldRenderMetaIconOutside = Boolean(metaIcon && meta);
 
           return `
             <button
@@ -10387,28 +10415,30 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                 }
 
                 ${
-                  hasAiBadge
-                    ? `<span class="scan-workspace-issue-ai-icon">✦</span>`
-                    : showFlagIcon
-                      ? `<span class="scan-workspace-issue-flag">⚑</span>`
+                  shouldShowStandaloneIcon
+                    ? `<span class="scan-workspace-issue-token-icon">${hasAiBadge ? "✦" : "⚑"}</span>`
                       : ""
                 }
 
                 ${
                   meta
                     ? `
-                      <span class="scan-workspace-issue-meta">
-                        ${escapeHtml(meta)}
+                      <span class="scan-workspace-issue-token-wrap">
+                        ${shouldRenderMetaIconOutside ? `<span class="scan-workspace-issue-token-icon scan-workspace-issue-token-icon--outside">${metaIcon}</span>` : ""}
+                        <span class="scan-workspace-issue-meta scan-workspace-issue-pill--${escapeHtml(tokenClass(meta))}">
+                          ${escapeHtml(meta)}
+                        </span>
                       </span>
                     `
                     : ""
                 }
 
                 ${
-                  countLabel
+                  visibleCountLabel
                     ? `
-                      <span class="scan-workspace-issue-count ${isScoreBubble ? "scan-workspace-issue-count--score" : ""} ${isScoreBubble && scoreImpact > 0 ? "is-positive" : ""} ${isScoreBubble && scoreImpact < 0 ? "is-negative" : ""}">
-                        ${escapeHtml(countLabel)}
+                      <span class="scan-workspace-issue-count scan-workspace-issue-pill--${escapeHtml(tokenClass(visibleCountLabel))} ${isScoreBubble ? "scan-workspace-issue-count--score" : ""} ${isScoreBubble && scoreImpact > 0 ? "is-positive" : ""} ${isScoreBubble && scoreImpact < 0 ? "is-negative" : ""}">
+                        ${countIcon ? `<span class="scan-workspace-issue-token-icon">${countIcon}</span>` : ""}
+                        ${escapeHtml(visibleCountLabel)}
                       </span>
                     `
                     : ""
@@ -11114,6 +11144,10 @@ function bindScanWorkspaceHandlers() {
       scanWorkspaceState.selectedTab = nextTab;
       scanWorkspaceState.activeCandidateId = "";
       renderScanWorkspaceView();
+      const reviewScroll = qs("scanWorkspaceInteractiveSummary")?.closest(".scan-review-left-scroll");
+      if (reviewScroll) {
+        reviewScroll.scrollTop = 0;
+      }
     });
   }
 }

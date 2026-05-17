@@ -24,6 +24,8 @@ from src.auth.session import (
     auth_cookie_name,
     auth_cookie_samesite,
     auth_cookie_secure,
+    auth_session_idle_timeout_seconds,
+    auth_session_inactivity_warning_seconds,
     auth_session_ttl_seconds,
     hash_session_token,
     new_auth_session_record,
@@ -1504,6 +1506,20 @@ def login(request: Request, payload: AuthLoginRequest = Body(...)):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except SystemExit as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.get("/auth/session-config")
+def auth_session_config():
+    idle_timeout_seconds = auth_session_idle_timeout_seconds()
+    warning_seconds = min(
+        auth_session_inactivity_warning_seconds(),
+        max(1, idle_timeout_seconds - 1),
+    )
+    return {
+        "ok": True,
+        "idle_timeout_seconds": idle_timeout_seconds,
+        "warning_seconds": warning_seconds,
+    }
 
 
 @router.post("/auth/logout")

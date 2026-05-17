@@ -666,7 +666,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v23"></script>
+  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
   <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
 </body>
 </html>
@@ -1039,7 +1039,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v23"></script>
+  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -1217,7 +1217,7 @@ def scan_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v43" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_36" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_62_compare_dark" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -2066,9 +2066,9 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v23"></script>
-  <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal12"></script>
+  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/planning.js?v=planning_ui_20260516_scan_marks1"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_suggestion_modal13"></script>
 </body>
 </html>
     """.strip()

@@ -1,494 +1,612 @@
-# AI Job Scraper
+# ApplyLens AI
 
-A scalable Python pipeline that discovers companies using modern Applicant Tracking Systems (ATS) and scrapes job postings for AI, ML, and Data roles.
+<p align="center">
+  <strong>AI-powered job discovery, application planning, resume scanning, and tailoring workspace.</strong>
+</p>
 
-The system continuously expands coverage by discovering new companies using ATS platforms and scraping their job boards.
-
----
-
-# Overview
-
-This project builds a **self-expanding job discovery and scraping system**.
-
-The pipeline:
-
-1. Discovers companies using different ATS platforms
-2. Scrapes job boards in parallel
-3. Filters relevant roles
-4. Deduplicates results
-5. Removes previously seen jobs
-6. Outputs only **new jobs**
+<p align="center">
+  Scrape jobs from modern ATS platforms, rank opportunities against saved resumes, review AI optimization guidance, generate tailored drafts, and track the full application workflow from one local operator app.
+</p>
 
 ---
 
-# System Architecture
+## Table of Contents
 
-```
-ATS Discovery
-    │
-    ▼
-ATS Company Lists
-(data/{ats}_companies.txt)
-    │
-    ▼
-Parallel Scrapers
-(Greenhouse • Lever • Workday • Ashby • Workable • Jobvite • SmartRecruiters)
-    │
-    ▼
-Raw Job Collection
-    │
-    ▼
-Filtering Pipeline
-(title • location • freshness)
-    │
-    ▼
-Deduplication Engine
-    │
-    ▼
-Seen Job Cache
-(job_cache.json)
-    │
-    ▼
-New Jobs Output
-(console • Google Sheets)
-```
+- [What This App Does](#what-this-app-does)
+- [Core Workflows](#core-workflows)
+- [Dashboard Pages](#dashboard-pages)
+- [Pipeline Capabilities](#pipeline-capabilities)
+- [AI Optimize Scan](#ai-optimize-scan)
+- [Resume Tailoring Workspace](#resume-tailoring-workspace)
+- [Scheduler Operations](#scheduler-operations)
+- [Storage and Persistence](#storage-and-persistence)
+- [Supported ATS Sources](#supported-ats-sources)
+- [Project Structure](#project-structure)
+- [Local Setup](#local-setup)
+- [Running the App](#running-the-app)
+- [Running Pipelines from the CLI](#running-pipelines-from-the-cli)
+- [Environment Variables](#environment-variables)
+- [Testing and Validation](#testing-and-validation)
+- [Deployment Notes](#deployment-notes)
+- [Roadmap Ideas](#roadmap-ideas)
 
 ---
 
-# Supported ATS Platforms
+## What This App Does
 
-| ATS             | Discovery | Scraping |
-| --------------- | --------- | -------- |
-| Greenhouse      | ✓         | ✓        |
-| Lever           | ✓         | ✓        |
-| Workday         | ✓         | ✓        |
-| Ashby           | ✓         | ✓        |
-| Workable        | ✓         | ✓        |
-| Jobvite         | ✓         | ✓        |
-| SmartRecruiters | ✓         | ✓        |
+ApplyLens AI is a job-search operating system for serious application workflows. It combines job scraping, resume intelligence, AI-assisted review, and decision tracking into a single FastAPI web application.
 
-Each ATS has a **dedicated scraper module** for reliability.
+The app is designed around a practical application loop:
 
----
+1. Discover and scrape jobs from multiple ATS platforms.
+2. Filter, deduplicate, and rank jobs against your saved resume corpus.
+3. Review recommended opportunities in dashboards.
+4. Run an AI Optimize Scan for any target role.
+5. Compare resume content against job requirements.
+6. Accept, reject, or manually edit AI suggestions.
+7. Export polished resume drafts.
+8. Track application decisions, pipeline runs, and saved scans.
 
-# Project Structure
-
-```
-src/
-│
-├── pipeline/
-│   ├── collector.py
-│   ├── discovery_stage.py
-│   ├── job_filter.py
-│   ├── dedupe.py
-│   ├── excel_writer.py
-│   └── scheduler.py
-│
-├── scrapers/
-│   ├── greenhouse_scraper.py
-│   ├── lever_scraper.py
-│   ├── workday_scraper.py
-│   ├── ashby_scraper.py
-│   ├── workable_scraper.py
-│   ├── jobvite_scraper.py
-│   └── smartrecruiters_scraper.py
-│
-├── discovery/
-│   ├── ats_detector.py
-│   ├── career_ats_detector.py
-│   ├── ats_network_discovery.py
-│   ├── smartrecruiters_discovery.py
-│   ├── learned_companies.py
-│   ├── persist_discovered.py
-│   ├── save_companies.py
-│   └── crawl_scheduler.py
-│
-├── utils/
-│   ├── logging.py
-│   ├── log_sections.py
-│   ├── job_cache.py
-│   ├── http_retry.py
-│   ├── file_loader.py
-│   ├── location_cleaner.py
-│   ├── url_normalizer.py
-│   ├── posted_at_utils.py
-│   ├── html_timestamp_extractor.py
-│   └── time_utils.py
-│
-└── config/
-    ├── consts.py
-    ├── settings.py
-    └── search_queries.py
-```
+The project can run locally for development, or as a Dockerized web service with PostgreSQL and Redis.
 
 ---
 
-# Discovery System
+## Core Workflows
 
-Discovery automatically finds companies using ATS platforms.
+### 1. Job Discovery and Collection
 
-Entry point:
+The pipeline discovers companies and job boards, then scrapes jobs from supported ATS providers. It handles common ATS-specific differences through dedicated scraper modules.
 
-```
-src/pipeline/discovery_stage.py
-```
+High-level flow:
 
-Discovery sources include:
-
-### Domain ATS Detection
-
-Detects ATS usage by scanning company domains.
-
-Example:
-
-```
-company.com → career page → greenhouse
+```text
+Company discovery
+  -> ATS-specific scraping
+  -> job normalization
+  -> location/title/freshness filtering
+  -> deduplication
+  -> seen-job filtering
+  -> job corpus export
+  -> application planning
 ```
 
-Handled by:
+### 2. Application Planning
 
-```
-src/discovery/ats_detector.py
-```
+Application planning takes the current job corpus and creates operator-friendly outputs:
+
+- Ranked application shortlist.
+- Best resume variant per job.
+- Runner-up and close-call review queues.
+- Direct-apply, maybe-tailor, and skip decisions.
+- Planning artifacts for dashboards.
+- Optional LLM-powered tailoring suggestions.
+
+### 3. AI Optimize Scan
+
+The scan workspace lets you paste a job description, choose a saved resume, and generate a structured review:
+
+- Personal details review.
+- Skill match analysis.
+- Searchability checks.
+- ATS formatting checks.
+- Recruiter-review suggestions.
+- Resume preview with clickable AI annotations.
+- Accept, reject, manual edit, compare, export, and continue flows.
+
+### 4. Tailoring and Export
+
+The tailoring workspace turns scan guidance into editable resume drafts. You can inspect AI suggestions, generate phrase alternatives, save decisions, and export the final draft as PDF or DOCX.
 
 ---
 
-### Career Page Detection
+## Dashboard Pages
 
-Analyzes career pages directly to identify ATS providers.
+The web app uses a shared navigation shell with these main pages:
 
-```
-src/discovery/career_ats_detector.py
-```
+| Page | Route | Purpose |
+| --- | --- | --- |
+| Executive | `/` | High-level operator dashboard for live pipeline runs and current opportunities. |
+| Planning | `/planning` | Application planning table, shortlist, resume selection, and tailoring entry points. |
+| Decisions | `/decisions-ui` | Review and manage operator decisions for jobs and resume variants. |
+| Intelligence | `/intelligence` | Job and skill intelligence surfaces backed by local artifacts and RAG tools. |
+| Applications | `/applications` | Application/action tracking workspace. |
+| Scheduler | `/scheduler` | Scheduler health, command previews, launchd configuration, and run history. |
+| Profile | `/profile` | Saved resumes, pipeline runs, saved scans, and account/admin tools. |
+| Saved Scans | `/profile/saved-scans` | Review previously generated AI Optimize Scan records. |
+| Login/Register | `/login`, `/register` | Local authentication and optional registration approval workflow. |
 
 ---
 
-### ATS Network Discovery
+## Pipeline Capabilities
 
-Some ATS boards reference other companies using the same ATS.
+### Job Scraping
 
-Example:
+The main scraping pipeline is driven by `main.py` and the modules under `src/pipeline` and `src/scrapers`.
 
-```
-Greenhouse board → discover other greenhouse companies
-```
+It supports:
 
-Handled by:
+- ATS-specific scraping.
+- Parallel collection where supported.
+- Job normalization into consistent records.
+- Location and title filtering.
+- Freshness checks.
+- Deduplication.
+- Seen-job state to avoid reprocessing old listings.
+- Export of current-run job corpus artifacts.
 
-```
-src/discovery/ats_network_discovery.py
+### Application Planning
+
+Application planning is driven by `run_application_planning.py` and helper modules under `src/tailoring`, `src/ai`, `src/rag`, and `src/storage`.
+
+It supports:
+
+- Resume-to-job matching.
+- Skill extraction and enrichment.
+- Best-resume selection.
+- Application priority scoring.
+- Manual review queues.
+- Patch candidate generation.
+- Tailoring packet generation.
+- LLM fallback/adjudication modes where configured.
+
+### Local RAG
+
+The app includes a local retrieval layer for job search and question answering:
+
+- Job corpus indexing.
+- Lexical and semantic retrieval.
+- Compact or full answer modes.
+- Optional legacy RAG index support.
+
+CLI access is available through:
+
+```bash
+python job_app.py rag "show data scientist roles with strong Python requirements"
 ```
 
 ---
 
-### SmartRecruiters Global Feed
+## AI Optimize Scan
 
-SmartRecruiters exposes a global search API:
+The AI Optimize Scan workspace is one of the central product surfaces.
 
+### New Scan Flow
+
+From `/scan-workspace`, the user can:
+
+- Select a saved profile resume.
+- Enter company, role, posting URL, and job description.
+- Start a scan.
+- Review a generated optimization report.
+- Save the scan record.
+- Re-scan the same saved scan after editing the inputs.
+
+### Review Flow
+
+The generated review includes:
+
+- Score summary.
+- Matched count.
+- Missing count.
+- AI-generated suggestions count.
+- Resume preview.
+- Job description preview.
+- Accepted/rejected/manual-edit comparison.
+- Export controls.
+
+### Suggestion Handling
+
+Resume annotations can be opened directly from the preview. The suggestion popover supports:
+
+- Inspecting matched or missing signals.
+- Editing the draft bullet.
+- Generating LLM phrase options.
+- Choosing a phrase alternative.
+- Reverting edits.
+- Saving edits for rescoring.
+
+### Re-Scan
+
+Saved New Scan reviews include a `Re-scan` action. It reopens the New Scan form with the previous scan inputs prefilled, then updates the same saved scan record when submitted.
+
+This is useful when:
+
+- The job description changed.
+- The role title needs correction.
+- A different saved resume should be tested.
+- You want to regenerate guidance without creating a duplicate scan.
+
+---
+
+## Resume Tailoring Workspace
+
+The tailoring workspace is available from planning rows and scan review flows.
+
+It provides:
+
+- Split-pane resume and guidance review.
+- Personal details editing.
+- Skill and searchability review tabs.
+- Formatting checks.
+- Recruiter tips.
+- Accept/reject/manual edit decisions.
+- Live draft rendering.
+- PDF and DOCX export.
+- Saved workspace drafts.
+
+The workspace is designed to preserve the source resume structure while applying targeted, reviewable changes.
+
+---
+
+## Scheduler Operations
+
+The scheduler wrapper lives in `src/pipeline/scheduler.py`.
+
+Currently supported scheduled jobs:
+
+| Job | What it runs |
+| --- | --- |
+| `agent_discovery` | `python -u run_agent_discovery.py` |
+| `live_pipeline` | `python -u main.py --run-application-planning ...` |
+
+The scheduler layer supports:
+
+- Command generation.
+- Launchd plist generation for macOS.
+- Launchd install/uninstall/status helpers.
+- JSONL run history.
+- Optional Postgres run-history sync.
+- Post-run summary artifacts.
+- Post-run email outbox artifacts.
+- Notification records.
+
+Useful endpoints:
+
+```text
+GET /scheduler/jobs
+GET /scheduler/command
+GET /scheduler/launchd-config
+GET /scheduler/launchd-agent-status
+GET /scheduler/history
+GET /scheduler/summary
 ```
-https://jobs.smartrecruiters.com/sr-jobs/search
-```
 
-Used to discover company identifiers.
+Example command preview:
 
-Handled by:
-
-```
-src/discovery/smartrecruiters_discovery.py
+```bash
+python -m src.pipeline.scheduler --job live_pipeline --print-only
 ```
 
 ---
 
-### Learned Company Expansion
+## Storage and Persistence
 
-When scraping jobs, new companies can be discovered from job URLs.
+The app can operate with local files and also includes Postgres-backed stores for production-style persistence.
 
-These are automatically persisted.
+Major storage areas:
 
-```
-src/discovery/learned_companies.py
+| Area | Purpose |
+| --- | --- |
+| `outputs/application_planning` | Active planning artifacts and generated outputs. |
+| `outputs/_archive` | Archived planning outputs. |
+| `data/scheduler_run_history.jsonl` | Scheduler run audit trail. |
+| `data/*_companies.txt` | Discovered ATS company lists. |
+| `tmp/pipeline_runs` | Pipeline scratch/run workspace. |
+| PostgreSQL | Users, sessions, profile resumes, saved scans, decisions, actions, scheduler artifacts, notification state. |
+| Redis | Optional cache and admission/lock support. |
+
+Postgres schemas live under `src/storage/**/schema.sql`.
+
+---
+
+## Supported ATS Sources
+
+The scraper layer includes dedicated modules for:
+
+| ATS | Scraper |
+| --- | --- |
+| Greenhouse | `src/scrapers/greenhouse_scraper.py` |
+| Lever | `src/scrapers/lever_scraper.py` |
+| Workday | `src/scrapers/workday_scraper.py` |
+| Ashby | `src/scrapers/ashby_scraper.py` |
+| Workable | `src/scrapers/workable_scraper.py` |
+| Jobvite | `src/scrapers/jobvite_scraper.py` |
+| SmartRecruiters | `src/scrapers/smartrecruiters_scraper.py` |
+
+Discovery helpers live under `src/discovery` and include ATS detection, sitemap discovery, GitHub discovery, learned company expansion, and SmartRecruiters/Greenhouse-specific discovery paths.
+
+---
+
+## Project Structure
+
+```text
+.
+├── main.py                         # Main scraping pipeline entry point
+├── job_app.py                      # Operator CLI for pipeline/planning/RAG workflows
+├── run_api.py                      # FastAPI/uvicorn launcher
+├── run_application_planning.py     # Application planning pipeline
+├── run_agent_discovery.py          # Standalone company discovery agent
+├── src/
+│   ├── app/                        # FastAPI routes, page templates, services, static UI
+│   ├── ai/                         # LLM clients, skill extraction, job-fit evaluation
+│   ├── auth/                       # Auth, sessions, registration approval
+│   ├── discovery/                  # Company and ATS discovery
+│   ├── details/                    # ATS job detail fetchers
+│   ├── pipeline/                   # Collector, scheduler, scoring, post-run artifacts
+│   ├── rag/                        # Retrieval and job corpus question answering
+│   ├── resume/                     # Resume loading, embeddings, evidence helpers
+│   ├── scrapers/                   # ATS-specific scrapers
+│   ├── storage/                    # Local/Postgres stores and schemas
+│   ├── tailoring/                  # Tailoring planner, rendering, selection logic
+│   └── utils/                      # Shared utilities
+├── tests/                          # Regression and smoke tests
+├── deploy/                         # Production environment examples
+├── Dockerfile
+├── docker-compose.prod.yml
+└── requirements.txt
 ```
 
 ---
 
-# Company Storage
+## Local Setup
 
-Discovered companies are stored in:
+### 1. Create a virtual environment
 
-```
-data/{ats}_companies.txt
-```
-
-Example:
-
-```
-data/
-├── greenhouse_companies.txt
-├── lever_companies.txt
-├── workday_companies.txt
-├── ashby_companies.txt
-├── workable_companies.txt
-├── jobvite_companies.txt
-└── smartrecruiters_companies.txt
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 ```
 
----
+### 2. Install dependencies
 
-# Scraping Pipeline
-
-Main orchestrator:
-
-```
-src/pipeline/collector.py
-```
-
-Scrapers run **in parallel** using:
-
-```
-ThreadPoolExecutor
-```
-
-Pipeline flow:
-
-```
-load company lists
-    ↓
-run ATS scrapers in parallel
-    ↓
-collect raw jobs
-    ↓
-filter jobs
-    ↓
-dedupe jobs
-    ↓
-remove cached jobs
-    ↓
-return new jobs
-```
-
----
-
-# Job Filtering
-
-Implemented in:
-
-```
-src/pipeline/job_filter.py
-```
-
-Filtering rules include:
-
-### Title Filtering
-
-Target roles include:
-
-* Data Scientist
-* Senior Data Scientist
-* Data Analyst
-* Machine Learning Engineer
-* AI Engineer
-* Applied Scientist
-
-Configured in:
-
-```
-src/config/search_queries.py
-```
-
----
-
-### Location Filtering
-
-Location normalization handled by:
-
-```
-src/utils/location_cleaner.py
-```
-
-Supports:
-
-* city
-* state
-* country
-* remote roles
-
----
-
-### Freshness Filtering
-
-Jobs older than a configured window are filtered out.
-
-Timestamp utilities:
-
-```
-posted_at_utils.py
-html_timestamp_extractor.py
-workday_timestamp.py
-```
-
----
-
-# Deduplication
-
-Handled in:
-
-```
-src/pipeline/dedupe.py
-```
-
-Removes duplicates caused by:
-
-* multiple ATS sources
-* multiple company boards
-* identical job listings
-
-Typical dedupe key:
-
-```
-title + company + location
-```
-
----
-
-# Job Cache
-
-To avoid repeating jobs across runs, the system stores previously seen jobs.
-
-```
-src/utils/job_cache.py
-```
-
-This ensures only **new jobs are returned each run**.
-
----
-
-# Logging
-
-Logging utilities:
-
-```
-src/utils/logging.py
-src/utils/log_sections.py
-```
-
-Log sections include:
-
-```
-ATS DISCOVERY
-SCRAPER RESULTS
-FILTER PIPELINE
-DEDUPLICATION
-CACHE FILTER
-```
-
----
-
-# Exporting Jobs
-
-Jobs can be exported to **Google Sheets**.
-
-```
-src/pipeline/excel_writer.py
-```
-
-Uses:
-
-```
-gspread
-```
-
----
-
-# Installation
-
-Clone the repository:
-
-```
-git clone <repo>
-cd job-scraper
-```
-
-Install dependencies:
-
-```
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
----
+### 3. Create environment configuration
 
-# Running the Pipeline
+Create a `.env` file in the repo root. At minimum, configure the LLM provider keys you plan to use.
 
-Run the full pipeline:
+Common options:
 
-```
-python main.py
-```
+```bash
+LLM_PROVIDER=groq
+LLM_MODEL=llama-3.1-8b-instant
+GROQ_API_KEY=...
 
-Typical run flow:
+# Optional alternatives/fallbacks
+OPENAI_API_KEY=...
+GEMINI_API_KEY=...
+LLM_FALLBACK_ENABLED=false
+LLM_FALLBACK_PROVIDER=gemini
+LLM_FALLBACK_MODEL=gemini-2.5-flash
 
-```
-ATS discovery
-company list update
-parallel scraping
-job filtering
-deduplication
-cache filtering
-new jobs output
-```
-
----
-
-# Scheduling
-
-Run the scraper daily using cron:
-
-```
-0 10 * * * python main.py
+# Optional production persistence
+DATABASE_URL=postgresql://user:password@localhost:5432/job_scraper_ops
+REDIS_URL=redis://localhost:6379/0
 ```
 
-Runs every day at **10 AM**.
+### 4. Start the web app
 
----
-
-# Development Notes
-
-Do not commit:
-
-```
-venv/
-__pycache__/
-*.pyc
-*.json credentials
+```bash
+python run_api.py --reload --host 127.0.0.1 --port 8000
 ```
 
-Use `.gitignore`.
+Open:
+
+```text
+http://127.0.0.1:8000
+```
 
 ---
 
-# Future Improvements
+## Running the App
 
-Potential enhancements:
+### Web UI
 
-### Discovery
+```bash
+python run_api.py --reload
+```
 
-* LinkedIn company discovery
-* sitemap parsing
-* domain expansion
+### Health Check
 
-### Scraping
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-* async scraping
-* proxy rotation
-* rate limiting
+### Main Pipeline
 
-### Filtering
+```bash
+python main.py --run-application-planning
+```
 
-* semantic job classification
-* ML-based relevance scoring
+### Planning-Only Run
 
-### Deduplication
+Use this when you already have a job corpus and want to regenerate planning outputs without scraping again.
 
-* fuzzy job matching
-* cross-ATS duplicate detection
+```bash
+python main.py \
+  --application-planning-only \
+  --run-application-planning \
+  --application-planning-output-dir outputs/application_planning
+```
 
+---
+
+## Running Pipelines from the CLI
+
+`job_app.py` provides a compact operator CLI.
+
+### Run scrape + planning
+
+```bash
+python job_app.py run --run-application-planning
+```
+
+### Run planning only
+
+```bash
+python job_app.py plan --job-limit 50
+```
+
+### Check output status
+
+```bash
+python job_app.py status
+```
+
+### Browse planning rows
+
+```bash
+python job_app.py browse --limit 20
+```
+
+### Review close calls
+
+```bash
+python job_app.py review --undecided-only true
+```
+
+### Record a resume decision
+
+```bash
+python job_app.py decide \
+  --queue-rank 1 \
+  --selected-resume "My Resume.pdf" \
+  --note "Best match for senior ML role"
+```
+
+### Ask the local RAG layer
+
+```bash
+python job_app.py rag "Which roles mention Kubernetes and ML infrastructure?"
+```
+
+---
+
+## Environment Variables
+
+The project supports many optional settings. The most commonly useful ones are below.
+
+### LLM and AI
+
+| Variable | Purpose |
+| --- | --- |
+| `LLM_PROVIDER` | Default provider for general LLM calls. |
+| `LLM_MODEL` | Default model for general LLM calls. |
+| `GROQ_API_KEY` | Groq API key. |
+| `OPENAI_API_KEY` | OpenAI API key. |
+| `GEMINI_API_KEY` | Gemini API key. |
+| `LLM_FALLBACK_ENABLED` | Enables provider fallback. |
+| `SKILL_EXTRACTION_BACKEND` | Skill extraction backend selection. |
+| `EVAL_MODE` | Job-fit evaluation mode. |
+| `LLM_TAILOR_PROVIDER` | Provider for tailoring generation. |
+| `LLM_TAILOR_MODEL` | Model for tailoring generation. |
+| `SCAN_PHRASE_PROVIDER` | Provider for scan phrase generation. |
+| `SCAN_PHRASE_MODEL` | Model for scan phrase generation. |
+
+### Persistence
+
+| Variable | Purpose |
+| --- | --- |
+| `DATABASE_URL` | Enables Postgres-backed stores. |
+| `REDIS_URL` | Enables Redis cache/locks where supported. |
+| `JOB_STACK_SEEN_JOBS_BACKEND` | Set to `postgres` for Postgres-backed seen-job state. |
+| `JOB_STACK_OWNER_USER_ID` | Owner/user scope for user-specific pipeline data. |
+| `JOB_STACK_USER_PIPELINE_MODE` | Enables user-scoped pipeline behavior. |
+
+### Auth
+
+| Variable | Purpose |
+| --- | --- |
+| `JOB_STACK_AUTH_ENABLED` | Enable or disable auth guard. |
+| `JOB_STACK_AUTH_COOKIE_SECURE` | Secure cookie setting. |
+| `JOB_STACK_AUTH_COOKIE_SAMESITE` | SameSite cookie setting. |
+| `JOB_STACK_AUTH_REGISTRATION_ENABLED` | Enable registration page flow. |
+| `JOB_STACK_AUTH_REGISTRATION_APPROVAL_REQUIRED` | Require admin approval for new registrations. |
+| `JOB_STACK_AUTH_FIRST_USER_ADMIN_ENABLED` | Make the first user an admin. |
+
+### Scheduler and Notifications
+
+| Variable | Purpose |
+| --- | --- |
+| `JOB_STACK_POST_RUN_EMAIL_MODE` | Email delivery mode, usually `outbox_only` or SMTP-backed. |
+| `JOB_STACK_POST_RUN_EMAIL_SMTP_HOST` | SMTP host. |
+| `JOB_STACK_POST_RUN_EMAIL_SMTP_PORT` | SMTP port. |
+| `JOB_STACK_POST_RUN_EMAIL_SMTP_USERNAME` | SMTP username. |
+| `JOB_STACK_POST_RUN_EMAIL_SMTP_PASSWORD` | SMTP password. |
+| `JOB_STACK_POST_RUN_EMAIL_FROM` | From address for post-run email. |
+| `JOB_STACK_POST_RUN_EMAIL_TO` | Recipient list. |
+
+See `deploy/env.production.example` for a production-oriented starter file.
+
+---
+
+## Testing and Validation
+
+Useful checks:
+
+```bash
+python3 -m py_compile src/app/services.py src/app/planning_ui.py src/app/api.py
+node --check src/app/static/planning.js
+node --check src/app/static/scan_workspace.js
+```
+
+Run the available Python tests:
+
+```bash
+pytest
+```
+
+Run matching smoke tests:
+
+```bash
+python run_matching_smoke.py
+```
+
+---
+
+## Deployment Notes
+
+The repo includes a production-style Docker setup:
+
+```bash
+cp deploy/env.production.example .env.production
+docker compose -f docker-compose.prod.yml up --build
+```
+
+The compose file starts:
+
+- PostgreSQL
+- Redis
+- FastAPI web app
+
+The web service is exposed on:
+
+```text
+127.0.0.1:8000
+```
+
+For a real deployment, set strong credentials, secure cookie settings, and the public base URL in `.env.production`.
+
+---
+
+## Roadmap Ideas
+
+Potential next improvements:
+
+- More ATS adapters and richer job detail extraction.
+- In-app scheduler installation controls.
+- More detailed pipeline observability.
+- Better scan-to-application workflow automation.
+- More granular resume version history.
+- Team/shared workspace support.
+- Expanded test coverage for UI state transitions and scan regeneration.
+
+---
+
+## Notes
+
+This repository is built as an operator-first system: deterministic pipelines where possible, LLM assistance where useful, and reviewable user decisions before important resume/application changes are committed.
 

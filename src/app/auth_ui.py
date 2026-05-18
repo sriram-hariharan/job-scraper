@@ -32,7 +32,6 @@ from src.auth.session import (
 )
 from src.storage.auth.read_postgres import (
     get_auth_postgres_status_payload,
-    get_auth_registration_request_by_id_postgres_payload,
     get_pending_auth_registration_requests_postgres_payload,
     get_auth_user_by_email_postgres_payload,
     revoke_auth_session_postgres_payload,

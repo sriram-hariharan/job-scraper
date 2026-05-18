@@ -1,6 +1,7 @@
 from collections import Counter
 from typing import Any, Dict, List
 import asyncio
+import json
 import os
 import time
 from uuid import uuid4
@@ -20,6 +21,29 @@ def _is_user_pipeline_mode() -> bool:
         "yes",
         "y",
     }
+
+
+def _selected_role_families_from_env() -> List[str]:
+    raw = str(os.environ.get("JOB_STACK_SELECTED_ROLE_FAMILIES", "") or "").strip()
+    if not raw:
+        return []
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Ignoring invalid JOB_STACK_SELECTED_ROLE_FAMILIES JSON.")
+        return []
+
+    if not isinstance(parsed, list):
+        logger.warning("Ignoring non-list JOB_STACK_SELECTED_ROLE_FAMILIES value.")
+        return []
+
+    selected: List[str] = []
+    for value in parsed:
+        role_family_id = str(value or "").strip()
+        if role_family_id and role_family_id not in selected:
+            selected.append(role_family_id)
+    return selected
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
@@ -140,6 +164,14 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     all_jobs: List[Dict[str, Any]] = []
     seen_job_ids = load_seen_job_ids()
+    selected_role_families = _selected_role_families_from_env()
+    if selected_role_families:
+        logger.info(
+            "Using selected role families for title filtering/ranking: %s",
+            ", ".join(selected_role_families),
+        )
+    else:
+        logger.info("Using default data/AI title filtering/ranking behavior.")
     logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
 
     start_total = time.time()
@@ -192,7 +224,10 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
-    filtered_jobs = filter_jobs(all_jobs)
+    filtered_jobs = filter_jobs(
+        all_jobs,
+        selected_role_families=selected_role_families or None,
+    )
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
 
     filtered_counts = log_stage_metrics("FILTERED", filtered_jobs)
@@ -216,7 +251,10 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("RANKING", logger)
     start_stage("ranking", f"Ranking {len(deduped_jobs)} deduped jobs")
 
-    ranked_jobs = rank_jobs(deduped_jobs)
+    ranked_jobs = rank_jobs(
+        deduped_jobs,
+        selected_role_families=selected_role_families or None,
+    )
     log_stage_metrics("RANKED", ranked_jobs)
     complete_stage("ranking", counts={"ranked_jobs": len(ranked_jobs)})
 

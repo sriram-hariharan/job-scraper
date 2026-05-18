@@ -468,6 +468,32 @@ def onboarding_status_payload(
     }
 
 
+def _selected_role_families_for_pipeline(owner_user_id: str = "") -> List[str]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return []
+
+    try:
+        payload = get_onboarding_preferences_postgres_payload(
+            owner,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        preferences = dict(payload.get("data", {}).get("preferences", {}) or {})
+        normalized = validate_onboarding_preferences_payload(preferences)
+    except (Exception, SystemExit):
+        logger.exception(
+            "Unable to load onboarding role preferences for live pipeline owner=%s; using default title behavior.",
+            owner,
+        )
+        return []
+
+    return list(normalized.get("selected_role_families", []) or [])
+
+
 def _public_admin_user_row(user: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "user_id": _clean_text(user.get("user_id")),
@@ -4312,6 +4338,7 @@ def run_live_pipeline_payload(
 
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
+    selected_role_families = _selected_role_families_for_pipeline(owner_for_pipeline_gate)
 
     ja = _job_app()
     effective_generate_llm_adjudication = bool(generate_llm_adjudication)
@@ -4382,6 +4409,7 @@ def run_live_pipeline_payload(
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
             "job_corpus_path": str(pipeline_job_corpus_path),
+            "selected_role_families": selected_role_families,
         },
     }
     canonical_status_path.write_text(
@@ -4475,6 +4503,7 @@ def run_live_pipeline_payload(
                 "JOB_STACK_SEEN_JOBS_BACKEND": "postgres",
                 "JOB_STACK_JOB_CORPUS_PATH": str(pipeline_job_corpus_path),
                 "JOB_STACK_USER_PIPELINE_MODE": "true",
+                "JOB_STACK_SELECTED_ROLE_FAMILIES": json.dumps(selected_role_families, ensure_ascii=False),
             }
         )
 

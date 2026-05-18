@@ -158,7 +158,9 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "display_name": "Backend Engineering",
         "title_include_patterns": (
             r"backend engineer",
+            r"backend.*engineer",
             r"back end engineer",
+            r"back end.*engineer",
             r"api engineer",
             r"server engineer",
         ),
@@ -188,7 +190,9 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "display_name": "Frontend Engineering",
         "title_include_patterns": (
             r"frontend engineer",
+            r"frontend.*engineer",
             r"front end engineer",
+            r"front end.*engineer",
             r"ui engineer",
             r"web engineer",
         ),
@@ -218,8 +222,11 @@ ROLE_TAXONOMY: Dict[str, Dict[str, Any]] = {
         "display_name": "Full-Stack Engineering",
         "title_include_patterns": (
             r"full stack engineer",
+            r"full stack.*engineer",
             r"full-stack engineer",
+            r"full-stack.*engineer",
             r"fullstack engineer",
+            r"fullstack.*engineer",
         ),
         "title_exclude_patterns": COMMON_TITLE_EXCLUDE_PATTERNS,
         "skill_patterns": (

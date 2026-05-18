@@ -5104,6 +5104,255 @@ html[data-theme="light"] .pipeline-count-empty {
   color: #64748b !important;
 }
 
+/* role_onboarding_r6: authenticated role preference setup. */
+.onboarding-page {
+  max-width: 1320px !important;
+}
+
+.onboarding-header {
+  align-items: flex-end;
+  gap: 18px;
+}
+
+.onboarding-kicker {
+  color: var(--app-secondary);
+  font-size: 14px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.onboarding-profile-link,
+.onboarding-solid-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 46px;
+  padding: 0 18px;
+  text-decoration: none;
+}
+
+.onboarding-solid-link {
+  width: fit-content;
+  border: 1px solid rgba(34, 211, 238, 0.5);
+  border-radius: var(--app-radius-md);
+  background: linear-gradient(135deg, var(--app-primary), var(--app-secondary));
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: var(--app-shadow-sm);
+}
+
+.onboarding-layout {
+  display: grid;
+  gap: 18px;
+}
+
+.onboarding-panel {
+  padding: clamp(18px, 2vw, 26px) !important;
+}
+
+.onboarding-required-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid rgba(251, 191, 36, 0.5);
+  border-radius: var(--app-radius-pill);
+  background: rgba(251, 191, 36, 0.14);
+  color: #fde68a;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+html[data-theme="light"] .onboarding-required-pill {
+  color: #92400e;
+  background: #fff7ed;
+}
+
+.onboarding-role-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 12px;
+}
+
+.onboarding-role-card {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 12px;
+  align-items: flex-start;
+  min-height: 92px;
+  padding: 16px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-lg);
+  background: rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+}
+
+html[data-theme="light"] .onboarding-role-card {
+  background: rgba(255, 255, 255, 0.78);
+}
+
+.onboarding-role-card:has(input:checked) {
+  border-color: rgba(34, 211, 238, 0.72);
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.22), rgba(34, 211, 238, 0.14));
+  box-shadow: 0 0 0 3px rgba(34, 211, 238, 0.1);
+}
+
+.onboarding-role-card input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--app-primary);
+}
+
+.onboarding-role-card-copy {
+  display: grid;
+  gap: 6px;
+}
+
+.onboarding-role-card-title {
+  color: var(--app-text);
+  font-size: 16px;
+  font-weight: 950;
+}
+
+.onboarding-role-card-subtitle {
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.onboarding-field-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.onboarding-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.onboarding-chip-group legend,
+.onboarding-text-field span {
+  width: 100%;
+  margin-bottom: 8px;
+  color: var(--app-text-2);
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.onboarding-chip-group label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-pill);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--app-text);
+  font-weight: 850;
+}
+
+html[data-theme="light"] .onboarding-chip-group label {
+  background: #ffffff;
+}
+
+.onboarding-chip-group input {
+  accent-color: var(--app-primary);
+}
+
+.onboarding-text-field {
+  display: grid;
+  gap: 8px;
+}
+
+.onboarding-text-field textarea {
+  width: 100%;
+  min-height: 94px;
+  padding: 14px;
+  border: 1px solid var(--app-border-2);
+  border-radius: var(--app-radius-lg);
+  background: var(--app-inset);
+  color: var(--app-text);
+  font: inherit;
+  font-weight: 750;
+  resize: vertical;
+}
+
+html[data-theme="light"] .onboarding-text-field textarea {
+  background: #f8fbff;
+}
+
+.onboarding-resume-callout {
+  display: grid;
+  gap: 6px;
+  padding: 16px;
+  border: 1px solid rgba(251, 191, 36, 0.38);
+  border-radius: var(--app-radius-lg);
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--app-text-2);
+  font-weight: 780;
+}
+
+.onboarding-resume-panel.is-complete .onboarding-resume-callout {
+  border-color: rgba(52, 211, 153, 0.44);
+  background: rgba(52, 211, 153, 0.1);
+}
+
+.onboarding-resume-callout strong {
+  color: var(--app-text);
+  font-size: 18px;
+  font-weight: 950;
+}
+
+.onboarding-confirm-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.onboarding-actions button {
+  min-height: 48px;
+  padding: 0 18px;
+}
+
+.onboarding-actions button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.5);
+  opacity: 0.58;
+}
+
+@media (max-width: 760px) {
+  .onboarding-header,
+  .onboarding-confirm-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .onboarding-profile-link,
+  .onboarding-solid-link,
+  .onboarding-actions button {
+    width: 100%;
+  }
+}
+
 html[data-theme="light"] .pipeline-step {
   border-color: #cbd5e1 !important;
   background: #f8fafc !important;

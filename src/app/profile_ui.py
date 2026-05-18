@@ -295,7 +295,7 @@ def profile_page(request: Request) -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/profile.js?v=profile_pipeline_runs_v3"></script>
 </body>
 </html>
@@ -405,7 +405,7 @@ def saved_scans_page() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/profile.js?v=profile_onboarding_gate_v1"></script>
 </body>
 </html>

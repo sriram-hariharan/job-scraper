@@ -663,7 +663,7 @@ def executive_dashboard() -> str:
   </div>
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v23"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/app.js?v=pipeline_modal_fix_v2"></script>
   </body>
 </html>
@@ -743,7 +743,7 @@ def scheduler_dashboard() -> str:
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=ui_redesign_v23"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script>
     (function () {{
       const summaryUrl = "/scheduler/summary?limit=25";

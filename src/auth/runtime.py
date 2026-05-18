@@ -41,6 +41,7 @@ HTML_NAVIGATION_PATHS = {
     "/scheduler",
     "/profile",
     "/profile/saved-scans",
+    "/onboarding",
     "/scan-workspace",
     "/tailoring-workspace",
 }

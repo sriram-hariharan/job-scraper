@@ -185,7 +185,7 @@ def decisions_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/decisions.js?v=decisions_dropdown_tabs3"></script>
 </body>
 </html>

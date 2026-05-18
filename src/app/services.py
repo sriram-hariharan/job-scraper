@@ -832,6 +832,8 @@ def _build_new_scan_document_preview(
 ) -> Dict[str, Any]:
     details = _normalize_workspace_personal_details(personal_details or {})
     safe_resume_name = _clean_text(resume_name)
+    if safe_resume_name == "-":
+        safe_resume_name = ""
     safe_resume_path = _clean_text(resume_file_path)
 
     if safe_resume_path:
@@ -1756,11 +1758,19 @@ def saved_scan_report_payload(
         raise ValueError("Saved scan does not contain a restorable report payload.")
 
     refreshed_payload = dict(review_payload)
-    resume_name = _clean_text(
-        refreshed_payload.get("resume_name")
-        or refreshed_payload.get("selected_resume")
-        or row.get("resume_name")
-        or row.get("resume_filename")
+    resume_name_candidates = [
+        refreshed_payload.get("resume_name"),
+        refreshed_payload.get("selected_resume"),
+        row.get("resume_name"),
+        row.get("resume_filename"),
+    ]
+    resume_name = next(
+        (
+            candidate
+            for candidate in (_clean_text(value) for value in resume_name_candidates)
+            if candidate and candidate != "-"
+        ),
+        "",
     )
     resume_text = _clean_text(row.get("resume_text"))
     resume_file_path = ""
@@ -14935,6 +14945,8 @@ def _workspace_export_preview_row_from_paragraph(
 def _workspace_export_split_skills_preview_rows(
     paragraph: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
+    skills_body_indent_pt = 14.0
+
     def _build_split_rows(segment_texts: List[str]) -> List[Dict[str, Any]]:
         split_rows: List[Dict[str, Any]] = []
 
@@ -14954,6 +14966,7 @@ def _workspace_export_split_skills_preview_rows(
                     else 6.0,
                 )
             )
+            split_rows[-1]["left_indent_pt"] = skills_body_indent_pt
 
         return split_rows
 
@@ -15128,13 +15141,13 @@ def _workspace_export_line_is_date_range(text: str) -> bool:
     if not clean or len(clean) > 48:
         return False
 
-    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?"
-    year = r"(?:19|20)\\d{2}"
-    point = rf"(?:{month}\\s+{year}|{year}|Present|Current)"
+    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+    year = r"(?:19|20)\d{2}"
+    point = rf"(?:{month}\s+{year}|{year}|Present|Current)"
 
     return bool(
         re.fullmatch(
-            rf"{point}(?:\\s*[-–—]\\s*{point})?",
+            rf"{point}(?:\s*[-–—]\s*{point})?",
             clean,
             flags=re.IGNORECASE,
         )
@@ -15364,11 +15377,13 @@ def _workspace_export_preview_pages_payload(
 
             is_section_heading = _workspace_export_is_section_heading_text(text)
 
-            if (
+            is_skills_body_row = (
                 current_section == "SKILLS"
                 and not is_section_heading
                 and not bool(paragraph.get("is_bullet"))
-            ):
+            )
+
+            if is_skills_body_row:
                 split_skill_rows = _workspace_export_split_skills_preview_rows(paragraph)
                 if split_skill_rows:
                     rows.extend(split_skill_rows)
@@ -15388,12 +15403,13 @@ def _workspace_export_preview_pages_payload(
                 idx += 1
                 continue
 
-            rows.append(
-                _workspace_export_preview_row_from_paragraph(
-                    paragraph,
-                    text=text,
-                )
+            preview_row = _workspace_export_preview_row_from_paragraph(
+                paragraph,
+                text=text,
             )
+            if is_skills_body_row:
+                preview_row["left_indent_pt"] = 14.0
+            rows.append(preview_row)
 
             if is_section_heading:
                 current_section = text.upper()

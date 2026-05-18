@@ -524,6 +524,7 @@ function updateScanWorkspaceIntakeActions() {
 }
 
 function clearScanWorkspaceIntakeForm() {
+  const root = getScanWorkspacePageRoot();
   const companyInput = getScanWorkspaceInput("scanWorkspaceCompanyInput");
   const roleInput = getScanWorkspaceInput("scanWorkspaceRoleInput");
   const jobUrlInput = getScanWorkspaceInput("scanWorkspaceJobUrlInput");
@@ -548,6 +549,9 @@ function clearScanWorkspaceIntakeForm() {
   scanWorkspaceIntakeState.resumeFileName = "";
   scanWorkspaceIntakeState.resumeText = "";
   scanWorkspaceIntakeState.jobDescriptionText = "";
+  if (root) {
+    root.dataset.rescanScanId = "";
+  }
 
   updateScanWorkspaceIntakeActions();
 }
@@ -850,14 +854,14 @@ async function beginScanWorkspaceProcessing() {
     const data = await response.json();
     const scanId = String(data?.scan?.scan_id || "").trim();
     const root = getScanWorkspacePageRoot();
-    if (root) {
-      root.dataset.rescanScanId = "";
-      if (scanId) root.dataset.savedScanId = scanId;
-    }
     const writeOk = data?.postgres_write?.ok === true;
     if (!writeOk) {
       const writeError = String(data?.postgres_write?.error || data?.postgres_write?.skipped || "").trim();
       throw new Error(writeError || "Saved scan could not be written to Postgres.");
+    }
+    if (root) {
+      root.dataset.rescanScanId = "";
+      if (scanId) root.dataset.savedScanId = scanId;
     }
 
     scanWorkspaceProcessingState.status = "complete";
@@ -865,7 +869,27 @@ async function beginScanWorkspaceProcessing() {
     scanWorkspaceProcessingState.note = scanId
       ? `Saved scan ${scanId.slice(0, 10)}. Match report ready.`
       : "Saved scan. Match report ready.";
-    scanWorkspaceProcessingState.pendingReviewPayload = data?.scan_review_payload || data?.preload_payload || null;
+    const pendingPayload = data?.scan_review_payload || data?.preload_payload || null;
+    scanWorkspaceProcessingState.pendingReviewPayload =
+      pendingPayload && typeof pendingPayload === "object"
+        ? {
+            ...pendingPayload,
+            resume_name: firstNonEmptyScanWorkspaceText(
+              pendingPayload.resume_name,
+              pendingPayload.selected_resume,
+              data?.scan?.resume_name,
+              data?.scan?.resume_filename,
+              draft.savedResumeName
+            ),
+            selected_resume: firstNonEmptyScanWorkspaceText(
+              pendingPayload.selected_resume,
+              pendingPayload.resume_name,
+              data?.scan?.resume_name,
+              data?.scan?.resume_filename,
+              draft.savedResumeName
+            ),
+          }
+        : null;
     updateScanWorkspaceProcessingView();
   } catch (err) {
     scanWorkspaceProcessingState.status = "error";
@@ -1037,7 +1061,27 @@ async function loadSavedScanWorkspaceReviewPayload() {
       throw new Error(message);
     }
     const data = await response.json();
-    applyNewScanWorkspaceReviewPayload(data?.scan_review_payload || null);
+    const reviewPayload = data?.scan_review_payload || null;
+    const scanRow = data?.scan || {};
+    applyNewScanWorkspaceReviewPayload(
+      reviewPayload && typeof reviewPayload === "object"
+        ? {
+            ...reviewPayload,
+            resume_name: firstNonEmptyScanWorkspaceText(
+              reviewPayload.resume_name,
+              reviewPayload.selected_resume,
+              scanRow.resume_name,
+              scanRow.resume_filename
+            ),
+            selected_resume: firstNonEmptyScanWorkspaceText(
+              reviewPayload.selected_resume,
+              reviewPayload.resume_name,
+              scanRow.resume_name,
+              scanRow.resume_filename
+            ),
+          }
+        : null
+    );
     return true;
   } catch (err) {
     const summary = document.getElementById("scanWorkspaceInteractiveSummary");
@@ -1639,7 +1683,9 @@ function renderScanWorkspacePersistenceStatus() {
 
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
-  const isSavedNewScan = Boolean(String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim());
+  const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
+  const entrySource = String(scanWorkspaceState.preloadPayload?.scan_entry_source || "").trim();
+  const isSavedNewScan = Boolean(savedScanId && entrySource === "scan_workspace_new_scan");
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
   const canPersist = hasContext || isSavedNewScan;
@@ -2468,6 +2514,8 @@ function getScanWorkspacePreviewDisplayResumeName() {
     payload?.scan_session?.selected_resume,
     preview?.resume_name,
     preview?.selected_resume,
+    getScanWorkspaceSelectedResumeName(),
+    scanWorkspaceIntakeState.savedResumeName,
     getScanWorkspacePageRoot()?.dataset?.resumeName
   );
 }
@@ -3063,7 +3111,7 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
   const measuredHeight = Math.max(300, Number(measuredRect?.height || popover?.offsetHeight || 420));
 
   const width = Math.min(
-    420,
+    520,
     Math.max(360, measuredWidth),
     window.innerWidth - viewportPadding * 2
   );
@@ -3076,8 +3124,7 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
       Number(scrollerRect?.right || window.innerWidth) - width - 18
     );
 
-    const preferredLeft =
-      targetRect.left + Math.min(340, Math.max(120, targetRect.width * 0.35));
+    const preferredLeft = targetRect.left + targetRect.width / 2 - width / 2;
 
     const left = Math.max(
       horizontalMin,
@@ -3129,19 +3176,21 @@ function positionScanWorkspaceSuggestionPopover(marker) {
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
   if (!popover || !marker) return;
 
+  const position = getScanWorkspaceSuggestionPopoverPosition(marker);
+
   popover.style.position = "fixed";
-  popover.style.top = "50%";
-  popover.style.left = "50%";
+  popover.style.top = position.top;
+  popover.style.left = position.left;
   popover.style.right = "auto";
   popover.style.bottom = "auto";
-  popover.style.transform = "translate(-50%, -50%)";
-  popover.style.width = "min(740px, calc(100vw - 48px))";
-  popover.style.minWidth = "0";
-  popover.style.maxWidth = "calc(100vw - 48px)";
-  popover.style.maxHeight = "min(720px, calc(100vh - 48px))";
+  popover.style.transform = "none";
+  popover.style.width = position.width;
+  popover.style.minWidth = position.minWidth;
+  popover.style.maxWidth = "calc(100vw - 32px)";
+  popover.style.maxHeight = position.maxHeight;
 
-  popover.classList.remove("is-above", "is-below", "is-clamped", "is-floating");
-  popover.classList.add("is-centered-modal");
+  popover.classList.remove("is-above", "is-below", "is-clamped", "is-floating", "is-centered-modal");
+  popover.classList.add(`is-${position.placement}`);
 }
 
 function getScanWorkspacePreviewScroller() {
@@ -3660,6 +3709,8 @@ function renderScanWorkspaceSuggestionPopover() {
     popover.style.top = "";
     popover.style.left = "";
     popover.style.right = "";
+    popover.style.bottom = "";
+    popover.style.transform = "";
     title.textContent = "Select a suggestion anchor to inspect it here.";
     if (kicker) kicker.textContent = "AI suggested change";
     copy.textContent = "";
@@ -3686,15 +3737,15 @@ function renderScanWorkspaceSuggestionPopover() {
   popover.classList.remove("hidden");
   popover.style.visibility = "hidden";
   popover.style.position = "fixed";
-  popover.style.top = "50%";
-  popover.style.left = "50%";
+  popover.style.top = "0";
+  popover.style.left = "0";
   popover.style.right = "auto";
   popover.style.bottom = "auto";
-  popover.style.transform = "translate(-50%, -50%)";
-  popover.style.width = "min(740px, calc(100vw - 48px))";
+  popover.style.transform = "none";
+  popover.style.width = "min(520px, calc(100vw - 32px))";
   popover.style.minWidth = "0";
-  popover.style.maxWidth = "calc(100vw - 48px)";
-  popover.style.maxHeight = "min(720px, calc(100vh - 48px))";
+  popover.style.maxWidth = "calc(100vw - 32px)";
+  popover.style.maxHeight = "min(620px, calc(100vh - 32px))";
 
   title.textContent = sourceLabel;
   if (kicker) {
@@ -4194,6 +4245,17 @@ function bindScanWorkspaceAnnotationShell() {
 
       positionScanWorkspaceSuggestionPopover(marker);
     });
+
+    window.addEventListener("scroll", () => {
+      const marker = getScanWorkspaceAnnotationMarkerById(
+        scanWorkspaceAnnotationState.activeMarkerId
+      );
+      const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+
+      if (!marker || !popover || popover.classList.contains("hidden")) return;
+
+      positionScanWorkspaceSuggestionPopover(marker);
+    }, { passive: true });
 
     window.addEventListener("scan-workspace-split-resize-start", () => {
       closeScanWorkspaceSuggestionPopover();

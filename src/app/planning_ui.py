@@ -1217,7 +1217,7 @@ def scan_workspace(
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
   <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
-  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_66_preview_page_margins" />
+  <link rel="stylesheet" href="/static/scan_workspace_review.css?v=scan_review_v2_69_anchor_popover" />
 </head>
 <body>
 {render_top_shell("/scan-workspace")}
@@ -1619,16 +1619,6 @@ def scan_workspace(
                   >
                     Job Description
                   </button>
-
-                  <button
-                    type="button"
-                    class="scan-workspace-surface-tab"
-                    data-scan-surface="cover_letter"
-                    disabled
-                    aria-disabled="true"
-                  >
-                    Cover Letter
-                  </button>
                 </div>
               </div>
 
@@ -1750,6 +1740,15 @@ def scan_workspace(
               <div class="scan-workspace-toolbar-resume-name" id="scanWorkspaceToolbarResumeName">
                 {resume_display_safe}
               </div>
+
+              <button
+                type="button"
+                class="ghost-btn btn-sm scan-workspace-toolbar-btn scan-workspace-rescan-btn"
+                id="scanWorkspaceRescanBtn"
+                hidden
+              >
+                Re-scan
+              </button>
 
               <div
                 class="scan-workspace-workflow-row scan-review-workflow"
@@ -2071,7 +2070,7 @@ def scan_workspace(
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
   <script src="/static/planning.js?v=planning_ui_20260516_scan_marks1"></script>
-  <script src="/static/scan_workspace.js?v=scan_workspace_preview_source2"></script>
+  <script src="/static/scan_workspace.js?v=scan_workspace_rescan3_anchor_popover"></script>
 </body>
 </html>
     """.strip()

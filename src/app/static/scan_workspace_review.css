@@ -1789,8 +1789,15 @@ html[data-theme="dark"] .scan-workspace-export-format-icon {
 }
 
 .scan-workspace-suggestion-popover-actions {
+  position: sticky !important;
+  bottom: -18px !important;
+  z-index: 2 !important;
   justify-content: flex-end !important;
   flex-wrap: wrap !important;
+  margin: 0 -18px -18px !important;
+  padding: 12px 18px 18px !important;
+  border-top: 1px solid var(--scan-border) !important;
+  background: var(--scan-panel-strong) !important;
 }
 
 .scan-workspace-suggestion-action-btn {

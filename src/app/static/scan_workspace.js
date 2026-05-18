@@ -3115,7 +3115,10 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
     Math.max(420, Math.min(measuredWidth, 520)),
     window.innerWidth - viewportPadding * 2
   );
-  const viewportMaxHeight = Math.max(360, window.innerHeight - viewportPadding * 2);
+  const viewportMaxHeight = Math.max(
+    420,
+    Math.min(760, window.innerHeight - 80)
+  );
 
   if (targetRow) {
     const targetRect = targetRow.getBoundingClientRect();
@@ -3711,6 +3714,11 @@ function renderScanWorkspaceSuggestionPopover() {
     scanWorkspaceAnnotationState.activeMarkerId
   );
   const isReplacement = isScanWorkspaceReplacementMarker(marker);
+  const hasPhraseOptions =
+    Boolean(marker) &&
+    scanWorkspacePhraseState.markerId === marker.id &&
+    Array.isArray(scanWorkspacePhraseState.options) &&
+    scanWorkspacePhraseState.options.length > 0;
 
   if (!marker) {
     popover.classList.add("hidden");
@@ -3743,6 +3751,7 @@ function renderScanWorkspaceSuggestionPopover() {
   const reasonText = String(marker.reasonText || "").trim();
 
   popover.classList.remove("hidden");
+  popover.classList.toggle("has-phrase-options", hasPhraseOptions);
   popover.style.visibility = "hidden";
   popover.style.position = "fixed";
   popover.style.top = "0";
@@ -3810,6 +3819,21 @@ function renderScanWorkspaceSuggestionPopover() {
   acceptBtn.classList.toggle("is-active", decision === "accepted");
   rejectBtn.classList.toggle("is-active", decision === "rejected");
   refreshScanWorkspaceGuidanceSaveButton(marker);
+}
+
+function scrollScanWorkspacePhraseOptionsIntoPopoverView() {
+  const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+  if (!popover || popover.classList.contains("hidden")) return;
+
+  const optionsList = popover.querySelector(".scan-workspace-phrase-option-list");
+  if (!optionsList) return;
+
+  window.requestAnimationFrame(() => {
+    popover.scrollTo({
+      top: Math.max(0, optionsList.offsetTop - 14),
+      behavior: "smooth",
+    });
+  });
 }
 
 function renderScanWorkspaceAnnotationShell() {
@@ -4011,6 +4035,9 @@ async function generateScanWorkspacePhrasesForActiveMarker() {
   } finally {
     scanWorkspacePhraseState.isLoading = false;
     renderScanWorkspaceSuggestionPopover();
+    if (scanWorkspacePhraseState.options.length) {
+      scrollScanWorkspacePhraseOptionsIntoPopoverView();
+    }
   }
 }
 

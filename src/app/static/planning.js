@@ -10538,6 +10538,38 @@ function buildScanWorkspaceAnnotationMarkerCopy(item) {
     .join("\n\n");
 }
 
+function isScanWorkspaceReplacementLikeSuggestion(item) {
+  const sourceLane = String(item?.source_lane || item?.replacement_status || "").trim();
+  const actionType = String(item?.row_action_type || item?.scan_issue_type || item?.action_type || "").trim();
+  const originalText = String(
+    item?.current_text ||
+    item?.original_text ||
+    item?.source_bullet_text ||
+    item?.bullet_text ||
+    item?.current_evidence ||
+    ""
+  ).trim();
+  const suggestedText = String(
+    item?.final_replacement_text ||
+    item?.suggested_text ||
+    item?.rewrite_direction ||
+    item?.rewrite_instruction ||
+    ""
+  ).trim();
+
+  if (!originalText || !suggestedText) return false;
+  if (item?.scan_issue_exact_replacement === true || item?.scan_issue_render_mode === "diff") return true;
+
+  return (
+    sourceLane === "direct_apply_ready" ||
+    sourceLane === "direct_apply_optional" ||
+    sourceLane === "ai_optimize_optional" ||
+    actionType === "direct_replacement" ||
+    actionType === "review_replacement" ||
+    actionType === "replacement"
+  );
+}
+
 function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
   return getScanWorkspaceAnchorableReplacementSuggestions(payload)
     .map((item, index) => {
@@ -10580,9 +10612,7 @@ function buildScanWorkspaceAnnotationMarkersFromPayload(payload) {
         `Scan suggestion ${index + 1}`
       ).trim();
 
-      const isExactReplacement =
-        item?.scan_issue_exact_replacement === true ||
-        item?.scan_issue_render_mode === "diff";
+      const isExactReplacement = isScanWorkspaceReplacementLikeSuggestion(item);
 
       const topPercent = Math.min(86, 20 + index * 8);
 

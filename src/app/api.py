@@ -151,6 +151,13 @@ def _auth_owner_user_id(request: Request) -> str:
     return str(_auth_user_from_request(request).get("user_id", "") or "").strip()
 
 
+def _require_auth_owner_user_id(request: Request) -> str:
+    owner_user_id = _auth_owner_user_id(request)
+    if not owner_user_id:
+        raise HTTPException(status_code=401, detail="Authentication required.")
+    return owner_user_id
+
+
 def _auth_owner_email(request: Request) -> str:
     return str(_auth_user_from_request(request).get("email", "") or "").strip()
 
@@ -997,6 +1004,40 @@ def profile_resumes(http_request: Request):
     try:
         return services.profile_resumes_payload(
             owner_user_id=_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/onboarding/preferences")
+def onboarding_preferences(http_request: Request):
+    try:
+        return services.onboarding_preferences_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/onboarding/preferences")
+def save_onboarding_preferences(
+    http_request: Request,
+    payload: dict = Body(...),
+):
+    try:
+        return services.save_onboarding_preferences_payload(
+            payload,
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/onboarding/status")
+def onboarding_status(http_request: Request):
+    try:
+        return services.onboarding_status_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

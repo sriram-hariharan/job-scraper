@@ -89,6 +89,11 @@ from src.storage.profile_resumes.store import (
     get_profile_resumes_postgres_payload,
     upsert_profile_resume_postgres_payload,
 )
+from src.storage.onboarding_preferences.store import (
+    get_onboarding_preferences_payload as get_onboarding_preferences_postgres_payload,
+    upsert_onboarding_preferences_payload as upsert_onboarding_preferences_postgres_payload,
+    validate_onboarding_preferences_payload,
+)
 from src.storage.auth.read_postgres import (
     delete_non_admin_auth_user_postgres_payload,
     get_non_admin_auth_users_postgres_payload,
@@ -339,6 +344,127 @@ def profile_resumes_payload(
         "storage": "postgres",
         "count": len(resumes),
         "resumes": resumes,
+    }
+
+
+def _onboarding_requirement_status(
+    *,
+    owner_user_id: str,
+    preferences: Dict[str, Any],
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    normalized = validate_onboarding_preferences_payload(preferences)
+    resumes_payload = profile_resumes_payload(owner_user_id=owner)
+    resume_count = int(resumes_payload.get("count", 0) or 0)
+    selected_role_count = len(normalized.get("selected_role_families", []) or [])
+    has_profile_resume = resume_count > 0
+    has_selected_role_family = selected_role_count > 0
+
+    return {
+        "has_profile_resume": has_profile_resume,
+        "profile_resume_count": resume_count,
+        "has_selected_role_family": has_selected_role_family,
+        "selected_role_family_count": selected_role_count,
+        "can_complete_onboarding": has_profile_resume and has_selected_role_family,
+    }
+
+
+def onboarding_preferences_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = get_onboarding_preferences_postgres_payload(
+        owner,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    preferences = dict(payload.get("data", {}).get("preferences", {}) or {})
+    if not preferences:
+        preferences = validate_onboarding_preferences_payload({})
+
+    status = _onboarding_requirement_status(
+        owner_user_id=owner,
+        preferences=preferences,
+    )
+    return {
+        "ok": True,
+        "found": bool(payload.get("data", {}).get("found", False)),
+        "owner_user_id": owner,
+        "preferences": preferences,
+        "requirements": status,
+    }
+
+
+def save_onboarding_preferences_payload(
+    preferences: Dict[str, Any],
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    normalized = validate_onboarding_preferences_payload(preferences)
+    status = _onboarding_requirement_status(
+        owner_user_id=owner,
+        preferences=normalized,
+    )
+    if bool(normalized.get("onboarding_completed", False)) and not bool(
+        status.get("can_complete_onboarding", False)
+    ):
+        raise ValueError(
+            "onboarding_completed cannot be true until at least one role family is selected and one profile resume exists."
+        )
+
+    payload = upsert_onboarding_preferences_postgres_payload(
+        owner,
+        normalized,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    saved_preferences = dict(payload.get("data", {}).get("preferences", {}) or normalized)
+    return {
+        "ok": True,
+        "owner_user_id": owner,
+        "preferences": saved_preferences,
+        "requirements": _onboarding_requirement_status(
+            owner_user_id=owner,
+            preferences=saved_preferences,
+        ),
+    }
+
+
+def onboarding_status_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    payload = onboarding_preferences_payload(owner_user_id=owner_user_id)
+    preferences = dict(payload.get("preferences", {}) or {})
+    requirements = dict(payload.get("requirements", {}) or {})
+    stored_completed = bool(preferences.get("onboarding_completed", False))
+    effective_completed = stored_completed and bool(
+        requirements.get("can_complete_onboarding", False)
+    )
+    return {
+        "ok": True,
+        "owner_user_id": payload.get("owner_user_id", ""),
+        "onboarding_completed": effective_completed,
+        "stored_onboarding_completed": stored_completed,
+        "requirements": requirements,
+        "preferences": preferences,
     }
 
 

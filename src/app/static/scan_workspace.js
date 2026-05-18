@@ -524,6 +524,7 @@ function updateScanWorkspaceIntakeActions() {
 }
 
 function clearScanWorkspaceIntakeForm() {
+  const root = getScanWorkspacePageRoot();
   const companyInput = getScanWorkspaceInput("scanWorkspaceCompanyInput");
   const roleInput = getScanWorkspaceInput("scanWorkspaceRoleInput");
   const jobUrlInput = getScanWorkspaceInput("scanWorkspaceJobUrlInput");
@@ -548,6 +549,9 @@ function clearScanWorkspaceIntakeForm() {
   scanWorkspaceIntakeState.resumeFileName = "";
   scanWorkspaceIntakeState.resumeText = "";
   scanWorkspaceIntakeState.jobDescriptionText = "";
+  if (root) {
+    root.dataset.rescanScanId = "";
+  }
 
   updateScanWorkspaceIntakeActions();
 }
@@ -850,14 +854,14 @@ async function beginScanWorkspaceProcessing() {
     const data = await response.json();
     const scanId = String(data?.scan?.scan_id || "").trim();
     const root = getScanWorkspacePageRoot();
-    if (root) {
-      root.dataset.rescanScanId = "";
-      if (scanId) root.dataset.savedScanId = scanId;
-    }
     const writeOk = data?.postgres_write?.ok === true;
     if (!writeOk) {
       const writeError = String(data?.postgres_write?.error || data?.postgres_write?.skipped || "").trim();
       throw new Error(writeError || "Saved scan could not be written to Postgres.");
+    }
+    if (root) {
+      root.dataset.rescanScanId = "";
+      if (scanId) root.dataset.savedScanId = scanId;
     }
 
     scanWorkspaceProcessingState.status = "complete";
@@ -865,7 +869,27 @@ async function beginScanWorkspaceProcessing() {
     scanWorkspaceProcessingState.note = scanId
       ? `Saved scan ${scanId.slice(0, 10)}. Match report ready.`
       : "Saved scan. Match report ready.";
-    scanWorkspaceProcessingState.pendingReviewPayload = data?.scan_review_payload || data?.preload_payload || null;
+    const pendingPayload = data?.scan_review_payload || data?.preload_payload || null;
+    scanWorkspaceProcessingState.pendingReviewPayload =
+      pendingPayload && typeof pendingPayload === "object"
+        ? {
+            ...pendingPayload,
+            resume_name: firstNonEmptyScanWorkspaceText(
+              pendingPayload.resume_name,
+              pendingPayload.selected_resume,
+              data?.scan?.resume_name,
+              data?.scan?.resume_filename,
+              draft.savedResumeName
+            ),
+            selected_resume: firstNonEmptyScanWorkspaceText(
+              pendingPayload.selected_resume,
+              pendingPayload.resume_name,
+              data?.scan?.resume_name,
+              data?.scan?.resume_filename,
+              draft.savedResumeName
+            ),
+          }
+        : null;
     updateScanWorkspaceProcessingView();
   } catch (err) {
     scanWorkspaceProcessingState.status = "error";
@@ -957,11 +981,15 @@ function applyNewScanWorkspaceReviewPayload(payload) {
     const resumeName = firstNonEmptyScanWorkspaceText(
       payload.resume_name,
       payload.selected_resume,
-      payload?.selection?.selected_resume
+      payload?.selection?.selected_resume,
+      payload?.draft?.selected_resume,
+      payload?.scan_session?.selected_resume,
+      root.dataset.resumeName
     );
     if (company) root.dataset.jobCompany = company;
     if (title) root.dataset.jobTitle = title;
     if (resumeName) root.dataset.resumeName = resumeName;
+    syncScanWorkspacePreviewName();
   }
 
   if (typeof updateScanWorkspaceContextLine === "function") {
@@ -1033,7 +1061,27 @@ async function loadSavedScanWorkspaceReviewPayload() {
       throw new Error(message);
     }
     const data = await response.json();
-    applyNewScanWorkspaceReviewPayload(data?.scan_review_payload || null);
+    const reviewPayload = data?.scan_review_payload || null;
+    const scanRow = data?.scan || {};
+    applyNewScanWorkspaceReviewPayload(
+      reviewPayload && typeof reviewPayload === "object"
+        ? {
+            ...reviewPayload,
+            resume_name: firstNonEmptyScanWorkspaceText(
+              reviewPayload.resume_name,
+              reviewPayload.selected_resume,
+              scanRow.resume_name,
+              scanRow.resume_filename
+            ),
+            selected_resume: firstNonEmptyScanWorkspaceText(
+              reviewPayload.selected_resume,
+              reviewPayload.resume_name,
+              scanRow.resume_name,
+              scanRow.resume_filename
+            ),
+          }
+        : null
+    );
     return true;
   } catch (err) {
     const summary = document.getElementById("scanWorkspaceInteractiveSummary");
@@ -1635,7 +1683,9 @@ function renderScanWorkspacePersistenceStatus() {
 
   const context = getScanWorkspaceContext();
   const hasContext = Boolean(context?.tailoringJsonPath && context?.resumeName);
-  const isSavedNewScan = Boolean(String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim());
+  const savedScanId = String(getScanWorkspacePageRoot()?.dataset?.savedScanId || "").trim();
+  const entrySource = String(scanWorkspaceState.preloadPayload?.scan_entry_source || "").trim();
+  const isSavedNewScan = Boolean(savedScanId && entrySource === "scan_workspace_new_scan");
   const currentSignature = getCurrentScanWorkspacePersistenceSignature();
   const savedSignature = scanWorkspacePersistenceState.hydratedSignature || "";
   const canPersist = hasContext || isSavedNewScan;
@@ -2173,12 +2223,13 @@ function fallbackRenderScanWorkspaceStructuredRow(row) {
   ].filter(Boolean).join(" ");
 
   if (isBullet) {
+    const bulletText = rawText.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, "");
     return `
       <div class="${extraClasses}" style="margin-top:${gapBefore}px;">
         <div class="tailoring-workspace-doc-bullet-row" style="padding-left:${indent}px;">
           <div class="tailoring-workspace-doc-bullet-marker">•</div>
           <div class="tailoring-workspace-doc-line-copy tailoring-workspace-doc-bullet-copy">
-            <span class="scan-workspace-preview-line-text">${scanWorkspaceEscapeHtml(rawText.replace(/^•\s*/, ""))}</span>
+            <span class="scan-workspace-preview-line-text">${scanWorkspaceEscapeHtml(bulletText)}</span>
           </div>
         </div>
       </div>
@@ -2452,6 +2503,38 @@ function getScanWorkspacePdfResumeName() {
   return resumeName.toLowerCase().endsWith(".pdf") ? resumeName : "";
 }
 
+function getScanWorkspacePreviewDisplayResumeName() {
+  const payload = getScanWorkspacePreloadPayloadForSurface();
+  const preview = scanWorkspacePreviewState.documentPreviewPayload || payload?.document_preview || {};
+  return firstNonEmptyScanWorkspaceText(
+    payload?.resume_name,
+    payload?.selected_resume,
+    payload?.selection?.selected_resume,
+    payload?.draft?.selected_resume,
+    payload?.scan_session?.selected_resume,
+    preview?.resume_name,
+    preview?.selected_resume,
+    getScanWorkspaceSelectedResumeName(),
+    scanWorkspaceIntakeState.savedResumeName,
+    getScanWorkspacePageRoot()?.dataset?.resumeName
+  );
+}
+
+function syncScanWorkspacePreviewName() {
+  const previewName = getScanWorkspaceInput("scanWorkspacePreviewName");
+  const toolbarName = getScanWorkspaceInput("scanWorkspaceToolbarResumeName");
+  if (!previewName && !toolbarName) return;
+
+  const resumeName = getScanWorkspacePreviewDisplayResumeName();
+  const displayName =
+    typeof humanizeResumeDisplayName === "function"
+      ? humanizeResumeDisplayName(resumeName || "")
+      : String(resumeName || "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ");
+  const label = displayName || "Generated resume preview";
+  if (previewName) previewName.textContent = label;
+  if (toolbarName) toolbarName.textContent = label;
+}
+
 function renderScanWorkspacePdfPreviewShell() {
   return `
     <div class="scan-workspace-pdf-toolbar" aria-label="Resume PDF preview controls">
@@ -2473,6 +2556,8 @@ function renderScanWorkspacePdfPreviewShell() {
 function renderScanWorkspaceLiveDraftPreviewInto() {
   const root = getScanWorkspaceInput("scanWorkspaceLiveDraftPreview");
   if (!root) return;
+
+  syncScanWorkspacePreviewName();
 
   if (scanWorkspacePreviewState.activeSurface === "job_description") {
     renderScanWorkspaceJobDescriptionSurfaceInto();
@@ -3026,21 +3111,34 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
   const measuredHeight = Math.max(300, Number(measuredRect?.height || popover?.offsetHeight || 420));
 
   const width = Math.min(
-    420,
-    Math.max(360, measuredWidth),
+    520,
+    Math.max(420, Math.min(measuredWidth, 520)),
     window.innerWidth - viewportPadding * 2
+  );
+  const viewportMaxHeight = Math.max(
+    420,
+    Math.min(760, window.innerHeight - 80)
   );
 
   if (targetRow) {
     const targetRect = targetRow.getBoundingClientRect();
+    const targetOutOfScroller =
+      Boolean(scrollerRect) &&
+      (targetRect.bottom <= scrollerRect.top || targetRect.top >= scrollerRect.bottom);
+    const targetOutOfViewport =
+      targetRect.bottom <= viewportPadding || targetRect.top >= window.innerHeight - viewportPadding;
+
+    if (targetOutOfScroller || targetOutOfViewport) {
+      return null;
+    }
+
     const horizontalMin = Math.max(viewportPadding, Number(scrollerRect?.left || 0) + 18);
     const horizontalMax = Math.min(
       window.innerWidth - width - viewportPadding,
       Number(scrollerRect?.right || window.innerWidth) - width - 18
     );
 
-    const preferredLeft =
-      targetRect.left + Math.min(340, Math.max(120, targetRect.width * 0.35));
+    const preferredLeft = targetRect.left + targetRect.width / 2 - width / 2;
 
     const left = Math.max(
       horizontalMin,
@@ -3051,14 +3149,7 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
     const belowSpace = Math.max(0, paneBottom - targetRect.bottom - gap);
     const preferAbove = aboveSpace >= 160 || aboveSpace >= belowSpace;
     const placement = preferAbove ? "above" : "below";
-    const availableHeight = placement === "above" ? aboveSpace : belowSpace;
-
-    const maxHeight = Math.max(
-      160,
-      Math.min(520, availableHeight || paneBottom - paneTop)
-    );
-
-    const renderedHeight = Math.min(measuredHeight, maxHeight);
+    const renderedHeight = Math.min(measuredHeight, viewportMaxHeight);
 
     const top =
       placement === "above"
@@ -3072,8 +3163,8 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
       top: `${Math.max(paneTop, top)}px`,
       left: `${left}px`,
       width: `${width}px`,
-      minWidth: "320px",
-      maxHeight: `${maxHeight}px`,
+      minWidth: "360px",
+      maxHeight: `${viewportMaxHeight}px`,
       placement,
     };
   }
@@ -3082,8 +3173,8 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
     top: `${paneTop}px`,
     left: `${Math.max(viewportPadding, window.innerWidth - width - viewportPadding)}px`,
     width: `${width}px`,
-    minWidth: "320px",
-    maxHeight: `${Math.min(520, paneBottom - paneTop)}px`,
+    minWidth: "360px",
+    maxHeight: `${viewportMaxHeight}px`,
     placement: "floating",
   };
 }
@@ -3092,19 +3183,25 @@ function positionScanWorkspaceSuggestionPopover(marker) {
   const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
   if (!popover || !marker) return;
 
+  const position = getScanWorkspaceSuggestionPopoverPosition(marker);
+  if (!position) {
+    closeScanWorkspaceSuggestionPopover();
+    return;
+  }
+
   popover.style.position = "fixed";
-  popover.style.top = "50%";
-  popover.style.left = "50%";
+  popover.style.top = position.top;
+  popover.style.left = position.left;
   popover.style.right = "auto";
   popover.style.bottom = "auto";
-  popover.style.transform = "translate(-50%, -50%)";
-  popover.style.width = "min(740px, calc(100vw - 48px))";
-  popover.style.minWidth = "0";
-  popover.style.maxWidth = "calc(100vw - 48px)";
-  popover.style.maxHeight = "min(720px, calc(100vh - 48px))";
+  popover.style.transform = "none";
+  popover.style.width = position.width;
+  popover.style.minWidth = position.minWidth;
+  popover.style.maxWidth = "calc(100vw - 32px)";
+  popover.style.maxHeight = position.maxHeight;
 
-  popover.classList.remove("is-above", "is-below", "is-clamped", "is-floating");
-  popover.classList.add("is-centered-modal");
+  popover.classList.remove("is-above", "is-below", "is-clamped", "is-floating", "is-centered-modal");
+  popover.classList.add(`is-${position.placement}`);
 }
 
 function getScanWorkspacePreviewScroller() {
@@ -3617,12 +3714,19 @@ function renderScanWorkspaceSuggestionPopover() {
     scanWorkspaceAnnotationState.activeMarkerId
   );
   const isReplacement = isScanWorkspaceReplacementMarker(marker);
+  const hasPhraseOptions =
+    Boolean(marker) &&
+    scanWorkspacePhraseState.markerId === marker.id &&
+    Array.isArray(scanWorkspacePhraseState.options) &&
+    scanWorkspacePhraseState.options.length > 0;
 
   if (!marker) {
     popover.classList.add("hidden");
     popover.style.top = "";
     popover.style.left = "";
     popover.style.right = "";
+    popover.style.bottom = "";
+    popover.style.transform = "";
     title.textContent = "Select a suggestion anchor to inspect it here.";
     if (kicker) kicker.textContent = "AI suggested change";
     copy.textContent = "";
@@ -3647,17 +3751,18 @@ function renderScanWorkspaceSuggestionPopover() {
   const reasonText = String(marker.reasonText || "").trim();
 
   popover.classList.remove("hidden");
+  popover.classList.toggle("has-phrase-options", hasPhraseOptions);
   popover.style.visibility = "hidden";
   popover.style.position = "fixed";
-  popover.style.top = "50%";
-  popover.style.left = "50%";
+  popover.style.top = "0";
+  popover.style.left = "0";
   popover.style.right = "auto";
   popover.style.bottom = "auto";
-  popover.style.transform = "translate(-50%, -50%)";
-  popover.style.width = "min(740px, calc(100vw - 48px))";
+  popover.style.transform = "none";
+  popover.style.width = "min(520px, calc(100vw - 32px))";
   popover.style.minWidth = "0";
-  popover.style.maxWidth = "calc(100vw - 48px)";
-  popover.style.maxHeight = "min(720px, calc(100vh - 48px))";
+  popover.style.maxWidth = "calc(100vw - 32px)";
+  popover.style.maxHeight = "calc(100vh - 28px)";
 
   title.textContent = sourceLabel;
   if (kicker) {
@@ -3714,6 +3819,21 @@ function renderScanWorkspaceSuggestionPopover() {
   acceptBtn.classList.toggle("is-active", decision === "accepted");
   rejectBtn.classList.toggle("is-active", decision === "rejected");
   refreshScanWorkspaceGuidanceSaveButton(marker);
+}
+
+function scrollScanWorkspacePhraseOptionsIntoPopoverView() {
+  const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+  if (!popover || popover.classList.contains("hidden")) return;
+
+  const optionsList = popover.querySelector(".scan-workspace-phrase-option-list");
+  if (!optionsList) return;
+
+  window.requestAnimationFrame(() => {
+    popover.scrollTo({
+      top: Math.max(0, optionsList.offsetTop - 14),
+      behavior: "smooth",
+    });
+  });
 }
 
 function renderScanWorkspaceAnnotationShell() {
@@ -3915,6 +4035,9 @@ async function generateScanWorkspacePhrasesForActiveMarker() {
   } finally {
     scanWorkspacePhraseState.isLoading = false;
     renderScanWorkspaceSuggestionPopover();
+    if (scanWorkspacePhraseState.options.length) {
+      scrollScanWorkspacePhraseOptionsIntoPopoverView();
+    }
   }
 }
 
@@ -4157,6 +4280,17 @@ function bindScanWorkspaceAnnotationShell() {
 
       positionScanWorkspaceSuggestionPopover(marker);
     });
+
+    window.addEventListener("scroll", () => {
+      const marker = getScanWorkspaceAnnotationMarkerById(
+        scanWorkspaceAnnotationState.activeMarkerId
+      );
+      const popover = getScanWorkspaceInput("scanWorkspaceSuggestionPopover");
+
+      if (!marker || !popover || popover.classList.contains("hidden")) return;
+
+      positionScanWorkspaceSuggestionPopover(marker);
+    }, { passive: true });
 
     window.addEventListener("scan-workspace-split-resize-start", () => {
       closeScanWorkspaceSuggestionPopover();

@@ -826,8 +826,36 @@ def _new_scan_resume_document(
 def _build_new_scan_document_preview(
     *,
     resume_text: str,
+    resume_file_path: str = "",
+    resume_name: str = "",
     personal_details: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
+    details = _normalize_workspace_personal_details(personal_details or {})
+    safe_resume_name = _clean_text(resume_name)
+    if safe_resume_name == "-":
+        safe_resume_name = ""
+    safe_resume_path = _clean_text(resume_file_path)
+
+    if safe_resume_path:
+        try:
+            resume_path = Path(safe_resume_path)
+            if resume_path.exists() and resume_path.suffix.lower() == ".pdf":
+                exported_pages = _extract_resume_pdf_paragraph_pages_for_export(resume_path)
+                if exported_pages:
+                    _workspace_export_apply_personal_details(exported_pages, details)
+                    pages_payload = _workspace_export_preview_pages_payload(exported_pages)
+                    if pages_payload:
+                        return {
+                            "ok": True,
+                            "source": "workspace_export_resume_pdf",
+                            "resume_name": safe_resume_name,
+                            "selected_resume": safe_resume_name,
+                            "page_count": len(pages_payload),
+                            "pages": pages_payload,
+                        }
+        except Exception:
+            pass
+
     safe_text = _clean_text(resume_text)
     if not safe_text:
         return {
@@ -836,11 +864,10 @@ def _build_new_scan_document_preview(
             "error_message": "Resume text could not be reconstructed for preview.",
         }
 
-    details = _normalize_workspace_personal_details(personal_details or {})
     raw_lines = [line.rstrip() for line in safe_text.splitlines()]
-    lines = [line for line in raw_lines if _clean_text(line)]
-    if not lines:
-        lines = [safe_text]
+    source_lines = [line for line in raw_lines if _clean_text(line)]
+    if not source_lines:
+        source_lines = [safe_text]
 
     rows: List[Dict[str, Any]] = []
     seen_name = False
@@ -858,24 +885,135 @@ def _build_new_scan_document_preview(
         "certifications",
     }
 
-    for index, line in enumerate(lines[:90]):
+    def _is_section_heading(value: str) -> bool:
+        clean_value = _clean_text(value)
+        lower_value = clean_value.lower().strip(":")
+        return lower_value in section_headings or (
+            clean_value.isupper()
+            and len(clean_value.split()) <= 5
+            and not re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", clean_value)
+        )
+
+    def _is_bullet_line(value: str) -> bool:
+        return bool(re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", value))
+
+    def _strip_bullet(value: str) -> str:
+        return re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", value).strip()
+
+    def _looks_like_date_range(value: str) -> bool:
+        return bool(
+            re.search(
+                r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{4}\b",
+                value,
+                flags=re.IGNORECASE,
+            )
+            and re.search(r"\b(?:present|current|\d{4})\b", value, flags=re.IGNORECASE)
+        )
+
+    def _looks_like_resume_entry(value: str) -> bool:
+        clean_value = _clean_text(value)
+        if not clean_value or _is_bullet_line(clean_value) or _is_section_heading(clean_value):
+            return False
+        if _looks_like_date_range(clean_value):
+            return True
+        return bool(
+            re.search(r"\s[|,]\s", clean_value)
+            and re.search(
+                r"\b(?:analyst|engineer|scientist|intern|developer|manager|consultant|university|college)\b",
+                clean_value,
+                flags=re.IGNORECASE,
+            )
+        )
+
+    def _line_should_continue_previous(previous: Dict[str, Any], current_text: str) -> bool:
+        if not previous:
+            return False
+        if _is_section_heading(current_text) or _is_bullet_line(current_text) or _looks_like_resume_entry(current_text):
+            return False
+        if previous.get("is_bullet"):
+            return True
+        previous_text = _clean_text(str(previous.get("text", "")))
+        if previous_text.endswith((".", "!", "?")):
+            return False
+        if ":" in previous_text and not _looks_like_date_range(current_text):
+            return True
+        return bool(current_text[:1].islower())
+
+    normalized_lines: List[Dict[str, Any]] = []
+    for raw_line in source_lines:
+        clean_line = _clean_text(raw_line)
+        if not clean_line:
+            continue
+        is_bullet = _is_bullet_line(clean_line)
+        text = _strip_bullet(clean_line) if is_bullet else clean_line
+        if not text:
+            continue
+        if normalized_lines and _line_should_continue_previous(normalized_lines[-1], clean_line):
+            previous_text = _clean_text(str(normalized_lines[-1].get("text", "")))
+            normalized_lines[-1]["text"] = f"{previous_text} {text}".strip()
+            normalized_lines[-1]["display_text"] = normalized_lines[-1]["text"]
+            continue
+        normalized_lines.append(
+            {
+                "text": text,
+                "display_text": text,
+                "is_bullet": is_bullet,
+                "raw_text": clean_line,
+            }
+        )
+
+    if not normalized_lines:
+        normalized_lines = [{"text": safe_text, "display_text": safe_text, "is_bullet": False, "raw_text": safe_text}]
+
+    paired_rows: List[Dict[str, Any]] = []
+    index = 0
+    while index < len(normalized_lines[:120]):
+        current = normalized_lines[index]
+        next_item = normalized_lines[index + 1] if index + 1 < len(normalized_lines) else None
+        current_text = _clean_text(str(current.get("text", "")))
+        if (
+            next_item
+            and not current.get("is_bullet")
+            and not next_item.get("is_bullet")
+            and not _is_section_heading(current_text)
+            and _looks_like_date_range(_clean_text(str(next_item.get("text", ""))))
+            and not _looks_like_date_range(current_text)
+        ):
+            paired_rows.append(
+                {
+                    "kind": "paired_row",
+                    "left_text": current_text,
+                    "right_text": _clean_text(str(next_item.get("text", ""))),
+                    "gap_before": 6,
+                    "left_indent_pt": 0,
+                }
+            )
+            index += 2
+            continue
+        paired_rows.append(current)
+        index += 1
+
+    for index, row in enumerate(paired_rows[:90]):
+        if row.get("kind") == "paired_row":
+            rows.append(row)
+            continue
+        line = str(row.get("raw_text") or row.get("text") or "")
         clean_line = _clean_text(line)
         lower_line = clean_line.lower().strip(":")
-        is_bullet = bool(re.match(r"^\s*(?:[-*•]|\d+[.)])\s+", line))
-        is_heading = lower_line in section_headings or (
-            clean_line.isupper() and len(clean_line.split()) <= 5 and not is_bullet
-        )
+        is_bullet = bool(row.get("is_bullet"))
+        display_text = _clean_text(str(row.get("text") or clean_line))
+        is_heading = _is_section_heading(display_text)
         presentation_role = ""
-        if not seen_name and index <= 2 and details.get("name") and details["name"].lower() in clean_line.lower():
+        if not seen_name and index <= 3 and details.get("name") and details["name"].lower() in display_text.lower():
             presentation_role = "header_name"
             seen_name = True
         elif (
             not seen_contact
-            and index <= 5
+            and index <= 6
             and (
-                "@" in clean_line
-                or re.search(r"\d{3}", clean_line)
-                or "linkedin" in clean_line.lower()
+                "@" in display_text
+                or re.search(r"\d{3}", display_text)
+                or "linkedin" in display_text.lower()
             )
         ):
             presentation_role = "header_contact"
@@ -883,20 +1021,22 @@ def _build_new_scan_document_preview(
 
         rows.append(
             {
-                "text": clean_line,
-                "display_text": clean_line,
+                "text": display_text,
+                "display_text": display_text,
                 "is_bullet": is_bullet,
                 "is_heading": is_heading,
                 "is_section_heading": is_heading,
                 "presentation_role": presentation_role,
-                "left_indent_pt": 18 if is_bullet else 0,
-                "gap_before": 8 if is_heading else 4,
+                "left_indent_pt": 14 if is_bullet else 0,
+                "gap_before": 8 if is_heading else (3 if is_bullet else 4),
             }
         )
 
     return {
         "ok": True,
         "source": "new_scan_resume_text",
+        "resume_name": safe_resume_name,
+        "selected_resume": safe_resume_name,
         "pages": [
             {
                 "page_number": 1,
@@ -1236,6 +1376,8 @@ def _build_new_scan_review_payload(
         },
         "document_preview": _build_new_scan_document_preview(
             resume_text=resume_document.raw_text,
+            resume_file_path=resume_document.path,
+            resume_name=selected_resume,
             personal_details=personal_details,
         ),
         "draft_status": "new_scan_ready",
@@ -1615,10 +1757,56 @@ def saved_scan_report_payload(
     if not isinstance(review_payload, dict):
         raise ValueError("Saved scan does not contain a restorable report payload.")
 
+    refreshed_payload = dict(review_payload)
+    resume_name_candidates = [
+        refreshed_payload.get("resume_name"),
+        refreshed_payload.get("selected_resume"),
+        row.get("resume_name"),
+        row.get("resume_filename"),
+    ]
+    resume_name = next(
+        (
+            candidate
+            for candidate in (_clean_text(value) for value in resume_name_candidates)
+            if candidate and candidate != "-"
+        ),
+        "",
+    )
+    resume_text = _clean_text(row.get("resume_text"))
+    resume_file_path = ""
+    if _clean_text(row.get("resume_source")) == "saved_resume" and resume_name:
+        try:
+            resume_file_path = str(
+                _materialize_profile_resume_temp_path(
+                    _sanitize_resume_filename(resume_name),
+                    owner_user_id=owner_user_id,
+                )
+            )
+        except Exception:
+            resume_file_path = ""
+
+    personal_details_payload = refreshed_payload.get("personal_details", {}) or {}
+    personal_details = (
+        personal_details_payload.get("current")
+        if isinstance(personal_details_payload, dict)
+        else {}
+    )
+    if not isinstance(personal_details, dict):
+        personal_details = {}
+
+    refreshed_payload["resume_name"] = resume_name or _clean_text(refreshed_payload.get("resume_name"))
+    refreshed_payload["selected_resume"] = resume_name or _clean_text(refreshed_payload.get("selected_resume"))
+    refreshed_payload["document_preview"] = _build_new_scan_document_preview(
+        resume_text=resume_text,
+        resume_file_path=resume_file_path,
+        resume_name=resume_name,
+        personal_details=personal_details,
+    )
+
     return {
         "ok": True,
         "scan": row,
-        "scan_review_payload": review_payload,
+        "scan_review_payload": refreshed_payload,
     }
 
 
@@ -14757,6 +14945,8 @@ def _workspace_export_preview_row_from_paragraph(
 def _workspace_export_split_skills_preview_rows(
     paragraph: Dict[str, Any],
 ) -> List[Dict[str, Any]]:
+    skills_body_indent_pt = 14.0
+
     def _build_split_rows(segment_texts: List[str]) -> List[Dict[str, Any]]:
         split_rows: List[Dict[str, Any]] = []
 
@@ -14776,6 +14966,7 @@ def _workspace_export_split_skills_preview_rows(
                     else 6.0,
                 )
             )
+            split_rows[-1]["left_indent_pt"] = skills_body_indent_pt
 
         return split_rows
 
@@ -14939,6 +15130,8 @@ def _workspace_export_section_supports_header_row_split(section_name: str) -> bo
         "EXPERIENCE",
         "EMPLOYMENT HISTORY",
         "EMPLOYMENT",
+        "EDUCATION",
+        "ACADEMIC BACKGROUND",
     }
 
 
@@ -14948,13 +15141,13 @@ def _workspace_export_line_is_date_range(text: str) -> bool:
     if not clean or len(clean) > 48:
         return False
 
-    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\\.?"
-    year = r"(?:19|20)\\d{2}"
-    point = rf"(?:{month}\\s+{year}|{year}|Present|Current)"
+    month = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
+    year = r"(?:19|20)\d{2}"
+    point = rf"(?:{month}\s+{year}|{year}|Present|Current)"
 
     return bool(
         re.fullmatch(
-            rf"{point}(?:\\s*[-–—]\\s*{point})?",
+            rf"{point}(?:\s*[-–—]\s*{point})?",
             clean,
             flags=re.IGNORECASE,
         )
@@ -15184,11 +15377,13 @@ def _workspace_export_preview_pages_payload(
 
             is_section_heading = _workspace_export_is_section_heading_text(text)
 
-            if (
+            is_skills_body_row = (
                 current_section == "SKILLS"
                 and not is_section_heading
                 and not bool(paragraph.get("is_bullet"))
-            ):
+            )
+
+            if is_skills_body_row:
                 split_skill_rows = _workspace_export_split_skills_preview_rows(paragraph)
                 if split_skill_rows:
                     rows.extend(split_skill_rows)
@@ -15208,12 +15403,13 @@ def _workspace_export_preview_pages_payload(
                 idx += 1
                 continue
 
-            rows.append(
-                _workspace_export_preview_row_from_paragraph(
-                    paragraph,
-                    text=text,
-                )
+            preview_row = _workspace_export_preview_row_from_paragraph(
+                paragraph,
+                text=text,
             )
+            if is_skills_body_row:
+                preview_row["left_indent_pt"] = 14.0
+            rows.append(preview_row)
 
             if is_section_heading:
                 current_section = text.upper()

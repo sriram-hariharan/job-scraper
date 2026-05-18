@@ -3112,12 +3112,23 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
 
   const width = Math.min(
     520,
-    Math.max(360, measuredWidth),
+    Math.max(420, Math.min(measuredWidth, 520)),
     window.innerWidth - viewportPadding * 2
   );
+  const viewportMaxHeight = Math.max(360, window.innerHeight - viewportPadding * 2);
 
   if (targetRow) {
     const targetRect = targetRow.getBoundingClientRect();
+    const targetOutOfScroller =
+      Boolean(scrollerRect) &&
+      (targetRect.bottom <= scrollerRect.top || targetRect.top >= scrollerRect.bottom);
+    const targetOutOfViewport =
+      targetRect.bottom <= viewportPadding || targetRect.top >= window.innerHeight - viewportPadding;
+
+    if (targetOutOfScroller || targetOutOfViewport) {
+      return null;
+    }
+
     const horizontalMin = Math.max(viewportPadding, Number(scrollerRect?.left || 0) + 18);
     const horizontalMax = Math.min(
       window.innerWidth - width - viewportPadding,
@@ -3135,14 +3146,7 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
     const belowSpace = Math.max(0, paneBottom - targetRect.bottom - gap);
     const preferAbove = aboveSpace >= 160 || aboveSpace >= belowSpace;
     const placement = preferAbove ? "above" : "below";
-    const availableHeight = placement === "above" ? aboveSpace : belowSpace;
-
-    const maxHeight = Math.max(
-      160,
-      Math.min(520, availableHeight || paneBottom - paneTop)
-    );
-
-    const renderedHeight = Math.min(measuredHeight, maxHeight);
+    const renderedHeight = Math.min(measuredHeight, viewportMaxHeight);
 
     const top =
       placement === "above"
@@ -3156,8 +3160,8 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
       top: `${Math.max(paneTop, top)}px`,
       left: `${left}px`,
       width: `${width}px`,
-      minWidth: "320px",
-      maxHeight: `${maxHeight}px`,
+      minWidth: "360px",
+      maxHeight: `${viewportMaxHeight}px`,
       placement,
     };
   }
@@ -3166,8 +3170,8 @@ function getScanWorkspaceSuggestionPopoverPosition(marker) {
     top: `${paneTop}px`,
     left: `${Math.max(viewportPadding, window.innerWidth - width - viewportPadding)}px`,
     width: `${width}px`,
-    minWidth: "320px",
-    maxHeight: `${Math.min(520, paneBottom - paneTop)}px`,
+    minWidth: "360px",
+    maxHeight: `${viewportMaxHeight}px`,
     placement: "floating",
   };
 }
@@ -3177,6 +3181,10 @@ function positionScanWorkspaceSuggestionPopover(marker) {
   if (!popover || !marker) return;
 
   const position = getScanWorkspaceSuggestionPopoverPosition(marker);
+  if (!position) {
+    closeScanWorkspaceSuggestionPopover();
+    return;
+  }
 
   popover.style.position = "fixed";
   popover.style.top = position.top;
@@ -3745,7 +3753,7 @@ function renderScanWorkspaceSuggestionPopover() {
   popover.style.width = "min(520px, calc(100vw - 32px))";
   popover.style.minWidth = "0";
   popover.style.maxWidth = "calc(100vw - 32px)";
-  popover.style.maxHeight = "min(620px, calc(100vh - 32px))";
+  popover.style.maxHeight = "calc(100vh - 28px)";
 
   title.textContent = sourceLabel;
   if (kicker) {

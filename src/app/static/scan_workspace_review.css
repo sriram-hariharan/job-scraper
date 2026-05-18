@@ -1195,11 +1195,12 @@ html[data-theme] .scan-review-v2 .scan-workspace-surface-tab.is-active::after {
   display: none !important;
 }
 
-.scan-review-v2 .scan-workspace-rescan-btn {
-  border-color: #0f766e !important;
-  background: linear-gradient(135deg, #0f766e, #0891b2) !important;
+.scan-workspace-page .scan-review-v2 .scan-workspace-rescan-btn {
+  border-color: #1d4ed8 !important;
+  background-color: #2563eb !important;
+  background: linear-gradient(135deg, #2563eb, #0891b2) !important;
   color: #ffffff !important;
-  box-shadow: 0 10px 22px rgba(8, 145, 178, 0.22) !important;
+  box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22) !important;
 }
 
 .scan-review-v2 .scan-workspace-toolbar-btn:not(:disabled):hover {
@@ -1207,9 +1208,24 @@ html[data-theme] .scan-review-v2 .scan-workspace-surface-tab.is-active::after {
   background: color-mix(in srgb, var(--scan-panel-strong) 82%, var(--scan-primary) 18%) !important;
 }
 
-.scan-review-v2 .scan-workspace-rescan-btn:not(:disabled):hover {
-  border-color: #0e7490 !important;
-  background: linear-gradient(135deg, #0d9488, #0284c7) !important;
+.scan-workspace-page .scan-review-v2 .scan-workspace-rescan-btn:not(:disabled):hover {
+  border-color: #1e40af !important;
+  background-color: #1d4ed8 !important;
+  background: linear-gradient(135deg, #1d4ed8, #0e7490) !important;
+}
+
+html[data-theme="dark"] .scan-workspace-page .scan-review-v2 .scan-workspace-rescan-btn {
+  border-color: #22d3ee !important;
+  background-color: #0f766e !important;
+  background: linear-gradient(135deg, #0f766e, #155e75) !important;
+  color: #f8fafc !important;
+  box-shadow: 0 12px 28px rgba(34, 211, 238, 0.18) !important;
+}
+
+html[data-theme="dark"] .scan-workspace-page .scan-review-v2 .scan-workspace-rescan-btn:not(:disabled):hover {
+  border-color: #67e8f9 !important;
+  background-color: #0d9488 !important;
+  background: linear-gradient(135deg, #0d9488, #0e7490) !important;
 }
 
 .scan-review-v2 :is(#scanWorkspaceUndoBtn, #scanWorkspaceRedoBtn) {
@@ -1249,12 +1265,13 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
 }
 
 .scan-workspace-export-option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   width: 100%;
-  min-height: 34px;
-  padding: 6px 8px;
+  min-height: 44px;
+  padding: 8px 10px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -1269,13 +1286,20 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
 }
 
 .scan-workspace-export-format-icon {
-  width: 34px;
-  height: 24px;
+  display: block;
+  width: 28px;
+  height: 28px;
+  justify-self: center;
+  object-fit: contain;
+}
+
+html[data-theme="dark"] .scan-workspace-export-format-icon {
+  filter: invert(1) brightness(1.35);
 }
 
 .scan-review-v2 .scan-workspace-toolbar-context {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) auto auto !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
   align-items: center !important;
   gap: 10px !important;
   width: 100% !important;
@@ -1283,9 +1307,19 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
   border-bottom: 1px solid var(--scan-border) !important;
 }
 
+.scan-review-v2 .scan-workspace-toolbar-title-actions {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
 .scan-review-v2 .scan-workspace-toolbar-resume-name {
   min-width: 0 !important;
   overflow: hidden !important;
+  flex: 0 1 auto !important;
   color: var(--scan-text) !important;
   font-size: 15px !important;
   font-weight: 900 !important;
@@ -1527,14 +1561,15 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
   display: grid !important;
   gap: 12px !important;
   width: min(520px, calc(100vw - 32px));
-  max-height: min(620px, calc(100vh - 32px));
+  max-height: calc(100vh - 28px);
   padding: 18px !important;
   border: 1px solid var(--scan-border) !important;
   border-radius: 16px !important;
   background: var(--scan-panel-strong) !important;
   color: var(--scan-text) !important;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28) !important;
-  overflow: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
 }
 
 .scan-workspace-suggestion-popover.hidden {
@@ -1650,6 +1685,8 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
   grid-template-columns: auto minmax(0, 1fr) !important;
   align-items: start !important;
   gap: 8px !important;
+  overflow: hidden !important;
+  white-space: normal !important;
 }
 
 .scan-workspace-phrase-option-index {
@@ -1662,6 +1699,14 @@ html[data-theme="dark"] .scan-review-v2 .scan-workspace-toolbar-icon {
   color: var(--scan-primary) !important;
   font-size: 11px !important;
   font-weight: 950 !important;
+}
+
+.scan-workspace-phrase-option-text {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  overflow-wrap: anywhere !important;
+  word-break: normal !important;
+  white-space: normal !important;
 }
 
 .scan-workspace-phrase-status {

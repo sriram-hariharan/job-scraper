@@ -23,10 +23,18 @@ from src.config.consts import (
     MAJOR_US_CITIES,
     FOREIGN_CITY_BLOCKLIST
 )
+from src.config.role_taxonomy import compile_role_title_regexes
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp
 
 logger = get_logger(__name__)
+
+
+def _role_title_regexes(selected_role_families=None):
+    if selected_role_families:
+        return compile_role_title_regexes(selected_role_families)
+
+    return TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
 
 def normalize_title(title):
     if not title:
@@ -38,15 +46,16 @@ def normalize_title(title):
     return WHITESPACE_REGEX.sub(" ", title).strip()
 
 
-def title_matches(title):
+def title_matches(title, selected_role_families=None):
     if not title:
         return False
 
+    include_regexes, exclude_regexes = _role_title_regexes(selected_role_families)
     normalized = normalize_title(title)
-    if not any(regex.search(normalized) for regex in TITLE_INCLUDE_REGEX):
+    if not any(regex.search(normalized) for regex in include_regexes):
         return False
 
-    if any(regex.search(normalized) for regex in TITLE_EXCLUDE_REGEX):
+    if any(regex.search(normalized) for regex in exclude_regexes):
         return False
 
     return True
@@ -114,7 +123,7 @@ def posted_within_24h(posted_at_raw):
     return dt >= now - timedelta(hours=FRESHNESS_HOURS)
 
 
-def filter_jobs(jobs):
+def filter_jobs(jobs, selected_role_families=None):
 
     title_pass = 0
     location_pass = 0
@@ -128,7 +137,7 @@ def filter_jobs(jobs):
 
         locations = location_field if isinstance(location_field, list) else [location_field]
 
-        if not title_matches(title):
+        if not title_matches(title, selected_role_families=selected_role_families):
             rejection_reasons["title_mismatch"] += 1
             continue
         title_pass += 1

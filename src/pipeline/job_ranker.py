@@ -2,22 +2,31 @@
 
 from datetime import datetime, timezone
 from src.config.consts import TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
+from src.config.role_taxonomy import compile_role_title_regexes
 
 
-def title_score(title: str):
+def _role_title_regexes(selected_role_families=None):
+    if selected_role_families:
+        return compile_role_title_regexes(selected_role_families)
+
+    return TITLE_INCLUDE_REGEX, TITLE_EXCLUDE_REGEX
+
+
+def title_score(title: str, selected_role_families=None):
 
     if not title:
         return 0
 
     t = title.lower()
+    include_regexes, exclude_regexes = _role_title_regexes(selected_role_families)
 
-    for r in TITLE_EXCLUDE_REGEX:
+    for r in exclude_regexes:
         if r.search(t):
             return -100
 
     score = 0
 
-    for r in TITLE_INCLUDE_REGEX:
+    for r in include_regexes:
         if r.search(t):
             score += 25
 
@@ -64,24 +73,28 @@ def momentum_score(company, momentum_map):
     return 0
 
 
-def score_job(job, momentum_map):
+def score_job(job, momentum_map, selected_role_families=None):
 
     score = 0
 
-    score += title_score(job.get("title",""))
+    score += title_score(job.get("title",""), selected_role_families=selected_role_families)
     score += recency_score(job.get("posted_at"))
     score += momentum_score(job.get("company"), momentum_map)
 
     return score
 
 
-def rank_jobs(jobs, momentum_map=None):
+def rank_jobs(jobs, momentum_map=None, selected_role_families=None):
 
     if momentum_map is None:
         momentum_map = {}
 
     for job in jobs:
-        job["_score"] = score_job(job, momentum_map)
+        job["_score"] = score_job(
+            job,
+            momentum_map,
+            selected_role_families=selected_role_families,
+        )
 
     jobs.sort(key=lambda x: x["_score"], reverse=True)
 

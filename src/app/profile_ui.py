@@ -406,7 +406,7 @@ def saved_scans_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_resume_roles_r8"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r8"></script>
 </body>
 </html>
     """.strip()

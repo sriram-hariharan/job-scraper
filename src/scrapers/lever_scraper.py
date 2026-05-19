@@ -1,5 +1,7 @@
 import asyncio
 import aiohttp
+import json
+import os
 from tqdm import tqdm
 from src.config.consts import LEVER_API
 from models.job import Job
@@ -20,9 +22,34 @@ from src.discovery.crawl_scheduler import (
 
 logger = get_logger("lever")
 
+
+def _selected_role_families_from_env():
+    raw = str(os.environ.get("JOB_STACK_SELECTED_ROLE_FAMILIES", "") or "").strip()
+    if not raw:
+        return []
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Ignoring invalid JOB_STACK_SELECTED_ROLE_FAMILIES JSON.")
+        return []
+
+    if not isinstance(parsed, list):
+        logger.warning("Ignoring non-list JOB_STACK_SELECTED_ROLE_FAMILIES value.")
+        return []
+
+    selected = []
+    for value in parsed:
+        role_family_id = str(value or "").strip()
+        if role_family_id and role_family_id not in selected:
+            selected.append(role_family_id)
+    return selected
+
+
 async def fetch_company_jobs(session, company):
 
     url = f"{LEVER_API}/{company}?mode=json"
+    selected_role_families = _selected_role_families_from_env()
 
     try:
         async with session.get(url, headers={"User-Agent": "Mozilla/5.0"}) as resp:
@@ -48,7 +75,10 @@ async def fetch_company_jobs(session, company):
 
         # ---------- EARLY FILTERS ----------
 
-        if not title_matches(title):
+        if not title_matches(
+            title,
+            selected_role_families=selected_role_families or None,
+        ):
             continue
 
         if not us_location(location, "lever"):

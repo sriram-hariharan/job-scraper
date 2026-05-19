@@ -1,6 +1,6 @@
 import requests
 import time
-from src.config.consts import ASHBY_URL, ASHBY_DETAIL_QUERY, ASHBY_QUERY
+from src.config.consts import ASHBY_URL, ASHBY_QUERY, ASHBY_TIMESTAMP_QUERY
 from models.job import Job
 from src.utils.file_loader import load_lines
 from src.utils.parallel import run_parallel
@@ -29,7 +29,7 @@ def fetch_ashby_timestamp(company, job_id):
     time.sleep(0.4)
     payload = {
         "operationName": "ApiJobPosting",
-        "query": ASHBY_DETAIL_QUERY,
+        "query": ASHBY_TIMESTAMP_QUERY,
         "variables": {
             "organizationHostedJobsPageName": company,
             "jobPostingId": job_id

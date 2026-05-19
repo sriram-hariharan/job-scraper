@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from tqdm import tqdm
 from src.utils.logging import get_logger
+from src.details.ashby_details import fetch_ashby_details
 from src.details.greenhouse_details import fetch_greenhouse_details
 from src.details.workday_details import fetch_workday_details
 from src.cache.description_cache import (
@@ -14,7 +15,7 @@ from models.description import Description
 
 logger = get_logger("job_details")
 
-ENRICHABLE_SOURCES = {"greenhouse", "workday"}
+ENRICHABLE_SOURCES = {"ashby", "greenhouse", "workday"}
 
 def process_job(job):
 
@@ -44,6 +45,9 @@ def process_job(job):
 
     elif source == "workday":
         job = fetch_workday_details(job)
+
+    elif source == "ashby":
+        job = fetch_ashby_details(job)
 
     else:
         job["_details_fetched"] = "skipped"
@@ -100,6 +104,8 @@ def enrich_job_details(jobs):
     f"json={counts.get('json', 0)} | "
     f"nextjs={counts.get('nextjs', 0)} | "
     f"api={counts.get('api', 0)} | "
+    f"ashby_api={counts.get('ashby_api', 0)} | "
+    f"ashby_no_description={counts.get('ashby_no_description', 0)} | "
     f"skipped={counts.get('skipped', 0)} | "
     f"failed={counts.get('failed', 0)} || "
     f"total={len(enriched_jobs)}"

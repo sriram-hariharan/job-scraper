@@ -163,6 +163,19 @@ query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
 }
 """
 
+ASHBY_TIMESTAMP_QUERY = """
+query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) {
+  jobPosting(
+    organizationHostedJobsPageName: $organizationHostedJobsPageName
+    jobPostingId: $jobPostingId
+  ) {
+    id
+    title
+    publishedDate
+  }
+}
+"""
+
 ASHBY_DETAIL_QUERY = """
 query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) {
   jobPosting(
@@ -172,6 +185,7 @@ query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: Str
     id
     title
     publishedDate
+    descriptionHtml
   }
 }
 """

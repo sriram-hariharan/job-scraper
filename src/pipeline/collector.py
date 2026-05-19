@@ -111,6 +111,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.discovery.domain_learner import learn_domains_from_jobs
     from src.discovery.persist_discovered import persist_discovered_companies
     from src.intelligence.job_intelligence import (
+        ai_evaluation_skip_summary,
         build_job_intelligence,
         filter_jobs_for_ai_evaluation,
     )
@@ -316,8 +317,36 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     start_stage("ai_evaluation_filter", "Selecting jobs eligible for AI evaluation")
 
     evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)
+    skip_summary = ai_evaluation_skip_summary(intelligent_jobs, limit=10)
+    skipped_count = int(skip_summary.get("skipped_count", 0) or 0)
+    reason_counts = dict(skip_summary.get("reason_counts", {}) or {})
+    skipped_samples = list(skip_summary.get("skipped_samples", []) or [])
+
+    if skipped_count:
+        logger.info(
+            "AI evaluation skipped jobs: count=%s | reason_counts=%s",
+            skipped_count,
+            reason_counts,
+        )
+        for index, skipped_job in enumerate(skip_summary.get("skipped_jobs", []) or [], start=1):
+            logger.info(
+                "AI evaluation skipped #%s | company=%s | title=%s | url=%s | reason=%s",
+                index,
+                skipped_job.get("company", ""),
+                skipped_job.get("title", ""),
+                skipped_job.get("url", ""),
+                skipped_job.get("reason", ""),
+            )
     logger.info(f"Jobs eligible for AI evaluation: {len(evaluable_jobs)}")
-    complete_stage("ai_evaluation_filter", counts={"evaluable_jobs": len(evaluable_jobs)})
+    complete_stage(
+        "ai_evaluation_filter",
+        counts={
+            "evaluable_jobs": len(evaluable_jobs),
+            "ai_evaluation_skipped_jobs": skipped_count,
+            "ai_evaluation_skip_reasons": reason_counts,
+            "ai_evaluation_skipped_samples": skipped_samples,
+        },
+    )
 
     section("EMBEDDING PREFILTER", logger)
     start_stage("embedding_prefilter", f"Embedding-prefiltering {len(evaluable_jobs)} evaluable jobs")

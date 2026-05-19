@@ -5,6 +5,7 @@ from src.utils.logging import get_logger
 from src.details.ashby_details import fetch_ashby_details
 from src.details.greenhouse_details import fetch_greenhouse_details
 from src.details.lever_details import fetch_lever_details
+from src.details.workable_details import fetch_workable_details
 from src.details.workday_details import fetch_workday_details
 from src.cache.description_cache import (
     init_cache,
@@ -16,7 +17,7 @@ from models.description import Description
 
 logger = get_logger("job_details")
 
-ENRICHABLE_SOURCES = {"ashby", "greenhouse", "lever", "workday"}
+ENRICHABLE_SOURCES = {"ashby", "greenhouse", "lever", "workable", "workday"}
 
 def process_job(job):
 
@@ -52,6 +53,9 @@ def process_job(job):
 
     elif source == "lever":
         job = fetch_lever_details(job)
+
+    elif source == "workable":
+        job = fetch_workable_details(job)
 
     else:
         job["_details_fetched"] = "skipped"
@@ -115,6 +119,9 @@ def enrich_job_details(jobs):
     f"lever_api={counts.get('lever_api', 0)} | "
     f"lever_no_description={counts.get('lever_no_description', 0)} | "
     f"lever_request_failed={counts.get('lever_request_failed', 0)} | "
+    f"workable_api={counts.get('workable_api', 0)} | "
+    f"workable_no_description={counts.get('workable_no_description', 0)} | "
+    f"workable_request_failed={counts.get('workable_request_failed', 0)} | "
     f"skipped={counts.get('skipped', 0)} | "
     f"failed={counts.get('failed', 0)} || "
     f"total={len(enriched_jobs)}"

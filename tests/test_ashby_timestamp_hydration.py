@@ -3,20 +3,22 @@ import types
 from datetime import datetime, timezone
 
 
+class _FakeTqdm:
+    def __call__(self, iterable=None, **kwargs):
+        return iterable
+
+    @staticmethod
+    def write(*args, **kwargs):
+        return None
+
+
 sys.modules.setdefault("pycountry", types.SimpleNamespace(countries=[]))
-sys.modules.setdefault(
-    "tqdm",
-    types.SimpleNamespace(tqdm=types.SimpleNamespace(write=lambda *args, **kwargs: None)),
-)
+sys.modules.setdefault("requests", types.SimpleNamespace())
+sys.modules.setdefault("tqdm", types.SimpleNamespace(tqdm=_FakeTqdm()))
 sys.modules.setdefault(
     "src.utils.workday_timestamp",
     types.SimpleNamespace(fetch_workday_timestamp=lambda *args, **kwargs: None),
 )
-sys.modules.setdefault(
-    "src.scrapers.ashby_scraper",
-    types.SimpleNamespace(fetch_ashby_timestamp=lambda *args, **kwargs: None),
-)
-
 from src.pipeline import job_filter
 
 
@@ -40,11 +42,11 @@ def _ashby_job(**overrides):
 def test_ashby_job_with_meta_job_id_gets_timestamp_hydrated(monkeypatch):
     calls = []
 
-    def fake_fetch_ashby_timestamp(company, job_id):
+    def fake_fetch_ashby_timestamp_result(company, job_id):
         calls.append((company, job_id))
-        return _fresh_timestamp()
+        return {"posted_at": _fresh_timestamp(), "marker": "", "status_code": 200}
 
-    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp", fake_fetch_ashby_timestamp)
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
 
     jobs = [_ashby_job(meta={"_job_id": "posting-123"})]
 
@@ -61,11 +63,11 @@ def test_ashby_job_with_meta_job_id_gets_timestamp_hydrated(monkeypatch):
 def test_ashby_job_with_top_level_job_id_still_gets_timestamp_hydrated(monkeypatch):
     calls = []
 
-    def fake_fetch_ashby_timestamp(company, job_id):
+    def fake_fetch_ashby_timestamp_result(company, job_id):
         calls.append((company, job_id))
-        return _fresh_timestamp()
+        return {"posted_at": _fresh_timestamp(), "marker": "", "status_code": 200}
 
-    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp", fake_fetch_ashby_timestamp)
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
 
     jobs = [_ashby_job(_job_id="posting-456")]
 
@@ -82,11 +84,11 @@ def test_ashby_job_with_top_level_job_id_still_gets_timestamp_hydrated(monkeypat
 def test_ashby_job_id_falls_back_to_prefixed_public_job_id(monkeypatch):
     calls = []
 
-    def fake_fetch_ashby_timestamp(company, job_id):
+    def fake_fetch_ashby_timestamp_result(company, job_id):
         calls.append((company, job_id))
-        return _fresh_timestamp()
+        return {"posted_at": _fresh_timestamp(), "marker": "", "status_code": 200}
 
-    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp", fake_fetch_ashby_timestamp)
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
 
     jobs = [_ashby_job(job_id="as_posting-789")]
 
@@ -103,8 +105,12 @@ def test_ashby_job_with_no_id_remains_rejected_without_posted_at(monkeypatch):
     calls = []
     monkeypatch.setattr(
         job_filter,
-        "fetch_ashby_timestamp",
-        lambda company, job_id: calls.append((company, job_id)) or _fresh_timestamp(),
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: calls.append((company, job_id)) or {
+            "posted_at": _fresh_timestamp(),
+            "marker": "",
+            "status_code": 200,
+        },
     )
 
     jobs = [_ashby_job()]
@@ -122,8 +128,12 @@ def test_non_ashby_missing_posted_at_behavior_is_unchanged(monkeypatch):
     calls = []
     monkeypatch.setattr(
         job_filter,
-        "fetch_ashby_timestamp",
-        lambda company, job_id: calls.append((company, job_id)) or _fresh_timestamp(),
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: calls.append((company, job_id)) or {
+            "posted_at": _fresh_timestamp(),
+            "marker": "",
+            "status_code": 200,
+        },
     )
 
     jobs = [
@@ -138,3 +148,48 @@ def test_non_ashby_missing_posted_at_behavior_is_unchanged(monkeypatch):
 
     assert job_filter.filter_jobs(jobs) == []
     assert calls == []
+
+
+def test_transient_ashby_timestamp_failure_then_success_passes(monkeypatch):
+    calls = []
+
+    def fake_fetch_ashby_timestamp_result(company, job_id):
+        calls.append((company, job_id))
+        return {"posted_at": _fresh_timestamp(), "marker": "", "status_code": 200}
+
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
+
+    jobs = [_ashby_job(meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+    )
+
+    assert calls == [("plaid", "posting-123")]
+    assert filtered == jobs
+
+
+def test_repeated_ashby_timestamp_failure_is_rejected(monkeypatch):
+    calls = []
+
+    def fake_fetch_ashby_timestamp_result(company, job_id):
+        calls.append((company, job_id))
+        return {
+            "posted_at": None,
+            "marker": "ashby_timestamp_request_failed",
+            "status_code": 500,
+        }
+
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
+
+    jobs = [_ashby_job(meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+    )
+
+    assert calls == [("plaid", "posting-123")]
+    assert filtered == []
+    assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"

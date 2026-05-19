@@ -25,7 +25,7 @@ from src.config.consts import (
 )
 from src.config.role_taxonomy import compile_role_title_regexes
 from src.utils.logging import get_logger
-from src.scrapers.ashby_scraper import fetch_ashby_timestamp
+from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
 
 logger = get_logger(__name__)
 
@@ -178,7 +178,7 @@ def filter_jobs(jobs, selected_role_families=None):
 
             futures = {
                 executor.submit(
-                    fetch_ashby_timestamp,
+                    fetch_ashby_timestamp_result,
                     job["company"],
                     ashby_posting_id(job)
                 ): job
@@ -192,14 +192,22 @@ def filter_jobs(jobs, selected_role_families=None):
                 job = futures[future]
 
                 try:
-                    ts = future.result()
+                    result = future.result()
+                    if isinstance(result, dict):
+                        ts = result.get("posted_at")
+                        marker = str(result.get("marker") or "").strip()
+                    else:
+                        ts = result
+                        marker = ""
 
                     if ts:
                         job["posted_at"] = ts
                         resolved += 1
+                    elif marker:
+                        job["_ashby_timestamp_status"] = marker
 
                 except Exception:
-                    pass
+                    job["_ashby_timestamp_status"] = "ashby_timestamp_request_failed"
 
     # resolve missing Workday timestamps
     workday_missing = [
@@ -242,6 +250,11 @@ def filter_jobs(jobs, selected_role_families=None):
 
         if job.get("source") == ATS_JOBVITE:
             filtered.append(job)
+            continue
+
+        if job.get("source") == "ashby" and not posted:
+            rejection_reasons["missing_timestamp"] += 1
+            job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
             continue
 
         if not posted_within_24h(posted):

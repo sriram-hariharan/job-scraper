@@ -106,6 +106,8 @@ def enrich_job_details(jobs):
     f"api={counts.get('api', 0)} | "
     f"ashby_api={counts.get('ashby_api', 0)} | "
     f"ashby_no_description={counts.get('ashby_no_description', 0)} | "
+    f"ashby_request_failed={counts.get('ashby_request_failed', 0)} | "
+    f"ashby_parse_failed={counts.get('ashby_parse_failed', 0)} | "
     f"skipped={counts.get('skipped', 0)} | "
     f"failed={counts.get('failed', 0)} || "
     f"total={len(enriched_jobs)}"

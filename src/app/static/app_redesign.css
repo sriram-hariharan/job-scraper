@@ -4055,6 +4055,97 @@ html[data-theme="light"] .resume-row .resume-delete-btn:hover {
   color: #991b1b !important;
 }
 
+.resume-role-mapping-panel {
+  grid-column: 1 / -1;
+  margin-top: 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 14px;
+  background: var(--app-inset);
+  overflow: hidden;
+}
+
+.resume-role-mapping-panel summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 42px;
+  padding: 0 14px;
+  cursor: pointer;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 900;
+  list-style: none;
+}
+
+.resume-role-mapping-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.resume-role-mapping-panel summary span:last-child {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.resume-role-mapping-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.resume-role-family-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 12px;
+  background: var(--app-surface);
+  color: var(--app-text-2);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.resume-role-family-option.is-selected {
+  border-color: rgba(37, 99, 235, 0.5);
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--app-text);
+}
+
+.resume-role-family-main,
+.resume-role-default-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.resume-role-family-main span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.resume-role-default-wrap {
+  flex: 0 0 auto;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.resume-role-default-wrap input:disabled + span {
+  opacity: 0.45;
+}
+
+html[data-theme="light"] .resume-role-family-option.is-selected {
+  background: #eff6ff;
+  color: #0f172a;
+}
+
 .admin-users-table-wrap {
   width: 100%;
   overflow-x: auto;

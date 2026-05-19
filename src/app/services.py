@@ -31,6 +31,7 @@ from src.config.consts import (
     _SCAN_TITLE_SIGNAL_PATTERNS,
     DOMAIN_SIGNAL_PATTERNS,
 )
+from src.config.role_taxonomy import ROLE_TAXONOMY
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -85,8 +86,11 @@ from src.storage.saved_scans.read_postgres import (
 )
 from src.storage.profile_resumes.store import (
     delete_profile_resume_postgres_payload,
+    delete_profile_resume_role_mapping_payload,
     get_profile_resume_blob_postgres_payload,
+    get_profile_resume_role_mappings_payload,
     get_profile_resumes_postgres_payload,
+    upsert_profile_resume_role_mapping_payload,
     upsert_profile_resume_postgres_payload,
 )
 from src.storage.onboarding_preferences.store import (
@@ -344,6 +348,97 @@ def profile_resumes_payload(
         "storage": "postgres",
         "count": len(resumes),
         "resumes": resumes,
+    }
+
+
+def _role_family_options_payload() -> List[Dict[str, str]]:
+    return [
+        {
+            "role_family_id": role_family_id,
+            "display_name": _clean_text(family.get("display_name")) or role_family_id,
+        }
+        for role_family_id, family in ROLE_TAXONOMY.items()
+    ]
+
+
+def profile_resume_role_mappings_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = get_profile_resume_role_mappings_payload(
+        owner,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    mappings = list(payload.get("mappings", []) or [])
+    return {
+        "ok": True,
+        "count": len(mappings),
+        "mappings": mappings,
+        "role_families": _role_family_options_payload(),
+    }
+
+
+def save_profile_resume_role_mapping_payload(
+    *,
+    owner_user_id: str = "",
+    resume_name: str = "",
+    role_family_id: str = "",
+    is_default_for_role: bool = False,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = upsert_profile_resume_role_mapping_payload(
+        owner_user_id=owner,
+        resume_name=_clean_text(resume_name),
+        role_family_id=_clean_text(role_family_id),
+        is_default_for_role=bool(is_default_for_role),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "mapping": payload.get("mapping", {}),
+    }
+
+
+def delete_profile_resume_role_mapping_service_payload(
+    *,
+    owner_user_id: str = "",
+    resume_name: str = "",
+    role_family_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = delete_profile_resume_role_mapping_payload(
+        owner_user_id=owner,
+        resume_name=_clean_text(resume_name),
+        role_family_id=_clean_text(role_family_id),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "deleted": bool(payload.get("deleted", False)),
+        "resume_name": payload.get("resume_name", ""),
+        "role_family_id": payload.get("role_family_id", ""),
     }
 
 

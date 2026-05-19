@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 from urllib.parse import urlsplit, urlunsplit
 
+from src.config.role_taxonomy import ROLE_TAXONOMY
+
 DEFAULT_PROFILE_RESUMES_SCHEMA_SQL_PATH = Path("src/storage/profile_resumes/schema.sql")
 
 
@@ -48,6 +50,10 @@ def _clean_text(value: Any) -> str:
 
 def _sql_quote_text(value: Any) -> str:
     return "'" + str(value or "").replace("'", "''") + "'"
+
+
+def _sql_bool_literal(value: Any) -> str:
+    return "TRUE" if bool(value) else "FALSE"
 
 
 def _read_sql_artifact(path: Path, label: str) -> str:
@@ -95,6 +101,12 @@ def profile_resumes_schema_sql_text(
     schema_path: Path = DEFAULT_PROFILE_RESUMES_SCHEMA_SQL_PATH,
 ) -> str:
     return _read_sql_artifact(schema_path, "profile resumes schema")
+
+
+def profile_resume_role_mapping_schema_sql_text(
+    schema_path: Path = DEFAULT_PROFILE_RESUMES_SCHEMA_SQL_PATH,
+) -> str:
+    return profile_resumes_schema_sql_text(schema_path)
 
 
 def _run_psql_json_query(
@@ -425,6 +437,264 @@ SELECT json_build_object(
         "ok": bool(payload.get("data", {}).get("deleted", False)),
         "deleted": bool(payload.get("data", {}).get("deleted", False)),
         "resume_name": _clean_text(payload.get("data", {}).get("resume_name")) or safe_resume_name,
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
+def _row_to_role_mapping_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "owner_user_id": _clean_text(row.get("owner_user_id")),
+        "resume_name": _clean_text(row.get("resume_name")),
+        "role_family_id": _clean_text(row.get("role_family_id")),
+        "is_default_for_role": bool(row.get("is_default_for_role", False)),
+        "created_at": _clean_text(row.get("created_at")),
+        "updated_at": _clean_text(row.get("updated_at")),
+    }
+
+
+def validate_profile_resume_role_mapping_payload(payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(payload, dict):
+        raise ValueError("Profile resume role mapping payload must be a dictionary.")
+
+    safe_owner = _clean_text(payload.get("owner_user_id"))
+    safe_resume_name = _clean_text(payload.get("resume_name"))
+    safe_role_family_id = _clean_text(payload.get("role_family_id"))
+    if not safe_owner:
+        raise ValueError("owner_user_id is required.")
+    if not safe_resume_name:
+        raise ValueError("resume_name is required.")
+    if safe_resume_name != Path(safe_resume_name).name:
+        raise ValueError("Invalid resume_name.")
+    if not safe_role_family_id:
+        raise ValueError("role_family_id is required.")
+    if safe_role_family_id not in ROLE_TAXONOMY:
+        allowed = ", ".join(sorted(ROLE_TAXONOMY))
+        raise ValueError(f"Unknown role family id: {safe_role_family_id}. Allowed: {allowed}")
+
+    return {
+        "owner_user_id": safe_owner,
+        "resume_name": safe_resume_name,
+        "role_family_id": safe_role_family_id,
+        "is_default_for_role": bool(payload.get("is_default_for_role", False)),
+    }
+
+
+def ensure_profile_resume_role_mapping_schema(
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+) -> Dict[str, Any]:
+    return _run_psql_stdin_command(
+        sql=profile_resume_role_mapping_schema_sql_text(),
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+
+
+def get_profile_resume_role_mappings_payload(
+    owner_user_id: str,
+    *,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    safe_owner = _clean_text(owner_user_id)
+    if not safe_owner:
+        raise ValueError("owner_user_id is required.")
+
+    schema_sql = profile_resume_role_mapping_schema_sql_text() + "\n\n" if ensure_schema else ""
+    sql = schema_sql + f"""
+WITH mapping_rows AS (
+    SELECT
+        owner_user_id,
+        resume_name,
+        role_family_id,
+        is_default_for_role,
+        created_at,
+        updated_at
+    FROM profile_resume_role_mappings
+    WHERE owner_user_id = {_sql_quote_text(safe_owner)}
+    ORDER BY resume_name ASC, role_family_id ASC
+)
+SELECT json_build_object(
+    'total_row_count', (SELECT COUNT(*) FROM profile_resume_role_mappings WHERE owner_user_id = {_sql_quote_text(safe_owner)}),
+    'rows', COALESCE((SELECT json_agg(row_to_json(mapping_rows)) FROM mapping_rows), '[]'::json)
+);
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    if print_only:
+        return payload
+
+    rows = [
+        _row_to_role_mapping_payload(dict(row or {}))
+        for row in list(payload.get("data", {}).get("rows", []) or [])
+    ]
+    return {
+        "ok": True,
+        "mappings": rows,
+        "rows": rows,
+        "count": len(rows),
+        "postgres": payload.get("data", {}),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
+def upsert_profile_resume_role_mapping_payload(
+    *,
+    owner_user_id: str,
+    resume_name: str,
+    role_family_id: str,
+    is_default_for_role: bool = False,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    normalized = validate_profile_resume_role_mapping_payload(
+        {
+            "owner_user_id": owner_user_id,
+            "resume_name": resume_name,
+            "role_family_id": role_family_id,
+            "is_default_for_role": is_default_for_role,
+        }
+    )
+    schema_sql = profile_resume_role_mapping_schema_sql_text() + "\n\n" if ensure_schema else ""
+    clear_default_sql = ""
+    if normalized["is_default_for_role"]:
+        clear_default_sql = f"""
+clear_existing_default AS (
+    UPDATE profile_resume_role_mappings
+    SET is_default_for_role = FALSE,
+        updated_at = NOW()
+    WHERE owner_user_id = {_sql_quote_text(normalized["owner_user_id"])}
+      AND role_family_id = {_sql_quote_text(normalized["role_family_id"])}
+      AND resume_name <> {_sql_quote_text(normalized["resume_name"])}
+    RETURNING 1
+),
+"""
+
+    sql = schema_sql + f"""
+WITH {clear_default_sql} upserted AS (
+    INSERT INTO profile_resume_role_mappings (
+        owner_user_id,
+        resume_name,
+        role_family_id,
+        is_default_for_role
+    )
+    VALUES (
+        {_sql_quote_text(normalized["owner_user_id"])},
+        {_sql_quote_text(normalized["resume_name"])},
+        {_sql_quote_text(normalized["role_family_id"])},
+        {_sql_bool_literal(normalized["is_default_for_role"])}
+    )
+    ON CONFLICT (owner_user_id, resume_name, role_family_id) DO UPDATE SET
+        is_default_for_role = EXCLUDED.is_default_for_role,
+        updated_at = NOW()
+    RETURNING
+        owner_user_id,
+        resume_name,
+        role_family_id,
+        is_default_for_role,
+        created_at,
+        updated_at
+)
+SELECT json_build_object(
+    'upserted', TRUE,
+    'mapping', (SELECT row_to_json(upserted) FROM upserted LIMIT 1)
+);
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    if print_only:
+        payload["data"] = {
+            "upserted": True,
+            "mapping": normalized,
+        }
+        return payload
+
+    return {
+        "ok": bool(payload.get("data", {}).get("upserted", False)),
+        "upserted": bool(payload.get("data", {}).get("upserted", False)),
+        "mapping": _row_to_role_mapping_payload(dict(payload.get("data", {}).get("mapping", {}) or {})),
+        "command": payload.get("command", []),
+        "command_text": payload.get("command_text", ""),
+    }
+
+
+def delete_profile_resume_role_mapping_payload(
+    *,
+    owner_user_id: str,
+    resume_name: str,
+    role_family_id: str,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    normalized = validate_profile_resume_role_mapping_payload(
+        {
+            "owner_user_id": owner_user_id,
+            "resume_name": resume_name,
+            "role_family_id": role_family_id,
+            "is_default_for_role": False,
+        }
+    )
+    schema_sql = profile_resume_role_mapping_schema_sql_text() + "\n\n" if ensure_schema else ""
+    sql = schema_sql + f"""
+WITH deleted AS (
+    DELETE FROM profile_resume_role_mappings
+    WHERE owner_user_id = {_sql_quote_text(normalized["owner_user_id"])}
+      AND resume_name = {_sql_quote_text(normalized["resume_name"])}
+      AND role_family_id = {_sql_quote_text(normalized["role_family_id"])}
+    RETURNING resume_name, role_family_id
+)
+SELECT json_build_object(
+    'deleted', EXISTS (SELECT 1 FROM deleted),
+    'resume_name', COALESCE((SELECT resume_name FROM deleted LIMIT 1), {_sql_quote_text(normalized["resume_name"])}),
+    'role_family_id', COALESCE((SELECT role_family_id FROM deleted LIMIT 1), {_sql_quote_text(normalized["role_family_id"])})
+);
+""".strip()
+    payload = _run_psql_json_stdin_query(
+        sql=sql,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+    )
+    if print_only:
+        payload["data"] = {
+            "deleted": True,
+            "resume_name": normalized["resume_name"],
+            "role_family_id": normalized["role_family_id"],
+        }
+        return payload
+
+    return {
+        "ok": bool(payload.get("data", {}).get("deleted", False)),
+        "deleted": bool(payload.get("data", {}).get("deleted", False)),
+        "resume_name": _clean_text(payload.get("data", {}).get("resume_name")) or normalized["resume_name"],
+        "role_family_id": _clean_text(payload.get("data", {}).get("role_family_id")) or normalized["role_family_id"],
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
     }

@@ -1011,6 +1011,48 @@ def profile_resumes(http_request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/profile/resume-role-mappings")
+def profile_resume_role_mappings(http_request: Request):
+    try:
+        return services.profile_resume_role_mappings_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/profile/resume-role-mappings")
+def save_profile_resume_role_mapping(
+    http_request: Request,
+    payload: dict = Body(...),
+):
+    try:
+        return services.save_profile_resume_role_mapping_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            resume_name=payload.get("resume_name", ""),
+            role_family_id=payload.get("role_family_id", ""),
+            is_default_for_role=bool(payload.get("is_default_for_role", False)),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/profile/resume-role-mappings")
+def delete_profile_resume_role_mapping(
+    http_request: Request,
+    resume_name: str = Query(..., min_length=1),
+    role_family_id: str = Query(..., min_length=1),
+):
+    try:
+        return services.delete_profile_resume_role_mapping_service_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            resume_name=resume_name,
+            role_family_id=role_family_id,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/onboarding/preferences")
 def onboarding_preferences(http_request: Request):
     try:

@@ -10,6 +10,8 @@ const profileState = {
   pipelineRunsTotalPages: 1,
   pipelineRunsHasPrevious: false,
   pipelineRunsHasNext: false,
+  resumeRoleFamilies: [],
+  resumeRoleMappings: [],
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
@@ -753,6 +755,77 @@ function closeResumeDeleteModal() {
   getResumeDeleteModal().classList.add("hidden");
 }
 
+function resumeRoleMappingsFor(resumeName) {
+  const safeName = String(resumeName || "");
+  return profileState.resumeRoleMappings.filter((mapping) => mapping.resume_name === safeName);
+}
+
+function resumeRoleMappingFor(resumeName, roleFamilyId) {
+  const safeName = String(resumeName || "");
+  const safeRole = String(roleFamilyId || "");
+  return profileState.resumeRoleMappings.find(
+    (mapping) => mapping.resume_name === safeName && mapping.role_family_id === safeRole
+  );
+}
+
+function renderResumeRoleMappingPanel(resume) {
+  const resumeName = String(resume?.resume_name || "");
+  const families = Array.isArray(profileState.resumeRoleFamilies) ? profileState.resumeRoleFamilies : [];
+  if (!families.length) return "";
+
+  const assignedCount = resumeRoleMappingsFor(resumeName).length;
+  const summary = assignedCount
+    ? `${assignedCount} role famil${assignedCount === 1 ? "y" : "ies"} assigned`
+    : "Assign role families";
+
+  const options = families.map((family) => {
+    const roleFamilyId = String(family.role_family_id || "");
+    const mapping = resumeRoleMappingFor(resumeName, roleFamilyId);
+    const checked = Boolean(mapping);
+    const isDefault = Boolean(mapping?.is_default_for_role);
+    const displayName = family.display_name || roleFamilyId;
+
+    return `
+      <label class="resume-role-family-option${checked ? " is-selected" : ""}">
+        <span class="resume-role-family-main">
+          <input
+            type="checkbox"
+            data-resume-role-toggle
+            data-resume-name="${escapeHtml(resumeName)}"
+            data-role-family-id="${escapeHtml(roleFamilyId)}"
+            ${checked ? "checked" : ""}
+          />
+          <span>${escapeHtml(displayName)}</span>
+        </span>
+        <span class="resume-role-default-wrap">
+          <input
+            type="radio"
+            name="resume-role-default-${escapeHtml(roleFamilyId)}"
+            data-resume-role-default
+            data-resume-name="${escapeHtml(resumeName)}"
+            data-role-family-id="${escapeHtml(roleFamilyId)}"
+            ${isDefault ? "checked" : ""}
+            ${checked ? "" : "disabled"}
+          />
+          <span>Default</span>
+        </span>
+      </label>
+    `;
+  }).join("");
+
+  return `
+    <details class="resume-role-mapping-panel">
+      <summary>
+        <span>Role family mapping</span>
+        <span>${escapeHtml(summary)}</span>
+      </summary>
+      <div class="resume-role-mapping-grid">
+        ${options}
+      </div>
+    </details>
+  `;
+}
+
 function renderResumeList(items) {
   const listEl = qs("resumeList");
   const metaEl = qs("resumeListMeta");
@@ -788,8 +861,16 @@ function renderResumeList(items) {
           Delete
         </button>
       </div>
+
+      ${renderResumeRoleMappingPanel(resume)}
     </article>
   `).join("");
+}
+
+async function loadResumeRoleMappings() {
+  const data = await fetchJson("/profile/resume-role-mappings");
+  profileState.resumeRoleMappings = Array.isArray(data.mappings) ? data.mappings : [];
+  profileState.resumeRoleFamilies = Array.isArray(data.role_families) ? data.role_families : [];
 }
 
 async function loadResumes() {
@@ -801,6 +882,7 @@ async function loadResumes() {
 
   const data = await fetchJson("/profile/resumes");
   const resumes = data.resumes || [];
+  await loadResumeRoleMappings();
   renderResumeList(resumes);
   renderResumeOnboardingState(resumes);
 }
@@ -1067,6 +1149,26 @@ async function deleteResume(resumeName) {
   await loadResumes();
 }
 
+async function saveResumeRoleMapping(resumeName, roleFamilyId, isDefaultForRole = false) {
+  await postJson("/profile/resume-role-mappings", {
+    resume_name: resumeName,
+    role_family_id: roleFamilyId,
+    is_default_for_role: Boolean(isDefaultForRole),
+  });
+  await loadResumes();
+}
+
+async function deleteResumeRoleMapping(resumeName, roleFamilyId) {
+  const params = new URLSearchParams({
+    resume_name: resumeName,
+    role_family_id: roleFamilyId,
+  });
+  await fetchJson(`/profile/resume-role-mappings?${params.toString()}`, {
+    method: "DELETE",
+  });
+  await loadResumes();
+}
+
 function bindUploadInteractions() {
   const dropzone = qs("resumeDropzone");
   const input = qs("resumeUploadInput");
@@ -1168,6 +1270,41 @@ function bindDeleteInteractions() {
   getResumeDeleteModal().addEventListener("click", (event) => {
     if (event.target === getResumeDeleteModal()) {
       closeResumeDeleteModal();
+    }
+  });
+}
+
+function bindResumeRoleMappingInteractions() {
+  qs("resumeList").addEventListener("change", async (event) => {
+    const toggle = event.target.closest("[data-resume-role-toggle]");
+    const defaultInput = event.target.closest("[data-resume-role-default]");
+    const input = toggle || defaultInput;
+    if (!input) return;
+
+    const resumeName = input.dataset.resumeName || "";
+    const roleFamilyId = input.dataset.roleFamilyId || "";
+    if (!resumeName || !roleFamilyId) return;
+
+    input.disabled = true;
+    try {
+      if (toggle) {
+        if (toggle.checked) {
+          await saveResumeRoleMapping(resumeName, roleFamilyId, false);
+          setStatus("Role family assigned.", "success");
+        } else {
+          await deleteResumeRoleMapping(resumeName, roleFamilyId);
+          setStatus("Role family assignment removed.", "success");
+        }
+        return;
+      }
+
+      if (defaultInput.checked) {
+        await saveResumeRoleMapping(resumeName, roleFamilyId, true);
+        setStatus("Default resume updated for role family.", "success");
+      }
+    } catch (err) {
+      setStatus(err.message, "error");
+      await loadResumes();
     }
   });
 }
@@ -1378,6 +1515,7 @@ async function initProfilePage() {
       }
       bindUploadInteractions();
       bindDeleteInteractions();
+      bindResumeRoleMappingInteractions();
       bindProfileTabs();
       bindPipelineRunsInteractions();
       bindAdminUsersInteractions();

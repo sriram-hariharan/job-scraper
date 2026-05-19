@@ -123,6 +123,22 @@ def posted_within_24h(posted_at_raw):
     return dt >= now - timedelta(hours=FRESHNESS_HOURS)
 
 
+def ashby_posting_id(job):
+    raw_job_id = job.get("_job_id")
+
+    if not raw_job_id and isinstance(job.get("meta"), dict):
+        raw_job_id = job.get("meta", {}).get("_job_id")
+
+    if not raw_job_id:
+        raw_job_id = job.get("job_id")
+
+    job_id = str(raw_job_id or "").strip()
+    if job_id.startswith("as_"):
+        job_id = job_id[3:]
+
+    return job_id
+
+
 def filter_jobs(jobs, selected_role_families=None):
 
     title_pass = 0
@@ -153,7 +169,7 @@ def filter_jobs(jobs, selected_role_families=None):
     job for job in prefiltered
     if job.get("source") == "ashby"
     and not job.get("posted_at")
-    and job.get("_job_id")
+    and ashby_posting_id(job)
     ]
 
     if ashby_missing:
@@ -164,7 +180,7 @@ def filter_jobs(jobs, selected_role_families=None):
                 executor.submit(
                     fetch_ashby_timestamp,
                     job["company"],
-                    job["_job_id"]
+                    ashby_posting_id(job)
                 ): job
                 for job in ashby_missing
             }

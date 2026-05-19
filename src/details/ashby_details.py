@@ -1,5 +1,6 @@
 import html
 import re
+import time
 from typing import Any, Dict, Optional, Tuple
 
 from bs4 import BeautifulSoup
@@ -9,6 +10,10 @@ from src.utils.http_retry import http_post
 from src.utils.logging import get_logger
 
 logger = get_logger("ashby_details")
+
+ASHBY_DETAIL_RETRIES = 3
+ASHBY_DETAIL_THROTTLE_SECONDS = 0.15
+ASHBY_DETAIL_BACKOFF_SECONDS = 0.5
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0",
@@ -65,12 +70,75 @@ def _extract_description_from_response(data: Dict[str, Any]) -> Tuple[Optional[s
     return description_html, description_text
 
 
+def _mark_failure(
+    job: Dict[str, Any],
+    *,
+    marker: str,
+    company: Optional[str],
+    job_id: Optional[str],
+    status_code: Optional[int] = None,
+) -> Dict[str, Any]:
+    logger.warning(
+        "Ashby detail fetch failed | company=%s | job_id=%s | status=%s | reason=%s",
+        company or "",
+        job_id or "",
+        status_code if status_code is not None else "",
+        marker,
+    )
+    job["_details_fetched"] = marker
+    return job
+
+
+def _post_ashby_detail_with_retry(
+    payload: Dict[str, Any],
+    *,
+    company: str,
+    job_id: str,
+):
+    last_response = None
+
+    for attempt in range(ASHBY_DETAIL_RETRIES):
+        if ASHBY_DETAIL_THROTTLE_SECONDS > 0:
+            time.sleep(ASHBY_DETAIL_THROTTLE_SECONDS)
+
+        try:
+            response = http_post(
+                ASHBY_URL,
+                json=payload,
+                headers=HEADERS,
+                timeout=10,
+            )
+        except Exception:
+            response = None
+
+        last_response = response
+        status_code = getattr(response, "status_code", None)
+        if response is not None and status_code == 200:
+            return response
+
+        if attempt < ASHBY_DETAIL_RETRIES - 1:
+            logger.info(
+                "Retrying Ashby detail fetch | company=%s | job_id=%s | status=%s | attempt=%s",
+                company,
+                job_id,
+                status_code if status_code is not None else "",
+                attempt + 1,
+            )
+            time.sleep(ASHBY_DETAIL_BACKOFF_SECONDS * (attempt + 1))
+
+    return last_response
+
+
 def fetch_ashby_details(job: Dict[str, Any]) -> Dict[str, Any]:
     company, job_id = _extract_ashby_identifiers(job)
 
     if not company or not job_id:
-        job["_details_fetched"] = "failed"
-        return job
+        return _mark_failure(
+            job,
+            marker="ashby_request_failed",
+            company=company,
+            job_id=job_id,
+        )
 
     payload = {
         "operationName": "ApiJobPosting",
@@ -81,30 +149,64 @@ def fetch_ashby_details(job: Dict[str, Any]) -> Dict[str, Any]:
         },
     }
 
-    try:
-        response = http_post(
-            ASHBY_URL,
-            json=payload,
-            headers=HEADERS,
-            timeout=10,
-        )
-    except Exception:
-        logger.warning("Ashby detail request failed: %s %s", company, job_id)
-        job["_details_fetched"] = "failed"
-        return job
-
+    response = _post_ashby_detail_with_retry(payload, company=company, job_id=job_id)
     if response is None or response.status_code != 200:
-        job["_details_fetched"] = "failed"
-        return job
+        return _mark_failure(
+            job,
+            marker="ashby_request_failed",
+            company=company,
+            job_id=job_id,
+            status_code=getattr(response, "status_code", None),
+        )
 
     try:
         data = response.json()
     except Exception:
-        job["_details_fetched"] = "failed"
-        return job
+        return _mark_failure(
+            job,
+            marker="ashby_parse_failed",
+            company=company,
+            job_id=job_id,
+            status_code=response.status_code,
+        )
+
+    if not isinstance(data, dict):
+        return _mark_failure(
+            job,
+            marker="ashby_parse_failed",
+            company=company,
+            job_id=job_id,
+            status_code=response.status_code,
+        )
+
+    if data.get("errors"):
+        return _mark_failure(
+            job,
+            marker="ashby_request_failed",
+            company=company,
+            job_id=job_id,
+            status_code=response.status_code,
+        )
+
+    root = data.get("data")
+    if not isinstance(root, dict) or not isinstance(root.get("jobPosting"), dict):
+        return _mark_failure(
+            job,
+            marker="ashby_parse_failed",
+            company=company,
+            job_id=job_id,
+            status_code=response.status_code,
+        )
 
     description_html, description_text = _extract_description_from_response(data)
     if not description_text:
+        logger.warning(
+            "Ashby detail fetch empty body | company=%s | job_id=%s | status=%s | reason=%s",
+            company,
+            job_id,
+            response.status_code,
+            "ashby_no_description",
+        )
         job["_details_fetched"] = "ashby_no_description"
         return job
 

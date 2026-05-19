@@ -66,6 +66,7 @@ function renderRequirementStatus(requirements) {
   };
   const resumeStatus = onboardingQs("onboardingResumeStatus");
   const resumePanel = onboardingQs("onboardingResumePanel");
+  const resumeCallout = onboardingQs("onboardingResumeCallout");
   const saveStatus = onboardingQs("onboardingSaveStatus");
   const completeBtn = onboardingQs("onboardingCompleteBtn");
 
@@ -82,6 +83,19 @@ function renderRequirementStatus(requirements) {
 
   if (resumePanel) {
     resumePanel.classList.toggle("is-complete", hasResume);
+  }
+
+  if (resumeCallout) {
+    const strong = resumeCallout.querySelector("strong");
+    const detail = resumeCallout.querySelector("span");
+    if (strong) {
+      strong.textContent = hasResume ? "Resume requirement satisfied." : "Upload at least one profile resume.";
+    }
+    if (detail) {
+      detail.textContent = hasResume
+        ? "You can still open your profile to manage or replace resumes."
+        : "Resume files stay in the existing profile resume storage and are not stored locally by onboarding.";
+    }
   }
 
   if (saveStatus) {

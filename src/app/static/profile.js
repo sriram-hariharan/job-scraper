@@ -12,6 +12,9 @@ const profileState = {
   pipelineRunsHasNext: false,
   resumeRoleFamilies: [],
   resumeRoleMappings: [],
+  onboardingPreferences: null,
+  onboardingRequirements: {},
+  preferencesLoaded: false,
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
@@ -57,6 +60,104 @@ async function postJson(url, payload = {}) {
     },
     body: JSON.stringify(payload),
   });
+}
+
+function splitProfilePreferenceList(value) {
+  return String(value || "")
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item, index, items) => items.indexOf(item) === index);
+}
+
+function profilePreferenceCheckedValues(name) {
+  const form = qs("profilePreferencesForm");
+  if (!form) return [];
+  return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`))
+    .map((input) => String(input.value || "").trim())
+    .filter(Boolean);
+}
+
+function setProfilePreferenceCheckedValues(name, values) {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+  const selected = new Set(Array.isArray(values) ? values.map(String) : []);
+  form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+    input.checked = selected.has(String(input.value || ""));
+  });
+}
+
+function setProfilePreferenceTextareaList(id, values) {
+  const input = qs(id);
+  if (!input) return;
+  input.value = Array.isArray(values) ? values.join(", ") : "";
+}
+
+function setProfilePreferencesStatus(message, tone = "info") {
+  const banner = qs("profilePreferencesStatusBanner");
+  if (!banner) return;
+  banner.textContent = message || "";
+  banner.className = `profile-inline-status ${tone}`;
+  if (!message) {
+    banner.classList.add("hidden");
+  }
+}
+
+function hydrateProfilePreferencesForm(preferences) {
+  setProfilePreferenceCheckedValues("selected_role_families", preferences?.selected_role_families || []);
+  setProfilePreferenceCheckedValues("target_seniority", preferences?.target_seniority || []);
+  setProfilePreferenceCheckedValues("work_modes", preferences?.work_modes || []);
+  setProfilePreferenceTextareaList("profilePreferredLocationsInput", preferences?.preferred_locations || []);
+  setProfilePreferenceTextareaList("profilePreferredSkillsInput", preferences?.preferred_skills || []);
+  setProfilePreferenceTextareaList("profileExcludedKeywordsInput", preferences?.excluded_keywords || []);
+}
+
+function collectProfilePreferences() {
+  const current = profileState.onboardingPreferences || {};
+  return {
+    onboarding_completed: Boolean(current.onboarding_completed),
+    selected_role_families: profilePreferenceCheckedValues("selected_role_families"),
+    target_seniority: profilePreferenceCheckedValues("target_seniority"),
+    preferred_locations: splitProfilePreferenceList(qs("profilePreferredLocationsInput")?.value),
+    work_modes: profilePreferenceCheckedValues("work_modes"),
+    preferred_skills: splitProfilePreferenceList(qs("profilePreferredSkillsInput")?.value),
+    excluded_keywords: splitProfilePreferenceList(qs("profileExcludedKeywordsInput")?.value),
+  };
+}
+
+async function loadProfilePreferences() {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+  setProfilePreferencesStatus("Loading preferences...");
+  const payload = await fetchJson("/onboarding/preferences");
+  profileState.onboardingPreferences = payload.preferences || {};
+  profileState.onboardingRequirements = payload.requirements || {};
+  hydrateProfilePreferencesForm(profileState.onboardingPreferences);
+  profileState.preferencesLoaded = true;
+  setProfilePreferencesStatus("");
+}
+
+async function saveProfilePreferences() {
+  const saveBtn = qs("profilePreferencesSaveBtn");
+  const preferences = collectProfilePreferences();
+  if (!preferences.selected_role_families.length) {
+    setProfilePreferencesStatus("Select at least one role family before saving.", "error");
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+  setProfilePreferencesStatus("Saving preferences...");
+  try {
+    const payload = await postJson("/onboarding/preferences", preferences);
+    profileState.onboardingPreferences = payload.preferences || preferences;
+    profileState.onboardingRequirements = payload.requirements || profileState.onboardingRequirements || {};
+    hydrateProfilePreferencesForm(profileState.onboardingPreferences);
+    setProfilePreferencesStatus("Preferences saved.", "success");
+  } catch (err) {
+    setProfilePreferencesStatus(err.message, "error");
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 function formatBytes(bytes) {
@@ -816,7 +917,10 @@ function renderResumeRoleMappingPanel(resume) {
   return `
     <details class="resume-role-mapping-panel">
       <summary>
-        <span>Role family mapping</span>
+        <span class="resume-role-summary-title">
+          <span class="resume-role-summary-caret" aria-hidden="true"></span>
+          <span>Role family mapping</span>
+        </span>
         <span>${escapeHtml(summary)}</span>
       </summary>
       <div class="resume-role-mapping-grid">
@@ -1331,11 +1435,27 @@ function bindProfileTabs() {
       });
     }
 
+    if (targetId === "profilePreferencesSection" && !profileState.preferencesLoaded) {
+      loadProfilePreferences().catch((err) => {
+        setProfilePreferencesStatus(err.message, "error");
+      });
+    }
+
     if (targetId === "profileAdminUsersSection" && !profileState.adminUsers.length) {
       loadAdminUsers().catch((err) => {
         setAdminUsersStatus(err.message, "error");
       });
     }
+  });
+}
+
+function bindProfilePreferencesInteractions() {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveProfilePreferences();
   });
 }
 
@@ -1499,10 +1619,20 @@ function isProfileResumePage() {
   return Boolean(qs("resumeList"));
 }
 
+function isProfilePreferencesPage() {
+  return Boolean(qs("profilePreferencesForm")) && !isProfileResumePage();
+}
+
 async function initProfilePage() {
   try {
     if (isSavedScansPage()) {
       await bindSavedScansPage();
+      return;
+    }
+
+    if (isProfilePreferencesPage()) {
+      bindProfilePreferencesInteractions();
+      await loadProfilePreferences();
       return;
     }
 
@@ -1530,6 +1660,8 @@ async function initProfilePage() {
   } catch (err) {
     if (isSavedScansPage()) {
       renderSavedScans([], { ok: false, error: err.message });
+    } else if (isProfilePreferencesPage()) {
+      setProfilePreferencesStatus(`Failed to load preferences: ${err.message}`, "error");
     } else {
       setStatus(`Failed to load resumes: ${err.message}`, "error");
     }

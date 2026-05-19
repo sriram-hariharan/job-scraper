@@ -40,6 +40,7 @@ HTML_NAVIGATION_PATHS = {
     "/applications",
     "/scheduler",
     "/profile",
+    "/profile/preferences",
     "/profile/saved-scans",
     "/onboarding",
     "/scan-workspace",

@@ -1,10 +1,96 @@
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+from src.app.onboarding_ui import _role_family_cards_html
 from src.app.ui_shell import render_top_shell
 from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
+
+
+def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) -> str:
+    hidden_class = " hidden" if hidden else ""
+    tab_attr = " data-profile-tab-panel" if tab_panel else ""
+    return f"""
+    <section class="card profile-section-card profile-preferences-section{hidden_class}" id="profilePreferencesSection"{tab_attr}>
+      <div class="section-header">
+        <div>
+          <h2>Preferences</h2>
+          <div class="subtext">Update the same role and matching preferences you selected during onboarding.</div>
+        </div>
+      </div>
+
+      <div class="profile-inline-status hidden" id="profilePreferencesStatusBanner"></div>
+
+      <form class="profile-preferences-form" id="profilePreferencesForm">
+        <section class="profile-preferences-group">
+          <div class="profile-preferences-group-header">
+            <div>
+              <h3>Role interests</h3>
+              <p class="subtext">Select at least one role family to guide your job queue.</p>
+            </div>
+            <span class="onboarding-required-pill">Required</span>
+          </div>
+          <div class="onboarding-role-grid" id="profilePreferencesRoleGrid">
+            {_role_family_cards_html()}
+          </div>
+        </section>
+
+        <section class="profile-preferences-group">
+          <div class="profile-preferences-group-header">
+            <div>
+              <h3>Seniority and work style</h3>
+              <p class="subtext">These are saved as preferences and can be changed anytime.</p>
+            </div>
+          </div>
+          <div class="onboarding-field-grid">
+            <fieldset class="onboarding-chip-group">
+              <legend>Seniority</legend>
+              <label><input type="checkbox" name="target_seniority" value="entry" /> Entry</label>
+              <label><input type="checkbox" name="target_seniority" value="mid" /> Mid</label>
+              <label><input type="checkbox" name="target_seniority" value="senior" /> Senior</label>
+              <label><input type="checkbox" name="target_seniority" value="staff" /> Staff</label>
+            </fieldset>
+
+            <fieldset class="onboarding-chip-group">
+              <legend>Work mode</legend>
+              <label><input type="checkbox" name="work_modes" value="remote" /> Remote</label>
+              <label><input type="checkbox" name="work_modes" value="hybrid" /> Hybrid</label>
+              <label><input type="checkbox" name="work_modes" value="onsite" /> On-site</label>
+            </fieldset>
+          </div>
+
+          <label class="onboarding-text-field">
+            <span>Preferred locations</span>
+            <textarea id="profilePreferredLocationsInput" rows="3" placeholder="New York, Remote, Boston"></textarea>
+          </label>
+        </section>
+
+        <section class="profile-preferences-group">
+          <div class="profile-preferences-group-header">
+            <div>
+              <h3>Skills and exclusions</h3>
+              <p class="subtext">Optional keywords to tune future role expansion and matching.</p>
+            </div>
+          </div>
+          <div class="onboarding-field-grid">
+            <label class="onboarding-text-field">
+              <span>Preferred skills/tools</span>
+              <textarea id="profilePreferredSkillsInput" rows="4" placeholder="Python, AWS, React, Kubernetes"></textarea>
+            </label>
+            <label class="onboarding-text-field">
+              <span>Excluded keywords</span>
+              <textarea id="profileExcludedKeywordsInput" rows="4" placeholder="intern, unpaid, commission only"></textarea>
+            </label>
+          </div>
+        </section>
+
+        <div class="profile-preferences-actions">
+          <button type="submit" id="profilePreferencesSaveBtn">Save preferences</button>
+        </div>
+      </form>
+    </section>
+"""
 
 
 @router.get("/profile", response_class=HTMLResponse)
@@ -20,8 +106,14 @@ def profile_page(request: Request) -> str:
     )
     profile_tabs_html = f"""
     <nav class="profile-tabs" id="profileTabs" aria-label="Profile sections">
-      <button type="button" class="profile-tab-btn is-active" data-profile-tab-target="resumeSection">Resumes</button>
-      <button type="button" class="profile-tab-btn" data-profile-tab-target="profilePipelineRunsSection">Pipeline runs</button>{admin_tab_html}
+      <button type="button" class="profile-tab-btn is-active" data-profile-tab-target="resumeSection">
+        <img class="profile-tab-icon" src="/static/media/profile_icon.svg" alt="" aria-hidden="true" />
+        <span>Resumes</span>
+      </button>
+      <button type="button" class="profile-tab-btn" data-profile-tab-target="profilePipelineRunsSection">
+        <img class="profile-tab-icon" src="/static/media/scan_icon.svg" alt="" aria-hidden="true" />
+        <span>Pipeline runs</span>
+      </button>{admin_tab_html}
     </nav>
 """
     admin_users_section_html = (
@@ -166,7 +258,7 @@ def profile_page(request: Request) -> str:
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=role_profile_preferences_tabs_r1" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -175,7 +267,7 @@ def profile_page(request: Request) -> str:
     <header class="page-header">
       <div>
         <h1>My Profile</h1>
-        <p class="subtext">Manage resume files and review persisted Live Pipeline runs.</p>
+        <p class="subtext">Manage resume files and persisted Live Pipeline runs.</p>
       </div>
     </header>
 
@@ -296,7 +388,42 @@ def profile_page(request: Request) -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_resume_roles_r8"></script>
+  <script src="/static/profile.js?v=profile_preferences_tabs_r1"></script>
+</body>
+</html>
+    """.strip()
+
+
+@router.get("/profile/preferences", response_class=HTMLResponse)
+def profile_preferences_page() -> str:
+    return f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Preferences · My Profile</title>
+  <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
+  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=role_profile_preferences_menu_r1" />
+</head>
+<body>
+  {render_top_shell("/profile/preferences")}
+
+  <div class="page">
+    <header class="page-header">
+      <div>
+        <h1>Preferences</h1>
+        <p class="subtext">Tune role interests, locations, work style, and matching keywords.</p>
+      </div>
+    </header>
+
+    {_preferences_section_html()}
+  </div>
+
+  <script src="/static/vendor/tabler/tabler.min.js"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
+  <script src="/static/profile.js?v=profile_preferences_menu_r1"></script>
 </body>
 </html>
     """.strip()
@@ -313,7 +440,7 @@ def saved_scans_page() -> str:
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=role_expansion_r10_ui" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -406,7 +533,7 @@ def saved_scans_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r8"></script>
+  <script src="/static/profile.js?v=profile_saved_scans_e5_discard_icon_profile_resume_roles_r10"></script>
 </body>
 </html>
     """.strip()

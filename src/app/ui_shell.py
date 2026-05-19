@@ -202,7 +202,7 @@ def render_top_shell(active_href: str) -> str:
       <div class="profile-dropdown-actions">
         <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
           <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
-            <img src="/static/media/preview_img.svg" alt="" />
+            <img src="/static/media/scan_icon.svg" alt="" />
           </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Saved Scans</span>
@@ -213,11 +213,22 @@ def render_top_shell(active_href: str) -> str:
 
         <a class="profile-dropdown-nav-btn" href="/profile">
           <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
-            <img src="/static/media/edit-mode-img.svg" alt="" />
+            <img src="/static/media/profile_icon.svg" alt="" />
           </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">My Profile</span>
-            <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
+            <span class="profile-dropdown-nav-subtitle">Resumes and account tools</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <a class="profile-dropdown-nav-btn" href="/profile/preferences">
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--preferences" aria-hidden="true">
+            <img src="/static/media/preferences_icon.svg" alt="" />
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Preferences</span>
+            <span class="profile-dropdown-nav-subtitle">Role focus, location, and matching signals</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>

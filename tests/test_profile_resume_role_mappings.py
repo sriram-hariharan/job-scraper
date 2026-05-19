@@ -98,4 +98,4 @@ def test_profile_ui_contract_for_resume_role_mapping_controls():
     assert "/profile/resume-role-mappings" in profile_js
     assert "data-resume-role-toggle" in profile_js
     assert "data-resume-role-default" in profile_js
-    assert "profile_resume_roles_r8" in profile_ui
+    assert "profile_resume_roles_r10" in profile_ui

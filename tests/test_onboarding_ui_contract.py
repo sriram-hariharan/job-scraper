@@ -10,6 +10,19 @@ def test_onboarding_page_defines_authenticated_flow():
     assert "/profile?onboarding=resume_upload" in source
 
 
+def test_onboarding_role_cards_render_decorative_icons():
+    source = Path("src/app/onboarding_ui.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    assert "ROLE_FAMILY_ICON_SVGS" in source
+    assert 'class="onboarding-role-icon"' in source
+    assert 'class="onboarding-role-icon-svg"' in source
+    assert 'aria-hidden="true"' in source
+    assert 'focusable="false"' in source
+    assert ".onboarding-role-icon" in css
+    assert ".onboarding-role-icon-svg" in css
+
+
 def test_shell_redirects_incomplete_onboarding():
     source = Path("src/app/static/shell.js").read_text(encoding="utf-8")
 

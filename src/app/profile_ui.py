@@ -93,6 +93,16 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
 """
 
 
+def _profile_navigation_icon_preloads_html() -> str:
+    return """
+    <div class="profile-navigation-icon-preloads hidden" aria-hidden="true">
+      <img src="/static/media/profile_icon.svg" alt="" />
+      <img src="/static/media/scan_icon.svg" alt="" />
+    </div>
+""".strip()
+
+
+
 @router.get("/profile", response_class=HTMLResponse)
 def profile_page(request: Request) -> str:
     user = dict(getattr(request.state, "auth_user", {}) or {}) or current_user_from_request(request)
@@ -271,6 +281,7 @@ def profile_page(request: Request) -> str:
 </head>
 <body>
   {render_top_shell("/profile")}
+  {_profile_navigation_icon_preloads_html()}
 
   <div class="page">
     <header class="page-header">

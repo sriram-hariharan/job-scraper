@@ -196,6 +196,16 @@ _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS: set[str] = set()
 _PIPELINE_ARTIFACT_MAX_BYTES = int(
     os.environ.get("JOB_STACK_PIPELINE_ARTIFACT_MAX_BYTES", "5242880") or "5242880"
 )
+_PIPELINE_ROOT_ARTIFACT_NAMES = {
+    "live_pipeline_status.json",
+    "live_pipeline_run.log",
+    "current_run_job_corpus.jsonl",
+    "best_resume_variant_by_job.csv",
+    "application_shortlist_by_job.csv",
+    "application_execution_queue.csv",
+    "job_packet_manifest.csv",
+}
+_PIPELINE_JOB_PACKET_SUFFIXES = {".json", ".jsonl", ".md", ".txt"}
 
 ALLOWED_APPLICATION_STATUSES = {
     "OPENED",
@@ -2891,17 +2901,8 @@ def _pipeline_artifact_candidate_paths(output_dir: Path) -> List[Path]:
         return []
 
     candidates: List[Path] = []
-    root_names = {
-        "live_pipeline_status.json",
-        "live_pipeline_run.log",
-        "current_run_job_corpus.jsonl",
-        "best_resume_variant_by_job.csv",
-        "application_shortlist_by_job.csv",
-        "application_execution_queue.csv",
-        "job_packet_manifest.csv",
-    }
 
-    for name in sorted(root_names):
+    for name in sorted(_PIPELINE_ROOT_ARTIFACT_NAMES):
         candidate = root / name
         if candidate.exists() and candidate.is_file():
             candidates.append(candidate)
@@ -2909,7 +2910,7 @@ def _pipeline_artifact_candidate_paths(output_dir: Path) -> List[Path]:
     packet_dir = root / "job_packets"
     if packet_dir.exists() and packet_dir.is_dir():
         for candidate in sorted(packet_dir.rglob("*")):
-            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl", ".md", ".txt"}:
+            if candidate.is_file() and candidate.suffix.lower() in _PIPELINE_JOB_PACKET_SUFFIXES:
                 candidates.append(candidate)
 
     return candidates
@@ -2941,11 +2942,11 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         return root_kind_by_name[name]
 
     if name.startswith("job_packets/"):
-        if filename.endswith("__tailoring_llm.json"):
+        if filename.endswith("__tailoring_llm.json") or filename.endswith("_tailoring_llm.json"):
             return "job_packet_tailoring_llm_json"
-        if filename.endswith("__tailoring.json"):
+        if filename.endswith("__tailoring.json") or filename.endswith("_tailoring.json"):
             return "job_packet_tailoring_json"
-        if filename.endswith("__tailoring.md"):
+        if filename.endswith("__tailoring.md") or filename.endswith("_tailoring.md"):
             return "job_packet_tailoring_markdown"
         if suffix == ".json":
             return "job_packet_json"
@@ -3065,8 +3066,13 @@ def _ingest_pipeline_run_artifacts_to_postgres(
     ingested: List[Dict[str, Any]] = []
     skipped: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
+    candidate_paths = _pipeline_artifact_candidate_paths(root)
+    candidate_names = [
+        _pipeline_artifact_name(output_dir=root, path=artifact_path)
+        for artifact_path in candidate_paths
+    ]
 
-    for artifact_path in _pipeline_artifact_candidate_paths(root):
+    for artifact_path in candidate_paths:
         artifact_name = _pipeline_artifact_name(output_dir=root, path=artifact_path)
 
         try:
@@ -3108,13 +3114,28 @@ def _ingest_pipeline_run_artifacts_to_postgres(
     result = {
         "ok": len(errors) == 0,
         "attempted": True,
+        "attempted_count": len(candidate_paths),
         "already_ingested": False,
         "owner_user_id": owner,
         "run_id": safe_run_id,
         "output_dir": str(root),
+        "candidate_count": len(candidate_paths),
+        "candidate_artifact_names": candidate_names,
         "ingested_count": len(ingested),
         "skipped_count": len(skipped),
         "error_count": len(errors),
+        "ingested_artifact_kinds": sorted(
+            {
+                _clean_text(item.get("artifact_kind"))
+                for item in ingested
+                if _clean_text(item.get("artifact_kind"))
+            }
+        ),
+        "ingested_artifact_names": [
+            _clean_text(item.get("artifact_name"))
+            for item in ingested
+            if _clean_text(item.get("artifact_name"))
+        ],
         "ingested": ingested,
         "skipped": skipped,
         "errors": errors,

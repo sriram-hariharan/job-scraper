@@ -5,6 +5,8 @@ from src.utils.logging import get_logger
 
 logger = get_logger(__name__)
 
+WORKABLE_ROUTE_SLUGS = {"j", "job", "jobs", "api", "accounts"}
+
 # in-memory store
 _DISCOVERED = {
     "greenhouse": set(),
@@ -17,6 +19,14 @@ _DISCOVERED = {
 }
 def get_learned():
     return _DISCOVERED
+
+
+def normalize_workable_slug(slug):
+    slug = str(slug or "").strip().lower()
+    if not slug or slug in WORKABLE_ROUTE_SLUGS:
+        return None
+    return slug
+
 
 def learn_from_job_url(url):
 
@@ -40,7 +50,9 @@ def learn_from_job_url(url):
 
     elif "apply.workable.com" in url:
         ats = "workable"
-        slug = url.split("apply.workable.com/")[1].split("/")[0].split("?")[0]
+        slug = normalize_workable_slug(
+            url.split("apply.workable.com/")[1].split("/")[0].split("?")[0]
+        )
 
     elif "jobs.jobvite.com" in url:
         ats = "jobvite"
@@ -75,7 +87,10 @@ def learn_company(ats, slug):
         return
 
     slug = slug.strip().lower()
+    if ats == "workable":
+        slug = normalize_workable_slug(slug)
+        if not slug:
+            return
 
     _DISCOVERED[ats].add(slug)
-
 

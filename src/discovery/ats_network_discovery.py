@@ -1,5 +1,6 @@
 import re
 from urllib.parse import urlparse
+from src.discovery.learned_companies import normalize_workable_slug
 def discover_greenhouse_neighbors(html: str):
 
     if not html:
@@ -52,7 +53,14 @@ def discover_workable_neighbors(html: str):
 
     matches = re.findall(r"apply\.workable\.com/([a-zA-Z0-9\-_]+)/", html)
 
-    return sorted(set(m.lower() for m in matches))
+    return sorted(
+        {
+            slug
+            for match in matches
+            for slug in [normalize_workable_slug(match)]
+            if slug
+        }
+    )
 
 def discover_jobvite_neighbors(html: str):
 

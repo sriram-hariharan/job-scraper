@@ -1030,6 +1030,19 @@ function setPipelineDeleteSeenDataValue(value) {
   setBinaryToggleValue("pipelineDeleteSeenData", value);
 }
 
+function setPipelineRunOptions(value) {
+  [
+    "pipelinePlanningOnly",
+    "pipelineGenerateTailoring",
+    "pipelineGenerateLlmTailoring",
+    "pipelineRefreshLlmTailoring",
+    "pipelineGenerateLlmFallback",
+    "pipelineGenerateLlmAdjudication",
+  ].forEach((name) => {
+    setBinaryToggleValue(name, value);
+  });
+}
+
 function applyPipelinePreset(name) {
   const preset = PIPELINE_PRESETS[name];
   if (!preset) return;
@@ -2276,6 +2289,14 @@ function attachPipelineConfigHandlers() {
 
   qs("pipelineClearAllActionsBtn").addEventListener("click", () => {
     setPipelineLlmActions([]);
+  });
+
+  qs("pipelineSelectAllRunOptionsBtn")?.addEventListener("click", () => {
+    setPipelineRunOptions(true);
+  });
+
+  qs("pipelineClearAllRunOptionsBtn")?.addEventListener("click", () => {
+    setPipelineRunOptions(false);
   });
 
   document.querySelectorAll("[data-pipeline-preset]").forEach((btn) => {

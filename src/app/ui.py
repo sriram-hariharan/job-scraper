@@ -16,8 +16,8 @@ def executive_dashboard() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Executive Queue Dashboard</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=ui_redesign_v44_shell_menu_clearance" />
+  <link rel="stylesheet" href="/static/styles.css?v=pipeline_options_controls_v4" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=pipeline_options_controls_v4" />
 </head>
 <body>
   {render_top_shell("/")}
@@ -349,8 +349,8 @@ def executive_dashboard() -> str:
             <div class="pipeline-option-section-header">
               <div class="pipeline-option-title">LLM ACTIONS</div>
               <div class="pipeline-inline-actions">
-                <button type="button" class="ghost-btn btn-sm" id="pipelineSelectAllActionsBtn">Select all</button>
-                <button type="button" class="ghost-btn btn-sm" id="pipelineClearAllActionsBtn">Clear all</button>
+                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="pipelineSelectAllActionsBtn">Select all</button>
+                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="pipelineClearAllActionsBtn">Clear all</button>
               </div>
             </div>
 
@@ -426,7 +426,13 @@ def executive_dashboard() -> str:
           </div>
 
           <div class="pipeline-option-section">
-            <div class="pipeline-option-title">RUN OPTIONS</div>
+            <div class="pipeline-option-section-header">
+              <div class="pipeline-option-title">RUN OPTIONS</div>
+              <div class="pipeline-inline-actions">
+                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="pipelineSelectAllRunOptionsBtn">Select all</button>
+                <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="pipelineClearAllRunOptionsBtn">Clear all</button>
+              </div>
+            </div>
 
             <div class="pipeline-toggle-grid">
               <div class="pipeline-toggle-item">
@@ -513,6 +519,7 @@ def executive_dashboard() -> str:
                   </label>
                 </div>
               </div>
+
               <div class="pipeline-toggle-item">
                 <div class="pipeline-toggle-copy">
                   <div class="pipeline-toggle-name">Generate LLM adjudication</div>
@@ -664,7 +671,7 @@ def executive_dashboard() -> str:
 </section>
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/app.js?v=pipeline_modal_fix_v2"></script>
+  <script src="/static/app.js?v=pipeline_options_controls_v4"></script>
   </body>
 </html>
     """.strip()

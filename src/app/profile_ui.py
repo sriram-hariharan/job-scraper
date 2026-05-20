@@ -100,18 +100,27 @@ def profile_page(request: Request) -> str:
     is_admin = bool(user.get("is_admin", False)) or access_level == "admin"
     admin_tab_html = (
         """
-      <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">User access</button>"""
+      <button type="button" class="profile-tab-btn" data-profile-tab-target="profileAdminUsersSection">
+        <span class="profile-tab-icon-stack" aria-hidden="true">
+          <img class="profile-tab-icon profile-tab-icon--dark" src="/static/media/admin_icon_dark.svg" alt="" />
+          <img class="profile-tab-icon profile-tab-icon--light" src="/static/media/admin_icon_light.svg" alt="" />
+        </span>
+        <span>User access</span>
+      </button>"""
         if is_admin
         else ""
     )
     profile_tabs_html = f"""
     <nav class="profile-tabs" id="profileTabs" aria-label="Profile sections">
       <button type="button" class="profile-tab-btn is-active" data-profile-tab-target="resumeSection">
-        <img class="profile-tab-icon" src="/static/media/profile_icon.svg" alt="" aria-hidden="true" />
+        <span class="profile-tab-icon-stack" aria-hidden="true">
+          <img class="profile-tab-icon profile-tab-icon--dark" src="/static/media/resume_icon_dark.svg" alt="" />
+          <img class="profile-tab-icon profile-tab-icon--light" src="/static/media/resume_icon_light.svg" alt="" />
+        </span>
         <span>Resumes</span>
       </button>
       <button type="button" class="profile-tab-btn" data-profile-tab-target="profilePipelineRunsSection">
-        <img class="profile-tab-icon" src="/static/media/scan_icon.svg" alt="" aria-hidden="true" />
+        <span class="profile-tab-icon profile-tab-icon--pipeline" aria-hidden="true"></span>
         <span>Pipeline runs</span>
       </button>{admin_tab_html}
     </nav>
@@ -210,7 +219,7 @@ def profile_page(request: Request) -> str:
           <h3 id="adminUserAccessTitle">Change access</h3>
           <div class="subtext" id="adminUserAccessSubtitle">Confirm this user access change.</div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="adminUserAccessCloseBtn" type="button">Close</button>
+        <button class="ghost-btn modal-close-btn admin-user-modal-close-btn" id="adminUserAccessCloseBtn" type="button">Close</button>
       </div>
 
       <div class="modal-body">
@@ -230,7 +239,7 @@ def profile_page(request: Request) -> str:
           <h3>Delete user</h3>
           <div class="subtext">This permanently removes the user account.</div>
         </div>
-        <button class="ghost-btn modal-close-btn" id="adminUserDeleteCloseBtn" type="button">Close</button>
+        <button class="ghost-btn modal-close-btn admin-user-modal-close-btn" id="adminUserDeleteCloseBtn" type="button">Close</button>
       </div>
 
       <div class="modal-body">
@@ -257,8 +266,8 @@ def profile_page(request: Request) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=role_profile_preferences_tabs_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_modal_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_modal_polish_r1" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -314,6 +323,15 @@ def profile_page(request: Request) -> str:
               Uploaded files are stored securely in your profile and become available to matching and scan workflows.
             </div>
           </div>
+
+          <div class="profile-planning-upload-callout hidden" id="profilePlanningUploadCallout">
+            <button type="button" class="profile-planning-options-btn" id="openProfilePlanningOptionsBtn">
+              Planning &amp; Tailoring Options
+            </button>
+            <div class="control-help field-help-wide">
+              You may want to run this after uploading new resumes so planning, fallback ranking, and tailoring can use the latest files.
+            </div>
+          </div>
         </section>
 
         <section class="resume-list-panel">
@@ -366,9 +384,139 @@ def profile_page(request: Request) -> str:
       </button>
     </div>
   </div>
-</section>
+  </section>
 
   {admin_modals_html}
+
+  <section class="modal-backdrop hidden" id="profilePlanningOptionsModal">
+    <div class="modal-card pipeline-modal-card profile-planning-options-card">
+      <div class="modal-header">
+        <div>
+          <h3>Planning &amp; Tailoring Options</h3>
+          <div class="subtext">Rerun planning after uploading new resumes so matching can consider the latest files.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn profile-planning-modal-close-btn" id="closeProfilePlanningOptionsModalBtn" type="button">Close</button>
+      </div>
+
+      <div class="pipeline-modal-scroll">
+        <div class="pipeline-option-section-header profile-planning-option-header">
+          <div class="pipeline-option-title">OPTIONS</div>
+          <div class="pipeline-inline-actions">
+            <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="profilePlanningSelectAllOptionsBtn">Select all</button>
+            <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="profilePlanningClearAllOptionsBtn">Clear all</button>
+          </div>
+        </div>
+        <div class="pipeline-toggle-grid profile-planning-options-grid">
+          <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-copy">
+              <div class="pipeline-toggle-name">Planning only</div>
+              <div class="pipeline-toggle-help">Skip scraping and rerun downstream planning only.</div>
+            </div>
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Planning only">
+              <label class="binary-toggle-option">
+                <input type="radio" name="profilePlanningOnly" value="no" />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="profilePlanningOnly" value="yes" checked />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-copy">
+              <div class="pipeline-toggle-name">Generate tailoring</div>
+              <div class="pipeline-toggle-help">Build deterministic tailoring artifacts.</div>
+            </div>
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate tailoring">
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateTailoring" value="no" checked />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateTailoring" value="yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-copy">
+              <div class="pipeline-toggle-name">Generate LLM tailoring</div>
+              <div class="pipeline-toggle-help">Run live LLM tailoring generation.</div>
+            </div>
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM tailoring">
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateLlmTailoring" value="no" checked />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateLlmTailoring" value="yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-copy">
+              <div class="pipeline-toggle-name">Refresh LLM tailoring</div>
+              <div class="pipeline-toggle-help">Force regeneration instead of reusing cached tailoring.</div>
+            </div>
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Refresh LLM tailoring">
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileRefreshLlmTailoring" value="no" checked />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileRefreshLlmTailoring" value="yes" />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-copy">
+              <div class="pipeline-toggle-name">Generate LLM fallback</div>
+              <div class="pipeline-toggle-help">Run fallback resume ranking when needed.</div>
+            </div>
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM fallback">
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateLlmFallback" value="no" />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateLlmFallback" value="yes" checked />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="pipeline-toggle-item">
+            <div class="pipeline-toggle-copy">
+              <div class="pipeline-toggle-name">Generate LLM adjudication</div>
+              <div class="pipeline-toggle-help">Run LLM adjudication during application planning when enabled.</div>
+            </div>
+            <div class="binary-toggle binary-toggle--compact" role="radiogroup" aria-label="Generate LLM adjudication">
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateLlmAdjudication" value="no" />
+                <span>No</span>
+              </label>
+              <label class="binary-toggle-option">
+                <input type="radio" name="profileGenerateLlmAdjudication" value="yes" checked />
+                <span>Yes</span>
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-actions pipeline-modal-actions">
+        <button type="button" class="ghost-btn profile-planning-cancel-btn" id="cancelProfilePlanningOptionsBtn">Cancel</button>
+        <button type="button" class="profile-planning-run-btn" id="runProfilePlanningUpdateBtn">Run Planning Update</button>
+      </div>
+    </div>
+  </section>
 
   <section class="modal-backdrop hidden" id="pipelineRunStatsModal">
     <div class="modal-card pipeline-run-stats-modal-card">
@@ -388,7 +536,7 @@ def profile_page(request: Request) -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_preferences_tabs_r1"></script>
+  <script src="/static/profile.js?v=profile_modal_polish_r1"></script>
 </body>
 </html>
     """.strip()

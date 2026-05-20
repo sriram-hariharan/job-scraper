@@ -20,6 +20,9 @@ const profileState = {
   pendingDeleteUserId: null,
 };
 
+const PROFILE_PLANNING_OUTPUT_DIR = "outputs/application_planning";
+const PROFILE_PLANNING_LOG_PATH = `${PROFILE_PLANNING_OUTPUT_DIR}/live_pipeline_run.log`;
+
 function qs(id) {
   return document.getElementById(id);
 }
@@ -91,6 +94,72 @@ function setProfilePreferenceTextareaList(id, values) {
   const input = qs(id);
   if (!input) return;
   input.value = Array.isArray(values) ? values.join(", ") : "";
+}
+
+function getBinaryToggleBool(name) {
+  return document.querySelector(`input[name='${name}']:checked`)?.value === "yes";
+}
+
+function showProfilePlanningUploadCallout() {
+  qs("profilePlanningUploadCallout")?.classList.remove("hidden");
+}
+
+function getProfilePlanningOptionsModal() {
+  return qs("profilePlanningOptionsModal");
+}
+
+function openProfilePlanningOptionsModal() {
+  getProfilePlanningOptionsModal()?.classList.remove("hidden");
+}
+
+function closeProfilePlanningOptionsModal() {
+  getProfilePlanningOptionsModal()?.classList.add("hidden");
+}
+
+function setProfilePlanningOptions(value) {
+  [
+    "profilePlanningOnly",
+    "profileGenerateTailoring",
+    "profileGenerateLlmTailoring",
+    "profileRefreshLlmTailoring",
+    "profileGenerateLlmFallback",
+    "profileGenerateLlmAdjudication",
+  ].forEach((name) => {
+    const input = document.querySelector(`input[name='${name}'][value='${value ? "yes" : "no"}']`);
+    if (input) input.checked = true;
+  });
+}
+
+function collectProfilePlanningUpdatePayload() {
+  return {
+    planning_only: getBinaryToggleBool("profilePlanningOnly"),
+    generate_tailoring: getBinaryToggleBool("profileGenerateTailoring"),
+    generate_llm_tailoring: getBinaryToggleBool("profileGenerateLlmTailoring"),
+    refresh_llm_tailoring: getBinaryToggleBool("profileRefreshLlmTailoring"),
+    generate_llm_fallback: getBinaryToggleBool("profileGenerateLlmFallback"),
+    generate_llm_adjudication: getBinaryToggleBool("profileGenerateLlmAdjudication"),
+    delete_seen_data: "no",
+    output_dir: PROFILE_PLANNING_OUTPUT_DIR,
+    log_path: PROFILE_PLANNING_LOG_PATH,
+    job_limit: 50,
+    job_packet_limit: 0,
+    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR"],
+  };
+}
+
+async function runProfilePlanningUpdate() {
+  const button = qs("runProfilePlanningUpdateBtn");
+  if (button) button.disabled = true;
+  setStatus("Starting planning update...", "info");
+  try {
+    await postJson("/pipeline/run", collectProfilePlanningUpdatePayload());
+    closeProfilePlanningOptionsModal();
+    setStatus("Planning update started. Open Executive Queue to watch progress.", "success");
+  } catch (err) {
+    setStatus(err.message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
 }
 
 function setProfilePreferencesStatus(message, tone = "info") {
@@ -1225,6 +1294,7 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"} successfully.`,
       "success"
     );
+    showProfilePlanningUploadCallout();
     return;
   }
 
@@ -1233,6 +1303,7 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"}, failed ${results.failed.length}.`,
       "error"
     );
+    showProfilePlanningUploadCallout();
     return;
   }
 
@@ -1409,6 +1480,24 @@ function bindResumeRoleMappingInteractions() {
     } catch (err) {
       setStatus(err.message, "error");
       await loadResumes();
+    }
+  });
+}
+
+function bindProfilePlanningOptionsInteractions() {
+  qs("openProfilePlanningOptionsBtn")?.addEventListener("click", openProfilePlanningOptionsModal);
+  qs("closeProfilePlanningOptionsModalBtn")?.addEventListener("click", closeProfilePlanningOptionsModal);
+  qs("cancelProfilePlanningOptionsBtn")?.addEventListener("click", closeProfilePlanningOptionsModal);
+  qs("runProfilePlanningUpdateBtn")?.addEventListener("click", runProfilePlanningUpdate);
+  qs("profilePlanningSelectAllOptionsBtn")?.addEventListener("click", () => {
+    setProfilePlanningOptions(true);
+  });
+  qs("profilePlanningClearAllOptionsBtn")?.addEventListener("click", () => {
+    setProfilePlanningOptions(false);
+  });
+  getProfilePlanningOptionsModal()?.addEventListener("click", (event) => {
+    if (event.target === getProfilePlanningOptionsModal()) {
+      closeProfilePlanningOptionsModal();
     }
   });
 }
@@ -1646,6 +1735,7 @@ async function initProfilePage() {
       bindUploadInteractions();
       bindDeleteInteractions();
       bindResumeRoleMappingInteractions();
+      bindProfilePlanningOptionsInteractions();
       bindProfileTabs();
       bindPipelineRunsInteractions();
       bindAdminUsersInteractions();

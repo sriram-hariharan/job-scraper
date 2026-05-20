@@ -2575,7 +2575,8 @@ tbody tr:hover {
 }
 
 .compact-option-sections > .pipeline-option-section + .pipeline-option-section {
-  padding-top: 18px;
+  margin-top: 8px;
+  padding-top: 28px;
   border-top: 1px solid rgba(42, 53, 99, 0.7);
 }
 
@@ -3276,6 +3277,28 @@ tbody tr:hover {
 .resume-upload-actions {
   display: flex;
   justify-content: center;
+}
+
+.profile-planning-upload-callout {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.profile-planning-options-btn {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 18px;
+}
+
+.profile-planning-options-card {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.profile-planning-options-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .resume-list {

@@ -9,6 +9,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 ANSWER_LLM_TIMEOUT_SECONDS = 25
 MODEL = get_default_model()
 MAX_SOURCE_CHARS = 2500
+SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS = (
+    "Legacy filesystem RAG index is disabled",
+)
 
 
 SYSTEM_PROMPT = """
@@ -279,6 +282,10 @@ def _extract_inline_source_ids(answer: str, valid_source_ids: List[str]) -> List
 
     return ordered
 
+def _is_semantic_retrieval_unavailable_error(exc: Exception) -> bool:
+    message = str(exc)
+    return any(marker in message for marker in SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS)
+
 def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> Dict[str, Any]:
     executor = ThreadPoolExecutor(max_workers=1)
     future = executor.submit(
@@ -321,6 +328,17 @@ def answer_job_query(
             "retrieved_count": 0,
         }
     except Exception as exc:
+        if _is_semantic_retrieval_unavailable_error(exc):
+            return {
+                "question": question,
+                "answer": "I could not answer this because no matching job documents were retrieved.",
+                "insufficient_evidence": True,
+                "used_source_ids": [],
+                "sources": [],
+                "retrieved_count": 0,
+                "job_evidence": [],
+            }
+
         return {
             "question": question,
             "answer": f"I could not answer this because retrieval failed: {exc}",

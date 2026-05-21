@@ -602,11 +602,23 @@ def _write_llm_fallback_cache(cache_key: str, payload: Dict[str, Any]) -> None:
         cached_payload,
     )
 
+
+def _normalize_allowed_resume_names(allowed_resume_names: List[Any]) -> set[str]:
+    allowed: set[str] = set()
+
+    for value in allowed_resume_names:
+        normalized = str(value or "").strip()
+        if normalized:
+            allowed.add(normalized)
+
+    return allowed
+
+
 def _normalize_llm_fallback_parsed(
     parsed: Dict[str, Any],
-    allowed_resume_names: List[str],
+    allowed_resume_names: List[Any],
 ) -> Dict[str, Any]:
-    allowed = {name.strip() for name in allowed_resume_names if name.strip()}
+    allowed = _normalize_allowed_resume_names(allowed_resume_names)
 
     best_resume = str(parsed.get("best_resume", "")).strip()
     backup_resume = str(parsed.get("backup_resume", "")).strip()
@@ -933,9 +945,9 @@ def _write_llm_adjudication_cache(cache_key: str, payload: Dict[str, Any]) -> No
 
 def _normalize_llm_adjudication_parsed(
     parsed: Dict[str, Any],
-    allowed_resume_names: List[str],
+    allowed_resume_names: List[Any],
 ) -> Dict[str, Any]:
-    allowed = {name.strip() for name in allowed_resume_names if name.strip()}
+    allowed = _normalize_allowed_resume_names(allowed_resume_names)
     adjudicated_resume = str(parsed.get("adjudicated_resume", "")).strip()
 
     if adjudicated_resume not in allowed:

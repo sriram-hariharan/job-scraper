@@ -63,6 +63,8 @@ def test_floating_job_assistant_shell_contract():
 
     shell = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
     css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    chat_js_path = Path("src/app/static/floating_intelligence_chat.js")
+    chat_js = chat_js_path.read_text(encoding="utf-8")
 
     required_ids = [
         "floatingIntelligenceChat",
@@ -78,6 +80,7 @@ def test_floating_job_assistant_shell_contract():
 
     for element_id in required_ids:
         assert element_id in shell
+        assert element_id in chat_js
 
     for selector in [
         "#floatingIntelligenceChatButton",
@@ -88,4 +91,8 @@ def test_floating_job_assistant_shell_contract():
     ]:
         assert selector in css
 
+    assert chat_js_path.exists()
+    assert "/jobs/search-lite" in chat_js
+    assert "/rag/answer" in chat_js
+    assert "/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" in shell
     assert "Intelligence" not in [label for label, _href, _short_label in NAV_ITEMS]

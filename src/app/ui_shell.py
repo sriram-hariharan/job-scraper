@@ -316,4 +316,5 @@ def render_top_shell(active_href: str) -> str:
     </svg>
   </button>
 </div>
+<script src="/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" defer></script>
 """.strip()

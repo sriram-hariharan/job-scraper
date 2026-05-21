@@ -15962,15 +15962,19 @@ def jobs_search_lite_payload(
     top_k: int = 10,
 ) -> Dict[str, Any]:
     from src.rag.corpus_store import _load_job_corpus
+    from src.rag.diagnostic_filter import filter_diagnostic_rag_rows
     from src.rag.lexical_retriever import _lexical_search
     from src.rag.query_filters import _infer_metadata_filters
 
     inferred_filters = _infer_metadata_filters(request)
-    lexical_results = _lexical_search(
-        query=request,
-        top_k=top_k,
-        filters=inferred_filters or None,
-    )
+    lexical_fetch_k = max(top_k * 3, top_k + 5)
+    lexical_results = filter_diagnostic_rag_rows(
+        _lexical_search(
+            query=request,
+            top_k=lexical_fetch_k,
+            filters=inferred_filters or None,
+        )
+    )[:top_k]
 
     compact_results = []
     for row in lexical_results:

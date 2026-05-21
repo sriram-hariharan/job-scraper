@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional
 
+from src.rag.diagnostic_filter import filter_diagnostic_rag_rows
 from src.rag.lexical_retriever import _lexical_search
 from src.rag.query_filters import _infer_metadata_filters, _merge_filters, _matches_filters
 from src.rag.retrieval_ranker import (
@@ -16,6 +17,9 @@ from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeou
 logger = get_logger("rag.query_engine")
 
 SEMANTIC_RETRIEVAL_TIMEOUT_SECONDS = 10
+SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS = (
+    "Legacy filesystem RAG index is disabled",
+)
 
 def _build_preview(text: str, max_length: int = 400) -> str:
     text = (text or "").strip()
@@ -62,6 +66,10 @@ def _retrieve_jobs_with_timeout(query: str, top_k: int) -> List[Dict[str, Any]]:
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
 
+def _is_semantic_retrieval_unavailable_error(exc: Exception) -> bool:
+    message = str(exc)
+    return any(marker in message for marker in SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS)
+
 def search_jobs(
     query: str,
     top_k: int = 5,
@@ -79,36 +87,54 @@ def search_jobs(
         effective_filters,
     )
 
+    semantic_fallback_reason = ""
     try:
         semantic_raw_results = _retrieve_jobs_with_timeout(query=query, top_k=fetch_k)
     except TimeoutError:
+        semantic_fallback_reason = "timeout"
+        semantic_raw_results = []
         logger.warning(
-            "RAG semantic retrieval timeout | query=%r | fetch_k=%s | effective_filters=%s",
+            "RAG semantic retrieval timeout; falling back to lexical retrieval | "
+            "query=%r | fetch_k=%s | effective_filters=%s",
             query,
             fetch_k,
             effective_filters,
         )
-        raise
-    except Exception:
-        logger.exception(
-            "RAG semantic retrieval failed | query=%r | fetch_k=%s | effective_filters=%s",
-            query,
-            fetch_k,
-            effective_filters,
-        )
-        raise
+    except Exception as exc:
+        if not _is_semantic_retrieval_unavailable_error(exc):
+            logger.exception(
+                "RAG semantic retrieval failed | query=%r | fetch_k=%s | effective_filters=%s",
+                query,
+                fetch_k,
+                effective_filters,
+            )
+            raise
 
+        semantic_fallback_reason = "unavailable"
+        semantic_raw_results = []
+        logger.warning(
+            "RAG semantic retrieval unavailable; falling back to lexical retrieval | "
+            "query=%r | fetch_k=%s | effective_filters=%s | error=%s",
+            query,
+            fetch_k,
+            effective_filters,
+            exc,
+        )
     semantic_filtered_results = [
         result for result in semantic_raw_results
         if _matches_filters(result, effective_filters)
     ]
 
-    semantic_deduped_results = _dedupe_results(semantic_filtered_results)
+    semantic_deduped_results = filter_diagnostic_rag_rows(
+        _dedupe_results(semantic_filtered_results)
+    )
 
-    lexical_results = _lexical_search(
-        query=query,
-        top_k=fetch_k,
-        filters=effective_filters,
+    lexical_results = filter_diagnostic_rag_rows(
+        _lexical_search(
+            query=query,
+            top_k=fetch_k,
+            filters=effective_filters,
+        )
     )
 
     semantic_doc_ids = {
@@ -136,7 +162,8 @@ def search_jobs(
 
     logger.info(
         "RAG retrieval | query=%r | fetch_k=%s | semantic_raw=%s | semantic_filtered=%s | "
-        "semantic_deduped=%s | lexical=%s | hybrid=%s | gate_pass=%s | max_overlap=%s | "
+        "semantic_deduped=%s | lexical=%s | hybrid=%s | semantic_fallback_reason=%r | "
+        "gate_pass=%s | max_overlap=%s | "
         "required_overlap=%s | top_scores=%s",
         query,
         fetch_k,
@@ -145,6 +172,7 @@ def search_jobs(
         len(semantic_deduped_results),
         len(lexical_results),
         len(hybrid_results),
+        semantic_fallback_reason,
         gate_metrics["passed"],
         gate_metrics["max_overlap"],
         gate_metrics["required_overlap"],

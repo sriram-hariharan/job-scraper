@@ -1,0 +1,216 @@
+def _raw_result(
+    *,
+    doc_id="job-1",
+    company="Acme AI",
+    title="Machine Learning Engineer",
+    source="lever",
+    text="Machine learning engineer role building model training systems.",
+    score=1.0,
+):
+    return {
+        "score": score,
+        "text": text,
+        "metadata": {
+            "doc_id": doc_id,
+            "company": company,
+            "title": title,
+            "location": "Remote",
+            "source": source,
+            "job_url": f"https://example.com/{doc_id}",
+            "posted_at": "2026-05-01",
+            "all_skills": ["machine learning", "python"],
+        },
+    }
+
+
+def test_search_jobs_semantic_timeout_falls_back_to_lexical(monkeypatch):
+    from src.rag import query_engine
+
+    def timeout_retrieval(*args, **kwargs):
+        raise TimeoutError("semantic retrieval timed out")
+
+    monkeypatch.setattr(query_engine, "_retrieve_jobs_with_timeout", timeout_retrieval)
+    monkeypatch.setattr(
+        query_engine,
+        "_lexical_search",
+        lambda *args, **kwargs: [_raw_result()],
+    )
+
+    results = query_engine.search_jobs(
+        query="machine learning engineer",
+        top_k=3,
+        fetch_k=5,
+    )
+
+    assert len(results) == 1
+    assert results[0]["title"] == "Machine Learning Engineer"
+    assert results[0]["retrieval_lanes"] == ["lexical"]
+
+
+def test_search_jobs_semantic_unavailable_falls_back_to_lexical(monkeypatch):
+    from src.rag import query_engine
+
+    def unavailable_retrieval(*args, **kwargs):
+        raise RuntimeError(
+            "Legacy filesystem RAG index is disabled. "
+            "Semantic vector retrieval will move to pgvector/vector DB in 6B.16."
+        )
+
+    monkeypatch.setattr(query_engine, "_retrieve_jobs_with_timeout", unavailable_retrieval)
+    monkeypatch.setattr(
+        query_engine,
+        "_lexical_search",
+        lambda *args, **kwargs: [_raw_result()],
+    )
+
+    results = query_engine.search_jobs(
+        query="machine learning engineer",
+        top_k=3,
+        fetch_k=5,
+    )
+
+    assert len(results) == 1
+    assert results[0]["title"] == "Machine Learning Engineer"
+    assert results[0]["retrieval_lanes"] == ["lexical"]
+
+
+def test_answer_job_query_uses_lexical_fallback_after_semantic_timeout(monkeypatch):
+    from src.rag import query_engine, rag_answerer
+
+    def timeout_retrieval(*args, **kwargs):
+        raise TimeoutError("semantic retrieval timed out")
+
+    monkeypatch.setattr(query_engine, "_retrieve_jobs_with_timeout", timeout_retrieval)
+    monkeypatch.setattr(
+        query_engine,
+        "_lexical_search",
+        lambda *args, **kwargs: [_raw_result()],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "_run_chat_completion_with_timeout",
+        lambda messages: {
+            "content": (
+                '{"answer":"The strongest match is Acme AI because it is a '
+                'machine learning engineering role. [S1]",'
+                '"insufficient_evidence":false,'
+                '"used_source_ids":["S1"],'
+                '"job_evidence":[{"source_id":"S1","evidence_points":["Machine learning engineer title"]}]}'
+            ),
+            "provider": "test",
+            "model": "deterministic",
+            "fallback_used": False,
+        },
+    )
+
+    payload = rag_answerer.answer_job_query(
+        question="What are the best machine learning engineer jobs?",
+        top_k=3,
+        fetch_k=5,
+    )
+
+    assert payload["answer"] != "I could not answer this because semantic retrieval timed out."
+    assert payload["insufficient_evidence"] is False
+    assert payload["retrieval_lanes_used"] == ["lexical"]
+    assert payload["sources"][0]["title"] == "Machine Learning Engineer"
+
+
+def test_answer_job_query_uses_lexical_fallback_after_semantic_unavailable(monkeypatch):
+    from src.rag import query_engine, rag_answerer
+
+    def unavailable_retrieval(*args, **kwargs):
+        raise RuntimeError(
+            "Legacy filesystem RAG index is disabled. "
+            "Semantic vector retrieval will move to pgvector/vector DB in 6B.16."
+        )
+
+    monkeypatch.setattr(query_engine, "_retrieve_jobs_with_timeout", unavailable_retrieval)
+    monkeypatch.setattr(
+        query_engine,
+        "_lexical_search",
+        lambda *args, **kwargs: [
+            _raw_result(
+                title="Backend Software Engineer",
+                text="Backend software engineer role building APIs and Python services.",
+            )
+        ],
+    )
+    monkeypatch.setattr(
+        rag_answerer,
+        "_run_chat_completion_with_timeout",
+        lambda messages: {
+            "content": (
+                '{"answer":"The backend software role is the clearest match '
+                'from the retrieved corpus. [S1]",'
+                '"insufficient_evidence":false,'
+                '"used_source_ids":["S1"],'
+                '"job_evidence":[{"source_id":"S1","evidence_points":["Backend software role"]}]}'
+            ),
+            "provider": "test",
+            "model": "deterministic",
+            "fallback_used": False,
+        },
+    )
+
+    payload = rag_answerer.answer_job_query(
+        question="What are the best backend software jobs?",
+        top_k=3,
+        fetch_k=5,
+    )
+
+    assert "Legacy filesystem RAG index is disabled" not in payload["answer"]
+    assert payload["insufficient_evidence"] is False
+    assert payload["retrieval_lanes_used"] == ["lexical"]
+    assert payload["sources"][0]["title"] == "Backend Software Engineer"
+
+
+def test_answer_job_query_no_matches_after_semantic_unavailable_is_clean(monkeypatch):
+    from src.rag import query_engine, rag_answerer
+
+    def unavailable_retrieval(*args, **kwargs):
+        raise RuntimeError(
+            "Legacy filesystem RAG index is disabled. "
+            "Semantic vector retrieval will move to pgvector/vector DB in 6B.16."
+        )
+
+    monkeypatch.setattr(query_engine, "_retrieve_jobs_with_timeout", unavailable_retrieval)
+    monkeypatch.setattr(query_engine, "_lexical_search", lambda *args, **kwargs: [])
+
+    payload = rag_answerer.answer_job_query(
+        question="What are the best data scientist jobs?",
+        top_k=3,
+        fetch_k=5,
+    )
+
+    assert payload["insufficient_evidence"] is True
+    assert "Legacy filesystem RAG index is disabled" not in payload["answer"]
+    assert payload["answer"] == "I could not answer this because no matching job documents were retrieved."
+    assert payload["sources"] == []
+
+
+def test_jobs_search_lite_excludes_obvious_rag_smoke_rows(monkeypatch):
+    from src.app import services
+    from src.rag import corpus_store, lexical_retriever, query_filters
+
+    smoke = _raw_result(
+        doc_id="rag-corpus-smoke-phase6b15g5a",
+        company="RAG Corpus Smoke",
+        title="RAG Corpus Smoke Phase6B15G5A",
+        source="smoke phase",
+        text="machine learning engineer diagnostic row",
+    )
+    real = _raw_result()
+
+    monkeypatch.setattr(query_filters, "_infer_metadata_filters", lambda request: {})
+    monkeypatch.setattr(lexical_retriever, "_lexical_search", lambda *args, **kwargs: [smoke, real])
+    monkeypatch.setattr(corpus_store, "_load_job_corpus", lambda: [smoke, real])
+    monkeypatch.setattr(services, "_overlay_application_actions", lambda rows, owner_user_id="": rows)
+
+    payload = services.jobs_search_lite_payload("machine learning engineer", top_k=5)
+
+    assert payload["result_count"] == 1
+    assert payload["results"][0]["title"] == "Machine Learning Engineer"
+    assert "RAG Corpus Smoke" not in {
+        row["title"]
+        for row in payload["results"]
+    }

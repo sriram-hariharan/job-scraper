@@ -239,4 +239,81 @@ def render_top_shell(active_href: str) -> str:
     </div>
   </div>
 </div>
+
+<div class="floating-intelligence-chat" id="floatingIntelligenceChat">
+  <section
+    class="floating-intelligence-chat-panel hidden"
+    id="floatingIntelligenceChatPanel"
+    aria-label="Job Assistant"
+  >
+    <header class="floating-intelligence-chat-header">
+      <div class="floating-intelligence-chat-heading">
+        <h2>Job Assistant</h2>
+        <p>Search jobs or ask about your current corpus.</p>
+      </div>
+      <button
+        type="button"
+        class="floating-intelligence-chat-close-btn"
+        id="floatingIntelligenceChatCloseBtn"
+        aria-label="Close Job Assistant"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="floating-intelligence-chat-controls">
+      <label class="floating-intelligence-chat-mode">
+        <span>Mode</span>
+        <select id="floatingIntelligenceModeSelect">
+          <option value="answer" selected>Answer</option>
+          <option value="search">Search</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="floating-intelligence-chat-messages" id="floatingIntelligenceMessages">
+      <p>Open the assistant to search jobs or ask grounded questions.</p>
+    </div>
+
+    <div class="floating-intelligence-chat-compose">
+      <input
+        type="text"
+        id="floatingIntelligenceInput"
+        placeholder="Ask about jobs, companies, skills, or applications..."
+      />
+      <button type="button" id="floatingIntelligenceSendBtn">Send</button>
+    </div>
+
+    <div class="floating-intelligence-chat-status" id="floatingIntelligenceStatus">Idle</div>
+  </section>
+
+  <button
+    type="button"
+    class="floating-intelligence-chat-button"
+    id="floatingIntelligenceChatButton"
+    aria-label="Open Job Assistant"
+  >
+    <svg
+      class="floating-intelligence-chat-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M5.5 6.5h13v8.2h-5.3L9.8 18v-3.3H5.5z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M8.3 10.3h7.4M8.3 12.8h4.8"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+    </svg>
+  </button>
+</div>
 """.strip()

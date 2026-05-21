@@ -56,3 +56,36 @@ def test_profile_preferences_menu_page_reuses_onboarding_preferences_contract():
     assert "isProfilePreferencesPage" in profile_js
     assert ".profile-preferences-section" in css
     assert ".profile-dropdown-nav-icon--preferences" in css
+
+
+def test_floating_job_assistant_shell_contract():
+    from src.app.ui_shell import NAV_ITEMS
+
+    shell = Path("src/app/ui_shell.py").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+
+    required_ids = [
+        "floatingIntelligenceChat",
+        "floatingIntelligenceChatButton",
+        "floatingIntelligenceChatPanel",
+        "floatingIntelligenceChatCloseBtn",
+        "floatingIntelligenceModeSelect",
+        "floatingIntelligenceInput",
+        "floatingIntelligenceSendBtn",
+        "floatingIntelligenceMessages",
+        "floatingIntelligenceStatus",
+    ]
+
+    for element_id in required_ids:
+        assert element_id in shell
+
+    for selector in [
+        "#floatingIntelligenceChatButton",
+        "#floatingIntelligenceChatPanel",
+        "#floatingIntelligenceChatPanel.hidden",
+        ".floating-intelligence-chat-compose",
+        "@media (max-width: 560px)",
+    ]:
+        assert selector in css
+
+    assert "Intelligence" not in [label for label, _href, _short_label in NAV_ITEMS]

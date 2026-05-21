@@ -282,7 +282,7 @@ def profile_page(request: Request) -> str:
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
   <link rel="stylesheet" href="/static/styles.css?v=profile_modal_polish_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_modal_polish_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=role_profile_preferences_menu_r1" />
 </head>
 <body>
   {render_top_shell("/profile")}

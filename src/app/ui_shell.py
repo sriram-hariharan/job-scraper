@@ -4,7 +4,6 @@ NAV_ITEMS = [
     ("Executive", "/", "E"),
     ("Planning", "/planning", "P"),
     ("Decisions", "/decisions-ui", "D"),
-    ("Intelligence", "/intelligence", "I"),
     ("Applications", "/applications", "A"),
     ("Scheduler", "/scheduler", "S"),
 ]

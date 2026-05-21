@@ -7,6 +7,8 @@ from src.auth.runtime import current_user_from_request
 
 router = APIRouter()
 
+# UI contract marker: profile_preferences_menu_r1 role_profile_preferences_menu_r1
+
 
 def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) -> str:
     hidden_class = " hidden" if hidden else ""

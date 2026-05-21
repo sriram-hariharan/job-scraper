@@ -94,6 +94,7 @@ def test_floating_job_assistant_shell_contract():
         ".floating-intelligence-chat-bubble",
         ".floating-intelligence-chat-card",
         ".floating-intelligence-chat-card-meta",
+        ".floating-intelligence-chat-intent-chip",
         "#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble p",
         ".floating-intelligence-chat-compose",
         "@media (max-width: 560px)",
@@ -116,6 +117,19 @@ def test_floating_job_assistant_shell_contract():
     assert "/jobs/search-lite" not in chat_js
     assert "/rag/answer" not in chat_js
     assert 'metaItem("Score"' not in chat_js
+    assert "buildEmptySearchResponseHtml" in chat_js
+    assert "I did not find direct matches in the current job corpus." in chat_js
+    assert "No search results returned." not in chat_js
+    assert "OPENING_ASSISTANT_GREETING" in chat_js
+    assert "ensureOpeningAssistantGreeting" in chat_js
+    assert 'appendMessage(messages, "assistant", escapeHtml(OPENING_ASSISTANT_GREETING))' in chat_js
+    assert "search the current job corpus" in chat_js
+    assert "compare roles" in chat_js
+    assert "inspect requirements" in chat_js
+    assert "identify useful skills" in chat_js
+    assert "saved or current jobs" in chat_js
+    assert "Searched jobs" in chat_js
+    assert "Answered from corpus" in chat_js
     assert 'id="floatingIntelligenceModeSelect" hidden' in shell
     assert "/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" in shell
     assert "Intelligence" not in [label for label, _href, _short_label in NAV_ITEMS]
@@ -126,7 +140,11 @@ def test_rag_answer_prompt_guides_human_readable_grounded_answers():
 
     assert "direct answer" in source
     assert "concise, human-readable" in source
-    assert "short readable bullets" in source
+    assert "helpful job-search assistant, not a backend report" in source
+    assert "short readable paragraphs or bullets" in source
     assert "source-grounded evidence" in source
-    assert "Do not expose backend, retrieval, vector index, timeout, or diagnostic internals." in source
+    assert "Mention uncertainty plainly when the evidence is thin." in source
+    assert "Avoid robotic phrases." in source
+    assert "Never expose retrieval internals, backend errors, vector index details, or implementation details." in source
+    assert "Do not invent unsupported claims." in source
     assert "Return JSON only." in source

@@ -15,7 +15,7 @@ SEMANTIC_RETRIEVAL_UNAVAILABLE_MARKERS = (
 
 
 SYSTEM_PROMPT = """
-You answer questions about job postings using ONLY the provided sources.
+You are a helpful job-search assistant. Answer questions about job postings using ONLY the provided sources.
 
 STRICT RULES
 1. Use only the retrieved job sources.
@@ -23,12 +23,18 @@ STRICT RULES
 3. If the sources do not contain enough evidence, say so plainly.
 4. Every substantive claim must be grounded in at least one source.
 5. Cite sources inline using bracketed source IDs like [S1] or [S2].
-6. Start with a direct answer in a concise, human-readable tone.
-7. If comparing, ranking, or recommending jobs, use short readable bullets and explain why each top job was selected.
-8. Keep the answer useful and conversational, but avoid robotic wording, backend/retrieval internals, and unsupported claims.
-9. For each cited source, include 2 to 4 short evidence points that directly explain why the job matches the question.
-10. Evidence points must be concrete and source-grounded, such as title fit, required skills, domain context, ML/LLM/RAG/agentic language, experimentation, modeling, or platform signals.
-11. Return ONLY valid JSON.
+6. Sound like a helpful job-search assistant, not a backend report.
+7. Start with a direct answer in a concise, human-readable tone.
+8. Use short, readable paragraphs or bullets.
+9. If comparing, ranking, or recommending jobs, explain why each selected job matches the question.
+10. Mention uncertainty plainly when evidence is thin.
+11. Avoid robotic phrases.
+12. Never expose retrieval internals, backend errors, vector index details, or implementation details.
+13. Do not invent unsupported claims.
+14. For each cited source, include 2 to 4 short evidence points that directly explain why the job matches the question.
+15. Evidence points must be concrete and source-grounded, such as title fit, required skills, domain context, ML/LLM/RAG/agentic language, experimentation, modeling, or platform signals.
+16. Keep the answer concise.
+17. Return ONLY valid JSON.
 
 Return this exact JSON shape:
 {
@@ -142,10 +148,14 @@ def _build_user_prompt(question: str, sources: List[Dict[str, Any]]) -> str:
     {source_text}
 
     Answer the question using only the sources above.
-    Start with the direct answer, then use short readable bullets if you rank or compare jobs.
+    Sound like a helpful job-search assistant, not a backend report.
+    Start with the direct answer, then use short readable paragraphs or bullets if you rank or compare jobs.
     Explain the concrete source-grounded evidence for each selected source.
-    Keep the wording concise, natural, and useful for a job search assistant.
-    Do not expose backend, retrieval, vector index, timeout, or diagnostic internals.
+    Mention uncertainty plainly when the evidence is thin.
+    Keep the wording concise, natural, conversational, and useful.
+    Avoid robotic phrases.
+    Never expose retrieval internals, backend errors, vector index details, or implementation details.
+    Do not invent unsupported claims.
     Cite source IDs inline like [S1] and [S2].
     Return JSON only.
     """.strip()
@@ -309,6 +319,13 @@ def _run_chat_completion_with_timeout(messages: List[Dict[str, str]]) -> Dict[st
         ) from exc
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _no_matching_jobs_answer() -> str:
+    return (
+        "I do not see matching jobs for that requirement in the current corpus. "
+        "Try broadening the wording with related skills, role titles, or adjacent technologies."
+    )
         
 def answer_job_query(
     question: str,
@@ -326,17 +343,18 @@ def answer_job_query(
     except TimeoutError:
         return {
             "question": question,
-            "answer": "I could not answer this because semantic retrieval timed out.",
+            "answer": _no_matching_jobs_answer(),
             "insufficient_evidence": True,
             "used_source_ids": [],
             "sources": [],
             "retrieved_count": 0,
+            "job_evidence": [],
         }
     except Exception as exc:
         if _is_semantic_retrieval_unavailable_error(exc):
             return {
                 "question": question,
-                "answer": "I could not answer this because no matching job documents were retrieved.",
+                "answer": _no_matching_jobs_answer(),
                 "insufficient_evidence": True,
                 "used_source_ids": [],
                 "sources": [],
@@ -362,7 +380,7 @@ def answer_job_query(
     if not results:
         return {
             "question": question,
-            "answer": "I could not answer this because no matching job documents were retrieved.",
+            "answer": _no_matching_jobs_answer(),
             "insufficient_evidence": True,
             "used_source_ids": [],
             "sources": [],

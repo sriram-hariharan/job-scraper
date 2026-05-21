@@ -16023,22 +16023,31 @@ _ASSISTANT_ANSWER_PHRASES = (
     "best",
     "strongest",
     "compare",
+    "give me jobs",
     "which jobs",
     "what jobs",
     "any jobs",
+    "any jobs with",
     "do any",
     "having",
+    "requirement",
     "requirements",
     "recommend",
     "fit",
     "look strongest",
     "current corpus",
     "jobs having",
+    "jobs with",
 )
 
 _ASSISTANT_INTERNAL_RETRIEVAL_ERRORS = (
     "Legacy filesystem RAG index is disabled",
     "semantic retrieval timed out",
+)
+
+_ASSISTANT_NO_MATCHING_JOBS_ANSWER = (
+    "I do not see matching jobs for that requirement in the current corpus. "
+    "Try broadening the wording with related skills, role titles, or adjacent technologies."
 )
 
 
@@ -16057,6 +16066,20 @@ def route_assistant_intent(request: str) -> Dict[str, str]:
             "intent": "answer_job_query",
             "reason": "question_starter",
         }
+
+    answer_patterns = (
+        (r"\bgive me jobs (?:about|with|having)\b", "jobs_request"),
+        (r"\bjobs (?:with|having) .+\brequirements?\b", "requirements_match"),
+        (r"\bany jobs with\b", "any_jobs_with"),
+        (r"\bdo any jobs require\b", "requirement_question"),
+    )
+
+    for pattern, reason in answer_patterns:
+        if re.search(pattern, normalized):
+            return {
+                "intent": "answer_job_query",
+                "reason": reason,
+            }
 
     for phrase in _ASSISTANT_ANSWER_PHRASES:
         if phrase in normalized:
@@ -16114,7 +16137,7 @@ def assistant_query_payload(
         if not _is_assistant_internal_retrieval_error(exc):
             raise
         response = {
-            "answer": "I could not answer this because no matching job documents were retrieved.",
+            "answer": _ASSISTANT_NO_MATCHING_JOBS_ANSWER,
             "insufficient_evidence": True,
             "sources": [],
             "job_evidence": [],

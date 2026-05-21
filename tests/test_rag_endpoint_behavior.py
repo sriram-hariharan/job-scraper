@@ -184,7 +184,8 @@ def test_answer_job_query_no_matches_after_semantic_unavailable_is_clean(monkeyp
 
     assert payload["insufficient_evidence"] is True
     assert "Legacy filesystem RAG index is disabled" not in payload["answer"]
-    assert payload["answer"] == "I could not answer this because no matching job documents were retrieved."
+    assert "current corpus" in payload["answer"]
+    assert "Try broadening" in payload["answer"]
     assert payload["sources"] == []
 
 
@@ -220,6 +221,7 @@ def test_assistant_intent_router_routes_keyword_searches():
     from src.app.services import route_assistant_intent
 
     assert route_assistant_intent("software engineer")["intent"] == "search_jobs"
+    assert route_assistant_intent("backend python")["intent"] == "search_jobs"
     assert route_assistant_intent("machine learning engineer")["intent"] == "search_jobs"
 
 
@@ -234,6 +236,62 @@ def test_assistant_intent_router_routes_questions_and_recommendations():
         route_assistant_intent("any of the jobs having python requirements?")["intent"]
         == "answer_job_query"
     )
+    assert route_assistant_intent("give me jobs about AI")["intent"] == "answer_job_query"
+    assert (
+        route_assistant_intent("give me jobs with AI/LLM requirement")["intent"]
+        == "answer_job_query"
+    )
+    assert (
+        route_assistant_intent("jobs with python requirements")["intent"]
+        == "answer_job_query"
+    )
+    assert (
+        route_assistant_intent("do any jobs require python")["intent"]
+        == "answer_job_query"
+    )
+
+
+def test_lexical_query_expansion_handles_common_ai_terms():
+    from src.rag.lexical_retriever import expand_query_terms
+
+    ai_expanded = expand_query_terms("give me jobs about AI")
+    assert "artificial intelligence" in ai_expanded
+    assert "machine learning" in ai_expanded
+
+    llm_expanded = expand_query_terms("give me jobs with AI/LLM requirement")
+    assert "artificial intelligence" in llm_expanded
+    assert "large language model" in llm_expanded
+    assert "generative ai" in llm_expanded
+
+
+def test_lexical_search_finds_ai_jobs_with_expanded_query(monkeypatch):
+    from src.rag import lexical_retriever
+
+    monkeypatch.setattr(
+        lexical_retriever,
+        "_load_job_corpus",
+        lambda: [
+            {
+                "doc_id": "job-ai-1",
+                "company": "Air AI",
+                "title": "AI Engineer",
+                "location": "Remote",
+                "source": "greenhouse",
+                "job_url": "https://example.com/job-ai-1",
+                "posted_at": "2026-05-01",
+                "all_skills": ["AI", "Python"],
+                "retrieval_text": "AI engineer building production artificial intelligence systems.",
+            }
+        ],
+    )
+
+    results = lexical_retriever._lexical_search(
+        query="give me jobs about AI",
+        top_k=5,
+    )
+
+    assert len(results) == 1
+    assert results[0]["metadata"]["title"] == "AI Engineer"
 
 
 def test_assistant_query_payload_for_search_uses_search_lite(monkeypatch):
@@ -322,3 +380,5 @@ def test_assistant_query_payload_cleans_known_internal_retrieval_error(monkeypat
     assert payload["result_count"] == 0
     assert payload["response"]["insufficient_evidence"] is True
     assert "Legacy filesystem RAG index is disabled" not in payload["response"]["answer"]
+    assert "current corpus" in payload["response"]["answer"]
+    assert "Try broadening" in payload["response"]["answer"]

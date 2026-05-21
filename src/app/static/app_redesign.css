@@ -4050,6 +4050,20 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   white-space: pre-wrap !important;
 }
 
+.floating-intelligence-chat-intent-chip {
+  display: inline-flex !important;
+  width: fit-content !important;
+  margin: 0 0 9px !important;
+  padding: 4px 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: var(--app-radius-pill) !important;
+  background: rgba(255, 255, 255, 0.12) !important;
+  color: rgba(255, 255, 255, 0.82) !important;
+  font-size: 11px !important;
+  font-weight: 850 !important;
+  line-height: 1.2 !important;
+}
+
 .floating-intelligence-chat-results,
 .floating-intelligence-chat-sources {
   display: grid !important;

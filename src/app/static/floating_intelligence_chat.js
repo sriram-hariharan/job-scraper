@@ -12,6 +12,11 @@
     cardMeta: "floating-intelligence-chat-card-meta",
   };
 
+  const OPENING_ASSISTANT_GREETING = (
+    "Hi, I can help you search the current job corpus, compare roles, inspect requirements, "
+    + "identify useful skills, and reason over your saved or current jobs.\n What can I do for you today?"
+  );
+
   function qs(id) {
     return document.getElementById(id);
   }
@@ -139,13 +144,27 @@
     `;
   }
 
+  function buildIntentChip(label) {
+    return `<div class="floating-intelligence-chat-intent-chip">${escapeHtml(label)}</div>`;
+  }
+
+  function buildEmptySearchResponseHtml() {
+    return `
+      ${buildIntentChip("Searched jobs")}
+      <p class="floating-intelligence-chat-answer">
+        I did not find direct matches in the current job corpus. The corpus may not contain that exact role or skill wording, so try broader or related terms.
+      </p>
+    `;
+  }
+
   function buildSearchResponseHtml(payload) {
     const rows = Array.isArray(payload?.results) ? payload.results : [];
     if (!rows.length) {
-      return "No search results returned.";
+      return buildEmptySearchResponseHtml();
     }
 
     return `
+      ${buildIntentChip("Searched jobs")}
       <div class="floating-intelligence-chat-results">
         ${rows.map((row, idx) => buildJobCard(row, idx, {
           includePosted: true,
@@ -179,6 +198,7 @@
       : "";
 
     return `
+      ${buildIntentChip("Answered from corpus")}
       <p class="floating-intelligence-chat-answer">${escapeHtml(answer)}</p>
       ${sourcesHtml}
     `;
@@ -217,6 +237,20 @@
     }
   }
 
+  function ensureOpeningAssistantGreeting(messages) {
+    if (
+      messages.dataset.floatingChatGreetingShown
+      || messages.querySelector(`.${FLOATING_CHAT_CLASS_NAMES.message}`)
+    ) {
+      return;
+    }
+
+    messages.innerHTML = "";
+    messages.dataset.floatingChatTouched = "true";
+    messages.dataset.floatingChatGreetingShown = "true";
+    appendMessage(messages, "assistant", escapeHtml(OPENING_ASSISTANT_GREETING));
+  }
+
   function bindFloatingChat() {
     const root = qs("floatingIntelligenceChat");
     const openBtn = qs("floatingIntelligenceChatButton");
@@ -237,6 +271,8 @@
       modeSelect.setAttribute("aria-hidden", "true");
       modeSelect.tabIndex = -1;
     }
+
+    ensureOpeningAssistantGreeting(messages);
 
     function setStatus(value) {
       status.textContent = value;

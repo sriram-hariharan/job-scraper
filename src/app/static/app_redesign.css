@@ -4020,12 +4020,18 @@ html[data-theme="dark"] .first-run-prompt-secondary {
 }
 
 .profile-tab-btn.is-active {
-  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  border: 1px solid #38bdf8 !important;
+  outline: 2px solid rgba(56, 189, 248, 0.82) !important;
+  outline-offset: -4px;
+  background: rgba(14, 165, 233, 0.14) !important;
   color: #ffffff !important;
+  box-shadow:
+    inset 0 0 0 2px rgba(56, 189, 248, 0.9),
+    0 0 0 3px rgba(56, 189, 248, 0.18) !important;
 }
 
 .profile-tab-btn.is-active .profile-tab-icon {
-  opacity: 0.96;
+  opacity: 1;
   filter: none;
 }
 
@@ -4453,7 +4459,7 @@ html[data-theme="light"] .resume-role-family-option.is-selected {
   color: #fecdd3;
 }
 
-.admin-user-access-switch {
+#profileAdminUsersSection .admin-user-access-switch {
   min-width: 132px;
   min-height: 42px;
   display: inline-flex;
@@ -4463,11 +4469,12 @@ html[data-theme="light"] .resume-role-family-option.is-selected {
   padding: 4px 12px 4px 5px;
   border-radius: 999px !important;
   border: 1px solid var(--app-border-2) !important;
-  background: var(--app-inset) !important;
-  color: var(--app-text) !important;
+  background: #1e293b !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.26) !important;
 }
 
-.admin-user-access-knob {
+#profileAdminUsersSection .admin-user-access-knob {
   width: 32px;
   height: 32px;
   border-radius: 999px;
@@ -4475,93 +4482,189 @@ html[data-theme="light"] .resume-role-family-option.is-selected {
   opacity: 0.92;
 }
 
-.admin-user-access-switch.is-authorized {
-  border-color: rgba(52, 211, 153, 0.48) !important;
-  background: rgba(52, 211, 153, 0.14) !important;
-  color: var(--app-success) !important;
+#profileAdminUsersSection .admin-user-access-switch.is-authorized {
+  border-color: #34d399 !important;
+  background-color: #047857 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(4, 120, 87, 0.28) !important;
 }
 
-.admin-user-access-switch.is-revoked {
+#profileAdminUsersSection .admin-user-access-switch.is-revoked {
   border-color: #fb7185 !important;
-  background: #be123c !important;
+  background-color: #be123c !important;
+  background-image: none !important;
   color: #ffffff !important;
   box-shadow: 0 10px 24px rgba(190, 18, 60, 0.28) !important;
 }
 
-.admin-user-access-label {
+#profileAdminUsersSection .admin-user-access-label {
   color: var(--app-text);
   font-size: 12px;
   font-weight: 900;
 }
 
-.admin-user-delete-btn,
-.admin-user-delete-confirm-btn,
-.admin-user-revoke-confirm-btn {
-  border: 1px solid #fb7185 !important;
-  background: #be123c !important;
+#profileAdminUsersSection .admin-user-delete-btn,
+#adminUserDeleteModal .admin-user-delete-confirm-btn,
+#adminUserAccessModal .admin-user-revoke-confirm-btn {
+  border: 1px solid #f43f5e !important;
+  background-color: #e11d48 !important;
+  background-image: none !important;
   color: #ffffff !important;
-  box-shadow: 0 10px 24px rgba(190, 18, 60, 0.28) !important;
+  box-shadow: 0 10px 24px rgba(225, 29, 72, 0.34) !important;
 }
 
-.admin-user-authorize-confirm-btn {
-  border: 1px solid #34d399 !important;
-  background: #047857 !important;
+#adminUserAccessModal .admin-user-authorize-confirm-btn {
+  border: 1px solid #10b981 !important;
+  background-color: #059669 !important;
+  background-image: none !important;
   color: #ffffff !important;
-  box-shadow: 0 10px 24px rgba(4, 120, 87, 0.25) !important;
+  box-shadow: 0 10px 24px rgba(5, 150, 105, 0.3) !important;
 }
 
-.admin-user-delete-btn {
+#profileAdminUsersSection .admin-user-delete-btn {
   min-height: 38px;
 }
 
-.admin-user-confirm-card {
-  width: min(560px, calc(100vw - 32px)) !important;
+#resumeDeleteModal .resume-delete-modal-card,
+#savedScanDeleteModal .resume-delete-modal-card {
+  width: min(720px, calc(100vw - 32px)) !important;
+  padding: 30px 36px !important;
   position: relative;
 }
 
-.admin-user-confirm-card .modal-header {
-  padding-right: 126px;
+#resumeDeleteModal .resume-delete-modal-card .modal-header,
+#savedScanDeleteModal .resume-delete-modal-card .modal-header {
+  margin: 0 !important;
+  padding: 0 134px 18px 0 !important;
+  border-bottom: 1px solid var(--app-border) !important;
 }
 
-.admin-user-confirm-card .modal-header h3 {
-  color: var(--app-text) !important;
-  font-weight: 900;
+#resumeDeleteModal .resume-delete-modal-card .modal-header > div,
+#savedScanDeleteModal .resume-delete-modal-card .modal-header > div {
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.admin-user-confirm-card .modal-header .subtext {
-  color: var(--app-muted) !important;
-  font-weight: 650;
+#resumeDeleteModal .resume-delete-modal-card .modal-body,
+#savedScanDeleteModal .resume-delete-modal-card .modal-body {
+  margin: 28px 0 34px !important;
+  padding: 0 !important;
 }
 
-.admin-user-modal-close-btn {
+#resumeDeleteModal .resume-delete-modal-close-btn,
+#savedScanDeleteModal .resume-delete-modal-close-btn {
   position: absolute;
   top: 24px;
-  right: 24px;
+  right: 36px;
   border-color: #38bdf8 !important;
-  background: #0f766e !important;
+  background-color: #0e7490 !important;
+  background-image: none !important;
   color: #f0fdff !important;
   box-shadow: var(--app-shadow-sm) !important;
 }
 
-.admin-user-confirm-card .modal-actions {
-  justify-content: flex-end;
+#resumeDeleteModal .resume-delete-modal-actions,
+#savedScanDeleteModal .resume-delete-modal-actions {
+  justify-content: flex-end !important;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
-.admin-user-confirm-copy {
+#savedScanDeleteModal .resume-delete-cancel-btn {
+  border-color: #64748b !important;
+  background-color: #334155 !important;
+  background-image: none !important;
+  color: #f8fafc !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22) !important;
+}
+
+#resumeDeleteModal .resume-delete-confirm-btn,
+#savedScanDeleteModal .resume-delete-confirm-btn {
+  min-width: 132px;
+  border: 1px solid #f43f5e !important;
+  border-radius: 12px !important;
+  background-color: #e11d48 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 24px rgba(225, 29, 72, 0.34) !important;
+}
+
+#adminUserAccessModal .admin-user-confirm-card,
+#adminUserDeleteModal .admin-user-confirm-card {
+  width: min(560px, calc(100vw - 32px)) !important;
+  padding: 30px 36px !important;
+  position: relative;
+}
+
+#adminUserAccessModal .admin-user-confirm-card .modal-header,
+#adminUserDeleteModal .admin-user-confirm-card .modal-header {
+  margin: 0 !important;
+  padding: 0 126px 18px 0 !important;
+  border-bottom: 1px solid var(--app-border) !important;
+}
+
+#adminUserAccessModal .admin-user-confirm-card .modal-header > div,
+#adminUserDeleteModal .admin-user-confirm-card .modal-header > div {
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#adminUserAccessModal .admin-user-confirm-card .modal-header h3,
+#adminUserDeleteModal .admin-user-confirm-card .modal-header h3 {
+  color: var(--app-text) !important;
+  font-weight: 900;
+}
+
+#adminUserAccessModal .admin-user-confirm-card .modal-header .subtext,
+#adminUserDeleteModal .admin-user-confirm-card .modal-header .subtext {
+  color: var(--app-muted) !important;
+  font-weight: 650;
+}
+
+#adminUserAccessModal .admin-user-modal-close-btn,
+#adminUserDeleteModal .admin-user-modal-close-btn {
+  position: absolute;
+  top: 24px;
+  right: 36px;
+  border-color: #38bdf8 !important;
+  background-color: #0e7490 !important;
+  background-image: none !important;
+  color: #f0fdff !important;
+  box-shadow: var(--app-shadow-sm) !important;
+}
+
+#adminUserAccessModal .admin-user-confirm-card .modal-body,
+#adminUserDeleteModal .admin-user-confirm-card .modal-body {
+  margin: 28px 0 34px !important;
+  padding: 0 !important;
+}
+
+#adminUserAccessModal .admin-user-confirm-card .modal-actions,
+#adminUserDeleteModal .admin-user-confirm-card .modal-actions {
+  justify-content: flex-end !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+#adminUserAccessModal .admin-user-confirm-copy,
+#adminUserDeleteModal .admin-user-confirm-copy {
   display: grid;
   gap: 10px;
-  padding: 16px 0 2px;
+  padding: 0;
   color: var(--app-text-2);
   line-height: 1.5;
 }
 
-.admin-user-confirm-copy strong {
+#adminUserAccessModal .admin-user-confirm-copy strong,
+#adminUserDeleteModal .admin-user-confirm-copy strong {
   color: #e0f2fe;
   font-size: 19px;
   font-weight: 900;
 }
 
-.admin-user-confirm-copy span {
+#adminUserAccessModal .admin-user-confirm-copy span,
+#adminUserDeleteModal .admin-user-confirm-copy span {
   color: var(--app-muted);
   font-weight: 650;
 }
@@ -4575,7 +4678,7 @@ html[data-theme="light"] .resume-role-family-option.is-selected {
 }
 
 .admin-user-high-warning {
-  margin-bottom: 16px;
+  margin: 22px 0 18px;
   padding: 14px 16px;
   border: 1px solid rgba(251, 113, 133, 0.5);
   border-radius: 14px;
@@ -4588,6 +4691,14 @@ html[data-theme="light"] .resume-role-family-option.is-selected {
 .admin-users-empty-cell {
   color: var(--app-muted);
   text-align: center !important;
+}
+
+#profileAdminUsersSection #refreshAdminUsersBtn {
+  border-color: #38bdf8 !important;
+  background-color: #0e7490 !important;
+  background-image: none !important;
+  color: #f0fdff !important;
+  box-shadow: var(--app-shadow-sm) !important;
 }
 
 html[data-theme="light"] .admin-users-table-wrap,
@@ -4622,6 +4733,9 @@ html[data-theme="light"] .profile-tab-icon--pipeline {
 }
 
 html[data-theme="light"] .profile-tab-btn.is-active {
+  border-color: #60a5fa !important;
+  outline: 2px solid #93c5fd !important;
+  outline-offset: -4px;
   background: #f8fafc !important;
   color: #0f172a !important;
   box-shadow:
@@ -4645,16 +4759,59 @@ html[data-theme="light"] .admin-user-confirm-copy strong {
   color: #0f172a;
 }
 
+html[data-theme="light"] #adminUserAccessModal .admin-user-confirm-copy strong {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] #adminUserDeleteModal .admin-user-confirm-copy strong {
+  color: #991b1b !important;
+}
+
 html[data-theme="light"] .admin-user-id,
 html[data-theme="light"] .admin-user-confirm-copy,
 html[data-theme="light"] .admin-user-confirm-copy span {
   color: #475569;
 }
 
-html[data-theme="light"] .admin-user-modal-close-btn {
+html[data-theme="light"] #adminUserAccessModal .admin-user-modal-close-btn,
+html[data-theme="light"] #adminUserDeleteModal .admin-user-modal-close-btn {
   border-color: #bae6fd !important;
-  background: #e0f2fe !important;
+  background-color: #e0f2fe !important;
+  background-image: none !important;
   color: #075985 !important;
+}
+
+html[data-theme="light"] #profileAdminUsersSection #refreshAdminUsersBtn {
+  border-color: #bae6fd !important;
+  background-color: #e0f2fe !important;
+  background-image: none !important;
+  color: #075985 !important;
+  box-shadow: 0 10px 20px rgba(14, 116, 144, 0.12) !important;
+}
+
+html[data-theme="light"] #resumeDeleteModal .resume-delete-modal-close-btn,
+html[data-theme="light"] #savedScanDeleteModal .resume-delete-modal-close-btn {
+  border-color: #bae6fd !important;
+  background-color: #e0f2fe !important;
+  background-image: none !important;
+  color: #075985 !important;
+}
+
+html[data-theme="light"] #savedScanDeleteModal .resume-delete-cancel-btn {
+  border-color: #cbd5e1 !important;
+  background-color: #f8fafc !important;
+  background-image: none !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] #resumeDeleteModal .resume-delete-confirm-btn,
+html[data-theme="light"] #savedScanDeleteModal .resume-delete-confirm-btn {
+  border-color: #b91c1c !important;
+  background-color: #dc2626 !important;
+  background-image: none !important;
+  color: #ffffff !important;
+  box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18) !important;
 }
 
 html[data-theme="light"] .admin-user-confirm-card:not(.admin-user-danger-card) .admin-user-confirm-copy strong {
@@ -4677,31 +4834,35 @@ html[data-theme="light"] .admin-user-status.is-revoked {
   color: #7f1d1d;
 }
 
-html[data-theme="light"] .admin-user-access-switch.is-authorized {
+html[data-theme="light"] #profileAdminUsersSection .admin-user-access-switch.is-authorized {
   border-color: #86efac !important;
-  background: #ecfdf5 !important;
+  background-color: #ecfdf5 !important;
+  background-image: none !important;
   color: #059669 !important;
 }
 
-html[data-theme="light"] .admin-user-access-switch.is-revoked {
+html[data-theme="light"] #profileAdminUsersSection .admin-user-access-switch.is-revoked {
   border-color: #b91c1c !important;
-  background: #dc2626 !important;
+  background-color: #dc2626 !important;
+  background-image: none !important;
   color: #ffffff !important;
   box-shadow: 0 10px 22px rgba(220, 38, 38, 0.2) !important;
 }
 
-html[data-theme="light"] .admin-user-delete-btn,
-html[data-theme="light"] .admin-user-delete-confirm-btn,
-html[data-theme="light"] .admin-user-revoke-confirm-btn {
+html[data-theme="light"] #profileAdminUsersSection .admin-user-delete-btn,
+html[data-theme="light"] #adminUserDeleteModal .admin-user-delete-confirm-btn,
+html[data-theme="light"] #adminUserAccessModal .admin-user-revoke-confirm-btn {
   border-color: #b91c1c !important;
-  background: #dc2626 !important;
+  background-color: #dc2626 !important;
+  background-image: none !important;
   color: #ffffff !important;
   box-shadow: 0 10px 22px rgba(220, 38, 38, 0.18) !important;
 }
 
-html[data-theme="light"] .admin-user-authorize-confirm-btn {
+html[data-theme="light"] #adminUserAccessModal .admin-user-authorize-confirm-btn {
   border-color: #047857 !important;
-  background: #059669 !important;
+  background-color: #059669 !important;
+  background-image: none !important;
   color: #ffffff !important;
   box-shadow: 0 10px 22px rgba(5, 150, 105, 0.18) !important;
 }

@@ -1432,7 +1432,7 @@ function bindDeleteInteractions() {
   });
 
   qs("closeResumeDeleteModalBtn").addEventListener("click", closeResumeDeleteModal);
-  qs("resumeDeleteCancelBtn").addEventListener("click", closeResumeDeleteModal);
+  qs("resumeDeleteCancelBtn")?.addEventListener("click", closeResumeDeleteModal);
 
   qs("resumeDeleteConfirmBtn").addEventListener("click", async () => {
     const resumeName = profileState.pendingDeleteResumeName || "";

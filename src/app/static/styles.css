@@ -3522,46 +3522,6 @@ tbody tr:hover {
   }
 }
 
-/* === profile resume delete modal === */
-
-.resume-delete-modal-card {
-  max-width: 520px;
-}
-
-.resume-delete-modal-actions {
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.resume-delete-cancel-btn {
-  border-color: rgba(120, 166, 255, 0.24);
-  color: #dbe6ff;
-  background: rgba(120, 166, 255, 0.08);
-}
-
-.resume-delete-cancel-btn:hover {
-  border-color: rgba(120, 166, 255, 0.34);
-  background: rgba(120, 166, 255, 0.12);
-}
-
-.resume-delete-confirm-btn {
-  min-width: 132px;
-  border: 1px solid rgba(255, 143, 143, 0.34);
-  background: rgba(255, 143, 143, 0.14);
-  color: #ffd7d7;
-  border-radius: 12px;
-  padding: 10px 16px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
-}
-
-.resume-delete-confirm-btn:hover {
-  border-color: rgba(255, 143, 143, 0.44);
-  background: rgba(255, 143, 143, 0.2);
-  transform: translateY(-1px);
-}
-
 /* === app error modal === */
 
 .app-error-modal-card {
@@ -11150,8 +11110,7 @@ html[data-bs-theme="light"] {
   padding-top: 16px;
 }
 
-.profile-dropdown-danger-btn,
-.resume-delete-confirm-btn {
+.profile-dropdown-danger-btn {
   min-height: 40px;
   border: 1px solid var(--app-danger) !important;
   border-radius: 8px !important;
@@ -13909,11 +13868,6 @@ html[data-theme="light"] .saved-scan-action-badge.failed {
   margin: 18px 0;
   color: var(--app-text-2);
   line-height: 1.55;
-}
-
-.resume-delete-confirm-btn {
-  background: linear-gradient(135deg, var(--app-danger), #be123c) !important;
-  color: #ffffff !important;
 }
 
 @media (max-width: 960px) {

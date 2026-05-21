@@ -281,8 +281,8 @@ def profile_page(request: Request) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=profile_modal_polish_r1" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=role_profile_preferences_menu_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_confirm_specific_r2" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -368,7 +368,7 @@ def profile_page(request: Request) -> str:
         <div class="subtext">This removes the file from the profile resume directory.</div>
       </div>
       <button
-        class="ghost-btn modal-close-btn"
+        class="ghost-btn modal-close-btn resume-delete-modal-close-btn"
         id="closeResumeDeleteModalBtn"
         type="button"
       >
@@ -384,13 +384,6 @@ def profile_page(request: Request) -> str:
     </div>
 
     <div class="modal-actions resume-delete-modal-actions">
-      <button
-        type="button"
-        class="ghost-btn resume-delete-cancel-btn"
-        id="resumeDeleteCancelBtn"
-      >
-        No
-      </button>
       <button
         type="button"
         class="resume-delete-confirm-btn"
@@ -552,7 +545,7 @@ def profile_page(request: Request) -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_modal_polish_r1"></script>
+  <script src="/static/profile.js?v=profile_confirm_specific_r2"></script>
 </body>
 </html>
     """.strip()
@@ -603,8 +596,8 @@ def saved_scans_page() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Saved Scans</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=role_expansion_r10_ui" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_confirm_specific_r2" />
 </head>
 <body>
   {render_top_shell("/profile/saved-scans")}
@@ -665,7 +658,7 @@ def saved_scans_page() -> str:
           </div>
           <button
             type="button"
-            class="ghost-btn modal-close-btn"
+            class="ghost-btn modal-close-btn resume-delete-modal-close-btn"
             id="savedScanDeleteCloseBtn"
           >
             Close
@@ -678,7 +671,7 @@ def saved_scans_page() -> str:
         <div class="modal-actions resume-delete-modal-actions">
           <button
             type="button"
-            class="ghost-btn"
+            class="ghost-btn resume-delete-cancel-btn"
             id="savedScanDeleteCancelBtn"
           >
             No

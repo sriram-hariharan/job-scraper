@@ -86,13 +86,44 @@ def test_floating_job_assistant_shell_contract():
         "#floatingIntelligenceChatButton",
         "#floatingIntelligenceChatPanel",
         "#floatingIntelligenceChatPanel.hidden",
+        ".floating-intelligence-chat-message",
+        ".floating-intelligence-chat-message--user",
+        ".floating-intelligence-chat-message--assistant",
+        ".floating-intelligence-chat-message--error",
+        ".floating-intelligence-chat-bubble",
+        ".floating-intelligence-chat-card",
+        ".floating-intelligence-chat-card-meta",
+        "#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble p",
         ".floating-intelligence-chat-compose",
         "@media (max-width: 560px)",
     ]:
         assert selector in css
 
+    for generated_class in [
+        "floating-intelligence-chat-message",
+        "floating-intelligence-chat-message--user",
+        "floating-intelligence-chat-message--assistant",
+        "floating-intelligence-chat-message--error",
+        "floating-intelligence-chat-bubble",
+        "floating-intelligence-chat-card",
+        "floating-intelligence-chat-card-meta",
+    ]:
+        assert generated_class in chat_js
+
     assert chat_js_path.exists()
     assert "/jobs/search-lite" in chat_js
     assert "/rag/answer" in chat_js
+    assert 'metaItem("Score"' not in chat_js
     assert "/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" in shell
     assert "Intelligence" not in [label for label, _href, _short_label in NAV_ITEMS]
+
+
+def test_rag_answer_prompt_guides_human_readable_grounded_answers():
+    source = Path("src/rag/rag_answerer.py").read_text(encoding="utf-8")
+
+    assert "direct answer" in source
+    assert "concise, human-readable" in source
+    assert "short readable bullets" in source
+    assert "source-grounded evidence" in source
+    assert "Do not expose backend, retrieval, vector index, timeout, or diagnostic internals." in source
+    assert "Return JSON only." in source

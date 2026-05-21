@@ -23,10 +23,12 @@ STRICT RULES
 3. If the sources do not contain enough evidence, say so plainly.
 4. Every substantive claim must be grounded in at least one source.
 5. Cite sources inline using bracketed source IDs like [S1] or [S2].
-6. If comparing or ranking jobs, explain the evidence for each selected job.
-7. For each cited source, include 2 to 4 short evidence points that directly explain why the job matches the question.
-8. Evidence points must be concrete and source-grounded, such as title fit, required skills, domain context, ML/LLM/RAG/agentic language, experimentation, modeling, or platform signals.
-9. Return ONLY valid JSON.
+6. Start with a direct answer in a concise, human-readable tone.
+7. If comparing, ranking, or recommending jobs, use short readable bullets and explain why each top job was selected.
+8. Keep the answer useful and conversational, but avoid robotic wording, backend/retrieval internals, and unsupported claims.
+9. For each cited source, include 2 to 4 short evidence points that directly explain why the job matches the question.
+10. Evidence points must be concrete and source-grounded, such as title fit, required skills, domain context, ML/LLM/RAG/agentic language, experimentation, modeling, or platform signals.
+11. Return ONLY valid JSON.
 
 Return this exact JSON shape:
 {
@@ -140,7 +142,10 @@ def _build_user_prompt(question: str, sources: List[Dict[str, Any]]) -> str:
     {source_text}
 
     Answer the question using only the sources above.
-    If you compare, rank, or recommend jobs, explain the concrete evidence for each selected source.
+    Start with the direct answer, then use short readable bullets if you rank or compare jobs.
+    Explain the concrete source-grounded evidence for each selected source.
+    Keep the wording concise, natural, and useful for a job search assistant.
+    Do not expose backend, retrieval, vector index, timeout, or diagnostic internals.
     Cite source IDs inline like [S1] and [S2].
     Return JSON only.
     """.strip()

@@ -1,6 +1,17 @@
 (function () {
   "use strict";
 
+
+  const FLOATING_CHAT_CLASS_NAMES = {
+    message: "floating-intelligence-chat-message",
+    userMessage: "floating-intelligence-chat-message--user",
+    assistantMessage: "floating-intelligence-chat-message--assistant",
+    errorMessage: "floating-intelligence-chat-message--error",
+    bubble: "floating-intelligence-chat-bubble",
+    card: "floating-intelligence-chat-card",
+    cardMeta: "floating-intelligence-chat-card-meta",
+  };
+
   function qs(id) {
     return document.getElementById(id);
   }
@@ -69,12 +80,14 @@
     });
   }
 
-  function formatScore(value) {
+  function metaItem(label, value) {
     if (value === null || value === undefined || String(value).trim() === "") return "";
-    const parsed = Number(String(value).replaceAll(",", "").trim());
-    if (!Number.isFinite(parsed)) return String(value);
-    const normalized = Math.abs(parsed) <= 1 ? parsed * 100 : parsed;
-    return normalized.toFixed(1);
+    return `
+      <span class="floating-intelligence-chat-card-meta-item">
+        <span class="floating-intelligence-chat-card-meta-label">${escapeHtml(label)}</span>
+        <span>${escapeHtml(value)}</span>
+      </span>
+    `;
   }
 
   function buildRequestUrl(mode, request) {
@@ -109,7 +122,6 @@
     const company = fieldValue(row, ["company", "job_company"]);
     const title = fieldValue(row, ["title", "job_title"]);
     const location = fieldValue(row, ["location", "job_location"]);
-    const score = formatScore(fieldValue(row, ["score", "ai_fit_score"]));
     const postedAt = formatDateTime(fieldValue(row, ["posted_at", "posted_date", "date_posted"]));
     const jobUrl = fieldValue(row, ["job_url", "url", "doc_id"]);
     const sourceId = fieldValue(row, ["source_id"]);
@@ -118,18 +130,18 @@
       : escapeHtml(title || "Job");
 
     const meta = [
-      company,
-      options.includeScore && score ? `Score: ${score}` : "",
-      location,
-      options.includePosted && postedAt ? `Posted: ${postedAt}` : "",
-      sourceId,
+      metaItem("Company", company),
+      metaItem("Location", location),
+      options.includePosted ? metaItem("Posted", postedAt) : "",
+      sourceId ? metaItem("Source", sourceId) : "",
     ].filter(Boolean);
 
     return `
-      <div class="floating-intelligence-chat-card">
-        <div class="floating-intelligence-chat-card-title">#${idx + 1} ${titleHtml}</div>
+      <div class="${FLOATING_CHAT_CLASS_NAMES.card}">
+        <div class="floating-intelligence-chat-card-kicker">${options.sourceLabel || "Result"} ${idx + 1}</div>
+        <div class="floating-intelligence-chat-card-title">${titleHtml}</div>
         ${meta.length
-          ? `<div class="floating-intelligence-chat-card-meta">${meta.map((item) => `<span>${escapeHtml(item)}</span>`).join("")}</div>`
+          ? `<div class="${FLOATING_CHAT_CLASS_NAMES.cardMeta}">${meta.join("")}</div>`
           : ""}
       </div>
     `;
@@ -143,7 +155,10 @@
 
     return `
       <div class="floating-intelligence-chat-results">
-        ${rows.map((row, idx) => buildJobCard(row, idx, { includeScore: true })).join("")}
+        ${rows.map((row, idx) => buildJobCard(row, idx, {
+          includePosted: true,
+          sourceLabel: "Result",
+        })).join("")}
       </div>
     `;
   }
@@ -162,25 +177,44 @@
     const sourcesHtml = sources.length
       ? `
         <div class="floating-intelligence-chat-sources">
-          ${sources.map((row, idx) => buildJobCard(row, idx, { includePosted: true })).join("")}
+          <div class="floating-intelligence-chat-section-label">Sources</div>
+          ${sources.map((row, idx) => buildJobCard(row, idx, {
+            includePosted: true,
+            sourceLabel: "Source",
+          })).join("")}
         </div>
       `
       : "";
 
     return `
-      <div class="floating-intelligence-chat-answer">${escapeHtml(answer)}</div>
+      <p class="floating-intelligence-chat-answer">${escapeHtml(answer)}</p>
       ${sourcesHtml}
     `;
   }
 
   function appendMessage(messages, role, html, options = {}) {
     const message = document.createElement("div");
-    message.className = `floating-intelligence-chat-message floating-intelligence-chat-message--${role}`;
+    const roleClass = role === "user"
+      ? FLOATING_CHAT_CLASS_NAMES.userMessage
+      : FLOATING_CHAT_CLASS_NAMES.assistantMessage;
+    message.className = `${FLOATING_CHAT_CLASS_NAMES.message} ${roleClass}`;
     if (options.error) {
-      message.className += " floating-intelligence-chat-message--error";
+      message.className += ` ${FLOATING_CHAT_CLASS_NAMES.errorMessage}`;
     }
-    message.innerHTML = html;
+    if (options.thinking) {
+      message.dataset.floatingChatThinking = "true";
+    }
+    message.innerHTML = `<div class="${FLOATING_CHAT_CLASS_NAMES.bubble}">${html}</div>`;
     messages.appendChild(message);
+    messages.scrollTop = messages.scrollHeight;
+    return message;
+  }
+
+  function removeThinkingMessage(messages) {
+    const thinking = messages.querySelector("[data-floating-chat-thinking='true']");
+    if (thinking) {
+      thinking.remove();
+    }
     messages.scrollTop = messages.scrollHeight;
   }
 
@@ -211,12 +245,14 @@
     }
 
     function openPanel() {
+      root.classList.add("is-open");
       panel.classList.remove("hidden");
       openBtn.setAttribute("aria-expanded", "true");
       input.focus();
     }
 
     function closePanel() {
+      root.classList.remove("is-open");
       panel.classList.add("hidden");
       openBtn.setAttribute("aria-expanded", "false");
     }
@@ -235,6 +271,7 @@
       const mode = modeSelect.value === "search" ? "search" : "answer";
       clearEmptyState(messages);
       appendMessage(messages, "user", escapeHtml(request));
+      appendMessage(messages, "assistant", "Thinking...", { thinking: true });
       input.value = "";
       sendBtn.disabled = true;
       setStatus("Thinking...");
@@ -244,9 +281,11 @@
         const html = mode === "search"
           ? buildSearchResponseHtml(payload)
           : buildAnswerResponseHtml(payload);
+        removeThinkingMessage(messages);
         appendMessage(messages, "assistant", html);
         setStatus("Idle");
       } catch (err) {
+        removeThinkingMessage(messages);
         appendMessage(messages, "assistant", escapeHtml(extractErrorMessage(err)), { error: true });
         setStatus("Error");
       } finally {

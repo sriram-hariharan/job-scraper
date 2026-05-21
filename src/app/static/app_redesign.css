@@ -3846,6 +3846,12 @@ body .notification-dropdown.hidden {
   box-shadow: 0 22px 54px rgba(37, 99, 235, 0.42) !important;
 }
 
+#floatingIntelligenceChat.is-open #floatingIntelligenceChatButton {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(10px) scale(0.94) !important;
+}
+
 .floating-intelligence-chat-icon {
   width: 32px !important;
   height: 32px !important;
@@ -3853,17 +3859,19 @@ body .notification-dropdown.hidden {
 
 #floatingIntelligenceChatPanel {
   position: fixed !important;
+  top: max(24px, env(safe-area-inset-top)) !important;
   right: 28px !important;
-  bottom: 104px !important;
+  bottom: max(24px, env(safe-area-inset-bottom)) !important;
   z-index: 900 !important;
   display: grid !important;
-  width: min(400px, calc(100vw - 56px)) !important;
-  max-height: 70vh !important;
-  grid-template-rows: auto auto minmax(120px, 1fr) auto auto;
+  width: min(600px, calc(100vw - 56px)) !important;
+  height: min(760px, calc(100vh - 48px)) !important;
+  max-height: calc(100vh - 48px) !important;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   gap: 14px !important;
   padding: 16px !important;
   border: 1px solid rgba(129, 156, 205, 0.3) !important;
-  border-radius: 22px !important;
+  border-radius: 20px !important;
   background:
     radial-gradient(circle at 16% 0%, rgba(124, 156, 255, 0.2), transparent 34%),
     linear-gradient(180deg, rgba(18, 25, 43, 0.98), rgba(11, 16, 32, 0.98)) !important;
@@ -3888,7 +3896,8 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   display: flex !important;
   align-items: flex-start !important;
   justify-content: space-between !important;
-  gap: 12px !important;
+  gap: 14px !important;
+  padding: 6px 6px 0 !important;
 }
 
 .floating-intelligence-chat-heading {
@@ -3897,7 +3906,7 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 
 .floating-intelligence-chat-heading h2 {
   margin: 0 !important;
-  font-size: 18px !important;
+  font-size: 20px !important;
   line-height: 1.2 !important;
   letter-spacing: 0 !important;
 }
@@ -3911,9 +3920,9 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 
 #floatingIntelligenceChatCloseBtn {
   flex: 0 0 auto !important;
-  width: 34px !important;
-  height: 34px !important;
-  min-height: 34px !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
   padding: 0 !important;
   border-radius: var(--app-radius-pill) !important;
   background: var(--app-surface-2) !important;
@@ -3925,6 +3934,7 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 .floating-intelligence-chat-controls {
   display: grid !important;
   gap: 8px !important;
+  padding: 0 4px !important;
 }
 
 .floating-intelligence-chat-mode {
@@ -3939,15 +3949,22 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
 #floatingIntelligenceModeSelect {
   width: 100% !important;
   min-height: 42px !important;
+  border-radius: 14px !important;
 }
 
 #floatingIntelligenceMessages {
-  min-height: 120px !important;
+  display: flex !important;
+  min-height: 0 !important;
+  flex-direction: column !important;
+  gap: 14px !important;
   overflow: auto !important;
-  padding: 14px !important;
+  padding: 16px !important;
   border: 1px solid var(--app-border) !important;
-  border-radius: var(--app-radius-md) !important;
-  background: var(--app-inset) !important;
+  border-radius: 18px !important;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01)),
+    var(--app-inset) !important;
+  overscroll-behavior: contain;
 }
 
 #floatingIntelligenceMessages p {
@@ -3957,27 +3974,187 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   line-height: 1.45 !important;
 }
 
+.floating-intelligence-chat-message {
+  display: flex !important;
+  width: 100% !important;
+}
+
+.floating-intelligence-chat-message--user {
+  justify-content: flex-start !important;
+}
+
+.floating-intelligence-chat-message--assistant,
+.floating-intelligence-chat-message--error {
+  justify-content: flex-end !important;
+}
+
+.floating-intelligence-chat-bubble {
+  width: fit-content !important;
+  max-width: min(500px, 86%) !important;
+  padding: 13px 15px !important;
+  border-radius: 18px !important;
+  font-size: 14px !important;
+  line-height: 1.5 !important;
+  overflow-wrap: anywhere !important;
+}
+
+.floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
+  border: 1px solid rgba(129, 156, 205, 0.24) !important;
+  border-bottom-left-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.075) !important;
+  color: var(--app-text) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.14) !important;
+}
+
+.floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble {
+  border-bottom-right-radius: 6px !important;
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.28) !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble p,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble span,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble div,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble a {
+  color: #ffffff !important;
+}
+
+.floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble p,
+.floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble span,
+.floating-intelligence-chat-message--assistant .floating-intelligence-chat-bubble div {
+  color: inherit !important;
+}
+
+.floating-intelligence-chat-message--error .floating-intelligence-chat-bubble {
+  border: 1px solid rgba(251, 113, 133, 0.35) !important;
+  background: rgba(251, 113, 133, 0.12) !important;
+  color: #fecdd3 !important;
+}
+
+.floating-intelligence-chat-answer {
+  color: inherit !important;
+  white-space: pre-wrap !important;
+}
+
+.floating-intelligence-chat-results,
+.floating-intelligence-chat-sources {
+  display: grid !important;
+  gap: 9px !important;
+  margin-top: 10px !important;
+}
+
+.floating-intelligence-chat-section-label,
+.floating-intelligence-chat-card-kicker {
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0 !important;
+  text-transform: uppercase;
+}
+
+.floating-intelligence-chat-card {
+  display: grid !important;
+  gap: 9px !important;
+  padding: 13px !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 15px !important;
+  background: rgba(7, 11, 24, 0.42) !important;
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14) !important;
+}
+
+.floating-intelligence-chat-card-title {
+  min-width: 0 !important;
+  color: inherit !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  line-height: 1.3 !important;
+}
+
+.floating-intelligence-chat-card-title a {
+  color: inherit !important;
+  text-decoration: none !important;
+  overflow-wrap: anywhere !important;
+}
+
+.floating-intelligence-chat-card-title a:hover,
+.floating-intelligence-chat-card-title a:focus-visible {
+  color: #ffffff !important;
+  text-decoration: underline !important;
+}
+
+.floating-intelligence-chat-card-meta {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+.floating-intelligence-chat-card-meta-item {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  max-width: 100% !important;
+  padding: 4px 7px !important;
+  border: 1px solid rgba(129, 156, 205, 0.18) !important;
+  border-radius: var(--app-radius-pill) !important;
+  background: rgba(255, 255, 255, 0.11) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  font-size: 11px !important;
+  font-weight: 750 !important;
+}
+
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-card-meta-label,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-card-kicker,
+#floatingIntelligenceMessages .floating-intelligence-chat-message--assistant .floating-intelligence-chat-section-label {
+  color: rgba(255, 255, 255, 0.78) !important;
+}
+
+.floating-intelligence-chat-card-meta-label {
+  color: rgba(255, 255, 255, 0.68) !important;
+  font-weight: 900 !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-message--user .floating-intelligence-chat-bubble {
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.08) !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-card {
+  border-color: rgba(255, 255, 255, 0.34) !important;
+  background: rgba(255, 255, 255, 0.16) !important;
+}
+
+html[data-theme="light"] .floating-intelligence-chat-message--error .floating-intelligence-chat-bubble {
+  background: #fff1f2 !important;
+  color: #9f1239 !important;
+}
+
 .floating-intelligence-chat-compose {
   display: grid !important;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px !important;
+  gap: 10px !important;
+  padding: 10px !important;
+  border: 1px solid rgba(129, 156, 205, 0.22) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.045) !important;
 }
 
 #floatingIntelligenceInput {
   min-width: 0 !important;
-  min-height: 44px !important;
+  min-height: 48px !important;
+  border: 0 !important;
+  background: transparent !important;
 }
 
 #floatingIntelligenceSendBtn {
-  min-height: 44px !important;
-  padding: 0 18px !important;
-  border-radius: var(--app-radius-md) !important;
+  min-height: 48px !important;
+  padding: 0 20px !important;
+  border-radius: 14px !important;
 }
 
 #floatingIntelligenceStatus {
-  color: var(--app-muted) !important;
-  font-size: 12px !important;
-  font-weight: 800 !important;
+  display: none !important;
 }
 
 @media (max-width: 560px) {
@@ -3989,11 +4166,18 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   }
 
   #floatingIntelligenceChatPanel {
+    top: max(16px, env(safe-area-inset-top)) !important;
     right: 16px !important;
     left: 16px !important;
-    bottom: 88px !important;
+    bottom: max(16px, env(safe-area-inset-bottom)) !important;
     width: auto !important;
-    max-height: 70vh !important;
+    height: calc(100vh - 32px) !important;
+    max-height: calc(100vh - 32px) !important;
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+  }
+
+  .floating-intelligence-chat-bubble {
+    max-width: 92% !important;
   }
 }
 

@@ -90,6 +90,14 @@ function setProfilePreferenceCheckedValues(name, values) {
   });
 }
 
+function setProfilePreferenceCheckboxGroup(name, checked) {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+  form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+    input.checked = Boolean(checked);
+  });
+}
+
 function setProfilePreferenceTextareaList(id, values) {
   const input = qs(id);
   if (!input) return;
@@ -1545,6 +1553,12 @@ function bindProfilePreferencesInteractions() {
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     saveProfilePreferences();
+  });
+  qs("profilePreferencesSelectAllRolesBtn")?.addEventListener("click", () => {
+    setProfilePreferenceCheckboxGroup("selected_role_families", true);
+  });
+  qs("profilePreferencesClearAllRolesBtn")?.addEventListener("click", () => {
+    setProfilePreferenceCheckboxGroup("selected_role_families", false);
   });
 }
 

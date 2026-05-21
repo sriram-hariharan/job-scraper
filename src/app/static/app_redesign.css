@@ -4061,11 +4061,26 @@ html[data-theme="dark"] .first-run-prompt-secondary {
   gap: 18px;
 }
 
+.profile-preferences-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .profile-preferences-group-header h3 {
   margin: 0 0 4px;
   color: var(--app-text);
   font-size: 22px;
   font-weight: 950;
+}
+
+.profile-preferences-required-title {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .profile-preferences-group-header p {

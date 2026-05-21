@@ -26,10 +26,16 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
         <section class="profile-preferences-group">
           <div class="profile-preferences-group-header">
             <div>
-              <h3>Role interests</h3>
+              <h3 class="profile-preferences-required-title">
+                <span>Role interests</span>
+                <span class="onboarding-required-pill">Required</span>
+              </h3>
               <p class="subtext">Select at least one role family to guide your job queue.</p>
             </div>
-            <span class="onboarding-required-pill">Required</span>
+            <div class="profile-preferences-header-actions">
+              <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--select" id="profilePreferencesSelectAllRolesBtn">Select all</button>
+              <button type="button" class="ghost-btn btn-sm pipeline-bulk-action-btn pipeline-bulk-action-btn--clear" id="profilePreferencesClearAllRolesBtn">Clear all</button>
+            </div>
           </div>
           <div class="onboarding-role-grid" id="profilePreferencesRoleGrid">
             {_role_family_cards_html()}
@@ -562,8 +568,8 @@ def profile_preferences_page() -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Preferences · My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=ui_redesign_v17" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=role_profile_preferences_menu_r1" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_preferences_bulk_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_preferences_bulk_r1" />
 </head>
 <body>
   {render_top_shell("/profile/preferences")}
@@ -581,7 +587,7 @@ def profile_preferences_page() -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_preferences_menu_r1"></script>
+  <script src="/static/profile.js?v=profile_preferences_bulk_r1"></script>
 </body>
 </html>
     """.strip()

@@ -86,6 +86,7 @@ def test_floating_job_assistant_shell_contract():
         "#floatingIntelligenceChatButton",
         "#floatingIntelligenceChatPanel",
         "#floatingIntelligenceChatPanel.hidden",
+        "#floatingIntelligenceModeSelect[hidden]",
         ".floating-intelligence-chat-message",
         ".floating-intelligence-chat-message--user",
         ".floating-intelligence-chat-message--assistant",
@@ -111,9 +112,11 @@ def test_floating_job_assistant_shell_contract():
         assert generated_class in chat_js
 
     assert chat_js_path.exists()
-    assert "/jobs/search-lite" in chat_js
-    assert "/rag/answer" in chat_js
+    assert "/assistant/query" in chat_js
+    assert "/jobs/search-lite" not in chat_js
+    assert "/rag/answer" not in chat_js
     assert 'metaItem("Score"' not in chat_js
+    assert 'id="floatingIntelligenceModeSelect" hidden' in shell
     assert "/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" in shell
     assert "Intelligence" not in [label for label, _href, _short_label in NAV_ITEMS]
 

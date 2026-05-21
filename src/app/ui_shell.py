@@ -249,7 +249,7 @@ def render_top_shell(active_href: str) -> str:
     <header class="floating-intelligence-chat-header">
       <div class="floating-intelligence-chat-heading">
         <h2>Job Assistant</h2>
-        <p>Search jobs or ask about your current corpus.</p>
+        <p>Ask a question or search by keywords.</p>
       </div>
       <button
         type="button"
@@ -262,13 +262,11 @@ def render_top_shell(active_href: str) -> str:
     </header>
 
     <div class="floating-intelligence-chat-controls">
-      <label class="floating-intelligence-chat-mode">
-        <span>Mode</span>
-        <select id="floatingIntelligenceModeSelect">
-          <option value="answer" selected>Answer</option>
-          <option value="search">Search</option>
-        </select>
-      </label>
+      <p class="floating-intelligence-chat-helper">The assistant will decide whether to search or answer.</p>
+      <select id="floatingIntelligenceModeSelect" hidden aria-hidden="true" tabindex="-1">
+        <option value="answer" selected>Answer</option>
+        <option value="search">Search</option>
+      </select>
     </div>
 
     <div class="floating-intelligence-chat-messages" id="floatingIntelligenceMessages">

@@ -214,3 +214,111 @@ def test_jobs_search_lite_excludes_obvious_rag_smoke_rows(monkeypatch):
         row["title"]
         for row in payload["results"]
     }
+
+
+def test_assistant_intent_router_routes_keyword_searches():
+    from src.app.services import route_assistant_intent
+
+    assert route_assistant_intent("software engineer")["intent"] == "search_jobs"
+    assert route_assistant_intent("machine learning engineer")["intent"] == "search_jobs"
+
+
+def test_assistant_intent_router_routes_questions_and_recommendations():
+    from src.app.services import route_assistant_intent
+
+    assert (
+        route_assistant_intent("What are the best backend engineering jobs?")["intent"]
+        == "answer_job_query"
+    )
+    assert (
+        route_assistant_intent("any of the jobs having python requirements?")["intent"]
+        == "answer_job_query"
+    )
+
+
+def test_assistant_query_payload_for_search_uses_search_lite(monkeypatch):
+    from src.app import services
+
+    monkeypatch.setattr(
+        services,
+        "jobs_search_lite_payload",
+        lambda request, top_k=5: {
+            "ok": True,
+            "request": request,
+            "result_count": 1,
+            "results": [
+                {
+                    "company": "Acme AI",
+                    "title": "Software Engineer",
+                }
+            ],
+        },
+    )
+
+    payload = services.assistant_query_payload("software engineer", top_k=5)
+
+    assert payload["ok"] is True
+    assert payload["intent"] == "search_jobs"
+    assert payload["natural_intent"] == "search_jobs"
+    assert payload["result_count"] == 1
+    assert payload["results"][0]["title"] == "Software Engineer"
+    assert payload["response"] is None
+    assert payload["router"]["intent"] == "search_jobs"
+
+
+def test_assistant_query_payload_for_answer_uses_rag_answer(monkeypatch):
+    from src.app import services
+
+    monkeypatch.setattr(
+        services,
+        "rag_answer_payload",
+        lambda request, top_k=5, fetch_k=10, output_mode="compact", include_diagnostics=False: {
+            "ok": True,
+            "request": request,
+            "response": {
+                "answer": "The backend role is strongest. [S1]",
+                "sources": [
+                    {
+                        "source_id": "S1",
+                        "company": "Acme AI",
+                        "title": "Backend Engineer",
+                    }
+                ],
+            },
+        },
+    )
+
+    payload = services.assistant_query_payload(
+        "What are the best backend engineering jobs?",
+        top_k=5,
+        fetch_k=10,
+        include_diagnostics=False,
+    )
+
+    assert payload["ok"] is True
+    assert payload["intent"] == "answer_job_query"
+    assert payload["natural_intent"] == "answer_job_query"
+    assert payload["result_count"] == 1
+    assert payload["results"] == []
+    assert payload["response"]["answer"] == "The backend role is strongest. [S1]"
+    assert payload["router"]["intent"] == "answer_job_query"
+
+
+def test_assistant_query_payload_cleans_known_internal_retrieval_error(monkeypatch):
+    from src.app import services
+
+    def raise_internal_error(*args, **kwargs):
+        raise RuntimeError(
+            "Legacy filesystem RAG index is disabled. "
+            "Semantic vector retrieval will move to pgvector/vector DB in 6B.16."
+        )
+
+    monkeypatch.setattr(services, "rag_answer_payload", raise_internal_error)
+
+    payload = services.assistant_query_payload("What jobs have Python requirements?")
+
+    assert payload["ok"] is True
+    assert payload["intent"] == "answer_job_query"
+    assert payload["result_count"] == 0
+    assert payload["response"]["insufficient_evidence"] is True
+    assert "Legacy filesystem RAG index is disabled" not in payload["response"]["answer"]

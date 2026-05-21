@@ -984,6 +984,20 @@ def jobs_search_lite(
         top_k=top_k,
     )
 
+@app.get("/assistant/query")
+def assistant_query(
+    request: str,
+    top_k: int = 5,
+    fetch_k: int = 10,
+    include_diagnostics: bool = False,
+):
+    return services.assistant_query_payload(
+        request=request,
+        top_k=top_k,
+        fetch_k=fetch_k,
+        include_diagnostics=include_diagnostics,
+    )
+
 @app.get("/rag/answer")
 def rag_answer(
     request: str,

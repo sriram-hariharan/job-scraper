@@ -90,22 +90,14 @@
     `;
   }
 
-  function buildRequestUrl(mode, request) {
-    if (mode === "search") {
-      const params = new URLSearchParams({
-        request,
-        top_k: "5",
-      });
-      return `/jobs/search-lite?${params.toString()}`;
-    }
-
+  function buildRequestUrl(request) {
     const params = new URLSearchParams({
       request,
       top_k: "5",
-      fetch_k: "15",
+      fetch_k: "10",
       include_diagnostics: "false",
     });
-    return `/rag/answer?${params.toString()}`;
+    return `/assistant/query?${params.toString()}`;
   }
 
   function fieldValue(row, keys) {
@@ -236,8 +228,14 @@
     const messages = qs("floatingIntelligenceMessages");
     const status = qs("floatingIntelligenceStatus");
 
-    if (!root || !openBtn || !panel || !closeBtn || !modeSelect || !input || !sendBtn || !messages || !status) {
+    if (!root || !openBtn || !panel || !closeBtn || !input || !sendBtn || !messages || !status) {
       return;
+    }
+
+    if (modeSelect) {
+      modeSelect.hidden = true;
+      modeSelect.setAttribute("aria-hidden", "true");
+      modeSelect.tabIndex = -1;
     }
 
     function setStatus(value) {
@@ -268,7 +266,6 @@
         return;
       }
 
-      const mode = modeSelect.value === "search" ? "search" : "answer";
       clearEmptyState(messages);
       appendMessage(messages, "user", escapeHtml(request));
       appendMessage(messages, "assistant", "Thinking...", { thinking: true });
@@ -277,8 +274,8 @@
       setStatus("Thinking...");
 
       try {
-        const payload = await fetchJson(buildRequestUrl(mode, request));
-        const html = mode === "search"
+        const payload = await fetchJson(buildRequestUrl(request));
+        const html = payload?.intent === "search_jobs"
           ? buildSearchResponseHtml(payload)
           : buildAnswerResponseHtml(payload);
         removeThinkingMessage(messages);

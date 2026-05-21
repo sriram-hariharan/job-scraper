@@ -16004,6 +16004,150 @@ def jobs_search_lite_payload(
         "results": compact_results,
     }
 
+_ASSISTANT_QUESTION_STARTERS = {
+    "what",
+    "which",
+    "who",
+    "where",
+    "when",
+    "why",
+    "how",
+    "can",
+    "does",
+    "do",
+    "are",
+    "is",
+}
+
+_ASSISTANT_ANSWER_PHRASES = (
+    "best",
+    "strongest",
+    "compare",
+    "which jobs",
+    "what jobs",
+    "any jobs",
+    "do any",
+    "having",
+    "requirements",
+    "recommend",
+    "fit",
+    "look strongest",
+    "current corpus",
+    "jobs having",
+)
+
+_ASSISTANT_INTERNAL_RETRIEVAL_ERRORS = (
+    "Legacy filesystem RAG index is disabled",
+    "semantic retrieval timed out",
+)
+
+
+def route_assistant_intent(request: str) -> Dict[str, str]:
+    normalized = re.sub(r"\s+", " ", str(request or "").strip().lower())
+    first_word = normalized.split(" ", 1)[0] if normalized else ""
+
+    if "?" in normalized:
+        return {
+            "intent": "answer_job_query",
+            "reason": "question_mark",
+        }
+
+    if first_word in _ASSISTANT_QUESTION_STARTERS:
+        return {
+            "intent": "answer_job_query",
+            "reason": "question_starter",
+        }
+
+    for phrase in _ASSISTANT_ANSWER_PHRASES:
+        if phrase in normalized:
+            return {
+                "intent": "answer_job_query",
+                "reason": f"answer_phrase:{phrase}",
+            }
+
+    return {
+        "intent": "search_jobs",
+        "reason": "keyword_search",
+    }
+
+
+def _is_assistant_internal_retrieval_error(exc: Exception) -> bool:
+    message = str(exc)
+    return any(marker in message for marker in _ASSISTANT_INTERNAL_RETRIEVAL_ERRORS)
+
+
+def assistant_query_payload(
+    request: str,
+    top_k: int = 5,
+    fetch_k: int = 10,
+    include_diagnostics: bool = False,
+) -> Dict[str, Any]:
+    router = route_assistant_intent(request)
+    intent = router["intent"]
+
+    if intent == "search_jobs":
+        search_payload = jobs_search_lite_payload(
+            request=request,
+            top_k=top_k,
+        )
+        results = search_payload.get("results", []) or []
+        return {
+            "ok": True,
+            "intent": "search_jobs",
+            "natural_intent": "search_jobs",
+            "request": request,
+            "result_count": len(results),
+            "results": results,
+            "response": None,
+            "router": router,
+        }
+
+    try:
+        answer_payload = rag_answer_payload(
+            request=request,
+            top_k=top_k,
+            fetch_k=fetch_k,
+            output_mode="compact",
+            include_diagnostics=include_diagnostics,
+        )
+    except Exception as exc:
+        if not _is_assistant_internal_retrieval_error(exc):
+            raise
+        response = {
+            "answer": "I could not answer this because no matching job documents were retrieved.",
+            "insufficient_evidence": True,
+            "sources": [],
+            "job_evidence": [],
+        }
+        return {
+            "ok": True,
+            "intent": "answer_job_query",
+            "natural_intent": "answer_job_query",
+            "request": request,
+            "result_count": 0,
+            "results": [],
+            "response": response,
+            "router": router,
+        }
+
+    response = answer_payload.get("response") if isinstance(answer_payload, dict) else None
+    source_count = 0
+    if isinstance(response, dict):
+        sources = response.get("sources", []) or response.get("job_evidence", []) or []
+        if isinstance(sources, list):
+            source_count = len(sources)
+
+    return {
+        "ok": True,
+        "intent": "answer_job_query",
+        "natural_intent": "answer_job_query",
+        "request": request,
+        "result_count": source_count,
+        "results": [],
+        "response": response,
+        "router": router,
+    }
+
 def rag_search_payload(
     request: str,
     top_k: int = 5,

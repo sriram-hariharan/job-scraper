@@ -3946,10 +3946,22 @@ html[data-theme="light"] #floatingIntelligenceChatPanel {
   text-transform: uppercase;
 }
 
+.floating-intelligence-chat-helper {
+  margin: 0 !important;
+  color: var(--app-muted) !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.35 !important;
+}
+
 #floatingIntelligenceModeSelect {
   width: 100% !important;
   min-height: 42px !important;
   border-radius: 14px !important;
+}
+
+#floatingIntelligenceModeSelect[hidden] {
+  display: none !important;
 }
 
 #floatingIntelligenceMessages {

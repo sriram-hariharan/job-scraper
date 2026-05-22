@@ -2106,6 +2106,30 @@ th .sort-header-btn {
   min-width: 240px;
 }
 
+.queue-job-location,
+.queue-simple-location {
+  margin-top: 5px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.timestamp-unavailable-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 9px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 999px;
+  background: var(--app-inset);
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 850;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 #planningTable tbody td *,
 #queueTable tbody td *,
 #decisionsTable tbody td *,
@@ -2878,6 +2902,12 @@ body.executive-simple-mode #queueTable td.apply-cell .job-apply-btn {
 
 .queue-simple-title .job-link {
   color: inherit !important;
+}
+
+.queue-simple-location {
+  margin-top: -2px;
+  margin-bottom: 8px;
+  color: var(--app-muted);
 }
 
 .queue-simple-posted {
@@ -5390,22 +5420,46 @@ html[data-theme="light"] .admin-user-high-warning {
   background: rgba(96, 165, 250, 0.22) !important;
 }
 
-html:not([data-theme="light"]) .pipeline-run-action-btn,
-html:not([data-theme="light"]) .pipeline-runs-refresh-btn,
-html[data-theme="dark"] .pipeline-run-action-btn,
-html[data-theme="dark"] .pipeline-runs-refresh-btn {
+html:not([data-theme="light"]) .pipeline-run-view-btn,
+html[data-theme="dark"] .pipeline-run-view-btn {
   border-color: rgba(129, 140, 248, 0.72) !important;
   background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
   color: #ffffff !important;
   box-shadow: 0 14px 32px rgba(79, 70, 229, 0.24) !important;
 }
 
-html:not([data-theme="light"]) .pipeline-run-action-btn:not(:disabled):hover,
-html:not([data-theme="light"]) .pipeline-runs-refresh-btn:not(:disabled):hover,
-html[data-theme="dark"] .pipeline-run-action-btn:not(:disabled):hover,
-html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
+html:not([data-theme="light"]) .pipeline-run-view-btn:not(:disabled):hover,
+html[data-theme="dark"] .pipeline-run-view-btn:not(:disabled):hover {
   border-color: rgba(165, 180, 252, 0.86) !important;
   background: linear-gradient(135deg, var(--app-primary-strong), var(--app-violet)) !important;
+}
+
+html:not([data-theme="light"]) .pipeline-run-rerun-btn,
+html[data-theme="dark"] .pipeline-run-rerun-btn {
+  border-color: rgba(34, 211, 238, 0.7) !important;
+  background: linear-gradient(135deg, #0891b2, #22d3ee) !important;
+  color: #ecfeff !important;
+  box-shadow: 0 14px 32px rgba(8, 145, 178, 0.24) !important;
+}
+
+html:not([data-theme="light"]) .pipeline-run-rerun-btn:not(:disabled):hover,
+html[data-theme="dark"] .pipeline-run-rerun-btn:not(:disabled):hover {
+  border-color: rgba(103, 232, 249, 0.86) !important;
+  background: linear-gradient(135deg, #06b6d4, #67e8f9) !important;
+}
+
+html:not([data-theme="light"]) .pipeline-runs-refresh-btn,
+html[data-theme="dark"] .pipeline-runs-refresh-btn {
+  border-color: rgba(52, 211, 153, 0.72) !important;
+  background: linear-gradient(135deg, #059669, #34d399) !important;
+  color: #ecfdf5 !important;
+  box-shadow: 0 14px 32px rgba(5, 150, 105, 0.24) !important;
+}
+
+html:not([data-theme="light"]) .pipeline-runs-refresh-btn:not(:disabled):hover,
+html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
+  border-color: rgba(110, 231, 183, 0.88) !important;
+  background: linear-gradient(135deg, #10b981, #6ee7b7) !important;
 }
 
 .pipeline-runs-empty-cell {

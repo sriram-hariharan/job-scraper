@@ -83,6 +83,10 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "source": (job.get("source") or "").strip(),
         "job_url": (job.get("url") or "").strip(),
         "posted_at": (job.get("posted_at") or "").strip(),
+        "freshness_status": (job.get("_freshness_status") or job.get("freshness_status") or "").strip(),
+        "ashby_timestamp_status": (
+            job.get("_ashby_timestamp_status") or job.get("ashby_timestamp_status") or ""
+        ).strip(),
         "description": job.get("description_text", "") or job.get("description", ""),
         "role_family": intelligence.get("role_family", "") or job.get("role_family", ""),
         "seniority": intelligence.get("seniority", ""),

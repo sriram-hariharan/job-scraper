@@ -1,0 +1,141 @@
+import csv
+import sys
+import tempfile
+from pathlib import Path
+
+import application_execution_queue
+import application_shortlist_from_batch_selector
+
+
+def _read_rows(path: Path):
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def _write_selector_fixture(path: Path) -> None:
+    row = {
+        "job_doc_id": "https://jobs.example.com/1",
+        "job_company": "Acme",
+        "job_title": "Backend Engineer",
+        "job_location": "New York, NY",
+        "posted_at": "",
+        "freshness_status": "unknown_timestamp_allowed",
+        "ashby_timestamp_status": "ashby_timestamp_request_failed",
+        "resume_variants_considered": "2",
+        "passed_prefilter": "1",
+        "filtered_out": "0",
+        "winner_resume": "resume.pdf",
+        "winner_score": "0.910000",
+        "winner_bucket": "strong",
+        "winner_top_dims": "skills=0.90",
+        "winner_missing_requirements": "",
+        "winner_matched_terms": "python",
+        "recommendation_summary": "Strong match.",
+        "resolved_resume": "resume.pdf",
+        "resolved_score": "0.910000",
+        "resolved_bucket": "strong",
+        "resolved_top_dims": "skills=0.90",
+        "resolved_missing_requirements": "",
+        "resolved_matched_terms": "python",
+        "resolved_resume_source": "deterministic_winner",
+        "resolved_selection_status": "resolved",
+        "variant_review_required": "False",
+        "resolved_best_available_imperfect_match": "False",
+        "selection_signal": "deterministic_winner",
+        "requires_manual_review": "False",
+        "manual_review_gap_epsilon": "0.020000",
+        "is_tie": "False",
+        "tie_epsilon": "0.010000",
+        "runner_up_resume": "",
+        "runner_up_score": "",
+        "score_gap": "",
+        "llm_adjudication_resume": "",
+        "llm_adjudication_confidence": "",
+        "llm_adjudication_reason": "",
+        "llm_adjudication_status": "disabled",
+        "llm_adjudication_parse_ok": "",
+        "llm_adjudication_provider": "",
+        "llm_adjudication_model": "",
+        "llm_adjudication_cache_hit": "",
+        "llm_adjudication_differs_from_deterministic": "False",
+        "llm_adjudication_error_type": "",
+        "llm_fallback_best_resume": "",
+        "llm_fallback_best_score": "",
+        "llm_fallback_backup_resume": "",
+        "llm_fallback_backup_score": "",
+        "llm_fallback_confidence": "",
+        "llm_fallback_reason": "",
+        "llm_fallback_status": "disabled",
+        "llm_fallback_parse_ok": "",
+        "llm_fallback_provider": "",
+        "llm_fallback_model": "",
+        "llm_fallback_cache_hit": "",
+        "llm_fallback_error_type": "",
+    }
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=list(row))
+        writer.writeheader()
+        writer.writerow(row)
+
+
+def test_selector_source_writes_location_and_unknown_timestamp_metadata():
+    source = Path("batch_select_best_resume_variant.py").read_text(encoding="utf-8")
+
+    assert '"job_location": str(record.get("location", "")' in source
+    assert '"freshness_status": str(record.get("freshness_status", "")' in source
+    assert '"ashby_timestamp_status": str(record.get("ashby_timestamp_status", "")' in source
+    assert '"job_location",' in source
+
+
+def test_job_packet_manifest_includes_location_and_timestamp_metadata():
+    source = Path("run_application_planning.py").read_text(encoding="utf-8")
+
+    assert '"job_location": row.get("job_location", "")' in source
+    assert '"freshness_status": row.get("freshness_status", "")' in source
+    assert '"ashby_timestamp_status": row.get("ashby_timestamp_status", "")' in source
+    assert '"job_location",' in source
+
+
+def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metadata():
+    original_argv = sys.argv[:]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        selector_csv = root / "best_resume_variant_by_job.csv"
+        shortlist_csv = root / "application_shortlist_by_job.csv"
+        queue_csv = root / "application_execution_queue.csv"
+        _write_selector_fixture(selector_csv)
+
+        try:
+            sys.argv = [
+                "application_shortlist_from_batch_selector.py",
+                "--input-csv",
+                str(selector_csv),
+                "--output-csv",
+                str(shortlist_csv),
+                "--top-k-console",
+                "0",
+            ]
+            application_shortlist_from_batch_selector.main()
+
+            sys.argv = [
+                "application_execution_queue.py",
+                "--input-csv",
+                str(shortlist_csv),
+                "--output-csv",
+                str(queue_csv),
+                "--top-k-console",
+                "0",
+            ]
+            application_execution_queue.main()
+        finally:
+            sys.argv = original_argv
+
+        shortlist_row = _read_rows(shortlist_csv)[0]
+        queue_row = _read_rows(queue_csv)[0]
+
+    for row in (shortlist_row, queue_row):
+        assert row["job_location"] == "New York, NY"
+        assert row["freshness_status"] == "unknown_timestamp_allowed"
+        assert row["ashby_timestamp_status"] == "ashby_timestamp_request_failed"
+        assert row["posted_at"] == ""

@@ -309,7 +309,10 @@ def main() -> None:
                 "job_doc_id": row["job_doc_id"],
                 "job_company": row["job_company"],
                 "job_title": row["job_title"],
+                "job_location": row.get("job_location", ""),
                 "posted_at": row.get("posted_at", ""),
+                "freshness_status": row.get("freshness_status", ""),
+                "ashby_timestamp_status": row.get("ashby_timestamp_status", ""),
                 "action": action,
                 "action_rationale": rationale,
 
@@ -397,7 +400,10 @@ def main() -> None:
         "job_doc_id",
         "job_company",
         "job_title",
+        "job_location",
         "posted_at",
+        "freshness_status",
+        "ashby_timestamp_status",
         "action",
         "action_rationale",
 

@@ -9096,6 +9096,20 @@ def _load_job_metadata_overlay_from_corpus(
                 record.get("posted_at")
                 or metadata.get("posted_at")
             )
+            job_location = _clean_text(
+                record.get("job_location")
+                or record.get("location")
+                or metadata.get("job_location")
+                or metadata.get("location")
+            )
+            freshness_status = _clean_text(
+                record.get("freshness_status")
+                or metadata.get("freshness_status")
+            )
+            ashby_timestamp_status = _clean_text(
+                record.get("ashby_timestamp_status")
+                or metadata.get("ashby_timestamp_status")
+            )
 
             if not any([job_doc_id, job_url, job_company, job_title]):
                 continue
@@ -9108,6 +9122,9 @@ def _load_job_metadata_overlay_from_corpus(
             }
             overlay = {
                 "posted_at": posted_at,
+                "job_location": job_location,
+                "freshness_status": freshness_status,
+                "ashby_timestamp_status": ashby_timestamp_status,
                 "job_url": job_url,
             }
 
@@ -9130,6 +9147,9 @@ def _overlay_job_metadata(
     for row in rows:
         merged = dict(row)
         merged["posted_at"] = _clean_text(merged.get("posted_at"))
+        merged["job_location"] = _clean_text(merged.get("job_location"))
+        merged["freshness_status"] = _clean_text(merged.get("freshness_status"))
+        merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
 
         if latest_by_key:
@@ -9140,6 +9160,12 @@ def _overlay_job_metadata(
 
                 if overlay.get("posted_at"):
                     merged["posted_at"] = overlay["posted_at"]
+                if overlay.get("job_location"):
+                    merged["job_location"] = overlay["job_location"]
+                if overlay.get("freshness_status"):
+                    merged["freshness_status"] = overlay["freshness_status"]
+                if overlay.get("ashby_timestamp_status"):
+                    merged["ashby_timestamp_status"] = overlay["ashby_timestamp_status"]
                 if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
                     merged["job_url"] = overlay["job_url"]
                 break
@@ -9249,6 +9275,20 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
             record.get("posted_at")
             or metadata.get("posted_at")
         )
+        job_location = _clean_text(
+            record.get("job_location")
+            or record.get("location")
+            or metadata.get("job_location")
+            or metadata.get("location")
+        )
+        freshness_status = _clean_text(
+            record.get("freshness_status")
+            or metadata.get("freshness_status")
+        )
+        ashby_timestamp_status = _clean_text(
+            record.get("ashby_timestamp_status")
+            or metadata.get("ashby_timestamp_status")
+        )
 
         if not any([job_doc_id, job_url, job_company, job_title]):
             continue
@@ -9261,6 +9301,9 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
         }
         overlay = {
             "posted_at": posted_at,
+            "job_location": job_location,
+            "freshness_status": freshness_status,
+            "ashby_timestamp_status": ashby_timestamp_status,
             "job_url": job_url,
         }
 
@@ -9280,6 +9323,9 @@ def _overlay_job_metadata_from_map(
     for row in rows:
         merged = dict(row)
         merged["posted_at"] = _clean_text(merged.get("posted_at"))
+        merged["job_location"] = _clean_text(merged.get("job_location"))
+        merged["freshness_status"] = _clean_text(merged.get("freshness_status"))
+        merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
 
         if latest_by_key:
@@ -9290,6 +9336,12 @@ def _overlay_job_metadata_from_map(
 
                 if overlay.get("posted_at"):
                     merged["posted_at"] = overlay["posted_at"]
+                if overlay.get("job_location"):
+                    merged["job_location"] = overlay["job_location"]
+                if overlay.get("freshness_status"):
+                    merged["freshness_status"] = overlay["freshness_status"]
+                if overlay.get("ashby_timestamp_status"):
+                    merged["ashby_timestamp_status"] = overlay["ashby_timestamp_status"]
                 if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
                     merged["job_url"] = overlay["job_url"]
                 break
@@ -9538,6 +9590,9 @@ def status_payload(
     for row in top_rows:
         overlay_row = dict(row)
         overlay_row["posted_at"] = _clean_text(overlay_row.get("posted_at"))
+        overlay_row["job_location"] = _clean_text(overlay_row.get("job_location"))
+        overlay_row["freshness_status"] = _clean_text(overlay_row.get("freshness_status"))
+        overlay_row["ashby_timestamp_status"] = _clean_text(overlay_row.get("ashby_timestamp_status"))
         overlay_row["job_url"] = _clean_text(overlay_row.get("job_url")) or _clean_text(overlay_row.get("job_doc_id"))
         for field in ja.OPERATOR_DECISION_OVERLAY_FIELDS:
             overlay_row.setdefault(field, "")
@@ -9563,6 +9618,12 @@ def status_payload(
 
             if metadata.get("posted_at"):
                 overlay_row["posted_at"] = metadata["posted_at"]
+            if metadata.get("job_location"):
+                overlay_row["job_location"] = metadata["job_location"]
+            if metadata.get("freshness_status"):
+                overlay_row["freshness_status"] = metadata["freshness_status"]
+            if metadata.get("ashby_timestamp_status"):
+                overlay_row["ashby_timestamp_status"] = metadata["ashby_timestamp_status"]
             if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
                 overlay_row["job_url"] = metadata["job_url"]
             break

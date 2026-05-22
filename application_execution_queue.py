@@ -192,7 +192,10 @@ def main() -> None:
     "job_doc_id",
     "job_company",
     "job_title",
+    "job_location",
     "posted_at",
+    "freshness_status",
+    "ashby_timestamp_status",
     "action",
     "action_rationale",
 

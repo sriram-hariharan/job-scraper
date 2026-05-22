@@ -29,6 +29,8 @@ def _job(job_id: str, title: str = "Backend Engineer"):
         "source": "lever",
         "description_text": "Build APIs and services.",
         "ai_fit_score": 90,
+        "_freshness_status": "unknown_timestamp_allowed",
+        "_ashby_timestamp_status": "ashby_timestamp_request_failed",
     }
 
 
@@ -60,6 +62,9 @@ def test_export_job_corpus_writes_non_empty_jsonl_to_filesystem_path():
     assert len(rows) == 1
     assert rows[0]["job_id"] == "1"
     assert rows[0]["title"] == "Backend Engineer"
+    assert rows[0]["location"] == "United States"
+    assert rows[0]["freshness_status"] == "unknown_timestamp_allowed"
+    assert rows[0]["ashby_timestamp_status"] == "ashby_timestamp_request_failed"
 
 
 def test_export_job_corpus_merge_existing_false_writes_only_current_jobs():

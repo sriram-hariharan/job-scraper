@@ -195,7 +195,7 @@ def profile_page(request: Request) -> str:
             <div class="application-pagination-meta" id="pipelineRunsPaginationMeta">Loading...</div>
             <div class="application-pagination-actions" id="pipelineRunsPaginationActions"></div>
           </div>
-          <button type="button" class="ghost-btn btn-sm" id="refreshPipelineRunsBtn">
+          <button type="button" class="ghost-btn btn-sm pipeline-runs-refresh-btn" id="refreshPipelineRunsBtn">
             Refresh
           </button>
         </div>
@@ -283,8 +283,8 @@ def profile_page(request: Request) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>My Profile</title>
   <link rel="stylesheet" href="/static/vendor/tabler/tabler.min.css" />
-  <link rel="stylesheet" href="/static/styles.css?v=profile_confirm_specific_r2" />
-  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_confirm_specific_r2" />
+  <link rel="stylesheet" href="/static/styles.css?v=profile_pipeline_run_buttons_r1" />
+  <link rel="stylesheet" href="/static/app_redesign.css?v=profile_pipeline_run_buttons_r1" />
 </head>
 <body>
   {render_top_shell("/profile")}
@@ -547,7 +547,7 @@ def profile_page(request: Request) -> str:
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_confirm_specific_r2"></script>
+  <script src="/static/profile.js?v=profile_pipeline_run_buttons_r1"></script>
 </body>
 </html>
     """.strip()

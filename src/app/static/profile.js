@@ -640,10 +640,10 @@ function renderPipelineRuns(runs) {
         <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunCountsSummary(run.counts))}</td>
         <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunSettingsSummary(run.config))}</td>
         <td>
-          <button type="button" class="ghost-btn btn-sm" data-pipeline-run-view="${runId}">View</button>
+          <button type="button" class="ghost-btn btn-sm pipeline-run-action-btn pipeline-run-view-btn" data-pipeline-run-view="${runId}">View</button>
         </td>
         <td>
-          <button type="button" class="pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
+          <button type="button" class="pipeline-run-action-btn pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
         </td>
       </tr>
     `;

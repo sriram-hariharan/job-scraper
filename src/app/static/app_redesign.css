@@ -5390,6 +5390,24 @@ html[data-theme="light"] .admin-user-high-warning {
   background: rgba(96, 165, 250, 0.22) !important;
 }
 
+html:not([data-theme="light"]) .pipeline-run-action-btn,
+html:not([data-theme="light"]) .pipeline-runs-refresh-btn,
+html[data-theme="dark"] .pipeline-run-action-btn,
+html[data-theme="dark"] .pipeline-runs-refresh-btn {
+  border-color: rgba(129, 140, 248, 0.72) !important;
+  background: linear-gradient(135deg, var(--app-primary), var(--app-violet)) !important;
+  color: #ffffff !important;
+  box-shadow: 0 14px 32px rgba(79, 70, 229, 0.24) !important;
+}
+
+html:not([data-theme="light"]) .pipeline-run-action-btn:not(:disabled):hover,
+html:not([data-theme="light"]) .pipeline-runs-refresh-btn:not(:disabled):hover,
+html[data-theme="dark"] .pipeline-run-action-btn:not(:disabled):hover,
+html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
+  border-color: rgba(165, 180, 252, 0.86) !important;
+  background: linear-gradient(135deg, var(--app-primary-strong), var(--app-violet)) !important;
+}
+
 .pipeline-runs-empty-cell {
   color: var(--app-muted);
   text-align: center !important;

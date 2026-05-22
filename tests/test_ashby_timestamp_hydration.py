@@ -1,6 +1,6 @@
 import sys
 import types
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 
 class _FakeTqdm:
@@ -20,6 +20,7 @@ sys.modules.setdefault(
     types.SimpleNamespace(fetch_workday_timestamp=lambda *args, **kwargs: None),
 )
 from src.pipeline import job_filter
+from src.config.consts import USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP
 
 
 def _fresh_timestamp():
@@ -37,6 +38,10 @@ def _ashby_job(**overrides):
     }
     job.update(overrides)
     return job
+
+
+def _stale_timestamp():
+    return (datetime.now(timezone.utc) - timedelta(days=5)).isoformat()
 
 
 def test_ashby_job_with_meta_job_id_gets_timestamp_hydrated(monkeypatch):
@@ -193,3 +198,107 @@ def test_repeated_ashby_timestamp_failure_is_rejected(monkeypatch):
     assert calls == [("plaid", "posting-123")]
     assert filtered == []
     assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"
+
+
+def test_user_pipeline_mode_allows_ashby_missing_timestamp_after_title_and_us_location(monkeypatch):
+    monkeypatch.setattr(
+        job_filter,
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: {
+            "posted_at": None,
+            "marker": "ashby_timestamp_request_failed",
+            "status_code": 500,
+        },
+    )
+
+    jobs = [_ashby_job(meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="user_pipeline",
+    )
+
+    assert filtered == jobs
+    assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"
+    assert jobs[0]["_freshness_status"] == "unknown_timestamp_allowed"
+
+
+def test_user_pipeline_mode_does_not_allow_missing_timestamp_for_non_us_location(monkeypatch):
+    monkeypatch.setattr(
+        job_filter,
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: {"posted_at": None, "marker": "missing"},
+    )
+
+    jobs = [_ashby_job(location="London", meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="user_pipeline",
+    )
+
+    assert filtered == []
+
+
+def test_user_pipeline_mode_does_not_allow_missing_timestamp_for_title_mismatch(monkeypatch):
+    monkeypatch.setattr(
+        job_filter,
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: {"posted_at": None, "marker": "missing"},
+    )
+
+    jobs = [_ashby_job(title="Product Manager", meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="user_pipeline",
+    )
+
+    assert filtered == []
+
+
+def test_user_pipeline_mode_unknown_timestamp_cap_is_stable(monkeypatch):
+    monkeypatch.setattr(
+        job_filter,
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: {"posted_at": None, "marker": "missing"},
+    )
+
+    jobs = [
+        _ashby_job(
+            title="Backend Engineer",
+            meta={"_job_id": f"posting-{index}"},
+            url=f"https://jobs.ashbyhq.com/plaid/posting-{index}",
+        )
+        for index in range(USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP + 5)
+    ]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="user_pipeline",
+    )
+
+    assert len(filtered) == USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP
+    assert filtered == jobs[:USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP]
+    assert all(job["_freshness_status"] == "unknown_timestamp_allowed" for job in filtered)
+
+
+def test_default_mode_keeps_not_recent_behavior_strict(monkeypatch):
+    monkeypatch.setattr(
+        job_filter,
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: {"posted_at": _stale_timestamp(), "marker": ""},
+    )
+
+    jobs = [_ashby_job(meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+    )
+
+    assert filtered == []

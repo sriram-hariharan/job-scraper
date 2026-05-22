@@ -21,13 +21,24 @@ from src.config.consts import (
     DATE_ONLY_HOUR,
     FRESHNESS_HOURS,
     MAJOR_US_CITIES,
-    FOREIGN_CITY_BLOCKLIST
+    FOREIGN_CITY_BLOCKLIST,
+    USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP,
 )
 from src.config.role_taxonomy import compile_role_title_regexes
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
 
 logger = get_logger(__name__)
+
+US_COUNTRY_REGEX = re.compile(
+    r"(?:\bU\.?\s*S\.?\b|\bUSA\b|\bUNITED STATES(?: OF AMERICA)?\b)",
+    re.I,
+)
+US_TIMEZONE_REGEX = re.compile(
+    r"(?:\bU\.?\s*S\.?\b|\bUSA\b|\bUNITED STATES)\s+TIME\s*ZONES?\b",
+    re.I,
+)
+NON_WORD_REGEX = re.compile(r"[^\w\s]")
 
 
 def _role_title_regexes(selected_role_families=None):
@@ -61,15 +72,47 @@ def title_matches(title, selected_role_families=None):
     return True
 
 
+def _normalized_location_text(location):
+    normalized = str(location or "").upper()
+    normalized = normalized.replace("&", " AND ")
+    normalized = NON_WORD_REGEX.sub(" ", normalized)
+    return WHITESPACE_REGEX.sub(" ", normalized).strip()
+
+
+def _geotext_has_us_city(location):
+    try:
+        from geotext import GeoText
+    except Exception:
+        return False
+
+    try:
+        places = GeoText(str(location or ""))
+    except Exception:
+        return False
+
+    country_mentions = getattr(places, "country_mentions", {}) or {}
+    if "US" in country_mentions or "United States" in country_mentions:
+        return True
+
+    cities = getattr(places, "cities", []) or []
+    for city in cities:
+        if str(city or "").strip().upper() in MAJOR_US_CITIES:
+            return True
+
+    return False
+
+
 def us_location(location, source):
 
     if not location:
         return False
 
-    loc = location.upper()
+    raw_location = str(location or "")
+    loc = raw_location.upper()
+    normalized_loc = _normalized_location_text(raw_location)
 
     if source == "ashby":
-        if "REMOTE" in loc and ("US" in loc or "UNITED STATES" in loc):
+        if "REMOTE" in loc and US_COUNTRY_REGEX.search(raw_location):
             return True
         if loc == "REMOTE":
             return True
@@ -79,13 +122,7 @@ def us_location(location, source):
     if source == ATS_LEVER and "," not in loc and "USA" not in loc and "UNITED STATES" not in loc:
         return False
 
-    if "UNITED STATES" in loc or "USA" in loc or " U.S." in loc:
-        return True
-
-    if "REMOTE" in loc and ("US" in loc or "USA" in loc or "UNITED STATES" in loc):
-        return True
-
-    if loc in FOREIGN_CITY_BLOCKLIST:
+    if normalized_loc in FOREIGN_CITY_BLOCKLIST:
         return False
     
     # reject foreign countries
@@ -93,18 +130,31 @@ def us_location(location, source):
     if FOREIGN_COUNTRY_REGEX.search(loc) and "UNITED STATES" not in loc:
         return False
 
-    tokens = set(TOKEN_SPLIT_REGEX.split(loc))
+    if US_COUNTRY_REGEX.search(raw_location):
+        return True
+
+    if "REMOTE" in loc and (
+        US_COUNTRY_REGEX.search(raw_location) or US_TIMEZONE_REGEX.search(raw_location)
+    ):
+        return True
+
+    if _geotext_has_us_city(raw_location):
+        return True
+
+    tokens = set(TOKEN_SPLIT_REGEX.split(normalized_loc))
 
     if tokens & US_STATES:
         return True
 
+    if "NYC" in tokens:
+        return True
+
     for state in US_STATE_NAMES:
-        if state in loc:
+        if state in normalized_loc:
             return True
-    
-        # allow known US cities
-        if loc in MAJOR_US_CITIES:
-            return True
+
+    if any(city in normalized_loc for city in MAJOR_US_CITIES):
+        return True
     
 
     return False
@@ -139,7 +189,30 @@ def ashby_posting_id(job):
     return job_id
 
 
-def filter_jobs(jobs, selected_role_families=None):
+def _filter_mode_allows_unknown_ashby_timestamp(filter_mode):
+    return str(filter_mode or "").strip().lower() in {
+        "user_pipeline",
+        "planning",
+        "user_planning",
+        "user_pipeline_planning",
+    }
+
+
+def _filter_diagnostics(rejection_reasons, title_pass, location_pass):
+    diagnostics = {
+        "title_pass": title_pass,
+        "location_pass": location_pass,
+    }
+    diagnostics.update(dict(rejection_reasons))
+    return diagnostics
+
+
+def filter_jobs(
+    jobs,
+    selected_role_families=None,
+    filter_mode="strict_live",
+    return_diagnostics=False,
+):
 
     title_pass = 0
     location_pass = 0
@@ -244,6 +317,8 @@ def filter_jobs(jobs, selected_role_families=None):
 
     filtered = []
     freshness_pass = 0
+    unknown_timestamp_allowed = 0
+    allow_unknown_ashby_timestamp = _filter_mode_allows_unknown_ashby_timestamp(filter_mode)
 
     for job in prefiltered:
         posted = job.get("posted_at")
@@ -253,6 +328,17 @@ def filter_jobs(jobs, selected_role_families=None):
             continue
 
         if job.get("source") == "ashby" and not posted:
+            if (
+                allow_unknown_ashby_timestamp
+                and unknown_timestamp_allowed < USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP
+            ):
+                job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
+                job["_freshness_status"] = "unknown_timestamp_allowed"
+                unknown_timestamp_allowed += 1
+                rejection_reasons["missing_timestamp_allowed"] += 1
+                filtered.append(job)
+                continue
+
             rejection_reasons["missing_timestamp"] += 1
             job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
             continue
@@ -273,6 +359,17 @@ def filter_jobs(jobs, selected_role_families=None):
     for reason, count in rejection_reasons.items():
         logger.info(f"{reason:20} {count}")
 
+    logger.info(
+        "Title pass: %s, Location pass: %s, Freshness pass: %s, Missing timestamp allowed: %s",
+        title_pass,
+        location_pass,
+        freshness_pass,
+        unknown_timestamp_allowed,
+    )
     logger.info("")
+
+    diagnostics = _filter_diagnostics(rejection_reasons, title_pass, location_pass)
+    if return_diagnostics:
+        return filtered, diagnostics
 
     return filtered

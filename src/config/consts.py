@@ -84,6 +84,7 @@ US_STATE_NAMES = {
 MAJOR_US_CITIES = {
     "NEW YORK",
     "SAN FRANCISCO",
+    "OAKLAND",
     "SEATTLE",
     "AUSTIN",
     "BOSTON",
@@ -94,6 +95,7 @@ MAJOR_US_CITIES = {
     "SAN DIEGO",
     "PORTLAND",
     "WASHINGTON",
+    "BAY AREA",
 }
 
 FOREIGN_CITY_BLOCKLIST = {
@@ -104,14 +106,19 @@ FOREIGN_CITY_BLOCKLIST = {
     "BERLIN",
     "PARIS",
     "AMSTERDAM",
+    "EUROPE",
 }
 
 ALL_COUNTRIES = {country.name.upper() for country in pycountry.countries}
 ALL_COUNTRIES.update({
+    "CYPRUS",
+    "EUROPE",
+    "INDIA",
     "UK",
     "U.K.",
     "UNITED KINGDOM",
     "KOREA",
+    "SINGAPORE",
     "SOUTH KOREA",
     "NORTH KOREA",
 })
@@ -197,6 +204,7 @@ query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: Str
 TIMESTAMP_WORKERS = 10
 DATE_ONLY_HOUR = 12
 FRESHNESS_HOURS = 24
+USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP = 100
 
 # ============================================================
 # ATS DISCOVERY / CAREER PAGE DETECTION

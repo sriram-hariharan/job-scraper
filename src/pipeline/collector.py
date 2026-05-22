@@ -225,10 +225,13 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
-    filtered_jobs = filter_jobs(
+    filter_result = filter_jobs(
         all_jobs,
         selected_role_families=selected_role_families or None,
+        filter_mode="user_pipeline" if _is_user_pipeline_mode() else "strict_live",
+        return_diagnostics=True,
     )
+    filtered_jobs, filter_diagnostics = filter_result
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
 
     filtered_counts = log_stage_metrics("FILTERED", filtered_jobs)
@@ -238,7 +241,19 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         drop_pct = round((1 - len(filtered_jobs) / len(all_jobs)) * 100, 2)
 
     logger.info(f"Filter drop rate: {drop_pct}%")
-    complete_stage("filtering", counts={"filtered_jobs": len(filtered_jobs)})
+    complete_stage(
+        "filtering",
+        counts={
+            "filtered_jobs": len(filtered_jobs),
+            "filter_title_mismatch": filter_diagnostics.get("title_mismatch", 0),
+            "filter_location_not_us": filter_diagnostics.get("location_not_us", 0),
+            "filter_not_recent": filter_diagnostics.get("not_recent", 0),
+            "filter_missing_timestamp": filter_diagnostics.get("missing_timestamp", 0),
+            "filter_missing_timestamp_allowed": filter_diagnostics.get("missing_timestamp_allowed", 0),
+            "filter_title_pass": filter_diagnostics.get("title_pass", 0),
+            "filter_location_pass": filter_diagnostics.get("location_pass", 0),
+        },
+    )
 
     section("DEDUPLICATION", logger)
     start_stage("dedupe", f"Deduplicating {len(filtered_jobs)} filtered jobs")

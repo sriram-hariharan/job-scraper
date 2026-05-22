@@ -113,6 +113,7 @@ from src.storage.user_pipeline.store import (
     get_user_pipeline_active_run_postgres_payload,
     release_user_pipeline_active_run_postgres_payload,
     reserve_user_pipeline_active_run_postgres_payload,
+    update_user_pipeline_run_status_postgres_payload,
     upsert_user_pipeline_artifact_postgres_payload,
     upsert_user_pipeline_run_postgres_payload,
     promote_user_seen_jobs_staging_postgres_payload,
@@ -720,7 +721,10 @@ def profile_pipeline_runs_payload(
         print_only=False,
         ensure_schema=True,
     )
-    runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+    runs = [
+        _pipeline_run_public_row(_reconciled_user_pipeline_run_record(owner, dict(run or {})))
+        for run in list(payload.get("runs", []) or [])
+    ]
     total_row_count = int(payload.get("total_row_count", len(runs)) or len(runs))
     total_pages = max((total_row_count + safe_page_size - 1) // safe_page_size, 1)
     current_page = min(requested_page, total_pages)
@@ -737,7 +741,10 @@ def profile_pipeline_runs_payload(
             print_only=False,
             ensure_schema=True,
         )
-        runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+        runs = [
+            _pipeline_run_public_row(_reconciled_user_pipeline_run_record(owner, dict(run or {})))
+            for run in list(payload.get("runs", []) or [])
+        ]
         total_row_count = int(payload.get("total_row_count", total_row_count) or total_row_count)
         total_pages = max((total_row_count + safe_page_size - 1) // safe_page_size, 1)
 
@@ -778,7 +785,7 @@ def profile_pipeline_run_detail_payload(
     if not bool(payload.get("found", False)):
         raise ValueError("Pipeline run not found.")
 
-    run = dict(payload.get("run", {}) or {})
+    run = _reconciled_user_pipeline_run_record(owner, dict(payload.get("run", {}) or {}))
     return {
         "ok": True,
         "run": _pipeline_run_public_row(run),
@@ -2769,6 +2776,160 @@ def _pipeline_terminal_statuses() -> set:
     return {"succeeded", "failed", "cancelled"}
 
 
+def _status_payload_completed_finalization(status_payload: Dict[str, Any]) -> bool:
+    if not isinstance(status_payload, dict):
+        return False
+
+    completed_stages = status_payload.get("completed_stages") or []
+    if isinstance(completed_stages, str):
+        completed_stages = [completed_stages]
+
+    return any(_clean_text(stage).lower() == "finalization" for stage in completed_stages)
+
+
+def _status_payload_return_code(status_payload: Dict[str, Any]) -> int | None:
+    if not isinstance(status_payload, dict):
+        return None
+
+    value = status_payload.get("return_code")
+    if value is None or value == "":
+        return None
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _reconciled_terminal_status_payload(status_payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(status_payload, dict):
+        return {}
+
+    reconciled = dict(status_payload)
+    status = _clean_text(reconciled.get("status")).lower() or "running"
+    return_code = _status_payload_return_code(reconciled)
+
+    if status not in _pipeline_terminal_statuses():
+        if return_code == 0 and _status_payload_completed_finalization(reconciled):
+            status = "succeeded"
+        else:
+            return reconciled
+
+    reconciled["status"] = status
+    reconciled["is_running"] = False
+
+    if return_code is not None:
+        reconciled["return_code"] = return_code
+
+    if not _clean_text(reconciled.get("finished_at")):
+        reconciled["finished_at"] = _utc_now()
+
+    if status == "succeeded" and not _clean_text(reconciled.get("current_stage")):
+        reconciled["current_stage"] = ""
+
+    return reconciled
+
+
+def _run_status_json_heal_payload(run: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(run, dict):
+        return {}
+
+    status_json = run.get("status_json")
+    if not isinstance(status_json, dict):
+        return {}
+
+    status = _clean_text(run.get("status")).lower()
+    if status in _pipeline_terminal_statuses():
+        return {}
+
+    healed = _reconciled_terminal_status_payload(status_json)
+    if _clean_text(healed.get("status")).lower() not in _pipeline_terminal_statuses():
+        return {}
+
+    if not _clean_text(healed.get("run_id")):
+        healed["run_id"] = _clean_text(run.get("run_id"))
+    if not _clean_text(healed.get("started_at")):
+        healed["started_at"] = _clean_text(run.get("started_at"))
+    if not _clean_text(healed.get("finished_at")):
+        healed["finished_at"] = _clean_text(run.get("completed_at"))
+    if not _clean_text(healed.get("summary_message")):
+        healed["summary_message"] = _clean_text(run.get("summary_message"))
+    if not _clean_text(healed.get("stage_message")):
+        healed["stage_message"] = _clean_text(run.get("stage_message"))
+    if not _clean_text(healed.get("current_stage")):
+        healed["current_stage"] = _clean_text(run.get("current_stage"))
+    if healed.get("return_code") is None:
+        healed["return_code"] = run.get("return_code")
+    if not _clean_text(healed.get("error")):
+        healed["error"] = _clean_text(run.get("error"))
+
+    return _reconciled_terminal_status_payload(healed)
+
+
+def _persist_user_pipeline_terminal_reconciliation(
+    *,
+    owner_user_id: str,
+    status_payload: Dict[str, Any],
+) -> None:
+    owner = _clean_text(owner_user_id)
+    payload = _reconciled_terminal_status_payload(status_payload)
+    run_id = _clean_text(payload.get("run_id"))
+    status = _clean_text(payload.get("status")).lower()
+
+    if not owner or not run_id or status not in _pipeline_terminal_statuses():
+        return
+
+    try:
+        update_user_pipeline_run_status_postgres_payload(
+            owner_user_id=owner,
+            run_id=run_id,
+            status=status,
+            current_stage=_clean_text(payload.get("current_stage")),
+            stage_message=_clean_text(payload.get("stage_message")),
+            summary_message=_clean_text(payload.get("summary_message"))
+            or _clean_text(payload.get("message")),
+            return_code=payload.get("return_code"),
+            completed_at=_clean_text(payload.get("finished_at")),
+            status_json=payload,
+            error=_clean_text(payload.get("error")),
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+    except Exception as exc:
+        logger.warning("Failed to reconcile terminal user pipeline status: %s", exc)
+
+    _release_user_pipeline_active_run(
+        owner_user_id=owner,
+        run_id=run_id,
+        terminal_status=status,
+    )
+    _clear_owner_active_pipeline_state(owner, run_id)
+
+
+def _reconciled_user_pipeline_run_record(owner_user_id: str, run: Dict[str, Any]) -> Dict[str, Any]:
+    row = dict(run or {})
+    healed_payload = _run_status_json_heal_payload(row)
+    if not healed_payload:
+        return row
+
+    _persist_user_pipeline_terminal_reconciliation(
+        owner_user_id=owner_user_id,
+        status_payload=healed_payload,
+    )
+    row["status"] = _clean_text(healed_payload.get("status"))
+    row["current_stage"] = _clean_text(healed_payload.get("current_stage"))
+    row["stage_message"] = _clean_text(healed_payload.get("stage_message"))
+    row["summary_message"] = _clean_text(healed_payload.get("summary_message"))
+    row["return_code"] = healed_payload.get("return_code")
+    row["completed_at"] = _clean_text(healed_payload.get("finished_at"))
+    row["status_json"] = healed_payload
+    row["error"] = _clean_text(healed_payload.get("error"))
+    return row
+
+
 def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
@@ -2798,7 +2959,8 @@ def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, An
         print_only=False,
         ensure_schema=True,
     )
-    run = dict(latest_payload.get("run", {}) or {})
+    run = _reconciled_user_pipeline_run_record(owner, dict(latest_payload.get("run", {}) or {}))
+
     status = _clean_text(run.get("status")) or "idle"
     running = status in {"queued", "running", "starting"}
 
@@ -2839,12 +3001,42 @@ def _persist_user_pipeline_status_snapshot(
     if isinstance(status_payload.get("pipeline"), dict):
         status_payload = dict(status_payload.get("pipeline") or {})
 
+    status_payload = _reconciled_terminal_status_payload(status_payload)
     run_id = _clean_text(status_payload.get("run_id"))
     if not run_id:
         return
 
     status = _clean_text(status_payload.get("status")) or "running"
     finished_at = _clean_text(status_payload.get("finished_at"))
+
+    if status not in _pipeline_terminal_statuses():
+        try:
+            existing_payload = get_user_pipeline_run_postgres_payload(
+                owner_user_id=owner,
+                run_id=run_id,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            existing_run = dict(existing_payload.get("run", {}) or {})
+            existing_status = _clean_text(existing_run.get("status")).lower()
+            if existing_status in _pipeline_terminal_statuses():
+                return
+
+            healed_existing_payload = _run_status_json_heal_payload(existing_run)
+            if healed_existing_payload:
+                _persist_user_pipeline_terminal_reconciliation(
+                    owner_user_id=owner,
+                    status_payload=healed_existing_payload,
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                "Failed to inspect existing user pipeline status before snapshot persist: %s",
+                exc,
+            )
 
     try:
         upsert_user_pipeline_run_postgres_payload(
@@ -3494,8 +3686,12 @@ def pipeline_status_payload(*, owner_user_id: str = "", state: Any = None) -> Di
 
     merged = dict(snapshot)
     if runtime_status:
+        runtime_status = _reconciled_terminal_status_payload(runtime_status)
+        runtime_status_value = _clean_text(runtime_status.get("status")).lower()
         if merged.get("status") == "idle":
             merged["status"] = runtime_status.get("status", merged["status"])
+        elif runtime_status_value in _pipeline_terminal_statuses():
+            merged["status"] = runtime_status_value
 
         if not merged.get("started_at"):
             merged["started_at"] = runtime_status.get("started_at", "")

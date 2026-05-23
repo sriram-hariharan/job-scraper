@@ -2,6 +2,7 @@ import csv
 import sys
 import tempfile
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -35,7 +36,7 @@ def _job(title, **overrides):
         "title": title,
         "location": "United States",
         "source": "jobvite",
-        "posted_at": "",
+        "posted_at": datetime.now(timezone.utc).isoformat(),
         "url": f"https://example.com/{title.lower().replace(' ', '-')}",
     }
     job.update(overrides)

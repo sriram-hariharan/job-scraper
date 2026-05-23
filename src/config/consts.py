@@ -204,7 +204,6 @@ query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: Str
 TIMESTAMP_WORKERS = 10
 DATE_ONLY_HOUR = 12
 FRESHNESS_HOURS = 24
-USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP = 100
 
 # ============================================================
 # ATS DISCOVERY / CAREER PAGE DETECTION

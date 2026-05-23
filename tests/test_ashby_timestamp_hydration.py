@@ -20,7 +20,6 @@ sys.modules.setdefault(
     types.SimpleNamespace(fetch_workday_timestamp=lambda *args, **kwargs: None),
 )
 from src.pipeline import job_filter
-from src.config.consts import USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP
 
 
 def _fresh_timestamp():
@@ -200,7 +199,7 @@ def test_repeated_ashby_timestamp_failure_is_rejected(monkeypatch):
     assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"
 
 
-def test_user_pipeline_mode_allows_ashby_missing_timestamp_after_title_and_us_location(monkeypatch):
+def test_user_pipeline_mode_rejects_ashby_missing_timestamp_after_title_and_us_location(monkeypatch):
     monkeypatch.setattr(
         job_filter,
         "fetch_ashby_timestamp_result",
@@ -219,9 +218,35 @@ def test_user_pipeline_mode_allows_ashby_missing_timestamp_after_title_and_us_lo
         filter_mode="user_pipeline",
     )
 
-    assert filtered == jobs
+    assert filtered == []
     assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"
-    assert jobs[0]["_freshness_status"] == "unknown_timestamp_allowed"
+    assert "_freshness_status" not in jobs[0]
+
+
+def test_strict_live_mode_rejects_ashby_missing_timestamp_after_hydration(monkeypatch):
+    monkeypatch.setattr(
+        job_filter,
+        "fetch_ashby_timestamp_result",
+        lambda company, job_id: {
+            "posted_at": None,
+            "marker": "ashby_timestamp_request_failed",
+            "status_code": 500,
+        },
+    )
+
+    jobs = [_ashby_job(meta={"_job_id": "posting-123"})]
+
+    filtered, diagnostics = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="strict_live",
+        return_diagnostics=True,
+    )
+
+    assert filtered == []
+    assert diagnostics["missing_timestamp"] == 1
+    assert diagnostics.get("missing_timestamp_allowed", 0) == 0
+    assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"
 
 
 def test_user_pipeline_mode_does_not_allow_missing_timestamp_for_non_us_location(monkeypatch):
@@ -260,7 +285,7 @@ def test_user_pipeline_mode_does_not_allow_missing_timestamp_for_title_mismatch(
     assert filtered == []
 
 
-def test_user_pipeline_mode_unknown_timestamp_cap_is_stable(monkeypatch):
+def test_user_pipeline_mode_emits_no_missing_timestamp_allowed_jobs(monkeypatch):
     monkeypatch.setattr(
         job_filter,
         "fetch_ashby_timestamp_result",
@@ -273,18 +298,21 @@ def test_user_pipeline_mode_unknown_timestamp_cap_is_stable(monkeypatch):
             meta={"_job_id": f"posting-{index}"},
             url=f"https://jobs.ashbyhq.com/plaid/posting-{index}",
         )
-        for index in range(USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP + 5)
+        for index in range(5)
     ]
 
-    filtered = job_filter.filter_jobs(
+    filtered, diagnostics = job_filter.filter_jobs(
         jobs,
         selected_role_families=["backend_engineering"],
         filter_mode="user_pipeline",
+        return_diagnostics=True,
     )
 
-    assert len(filtered) == USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP
-    assert filtered == jobs[:USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP]
-    assert all(job["_freshness_status"] == "unknown_timestamp_allowed" for job in filtered)
+    assert filtered == []
+    assert diagnostics["missing_timestamp"] == 5
+    assert diagnostics.get("missing_timestamp_allowed", 0) == 0
+    assert all(job["_ashby_timestamp_status"] == "missing" for job in jobs)
+    assert all("_freshness_status" not in job for job in jobs)
 
 
 def test_default_mode_keeps_not_recent_behavior_strict(monkeypatch):
@@ -302,3 +330,15 @@ def test_default_mode_keeps_not_recent_behavior_strict(monkeypatch):
     )
 
     assert filtered == []
+
+
+def test_recent_parseable_timestamp_still_passes():
+    jobs = [_ashby_job(posted_at=_fresh_timestamp(), meta={"_job_id": "posting-123"})]
+
+    filtered = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="user_pipeline",
+    )
+
+    assert filtered == jobs

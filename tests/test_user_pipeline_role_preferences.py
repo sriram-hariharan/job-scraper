@@ -2,6 +2,7 @@ import json
 import sys
 import tempfile
 import types
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -31,7 +32,7 @@ def _job(title):
         "company": "Acme",
         "location": "United States",
         "source": "jobvite",
-        "posted_at": "",
+        "posted_at": datetime.now(timezone.utc).isoformat(),
     }
 
 

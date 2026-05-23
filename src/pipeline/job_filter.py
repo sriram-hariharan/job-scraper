@@ -24,7 +24,6 @@ from src.config.consts import (
     FRESHNESS_HOURS,
     MAJOR_US_CITIES,
     FOREIGN_CITY_BLOCKLIST,
-    USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP,
 )
 from src.config.role_taxonomy import (
     DEFAULT_ROLE_FAMILY_IDS,
@@ -394,15 +393,6 @@ def ashby_posting_id(job):
     return job_id
 
 
-def _filter_mode_allows_unknown_ashby_timestamp(filter_mode):
-    return str(filter_mode or "").strip().lower() in {
-        "user_pipeline",
-        "planning",
-        "user_planning",
-        "user_pipeline_planning",
-    }
-
-
 def _filter_diagnostics(rejection_reasons, title_pass, location_pass):
     diagnostics = {
         "title_pass": title_pass,
@@ -540,30 +530,14 @@ def filter_jobs(
 
     filtered = []
     freshness_pass = 0
-    unknown_timestamp_allowed = 0
-    allow_unknown_ashby_timestamp = _filter_mode_allows_unknown_ashby_timestamp(filter_mode)
 
     for job in prefiltered:
         posted = job.get("posted_at")
 
-        if job.get("source") == ATS_JOBVITE:
-            filtered.append(job)
-            continue
-
-        if job.get("source") == "ashby" and not posted:
-            if (
-                allow_unknown_ashby_timestamp
-                and unknown_timestamp_allowed < USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP
-            ):
-                job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
-                job["_freshness_status"] = "unknown_timestamp_allowed"
-                unknown_timestamp_allowed += 1
-                rejection_reasons["missing_timestamp_allowed"] += 1
-                filtered.append(job)
-                continue
-
+        if not posted:
             rejection_reasons["missing_timestamp"] += 1
-            job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
+            if job.get("source") == "ashby":
+                job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
             continue
 
         if not posted_within_24h(posted):
@@ -587,7 +561,7 @@ def filter_jobs(
         title_pass,
         location_pass,
         freshness_pass,
-        unknown_timestamp_allowed,
+        0,
     )
     logger.info("")
 

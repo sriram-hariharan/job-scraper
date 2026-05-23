@@ -1249,7 +1249,7 @@ function renderPipelineSuccessSummary(pipeline = {}) {
     pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
     pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
     pipeline.final_job_count !== undefined && pipeline.final_job_count !== null
-      ? `Final jobs: ${pipeline.final_job_count}`
+      ? `Display jobs: ${pipeline.final_job_count}`
       : "",
   ].filter(Boolean);
 

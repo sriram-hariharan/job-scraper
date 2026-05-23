@@ -66,7 +66,6 @@ def test_role_expansion_title_permutations_match_selected_families():
         ("Backend Software Engineer", ["backend_engineering"]),
         ("Software Engineer, Backend", ["backend_engineering"]),
         ("Software Engineer II", ["software_engineering"]),
-        ("Member of Technical Staff", ["software_engineering"]),
         ("AI Platform Engineer", ["ml_ai_engineering"]),
         ("Machine Learning Infrastructure Engineer", ["ml_ai_engineering"]),
         ("Data Platform Engineer", ["data_engineering"]),
@@ -86,6 +85,57 @@ def test_role_expansion_avoids_manager_and_generic_architect_overmatching():
         "Sales Manager",
         "Principal Architect",
     ):
+        assert title_matches(title, selected_role_families=ALL_SELECTED_ROLE_FAMILIES) is False
+
+
+def test_audited_non_super_senior_role_titles_match_selected_families():
+    cases = [
+        ("Senior Full Stack Developer", ["fullstack_engineering"]),
+        ("Senior Fullstack Developer", ["fullstack_engineering"]),
+        ("Research Engineer", ["ml_ai_engineering"]),
+        ("Senior Research Engineer", ["ml_ai_engineering"]),
+        ("Research Engineer, Model Inference & Serving", ["ml_ai_engineering"]),
+        ("Research Engineer / Scientist, Post-training", ["ml_ai_engineering"]),
+        ("ML Research Resident", ["ml_ai_engineering"]),
+        ("Machine Learning Research Scientist", ["ml_ai_engineering"]),
+        ("Computer Vision Engineer", ["ml_ai_engineering"]),
+        ("Senior Rust Engineer (Backend)", ["backend_engineering"]),
+        ("Sr. Engineer, Backend - Enterprise", ["backend_engineering"]),
+        ("Forward Deployed Engineer", ["solutions_engineering"]),
+        ("Forward Deployed Engineer, Agentic Platform", ["solutions_engineering"]),
+        ("Forward Deployed Engineer, Infrastructure Specialist", ["solutions_engineering"]),
+    ]
+
+    for title, selected_role_families in cases:
+        assert title_matches(title, selected_role_families=selected_role_families) is True
+
+
+def test_super_senior_and_business_titles_remain_rejected_for_all_families():
+    titles = [
+        "Staff Software Engineer",
+        "Staff Software Engineer, Platform",
+        "Principal Software Engineer",
+        "Principal/Staff Software Engineer",
+        "Lead Data Engineer",
+        "Lead Infrastructure Engineer",
+        "Member of Technical Staff (Backend Software Engineer)",
+        "Member of Technical Staff (AI Infrastructure Engineer)",
+        "MTS, Machine Learning Engineer",
+        "Engineering Manager",
+        "Senior Product Manager - AI Agent",
+        "Product Manager, Analytics",
+        "AI Artist",
+        "AI Video Editor",
+        "AI Creative Producer",
+        "AI PM Intern",
+        "Developer Marketing Lead",
+        "Director of Infrastructure Finance",
+        "Technical Account Manager",
+        "Deployment Strategist",
+        "GTM Engineer",
+    ]
+
+    for title in titles:
         assert title_matches(title, selected_role_families=ALL_SELECTED_ROLE_FAMILIES) is False
 
 

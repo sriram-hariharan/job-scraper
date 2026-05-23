@@ -121,7 +121,11 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.pipeline.dedupe import dedupe_jobs
     from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
     from src.pipeline.job_details import enrich_job_details
-    from src.pipeline.job_filter import filter_jobs
+    from src.pipeline.job_filter import (
+        filter_jobs,
+        role_title_filter_audit_counts,
+        write_role_title_filter_audit_csv,
+    )
     from src.pipeline.job_ranker import rank_jobs
     from src.rag.export_job_corpus import export_job_corpus
     from src.scrapers.ashby_scraper import scrape_all_ashby
@@ -166,6 +170,11 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     all_jobs: List[Dict[str, Any]] = []
     seen_job_ids = load_seen_job_ids()
     selected_role_families = _selected_role_families_from_env()
+    corpus_path = str(
+        os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
+        or "postgres://rag_job_documents"
+    ).strip()
+    corpus_file = Path(corpus_path)
     if selected_role_families:
         logger.info(
             "Using selected role families for title filtering/ranking: %s",
@@ -225,13 +234,27 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
+    role_title_audit_rows = [] if _is_user_pipeline_mode() and selected_role_families else None
     filter_result = filter_jobs(
         all_jobs,
         selected_role_families=selected_role_families or None,
         filter_mode="user_pipeline" if _is_user_pipeline_mode() else "strict_live",
         return_diagnostics=True,
+        role_title_audit_rows=role_title_audit_rows,
     )
     filtered_jobs, filter_diagnostics = filter_result
+    role_title_audit_summary = role_title_filter_audit_counts(role_title_audit_rows or [])
+    if role_title_audit_rows is not None:
+        audit_path = Path(corpus_path).expanduser().with_name("role_title_filter_audit.csv")
+        write_role_title_filter_audit_csv(role_title_audit_rows, audit_path)
+        logger.info(
+            "Role title filter audit written: %s | total=%s pass=%s reject=%s suspected_false_negative=%s",
+            audit_path,
+            role_title_audit_summary["role_title_audit_total"],
+            role_title_audit_summary["role_title_audit_pass"],
+            role_title_audit_summary["role_title_audit_reject"],
+            role_title_audit_summary["role_title_audit_suspected_false_negative"],
+        )
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
 
     filtered_counts = log_stage_metrics("FILTERED", filtered_jobs)
@@ -252,6 +275,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             "filter_missing_timestamp_allowed": filter_diagnostics.get("missing_timestamp_allowed", 0),
             "filter_title_pass": filter_diagnostics.get("title_pass", 0),
             "filter_location_pass": filter_diagnostics.get("location_pass", 0),
+            **role_title_audit_summary,
         },
     )
 
@@ -469,12 +493,6 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
-
-    corpus_path = str(
-        os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
-        or "postgres://rag_job_documents"
-    ).strip()
-    corpus_file = Path(corpus_path)
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 

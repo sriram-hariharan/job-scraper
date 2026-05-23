@@ -97,7 +97,7 @@ def _render_live_pipeline_subject(summary: Dict[str, Any]) -> str:
         stage = _clean_text(summary.get("current_stage")) or "error"
         return f"Scheduled job {status_token} | live_pipeline | stage={stage}"
 
-    return f"Scheduled job {status_token} | live_pipeline | final_jobs={final_job_count}"
+    return f"Scheduled job {status_token} | live_pipeline | display_jobs={final_job_count}"
 
 
 def _render_agent_discovery_body(
@@ -168,7 +168,7 @@ def _render_live_pipeline_body(
         f"Started At: {summary.get('started_at', '')}",
         f"Finished At: {summary.get('finished_at', '')}",
         f"Summary: {summary.get('summary_message', '')}",
-        f"Final Job Count: {summary.get('final_job_count', '')}",
+        f"Browse/Display Job Count: {summary.get('final_job_count', '')}",
         f"Normalized Summary Path: {post_run_summary_path}",
         f"Source Artifact Type: {summary.get('artifact_type', '')}",
         f"Source Artifact Path: {summary.get('artifact_path', '')}",

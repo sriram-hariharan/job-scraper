@@ -131,3 +131,21 @@ def test_write_current_run_planning_corpus_produces_accepted_file():
     assert path.name == "current_run_job_corpus.jsonl"
     assert len(rows) == 1
     assert has_records is True
+
+
+def test_build_job_document_accepts_non_string_posted_at():
+    from src.rag.job_document_builder import build_job_document
+
+    doc = build_job_document(
+        {
+            "company": "example",
+            "title": "Backend Engineer",
+            "location": "New York, NY",
+            "posted_at": 20260522,
+            "url": "https://example.com/job",
+            "description": "Build backend systems.",
+        }
+    )
+
+    assert doc["posted_at"] == "20260522"
+

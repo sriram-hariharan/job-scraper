@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import csv
 import re
 from collections import Counter
+from pathlib import Path
 from src.utils.posted_at_utils import parse_posted_at
 from src.utils.workday_timestamp import fetch_workday_timestamp
 from src.config.consts import (
@@ -24,7 +26,11 @@ from src.config.consts import (
     FOREIGN_CITY_BLOCKLIST,
     USER_PIPELINE_UNKNOWN_TIMESTAMP_JOB_CAP,
 )
-from src.config.role_taxonomy import compile_role_title_regexes
+from src.config.role_taxonomy import (
+    DEFAULT_ROLE_FAMILY_IDS,
+    ROLE_TAXONOMY,
+    compile_role_title_regexes,
+)
 from src.utils.logging import get_logger
 from src.scrapers.ashby_scraper import fetch_ashby_timestamp_result
 
@@ -39,6 +45,35 @@ US_TIMEZONE_REGEX = re.compile(
     re.I,
 )
 NON_WORD_REGEX = re.compile(r"[^\w\s]")
+ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
+    "job_company",
+    "job_title",
+    "job_location",
+    "source",
+    "selected_role_families",
+    "title_filter_decision",
+    "title_filter_reason",
+    "matched_role_family",
+    "matched_pattern",
+    "suspected_role_family_hint",
+    "posted_at",
+    "url",
+]
+
+ROLE_TITLE_HINT_PATTERNS = (
+    ("ml_ai_engineering", re.compile(r"\b(?:ml|machine learning|ai|llm|computer vision|research engineer)\b", re.I)),
+    ("data_engineering", re.compile(r"\b(?:data platform|data infra|data infrastructure|data engineer)\b", re.I)),
+    ("analytics", re.compile(r"\b(?:analytics|data analyst|bi|business intelligence)\b", re.I)),
+    ("backend_engineering", re.compile(r"\b(?:backend|back end|api|server side)\b", re.I)),
+    ("frontend_engineering", re.compile(r"\b(?:frontend|front end|ui engineer|web developer|react)\b", re.I)),
+    ("fullstack_engineering", re.compile(r"\b(?:full stack|fullstack)\b", re.I)),
+    ("software_engineering", re.compile(r"\b(?:software engineer|software developer|swe|developer|member of technical staff|mts|forward deployed engineer)\b", re.I)),
+    ("cloud_devops", re.compile(r"\b(?:cloud|devops|infrastructure|infra|platform engineer)\b", re.I)),
+    ("sre", re.compile(r"\b(?:site reliability|sre|reliability engineer)\b", re.I)),
+    ("qa_automation", re.compile(r"\b(?:qa|quality assurance|test engineer|sdet|automation)\b", re.I)),
+    ("security", re.compile(r"\b(?:security|appsec|application security)\b", re.I)),
+    ("solutions_engineering", re.compile(r"\b(?:solutions engineer|solution engineer|sales engineer|forward deployed)\b", re.I)),
+)
 
 
 def _role_title_regexes(selected_role_families=None):
@@ -57,19 +92,136 @@ def normalize_title(title):
     return WHITESPACE_REGEX.sub(" ", title).strip()
 
 
-def title_matches(title, selected_role_families=None):
+def _selected_role_family_ids(selected_role_families=None):
+    if selected_role_families:
+        return tuple(
+            role_family_id
+            for role_family_id in (str(value or "").strip() for value in selected_role_families)
+            if role_family_id in ROLE_TAXONOMY
+        )
+
+    return DEFAULT_ROLE_FAMILY_IDS
+
+
+def _first_role_title_include_match(normalized_title, selected_role_families=None):
+    for role_family_id in _selected_role_family_ids(selected_role_families):
+        role_family = ROLE_TAXONOMY.get(role_family_id, {})
+        for pattern in role_family.get("title_include_patterns", ()) or ():
+            regex = re.compile(pattern, re.I)
+            if regex.search(normalized_title):
+                return role_family_id, pattern
+
+    return "", ""
+
+
+def _suspected_role_family_hint(title, selected_role_families=None):
+    raw_title = str(title or "").strip()
+    if not raw_title:
+        return ""
+
+    selected = set(_selected_role_family_ids(selected_role_families))
+    for role_family_id, regex in ROLE_TITLE_HINT_PATTERNS:
+        if selected and role_family_id not in selected:
+            continue
+        if regex.search(raw_title):
+            return role_family_id
+
+    return ""
+
+
+def title_match_detail(title, selected_role_families=None):
+    detail = {
+        "matched": False,
+        "reason": "missing_title",
+        "matched_role_family": "",
+        "matched_pattern": "",
+        "suspected_role_family_hint": "",
+    }
+
     if not title:
-        return False
+        return detail
 
     include_regexes, exclude_regexes = _role_title_regexes(selected_role_families)
     normalized = normalize_title(title)
+    matched_role_family, matched_pattern = _first_role_title_include_match(
+        normalized,
+        selected_role_families=selected_role_families,
+    )
+    detail["matched_role_family"] = matched_role_family
+    detail["matched_pattern"] = matched_pattern
+    detail["suspected_role_family_hint"] = _suspected_role_family_hint(
+        title,
+        selected_role_families=selected_role_families,
+    )
+
     if not any(regex.search(normalized) for regex in include_regexes):
-        return False
+        detail["reason"] = "no_include_pattern_match"
+        return detail
 
     if any(regex.search(normalized) for regex in exclude_regexes):
-        return False
+        detail["reason"] = "exclude_pattern_match"
+        return detail
 
-    return True
+    detail["matched"] = True
+    detail["reason"] = "include_pattern_match"
+    return detail
+
+
+def title_matches(title, selected_role_families=None):
+    return bool(title_match_detail(title, selected_role_families=selected_role_families)["matched"])
+
+
+def build_role_title_filter_audit_row(job, selected_role_families=None):
+    title = job.get("title")
+    detail = title_match_detail(title, selected_role_families=selected_role_families)
+    location = job.get("location")
+    if isinstance(location, list):
+        location = "; ".join(str(value or "").strip() for value in location if str(value or "").strip())
+
+    selected = _selected_role_family_ids(selected_role_families)
+    return {
+        "job_company": str(job.get("company") or ""),
+        "job_title": str(title or ""),
+        "job_location": str(location or ""),
+        "source": str(job.get("source") or ""),
+        "selected_role_families": "|".join(selected),
+        "title_filter_decision": "pass" if detail["matched"] else "reject",
+        "title_filter_reason": detail["reason"],
+        "matched_role_family": detail["matched_role_family"] if detail["matched"] else "",
+        "matched_pattern": detail["matched_pattern"] if detail["matched"] else "",
+        "suspected_role_family_hint": detail["suspected_role_family_hint"] if not detail["matched"] else "",
+        "posted_at": str(job.get("posted_at") or ""),
+        "url": str(job.get("url") or job.get("job_url") or ""),
+    }
+
+
+def role_title_filter_audit_counts(audit_rows):
+    rows = list(audit_rows or [])
+    pass_count = sum(1 for row in rows if row.get("title_filter_decision") == "pass")
+    reject_count = sum(1 for row in rows if row.get("title_filter_decision") == "reject")
+    suspected_count = sum(
+        1
+        for row in rows
+        if row.get("title_filter_decision") == "reject"
+        and str(row.get("suspected_role_family_hint") or "").strip()
+    )
+    return {
+        "role_title_audit_total": len(rows),
+        "role_title_audit_pass": pass_count,
+        "role_title_audit_reject": reject_count,
+        "role_title_audit_suspected_false_negative": suspected_count,
+    }
+
+
+def write_role_title_filter_audit_csv(audit_rows, output_path):
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=ROLE_TITLE_FILTER_AUDIT_FIELDNAMES)
+        writer.writeheader()
+        for row in audit_rows or []:
+            writer.writerow({field: row.get(field, "") for field in ROLE_TITLE_FILTER_AUDIT_FIELDNAMES})
+    return path
 
 
 def _normalized_location_text(location):
@@ -212,6 +364,7 @@ def filter_jobs(
     selected_role_families=None,
     filter_mode="strict_live",
     return_diagnostics=False,
+    role_title_audit_rows=None,
 ):
 
     title_pass = 0
@@ -226,7 +379,16 @@ def filter_jobs(
 
         locations = location_field if isinstance(location_field, list) else [location_field]
 
-        if not title_matches(title, selected_role_families=selected_role_families):
+        title_detail = title_match_detail(title, selected_role_families=selected_role_families)
+        if role_title_audit_rows is not None:
+            role_title_audit_rows.append(
+                build_role_title_filter_audit_row(
+                    job,
+                    selected_role_families=selected_role_families,
+                )
+            )
+
+        if not title_detail["matched"]:
             rejection_reasons["title_mismatch"] += 1
             continue
         title_pass += 1

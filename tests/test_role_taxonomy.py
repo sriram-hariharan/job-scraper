@@ -107,7 +107,7 @@ def test_title_pattern_helpers_dedupe_and_compile_regexes():
     )
 
     assert include_patterns.count(r"analytics engineer") == 1
-    assert exclude_patterns.count(r"director") == 1
+    assert exclude_patterns.count(r"\bdirector\b") == 1
 
     include_regexes, exclude_regexes = compile_role_title_regexes(["analytics"])
 

@@ -47,7 +47,7 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
         <section class="profile-preferences-group">
           <div class="profile-preferences-group-header">
             <div>
-              <h3>Seniority and work style</h3>
+              <h3>Seniority and location</h3>
               <p class="subtext">These are saved as preferences and can be changed anytime.</p>
             </div>
           </div>
@@ -60,12 +60,6 @@ def _preferences_section_html(*, hidden: bool = False, tab_panel: bool = False) 
               <label><input type="checkbox" name="target_seniority" value="staff" /> Staff</label>
             </fieldset>
 
-            <fieldset class="onboarding-chip-group">
-              <legend>Work mode</legend>
-              <label><input type="checkbox" name="work_modes" value="remote" /> Remote</label>
-              <label><input type="checkbox" name="work_modes" value="hybrid" /> Hybrid</label>
-              <label><input type="checkbox" name="work_modes" value="onsite" /> On-site</label>
-            </fieldset>
           </div>
 
           <label class="onboarding-text-field">
@@ -573,7 +567,7 @@ def profile_preferences_page() -> str:
     <header class="page-header">
       <div>
         <h1>Preferences</h1>
-        <p class="subtext">Tune role interests, locations, work style, and matching keywords.</p>
+        <p class="subtext">Tune role interests, locations, seniority, and matching keywords.</p>
       </div>
     </header>
 

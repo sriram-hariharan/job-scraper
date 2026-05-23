@@ -45,6 +45,18 @@ US_TIMEZONE_REGEX = re.compile(
     re.I,
 )
 NON_WORD_REGEX = re.compile(r"[^\w\s]")
+JOB_TEXT_FIELDS_FOR_EXCLUSIONS = (
+    "title",
+    "company",
+    "location",
+    "source",
+    "url",
+    "job_url",
+    "summary",
+    "description",
+    "description_text",
+    "short_description",
+)
 ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
     "job_company",
     "job_title",
@@ -90,6 +102,47 @@ def normalize_title(title):
     title = PUNCT_REGEX.sub(" ", title)
     title = ROMAN_SUFFIX_REGEX.sub("", title)
     return WHITESPACE_REGEX.sub(" ", title).strip()
+
+
+def _normalize_preference_list(values):
+    if not values:
+        return []
+    raw_values = values if isinstance(values, (list, tuple, set)) else [values]
+    normalized = []
+    for value in raw_values:
+        text = WHITESPACE_REGEX.sub(" ", str(value or "").strip().lower())
+        if text and text not in normalized:
+            normalized.append(text)
+    return normalized
+
+
+def _normalized_job_text(job, field_names=JOB_TEXT_FIELDS_FOR_EXCLUSIONS):
+    parts = []
+    for field_name in field_names:
+        value = job.get(field_name)
+        if isinstance(value, list):
+            parts.extend(str(item or "") for item in value)
+        else:
+            parts.append(str(value or ""))
+    text = " ".join(part for part in parts if part.strip()).lower()
+    text = PUNCT_REGEX.sub(" ", text)
+    return WHITESPACE_REGEX.sub(" ", text).strip()
+
+
+def matched_excluded_keyword(job, excluded_keywords=None):
+    haystack = _normalized_job_text(job)
+    if not haystack:
+        return ""
+
+    for keyword in _normalize_preference_list(excluded_keywords):
+        needle = PUNCT_REGEX.sub(" ", keyword)
+        needle = WHITESPACE_REGEX.sub(" ", needle).strip()
+        if not needle:
+            continue
+        if re.search(rf"(?<!\w){re.escape(needle)}(?!\w)", haystack):
+            return keyword
+
+    return ""
 
 
 def _selected_role_family_ids(selected_role_families=None):
@@ -365,6 +418,7 @@ def filter_jobs(
     filter_mode="strict_live",
     return_diagnostics=False,
     role_title_audit_rows=None,
+    excluded_keywords=None,
 ):
 
     title_pass = 0
@@ -387,6 +441,13 @@ def filter_jobs(
                     selected_role_families=selected_role_families,
                 )
             )
+
+        excluded_keyword = matched_excluded_keyword(job, excluded_keywords=excluded_keywords)
+        if excluded_keyword:
+            job["_filter_rejection_reason"] = "excluded_keyword"
+            job["_matched_excluded_keyword"] = excluded_keyword
+            rejection_reasons["excluded_keyword"] += 1
+            continue
 
         if not title_detail["matched"]:
             rejection_reasons["title_mismatch"] += 1

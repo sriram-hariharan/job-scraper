@@ -575,10 +575,16 @@ def onboarding_status_payload(
     }
 
 
-def _selected_role_families_for_pipeline(owner_user_id: str = "") -> List[str]:
+def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
     owner = _clean_text(owner_user_id)
     if not owner:
-        return []
+        return {
+            "selected_role_families": [],
+            "target_seniority": [],
+            "preferred_locations": [],
+            "preferred_skills": [],
+            "excluded_keywords": [],
+        }
 
     try:
         payload = get_onboarding_preferences_postgres_payload(
@@ -593,12 +599,28 @@ def _selected_role_families_for_pipeline(owner_user_id: str = "") -> List[str]:
         normalized = validate_onboarding_preferences_payload(preferences)
     except (Exception, SystemExit):
         logger.exception(
-            "Unable to load onboarding role preferences for live pipeline owner=%s; using default title behavior.",
+            "Unable to load onboarding preferences for live pipeline owner=%s; using default pipeline preferences.",
             owner,
         )
-        return []
+        return {
+            "selected_role_families": [],
+            "target_seniority": [],
+            "preferred_locations": [],
+            "preferred_skills": [],
+            "excluded_keywords": [],
+        }
 
-    return list(normalized.get("selected_role_families", []) or [])
+    return {
+        "selected_role_families": list(normalized.get("selected_role_families", []) or []),
+        "target_seniority": list(normalized.get("target_seniority", []) or []),
+        "preferred_locations": list(normalized.get("preferred_locations", []) or []),
+        "preferred_skills": list(normalized.get("preferred_skills", []) or []),
+        "excluded_keywords": list(normalized.get("excluded_keywords", []) or []),
+    }
+
+
+def _selected_role_families_for_pipeline(owner_user_id: str = "") -> List[str]:
+    return _preferences_for_pipeline(owner_user_id).get("selected_role_families", [])
 
 
 def _public_admin_user_row(user: Dict[str, Any]) -> Dict[str, Any]:
@@ -4652,7 +4674,8 @@ def run_live_pipeline_payload(
 
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
-    selected_role_families = _selected_role_families_for_pipeline(owner_for_pipeline_gate)
+    pipeline_preferences = _preferences_for_pipeline(owner_for_pipeline_gate)
+    selected_role_families = pipeline_preferences.get("selected_role_families", [])
 
     ja = _job_app()
     effective_generate_llm_adjudication = bool(generate_llm_adjudication)
@@ -4723,6 +4746,7 @@ def run_live_pipeline_payload(
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
             "job_corpus_path": str(pipeline_job_corpus_path),
+            "preferences": pipeline_preferences,
             "selected_role_families": selected_role_families,
         },
     }
@@ -4818,6 +4842,10 @@ def run_live_pipeline_payload(
                 "JOB_STACK_JOB_CORPUS_PATH": str(pipeline_job_corpus_path),
                 "JOB_STACK_USER_PIPELINE_MODE": "true",
                 "JOB_STACK_SELECTED_ROLE_FAMILIES": json.dumps(selected_role_families, ensure_ascii=False),
+                "JOB_STACK_TARGET_SENIORITY": json.dumps(pipeline_preferences.get("target_seniority", []), ensure_ascii=False),
+                "JOB_STACK_PREFERRED_LOCATIONS": json.dumps(pipeline_preferences.get("preferred_locations", []), ensure_ascii=False),
+                "JOB_STACK_PREFERRED_SKILLS": json.dumps(pipeline_preferences.get("preferred_skills", []), ensure_ascii=False),
+                "JOB_STACK_EXCLUDED_KEYWORDS": json.dumps(pipeline_preferences.get("excluded_keywords", []), ensure_ascii=False),
             }
         )
 

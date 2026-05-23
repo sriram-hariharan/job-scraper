@@ -21,7 +21,6 @@ def test_valid_preferences_normalize_and_save_payload_shape_print_only():
             "selected_role_families": ["backend_engineering"],
             "target_seniority": ["senior"],
             "preferred_locations": ["New York", "Remote"],
-            "work_modes": ["remote"],
             "preferred_skills": ["Python", "Postgres"],
             "excluded_keywords": ["intern"],
         },
@@ -35,7 +34,6 @@ def test_valid_preferences_normalize_and_save_payload_shape_print_only():
         "selected_role_families": ["backend_engineering"],
         "target_seniority": ["senior"],
         "preferred_locations": ["New York", "Remote"],
-        "work_modes": ["remote"],
         "preferred_skills": ["Python", "Postgres"],
         "excluded_keywords": ["intern"],
     }
@@ -82,3 +80,14 @@ def test_valid_role_family_list_is_deduped_and_order_preserved():
         "qa_automation",
     ]
     assert normalized["preferred_skills"] == ["Python", "SQL"]
+
+
+def test_work_modes_input_is_ignored_for_backward_compatible_reads():
+    normalized = validate_onboarding_preferences_payload(
+        {
+            "selected_role_families": ["backend_engineering"],
+            "work_modes": ["remote"],
+        }
+    )
+
+    assert "work_modes" not in normalized

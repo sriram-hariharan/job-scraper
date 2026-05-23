@@ -20,7 +20,6 @@ PREFERENCE_LIST_FIELDS = (
     "selected_role_families",
     "target_seniority",
     "preferred_locations",
-    "work_modes",
     "preferred_skills",
     "excluded_keywords",
 )
@@ -251,7 +250,6 @@ def _row_to_preferences_payload(row: Dict[str, Any]) -> Dict[str, Any]:
         "selected_role_families": row.get("selected_role_families") or [],
         "target_seniority": row.get("target_seniority") or [],
         "preferred_locations": row.get("preferred_locations") or [],
-        "work_modes": row.get("work_modes") or [],
         "preferred_skills": row.get("preferred_skills") or [],
         "excluded_keywords": row.get("excluded_keywords") or [],
     }
@@ -303,7 +301,6 @@ SELECT COALESCE(
             'selected_role_families', selected_role_families,
             'target_seniority', target_seniority,
             'preferred_locations', preferred_locations,
-            'work_modes', work_modes,
             'preferred_skills', preferred_skills,
             'excluded_keywords', excluded_keywords,
             'created_at', created_at,
@@ -366,7 +363,6 @@ WITH upserted AS (
         selected_role_families,
         target_seniority,
         preferred_locations,
-        work_modes,
         preferred_skills,
         excluded_keywords
     )
@@ -376,7 +372,6 @@ WITH upserted AS (
         {_sql_quote_jsonb(normalized["selected_role_families"])},
         {_sql_quote_jsonb(normalized["target_seniority"])},
         {_sql_quote_jsonb(normalized["preferred_locations"])},
-        {_sql_quote_jsonb(normalized["work_modes"])},
         {_sql_quote_jsonb(normalized["preferred_skills"])},
         {_sql_quote_jsonb(normalized["excluded_keywords"])}
     )
@@ -385,7 +380,6 @@ WITH upserted AS (
         selected_role_families = EXCLUDED.selected_role_families,
         target_seniority = EXCLUDED.target_seniority,
         preferred_locations = EXCLUDED.preferred_locations,
-        work_modes = EXCLUDED.work_modes,
         preferred_skills = EXCLUDED.preferred_skills,
         excluded_keywords = EXCLUDED.excluded_keywords,
         updated_at = NOW()
@@ -395,7 +389,6 @@ WITH upserted AS (
         selected_role_families,
         target_seniority,
         preferred_locations,
-        work_modes,
         preferred_skills,
         excluded_keywords,
         created_at,
@@ -408,7 +401,6 @@ SELECT json_build_object(
     'selected_role_families', selected_role_families,
     'target_seniority', target_seniority,
     'preferred_locations', preferred_locations,
-    'work_modes', work_modes,
     'preferred_skills', preferred_skills,
     'excluded_keywords', excluded_keywords,
     'created_at', created_at,

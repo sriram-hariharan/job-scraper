@@ -19,6 +19,7 @@ sys.modules.setdefault(
     types.SimpleNamespace(fetch_workday_timestamp=lambda *args, **kwargs: None),
 )
 from src.pipeline.job_filter import title_matches
+from src.pipeline.job_filter import filter_jobs
 from src.pipeline.job_ranker import rank_jobs, title_score
 
 
@@ -196,3 +197,78 @@ def test_selected_role_family_ranker_scores_selected_role():
 
     assert ranked[0]["title"] == "Backend Engineer"
     assert ranked[0]["_score"] > ranked[1]["_score"]
+
+
+def _filter_job(title, **overrides):
+    job = {
+        "title": title,
+        "company": "Acme",
+        "location": "United States",
+        "source": "jobvite",
+        "posted_at": "",
+        "url": "https://example.com/job",
+    }
+    job.update(overrides)
+    return job
+
+
+def test_excluded_keywords_hard_reject_available_early_job_text():
+    diagnostics_cases = [
+        (
+            [_filter_job("Software Engineering Intern")],
+            ["intern"],
+        ),
+        (
+            [_filter_job("Backend Engineer", description_text="This is commission only.")],
+            ["commission only"],
+        ),
+        (
+            [_filter_job("Backend Engineer", company="Unpaid Labs")],
+            ["UNPAID"],
+        ),
+    ]
+
+    for jobs, excluded_keywords in diagnostics_cases:
+        filtered, diagnostics = filter_jobs(
+            jobs,
+            selected_role_families=["backend_engineering", "software_engineering"],
+            excluded_keywords=excluded_keywords,
+            return_diagnostics=True,
+        )
+        assert filtered == []
+        assert diagnostics["excluded_keyword"] == 1
+
+
+def test_preference_ranking_metadata_detects_soft_matches_without_filtering_non_matches():
+    jobs = [
+        _filter_job(
+            "Senior Backend Engineer",
+            location="New York, NY",
+            description_text="Build Python services.",
+        ),
+        _filter_job(
+            "Backend Engineer",
+            location="Austin, TX",
+            description_text="Build Go services.",
+        ),
+        _filter_job(
+            "Backend Engineer",
+            location="Boston, MA",
+            description_text="Build APIs.",
+        ),
+    ]
+
+    ranked = rank_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        target_seniority=["senior"],
+        preferred_locations=["New York", "Remote"],
+        preferred_skills=["Python"],
+    )
+
+    assert len(ranked) == 3
+    assert ranked[0]["title"] == "Senior Backend Engineer"
+    assert ranked[0]["_preference_seniority_match"] is True
+    assert ranked[0]["_preference_location_matches"] == ["new york"]
+    assert ranked[0]["_preference_skill_matches"] == ["python"]
+    assert any(job.get("_preference_seniority_unknown") for job in ranked[1:])

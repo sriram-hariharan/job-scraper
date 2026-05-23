@@ -183,7 +183,6 @@ function setProfilePreferencesStatus(message, tone = "info") {
 function hydrateProfilePreferencesForm(preferences) {
   setProfilePreferenceCheckedValues("selected_role_families", preferences?.selected_role_families || []);
   setProfilePreferenceCheckedValues("target_seniority", preferences?.target_seniority || []);
-  setProfilePreferenceCheckedValues("work_modes", preferences?.work_modes || []);
   setProfilePreferenceTextareaList("profilePreferredLocationsInput", preferences?.preferred_locations || []);
   setProfilePreferenceTextareaList("profilePreferredSkillsInput", preferences?.preferred_skills || []);
   setProfilePreferenceTextareaList("profileExcludedKeywordsInput", preferences?.excluded_keywords || []);
@@ -196,7 +195,6 @@ function collectProfilePreferences() {
     selected_role_families: profilePreferenceCheckedValues("selected_role_families"),
     target_seniority: profilePreferenceCheckedValues("target_seniority"),
     preferred_locations: splitProfilePreferenceList(qs("profilePreferredLocationsInput")?.value),
-    work_modes: profilePreferenceCheckedValues("work_modes"),
     preferred_skills: splitProfilePreferenceList(qs("profilePreferredSkillsInput")?.value),
     excluded_keywords: splitProfilePreferenceList(qs("profileExcludedKeywordsInput")?.value),
   };

@@ -115,7 +115,7 @@ def onboarding_page() -> str:
       <section class="card onboarding-panel">
         <div class="section-header">
           <div>
-            <h2>Seniority and work style</h2>
+            <h2>Seniority and location</h2>
             <div class="subtext">These preferences are saved as selections only.</div>
           </div>
         </div>
@@ -128,12 +128,6 @@ def onboarding_page() -> str:
             <label><input type="checkbox" name="target_seniority" value="staff" /> Staff</label>
           </fieldset>
 
-          <fieldset class="onboarding-chip-group">
-            <legend>Work mode</legend>
-            <label><input type="checkbox" name="work_modes" value="remote" /> Remote</label>
-            <label><input type="checkbox" name="work_modes" value="hybrid" /> Hybrid</label>
-            <label><input type="checkbox" name="work_modes" value="onsite" /> On-site</label>
-          </fieldset>
         </div>
 
         <label class="onboarding-text-field">

@@ -24,26 +24,40 @@ def _is_user_pipeline_mode() -> bool:
 
 
 def _selected_role_families_from_env() -> List[str]:
-    raw = str(os.environ.get("JOB_STACK_SELECTED_ROLE_FAMILIES", "") or "").strip()
+    return _json_list_from_env("JOB_STACK_SELECTED_ROLE_FAMILIES")
+
+
+def _json_list_from_env(env_name: str) -> List[str]:
+    raw = str(os.environ.get(env_name, "") or "").strip()
     if not raw:
         return []
 
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        logger.warning("Ignoring invalid JOB_STACK_SELECTED_ROLE_FAMILIES JSON.")
+        logger.warning("Ignoring invalid %s JSON.", env_name)
         return []
 
     if not isinstance(parsed, list):
-        logger.warning("Ignoring non-list JOB_STACK_SELECTED_ROLE_FAMILIES value.")
+        logger.warning("Ignoring non-list %s value.", env_name)
         return []
 
-    selected: List[str] = []
+    values: List[str] = []
     for value in parsed:
-        role_family_id = str(value or "").strip()
-        if role_family_id and role_family_id not in selected:
-            selected.append(role_family_id)
-    return selected
+        text = str(value or "").strip()
+        if text and text not in values:
+            values.append(text)
+    return values
+
+
+def _pipeline_preferences_from_env() -> Dict[str, List[str]]:
+    return {
+        "selected_role_families": _json_list_from_env("JOB_STACK_SELECTED_ROLE_FAMILIES"),
+        "target_seniority": _json_list_from_env("JOB_STACK_TARGET_SENIORITY"),
+        "preferred_locations": _json_list_from_env("JOB_STACK_PREFERRED_LOCATIONS"),
+        "preferred_skills": _json_list_from_env("JOB_STACK_PREFERRED_SKILLS"),
+        "excluded_keywords": _json_list_from_env("JOB_STACK_EXCLUDED_KEYWORDS"),
+    }
 
 
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
@@ -169,7 +183,8 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     all_jobs: List[Dict[str, Any]] = []
     seen_job_ids = load_seen_job_ids()
-    selected_role_families = _selected_role_families_from_env()
+    pipeline_preferences = _pipeline_preferences_from_env()
+    selected_role_families = pipeline_preferences["selected_role_families"]
     corpus_path = str(
         os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
         or "postgres://rag_job_documents"
@@ -241,6 +256,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         filter_mode="user_pipeline" if _is_user_pipeline_mode() else "strict_live",
         return_diagnostics=True,
         role_title_audit_rows=role_title_audit_rows,
+        excluded_keywords=pipeline_preferences["excluded_keywords"],
     )
     filtered_jobs, filter_diagnostics = filter_result
     role_title_audit_summary = role_title_filter_audit_counts(role_title_audit_rows or [])
@@ -275,6 +291,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             "filter_missing_timestamp_allowed": filter_diagnostics.get("missing_timestamp_allowed", 0),
             "filter_title_pass": filter_diagnostics.get("title_pass", 0),
             "filter_location_pass": filter_diagnostics.get("location_pass", 0),
+            "filter_excluded_keyword": filter_diagnostics.get("excluded_keyword", 0),
             **role_title_audit_summary,
         },
     )
@@ -294,9 +311,21 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     ranked_jobs = rank_jobs(
         deduped_jobs,
         selected_role_families=selected_role_families or None,
+        target_seniority=pipeline_preferences["target_seniority"],
+        preferred_locations=pipeline_preferences["preferred_locations"],
+        preferred_skills=pipeline_preferences["preferred_skills"],
     )
+    preference_counts = {
+        "preference_seniority_match": sum(1 for job in ranked_jobs if job.get("_preference_seniority_match")),
+        "preference_seniority_unknown": sum(1 for job in ranked_jobs if job.get("_preference_seniority_unknown")),
+        "preference_location_match": sum(1 for job in ranked_jobs if job.get("_preference_location_matches")),
+        "preference_skill_matches": sum(
+            len(job.get("_preference_skill_matches") or [])
+            for job in ranked_jobs
+        ),
+    }
     log_stage_metrics("RANKED", ranked_jobs)
-    complete_stage("ranking", counts={"ranked_jobs": len(ranked_jobs)})
+    complete_stage("ranking", counts={"ranked_jobs": len(ranked_jobs), **preference_counts})
 
     section("CACHE FILTER", logger)
     start_stage("cache_filter", f"Filtering cached jobs from {len(ranked_jobs)} ranked jobs")

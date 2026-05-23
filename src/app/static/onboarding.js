@@ -53,7 +53,6 @@ function collectOnboardingPreferences(onboardingCompleted) {
     selected_role_families: checkedValues("selected_role_families"),
     target_seniority: checkedValues("target_seniority"),
     preferred_locations: splitPreferenceList(onboardingQs("preferredLocationsInput")?.value),
-    work_modes: checkedValues("work_modes"),
     preferred_skills: splitPreferenceList(onboardingQs("preferredSkillsInput")?.value),
     excluded_keywords: splitPreferenceList(onboardingQs("excludedKeywordsInput")?.value),
   };
@@ -118,7 +117,6 @@ function renderRequirementStatus(requirements) {
 function hydrateOnboardingForm(preferences) {
   setCheckedValues("selected_role_families", preferences?.selected_role_families || []);
   setCheckedValues("target_seniority", preferences?.target_seniority || []);
-  setCheckedValues("work_modes", preferences?.work_modes || []);
   setTextareaList("preferredLocationsInput", preferences?.preferred_locations || []);
   setTextareaList("preferredSkillsInput", preferences?.preferred_skills || []);
   setTextareaList("excludedKeywordsInput", preferences?.excluded_keywords || []);

@@ -107,6 +107,10 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_child_env():
                 "preferences": {
                     "onboarding_completed": True,
                     "selected_role_families": ["backend_engineering"],
+                    "target_seniority": ["senior"],
+                    "preferred_locations": ["New York"],
+                    "preferred_skills": ["Python"],
+                    "excluded_keywords": ["intern"],
                 },
             }
         }
@@ -145,5 +149,10 @@ def test_selected_role_families_appear_in_pipeline_run_config_and_child_env():
                     setattr(services, name, value)
 
     assert payload["pipeline"]["config"]["selected_role_families"] == ["backend_engineering"]
+    assert payload["pipeline"]["config"]["preferences"]["target_seniority"] == ["senior"]
     assert captured["state"]["config"]["selected_role_families"] == ["backend_engineering"]
     assert json.loads(captured["env"]["JOB_STACK_SELECTED_ROLE_FAMILIES"]) == ["backend_engineering"]
+    assert json.loads(captured["env"]["JOB_STACK_TARGET_SENIORITY"]) == ["senior"]
+    assert json.loads(captured["env"]["JOB_STACK_PREFERRED_LOCATIONS"]) == ["New York"]
+    assert json.loads(captured["env"]["JOB_STACK_PREFERRED_SKILLS"]) == ["Python"]
+    assert json.loads(captured["env"]["JOB_STACK_EXCLUDED_KEYWORDS"]) == ["intern"]

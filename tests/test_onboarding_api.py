@@ -79,6 +79,7 @@ def test_valid_onboarding_preferences_save():
     assert payload["ok"] is True
     assert payload["preferences"]["selected_role_families"] == ["backend_engineering"]
     assert payload["preferences"]["preferred_skills"] == ["Python", "Postgres"]
+    assert "work_modes" not in payload["preferences"]
     assert captured["owner_user_id"] == "user_123"
 
 

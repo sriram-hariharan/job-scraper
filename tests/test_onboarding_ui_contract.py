@@ -37,3 +37,16 @@ def test_onboarding_client_saves_preferences():
     assert '"/onboarding/preferences"' in source
     assert "selected_role_families" in source
     assert "onboarding_completed" in source
+    assert "work_modes" not in source
+
+
+def test_work_mode_is_not_part_of_onboarding_or_profile_ui_contract():
+    onboarding_source = Path("src/app/onboarding_ui.py").read_text(encoding="utf-8")
+    profile_source = Path("src/app/profile_ui.py").read_text(encoding="utf-8")
+    profile_js = Path("src/app/static/profile.js").read_text(encoding="utf-8")
+
+    assert "work_modes" not in onboarding_source
+    assert "Work mode" not in onboarding_source
+    assert "work_modes" not in profile_source
+    assert "Work mode" not in profile_source
+    assert "work_modes" not in profile_js

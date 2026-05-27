@@ -206,6 +206,7 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "application_execution_queue.csv",
     "job_packet_manifest.csv",
     "role_title_filter_audit.csv",
+    "source_health_report.csv",
 }
 _PIPELINE_JOB_PACKET_SUFFIXES = {".json", ".jsonl", ".md", ".txt"}
 
@@ -3152,6 +3153,7 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "application_execution_queue.csv": "application_execution_queue",
         "job_packet_manifest.csv": "job_packet_manifest",
         "role_title_filter_audit.csv": "role_title_filter_audit",
+        "source_health_report.csv": "source_health_report",
     }
 
     if name in root_kind_by_name:

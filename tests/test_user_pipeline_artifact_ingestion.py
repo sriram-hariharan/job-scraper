@@ -65,6 +65,10 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
             output_dir / "role_title_filter_audit.csv",
             "job_company,job_title,title_filter_decision\nAcme,Backend Engineer,pass\n",
         )
+        _write(
+            output_dir / "source_health_report.csv",
+            "source,company,scraped_jobs,final_corpus_jobs\ngreenhouse,scaleai,2,1\n",
+        )
         _write(output_dir / "live_pipeline_run.log", "pipeline log\n")
         _write(output_dir / "live_pipeline_status.json", json.dumps({"status": "succeeded"}))
         _write(output_dir / "job_packets" / "backend_engineer.json", json.dumps({"job_id": "1"}))
@@ -91,7 +95,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 11
+    assert result["ingested_count"] == 12
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
@@ -99,6 +103,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "best_resume_variant_by_job.csv" in artifact_names
     assert "current_run_job_corpus.jsonl" in artifact_names
     assert "role_title_filter_audit.csv" in artifact_names
+    assert "source_health_report.csv" in artifact_names
     assert "live_pipeline_run.log" in artifact_names
     assert "live_pipeline_status.json" in artifact_names
     assert "job_packets/backend_engineer.json" in artifact_names
@@ -110,6 +115,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "best_resume_variant_by_job" in artifact_kinds
     assert "current_run_job_corpus" in artifact_kinds
     assert "role_title_filter_audit" in artifact_kinds
+    assert "source_health_report" in artifact_kinds
     assert "job_packet_json" in artifact_kinds
     assert "job_packet_tailoring_json" in artifact_kinds
     assert "job_packet_tailoring_llm_json" in artifact_kinds

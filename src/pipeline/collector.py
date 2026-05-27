@@ -138,6 +138,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.pipeline.job_filter import (
         filter_jobs,
         role_title_filter_audit_counts,
+        write_source_health_report_csv,
         write_role_title_filter_audit_csv,
     )
     from src.pipeline.job_ranker import rank_jobs
@@ -527,6 +528,11 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
+
+    if role_title_audit_rows is not None:
+        source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")
+        write_source_health_report_csv(role_title_audit_rows, scored_jobs, source_health_path)
+        logger.info("Source health report written: %s", source_health_path)
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 

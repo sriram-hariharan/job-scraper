@@ -66,6 +66,13 @@ ROLE_TITLE_FILTER_AUDIT_FIELDNAMES = [
     "matched_role_family",
     "matched_pattern",
     "suspected_role_family_hint",
+    "location_filter_decision",
+    "location_filter_reason",
+    "freshness_filter_decision",
+    "freshness_filter_reason",
+    "ashby_timestamp_status",
+    "ashby_timestamp_status_code",
+    "ashby_timestamp_fetch_decision",
     "posted_at",
     "url",
 ]
@@ -84,6 +91,25 @@ ROLE_TITLE_HINT_PATTERNS = (
     ("security", re.compile(r"\b(?:security|appsec|application security)\b", re.I)),
     ("solutions_engineering", re.compile(r"\b(?:solutions engineer|solution engineer|sales engineer|forward deployed)\b", re.I)),
 )
+
+SOURCE_HEALTH_REPORT_FIELDNAMES = [
+    "source",
+    "company",
+    "scraped_jobs",
+    "title_pass_jobs",
+    "title_reject_jobs",
+    "location_pass_jobs",
+    "location_reject_jobs",
+    "freshness_pass_jobs",
+    "not_recent_jobs",
+    "missing_timestamp_jobs",
+    "final_corpus_jobs",
+    "final_display_jobs",
+    "ashby_timestamp_fetch_success",
+    "ashby_timestamp_fetch_429",
+    "ashby_timestamp_fetch_failed",
+    "notes",
+]
 
 
 def _role_title_regexes(selected_role_families=None):
@@ -241,6 +267,13 @@ def build_role_title_filter_audit_row(job, selected_role_families=None):
         "matched_role_family": detail["matched_role_family"] if detail["matched"] else "",
         "matched_pattern": detail["matched_pattern"] if detail["matched"] else "",
         "suspected_role_family_hint": detail["suspected_role_family_hint"] if not detail["matched"] else "",
+        "location_filter_decision": "",
+        "location_filter_reason": "",
+        "freshness_filter_decision": "",
+        "freshness_filter_reason": "",
+        "ashby_timestamp_status": str(job.get("_ashby_timestamp_status") or ""),
+        "ashby_timestamp_status_code": "",
+        "ashby_timestamp_fetch_decision": "",
         "posted_at": str(job.get("posted_at") or ""),
         "url": str(job.get("url") or job.get("job_url") or ""),
     }
@@ -272,6 +305,102 @@ def write_role_title_filter_audit_csv(audit_rows, output_path):
         writer.writeheader()
         for row in audit_rows or []:
             writer.writerow({field: row.get(field, "") for field in ROLE_TITLE_FILTER_AUDIT_FIELDNAMES})
+    return path
+
+
+def _source_company_key(source, company):
+    return (
+        str(source or "").strip().lower(),
+        str(company or "").strip().lower(),
+    )
+
+
+def _source_company_display(source, company):
+    return {
+        "source": str(source or "").strip(),
+        "company": str(company or "").strip(),
+    }
+
+
+def build_source_health_report_rows(audit_rows=None, final_corpus_jobs=None):
+    rows_by_key = {}
+
+    def ensure_row(source, company):
+        key = _source_company_key(source, company)
+        if key not in rows_by_key:
+            display = _source_company_display(source, company)
+            rows_by_key[key] = {
+                "source": display["source"],
+                "company": display["company"],
+                "scraped_jobs": 0,
+                "title_pass_jobs": 0,
+                "title_reject_jobs": 0,
+                "location_pass_jobs": 0,
+                "location_reject_jobs": 0,
+                "freshness_pass_jobs": 0,
+                "not_recent_jobs": 0,
+                "missing_timestamp_jobs": 0,
+                "final_corpus_jobs": 0,
+                "final_display_jobs": 0,
+                "ashby_timestamp_fetch_success": 0,
+                "ashby_timestamp_fetch_429": 0,
+                "ashby_timestamp_fetch_failed": 0,
+                "notes": "",
+            }
+        return rows_by_key[key]
+
+    for audit_row in audit_rows or []:
+        row = ensure_row(audit_row.get("source"), audit_row.get("job_company"))
+        row["scraped_jobs"] += 1
+
+        title_decision = str(audit_row.get("title_filter_decision") or "").strip()
+        if title_decision == "pass":
+            row["title_pass_jobs"] += 1
+        elif title_decision == "reject":
+            row["title_reject_jobs"] += 1
+
+        location_decision = str(audit_row.get("location_filter_decision") or "").strip()
+        if location_decision == "pass":
+            row["location_pass_jobs"] += 1
+        elif location_decision == "reject":
+            row["location_reject_jobs"] += 1
+
+        freshness_decision = str(audit_row.get("freshness_filter_decision") or "").strip()
+        freshness_reason = str(audit_row.get("freshness_filter_reason") or "").strip()
+        if freshness_decision == "pass":
+            row["freshness_pass_jobs"] += 1
+        elif freshness_reason == "not_recent":
+            row["not_recent_jobs"] += 1
+        elif freshness_reason == "missing_timestamp":
+            row["missing_timestamp_jobs"] += 1
+
+        ashby_decision = str(audit_row.get("ashby_timestamp_fetch_decision") or "").strip()
+        if ashby_decision == "success":
+            row["ashby_timestamp_fetch_success"] += 1
+        elif ashby_decision == "429":
+            row["ashby_timestamp_fetch_429"] += 1
+        elif ashby_decision == "failed":
+            row["ashby_timestamp_fetch_failed"] += 1
+
+    for job in final_corpus_jobs or []:
+        row = ensure_row(job.get("source"), job.get("company") or job.get("job_company"))
+        row["final_corpus_jobs"] += 1
+        row["final_display_jobs"] += 1
+
+    return [
+        {field: row.get(field, "") for field in SOURCE_HEALTH_REPORT_FIELDNAMES}
+        for row in sorted(rows_by_key.values(), key=lambda item: (str(item.get("source", "")).lower(), str(item.get("company", "")).lower()))
+    ]
+
+
+def write_source_health_report_csv(audit_rows, final_corpus_jobs, output_path):
+    path = Path(output_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = build_source_health_report_rows(audit_rows, final_corpus_jobs)
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=SOURCE_HEALTH_REPORT_FIELDNAMES)
+        writer.writeheader()
+        writer.writerows(rows)
     return path
 
 
@@ -422,6 +551,12 @@ def _apply_ashby_timestamp_result(job, result):
     }
 
 
+def _audit_update(audit_row, **updates):
+    if audit_row is not None:
+        for key, value in updates.items():
+            audit_row[key] = "" if value is None else value
+
+
 def _filter_diagnostics(rejection_reasons, title_pass, location_pass):
     diagnostics = {
         "title_pass": title_pass,
@@ -445,6 +580,7 @@ def filter_jobs(
     prefiltered = []
     rejection_reasons = Counter()
     ashby_timestamp_stats = Counter()
+    audit_rows_by_job_id = {}
 
     for job in jobs:
 
@@ -454,31 +590,54 @@ def filter_jobs(
         locations = location_field if isinstance(location_field, list) else [location_field]
 
         title_detail = title_match_detail(title, selected_role_families=selected_role_families)
+        audit_row = None
         if role_title_audit_rows is not None:
-            role_title_audit_rows.append(
-                build_role_title_filter_audit_row(
-                    job,
-                    selected_role_families=selected_role_families,
-                )
+            audit_row = build_role_title_filter_audit_row(
+                job,
+                selected_role_families=selected_role_families,
             )
+            role_title_audit_rows.append(audit_row)
+            audit_rows_by_job_id[id(job)] = audit_row
 
         excluded_keyword = matched_excluded_keyword(job, excluded_keywords=excluded_keywords)
         if excluded_keyword:
             job["_filter_rejection_reason"] = "excluded_keyword"
             job["_matched_excluded_keyword"] = excluded_keyword
+            _audit_update(
+                audit_row,
+                freshness_filter_decision="reject",
+                freshness_filter_reason="excluded_keyword",
+            )
             rejection_reasons["excluded_keyword"] += 1
             continue
 
         if not title_detail["matched"]:
+            _audit_update(
+                audit_row,
+                freshness_filter_decision="reject",
+                freshness_filter_reason="title_mismatch",
+            )
             rejection_reasons["title_mismatch"] += 1
             continue
         title_pass += 1
 
         if not any(us_location(loc, job.get("source")) for loc in locations):
+            _audit_update(
+                audit_row,
+                location_filter_decision="reject",
+                location_filter_reason="location_not_us",
+                freshness_filter_decision="reject",
+                freshness_filter_reason="location_not_us",
+            )
             rejection_reasons["location_not_us"] += 1
             continue
         
         location_pass += 1
+        _audit_update(
+            audit_row,
+            location_filter_decision="pass",
+            location_filter_reason="us_location",
+        )
         prefiltered.append(job)
 
     ashby_missing = [
@@ -529,16 +688,27 @@ def filter_jobs(
                     result = future.result()
                     timestamp_cache[cache_key] = result
                     applied = _apply_ashby_timestamp_result(jobs[0], result) if jobs else {}
+                    fetch_decision = "failed"
                     if applied.get("posted_at"):
                         ashby_timestamp_stats["ashby_timestamp_fetch_success"] += 1
+                        fetch_decision = "success"
                     elif applied.get("status_code") == 429:
                         ashby_timestamp_stats["ashby_timestamp_fetch_429"] += 1
+                        fetch_decision = "429"
                     else:
                         ashby_timestamp_stats["ashby_timestamp_fetch_failed"] += 1
 
-                    for duplicate_job in jobs[1:]:
-                        ashby_timestamp_stats["ashby_timestamp_cache_hit"] += 1
-                        _apply_ashby_timestamp_result(duplicate_job, result)
+                    for index, timestamp_job in enumerate(jobs):
+                        if index > 0:
+                            ashby_timestamp_stats["ashby_timestamp_cache_hit"] += 1
+                            _apply_ashby_timestamp_result(timestamp_job, result)
+                        _audit_update(
+                            audit_rows_by_job_id.get(id(timestamp_job)),
+                            posted_at=timestamp_job.get("posted_at") or "",
+                            ashby_timestamp_status=timestamp_job.get("_ashby_timestamp_status") or "",
+                            ashby_timestamp_status_code=applied.get("status_code") or "",
+                            ashby_timestamp_fetch_decision=fetch_decision if index == 0 else "cache_hit",
+                        )
 
                 except Exception:
                     result = {
@@ -548,8 +718,13 @@ def filter_jobs(
                     }
                     timestamp_cache[cache_key] = result
                     ashby_timestamp_stats["ashby_timestamp_fetch_failed"] += 1
-                    for job in jobs:
+                    for index, job in enumerate(jobs):
                         _apply_ashby_timestamp_result(job, result)
+                        _audit_update(
+                            audit_rows_by_job_id.get(id(job)),
+                            ashby_timestamp_status=job.get("_ashby_timestamp_status") or "",
+                            ashby_timestamp_fetch_decision="failed" if index == 0 else "cache_hit",
+                        )
 
     # resolve missing Workday timestamps
     workday_missing = [
@@ -594,13 +769,32 @@ def filter_jobs(
             rejection_reasons["missing_timestamp"] += 1
             if job.get("source") == "ashby":
                 job.setdefault("_ashby_timestamp_status", "ashby_timestamp_missing")
+            _audit_update(
+                audit_rows_by_job_id.get(id(job)),
+                ashby_timestamp_status=job.get("_ashby_timestamp_status") or "",
+                freshness_filter_decision="reject",
+                freshness_filter_reason="missing_timestamp",
+                posted_at="",
+            )
             continue
 
         if not posted_within_24h(posted):
             rejection_reasons["not_recent"] += 1
+            _audit_update(
+                audit_rows_by_job_id.get(id(job)),
+                freshness_filter_decision="reject",
+                freshness_filter_reason="not_recent",
+                posted_at=posted,
+            )
             continue
         
         freshness_pass += 1
+        _audit_update(
+            audit_rows_by_job_id.get(id(job)),
+            freshness_filter_decision="pass",
+            freshness_filter_reason="fresh",
+            posted_at=posted,
+        )
         filtered.append(job)
 
     for job in filtered:

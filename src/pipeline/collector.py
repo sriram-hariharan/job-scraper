@@ -144,6 +144,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.pipeline.job_ranker import rank_jobs
     from src.rag.export_job_corpus import export_job_corpus
     from src.scrapers.ashby_scraper import scrape_all_ashby
+    from src.scrapers.builtin_scraper import scrape_all_builtin
     from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
     from src.scrapers.jobvite_scraper import scrape_all_jobvite
     from src.scrapers.lever_scraper import scrape_all_lever
@@ -180,6 +181,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
         ("smartrecruiters", scrape_all_smartrecruiters),
+        ("builtin", scrape_all_builtin),
     ]
 
     all_jobs: List[Dict[str, Any]] = []

@@ -3,6 +3,7 @@ from collections import Counter
 from tqdm import tqdm
 from src.utils.logging import get_logger
 from src.details.ashby_details import fetch_ashby_details
+from src.details.builtin_details import fetch_builtin_details
 from src.details.greenhouse_details import fetch_greenhouse_details
 from src.details.jobvite_details import fetch_jobvite_details
 from src.details.lever_details import fetch_lever_details
@@ -21,6 +22,7 @@ logger = get_logger("job_details")
 
 ENRICHABLE_SOURCES = {
     "ashby",
+    "builtin",
     "greenhouse",
     "jobvite",
     "lever",
@@ -72,6 +74,9 @@ def process_job(job):
 
     elif source == "smartrecruiters":
         job = fetch_smartrecruiters_details(job)
+
+    elif source == "builtin":
+        job = fetch_builtin_details(job)
 
     else:
         job["_details_fetched"] = "skipped"
@@ -144,6 +149,9 @@ def enrich_job_details(jobs):
     f"smartrecruiters_api={counts.get('smartrecruiters_api', 0)} | "
     f"smartrecruiters_no_description={counts.get('smartrecruiters_no_description', 0)} | "
     f"smartrecruiters_request_failed={counts.get('smartrecruiters_request_failed', 0)} | "
+    f"builtin_page={counts.get('builtin_page', 0)} | "
+    f"builtin_no_description={counts.get('builtin_no_description', 0)} | "
+    f"builtin_request_failed={counts.get('builtin_request_failed', 0)} | "
     f"skipped={counts.get('skipped', 0)} | "
     f"failed={counts.get('failed', 0)} || "
     f"total={len(enriched_jobs)}"

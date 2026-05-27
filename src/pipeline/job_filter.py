@@ -18,7 +18,6 @@ from src.config.consts import (
     TOKEN_SPLIT_REGEX,
     ATS_LEVER,
     ATS_WORKDAY,
-    ATS_JOBVITE,
     TIMESTAMP_WORKERS,
     DATE_ONLY_HOUR,
     FRESHNESS_HOURS,
@@ -393,6 +392,36 @@ def ashby_posting_id(job):
     return job_id
 
 
+def _ashby_timestamp_cache_key(job):
+    company = str(job.get("company") or "").strip().lower()
+    job_id = ashby_posting_id(job)
+    if not company or not job_id:
+        return ""
+    return f"{company}:{job_id}"
+
+
+def _apply_ashby_timestamp_result(job, result):
+    if isinstance(result, dict):
+        posted_at = result.get("posted_at")
+        marker = str(result.get("marker") or "").strip()
+        status_code = result.get("status_code")
+    else:
+        posted_at = result
+        marker = ""
+        status_code = None
+
+    if posted_at:
+        job["posted_at"] = posted_at
+    elif marker:
+        job["_ashby_timestamp_status"] = marker
+
+    return {
+        "posted_at": posted_at,
+        "marker": marker,
+        "status_code": status_code,
+    }
+
+
 def _filter_diagnostics(rejection_reasons, title_pass, location_pass):
     diagnostics = {
         "title_pass": title_pass,
@@ -415,6 +444,7 @@ def filter_jobs(
     location_pass = 0
     prefiltered = []
     rejection_reasons = Counter()
+    ashby_timestamp_stats = Counter()
 
     for job in jobs:
 
@@ -452,48 +482,74 @@ def filter_jobs(
         prefiltered.append(job)
 
     ashby_missing = [
-    job for job in prefiltered
-    if job.get("source") == "ashby"
-    and not job.get("posted_at")
-    and ashby_posting_id(job)
+        job for job in prefiltered
+        if job.get("source") == "ashby"
+        and not job.get("posted_at")
+        and ashby_posting_id(job)
     ]
 
     if ashby_missing:
+        timestamp_cache = {}
+        jobs_by_cache_key = {}
+
+        for job in ashby_missing:
+            cache_key = _ashby_timestamp_cache_key(job)
+            if not cache_key:
+                continue
+
+            if cache_key in timestamp_cache:
+                ashby_timestamp_stats["ashby_timestamp_cache_hit"] += 1
+                _apply_ashby_timestamp_result(job, timestamp_cache[cache_key])
+                continue
+
+            if cache_key in jobs_by_cache_key:
+                jobs_by_cache_key[cache_key].append(job)
+                continue
+
+            jobs_by_cache_key[cache_key] = [job]
+            ashby_timestamp_stats["ashby_timestamp_cache_miss"] += 1
 
         with ThreadPoolExecutor(max_workers=2) as executor:
 
             futures = {
                 executor.submit(
                     fetch_ashby_timestamp_result,
-                    job["company"],
-                    ashby_posting_id(job)
-                ): job
-                for job in ashby_missing
+                    jobs[0]["company"],
+                    ashby_posting_id(jobs[0])
+                ): cache_key
+                for cache_key, jobs in jobs_by_cache_key.items()
             }
-
-            resolved = 0
 
             for future in as_completed(futures):
 
-                job = futures[future]
+                cache_key = futures[future]
+                jobs = jobs_by_cache_key.get(cache_key, [])
 
                 try:
                     result = future.result()
-                    if isinstance(result, dict):
-                        ts = result.get("posted_at")
-                        marker = str(result.get("marker") or "").strip()
+                    timestamp_cache[cache_key] = result
+                    applied = _apply_ashby_timestamp_result(jobs[0], result) if jobs else {}
+                    if applied.get("posted_at"):
+                        ashby_timestamp_stats["ashby_timestamp_fetch_success"] += 1
+                    elif applied.get("status_code") == 429:
+                        ashby_timestamp_stats["ashby_timestamp_fetch_429"] += 1
                     else:
-                        ts = result
-                        marker = ""
+                        ashby_timestamp_stats["ashby_timestamp_fetch_failed"] += 1
 
-                    if ts:
-                        job["posted_at"] = ts
-                        resolved += 1
-                    elif marker:
-                        job["_ashby_timestamp_status"] = marker
+                    for duplicate_job in jobs[1:]:
+                        ashby_timestamp_stats["ashby_timestamp_cache_hit"] += 1
+                        _apply_ashby_timestamp_result(duplicate_job, result)
 
                 except Exception:
-                    job["_ashby_timestamp_status"] = "ashby_timestamp_request_failed"
+                    result = {
+                        "posted_at": None,
+                        "marker": "ashby_timestamp_request_failed",
+                        "status_code": None,
+                    }
+                    timestamp_cache[cache_key] = result
+                    ashby_timestamp_stats["ashby_timestamp_fetch_failed"] += 1
+                    for job in jobs:
+                        _apply_ashby_timestamp_result(job, result)
 
     # resolve missing Workday timestamps
     workday_missing = [
@@ -566,6 +622,7 @@ def filter_jobs(
     logger.info("")
 
     diagnostics = _filter_diagnostics(rejection_reasons, title_pass, location_pass)
+    diagnostics.update(dict(ashby_timestamp_stats))
     if return_diagnostics:
         return filtered, diagnostics
 

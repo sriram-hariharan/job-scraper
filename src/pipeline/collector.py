@@ -292,6 +292,11 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
             "filter_title_pass": filter_diagnostics.get("title_pass", 0),
             "filter_location_pass": filter_diagnostics.get("location_pass", 0),
             "filter_excluded_keyword": filter_diagnostics.get("excluded_keyword", 0),
+            "ashby_timestamp_cache_hit": filter_diagnostics.get("ashby_timestamp_cache_hit", 0),
+            "ashby_timestamp_cache_miss": filter_diagnostics.get("ashby_timestamp_cache_miss", 0),
+            "ashby_timestamp_fetch_success": filter_diagnostics.get("ashby_timestamp_fetch_success", 0),
+            "ashby_timestamp_fetch_429": filter_diagnostics.get("ashby_timestamp_fetch_429", 0),
+            "ashby_timestamp_fetch_failed": filter_diagnostics.get("ashby_timestamp_fetch_failed", 0),
             **role_title_audit_summary,
         },
     )

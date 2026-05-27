@@ -199,6 +199,122 @@ def test_repeated_ashby_timestamp_failure_is_rejected(monkeypatch):
     assert jobs[0]["_ashby_timestamp_status"] == "ashby_timestamp_request_failed"
 
 
+def test_duplicate_ashby_jobs_share_one_timestamp_fetch(monkeypatch):
+    calls = []
+
+    def fake_fetch_ashby_timestamp_result(company, job_id):
+        calls.append((company, job_id))
+        return {"posted_at": _fresh_timestamp(), "marker": "", "status_code": 200}
+
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
+
+    jobs = [
+        _ashby_job(meta={"_job_id": "posting-123"}),
+        _ashby_job(meta={"_job_id": "posting-123"}, url="https://jobs.ashbyhq.com/plaid/posting-123?dup=1"),
+    ]
+
+    filtered, diagnostics = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        return_diagnostics=True,
+    )
+
+    assert calls == [("plaid", "posting-123")]
+    assert filtered == jobs
+    assert all(job["posted_at"] for job in jobs)
+    assert diagnostics["ashby_timestamp_cache_miss"] == 1
+    assert diagnostics["ashby_timestamp_cache_hit"] == 1
+    assert diagnostics["ashby_timestamp_fetch_success"] == 1
+
+
+def test_duplicate_ashby_429_marker_is_cached_and_rejects_all(monkeypatch):
+    calls = []
+
+    def fake_fetch_ashby_timestamp_result(company, job_id):
+        calls.append((company, job_id))
+        return {
+            "posted_at": None,
+            "marker": "ashby_timestamp_request_failed",
+            "status_code": 429,
+        }
+
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
+
+    jobs = [
+        _ashby_job(meta={"_job_id": "posting-123"}),
+        _ashby_job(meta={"_job_id": "posting-123"}, url="https://jobs.ashbyhq.com/plaid/posting-123?dup=1"),
+    ]
+
+    filtered, diagnostics = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        filter_mode="user_pipeline",
+        return_diagnostics=True,
+    )
+
+    assert calls == [("plaid", "posting-123")]
+    assert filtered == []
+    assert diagnostics["missing_timestamp"] == 2
+    assert diagnostics["ashby_timestamp_cache_miss"] == 1
+    assert diagnostics["ashby_timestamp_cache_hit"] == 1
+    assert diagnostics["ashby_timestamp_fetch_429"] == 1
+    assert diagnostics.get("missing_timestamp_allowed", 0) == 0
+    assert all(job["_ashby_timestamp_status"] == "ashby_timestamp_request_failed" for job in jobs)
+
+
+def test_duplicate_ashby_cached_recent_timestamp_passes_without_second_fetch(monkeypatch):
+    calls = []
+
+    def fake_fetch_ashby_timestamp_result(company, job_id):
+        calls.append((company, job_id))
+        return {"posted_at": _fresh_timestamp(), "marker": "", "status_code": 200}
+
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
+
+    jobs = [
+        _ashby_job(meta={"_job_id": "posting-123"}),
+        _ashby_job(meta={"_job_id": "posting-123"}, url="https://jobs.ashbyhq.com/plaid/posting-123?dup=1"),
+    ]
+
+    filtered, diagnostics = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        return_diagnostics=True,
+    )
+
+    assert calls == [("plaid", "posting-123")]
+    assert filtered == jobs
+    assert diagnostics["ashby_timestamp_cache_hit"] == 1
+    assert diagnostics["ashby_timestamp_fetch_success"] == 1
+
+
+def test_duplicate_ashby_cached_stale_timestamp_rejects_without_second_fetch(monkeypatch):
+    calls = []
+
+    def fake_fetch_ashby_timestamp_result(company, job_id):
+        calls.append((company, job_id))
+        return {"posted_at": _stale_timestamp(), "marker": "", "status_code": 200}
+
+    monkeypatch.setattr(job_filter, "fetch_ashby_timestamp_result", fake_fetch_ashby_timestamp_result)
+
+    jobs = [
+        _ashby_job(meta={"_job_id": "posting-123"}),
+        _ashby_job(meta={"_job_id": "posting-123"}, url="https://jobs.ashbyhq.com/plaid/posting-123?dup=1"),
+    ]
+
+    filtered, diagnostics = job_filter.filter_jobs(
+        jobs,
+        selected_role_families=["backend_engineering"],
+        return_diagnostics=True,
+    )
+
+    assert calls == [("plaid", "posting-123")]
+    assert filtered == []
+    assert diagnostics["not_recent"] == 2
+    assert diagnostics["ashby_timestamp_cache_hit"] == 1
+    assert diagnostics["ashby_timestamp_fetch_success"] == 1
+
+
 def test_user_pipeline_mode_rejects_ashby_missing_timestamp_after_title_and_us_location(monkeypatch):
     monkeypatch.setattr(
         job_filter,

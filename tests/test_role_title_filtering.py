@@ -111,6 +111,32 @@ def test_audited_non_super_senior_role_titles_match_selected_families():
         assert title_matches(title, selected_role_families=selected_role_families) is True
 
 
+def test_latest_audit_technical_false_negatives_match_narrow_families():
+    cases = [
+        ("Machine Learning Enginer, Core Evaluations", ["ml_ai_engineering"]),
+        ("AI Content Engineer", ["ml_ai_engineering"]),
+        ("Senior Infra Engineer", ["cloud_devops"]),
+        ("Senior Engineer (Infra) - AI Adoption Product", ["cloud_devops"]),
+        ("Infrastructure Deployment Engineer", ["cloud_devops"]),
+        ("Infrastructure Ops Engineer", ["cloud_devops"]),
+        ("Infra Engineer - Datacenters", ["cloud_devops"]),
+        ("Senior Infra Engineer: Baremetal Orchestration", ["cloud_devops"]),
+        ("Senior Infra Engineer: Observability", ["cloud_devops"]),
+        ("Applied AI Inference Engineer", ["ml_ai_engineering"]),
+        ("Audio Inference Engineer, Model Efficiency", ["ml_ai_engineering"]),
+        ("Rust Engineer", ["backend_engineering"]),
+        ("Automation Engineer", ["qa_automation"]),
+        ("Analytics Developer", ["analytics"]),
+        ("AI Security Specialist", ["security"]),
+        ("Senior Security Operations Engineer", ["security"]),
+        ("AI/ML Developer", ["ml_ai_engineering"]),
+        ("Developer Productivity", ["software_engineering"]),
+    ]
+
+    for title, selected_role_families in cases:
+        assert title_matches(title, selected_role_families=selected_role_families) is True
+
+
 def test_super_senior_and_business_titles_remain_rejected_for_all_families():
     titles = [
         "Staff Software Engineer",
@@ -121,6 +147,7 @@ def test_super_senior_and_business_titles_remain_rejected_for_all_families():
         "Lead Infrastructure Engineer",
         "Member of Technical Staff (Backend Software Engineer)",
         "Member of Technical Staff (AI Infrastructure Engineer)",
+        "Member of Technical Staff (AI Inference Engineer)",
         "MTS, Machine Learning Engineer",
         "Engineering Manager",
         "Senior Product Manager - AI Agent",
@@ -134,6 +161,21 @@ def test_super_senior_and_business_titles_remain_rejected_for_all_families():
         "Technical Account Manager",
         "Deployment Strategist",
         "GTM Engineer",
+        "AI Trainer",
+        "Music Producer - AI Trainer",
+        "AI Coach",
+        "Machine Learning Intern",
+        "Research Scientist Intern (PhD) - Model Team",
+        "Software Engineer Intern",
+        "AI Deployment Strategist",
+        "AI Partner Development - GTM Pod",
+        "Developer Evangelist",
+        "Developer Relations",
+        "Product Manager, AI",
+        "Senior Product Marketing, AI Video Editing",
+        "Business Developer Defense",
+        "Guest Service Agent",
+        "Customer Support Agent",
     ]
 
     for title in titles:

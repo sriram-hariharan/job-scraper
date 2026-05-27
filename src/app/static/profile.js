@@ -18,6 +18,7 @@ const profileState = {
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
+  pendingRerunRunId: null,
 };
 
 const PROFILE_PLANNING_OUTPUT_DIR = "outputs/application_planning";
@@ -855,6 +856,64 @@ function closePipelineRunStatsModal() {
   qs("pipelineRunStatsModal")?.classList.add("hidden");
 }
 
+function renderPipelineRunRerunSummary(run) {
+  const config = run?.config && typeof run.config === "object" ? run.config : {};
+  const counts = run?.counts && typeof run.counts === "object" ? run.counts : {};
+  const started = formatDateTime(run?.started_at || "");
+  const summary = run?.summary_message || run?.stage_message || run?.error || "";
+  const finalJobs = run?.final_job_count ?? counts.final_jobs ?? "";
+  const llmActions = Array.isArray(config.llm_actions)
+    ? config.llm_actions.join(", ")
+    : config.llm_actions;
+  qs("pipelineRunRerunTitle").textContent = "Re-run pipeline";
+  qs("pipelineRunRerunSubtitle").textContent = run?.run_id || "Persisted run";
+  qs("pipelineRunRerunBody").innerHTML = `
+    <section class="pipeline-run-detail-panel pipeline-run-rerun-panel">
+      <h4>Run snapshot</h4>
+      ${renderKeyValueList([
+        ["Status", pipelineRunStatusLabel(run?.status)],
+        ["Started", started],
+        ["Summary", summary],
+        ["Final jobs", finalJobs],
+        ["Counts", pipelineRunCountsSummary(counts)],
+      ])}
+    </section>
+
+    <section class="pipeline-run-detail-panel pipeline-run-rerun-panel">
+      <h4>Re-run settings</h4>
+      ${renderKeyValueList([
+        ["Job limit", config.job_limit ?? 50],
+        ["Packet limit", config.job_packet_limit ?? 0],
+        ["LLM actions", llmActions],
+        ["Planning only", config.planning_only ? "Yes" : "No"],
+        ["Generate suggestions", config.generate_tailoring ? "Yes" : "No"],
+        ["Generate LLM suggestions", config.generate_llm_tailoring ? "Yes" : "No"],
+        ["Refresh LLM suggestions", config.refresh_llm_tailoring ? "Yes" : "No"],
+        ["LLM fallback ranking", config.generate_llm_fallback ? "Yes" : "No"],
+        ["LLM judging", config.generate_llm_adjudication ? "Yes" : "No"],
+      ])}
+    </section>
+  `;
+}
+
+function openPipelineRunRerunModal(runId) {
+  const run = getPipelineRunById(runId);
+  if (!run) {
+    throw new Error("Pipeline run was not found on this page.");
+  }
+
+  profileState.pendingRerunRunId = runId;
+  renderPipelineRunRerunSummary(run);
+  qs("pipelineRunRerunConfirmBtn").disabled = false;
+  qs("pipelineRunRerunConfirmBtn").textContent = "Yes";
+  qs("pipelineRunRerunModal")?.classList.remove("hidden");
+}
+
+function closePipelineRunRerunModal() {
+  profileState.pendingRerunRunId = null;
+  qs("pipelineRunRerunModal")?.classList.add("hidden");
+}
+
 async function rerunPipelineRun(runId) {
   const run = getPipelineRunById(runId);
   const label = run?.started_at ? formatDateTime(run.started_at) : runId;
@@ -863,6 +922,28 @@ async function rerunPipelineRun(runId) {
   const newRunId = data?.pipeline?.run_id || "new run";
   await loadPipelineRuns();
   setPipelineRunsStatus(`Pipeline re-run started (${newRunId}). Open Executive Queue to watch live progress.`, "success");
+}
+
+async function confirmPipelineRunRerun() {
+  const runId = profileState.pendingRerunRunId;
+  if (!runId) return;
+
+  const confirmBtn = qs("pipelineRunRerunConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Starting...";
+  }
+
+  try {
+    await rerunPipelineRun(runId);
+    closePipelineRunRerunModal();
+  } catch (err) {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Yes";
+    }
+    throw err;
+  }
 }
 
 
@@ -1594,9 +1675,11 @@ function bindPipelineRunsInteractions() {
 
     const rerunBtn = event.target.closest("[data-pipeline-run-rerun]");
     if (rerunBtn) {
-      rerunPipelineRun(rerunBtn.dataset.pipelineRunRerun || "").catch((err) => {
+      try {
+        openPipelineRunRerunModal(rerunBtn.dataset.pipelineRunRerun || "");
+      } catch (err) {
         setPipelineRunsStatus(err.message, "error");
-      });
+      }
     }
   });
 
@@ -1604,6 +1687,18 @@ function bindPipelineRunsInteractions() {
   qs("pipelineRunStatsModal")?.addEventListener("click", (event) => {
     if (event.target === qs("pipelineRunStatsModal")) {
       closePipelineRunStatsModal();
+    }
+  });
+  qs("pipelineRunRerunCloseBtn")?.addEventListener("click", closePipelineRunRerunModal);
+  qs("pipelineRunRerunCancelBtn")?.addEventListener("click", closePipelineRunRerunModal);
+  qs("pipelineRunRerunConfirmBtn")?.addEventListener("click", () => {
+    confirmPipelineRunRerun().catch((err) => {
+      setPipelineRunsStatus(err.message, "error");
+    });
+  });
+  qs("pipelineRunRerunModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("pipelineRunRerunModal")) {
+      closePipelineRunRerunModal();
     }
   });
 }

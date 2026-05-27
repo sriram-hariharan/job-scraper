@@ -539,9 +539,31 @@ def profile_page(request: Request) -> str:
     </div>
   </section>
 
+  <section class="modal-backdrop hidden" id="pipelineRunRerunModal">
+    <div class="modal-card pipeline-run-rerun-modal-card">
+      <div class="modal-header">
+        <div>
+          <h3 id="pipelineRunRerunTitle">Re-run pipeline</h3>
+          <div class="subtext" id="pipelineRunRerunSubtitle">Review the run before starting a new one.</div>
+        </div>
+        <button class="ghost-btn modal-close-btn" id="pipelineRunRerunCloseBtn" type="button">Close</button>
+      </div>
+
+      <div class="modal-body">
+        <div id="pipelineRunRerunBody" class="pipeline-run-rerun-body"></div>
+      </div>
+
+      <div class="modal-actions pipeline-run-rerun-actions">
+        <div class="pipeline-run-rerun-question">Good to re-run?</div>
+        <button type="button" class="ghost-btn" id="pipelineRunRerunCancelBtn">No</button>
+        <button type="button" class="pipeline-run-rerun-confirm-btn" id="pipelineRunRerunConfirmBtn">Yes</button>
+      </div>
+    </div>
+  </section>
+
   <script src="/static/vendor/tabler/tabler.min.js"></script>
   <script src="/static/shell.js?v=role_onboarding_r6"></script>
-  <script src="/static/profile.js?v=profile_pipeline_run_buttons_r1"></script>
+  <script src="/static/profile.js?v=profile_pipeline_rerun_modal_r1"></script>
 </body>
 </html>
     """.strip()

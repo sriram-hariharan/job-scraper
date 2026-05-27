@@ -19,6 +19,7 @@ from src.discovery.crawl_scheduler import (
     should_scrape,
     mark_scraped
 )
+from src.utils.http_retry import http_get
 
 logger = get_logger("lever")
 
@@ -46,9 +47,70 @@ def _selected_role_families_from_env():
     return selected
 
 
+def _lever_company_url(company):
+    return f"{LEVER_API}/{company}?mode=json"
+
+
+def _parse_lever_postings_payload(data):
+    if not isinstance(data, list):
+        return []
+
+    return [
+        job for job in data
+        if isinstance(job, dict)
+        and str(job.get("id") or "").strip()
+        and str(job.get("text") or "").strip()
+    ]
+
+
+def validate_lever_company(company):
+    slug = str(company or "").strip()
+    if not slug:
+        return False
+
+    try:
+        response = http_get(
+            _lever_company_url(slug),
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=10,
+        )
+        if response is None or response.status_code != 200:
+            return False
+
+        return bool(_parse_lever_postings_payload(response.json()))
+    except Exception:
+        return False
+
+
+def validate_lever_companies(slugs):
+    valid = set()
+
+    for slug in tqdm(slugs, desc="Lever API validation"):
+        company = str(slug or "").strip()
+        if company and validate_lever_company(company):
+            valid.add(company)
+
+    logger.info("%s valid lever companies from API validation", len(valid))
+    return valid
+
+
+def seed_valid_lever_companies(slugs, *, source="manual_lever_validation"):
+    valid = validate_lever_companies(slugs)
+    if not valid:
+        return 0
+
+    from src.storage.discovery_store import upsert_discovered_ats_companies
+
+    return upsert_discovered_ats_companies(
+        "lever",
+        valid,
+        source=source,
+    )
+
+
 async def fetch_company_jobs(session, company):
 
-    url = f"{LEVER_API}/{company}?mode=json"
+    url = _lever_company_url(company)
     selected_role_families = _selected_role_families_from_env()
 
     try:
@@ -64,7 +126,7 @@ async def fetch_company_jobs(session, company):
 
     jobs = []
 
-    for job in data:
+    for job in _parse_lever_postings_payload(data):
 
         title = job.get("text", "")
         location = job.get("categories", {}).get("location", "")

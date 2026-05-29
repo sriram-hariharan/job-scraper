@@ -19,6 +19,10 @@ from src.resume.evidence_builder import build_resume_evidence
 from src.storage.redis_cache import cache_get_json, cache_set_json
 
 from src.config.settings import SCORER_V2_POLICY
+from src.pipeline.resume_selection_credibility import (
+    CREDIBILITY_COLUMNS,
+    compute_resume_selection_credibility,
+)
 
 SELECTOR_POLICY = SCORER_V2_POLICY["selector"]
 
@@ -1285,7 +1289,7 @@ def _resolved_selection_projection(
                 result_by_resume_name=result_by_resume_name,
                 resume_name=llm_fallback_best_resume,
                 source=f"llm_fallback_{llm_fallback_status}",
-                status="resolved",
+                status="fallback_only_no_deterministic_match",
                 variant_review_required=False,
                 best_available_imperfect_match=True,
             )
@@ -1587,8 +1591,7 @@ def main() -> None:
             llm_adjudication=llm_adjudication,
         )
                 
-        output_rows.append(
-            {
+        output_row = {
                 "job_doc_id": winner.pair.job_doc_id,
                 "job_company": winner.pair.job_company,
                 "job_title": winner.pair.job_title,
@@ -1736,7 +1739,10 @@ def main() -> None:
                 "llm_adjudication_differs_from_deterministic": llm_adjudication["differs_from_deterministic"],
                 "llm_adjudication_error_type": llm_adjudication["error_type"],
             }
-        )
+        output_row.update(compute_resume_selection_credibility(output_row))
+        if output_row["fallback_only_no_deterministic_match"] == "true":
+            output_row["resolved_selection_status"] = "fallback_only_no_deterministic_match"
+        output_rows.append(output_row)
 
     output_rows = sorted(
         output_rows,
@@ -1807,6 +1813,7 @@ def main() -> None:
         "resolved_selection_status",
         "variant_review_required",
         "resolved_best_available_imperfect_match",
+        *CREDIBILITY_COLUMNS,
         "llm_fallback_best_resume",
         "llm_fallback_best_score",
         "llm_fallback_backup_resume",

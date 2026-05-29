@@ -5,6 +5,7 @@ from pathlib import Path
 
 import application_execution_queue
 import application_shortlist_from_batch_selector
+import run_application_planning
 
 
 def _read_rows(path: Path):
@@ -139,3 +140,133 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         assert row["freshness_status"] == "unknown_timestamp_allowed"
         assert row["ashby_timestamp_status"] == "ashby_timestamp_request_failed"
         assert row["posted_at"] == ""
+        assert row["deterministic_winner_available"] == "true"
+        assert row["deterministic_winner_score"] == "0.910000"
+        assert row["packet_generation_allowed"] == "true"
+
+
+def test_fallback_only_selector_row_is_visible_but_not_actionable():
+    original_argv = sys.argv[:]
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        root = Path(tmp_dir)
+        selector_csv = root / "best_resume_variant_by_job.csv"
+        shortlist_csv = root / "application_shortlist_by_job.csv"
+        queue_csv = root / "application_execution_queue.csv"
+        _write_selector_fixture(selector_csv)
+
+        rows = _read_rows(selector_csv)
+        row = rows[0]
+        row.update(
+            {
+                "passed_prefilter": "0",
+                "winner_resume": "",
+                "winner_score": "0.000000",
+                "winner_bucket": "filtered_out",
+                "resolved_resume": "fallback.pdf",
+                "resolved_score": "0.000000",
+                "resolved_bucket": "filtered_out",
+                "resolved_resume_source": "llm_fallback_generated",
+                "resolved_selection_status": "fallback_only_no_deterministic_match",
+                "resolved_best_available_imperfect_match": "True",
+                "selection_signal": "no_credible_match",
+                "llm_fallback_best_resume": "fallback.pdf",
+                "llm_fallback_best_score": "0.420000",
+                "llm_fallback_status": "generated",
+            }
+        )
+        with selector_csv.open("w", encoding="utf-8", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=list(row))
+            writer.writeheader()
+            writer.writerow(row)
+
+        try:
+            sys.argv = [
+                "application_shortlist_from_batch_selector.py",
+                "--input-csv",
+                str(selector_csv),
+                "--output-csv",
+                str(shortlist_csv),
+                "--top-k-console",
+                "0",
+            ]
+            application_shortlist_from_batch_selector.main()
+
+            sys.argv = [
+                "application_execution_queue.py",
+                "--input-csv",
+                str(shortlist_csv),
+                "--output-csv",
+                str(queue_csv),
+                "--top-k-console",
+                "0",
+            ]
+            application_execution_queue.main()
+        finally:
+            sys.argv = original_argv
+
+        shortlist_row = _read_rows(shortlist_csv)[0]
+        queue_row = _read_rows(queue_csv)[0]
+
+    assert shortlist_row["action"] == "SKIP_FOR_NOW"
+    assert shortlist_row["winner_resume"] == ""
+    assert shortlist_row["resolved_resume"] == "fallback.pdf"
+    assert shortlist_row["selector_winner_resume"] == ""
+    assert shortlist_row["fallback_only_no_deterministic_match"] == "true"
+    assert shortlist_row["resolved_selection_status"] == "fallback_only_no_deterministic_match"
+    assert shortlist_row["packet_generation_allowed"] == "false"
+    assert shortlist_row["packet_generation_block_reason"] == "fallback_only_no_deterministic_match"
+    assert (
+        shortlist_row["resolved_resume_warning"]
+        == "Fallback suggested a resume, but deterministic scorer found no credible match."
+    )
+    assert "Fallback resume suggestion only" in queue_row["queue_priority_reason"]
+
+
+def test_packet_selection_blocks_fallback_only_and_low_confidence_rows():
+    fallback_only = {
+        "winner_resume": "",
+        "winner_score": "0.000000",
+        "resolved_resume": "fallback.pdf",
+        "resolved_selection_status": "fallback_only_no_deterministic_match",
+        "resolved_resume_source": "llm_fallback_generated",
+        "variant_review_required": "false",
+        "selection_signal": "no_credible_match",
+        "llm_fallback_best_resume": "fallback.pdf",
+        "llm_fallback_status": "generated",
+    }
+    assert run_application_planning._resolve_packet_resume_selection(fallback_only) == {
+        "packet_status": "unresolved_no_credible_match",
+        "packet_resume": "",
+        "packet_resume_source": "fallback_only_no_deterministic_match",
+    }
+
+    low_confidence = {
+        "winner_resume": "weak.pdf",
+        "winner_score": "0.490000",
+        "resolved_resume": "weak.pdf",
+        "resolved_selection_status": "resolved",
+        "resolved_resume_source": "deterministic_winner",
+        "variant_review_required": "false",
+        "selection_signal": "deterministic_winner",
+    }
+    assert run_application_planning._resolve_packet_resume_selection(low_confidence) == {
+        "packet_status": "blocked_low_confidence_match",
+        "packet_resume": "",
+        "packet_resume_source": "deterministic_score_below_credible_threshold",
+    }
+
+    swatika_style = {
+        "winner_resume": "SWATIKA_test_1.pdf",
+        "winner_score": "0.520000",
+        "resolved_resume": "SWATIKA_test_1.pdf",
+        "resolved_selection_status": "resolved",
+        "resolved_resume_source": "deterministic_winner",
+        "variant_review_required": "false",
+        "selection_signal": "deterministic_winner",
+    }
+    assert run_application_planning._resolve_packet_resume_selection(swatika_style) == {
+        "packet_status": "generated",
+        "packet_resume": "SWATIKA_test_1.pdf",
+        "packet_resume_source": "deterministic_winner",
+    }

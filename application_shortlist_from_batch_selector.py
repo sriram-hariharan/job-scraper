@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import List
 
 from src.config.settings import SCORER_V2_POLICY
+from src.pipeline.resume_selection_credibility import (
+    CREDIBILITY_COLUMNS,
+    compute_resume_selection_credibility,
+    parse_bool as parse_credibility_bool,
+)
 
 SHORTLIST_POLICY = SCORER_V2_POLICY["shortlist"]
 
@@ -113,6 +118,19 @@ def _requires_manual_review(row: dict) -> bool:
     return _variant_review_required(row)
 
 def _classify_action(row: dict) -> tuple[str, str]:
+    credibility = compute_resume_selection_credibility(row)
+    block_reason = credibility["packet_generation_block_reason"]
+    if parse_credibility_bool(credibility["fallback_only_no_deterministic_match"]):
+        return (
+            "SKIP_FOR_NOW",
+            "Fallback resume suggestion only; deterministic scorer found no credible match.",
+        )
+    if block_reason == "deterministic_score_below_credible_threshold":
+        return (
+            "SKIP_FOR_NOW",
+            "Deterministic resume score is below the credible threshold; keep visible for review.",
+        )
+
     resolved_resume = _resolved_resume(row)
     resolved_score = _resolved_score(row)
     resolved_bucket = _resolved_bucket(row)
@@ -284,6 +302,7 @@ def main() -> None:
     shortlist_rows = []
 
     for row in rows:
+        credibility = compute_resume_selection_credibility(row)
         action, rationale = _classify_action(row)
         resolved_resume = _resolved_resume(row)
         resolved_score = (
@@ -299,6 +318,10 @@ def main() -> None:
         resolved_matched_terms = _resolved_matched_terms(row)
         resolved_resume_source = _resolved_resume_source(row)
         resolved_selection_status = _resolved_selection_status(row)
+        fallback_only = credibility["fallback_only_no_deterministic_match"] == "true"
+        display_winner_resume = "" if fallback_only else resolved_resume
+        if fallback_only:
+            resolved_selection_status = "fallback_only_no_deterministic_match"
         variant_review_required = str(_variant_review_required(row))
         resolved_best_available_imperfect_match = str(
             _resolved_best_available_imperfect_match(row)
@@ -317,7 +340,7 @@ def main() -> None:
                 "action_rationale": rationale,
 
                 # Primary resolved selection view for downstream consumers
-                "winner_resume": resolved_resume,
+                "winner_resume": display_winner_resume,
                 "winner_score": resolved_score,
                 "winner_bucket": resolved_bucket,
                 "winner_top_dims": resolved_top_dims,
@@ -336,6 +359,7 @@ def main() -> None:
                 "resolved_selection_status": resolved_selection_status,
                 "variant_review_required": variant_review_required,
                 "resolved_best_available_imperfect_match": resolved_best_available_imperfect_match,
+                **credibility,
 
                 # Original selector winner retained for audit
                 "selector_winner_resume": row["winner_resume"],
@@ -425,6 +449,7 @@ def main() -> None:
         "resolved_selection_status",
         "variant_review_required",
         "resolved_best_available_imperfect_match",
+        *CREDIBILITY_COLUMNS,
 
         "selector_winner_resume",
         "selector_winner_score",

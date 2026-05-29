@@ -1,0 +1,26 @@
+{
+  "greenhouse": [
+    "scaleai",
+    "anthropic",
+    "stripe",
+    "samsara",
+    "figma",
+    "databricks",
+    "mongodb",
+    "cloudflare",
+    "appliedintuition",
+    "labelbox",
+    "instabase",
+    "verkada",
+    "brex",
+    "gusto",
+    "snorkelai",
+    "togetherai",
+    "nuro"
+  ],
+  "lever": [
+    "field-ai",
+    "shieldai",
+    "mistral"
+  ]
+}

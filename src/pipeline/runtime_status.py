@@ -43,6 +43,27 @@ def _run_id() -> str:
     return os.getenv(ENV_RUN_ID, "").strip()
 
 
+def _selected_role_families_from_env() -> list[str]:
+    raw = str(os.environ.get("JOB_STACK_SELECTED_ROLE_FAMILIES", "") or "").strip()
+    if not raw:
+        return []
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        return []
+
+    if not isinstance(parsed, list):
+        return []
+
+    selected: list[str] = []
+    for value in parsed:
+        role_family_id = str(value or "").strip()
+        if role_family_id and role_family_id not in selected:
+            selected.append(role_family_id)
+    return selected
+
+
 def is_enabled() -> bool:
     return _status_path() is not None
 
@@ -120,6 +141,7 @@ def initialize_run(
             "generate_llm_fallback": generate_llm_fallback,
             "generate_llm_adjudication": generate_llm_adjudication,
             "delete_seen_data": delete_seen_data,
+            "selected_role_families": _selected_role_families_from_env(),
         },
     }
     _write_status(payload)

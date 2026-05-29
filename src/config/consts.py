@@ -84,6 +84,7 @@ US_STATE_NAMES = {
 MAJOR_US_CITIES = {
     "NEW YORK",
     "SAN FRANCISCO",
+    "OAKLAND",
     "SEATTLE",
     "AUSTIN",
     "BOSTON",
@@ -94,6 +95,7 @@ MAJOR_US_CITIES = {
     "SAN DIEGO",
     "PORTLAND",
     "WASHINGTON",
+    "BAY AREA",
 }
 
 FOREIGN_CITY_BLOCKLIST = {
@@ -104,14 +106,19 @@ FOREIGN_CITY_BLOCKLIST = {
     "BERLIN",
     "PARIS",
     "AMSTERDAM",
+    "EUROPE",
 }
 
 ALL_COUNTRIES = {country.name.upper() for country in pycountry.countries}
 ALL_COUNTRIES.update({
+    "CYPRUS",
+    "EUROPE",
+    "INDIA",
     "UK",
     "U.K.",
     "UNITED KINGDOM",
     "KOREA",
+    "SINGAPORE",
     "SOUTH KOREA",
     "NORTH KOREA",
 })
@@ -163,6 +170,19 @@ query ApiJobBoardWithTeams($organizationHostedJobsPageName: String!) {
 }
 """
 
+ASHBY_TIMESTAMP_QUERY = """
+query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) {
+  jobPosting(
+    organizationHostedJobsPageName: $organizationHostedJobsPageName
+    jobPostingId: $jobPostingId
+  ) {
+    id
+    title
+    publishedDate
+  }
+}
+"""
+
 ASHBY_DETAIL_QUERY = """
 query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: String!) {
   jobPosting(
@@ -172,6 +192,7 @@ query ApiJobPosting($organizationHostedJobsPageName: String!, $jobPostingId: Str
     id
     title
     publishedDate
+    descriptionHtml
   }
 }
 """

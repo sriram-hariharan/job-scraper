@@ -1,40 +1,60 @@
 import re
 
+from src.config.role_taxonomy import ROLE_TAXONOMY
 
-ML_ENGINEER_SKILLS = {
-    "pytorch",
-    "tensorflow",
-    "model training",
-    "model deployment",
-    "inference",
-    "deep learning",
-    "ml pipeline",
-}
+TITLE_ROLE_PRIORITY = (
+    "sre",
+    "fullstack_engineering",
+    "backend_engineering",
+    "frontend_engineering",
+    "ml_ai_engineering",
+    "data_science",
+    "data_engineering",
+    "analytics",
+    "cloud_devops",
+    "qa_automation",
+    "security",
+    "systems_it",
+    "solutions_engineering",
+    "software_engineering",
+)
 
-DATA_SCIENTIST_SKILLS = {
-    "statistics",
-    "predictive modeling",
-    "feature engineering",
-    "ab testing",
-    "experimentation",
-}
+SKILL_ROLE_PRIORITY = (
+    "ml_ai_engineering",
+    "data_science",
+    "data_engineering",
+    "analytics",
+    "sre",
+    "cloud_devops",
+    "qa_automation",
+    "security",
+    "systems_it",
+    "solutions_engineering",
+    "fullstack_engineering",
+    "backend_engineering",
+    "frontend_engineering",
+    "software_engineering",
+)
 
-ANALYTICS_SKILLS = {
-    "sql",
-    "tableau",
-    "power bi",
-    "dashboard",
-    "reporting",
-    "business intelligence",
-}
 
-DATA_ENGINEERING_SKILLS = {
-    "spark",
-    "airflow",
-    "etl",
-    "data pipeline",
-    "data warehouse",
-}
+def _pattern_matches_text(pattern, text):
+    return re.search(pattern, text, re.I) is not None
+
+
+def _role_matches_title(role_family_id, title):
+    family = ROLE_TAXONOMY[role_family_id]
+    return any(
+        _pattern_matches_text(pattern, title)
+        for pattern in family["title_include_patterns"]
+    )
+
+
+def _role_matches_skills(role_family_id, skills_text, field_name):
+    family = ROLE_TAXONOMY[role_family_id]
+    return any(
+        _pattern_matches_text(pattern, skills_text)
+        for pattern in family[field_name]
+    )
 
 def _extract_job_skills(job):
     raw_skills = []
@@ -61,38 +81,27 @@ def classify_role_family(job):
 
     title = (job.get("title") or "").lower()
     skills = _extract_job_skills(job)
+    skills_text = " ".join(sorted(skills))
 
     # -------------------------
     # Title-based strong signals
     # -------------------------
 
-    if re.search(r"machine learning engineer|ml engineer|ai engineer", title):
-        return "ml_engineer"
-
-    if re.search(r"data scientist|applied scientist|research scientist", title):
-        return "data_scientist"
-
-    if re.search(r"data analyst|analytics engineer|bi analyst", title):
-        return "analytics"
-
-    if re.search(r"data engineer|platform engineer", title):
-        return "data_engineer"
+    for role_family_id in TITLE_ROLE_PRIORITY:
+        if _role_matches_title(role_family_id, title):
+            return role_family_id
 
     # -------------------------
-    # Skill-based fallback
+    # Skill/tool-based fallback
     # -------------------------
 
-    if skills & ML_ENGINEER_SKILLS:
-        return "ml_engineer"
+    for role_family_id in SKILL_ROLE_PRIORITY:
+        if _role_matches_skills(role_family_id, skills_text, "skill_patterns"):
+            return role_family_id
 
-    if skills & DATA_SCIENTIST_SKILLS:
-        return "data_scientist"
-
-    if skills & ANALYTICS_SKILLS:
-        return "analytics"
-
-    if skills & DATA_ENGINEERING_SKILLS:
-        return "data_engineer"
+    for role_family_id in SKILL_ROLE_PRIORITY:
+        if _role_matches_skills(role_family_id, skills_text, "tooling_patterns"):
+            return role_family_id
 
     return "other"
 

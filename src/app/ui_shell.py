@@ -4,7 +4,6 @@ NAV_ITEMS = [
     ("Executive", "/", "E"),
     ("Planning", "/planning", "P"),
     ("Decisions", "/decisions-ui", "D"),
-    ("Intelligence", "/intelligence", "I"),
     ("Applications", "/applications", "A"),
     ("Scheduler", "/scheduler", "S"),
 ]
@@ -202,7 +201,7 @@ def render_top_shell(active_href: str) -> str:
       <div class="profile-dropdown-actions">
         <a class="profile-dropdown-nav-btn" href="/profile/saved-scans">
           <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--scans" aria-hidden="true">
-            <img src="/static/media/preview_img.svg" alt="" />
+            <img src="/static/media/scan_icon.svg" alt="" />
           </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">Saved Scans</span>
@@ -213,11 +212,22 @@ def render_top_shell(active_href: str) -> str:
 
         <a class="profile-dropdown-nav-btn" href="/profile">
           <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--profile" aria-hidden="true">
-            <img src="/static/media/edit-mode-img.svg" alt="" />
+            <img src="/static/media/profile_icon.svg" alt="" />
           </span>
           <span class="profile-dropdown-nav-copy">
             <span class="profile-dropdown-nav-title">My Profile</span>
-            <span class="profile-dropdown-nav-subtitle">Resumes, preferences, account tools</span>
+            <span class="profile-dropdown-nav-subtitle">Resumes and account tools</span>
+          </span>
+          <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
+        </a>
+
+        <a class="profile-dropdown-nav-btn" href="/profile/preferences">
+          <span class="profile-dropdown-nav-icon profile-dropdown-nav-icon--preferences" aria-hidden="true">
+            <img src="/static/media/preferences_icon.svg" alt="" />
+          </span>
+          <span class="profile-dropdown-nav-copy">
+            <span class="profile-dropdown-nav-title">Preferences</span>
+            <span class="profile-dropdown-nav-subtitle">Role focus, location, and matching signals</span>
           </span>
           <span class="profile-dropdown-nav-arrow" aria-hidden="true">›</span>
         </a>
@@ -229,4 +239,80 @@ def render_top_shell(active_href: str) -> str:
     </div>
   </div>
 </div>
+
+<div class="floating-intelligence-chat" id="floatingIntelligenceChat">
+  <section
+    class="floating-intelligence-chat-panel hidden"
+    id="floatingIntelligenceChatPanel"
+    aria-label="Job Assistant"
+  >
+    <header class="floating-intelligence-chat-header">
+      <div class="floating-intelligence-chat-heading">
+        <h2>Job Assistant</h2>
+        <p>Ask a question or search by keywords.</p>
+      </div>
+      <button
+        type="button"
+        class="floating-intelligence-chat-close-btn"
+        id="floatingIntelligenceChatCloseBtn"
+        aria-label="Close Job Assistant"
+      >
+        ×
+      </button>
+    </header>
+
+    <div class="floating-intelligence-chat-controls">
+      <p class="floating-intelligence-chat-helper">The assistant will decide whether to search or answer.</p>
+      <select id="floatingIntelligenceModeSelect" hidden aria-hidden="true" tabindex="-1">
+        <option value="answer" selected>Answer</option>
+        <option value="search">Search</option>
+      </select>
+    </div>
+
+    <div class="floating-intelligence-chat-messages" id="floatingIntelligenceMessages">
+      <p>Open the assistant to search jobs or ask grounded questions.</p>
+    </div>
+
+    <div class="floating-intelligence-chat-compose">
+      <input
+        type="text"
+        id="floatingIntelligenceInput"
+        placeholder="Ask about jobs, companies, skills, or applications..."
+      />
+      <button type="button" id="floatingIntelligenceSendBtn">Send</button>
+    </div>
+
+    <div class="floating-intelligence-chat-status" id="floatingIntelligenceStatus">Idle</div>
+  </section>
+
+  <button
+    type="button"
+    class="floating-intelligence-chat-button"
+    id="floatingIntelligenceChatButton"
+    aria-label="Open Job Assistant"
+  >
+    <svg
+      class="floating-intelligence-chat-icon"
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path
+        d="M5.5 6.5h13v8.2h-5.3L9.8 18v-3.3H5.5z"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linejoin="round"
+      />
+      <path
+        d="M8.3 10.3h7.4M8.3 12.8h4.8"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.8"
+        stroke-linecap="round"
+      />
+    </svg>
+  </button>
+</div>
+<script src="/static/floating_intelligence_chat.js?v=floating_job_assistant_r1" defer></script>
 """.strip()

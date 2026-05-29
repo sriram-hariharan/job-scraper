@@ -62,6 +62,11 @@ def build_retrieval_text(job_doc: Dict[str, Any]) -> str:
     return "\n".join(lines).strip()
 
 
+def _clean_text_value(value: object) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
+
 def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
     intelligence = job.get("intelligence", {}) or {}
     skills = intelligence.get("skills", {}) or {}
@@ -82,7 +87,11 @@ def build_job_document(job: Dict[str, Any]) -> Dict[str, Any]:
         "location": (job.get("location") or "").strip(),
         "source": (job.get("source") or "").strip(),
         "job_url": (job.get("url") or "").strip(),
-        "posted_at": (job.get("posted_at") or "").strip(),
+        "posted_at": _clean_text_value(job.get("posted_at")),
+        "freshness_status": (job.get("_freshness_status") or job.get("freshness_status") or "").strip(),
+        "ashby_timestamp_status": (
+            job.get("_ashby_timestamp_status") or job.get("ashby_timestamp_status") or ""
+        ).strip(),
         "description": job.get("description_text", "") or job.get("description", ""),
         "role_family": intelligence.get("role_family", "") or job.get("role_family", ""),
         "seniority": intelligence.get("seniority", ""),

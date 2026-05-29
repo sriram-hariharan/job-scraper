@@ -17,6 +17,50 @@ from src.pipeline.runtime_status import (
 from src.rag.export_job_corpus import export_job_corpus
 from src.utils.logging import get_logger
 
+
+def _application_planning_status_counts(output_dir="outputs/application_planning"):
+    """Return application-planning counts for clearer runtime status messaging."""
+    import csv
+    from collections import Counter
+    from pathlib import Path
+
+    output_dir = Path(output_dir)
+    shortlist_csv = output_dir / "application_shortlist_by_job.csv"
+    packet_manifest_csv = output_dir / "job_packet_manifest.csv"
+
+    def _count_rows(path):
+        if not path.exists():
+            return 0
+        with path.open(newline="") as f:
+            return sum(1 for _ in csv.DictReader(f))
+
+    def _count_values(path, column):
+        if not path.exists():
+            return {}
+        with path.open(newline="") as f:
+            return dict(Counter((row.get(column) or "").strip() for row in csv.DictReader(f)))
+
+    return {
+        "planning_total_jobs": _count_rows(shortlist_csv),
+        "planning_packet_jobs": _count_rows(packet_manifest_csv),
+        "planning_actions": _count_values(shortlist_csv, "action"),
+    }
+
+
+def _application_planning_summary_message(browse_final_job_count):
+    counts = _application_planning_status_counts()
+    planned = counts.get("planning_total_jobs", 0)
+    packets = counts.get("planning_packet_jobs", 0)
+
+    if planned or packets:
+        return (
+            f"Completed: {browse_final_job_count} display jobs, "
+            f"{planned} planned jobs, {packets} packet jobs"
+        )
+
+    return f"Completed: {browse_final_job_count} display jobs"
+
+
 logger = get_logger(__name__)
 
 
@@ -556,15 +600,15 @@ async def main_async(args):
             Path(args.application_planning_output_dir) / "job_packet_manifest.csv",
         )
 
-    start_stage("finalization", f"Final jobs: {len(jobs)}")
-    logger.info("Final jobs: %s", len(jobs))
+    start_stage("finalization", f"Display jobs: {len(jobs)}")
+    logger.info("Display jobs: %s", len(jobs))
 
     finish_run(
         return_code=0,
         summary_message=(
             "Completed: no new jobs after cache/filtering"
             if len(jobs) == 0
-            else f"Completed: {len(jobs)} final jobs"
+            else _application_planning_summary_message(len(jobs))
         ),
         final_job_count=len(jobs),
     )

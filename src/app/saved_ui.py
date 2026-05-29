@@ -125,7 +125,7 @@ def saved_jobs_dashboard() -> str:
   </section>
   
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/application_views.js"></script>
 </body>
 </html>

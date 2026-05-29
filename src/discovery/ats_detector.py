@@ -2,6 +2,7 @@ import requests
 from requests.adapters import HTTPAdapter
 import re
 from src.config.consts import CAREER_PATHS, WORKDAY_REGEX, CAREER_SUBDOMAINS
+from src.discovery.learned_companies import normalize_workable_slug
 import requests
 
 session = requests.Session()
@@ -60,7 +61,7 @@ def extract_workday_url(html):
 
 def extract_workable_slug(html):
     m = re.search(r"apply\.workable\.com/([a-z0-9\-]+)", html.lower())
-    return m.group(1) if m else None
+    return normalize_workable_slug(m.group(1)) if m else None
 
 
 def extract_jobvite_slug(html):
@@ -171,7 +172,7 @@ def detect_ats_from_redirect(domain):
 
         if "apply.workable.com" in final_url:
             slug = final_url.split("apply.workable.com/")[1].split("/")[0]
-            return "workable", slug
+            return "workable", normalize_workable_slug(slug)
 
         if "jobs.jobvite.com" in final_url:
             slug = final_url.split("jobs.jobvite.com/")[1].split("/")[0]
@@ -204,6 +205,8 @@ def detect_ats_from_embeds(html):
         if m:
             if ats == "workday":
                 return ats, m.group(1).split("?")[0]
+            if ats == "workable":
+                return ats, normalize_workable_slug(m.group(1))
             return ats, m.group(1)
 
     return None, None

@@ -4,6 +4,11 @@ from pathlib import Path
 from typing import List
 
 from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
+from src.pipeline.resume_selection_credibility import (
+    CREDIBILITY_COLUMNS,
+    compute_resume_selection_credibility,
+    parse_bool as parse_credibility_bool,
+)
 
 ACTION_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["action_rank"]
 TIE_REVIEW_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["tie_review_rank"]
@@ -78,6 +83,12 @@ def _needs_variant_review(row: dict) -> str:
 
 
 def _queue_priority_reason(row: dict) -> str:
+    credibility = compute_resume_selection_credibility(row)
+    if parse_credibility_bool(credibility["fallback_only_no_deterministic_match"]):
+        return "Fallback resume suggestion only; deterministic scorer found no credible match."
+    if credibility["packet_generation_block_reason"] == "deterministic_score_below_credible_threshold":
+        return "Deterministic resume score is below the credible threshold; keep visible for review."
+
     action = row.get("action", "")
     variant_review_required = _variant_review_required(row)
     selection_signal = str(row.get("selection_signal", "")).strip()
@@ -151,6 +162,7 @@ def main() -> None:
 
     queue_rows = []
     for row in rows:
+        row = {**row, **compute_resume_selection_credibility(row)}
         missing_requirement_count = _count_missing_requirements(
             row.get("winner_missing_requirements", "")
         )
@@ -192,7 +204,10 @@ def main() -> None:
     "job_doc_id",
     "job_company",
     "job_title",
+    "job_location",
     "posted_at",
+    "freshness_status",
+    "ashby_timestamp_status",
     "action",
     "action_rationale",
 
@@ -214,6 +229,7 @@ def main() -> None:
     "resolved_selection_status",
     "variant_review_required",
     "resolved_best_available_imperfect_match",
+    *CREDIBILITY_COLUMNS,
 
     "selector_winner_resume",
     "selector_winner_score",

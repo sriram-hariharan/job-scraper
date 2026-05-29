@@ -1,4 +1,4 @@
-from src.discovery.learned_companies import get_learned
+from src.discovery.learned_companies import get_learned, normalize_workable_slug
 from src.discovery.save_companies import append_new_companies
 import re
 from src.config.consts import INVALID_SLUGS
@@ -33,6 +33,13 @@ def persist_discovered_companies():
                 for c in companies
                 if c
             }
+            if ats == "workable":
+                normalized = {
+                    slug
+                    for c in normalized
+                    for slug in [normalize_workable_slug(c)]
+                    if slug
+                }
             # remove junk slugs
             normalized = {
                 c for c in normalized

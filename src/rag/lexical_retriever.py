@@ -5,19 +5,53 @@ from src.config.consts import QUERY_STOPWORDS
 from src.rag.corpus_store import _load_job_corpus
 from src.rag.query_filters import _matches_filters, _normalize_text
 
+_LEXICAL_SHORT_TERMS = {"ai", "ml"}
+
+
+def expand_query_terms(query: str) -> str:
+    normalized = _normalize_text(query)
+    tokens = re.findall(r"[a-z0-9]+", normalized)
+    token_set = set(tokens)
+    expansions: List[str] = []
+
+    def add(values: List[str]) -> None:
+        for value in values:
+            if value not in expansions:
+                expansions.append(value)
+
+    if "ai" in token_set:
+        add(["artificial intelligence", "machine learning", "ai"])
+
+    if "llm" in token_set:
+        add(["large language model", "generative ai", "llm"])
+
+    if "ml" in token_set:
+        add(["machine learning", "ml"])
+
+    if not expansions:
+        return query
+
+    return " ".join([str(query or "").strip(), *expansions]).strip()
+
 
 def _extract_query_terms(query: str) -> List[str]:
-    terms = re.findall(r"[a-z0-9\+\#\/\.\-]+", _normalize_text(query))
+    terms = re.findall(r"[a-z0-9\+\#\/\.\-]+", _normalize_text(expand_query_terms(query)))
     unique_terms: List[str] = []
 
     for term in terms:
         term = term.strip("-./")
-        if len(term) < 3:
-            continue
-        if term in QUERY_STOPWORDS:
-            continue
-        if term not in unique_terms:
-            unique_terms.append(term)
+        if "/" in term:
+            split_terms = [part for part in term.split("/") if part]
+        else:
+            split_terms = [term]
+
+        for split_term in split_terms:
+            if len(split_term) < 3 and split_term not in _LEXICAL_SHORT_TERMS:
+                continue
+            if split_term in QUERY_STOPWORDS:
+                continue
+            if split_term not in unique_terms:
+                unique_terms.append(split_term)
 
     return unique_terms
 

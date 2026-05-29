@@ -1,6 +1,7 @@
 from collections import Counter
 from typing import Any, Dict, List
 import asyncio
+import json
 import os
 import time
 from uuid import uuid4
@@ -19,6 +20,43 @@ def _is_user_pipeline_mode() -> bool:
         "true",
         "yes",
         "y",
+    }
+
+
+def _selected_role_families_from_env() -> List[str]:
+    return _json_list_from_env("JOB_STACK_SELECTED_ROLE_FAMILIES")
+
+
+def _json_list_from_env(env_name: str) -> List[str]:
+    raw = str(os.environ.get(env_name, "") or "").strip()
+    if not raw:
+        return []
+
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError:
+        logger.warning("Ignoring invalid %s JSON.", env_name)
+        return []
+
+    if not isinstance(parsed, list):
+        logger.warning("Ignoring non-list %s value.", env_name)
+        return []
+
+    values: List[str] = []
+    for value in parsed:
+        text = str(value or "").strip()
+        if text and text not in values:
+            values.append(text)
+    return values
+
+
+def _pipeline_preferences_from_env() -> Dict[str, List[str]]:
+    return {
+        "selected_role_families": _json_list_from_env("JOB_STACK_SELECTED_ROLE_FAMILIES"),
+        "target_seniority": _json_list_from_env("JOB_STACK_TARGET_SENIORITY"),
+        "preferred_locations": _json_list_from_env("JOB_STACK_PREFERRED_LOCATIONS"),
+        "preferred_skills": _json_list_from_env("JOB_STACK_PREFERRED_SKILLS"),
+        "excluded_keywords": _json_list_from_env("JOB_STACK_EXCLUDED_KEYWORDS"),
     }
 
 
@@ -87,6 +125,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.discovery.domain_learner import learn_domains_from_jobs
     from src.discovery.persist_discovered import persist_discovered_companies
     from src.intelligence.job_intelligence import (
+        ai_evaluation_skip_summary,
         build_job_intelligence,
         filter_jobs_for_ai_evaluation,
     )
@@ -96,10 +135,16 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.pipeline.dedupe import dedupe_jobs
     from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
     from src.pipeline.job_details import enrich_job_details
-    from src.pipeline.job_filter import filter_jobs
+    from src.pipeline.job_filter import (
+        filter_jobs,
+        role_title_filter_audit_counts,
+        write_source_health_report_csv,
+        write_role_title_filter_audit_csv,
+    )
     from src.pipeline.job_ranker import rank_jobs
     from src.rag.export_job_corpus import export_job_corpus
     from src.scrapers.ashby_scraper import scrape_all_ashby
+    from src.scrapers.builtin_scraper import scrape_all_builtin
     from src.scrapers.greenhouse_scraper import scrape_all_greenhouse
     from src.scrapers.jobvite_scraper import scrape_all_jobvite
     from src.scrapers.lever_scraper import scrape_all_lever
@@ -136,10 +181,25 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         ("workable", scrape_all_workable),
         ("jobvite", scrape_all_jobvite),
         ("smartrecruiters", scrape_all_smartrecruiters),
+        ("builtin", scrape_all_builtin),
     ]
 
     all_jobs: List[Dict[str, Any]] = []
     seen_job_ids = load_seen_job_ids()
+    pipeline_preferences = _pipeline_preferences_from_env()
+    selected_role_families = pipeline_preferences["selected_role_families"]
+    corpus_path = str(
+        os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
+        or "postgres://rag_job_documents"
+    ).strip()
+    corpus_file = Path(corpus_path)
+    if selected_role_families:
+        logger.info(
+            "Using selected role families for title filtering/ranking: %s",
+            ", ".join(selected_role_families),
+        )
+    else:
+        logger.info("Using default data/AI title filtering/ranking behavior.")
     logger.info(f"Loaded {len(seen_job_ids)} cached job IDs")
 
     start_total = time.time()
@@ -192,7 +252,28 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("FILTER PIPELINE", logger)
     start_stage("filtering", f"Filtering {len(all_jobs)} scraped jobs")
 
-    filtered_jobs = filter_jobs(all_jobs)
+    role_title_audit_rows = [] if _is_user_pipeline_mode() and selected_role_families else None
+    filter_result = filter_jobs(
+        all_jobs,
+        selected_role_families=selected_role_families or None,
+        filter_mode="user_pipeline" if _is_user_pipeline_mode() else "strict_live",
+        return_diagnostics=True,
+        role_title_audit_rows=role_title_audit_rows,
+        excluded_keywords=pipeline_preferences["excluded_keywords"],
+    )
+    filtered_jobs, filter_diagnostics = filter_result
+    role_title_audit_summary = role_title_filter_audit_counts(role_title_audit_rows or [])
+    if role_title_audit_rows is not None:
+        audit_path = Path(corpus_path).expanduser().with_name("role_title_filter_audit.csv")
+        write_role_title_filter_audit_csv(role_title_audit_rows, audit_path)
+        logger.info(
+            "Role title filter audit written: %s | total=%s pass=%s reject=%s suspected_false_negative=%s",
+            audit_path,
+            role_title_audit_summary["role_title_audit_total"],
+            role_title_audit_summary["role_title_audit_pass"],
+            role_title_audit_summary["role_title_audit_reject"],
+            role_title_audit_summary["role_title_audit_suspected_false_negative"],
+        )
     logger.info(f"Total filtered jobs: {len(filtered_jobs)}")
 
     filtered_counts = log_stage_metrics("FILTERED", filtered_jobs)
@@ -202,7 +283,26 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
         drop_pct = round((1 - len(filtered_jobs) / len(all_jobs)) * 100, 2)
 
     logger.info(f"Filter drop rate: {drop_pct}%")
-    complete_stage("filtering", counts={"filtered_jobs": len(filtered_jobs)})
+    complete_stage(
+        "filtering",
+        counts={
+            "filtered_jobs": len(filtered_jobs),
+            "filter_title_mismatch": filter_diagnostics.get("title_mismatch", 0),
+            "filter_location_not_us": filter_diagnostics.get("location_not_us", 0),
+            "filter_not_recent": filter_diagnostics.get("not_recent", 0),
+            "filter_missing_timestamp": filter_diagnostics.get("missing_timestamp", 0),
+            "filter_missing_timestamp_allowed": filter_diagnostics.get("missing_timestamp_allowed", 0),
+            "filter_title_pass": filter_diagnostics.get("title_pass", 0),
+            "filter_location_pass": filter_diagnostics.get("location_pass", 0),
+            "filter_excluded_keyword": filter_diagnostics.get("excluded_keyword", 0),
+            "ashby_timestamp_cache_hit": filter_diagnostics.get("ashby_timestamp_cache_hit", 0),
+            "ashby_timestamp_cache_miss": filter_diagnostics.get("ashby_timestamp_cache_miss", 0),
+            "ashby_timestamp_fetch_success": filter_diagnostics.get("ashby_timestamp_fetch_success", 0),
+            "ashby_timestamp_fetch_429": filter_diagnostics.get("ashby_timestamp_fetch_429", 0),
+            "ashby_timestamp_fetch_failed": filter_diagnostics.get("ashby_timestamp_fetch_failed", 0),
+            **role_title_audit_summary,
+        },
+    )
 
     section("DEDUPLICATION", logger)
     start_stage("dedupe", f"Deduplicating {len(filtered_jobs)} filtered jobs")
@@ -216,9 +316,24 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     section("RANKING", logger)
     start_stage("ranking", f"Ranking {len(deduped_jobs)} deduped jobs")
 
-    ranked_jobs = rank_jobs(deduped_jobs)
+    ranked_jobs = rank_jobs(
+        deduped_jobs,
+        selected_role_families=selected_role_families or None,
+        target_seniority=pipeline_preferences["target_seniority"],
+        preferred_locations=pipeline_preferences["preferred_locations"],
+        preferred_skills=pipeline_preferences["preferred_skills"],
+    )
+    preference_counts = {
+        "preference_seniority_match": sum(1 for job in ranked_jobs if job.get("_preference_seniority_match")),
+        "preference_seniority_unknown": sum(1 for job in ranked_jobs if job.get("_preference_seniority_unknown")),
+        "preference_location_match": sum(1 for job in ranked_jobs if job.get("_preference_location_matches")),
+        "preference_skill_matches": sum(
+            len(job.get("_preference_skill_matches") or [])
+            for job in ranked_jobs
+        ),
+    }
     log_stage_metrics("RANKED", ranked_jobs)
-    complete_stage("ranking", counts={"ranked_jobs": len(ranked_jobs)})
+    complete_stage("ranking", counts={"ranked_jobs": len(ranked_jobs), **preference_counts})
 
     section("CACHE FILTER", logger)
     start_stage("cache_filter", f"Filtering cached jobs from {len(ranked_jobs)} ranked jobs")
@@ -278,8 +393,36 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     start_stage("ai_evaluation_filter", "Selecting jobs eligible for AI evaluation")
 
     evaluable_jobs = filter_jobs_for_ai_evaluation(intelligent_jobs)
+    skip_summary = ai_evaluation_skip_summary(intelligent_jobs, limit=10)
+    skipped_count = int(skip_summary.get("skipped_count", 0) or 0)
+    reason_counts = dict(skip_summary.get("reason_counts", {}) or {})
+    skipped_samples = list(skip_summary.get("skipped_samples", []) or [])
+
+    if skipped_count:
+        logger.info(
+            "AI evaluation skipped jobs: count=%s | reason_counts=%s",
+            skipped_count,
+            reason_counts,
+        )
+        for index, skipped_job in enumerate(skip_summary.get("skipped_jobs", []) or [], start=1):
+            logger.info(
+                "AI evaluation skipped #%s | company=%s | title=%s | url=%s | reason=%s",
+                index,
+                skipped_job.get("company", ""),
+                skipped_job.get("title", ""),
+                skipped_job.get("url", ""),
+                skipped_job.get("reason", ""),
+            )
     logger.info(f"Jobs eligible for AI evaluation: {len(evaluable_jobs)}")
-    complete_stage("ai_evaluation_filter", counts={"evaluable_jobs": len(evaluable_jobs)})
+    complete_stage(
+        "ai_evaluation_filter",
+        counts={
+            "evaluable_jobs": len(evaluable_jobs),
+            "ai_evaluation_skipped_jobs": skipped_count,
+            "ai_evaluation_skip_reasons": reason_counts,
+            "ai_evaluation_skipped_samples": skipped_samples,
+        },
+    )
 
     section("EMBEDDING PREFILTER", logger)
     start_stage("embedding_prefilter", f"Embedding-prefiltering {len(evaluable_jobs)} evaluable jobs")
@@ -388,11 +531,10 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
 
-    corpus_path = str(
-        os.environ.get("JOB_STACK_JOB_CORPUS_PATH", "")
-        or "postgres://rag_job_documents"
-    ).strip()
-    corpus_file = Path(corpus_path)
+    if role_title_audit_rows is not None:
+        source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")
+        write_source_health_report_csv(role_title_audit_rows, scored_jobs, source_health_path)
+        logger.info("Source health report written: %s", source_health_path)
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 

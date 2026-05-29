@@ -99,20 +99,49 @@ def _validate_dimension_weights(dimensions: List[MatchDimensionDefinition]) -> N
 
 
 def get_match_dimensions(role_archetype: str = "") -> List[MatchDimensionDefinition]:
-    archetype = str(role_archetype or "").strip().lower()
-    overrides = _ARCHETYPE_WEIGHT_OVERRIDES.get(archetype)
+    """
+    Return scoring dimensions used for resume selection.
 
-    if not overrides:
-        dimensions = [replace(dimension) for dimension in _DEFAULT_MATCH_DIMENSIONS]
-        _validate_dimension_weights(dimensions)
-        return dimensions
+    Important: title_alignment is intentionally excluded from weighted selection.
+    Resume/job title similarity can be useful as a diagnostic, but it should not
+    boost or suppress resume selection because it creates title-based false
+    positives and false negatives. Selection should be driven by JD-to-experience
+    evidence, skills, methods, workflow, domain, tooling, and business context.
+    """
+    role_key = (role_archetype or "").strip().lower()
+    overrides = _ARCHETYPE_WEIGHT_OVERRIDES.get(role_key)
+
+    dimensions = _DEFAULT_MATCH_DIMENSIONS
+    if overrides:
+        dimensions = [
+            replace(dimension, weight=overrides.get(dimension.name, dimension.weight))
+            for dimension in dimensions
+        ]
 
     dimensions = [
-        replace(dimension, weight=overrides.get(dimension.name, dimension.weight))
-        for dimension in _DEFAULT_MATCH_DIMENSIONS
+        dimension
+        for dimension in dimensions
+        if dimension.name != "title_alignment"
     ]
-    _validate_dimension_weights(dimensions)
-    return dimensions
+
+    total = sum(dimension.weight for dimension in dimensions)
+    if total <= 0:
+        raise ValueError("Match dimension weights must have positive total after excluding title_alignment")
+
+    normalized = []
+    running_total = 0.0
+
+    for dimension in dimensions[:-1]:
+        normalized_weight = round(dimension.weight / total, 6)
+        running_total += normalized_weight
+        normalized.append(replace(dimension, weight=normalized_weight))
+
+    normalized.append(
+        replace(dimensions[-1], weight=round(1.0 - running_total, 6))
+    )
+
+    _validate_dimension_weights(normalized)
+    return normalized
 
 
 def get_dimension_weights(role_archetype: str = "") -> Dict[str, float]:

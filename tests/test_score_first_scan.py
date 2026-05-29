@@ -966,7 +966,8 @@ def test_workspace_draft_persists_personal_details():
             "state": "NJ",
             "contact": "+1 (555) 123-4567",
             "email": "alex@example.com",
-            "linkedin": "linkedin.com/in/alexrivera",
+            "linkedin": "https://linkedin.com/in/alexrivera",
+            "github": "",
         }
 
 

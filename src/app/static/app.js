@@ -901,6 +901,32 @@ function buildDateTimeCellHtml(value) {
   `;
 }
 
+function buildPostedAtCellHtml(row) {
+  if (row?.posted_at) {
+    return buildDateTimeCellHtml(row.posted_at);
+  }
+
+  if (row?.freshness_status === "unknown_timestamp_allowed") {
+    return `<span class="timestamp-unavailable-label">Timestamp unavailable</span>`;
+  }
+
+  return "-";
+}
+
+function buildJobTitleCellHtml(row, { simple = false } = {}) {
+  const title = escapeHtml(row.job_title || "");
+  const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
+  const location = escapeHtml(row.job_location || "");
+  const titleHtml = jobUrl
+    ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
+    : title;
+  const locationHtml = location
+    ? `<div class="${simple ? "queue-simple-location" : "queue-job-location"}">${location}</div>`
+    : "";
+
+  return `${titleHtml}${locationHtml}`;
+}
+
 function formatDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -1028,6 +1054,19 @@ function getPipelineDeleteSeenDataValue() {
 
 function setPipelineDeleteSeenDataValue(value) {
   setBinaryToggleValue("pipelineDeleteSeenData", value);
+}
+
+function setPipelineRunOptions(value) {
+  [
+    "pipelinePlanningOnly",
+    "pipelineGenerateTailoring",
+    "pipelineGenerateLlmTailoring",
+    "pipelineRefreshLlmTailoring",
+    "pipelineGenerateLlmFallback",
+    "pipelineGenerateLlmAdjudication",
+  ].forEach((name) => {
+    setBinaryToggleValue(name, value);
+  });
 }
 
 function applyPipelinePreset(name) {
@@ -1210,7 +1249,7 @@ function renderPipelineSuccessSummary(pipeline = {}) {
     pipeline.started_at ? `Started: ${formatDateTime(pipeline.started_at)}` : "",
     pipeline.finished_at ? `Finished: ${formatDateTime(pipeline.finished_at)}` : "",
     pipeline.final_job_count !== undefined && pipeline.final_job_count !== null
-      ? `Final jobs: ${pipeline.final_job_count}`
+      ? `Display jobs: ${pipeline.final_job_count}`
       : "",
   ].filter(Boolean);
 
@@ -1765,11 +1804,7 @@ function buildQueueRowDetailedHtml(row) {
   const queueRank = escapeHtml(row.queue_rank || "");
   const action = escapeHtml(row.action || "");
   const company = escapeHtml(row.job_company || "");
-  const title = escapeHtml(row.job_title || "");
-  const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
-  const titleHtml = jobUrl
-    ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
-    : title;
+  const titleHtml = buildJobTitleCellHtml(row);
   const applyButtonHtml = buildApplicationButtonHtml(row);
   const winnerResume = escapeHtml(row.winner_resume || "");
   const winnerScore = escapeHtml(row.winner_score || "");
@@ -1786,7 +1821,7 @@ function buildQueueRowDetailedHtml(row) {
       <td><span class="pill">${action || "-"}</span></td>
       <td>${company}</td>
       <td class="title-cell">${titleHtml}</td>
-      <td>${buildDateTimeCellHtml(row.posted_at)}</td>
+      <td>${buildPostedAtCellHtml(row)}</td>
       <td>${buildResumeCellHtml(row.winner_resume, { emptyLabel: "-", wrap: true })}</td>
       <td>${escapeHtml(formatScore100(row.winner_score))}</td>
       <td>${buildResumeCellHtml(row.runner_up_resume, { emptyLabel: "-", wrap: true })}</td>
@@ -1804,12 +1839,8 @@ function buildQueueRowSimpleHtml(row) {
   const queueRank = escapeHtml(row.queue_rank || "");
   const action = escapeHtml(row.action || "");
   const company = escapeHtml(row.job_company || "");
-  const title = escapeHtml(row.job_title || "");
-  const postedAt = buildDateTimeCellHtml(row.posted_at);
-  const jobUrl = escapeHtml(row.job_doc_id || row.job_url || "");
-  const titleHtml = jobUrl
-    ? `<a class="job-link" href="${jobUrl}" target="_blank" rel="noopener noreferrer">${title}</a>`
-    : title;
+  const postedAt = buildPostedAtCellHtml(row);
+  const titleHtml = buildJobTitleCellHtml(row, { simple: true });
 
   const applyButtonHtml = buildApplicationButtonHtml(row);
 
@@ -2276,6 +2307,14 @@ function attachPipelineConfigHandlers() {
 
   qs("pipelineClearAllActionsBtn").addEventListener("click", () => {
     setPipelineLlmActions([]);
+  });
+
+  qs("pipelineSelectAllRunOptionsBtn")?.addEventListener("click", () => {
+    setPipelineRunOptions(true);
+  });
+
+  qs("pipelineClearAllRunOptionsBtn")?.addEventListener("click", () => {
+    setPipelineRunOptions(false);
   });
 
   document.querySelectorAll("[data-pipeline-preset]").forEach((btn) => {

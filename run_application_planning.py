@@ -9,6 +9,11 @@ from typing import Dict, List, Set
 from src.matching.job_adapter import build_job_evidence
 
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.pipeline.resume_selection_credibility import (
+    CREDIBILITY_COLUMNS,
+    compute_resume_selection_credibility,
+    parse_bool as parse_credibility_bool,
+)
 from src.pipeline.runtime_status import update_stage_message
 
 def _normalize_text(value: str) -> str:
@@ -225,6 +230,27 @@ def _parse_bool(value: str) -> bool:
 
 
 def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
+    credibility = compute_resume_selection_credibility(row)
+    if not parse_credibility_bool(credibility["packet_generation_allowed"]):
+        block_reason = credibility["packet_generation_block_reason"]
+        if block_reason == "fallback_only_no_deterministic_match":
+            return {
+                "packet_status": "unresolved_no_credible_match",
+                "packet_resume": "",
+                "packet_resume_source": block_reason,
+            }
+        if block_reason == "deterministic_score_below_credible_threshold":
+            return {
+                "packet_status": "blocked_low_confidence_match",
+                "packet_resume": "",
+                "packet_resume_source": block_reason,
+            }
+        return {
+            "packet_status": "unresolved_missing_winner",
+            "packet_resume": "",
+            "packet_resume_source": block_reason or "no_deterministic_winner",
+        }
+
     resolved_resume = str(row.get("resolved_resume", "") or "").strip()
     resolved_selection_status = str(
         row.get("resolved_selection_status", "") or ""
@@ -268,12 +294,6 @@ def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
     ).strip()
 
     if selection_signal == "no_credible_match":
-        if llm_fallback_status in {"generated", "cached"} and llm_fallback_best_resume:
-            return {
-                "packet_status": "generated",
-                "packet_resume": llm_fallback_best_resume,
-                "packet_resume_source": f"llm_fallback_{llm_fallback_status}",
-            }
         return {
             "packet_status": "unresolved_no_credible_match",
             "packet_resume": "",
@@ -562,6 +582,7 @@ def main() -> None:
     manifest_rows = []
 
     for packet_index, row in enumerate(selected, start=1):
+        row = {**row, **compute_resume_selection_credibility(row)}
         job_doc_id = row["job_doc_id"]
         if job_doc_id not in job_doc_id_to_index:
             raise RuntimeError(f"Could not map job_doc_id to index: {job_doc_id}")
@@ -708,6 +729,10 @@ def main() -> None:
                 "job_doc_id": job_doc_id,
                 "job_company": company,
                 "job_title": title,
+                "job_location": row.get("job_location", ""),
+                "posted_at": row.get("posted_at", ""),
+                "freshness_status": row.get("freshness_status", ""),
+                "ashby_timestamp_status": row.get("ashby_timestamp_status", ""),
                 "action": row["action"],
                 "winner_resume": winner_resume,
                 "winner_score": row["winner_score"],
@@ -719,6 +744,7 @@ def main() -> None:
                 "score_gap": row["score_gap"],
                 "is_tie": row["is_tie"],
                 "tie_epsilon": row.get("tie_epsilon", ""),
+                **{column: row.get(column, "") for column in CREDIBILITY_COLUMNS},
                 "packet_status": packet_status,
                 "packet_resume": packet_resume,
                 "packet_resume_source": packet_resume_source,
@@ -780,6 +806,10 @@ def main() -> None:
         "job_doc_id",
         "job_company",
         "job_title",
+        "job_location",
+        "posted_at",
+        "freshness_status",
+        "ashby_timestamp_status",
         "action",
         "winner_resume",
         "winner_score",
@@ -791,6 +821,7 @@ def main() -> None:
         "score_gap",
         "is_tie",
         "tie_epsilon",
+        *CREDIBILITY_COLUMNS,
         "packet_status",
         "packet_resume",
         "packet_resume_source",

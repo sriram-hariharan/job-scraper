@@ -1,6 +1,7 @@
 import aiohttp
 import asyncio
 from src.config.consts import CAREER_PATHS, ATS_REGEX
+from src.discovery.learned_companies import normalize_workable_slug
 from src.utils.logging import get_logger
 from tqdm import tqdm
 from aiohttp import ClientConnectorError
@@ -131,7 +132,7 @@ def detect_ats_from_url(url):
 
         # Workable
         if "apply.workable.com" in domain and len(path) >= 1:
-            return "workable", path[0]
+            return "workable", normalize_workable_slug(path[0])
 
         # Jobvite
         if "jobvite.com" in domain and len(path) >= 1:

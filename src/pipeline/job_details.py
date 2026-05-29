@@ -2,7 +2,13 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from collections import Counter
 from tqdm import tqdm
 from src.utils.logging import get_logger
+from src.details.ashby_details import fetch_ashby_details
+from src.details.builtin_details import fetch_builtin_details
 from src.details.greenhouse_details import fetch_greenhouse_details
+from src.details.jobvite_details import fetch_jobvite_details
+from src.details.lever_details import fetch_lever_details
+from src.details.smartrecruiters_details import fetch_smartrecruiters_details
+from src.details.workable_details import fetch_workable_details
 from src.details.workday_details import fetch_workday_details
 from src.cache.description_cache import (
     init_cache,
@@ -14,7 +20,16 @@ from models.description import Description
 
 logger = get_logger("job_details")
 
-ENRICHABLE_SOURCES = {"greenhouse", "workday"}
+ENRICHABLE_SOURCES = {
+    "ashby",
+    "builtin",
+    "greenhouse",
+    "jobvite",
+    "lever",
+    "smartrecruiters",
+    "workable",
+    "workday",
+}
 
 def process_job(job):
 
@@ -44,6 +59,24 @@ def process_job(job):
 
     elif source == "workday":
         job = fetch_workday_details(job)
+
+    elif source == "ashby":
+        job = fetch_ashby_details(job)
+
+    elif source == "lever":
+        job = fetch_lever_details(job)
+
+    elif source == "workable":
+        job = fetch_workable_details(job)
+
+    elif source == "jobvite":
+        job = fetch_jobvite_details(job)
+
+    elif source == "smartrecruiters":
+        job = fetch_smartrecruiters_details(job)
+
+    elif source == "builtin":
+        job = fetch_builtin_details(job)
 
     else:
         job["_details_fetched"] = "skipped"
@@ -100,6 +133,25 @@ def enrich_job_details(jobs):
     f"json={counts.get('json', 0)} | "
     f"nextjs={counts.get('nextjs', 0)} | "
     f"api={counts.get('api', 0)} | "
+    f"ashby_api={counts.get('ashby_api', 0)} | "
+    f"ashby_no_description={counts.get('ashby_no_description', 0)} | "
+    f"ashby_request_failed={counts.get('ashby_request_failed', 0)} | "
+    f"ashby_parse_failed={counts.get('ashby_parse_failed', 0)} | "
+    f"lever_api={counts.get('lever_api', 0)} | "
+    f"lever_no_description={counts.get('lever_no_description', 0)} | "
+    f"lever_request_failed={counts.get('lever_request_failed', 0)} | "
+    f"workable_api={counts.get('workable_api', 0)} | "
+    f"workable_no_description={counts.get('workable_no_description', 0)} | "
+    f"workable_request_failed={counts.get('workable_request_failed', 0)} | "
+    f"jobvite_html={counts.get('jobvite_html', 0)} | "
+    f"jobvite_no_description={counts.get('jobvite_no_description', 0)} | "
+    f"jobvite_request_failed={counts.get('jobvite_request_failed', 0)} | "
+    f"smartrecruiters_api={counts.get('smartrecruiters_api', 0)} | "
+    f"smartrecruiters_no_description={counts.get('smartrecruiters_no_description', 0)} | "
+    f"smartrecruiters_request_failed={counts.get('smartrecruiters_request_failed', 0)} | "
+    f"builtin_page={counts.get('builtin_page', 0)} | "
+    f"builtin_no_description={counts.get('builtin_no_description', 0)} | "
+    f"builtin_request_failed={counts.get('builtin_request_failed', 0)} | "
     f"skipped={counts.get('skipped', 0)} | "
     f"failed={counts.get('failed', 0)} || "
     f"total={len(enriched_jobs)}"

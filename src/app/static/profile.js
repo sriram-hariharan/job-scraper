@@ -10,10 +10,19 @@ const profileState = {
   pipelineRunsTotalPages: 1,
   pipelineRunsHasPrevious: false,
   pipelineRunsHasNext: false,
+  resumeRoleFamilies: [],
+  resumeRoleMappings: [],
+  onboardingPreferences: null,
+  onboardingRequirements: {},
+  preferencesLoaded: false,
   pendingAccessUserId: null,
   pendingAccessValue: null,
   pendingDeleteUserId: null,
+  pendingRerunRunId: null,
 };
+
+const PROFILE_PLANNING_OUTPUT_DIR = "outputs/application_planning";
+const PROFILE_PLANNING_LOG_PATH = `${PROFILE_PLANNING_OUTPUT_DIR}/live_pipeline_run.log`;
 
 function qs(id) {
   return document.getElementById(id);
@@ -55,6 +64,176 @@ async function postJson(url, payload = {}) {
     },
     body: JSON.stringify(payload),
   });
+}
+
+function splitProfilePreferenceList(value) {
+  return String(value || "")
+    .split(/[\n,]/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item, index, items) => items.indexOf(item) === index);
+}
+
+function profilePreferenceCheckedValues(name) {
+  const form = qs("profilePreferencesForm");
+  if (!form) return [];
+  return Array.from(form.querySelectorAll(`input[name="${name}"]:checked`))
+    .map((input) => String(input.value || "").trim())
+    .filter(Boolean);
+}
+
+function setProfilePreferenceCheckedValues(name, values) {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+  const selected = new Set(Array.isArray(values) ? values.map(String) : []);
+  form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+    input.checked = selected.has(String(input.value || ""));
+  });
+}
+
+function setProfilePreferenceCheckboxGroup(name, checked) {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+  form.querySelectorAll(`input[name="${name}"]`).forEach((input) => {
+    input.checked = Boolean(checked);
+  });
+}
+
+function setProfilePreferenceTextareaList(id, values) {
+  const input = qs(id);
+  if (!input) return;
+  input.value = Array.isArray(values) ? values.join(", ") : "";
+}
+
+function getBinaryToggleBool(name) {
+  return document.querySelector(`input[name='${name}']:checked`)?.value === "yes";
+}
+
+function showProfilePlanningUploadCallout() {
+  qs("profilePlanningUploadCallout")?.classList.remove("hidden");
+}
+
+function getProfilePlanningOptionsModal() {
+  return qs("profilePlanningOptionsModal");
+}
+
+function openProfilePlanningOptionsModal() {
+  getProfilePlanningOptionsModal()?.classList.remove("hidden");
+}
+
+function closeProfilePlanningOptionsModal() {
+  getProfilePlanningOptionsModal()?.classList.add("hidden");
+}
+
+function setProfilePlanningOptions(value) {
+  [
+    "profilePlanningOnly",
+    "profileGenerateTailoring",
+    "profileGenerateLlmTailoring",
+    "profileRefreshLlmTailoring",
+    "profileGenerateLlmFallback",
+    "profileGenerateLlmAdjudication",
+  ].forEach((name) => {
+    const input = document.querySelector(`input[name='${name}'][value='${value ? "yes" : "no"}']`);
+    if (input) input.checked = true;
+  });
+}
+
+function collectProfilePlanningUpdatePayload() {
+  return {
+    planning_only: getBinaryToggleBool("profilePlanningOnly"),
+    generate_tailoring: getBinaryToggleBool("profileGenerateTailoring"),
+    generate_llm_tailoring: getBinaryToggleBool("profileGenerateLlmTailoring"),
+    refresh_llm_tailoring: getBinaryToggleBool("profileRefreshLlmTailoring"),
+    generate_llm_fallback: getBinaryToggleBool("profileGenerateLlmFallback"),
+    generate_llm_adjudication: getBinaryToggleBool("profileGenerateLlmAdjudication"),
+    delete_seen_data: "no",
+    output_dir: PROFILE_PLANNING_OUTPUT_DIR,
+    log_path: PROFILE_PLANNING_LOG_PATH,
+    job_limit: 50,
+    job_packet_limit: 0,
+    llm_actions: ["APPLY", "APPLY_REVIEW_VARIANTS", "MAYBE_TAILOR"],
+  };
+}
+
+async function runProfilePlanningUpdate() {
+  const button = qs("runProfilePlanningUpdateBtn");
+  if (button) button.disabled = true;
+  setStatus("Starting planning update...", "info");
+  try {
+    await postJson("/pipeline/run", collectProfilePlanningUpdatePayload());
+    closeProfilePlanningOptionsModal();
+    setStatus("Planning update started. Open Executive Queue to watch progress.", "success");
+  } catch (err) {
+    setStatus(err.message, "error");
+  } finally {
+    if (button) button.disabled = false;
+  }
+}
+
+function setProfilePreferencesStatus(message, tone = "info") {
+  const banner = qs("profilePreferencesStatusBanner");
+  if (!banner) return;
+  banner.textContent = message || "";
+  banner.className = `profile-inline-status ${tone}`;
+  if (!message) {
+    banner.classList.add("hidden");
+  }
+}
+
+function hydrateProfilePreferencesForm(preferences) {
+  setProfilePreferenceCheckedValues("selected_role_families", preferences?.selected_role_families || []);
+  setProfilePreferenceCheckedValues("target_seniority", preferences?.target_seniority || []);
+  setProfilePreferenceTextareaList("profilePreferredLocationsInput", preferences?.preferred_locations || []);
+  setProfilePreferenceTextareaList("profilePreferredSkillsInput", preferences?.preferred_skills || []);
+  setProfilePreferenceTextareaList("profileExcludedKeywordsInput", preferences?.excluded_keywords || []);
+}
+
+function collectProfilePreferences() {
+  const current = profileState.onboardingPreferences || {};
+  return {
+    onboarding_completed: Boolean(current.onboarding_completed),
+    selected_role_families: profilePreferenceCheckedValues("selected_role_families"),
+    target_seniority: profilePreferenceCheckedValues("target_seniority"),
+    preferred_locations: splitProfilePreferenceList(qs("profilePreferredLocationsInput")?.value),
+    preferred_skills: splitProfilePreferenceList(qs("profilePreferredSkillsInput")?.value),
+    excluded_keywords: splitProfilePreferenceList(qs("profileExcludedKeywordsInput")?.value),
+  };
+}
+
+async function loadProfilePreferences() {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+  setProfilePreferencesStatus("Loading preferences...");
+  const payload = await fetchJson("/onboarding/preferences");
+  profileState.onboardingPreferences = payload.preferences || {};
+  profileState.onboardingRequirements = payload.requirements || {};
+  hydrateProfilePreferencesForm(profileState.onboardingPreferences);
+  profileState.preferencesLoaded = true;
+  setProfilePreferencesStatus("");
+}
+
+async function saveProfilePreferences() {
+  const saveBtn = qs("profilePreferencesSaveBtn");
+  const preferences = collectProfilePreferences();
+  if (!preferences.selected_role_families.length) {
+    setProfilePreferencesStatus("Select at least one role family before saving.", "error");
+    return;
+  }
+
+  if (saveBtn) saveBtn.disabled = true;
+  setProfilePreferencesStatus("Saving preferences...");
+  try {
+    const payload = await postJson("/onboarding/preferences", preferences);
+    profileState.onboardingPreferences = payload.preferences || preferences;
+    profileState.onboardingRequirements = payload.requirements || profileState.onboardingRequirements || {};
+    hydrateProfilePreferencesForm(profileState.onboardingPreferences);
+    setProfilePreferencesStatus("Preferences saved.", "success");
+  } catch (err) {
+    setProfilePreferencesStatus(err.message, "error");
+  } finally {
+    if (saveBtn) saveBtn.disabled = false;
+  }
 }
 
 function formatBytes(bytes) {
@@ -460,10 +639,10 @@ function renderPipelineRuns(runs) {
         <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunCountsSummary(run.counts))}</td>
         <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunSettingsSummary(run.config))}</td>
         <td>
-          <button type="button" class="ghost-btn btn-sm" data-pipeline-run-view="${runId}">View</button>
+          <button type="button" class="ghost-btn btn-sm pipeline-run-action-btn pipeline-run-view-btn" data-pipeline-run-view="${runId}">View</button>
         </td>
         <td>
-          <button type="button" class="pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
+          <button type="button" class="pipeline-run-action-btn pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
         </td>
       </tr>
     `;
@@ -677,6 +856,64 @@ function closePipelineRunStatsModal() {
   qs("pipelineRunStatsModal")?.classList.add("hidden");
 }
 
+function renderPipelineRunRerunSummary(run) {
+  const config = run?.config && typeof run.config === "object" ? run.config : {};
+  const counts = run?.counts && typeof run.counts === "object" ? run.counts : {};
+  const started = formatDateTime(run?.started_at || "");
+  const summary = run?.summary_message || run?.stage_message || run?.error || "";
+  const finalJobs = run?.final_job_count ?? counts.final_jobs ?? "";
+  const llmActions = Array.isArray(config.llm_actions)
+    ? config.llm_actions.join(", ")
+    : config.llm_actions;
+  qs("pipelineRunRerunTitle").textContent = "Re-run pipeline";
+  qs("pipelineRunRerunSubtitle").textContent = run?.run_id || "Persisted run";
+  qs("pipelineRunRerunBody").innerHTML = `
+    <section class="pipeline-run-detail-panel pipeline-run-rerun-panel">
+      <h4>Run snapshot</h4>
+      ${renderKeyValueList([
+        ["Status", pipelineRunStatusLabel(run?.status)],
+        ["Started", started],
+        ["Summary", summary],
+        ["Final jobs", finalJobs],
+        ["Counts", pipelineRunCountsSummary(counts)],
+      ])}
+    </section>
+
+    <section class="pipeline-run-detail-panel pipeline-run-rerun-panel">
+      <h4>Re-run settings</h4>
+      ${renderKeyValueList([
+        ["Job limit", config.job_limit ?? 50],
+        ["Packet limit", config.job_packet_limit ?? 0],
+        ["LLM actions", llmActions],
+        ["Planning only", config.planning_only ? "Yes" : "No"],
+        ["Generate suggestions", config.generate_tailoring ? "Yes" : "No"],
+        ["Generate LLM suggestions", config.generate_llm_tailoring ? "Yes" : "No"],
+        ["Refresh LLM suggestions", config.refresh_llm_tailoring ? "Yes" : "No"],
+        ["LLM fallback ranking", config.generate_llm_fallback ? "Yes" : "No"],
+        ["LLM judging", config.generate_llm_adjudication ? "Yes" : "No"],
+      ])}
+    </section>
+  `;
+}
+
+function openPipelineRunRerunModal(runId) {
+  const run = getPipelineRunById(runId);
+  if (!run) {
+    throw new Error("Pipeline run was not found on this page.");
+  }
+
+  profileState.pendingRerunRunId = runId;
+  renderPipelineRunRerunSummary(run);
+  qs("pipelineRunRerunConfirmBtn").disabled = false;
+  qs("pipelineRunRerunConfirmBtn").textContent = "Yes";
+  qs("pipelineRunRerunModal")?.classList.remove("hidden");
+}
+
+function closePipelineRunRerunModal() {
+  profileState.pendingRerunRunId = null;
+  qs("pipelineRunRerunModal")?.classList.add("hidden");
+}
+
 async function rerunPipelineRun(runId) {
   const run = getPipelineRunById(runId);
   const label = run?.started_at ? formatDateTime(run.started_at) : runId;
@@ -685,6 +922,28 @@ async function rerunPipelineRun(runId) {
   const newRunId = data?.pipeline?.run_id || "new run";
   await loadPipelineRuns();
   setPipelineRunsStatus(`Pipeline re-run started (${newRunId}). Open Executive Queue to watch live progress.`, "success");
+}
+
+async function confirmPipelineRunRerun() {
+  const runId = profileState.pendingRerunRunId;
+  if (!runId) return;
+
+  const confirmBtn = qs("pipelineRunRerunConfirmBtn");
+  if (confirmBtn) {
+    confirmBtn.disabled = true;
+    confirmBtn.textContent = "Starting...";
+  }
+
+  try {
+    await rerunPipelineRun(runId);
+    closePipelineRunRerunModal();
+  } catch (err) {
+    if (confirmBtn) {
+      confirmBtn.disabled = false;
+      confirmBtn.textContent = "Yes";
+    }
+    throw err;
+  }
 }
 
 
@@ -753,6 +1012,80 @@ function closeResumeDeleteModal() {
   getResumeDeleteModal().classList.add("hidden");
 }
 
+function resumeRoleMappingsFor(resumeName) {
+  const safeName = String(resumeName || "");
+  return profileState.resumeRoleMappings.filter((mapping) => mapping.resume_name === safeName);
+}
+
+function resumeRoleMappingFor(resumeName, roleFamilyId) {
+  const safeName = String(resumeName || "");
+  const safeRole = String(roleFamilyId || "");
+  return profileState.resumeRoleMappings.find(
+    (mapping) => mapping.resume_name === safeName && mapping.role_family_id === safeRole
+  );
+}
+
+function renderResumeRoleMappingPanel(resume) {
+  const resumeName = String(resume?.resume_name || "");
+  const families = Array.isArray(profileState.resumeRoleFamilies) ? profileState.resumeRoleFamilies : [];
+  if (!families.length) return "";
+
+  const assignedCount = resumeRoleMappingsFor(resumeName).length;
+  const summary = assignedCount
+    ? `${assignedCount} role famil${assignedCount === 1 ? "y" : "ies"} assigned`
+    : "Assign role families";
+
+  const options = families.map((family) => {
+    const roleFamilyId = String(family.role_family_id || "");
+    const mapping = resumeRoleMappingFor(resumeName, roleFamilyId);
+    const checked = Boolean(mapping);
+    const isDefault = Boolean(mapping?.is_default_for_role);
+    const displayName = family.display_name || roleFamilyId;
+
+    return `
+      <label class="resume-role-family-option${checked ? " is-selected" : ""}">
+        <span class="resume-role-family-main">
+          <input
+            type="checkbox"
+            data-resume-role-toggle
+            data-resume-name="${escapeHtml(resumeName)}"
+            data-role-family-id="${escapeHtml(roleFamilyId)}"
+            ${checked ? "checked" : ""}
+          />
+          <span>${escapeHtml(displayName)}</span>
+        </span>
+        <span class="resume-role-default-wrap">
+          <input
+            type="radio"
+            name="resume-role-default-${escapeHtml(roleFamilyId)}"
+            data-resume-role-default
+            data-resume-name="${escapeHtml(resumeName)}"
+            data-role-family-id="${escapeHtml(roleFamilyId)}"
+            ${isDefault ? "checked" : ""}
+            ${checked ? "" : "disabled"}
+          />
+          <span>Default</span>
+        </span>
+      </label>
+    `;
+  }).join("");
+
+  return `
+    <details class="resume-role-mapping-panel">
+      <summary>
+        <span class="resume-role-summary-title">
+          <span class="resume-role-summary-caret" aria-hidden="true"></span>
+          <span>Role family mapping</span>
+        </span>
+        <span>${escapeHtml(summary)}</span>
+      </summary>
+      <div class="resume-role-mapping-grid">
+        ${options}
+      </div>
+    </details>
+  `;
+}
+
 function renderResumeList(items) {
   const listEl = qs("resumeList");
   const metaEl = qs("resumeListMeta");
@@ -788,8 +1121,16 @@ function renderResumeList(items) {
           Delete
         </button>
       </div>
+
+      ${renderResumeRoleMappingPanel(resume)}
     </article>
   `).join("");
+}
+
+async function loadResumeRoleMappings() {
+  const data = await fetchJson("/profile/resume-role-mappings");
+  profileState.resumeRoleMappings = Array.isArray(data.mappings) ? data.mappings : [];
+  profileState.resumeRoleFamilies = Array.isArray(data.role_families) ? data.role_families : [];
 }
 
 async function loadResumes() {
@@ -801,6 +1142,7 @@ async function loadResumes() {
 
   const data = await fetchJson("/profile/resumes");
   const resumes = data.resumes || [];
+  await loadResumeRoleMappings();
   renderResumeList(resumes);
   renderResumeOnboardingState(resumes);
 }
@@ -1039,6 +1381,7 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"} successfully.`,
       "success"
     );
+    showProfilePlanningUploadCallout();
     return;
   }
 
@@ -1047,6 +1390,7 @@ async function uploadResumeFiles(files) {
       `Uploaded ${results.uploaded.length} file${results.uploaded.length === 1 ? "" : "s"}, failed ${results.failed.length}.`,
       "error"
     );
+    showProfilePlanningUploadCallout();
     return;
   }
 
@@ -1064,6 +1408,26 @@ async function deleteResume(resumeName) {
   });
 
   setStatus(`Deleted ${resumeName}.`, "success");
+  await loadResumes();
+}
+
+async function saveResumeRoleMapping(resumeName, roleFamilyId, isDefaultForRole = false) {
+  await postJson("/profile/resume-role-mappings", {
+    resume_name: resumeName,
+    role_family_id: roleFamilyId,
+    is_default_for_role: Boolean(isDefaultForRole),
+  });
+  await loadResumes();
+}
+
+async function deleteResumeRoleMapping(resumeName, roleFamilyId) {
+  const params = new URLSearchParams({
+    resume_name: resumeName,
+    role_family_id: roleFamilyId,
+  });
+  await fetchJson(`/profile/resume-role-mappings?${params.toString()}`, {
+    method: "DELETE",
+  });
   await loadResumes();
 }
 
@@ -1147,7 +1511,7 @@ function bindDeleteInteractions() {
   });
 
   qs("closeResumeDeleteModalBtn").addEventListener("click", closeResumeDeleteModal);
-  qs("resumeDeleteCancelBtn").addEventListener("click", closeResumeDeleteModal);
+  qs("resumeDeleteCancelBtn")?.addEventListener("click", closeResumeDeleteModal);
 
   qs("resumeDeleteConfirmBtn").addEventListener("click", async () => {
     const resumeName = profileState.pendingDeleteResumeName || "";
@@ -1168,6 +1532,59 @@ function bindDeleteInteractions() {
   getResumeDeleteModal().addEventListener("click", (event) => {
     if (event.target === getResumeDeleteModal()) {
       closeResumeDeleteModal();
+    }
+  });
+}
+
+function bindResumeRoleMappingInteractions() {
+  qs("resumeList").addEventListener("change", async (event) => {
+    const toggle = event.target.closest("[data-resume-role-toggle]");
+    const defaultInput = event.target.closest("[data-resume-role-default]");
+    const input = toggle || defaultInput;
+    if (!input) return;
+
+    const resumeName = input.dataset.resumeName || "";
+    const roleFamilyId = input.dataset.roleFamilyId || "";
+    if (!resumeName || !roleFamilyId) return;
+
+    input.disabled = true;
+    try {
+      if (toggle) {
+        if (toggle.checked) {
+          await saveResumeRoleMapping(resumeName, roleFamilyId, false);
+          setStatus("Role family assigned.", "success");
+        } else {
+          await deleteResumeRoleMapping(resumeName, roleFamilyId);
+          setStatus("Role family assignment removed.", "success");
+        }
+        return;
+      }
+
+      if (defaultInput.checked) {
+        await saveResumeRoleMapping(resumeName, roleFamilyId, true);
+        setStatus("Default resume updated for role family.", "success");
+      }
+    } catch (err) {
+      setStatus(err.message, "error");
+      await loadResumes();
+    }
+  });
+}
+
+function bindProfilePlanningOptionsInteractions() {
+  qs("openProfilePlanningOptionsBtn")?.addEventListener("click", openProfilePlanningOptionsModal);
+  qs("closeProfilePlanningOptionsModalBtn")?.addEventListener("click", closeProfilePlanningOptionsModal);
+  qs("cancelProfilePlanningOptionsBtn")?.addEventListener("click", closeProfilePlanningOptionsModal);
+  qs("runProfilePlanningUpdateBtn")?.addEventListener("click", runProfilePlanningUpdate);
+  qs("profilePlanningSelectAllOptionsBtn")?.addEventListener("click", () => {
+    setProfilePlanningOptions(true);
+  });
+  qs("profilePlanningClearAllOptionsBtn")?.addEventListener("click", () => {
+    setProfilePlanningOptions(false);
+  });
+  getProfilePlanningOptionsModal()?.addEventListener("click", (event) => {
+    if (event.target === getProfilePlanningOptionsModal()) {
+      closeProfilePlanningOptionsModal();
     }
   });
 }
@@ -1194,11 +1611,33 @@ function bindProfileTabs() {
       });
     }
 
+    if (targetId === "profilePreferencesSection" && !profileState.preferencesLoaded) {
+      loadProfilePreferences().catch((err) => {
+        setProfilePreferencesStatus(err.message, "error");
+      });
+    }
+
     if (targetId === "profileAdminUsersSection" && !profileState.adminUsers.length) {
       loadAdminUsers().catch((err) => {
         setAdminUsersStatus(err.message, "error");
       });
     }
+  });
+}
+
+function bindProfilePreferencesInteractions() {
+  const form = qs("profilePreferencesForm");
+  if (!form) return;
+
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    saveProfilePreferences();
+  });
+  qs("profilePreferencesSelectAllRolesBtn")?.addEventListener("click", () => {
+    setProfilePreferenceCheckboxGroup("selected_role_families", true);
+  });
+  qs("profilePreferencesClearAllRolesBtn")?.addEventListener("click", () => {
+    setProfilePreferenceCheckboxGroup("selected_role_families", false);
   });
 }
 
@@ -1236,9 +1675,11 @@ function bindPipelineRunsInteractions() {
 
     const rerunBtn = event.target.closest("[data-pipeline-run-rerun]");
     if (rerunBtn) {
-      rerunPipelineRun(rerunBtn.dataset.pipelineRunRerun || "").catch((err) => {
+      try {
+        openPipelineRunRerunModal(rerunBtn.dataset.pipelineRunRerun || "");
+      } catch (err) {
         setPipelineRunsStatus(err.message, "error");
-      });
+      }
     }
   });
 
@@ -1246,6 +1687,18 @@ function bindPipelineRunsInteractions() {
   qs("pipelineRunStatsModal")?.addEventListener("click", (event) => {
     if (event.target === qs("pipelineRunStatsModal")) {
       closePipelineRunStatsModal();
+    }
+  });
+  qs("pipelineRunRerunCloseBtn")?.addEventListener("click", closePipelineRunRerunModal);
+  qs("pipelineRunRerunCancelBtn")?.addEventListener("click", closePipelineRunRerunModal);
+  qs("pipelineRunRerunConfirmBtn")?.addEventListener("click", () => {
+    confirmPipelineRunRerun().catch((err) => {
+      setPipelineRunsStatus(err.message, "error");
+    });
+  });
+  qs("pipelineRunRerunModal")?.addEventListener("click", (event) => {
+    if (event.target === qs("pipelineRunRerunModal")) {
+      closePipelineRunRerunModal();
     }
   });
 }
@@ -1362,10 +1815,20 @@ function isProfileResumePage() {
   return Boolean(qs("resumeList"));
 }
 
+function isProfilePreferencesPage() {
+  return Boolean(qs("profilePreferencesForm")) && !isProfileResumePage();
+}
+
 async function initProfilePage() {
   try {
     if (isSavedScansPage()) {
       await bindSavedScansPage();
+      return;
+    }
+
+    if (isProfilePreferencesPage()) {
+      bindProfilePreferencesInteractions();
+      await loadProfilePreferences();
       return;
     }
 
@@ -1378,6 +1841,8 @@ async function initProfilePage() {
       }
       bindUploadInteractions();
       bindDeleteInteractions();
+      bindResumeRoleMappingInteractions();
+      bindProfilePlanningOptionsInteractions();
       bindProfileTabs();
       bindPipelineRunsInteractions();
       bindAdminUsersInteractions();
@@ -1392,6 +1857,8 @@ async function initProfilePage() {
   } catch (err) {
     if (isSavedScansPage()) {
       renderSavedScans([], { ok: false, error: err.message });
+    } else if (isProfilePreferencesPage()) {
+      setProfilePreferencesStatus(`Failed to load preferences: ${err.message}`, "error");
     } else {
       setStatus(`Failed to load resumes: ${err.message}`, "error");
     }

@@ -558,6 +558,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   async function refreshNewUserWorkspaceState() {
     if (document.body.classList.contains("auth-page")) return;
+    if (window.location.pathname === "/onboarding") return;
     if (window.location.pathname === "/profile") return;
 
     try {
@@ -577,6 +578,29 @@ window.addEventListener("DOMContentLoaded", () => {
       clearNewUserOnboardingState();
     } catch (_) {
       ensureNewUserEmptyState();
+    }
+  }
+
+  async function redirectIncompleteOnboarding() {
+    if (document.body.classList.contains("auth-page")) return;
+
+    const currentPath = window.location.pathname || "/";
+    if (currentPath === "/onboarding" || currentPath === "/profile") return;
+    if (currentPath.startsWith("/static/")) return;
+
+    try {
+      const response = await fetch("/onboarding/status", {
+        headers: { Accept: "application/json" },
+        credentials: "same-origin",
+      });
+      if (!response.ok) return;
+
+      const payload = await response.json();
+      if (payload && payload.onboarding_completed === false) {
+        window.location.href = "/onboarding";
+      }
+    } catch (_) {
+      // Onboarding is a product setup gate; failed status checks should not block navigation.
     }
   }
 
@@ -957,6 +981,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   loadProfileShellUser();
   loadUnreadCount();
+  redirectIncompleteOnboarding();
   refreshNewUserWorkspaceState();
   initAuthInactivityLogout();
   showFirstRunPrompt();

@@ -666,7 +666,7 @@ def planning_dashboard() -> str:
   </section>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/planning.js?v=planning_ui_20260512_tailoring_tabs8"></script>
 </body>
 </html>
@@ -1039,7 +1039,7 @@ def tailoring_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <section class="modal-backdrop hidden" id="tailoringWorkspaceExportModal">
     <div class="modal-card tailoring-workspace-export-modal-card">
       <div class="modal-header">
@@ -2070,7 +2070,7 @@ def scan_workspace(
   </div>
 
   <script src="/static/vendor/tabler/tabler.min.js"></script>
-  <script src="/static/shell.js?v=auth_idle_timeout_v2"></script>
+  <script src="/static/shell.js?v=role_onboarding_r6"></script>
   <script src="/static/planning.js?v=planning_ui_20260518_scan_replacement_markers"></script>
   <script src="/static/scan_workspace.js?v=scan_workspace_rescan6_popover_phrase_scroll"></script>
 </body>

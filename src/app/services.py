@@ -31,6 +31,7 @@ from src.config.consts import (
     _SCAN_TITLE_SIGNAL_PATTERNS,
     DOMAIN_SIGNAL_PATTERNS,
 )
+from src.config.role_taxonomy import ROLE_TAXONOMY
 from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
@@ -85,9 +86,17 @@ from src.storage.saved_scans.read_postgres import (
 )
 from src.storage.profile_resumes.store import (
     delete_profile_resume_postgres_payload,
+    delete_profile_resume_role_mapping_payload,
     get_profile_resume_blob_postgres_payload,
+    get_profile_resume_role_mappings_payload,
     get_profile_resumes_postgres_payload,
+    upsert_profile_resume_role_mapping_payload,
     upsert_profile_resume_postgres_payload,
+)
+from src.storage.onboarding_preferences.store import (
+    get_onboarding_preferences_payload as get_onboarding_preferences_postgres_payload,
+    upsert_onboarding_preferences_payload as upsert_onboarding_preferences_postgres_payload,
+    validate_onboarding_preferences_payload,
 )
 from src.storage.auth.read_postgres import (
     delete_non_admin_auth_user_postgres_payload,
@@ -104,6 +113,7 @@ from src.storage.user_pipeline.store import (
     get_user_pipeline_active_run_postgres_payload,
     release_user_pipeline_active_run_postgres_payload,
     reserve_user_pipeline_active_run_postgres_payload,
+    update_user_pipeline_run_status_postgres_payload,
     upsert_user_pipeline_artifact_postgres_payload,
     upsert_user_pipeline_run_postgres_payload,
     promote_user_seen_jobs_staging_postgres_payload,
@@ -187,6 +197,18 @@ _PIPELINE_ARTIFACT_INGESTED_RUN_KEYS: set[str] = set()
 _PIPELINE_ARTIFACT_MAX_BYTES = int(
     os.environ.get("JOB_STACK_PIPELINE_ARTIFACT_MAX_BYTES", "5242880") or "5242880"
 )
+_PIPELINE_ROOT_ARTIFACT_NAMES = {
+    "live_pipeline_status.json",
+    "live_pipeline_run.log",
+    "current_run_job_corpus.jsonl",
+    "best_resume_variant_by_job.csv",
+    "application_shortlist_by_job.csv",
+    "application_execution_queue.csv",
+    "job_packet_manifest.csv",
+    "role_title_filter_audit.csv",
+    "source_health_report.csv",
+}
+_PIPELINE_JOB_PACKET_SUFFIXES = {".json", ".jsonl", ".md", ".txt"}
 
 ALLOWED_APPLICATION_STATUSES = {
     "OPENED",
@@ -342,6 +364,266 @@ def profile_resumes_payload(
     }
 
 
+def _role_family_options_payload() -> List[Dict[str, str]]:
+    return [
+        {
+            "role_family_id": role_family_id,
+            "display_name": _clean_text(family.get("display_name")) or role_family_id,
+        }
+        for role_family_id, family in ROLE_TAXONOMY.items()
+    ]
+
+
+def profile_resume_role_mappings_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = get_profile_resume_role_mappings_payload(
+        owner,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    mappings = list(payload.get("mappings", []) or [])
+    return {
+        "ok": True,
+        "count": len(mappings),
+        "mappings": mappings,
+        "role_families": _role_family_options_payload(),
+    }
+
+
+def save_profile_resume_role_mapping_payload(
+    *,
+    owner_user_id: str = "",
+    resume_name: str = "",
+    role_family_id: str = "",
+    is_default_for_role: bool = False,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = upsert_profile_resume_role_mapping_payload(
+        owner_user_id=owner,
+        resume_name=_clean_text(resume_name),
+        role_family_id=_clean_text(role_family_id),
+        is_default_for_role=bool(is_default_for_role),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "mapping": payload.get("mapping", {}),
+    }
+
+
+def delete_profile_resume_role_mapping_service_payload(
+    *,
+    owner_user_id: str = "",
+    resume_name: str = "",
+    role_family_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = delete_profile_resume_role_mapping_payload(
+        owner_user_id=owner,
+        resume_name=_clean_text(resume_name),
+        role_family_id=_clean_text(role_family_id),
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "deleted": bool(payload.get("deleted", False)),
+        "resume_name": payload.get("resume_name", ""),
+        "role_family_id": payload.get("role_family_id", ""),
+    }
+
+
+def _onboarding_requirement_status(
+    *,
+    owner_user_id: str,
+    preferences: Dict[str, Any],
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    normalized = validate_onboarding_preferences_payload(preferences)
+    resumes_payload = profile_resumes_payload(owner_user_id=owner)
+    resume_count = int(resumes_payload.get("count", 0) or 0)
+    selected_role_count = len(normalized.get("selected_role_families", []) or [])
+    has_profile_resume = resume_count > 0
+    has_selected_role_family = selected_role_count > 0
+
+    return {
+        "has_profile_resume": has_profile_resume,
+        "profile_resume_count": resume_count,
+        "has_selected_role_family": has_selected_role_family,
+        "selected_role_family_count": selected_role_count,
+        "can_complete_onboarding": has_profile_resume and has_selected_role_family,
+    }
+
+
+def onboarding_preferences_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    payload = get_onboarding_preferences_postgres_payload(
+        owner,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    preferences = dict(payload.get("data", {}).get("preferences", {}) or {})
+    if not preferences:
+        preferences = validate_onboarding_preferences_payload({})
+
+    status = _onboarding_requirement_status(
+        owner_user_id=owner,
+        preferences=preferences,
+    )
+    return {
+        "ok": True,
+        "found": bool(payload.get("data", {}).get("found", False)),
+        "owner_user_id": owner,
+        "preferences": preferences,
+        "requirements": status,
+    }
+
+
+def save_onboarding_preferences_payload(
+    preferences: Dict[str, Any],
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+
+    normalized = validate_onboarding_preferences_payload(preferences)
+    status = _onboarding_requirement_status(
+        owner_user_id=owner,
+        preferences=normalized,
+    )
+    if bool(normalized.get("onboarding_completed", False)) and not bool(
+        status.get("can_complete_onboarding", False)
+    ):
+        raise ValueError(
+            "onboarding_completed cannot be true until at least one role family is selected and one profile resume exists."
+        )
+
+    payload = upsert_onboarding_preferences_postgres_payload(
+        owner,
+        normalized,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    saved_preferences = dict(payload.get("data", {}).get("preferences", {}) or normalized)
+    return {
+        "ok": True,
+        "owner_user_id": owner,
+        "preferences": saved_preferences,
+        "requirements": _onboarding_requirement_status(
+            owner_user_id=owner,
+            preferences=saved_preferences,
+        ),
+    }
+
+
+def onboarding_status_payload(
+    *,
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    payload = onboarding_preferences_payload(owner_user_id=owner_user_id)
+    preferences = dict(payload.get("preferences", {}) or {})
+    requirements = dict(payload.get("requirements", {}) or {})
+    stored_completed = bool(preferences.get("onboarding_completed", False))
+    effective_completed = stored_completed and bool(
+        requirements.get("can_complete_onboarding", False)
+    )
+    return {
+        "ok": True,
+        "owner_user_id": payload.get("owner_user_id", ""),
+        "onboarding_completed": effective_completed,
+        "stored_onboarding_completed": stored_completed,
+        "requirements": requirements,
+        "preferences": preferences,
+    }
+
+
+def _preferences_for_pipeline(owner_user_id: str = "") -> Dict[str, List[str]]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        return {
+            "selected_role_families": [],
+            "target_seniority": [],
+            "preferred_locations": [],
+            "preferred_skills": [],
+            "excluded_keywords": [],
+        }
+
+    try:
+        payload = get_onboarding_preferences_postgres_payload(
+            owner,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        preferences = dict(payload.get("data", {}).get("preferences", {}) or {})
+        normalized = validate_onboarding_preferences_payload(preferences)
+    except (Exception, SystemExit):
+        logger.exception(
+            "Unable to load onboarding preferences for live pipeline owner=%s; using default pipeline preferences.",
+            owner,
+        )
+        return {
+            "selected_role_families": [],
+            "target_seniority": [],
+            "preferred_locations": [],
+            "preferred_skills": [],
+            "excluded_keywords": [],
+        }
+
+    return {
+        "selected_role_families": list(normalized.get("selected_role_families", []) or []),
+        "target_seniority": list(normalized.get("target_seniority", []) or []),
+        "preferred_locations": list(normalized.get("preferred_locations", []) or []),
+        "preferred_skills": list(normalized.get("preferred_skills", []) or []),
+        "excluded_keywords": list(normalized.get("excluded_keywords", []) or []),
+    }
+
+
+def _selected_role_families_for_pipeline(owner_user_id: str = "") -> List[str]:
+    return _preferences_for_pipeline(owner_user_id).get("selected_role_families", [])
+
+
 def _public_admin_user_row(user: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "user_id": _clean_text(user.get("user_id")),
@@ -463,7 +745,10 @@ def profile_pipeline_runs_payload(
         print_only=False,
         ensure_schema=True,
     )
-    runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+    runs = [
+        _pipeline_run_public_row(_reconciled_user_pipeline_run_record(owner, dict(run or {})))
+        for run in list(payload.get("runs", []) or [])
+    ]
     total_row_count = int(payload.get("total_row_count", len(runs)) or len(runs))
     total_pages = max((total_row_count + safe_page_size - 1) // safe_page_size, 1)
     current_page = min(requested_page, total_pages)
@@ -480,7 +765,10 @@ def profile_pipeline_runs_payload(
             print_only=False,
             ensure_schema=True,
         )
-        runs = [_pipeline_run_public_row(dict(run or {})) for run in list(payload.get("runs", []) or [])]
+        runs = [
+            _pipeline_run_public_row(_reconciled_user_pipeline_run_record(owner, dict(run or {})))
+            for run in list(payload.get("runs", []) or [])
+        ]
         total_row_count = int(payload.get("total_row_count", total_row_count) or total_row_count)
         total_pages = max((total_row_count + safe_page_size - 1) // safe_page_size, 1)
 
@@ -521,7 +809,7 @@ def profile_pipeline_run_detail_payload(
     if not bool(payload.get("found", False)):
         raise ValueError("Pipeline run not found.")
 
-    run = dict(payload.get("run", {}) or {})
+    run = _reconciled_user_pipeline_run_record(owner, dict(payload.get("run", {}) or {}))
     return {
         "ok": True,
         "run": _pipeline_run_public_row(run),
@@ -2512,6 +2800,160 @@ def _pipeline_terminal_statuses() -> set:
     return {"succeeded", "failed", "cancelled"}
 
 
+def _status_payload_completed_finalization(status_payload: Dict[str, Any]) -> bool:
+    if not isinstance(status_payload, dict):
+        return False
+
+    completed_stages = status_payload.get("completed_stages") or []
+    if isinstance(completed_stages, str):
+        completed_stages = [completed_stages]
+
+    return any(_clean_text(stage).lower() == "finalization" for stage in completed_stages)
+
+
+def _status_payload_return_code(status_payload: Dict[str, Any]) -> int | None:
+    if not isinstance(status_payload, dict):
+        return None
+
+    value = status_payload.get("return_code")
+    if value is None or value == "":
+        return None
+
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _reconciled_terminal_status_payload(status_payload: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(status_payload, dict):
+        return {}
+
+    reconciled = dict(status_payload)
+    status = _clean_text(reconciled.get("status")).lower() or "running"
+    return_code = _status_payload_return_code(reconciled)
+
+    if status not in _pipeline_terminal_statuses():
+        if return_code == 0 and _status_payload_completed_finalization(reconciled):
+            status = "succeeded"
+        else:
+            return reconciled
+
+    reconciled["status"] = status
+    reconciled["is_running"] = False
+
+    if return_code is not None:
+        reconciled["return_code"] = return_code
+
+    if not _clean_text(reconciled.get("finished_at")):
+        reconciled["finished_at"] = _utc_now()
+
+    if status == "succeeded" and not _clean_text(reconciled.get("current_stage")):
+        reconciled["current_stage"] = ""
+
+    return reconciled
+
+
+def _run_status_json_heal_payload(run: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(run, dict):
+        return {}
+
+    status_json = run.get("status_json")
+    if not isinstance(status_json, dict):
+        return {}
+
+    status = _clean_text(run.get("status")).lower()
+    if status in _pipeline_terminal_statuses():
+        return {}
+
+    healed = _reconciled_terminal_status_payload(status_json)
+    if _clean_text(healed.get("status")).lower() not in _pipeline_terminal_statuses():
+        return {}
+
+    if not _clean_text(healed.get("run_id")):
+        healed["run_id"] = _clean_text(run.get("run_id"))
+    if not _clean_text(healed.get("started_at")):
+        healed["started_at"] = _clean_text(run.get("started_at"))
+    if not _clean_text(healed.get("finished_at")):
+        healed["finished_at"] = _clean_text(run.get("completed_at"))
+    if not _clean_text(healed.get("summary_message")):
+        healed["summary_message"] = _clean_text(run.get("summary_message"))
+    if not _clean_text(healed.get("stage_message")):
+        healed["stage_message"] = _clean_text(run.get("stage_message"))
+    if not _clean_text(healed.get("current_stage")):
+        healed["current_stage"] = _clean_text(run.get("current_stage"))
+    if healed.get("return_code") is None:
+        healed["return_code"] = run.get("return_code")
+    if not _clean_text(healed.get("error")):
+        healed["error"] = _clean_text(run.get("error"))
+
+    return _reconciled_terminal_status_payload(healed)
+
+
+def _persist_user_pipeline_terminal_reconciliation(
+    *,
+    owner_user_id: str,
+    status_payload: Dict[str, Any],
+) -> None:
+    owner = _clean_text(owner_user_id)
+    payload = _reconciled_terminal_status_payload(status_payload)
+    run_id = _clean_text(payload.get("run_id"))
+    status = _clean_text(payload.get("status")).lower()
+
+    if not owner or not run_id or status not in _pipeline_terminal_statuses():
+        return
+
+    try:
+        update_user_pipeline_run_status_postgres_payload(
+            owner_user_id=owner,
+            run_id=run_id,
+            status=status,
+            current_stage=_clean_text(payload.get("current_stage")),
+            stage_message=_clean_text(payload.get("stage_message")),
+            summary_message=_clean_text(payload.get("summary_message"))
+            or _clean_text(payload.get("message")),
+            return_code=payload.get("return_code"),
+            completed_at=_clean_text(payload.get("finished_at")),
+            status_json=payload,
+            error=_clean_text(payload.get("error")),
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+    except Exception as exc:
+        logger.warning("Failed to reconcile terminal user pipeline status: %s", exc)
+
+    _release_user_pipeline_active_run(
+        owner_user_id=owner,
+        run_id=run_id,
+        terminal_status=status,
+    )
+    _clear_owner_active_pipeline_state(owner, run_id)
+
+
+def _reconciled_user_pipeline_run_record(owner_user_id: str, run: Dict[str, Any]) -> Dict[str, Any]:
+    row = dict(run or {})
+    healed_payload = _run_status_json_heal_payload(row)
+    if not healed_payload:
+        return row
+
+    _persist_user_pipeline_terminal_reconciliation(
+        owner_user_id=owner_user_id,
+        status_payload=healed_payload,
+    )
+    row["status"] = _clean_text(healed_payload.get("status"))
+    row["current_stage"] = _clean_text(healed_payload.get("current_stage"))
+    row["stage_message"] = _clean_text(healed_payload.get("stage_message"))
+    row["summary_message"] = _clean_text(healed_payload.get("summary_message"))
+    row["return_code"] = healed_payload.get("return_code")
+    row["completed_at"] = _clean_text(healed_payload.get("finished_at"))
+    row["status_json"] = healed_payload
+    row["error"] = _clean_text(healed_payload.get("error"))
+    return row
+
+
 def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     if not owner:
@@ -2541,7 +2983,8 @@ def _latest_owner_pipeline_status_payload(*, owner_user_id: str) -> Dict[str, An
         print_only=False,
         ensure_schema=True,
     )
-    run = dict(latest_payload.get("run", {}) or {})
+    run = _reconciled_user_pipeline_run_record(owner, dict(latest_payload.get("run", {}) or {}))
+
     status = _clean_text(run.get("status")) or "idle"
     running = status in {"queued", "running", "starting"}
 
@@ -2582,12 +3025,42 @@ def _persist_user_pipeline_status_snapshot(
     if isinstance(status_payload.get("pipeline"), dict):
         status_payload = dict(status_payload.get("pipeline") or {})
 
+    status_payload = _reconciled_terminal_status_payload(status_payload)
     run_id = _clean_text(status_payload.get("run_id"))
     if not run_id:
         return
 
     status = _clean_text(status_payload.get("status")) or "running"
     finished_at = _clean_text(status_payload.get("finished_at"))
+
+    if status not in _pipeline_terminal_statuses():
+        try:
+            existing_payload = get_user_pipeline_run_postgres_payload(
+                owner_user_id=owner,
+                run_id=run_id,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            existing_run = dict(existing_payload.get("run", {}) or {})
+            existing_status = _clean_text(existing_run.get("status")).lower()
+            if existing_status in _pipeline_terminal_statuses():
+                return
+
+            healed_existing_payload = _run_status_json_heal_payload(existing_run)
+            if healed_existing_payload:
+                _persist_user_pipeline_terminal_reconciliation(
+                    owner_user_id=owner,
+                    status_payload=healed_existing_payload,
+                )
+                return
+        except Exception as exc:
+            logger.warning(
+                "Failed to inspect existing user pipeline status before snapshot persist: %s",
+                exc,
+            )
 
     try:
         upsert_user_pipeline_run_postgres_payload(
@@ -2644,17 +3117,8 @@ def _pipeline_artifact_candidate_paths(output_dir: Path) -> List[Path]:
         return []
 
     candidates: List[Path] = []
-    root_names = {
-        "live_pipeline_status.json",
-        "live_pipeline_run.log",
-        "current_run_job_corpus.jsonl",
-        "best_resume_variant_by_job.csv",
-        "application_shortlist_by_job.csv",
-        "application_execution_queue.csv",
-        "job_packet_manifest.csv",
-    }
 
-    for name in sorted(root_names):
+    for name in sorted(_PIPELINE_ROOT_ARTIFACT_NAMES):
         candidate = root / name
         if candidate.exists() and candidate.is_file():
             candidates.append(candidate)
@@ -2662,7 +3126,7 @@ def _pipeline_artifact_candidate_paths(output_dir: Path) -> List[Path]:
     packet_dir = root / "job_packets"
     if packet_dir.exists() and packet_dir.is_dir():
         for candidate in sorted(packet_dir.rglob("*")):
-            if candidate.is_file() and candidate.suffix.lower() in {".json", ".jsonl", ".md", ".txt"}:
+            if candidate.is_file() and candidate.suffix.lower() in _PIPELINE_JOB_PACKET_SUFFIXES:
                 candidates.append(candidate)
 
     return candidates
@@ -2688,17 +3152,19 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "application_shortlist_by_job.csv": "application_shortlist_by_job",
         "application_execution_queue.csv": "application_execution_queue",
         "job_packet_manifest.csv": "job_packet_manifest",
+        "role_title_filter_audit.csv": "role_title_filter_audit",
+        "source_health_report.csv": "source_health_report",
     }
 
     if name in root_kind_by_name:
         return root_kind_by_name[name]
 
     if name.startswith("job_packets/"):
-        if filename.endswith("__tailoring_llm.json"):
+        if filename.endswith("__tailoring_llm.json") or filename.endswith("_tailoring_llm.json"):
             return "job_packet_tailoring_llm_json"
-        if filename.endswith("__tailoring.json"):
+        if filename.endswith("__tailoring.json") or filename.endswith("_tailoring.json"):
             return "job_packet_tailoring_json"
-        if filename.endswith("__tailoring.md"):
+        if filename.endswith("__tailoring.md") or filename.endswith("_tailoring.md"):
             return "job_packet_tailoring_markdown"
         if suffix == ".json":
             return "job_packet_json"
@@ -2818,8 +3284,13 @@ def _ingest_pipeline_run_artifacts_to_postgres(
     ingested: List[Dict[str, Any]] = []
     skipped: List[Dict[str, Any]] = []
     errors: List[Dict[str, Any]] = []
+    candidate_paths = _pipeline_artifact_candidate_paths(root)
+    candidate_names = [
+        _pipeline_artifact_name(output_dir=root, path=artifact_path)
+        for artifact_path in candidate_paths
+    ]
 
-    for artifact_path in _pipeline_artifact_candidate_paths(root):
+    for artifact_path in candidate_paths:
         artifact_name = _pipeline_artifact_name(output_dir=root, path=artifact_path)
 
         try:
@@ -2861,13 +3332,28 @@ def _ingest_pipeline_run_artifacts_to_postgres(
     result = {
         "ok": len(errors) == 0,
         "attempted": True,
+        "attempted_count": len(candidate_paths),
         "already_ingested": False,
         "owner_user_id": owner,
         "run_id": safe_run_id,
         "output_dir": str(root),
+        "candidate_count": len(candidate_paths),
+        "candidate_artifact_names": candidate_names,
         "ingested_count": len(ingested),
         "skipped_count": len(skipped),
         "error_count": len(errors),
+        "ingested_artifact_kinds": sorted(
+            {
+                _clean_text(item.get("artifact_kind"))
+                for item in ingested
+                if _clean_text(item.get("artifact_kind"))
+            }
+        ),
+        "ingested_artifact_names": [
+            _clean_text(item.get("artifact_name"))
+            for item in ingested
+            if _clean_text(item.get("artifact_name"))
+        ],
         "ingested": ingested,
         "skipped": skipped,
         "errors": errors,
@@ -3226,8 +3712,12 @@ def pipeline_status_payload(*, owner_user_id: str = "", state: Any = None) -> Di
 
     merged = dict(snapshot)
     if runtime_status:
+        runtime_status = _reconciled_terminal_status_payload(runtime_status)
+        runtime_status_value = _clean_text(runtime_status.get("status")).lower()
         if merged.get("status") == "idle":
             merged["status"] = runtime_status.get("status", merged["status"])
+        elif runtime_status_value in _pipeline_terminal_statuses():
+            merged["status"] = runtime_status_value
 
         if not merged.get("started_at"):
             merged["started_at"] = runtime_status.get("started_at", "")
@@ -4186,6 +4676,8 @@ def run_live_pipeline_payload(
 
     normalized_llm_actions = _normalize_pipeline_llm_actions(llm_actions)
     normalized_delete_seen_data = _normalize_delete_seen_data(delete_seen_data)
+    pipeline_preferences = _preferences_for_pipeline(owner_for_pipeline_gate)
+    selected_role_families = pipeline_preferences.get("selected_role_families", [])
 
     ja = _job_app()
     effective_generate_llm_adjudication = bool(generate_llm_adjudication)
@@ -4256,6 +4748,8 @@ def run_live_pipeline_payload(
             "storage_mode": "run_scoped_scratch" if owner_for_pipeline_gate else "legacy_output_dir",
             "owner_user_id": owner_for_pipeline_gate,
             "job_corpus_path": str(pipeline_job_corpus_path),
+            "preferences": pipeline_preferences,
+            "selected_role_families": selected_role_families,
         },
     }
     canonical_status_path.write_text(
@@ -4349,6 +4843,11 @@ def run_live_pipeline_payload(
                 "JOB_STACK_SEEN_JOBS_BACKEND": "postgres",
                 "JOB_STACK_JOB_CORPUS_PATH": str(pipeline_job_corpus_path),
                 "JOB_STACK_USER_PIPELINE_MODE": "true",
+                "JOB_STACK_SELECTED_ROLE_FAMILIES": json.dumps(selected_role_families, ensure_ascii=False),
+                "JOB_STACK_TARGET_SENIORITY": json.dumps(pipeline_preferences.get("target_seniority", []), ensure_ascii=False),
+                "JOB_STACK_PREFERRED_LOCATIONS": json.dumps(pipeline_preferences.get("preferred_locations", []), ensure_ascii=False),
+                "JOB_STACK_PREFERRED_SKILLS": json.dumps(pipeline_preferences.get("preferred_skills", []), ensure_ascii=False),
+                "JOB_STACK_EXCLUDED_KEYWORDS": json.dumps(pipeline_preferences.get("excluded_keywords", []), ensure_ascii=False),
             }
         )
 
@@ -8629,6 +9128,20 @@ def _load_job_metadata_overlay_from_corpus(
                 record.get("posted_at")
                 or metadata.get("posted_at")
             )
+            job_location = _clean_text(
+                record.get("job_location")
+                or record.get("location")
+                or metadata.get("job_location")
+                or metadata.get("location")
+            )
+            freshness_status = _clean_text(
+                record.get("freshness_status")
+                or metadata.get("freshness_status")
+            )
+            ashby_timestamp_status = _clean_text(
+                record.get("ashby_timestamp_status")
+                or metadata.get("ashby_timestamp_status")
+            )
 
             if not any([job_doc_id, job_url, job_company, job_title]):
                 continue
@@ -8641,6 +9154,9 @@ def _load_job_metadata_overlay_from_corpus(
             }
             overlay = {
                 "posted_at": posted_at,
+                "job_location": job_location,
+                "freshness_status": freshness_status,
+                "ashby_timestamp_status": ashby_timestamp_status,
                 "job_url": job_url,
             }
 
@@ -8663,6 +9179,9 @@ def _overlay_job_metadata(
     for row in rows:
         merged = dict(row)
         merged["posted_at"] = _clean_text(merged.get("posted_at"))
+        merged["job_location"] = _clean_text(merged.get("job_location"))
+        merged["freshness_status"] = _clean_text(merged.get("freshness_status"))
+        merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
 
         if latest_by_key:
@@ -8673,6 +9192,12 @@ def _overlay_job_metadata(
 
                 if overlay.get("posted_at"):
                     merged["posted_at"] = overlay["posted_at"]
+                if overlay.get("job_location"):
+                    merged["job_location"] = overlay["job_location"]
+                if overlay.get("freshness_status"):
+                    merged["freshness_status"] = overlay["freshness_status"]
+                if overlay.get("ashby_timestamp_status"):
+                    merged["ashby_timestamp_status"] = overlay["ashby_timestamp_status"]
                 if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
                     merged["job_url"] = overlay["job_url"]
                 break
@@ -8782,6 +9307,20 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
             record.get("posted_at")
             or metadata.get("posted_at")
         )
+        job_location = _clean_text(
+            record.get("job_location")
+            or record.get("location")
+            or metadata.get("job_location")
+            or metadata.get("location")
+        )
+        freshness_status = _clean_text(
+            record.get("freshness_status")
+            or metadata.get("freshness_status")
+        )
+        ashby_timestamp_status = _clean_text(
+            record.get("ashby_timestamp_status")
+            or metadata.get("ashby_timestamp_status")
+        )
 
         if not any([job_doc_id, job_url, job_company, job_title]):
             continue
@@ -8794,6 +9333,9 @@ def _job_metadata_overlay_from_jsonl_text(text: Any) -> Dict[str, Dict[str, Any]
         }
         overlay = {
             "posted_at": posted_at,
+            "job_location": job_location,
+            "freshness_status": freshness_status,
+            "ashby_timestamp_status": ashby_timestamp_status,
             "job_url": job_url,
         }
 
@@ -8813,6 +9355,9 @@ def _overlay_job_metadata_from_map(
     for row in rows:
         merged = dict(row)
         merged["posted_at"] = _clean_text(merged.get("posted_at"))
+        merged["job_location"] = _clean_text(merged.get("job_location"))
+        merged["freshness_status"] = _clean_text(merged.get("freshness_status"))
+        merged["ashby_timestamp_status"] = _clean_text(merged.get("ashby_timestamp_status"))
         merged["job_url"] = _clean_text(merged.get("job_url")) or _clean_text(merged.get("job_doc_id"))
 
         if latest_by_key:
@@ -8823,6 +9368,12 @@ def _overlay_job_metadata_from_map(
 
                 if overlay.get("posted_at"):
                     merged["posted_at"] = overlay["posted_at"]
+                if overlay.get("job_location"):
+                    merged["job_location"] = overlay["job_location"]
+                if overlay.get("freshness_status"):
+                    merged["freshness_status"] = overlay["freshness_status"]
+                if overlay.get("ashby_timestamp_status"):
+                    merged["ashby_timestamp_status"] = overlay["ashby_timestamp_status"]
                 if overlay.get("job_url") and not _clean_text(merged.get("job_url")):
                     merged["job_url"] = overlay["job_url"]
                 break
@@ -9071,6 +9622,9 @@ def status_payload(
     for row in top_rows:
         overlay_row = dict(row)
         overlay_row["posted_at"] = _clean_text(overlay_row.get("posted_at"))
+        overlay_row["job_location"] = _clean_text(overlay_row.get("job_location"))
+        overlay_row["freshness_status"] = _clean_text(overlay_row.get("freshness_status"))
+        overlay_row["ashby_timestamp_status"] = _clean_text(overlay_row.get("ashby_timestamp_status"))
         overlay_row["job_url"] = _clean_text(overlay_row.get("job_url")) or _clean_text(overlay_row.get("job_doc_id"))
         for field in ja.OPERATOR_DECISION_OVERLAY_FIELDS:
             overlay_row.setdefault(field, "")
@@ -9096,6 +9650,12 @@ def status_payload(
 
             if metadata.get("posted_at"):
                 overlay_row["posted_at"] = metadata["posted_at"]
+            if metadata.get("job_location"):
+                overlay_row["job_location"] = metadata["job_location"]
+            if metadata.get("freshness_status"):
+                overlay_row["freshness_status"] = metadata["freshness_status"]
+            if metadata.get("ashby_timestamp_status"):
+                overlay_row["ashby_timestamp_status"] = metadata["ashby_timestamp_status"]
             if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
                 overlay_row["job_url"] = metadata["job_url"]
             break
@@ -15691,15 +16251,19 @@ def jobs_search_lite_payload(
     top_k: int = 10,
 ) -> Dict[str, Any]:
     from src.rag.corpus_store import _load_job_corpus
+    from src.rag.diagnostic_filter import filter_diagnostic_rag_rows
     from src.rag.lexical_retriever import _lexical_search
     from src.rag.query_filters import _infer_metadata_filters
 
     inferred_filters = _infer_metadata_filters(request)
-    lexical_results = _lexical_search(
-        query=request,
-        top_k=top_k,
-        filters=inferred_filters or None,
-    )
+    lexical_fetch_k = max(top_k * 3, top_k + 5)
+    lexical_results = filter_diagnostic_rag_rows(
+        _lexical_search(
+            query=request,
+            top_k=lexical_fetch_k,
+            filters=inferred_filters or None,
+        )
+    )[:top_k]
 
     compact_results = []
     for row in lexical_results:
@@ -15727,6 +16291,173 @@ def jobs_search_lite_payload(
         "inferred_filters": inferred_filters,
         "result_count": len(compact_results),
         "results": compact_results,
+    }
+
+_ASSISTANT_QUESTION_STARTERS = {
+    "what",
+    "which",
+    "who",
+    "where",
+    "when",
+    "why",
+    "how",
+    "can",
+    "does",
+    "do",
+    "are",
+    "is",
+}
+
+_ASSISTANT_ANSWER_PHRASES = (
+    "best",
+    "strongest",
+    "compare",
+    "give me jobs",
+    "which jobs",
+    "what jobs",
+    "any jobs",
+    "any jobs with",
+    "do any",
+    "having",
+    "requirement",
+    "requirements",
+    "recommend",
+    "fit",
+    "look strongest",
+    "current corpus",
+    "jobs having",
+    "jobs with",
+)
+
+_ASSISTANT_INTERNAL_RETRIEVAL_ERRORS = (
+    "Legacy filesystem RAG index is disabled",
+    "semantic retrieval timed out",
+)
+
+_ASSISTANT_NO_MATCHING_JOBS_ANSWER = (
+    "I do not see matching jobs for that requirement in the current corpus. "
+    "Try broadening the wording with related skills, role titles, or adjacent technologies."
+)
+
+
+def route_assistant_intent(request: str) -> Dict[str, str]:
+    normalized = re.sub(r"\s+", " ", str(request or "").strip().lower())
+    first_word = normalized.split(" ", 1)[0] if normalized else ""
+
+    if "?" in normalized:
+        return {
+            "intent": "answer_job_query",
+            "reason": "question_mark",
+        }
+
+    if first_word in _ASSISTANT_QUESTION_STARTERS:
+        return {
+            "intent": "answer_job_query",
+            "reason": "question_starter",
+        }
+
+    answer_patterns = (
+        (r"\bgive me jobs (?:about|with|having)\b", "jobs_request"),
+        (r"\bjobs (?:with|having) .+\brequirements?\b", "requirements_match"),
+        (r"\bany jobs with\b", "any_jobs_with"),
+        (r"\bdo any jobs require\b", "requirement_question"),
+    )
+
+    for pattern, reason in answer_patterns:
+        if re.search(pattern, normalized):
+            return {
+                "intent": "answer_job_query",
+                "reason": reason,
+            }
+
+    for phrase in _ASSISTANT_ANSWER_PHRASES:
+        if phrase in normalized:
+            return {
+                "intent": "answer_job_query",
+                "reason": f"answer_phrase:{phrase}",
+            }
+
+    return {
+        "intent": "search_jobs",
+        "reason": "keyword_search",
+    }
+
+
+def _is_assistant_internal_retrieval_error(exc: Exception) -> bool:
+    message = str(exc)
+    return any(marker in message for marker in _ASSISTANT_INTERNAL_RETRIEVAL_ERRORS)
+
+
+def assistant_query_payload(
+    request: str,
+    top_k: int = 5,
+    fetch_k: int = 10,
+    include_diagnostics: bool = False,
+) -> Dict[str, Any]:
+    router = route_assistant_intent(request)
+    intent = router["intent"]
+
+    if intent == "search_jobs":
+        search_payload = jobs_search_lite_payload(
+            request=request,
+            top_k=top_k,
+        )
+        results = search_payload.get("results", []) or []
+        return {
+            "ok": True,
+            "intent": "search_jobs",
+            "natural_intent": "search_jobs",
+            "request": request,
+            "result_count": len(results),
+            "results": results,
+            "response": None,
+            "router": router,
+        }
+
+    try:
+        answer_payload = rag_answer_payload(
+            request=request,
+            top_k=top_k,
+            fetch_k=fetch_k,
+            output_mode="compact",
+            include_diagnostics=include_diagnostics,
+        )
+    except Exception as exc:
+        if not _is_assistant_internal_retrieval_error(exc):
+            raise
+        response = {
+            "answer": _ASSISTANT_NO_MATCHING_JOBS_ANSWER,
+            "insufficient_evidence": True,
+            "sources": [],
+            "job_evidence": [],
+        }
+        return {
+            "ok": True,
+            "intent": "answer_job_query",
+            "natural_intent": "answer_job_query",
+            "request": request,
+            "result_count": 0,
+            "results": [],
+            "response": response,
+            "router": router,
+        }
+
+    response = answer_payload.get("response") if isinstance(answer_payload, dict) else None
+    source_count = 0
+    if isinstance(response, dict):
+        sources = response.get("sources", []) or response.get("job_evidence", []) or []
+        if isinstance(sources, list):
+            source_count = len(sources)
+
+    return {
+        "ok": True,
+        "intent": "answer_job_query",
+        "natural_intent": "answer_job_query",
+        "request": request,
+        "result_count": source_count,
+        "results": [],
+        "response": response,
+        "router": router,
     }
 
 def rag_search_payload(

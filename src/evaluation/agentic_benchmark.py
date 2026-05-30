@@ -3,6 +3,8 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -13,10 +15,28 @@ from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
 DEFAULT_FIXTURE_PATH = Path("tests/fixtures/agentic_benchmark/cases.json")
 DEFAULT_OUTPUT_DIR = Path("outputs/evaluation")
+THRESHOLD_METRIC_KEYS = [
+    "source_health_recommendation_accuracy",
+    "fallback_only_block_rate",
+    "deterministic_match_allow_rate",
+    "low_confidence_block_rate",
+    "validation_pass_rate",
+]
+DEFAULT_THRESHOLDS = {
+    "source_health_recommendation_accuracy": 1.0,
+    "fallback_only_block_rate": 1.0,
+    "deterministic_match_allow_rate": 1.0,
+    "low_confidence_block_rate": 1.0,
+    "validation_pass_rate": 1.0,
+}
 
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def load_benchmark_fixture(path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, Any]:
@@ -165,6 +185,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         **metrics,
         "summary_json": {
             "benchmark_name": fixture.get("benchmark_name", ""),
+            "generated_at_utc": _utc_now_iso(),
             "metrics": metrics,
             "source_health_summary": source_health["payload"]["summary"],
             "resume_match_summary": resume_match_agent.build_resume_match_agent_summary_payload(
@@ -180,6 +201,40 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
     }
 
 
+def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
+    thresholds = dict(DEFAULT_THRESHOLDS)
+    overrides = {
+        "source_health_recommendation_accuracy": args.min_source_health_recommendation_accuracy,
+        "fallback_only_block_rate": args.min_fallback_only_block_rate,
+        "deterministic_match_allow_rate": args.min_deterministic_match_allow_rate,
+        "low_confidence_block_rate": args.min_low_confidence_block_rate,
+        "validation_pass_rate": args.min_validation_pass_rate,
+    }
+    for key, value in overrides.items():
+        if value is not None:
+            thresholds[key] = float(value)
+    return thresholds
+
+
+def evaluate_thresholds(
+    result: Dict[str, Any],
+    thresholds: Dict[str, float] | None = None,
+) -> Dict[str, Any]:
+    metrics = result.get("summary_json", {}).get("metrics", {})
+    expected = dict(DEFAULT_THRESHOLDS if thresholds is None else thresholds)
+    failures: List[Dict[str, Any]] = []
+    for key in THRESHOLD_METRIC_KEYS:
+        minimum = float(expected.get(key, DEFAULT_THRESHOLDS[key]))
+        actual = float(metrics.get(key, 0.0) or 0.0)
+        if actual < minimum:
+            failures.append({"metric": key, "actual": actual, "minimum": minimum})
+    return {
+        "passed": not failures,
+        "thresholds": {key: float(expected.get(key, DEFAULT_THRESHOLDS[key])) for key in THRESHOLD_METRIC_KEYS},
+        "failures": failures,
+    }
+
+
 def render_results_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
     metrics = result["summary_json"]["metrics"]
     return [
@@ -190,10 +245,12 @@ def render_results_rows(result: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 def render_markdown_report(result: Dict[str, Any]) -> str:
     metrics = result["summary_json"]["metrics"]
+    threshold_result = result.get("thresholds") if isinstance(result.get("thresholds"), dict) else {}
     lines = [
         "# Agentic Benchmark Report",
         "",
         f"Benchmark: `{result['summary_json'].get('benchmark_name', '')}`",
+        f"Generated at UTC: `{result['summary_json'].get('generated_at_utc', '')}`",
         "",
         "## Metrics",
         "",
@@ -210,6 +267,19 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.extend(["", "## Failed Case IDs", ""])
     failed = metrics.get("failed_case_ids") or []
     lines.append(", ".join(f"`{case_id}`" for case_id in failed) if failed else "None")
+    lines.extend(["", "## Interpretation", ""])
+    if threshold_result:
+        if threshold_result.get("passed"):
+            lines.append("All configured regression thresholds passed.")
+        else:
+            lines.append("One or more regression thresholds failed.")
+            for failure in threshold_result.get("failures", []) or []:
+                lines.append(
+                    f"- `{failure.get('metric')}`: actual {failure.get('actual')} "
+                    f"below minimum {failure.get('minimum')}"
+                )
+    else:
+        lines.append("No regression threshold result was attached to this run.")
     lines.extend(["", "## Components", ""])
     lines.append("- Source Health Agent advisory benchmark")
     lines.append("- Resume Match Agent credibility benchmark")
@@ -237,18 +307,45 @@ def write_benchmark_outputs(result: Dict[str, Any], output_dir: str | Path = DEF
     }
 
 
-def main() -> None:
+def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run the offline ApplyLens agentic benchmark.")
-    parser.add_argument("--fixture", default=str(DEFAULT_FIXTURE_PATH))
+    parser.add_argument("--fixture-path", "--fixture", dest="fixture_path", default=str(DEFAULT_FIXTURE_PATH))
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
-    parser.add_argument("--write-outputs", action="store_true")
-    args = parser.parse_args()
+    parser.add_argument("--write", "--write-outputs", dest="write_outputs", action="store_true")
+    parser.add_argument("--no-write", dest="write_outputs", action="store_false")
+    parser.set_defaults(write_outputs=False)
+    parser.add_argument("--print-summary", action="store_true")
+    parser.add_argument("--min-source-health-recommendation-accuracy", type=float, default=None)
+    parser.add_argument("--min-fallback-only-block-rate", type=float, default=None)
+    parser.add_argument("--min-deterministic-match-allow-rate", type=float, default=None)
+    parser.add_argument("--min-low-confidence-block-rate", type=float, default=None)
+    parser.add_argument("--min-validation-pass-rate", type=float, default=None)
+    return parser
 
-    result = run_benchmark(args.fixture)
+
+def main(argv: List[str] | None = None) -> int:
+    parser = build_arg_parser()
+    args = parser.parse_args(argv)
+
+    result = run_benchmark(args.fixture_path)
+    threshold_result = evaluate_thresholds(result, threshold_overrides_from_args(args))
+    result["thresholds"] = threshold_result
     if args.write_outputs:
         result["output_files"] = write_benchmark_outputs(result, args.output_dir)
-    print(json.dumps(result["summary_json"], indent=2, sort_keys=True))
+    if args.print_summary or not args.write_outputs:
+        print(json.dumps(result["summary_json"], indent=2, sort_keys=True))
+    if not threshold_result["passed"]:
+        print(
+            json.dumps(
+                {"threshold_failures": threshold_result["failures"]},
+                indent=2,
+                sort_keys=True,
+            ),
+            file=sys.stderr,
+        )
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

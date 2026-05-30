@@ -28,6 +28,16 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["low_confidence_block_rate"] == 1.0
     assert result["validation_pass_rate"] == 1.0
     assert result["failed_case_ids"] == []
+    assert "generated_at_utc" in result["summary_json"]
+    assert set(result["summary_json"]["metrics"]) == {
+        "benchmark_case_count",
+        "source_health_recommendation_accuracy",
+        "fallback_only_block_rate",
+        "deterministic_match_allow_rate",
+        "low_confidence_block_rate",
+        "validation_pass_rate",
+        "failed_case_ids",
+    }
 
 
 def test_agentic_benchmark_source_health_recommendation_rules_score_correctly():
@@ -58,10 +68,15 @@ def test_agentic_benchmark_resume_credibility_guards():
 
 def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     result = agentic_benchmark.run_benchmark()
+    result["thresholds"] = agentic_benchmark.evaluate_thresholds(result)
     report = agentic_benchmark.render_markdown_report(result)
 
     assert "# Agentic Benchmark Report" in report
+    assert "Generated at UTC" in report
     assert "source_health_recommendation_accuracy" in report
+    assert "## Failed Case IDs" in report
+    assert "## Interpretation" in report
+    assert "All configured regression thresholds passed." in report
     assert "Resume Match Agent credibility benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:
@@ -73,3 +88,33 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
         assert Path(output_files["summary_json"]).exists()
         assert Path(output_files["results_csv"]).exists()
         assert Path(output_files["report_md"]).exists()
+
+
+def test_agentic_benchmark_cli_no_write_returns_success(capsys):
+    exit_code = agentic_benchmark.main(["--no-write", "--print-summary"])
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "agentic_phase_4a_sanitized_v1" in captured.out
+    assert "source_health_recommendation_accuracy" in captured.out
+
+
+def test_agentic_benchmark_cli_write_mode_writes_files(tmp_path):
+    exit_code = agentic_benchmark.main(["--write", "--output-dir", str(tmp_path)])
+
+    assert exit_code == 0
+    assert (tmp_path / "agentic_benchmark_summary.json").exists()
+    assert (tmp_path / "agentic_benchmark_results.csv").exists()
+    assert (tmp_path / "agentic_benchmark_report.md").exists()
+
+
+def test_agentic_benchmark_cli_threshold_failure_returns_nonzero(capsys):
+    exit_code = agentic_benchmark.main([
+        "--no-write",
+        "--min-validation-pass-rate",
+        "1.01",
+    ])
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "validation_pass_rate" in captured.err

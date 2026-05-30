@@ -36,6 +36,7 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
+from src.agents import critic_agent
 from src.matching.dimensions import get_dimension_weights
 from src.matching.job_adapter import build_job_evidence
 from src.matching.models import MatchPrefilterResult
@@ -177,6 +178,7 @@ DEFAULT_PIPELINE_SCRATCH_DIR = Path(
 ).expanduser()
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
+CRITIC_ADVISORY_ENABLED_ENV = "APPLYLENS_CRITIC_ADVISORY_ENABLED"
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -5135,6 +5137,10 @@ def run_live_pipeline_payload(
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
 
+def _env_flag_enabled(name: str, env: Dict[str, str] | None = None) -> bool:
+    env_map = env if env is not None else os.environ
+    return _clean_text(env_map.get(name)).lower() in {"1", "true", "yes", "on"}
+
 def _scan_issue_display_label(value: Any) -> str:
     raw = _clean_text(value)
     if not raw:
@@ -7535,6 +7541,108 @@ def _scan_issue_from_replacement_row(
     }
 
 
+def _scan_issue_critic_jd_skills(
+    issue: Dict[str, Any],
+    tailoring_summary: Dict[str, Any] | None,
+) -> Tuple[List[str], List[str]]:
+    summary = tailoring_summary or {}
+    required: List[str] = []
+    preferred: List[str] = []
+    for key in ("matched_required", "missing_required", "required_skills", "required_terms"):
+        required.extend(list(summary.get(key, []) or []))
+    for key in ("matched_preferred", "missing_preferred", "preferred_skills", "preferred_terms"):
+        preferred.extend(list(summary.get(key, []) or []))
+    supported = list(issue.get("supported_jd_signals", []) or [])
+    if supported:
+        required.extend(supported)
+    return (
+        _scan_issue_unique_display_labels(required),
+        _scan_issue_unique_display_labels(preferred),
+    )
+
+
+def _scan_issue_to_critic_input(
+    issue: Dict[str, Any],
+    *,
+    tailoring_summary: Dict[str, Any] | None = None,
+) -> Dict[str, Any] | None:
+    proposed_text = _clean_text(issue.get("suggested_text")) or _clean_text(issue.get("reason"))
+    if not proposed_text:
+        return None
+
+    source_bullet = (
+        _clean_text(issue.get("original_text"))
+        or _clean_text(issue.get("current_text"))
+        or _clean_text((issue.get("raw") or {}).get("parent_bullet"))
+    )
+    jd_required, jd_preferred = _scan_issue_critic_jd_skills(issue, tailoring_summary)
+    suggestion_type = "patch_ready" if issue.get("can_accept") else "guidance_only"
+    return critic_agent.build_critic_agent_input_payload(
+        suggestion_id=_clean_text(issue.get("candidate_id")) or _clean_text(issue.get("issue_id")),
+        original_resume_evidence=[source_bullet] if source_bullet else [],
+        jd_required_skills=jd_required,
+        jd_preferred_skills=jd_preferred,
+        proposed_text=proposed_text,
+        source_bullet=source_bullet,
+        projected_score_delta=issue.get("projected_overall_delta"),
+        suggestion_type=suggestion_type,
+    )
+
+
+def _attach_critic_advisory_to_scan_issues(
+    issues: List[Dict[str, Any]],
+    *,
+    tailoring_summary: Dict[str, Any] | None = None,
+    env: Dict[str, str] | None = None,
+    trace_module: Any = None,
+) -> Dict[str, Any]:
+    if not _env_flag_enabled(CRITIC_ADVISORY_ENABLED_ENV, env):
+        return {"enabled": False, "suggestion_count": 0, "trace": {"attempted": False, "reason": "advisory_disabled"}}
+
+    critic_inputs: List[Dict[str, Any]] = []
+    issue_by_suggestion_id: Dict[str, Dict[str, Any]] = {}
+    for issue in issues:
+        if not isinstance(issue, dict) or not issue.get("candidate_id"):
+            continue
+        critic_input = _scan_issue_to_critic_input(issue, tailoring_summary=tailoring_summary)
+        if not critic_input:
+            continue
+        suggestion_id = _clean_text(critic_input.get("suggestion_id"))
+        if not suggestion_id:
+            continue
+        critic_inputs.append(critic_input)
+        issue_by_suggestion_id[suggestion_id] = issue
+
+    for critic_input in critic_inputs:
+        rendered = critic_agent.render_critic_decision(critic_input)
+        output = rendered["output"]
+        issue = issue_by_suggestion_id.get(_clean_text(output.get("suggestion_id")))
+        if not issue:
+            continue
+        issue.update(
+            {
+                "critic_advisory_only": True,
+                "critic_decision": _clean_text(output.get("decision")),
+                "critic_confidence": output.get("confidence"),
+                "critic_reason_codes": list(output.get("reason_codes", []) or []),
+                "critic_notes": _clean_text(output.get("notes")),
+                "critic_evidence_spans": list(output.get("evidence_spans", []) or []),
+                "critic_score_delta": output.get("score_delta"),
+            }
+        )
+
+    trace_payload = critic_agent.record_critic_agent_trace(
+        input_payloads=critic_inputs,
+        env=env,
+        trace_module=trace_module or critic_agent.trace_store,
+    )
+    return {
+        "enabled": True,
+        "suggestion_count": len(critic_inputs),
+        "trace": trace_payload,
+    }
+
+
 def _build_tailoring_scan_issue_contract(
     *,
     trusted_ready: List[Dict[str, Any]],
@@ -7544,6 +7652,8 @@ def _build_tailoring_scan_issue_contract(
     resume_evidence: Any = None,
     tailoring_summary: Dict[str, Any] | None = None,
     jd_record: Dict[str, Any] | None = None,
+    env: Dict[str, str] | None = None,
+    critic_trace_module: Any = None,
 ) -> Dict[str, Any]:
     replacement_issues: List[Dict[str, Any]] = []
 
@@ -7659,6 +7769,15 @@ def _build_tailoring_scan_issue_contract(
         "actionable": sum(1 for issue in visible_issues if issue.get("can_accept")),
         "accept_all_eligible": sum(1 for issue in visible_issues if issue.get("can_accept_all")),
     }
+
+    critic_advisory = _attach_critic_advisory_to_scan_issues(
+        issues,
+        tailoring_summary=tailoring_summary,
+        env=env,
+        trace_module=critic_trace_module,
+    )
+    if critic_advisory.get("enabled"):
+        counts["critic_advisory_labeled"] = int(critic_advisory.get("suggestion_count", 0) or 0)
 
     def _group_counts(group_id: str) -> Dict[str, int]:
         group_issues = [
@@ -7801,7 +7920,7 @@ def _build_tailoring_scan_issue_contract(
         },
     ]
 
-    return {
+    contract = {
         "version": "scan_issue_contract_v2",
         "source": "tailoring_keyword_scan",
         "groups": groups,
@@ -7832,6 +7951,9 @@ def _build_tailoring_scan_issue_contract(
             },
         },
     }
+    if critic_advisory.get("enabled"):
+        contract["critic_advisory"] = critic_advisory
+    return contract
 
 
 def _coerce_scan_score_value(*values: Any) -> int | None:

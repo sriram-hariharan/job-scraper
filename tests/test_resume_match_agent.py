@@ -157,3 +157,51 @@ def test_resume_match_agent_optional_trace_recording_can_be_monkeypatched():
     step_record = calls[1][1]["record"]
     assert step_record["agent_name"] == resume_match_agent.AGENT_NAME
     assert step_record["input_json"]["job_count"] == 1
+    assert step_record["owner_user_id"] == "user_1"
+    assert step_record["pipeline_run_id"] == "run_1"
+
+
+def test_resume_match_agent_trace_failure_returns_warning_when_not_strict():
+    class TraceModule:
+        def create_agent_run(self, **kwargs):
+            raise RuntimeError("trace db unavailable")
+
+    result = resume_match_agent.record_resume_match_agent_trace(
+        rows=[_row()],
+        candidate_resume_names=["SWATIKA_test_1.pdf"],
+        source_artifact_path="best_resume_variant_by_job.csv",
+        env={
+            resume_match_agent.TRACE_ENABLED_ENV: "1",
+            "JOB_STACK_OWNER_USER_ID": "user_1",
+            "JOB_APP_PIPELINE_RUN_ID": "run_1",
+        },
+        trace_module=TraceModule(),
+    )
+
+    assert result["attempted"] is True
+    assert result["recorded"] is False
+    assert "trace db unavailable" in result["warning"]
+
+
+def test_resume_match_agent_trace_strict_reraises_failure():
+    class TraceModule:
+        def create_agent_run(self, **kwargs):
+            raise RuntimeError("strict trace failure")
+
+    try:
+        resume_match_agent.record_resume_match_agent_trace(
+            rows=[_row()],
+            candidate_resume_names=["SWATIKA_test_1.pdf"],
+            source_artifact_path="best_resume_variant_by_job.csv",
+            env={
+                resume_match_agent.TRACE_ENABLED_ENV: "1",
+                resume_match_agent.TRACE_STRICT_ENV: "1",
+                "JOB_STACK_OWNER_USER_ID": "user_1",
+                "JOB_APP_PIPELINE_RUN_ID": "run_1",
+            },
+            trace_module=TraceModule(),
+        )
+    except RuntimeError as exc:
+        assert "strict trace failure" in str(exc)
+    else:
+        raise AssertionError("Expected strict trace failure to be raised.")

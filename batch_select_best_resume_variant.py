@@ -1863,6 +1863,8 @@ def main() -> None:
                 trace_result.get("agent_run_id", ""),
                 trace_result.get("agent_step_id", ""),
             )
+        elif trace_result.get("warning"):
+            print(f"WARNING: Resume Match Agent trace skipped: {trace_result.get('warning')}")
     except Exception as exc:
         if agent_trace_strict():
             raise

@@ -1,26 +1,6 @@
 import csv
-import sys
 import tempfile
-import types
 from pathlib import Path
-
-
-class _FakeTqdm:
-    def __call__(self, iterable=None, **kwargs):
-        return iterable
-
-    @staticmethod
-    def write(*args, **kwargs):
-        return None
-
-
-sys.modules.setdefault("pycountry", types.SimpleNamespace(countries=[]))
-sys.modules.setdefault("requests", types.SimpleNamespace())
-sys.modules.setdefault("tqdm", types.SimpleNamespace(tqdm=_FakeTqdm()))
-sys.modules.setdefault(
-    "src.utils.workday_timestamp",
-    types.SimpleNamespace(fetch_workday_timestamp=lambda *args, **kwargs: None),
-)
 
 from src.pipeline.job_filter import (
     build_source_health_report_rows,

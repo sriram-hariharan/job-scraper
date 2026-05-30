@@ -305,3 +305,19 @@ def test_profile_pipeline_run_agent_trace_route_requires_auth():
         assert exc.status_code == 401
     else:
         raise AssertionError("Expected route to require authenticated owner.")
+
+
+def test_pipeline_child_env_propagates_agent_trace_flags():
+    child_env = services._pipeline_child_env(
+        base_env={
+            "APPLYLENS_AGENT_TRACE_ENABLED": "1",
+            "APPLYLENS_AGENT_TRACE_STRICT": "true",
+            "UNRELATED_SECRET": "do-not-copy",
+            "PATH": "/usr/bin",
+        },
+        extra_env={},
+    )
+
+    assert child_env["APPLYLENS_AGENT_TRACE_ENABLED"] == "1"
+    assert child_env["APPLYLENS_AGENT_TRACE_STRICT"] == "true"
+    assert "UNRELATED_SECRET" not in child_env

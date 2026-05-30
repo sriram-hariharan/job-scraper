@@ -256,76 +256,81 @@ def record_resume_match_agent_trace(
     if not context["owner_user_id"] or not context["pipeline_run_id"]:
         return {"attempted": False, "reason": "missing_trace_context", **context}
 
-    started_at = _utc_now_iso()
-    input_payload = build_resume_match_agent_input_payload(
-        rows=rows,
-        candidate_resume_names=candidate_resume_names,
-        pipeline_run_id=context["pipeline_run_id"],
-        owner_user_id=context["owner_user_id"],
-        source_artifact_path=source_artifact_path,
-    )
-    output_payload = build_resume_match_agent_output_payload(rows)
-    validation_payload = build_resume_match_agent_validation_payload(
-        input_payload=input_payload,
-        output_payload=output_payload,
-        rows=rows,
-    )
-    summary_payload = build_resume_match_agent_summary_payload(
-        input_payload=input_payload,
-        output_payload=output_payload,
-        validation_payload=validation_payload,
-    )
+    try:
+        started_at = _utc_now_iso()
+        input_payload = build_resume_match_agent_input_payload(
+            rows=rows,
+            candidate_resume_names=candidate_resume_names,
+            pipeline_run_id=context["pipeline_run_id"],
+            owner_user_id=context["owner_user_id"],
+            source_artifact_path=source_artifact_path,
+        )
+        output_payload = build_resume_match_agent_output_payload(rows)
+        validation_payload = build_resume_match_agent_validation_payload(
+            input_payload=input_payload,
+            output_payload=output_payload,
+            rows=rows,
+        )
+        summary_payload = build_resume_match_agent_summary_payload(
+            input_payload=input_payload,
+            output_payload=output_payload,
+            validation_payload=validation_payload,
+        )
 
-    run_payload = trace_module.create_agent_run(
-        record={
-            "owner_user_id": context["owner_user_id"],
-            "pipeline_run_id": context["pipeline_run_id"],
-            "context_id": context["context_id"],
-            "status": "running",
-            "started_at": started_at,
-            "summary_json": summary_payload,
-        }
-    )
-    agent_run_id = _clean_text((run_payload.get("run") or {}).get("agent_run_id"))
-    if not agent_run_id:
-        raise RuntimeError("Agent trace run did not return agent_run_id.")
+        run_payload = trace_module.create_agent_run(
+            record={
+                "owner_user_id": context["owner_user_id"],
+                "pipeline_run_id": context["pipeline_run_id"],
+                "context_id": context["context_id"],
+                "status": "running",
+                "started_at": started_at,
+                "summary_json": summary_payload,
+            }
+        )
+        agent_run_id = _clean_text((run_payload.get("run") or {}).get("agent_run_id"))
+        if not agent_run_id:
+            raise RuntimeError("Agent trace run did not return agent_run_id.")
 
-    step_payload = trace_module.record_agent_step(
-        record={
+        step_payload = trace_module.record_agent_step(
+            record={
+                "agent_run_id": agent_run_id,
+                "owner_user_id": context["owner_user_id"],
+                "pipeline_run_id": context["pipeline_run_id"],
+                "context_id": context["context_id"],
+                "agent_name": AGENT_NAME,
+                "agent_version": AGENT_VERSION,
+                "input_json": input_payload,
+                "status": "running",
+                "started_at": started_at,
+            }
+        )
+        agent_step_id = _clean_text((step_payload.get("step") or {}).get("agent_step_id"))
+        if not agent_step_id:
+            raise RuntimeError("Agent trace step did not return agent_step_id.")
+
+        completed_at = _utc_now_iso()
+        trace_module.complete_agent_step(
+            agent_step_id=agent_step_id,
+            owner_user_id=context["owner_user_id"],
+            output_json=output_payload,
+            validation_json=validation_payload,
+            completed_at=completed_at,
+        )
+        trace_module.complete_agent_run(
+            agent_run_id=agent_run_id,
+            owner_user_id=context["owner_user_id"],
+            summary_json=summary_payload,
+            completed_at=completed_at,
+        )
+        return {
+            "attempted": True,
+            "recorded": True,
             "agent_run_id": agent_run_id,
-            "owner_user_id": context["owner_user_id"],
-            "pipeline_run_id": context["pipeline_run_id"],
-            "context_id": context["context_id"],
-            "agent_name": AGENT_NAME,
-            "agent_version": AGENT_VERSION,
-            "input_json": input_payload,
-            "status": "running",
-            "started_at": started_at,
+            "agent_step_id": agent_step_id,
+            "summary": summary_payload,
+            "validation": validation_payload,
         }
-    )
-    agent_step_id = _clean_text((step_payload.get("step") or {}).get("agent_step_id"))
-    if not agent_step_id:
-        raise RuntimeError("Agent trace step did not return agent_step_id.")
-
-    completed_at = _utc_now_iso()
-    trace_module.complete_agent_step(
-        agent_step_id=agent_step_id,
-        owner_user_id=context["owner_user_id"],
-        output_json=output_payload,
-        validation_json=validation_payload,
-        completed_at=completed_at,
-    )
-    trace_module.complete_agent_run(
-        agent_run_id=agent_run_id,
-        owner_user_id=context["owner_user_id"],
-        summary_json=summary_payload,
-        completed_at=completed_at,
-    )
-    return {
-        "attempted": True,
-        "recorded": True,
-        "agent_run_id": agent_run_id,
-        "agent_step_id": agent_step_id,
-        "summary": summary_payload,
-        "validation": validation_payload,
-    }
+    except Exception as exc:
+        if agent_trace_strict(env_map):
+            raise
+        return {"attempted": True, "recorded": False, "warning": str(exc)}

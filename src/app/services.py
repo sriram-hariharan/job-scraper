@@ -4744,6 +4744,7 @@ _PIPELINE_CHILD_ENV_PREFIXES = (
     "EMAIL_",
     "AUTH_",
     "SESSION_",
+    "APPLYLENS_",
 )
 
 

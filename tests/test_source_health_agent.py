@@ -151,6 +151,8 @@ def test_source_health_agent_optional_trace_can_be_monkeypatched():
     step_record = calls[1][1]["record"]
     assert step_record["agent_name"] == source_health_agent.AGENT_NAME
     assert step_record["input_json"]["total_source_company_rows"] == 1
+    assert step_record["owner_user_id"] == "user_1"
+    assert step_record["pipeline_run_id"] == "run_1"
 
 
 def test_source_health_agent_trace_failure_returns_warning_when_not_strict():
@@ -171,3 +173,25 @@ def test_source_health_agent_trace_failure_returns_warning_when_not_strict():
     assert result["attempted"] is True
     assert result["recorded"] is False
     assert "db unavailable" in result["warning"]
+
+
+def test_source_health_agent_trace_strict_reraises_failure():
+    class TraceModule:
+        def create_agent_run(self, **kwargs):
+            raise RuntimeError("strict db unavailable")
+
+    try:
+        source_health_agent.record_source_health_agent_trace(
+            rows=[_row("greenhouse", "scaleai")],
+            env={
+                source_health_agent.TRACE_ENABLED_ENV: "1",
+                source_health_agent.TRACE_STRICT_ENV: "1",
+                "JOB_STACK_OWNER_USER_ID": "user_1",
+                "JOB_APP_PIPELINE_RUN_ID": "run_1",
+            },
+            trace_module=TraceModule(),
+        )
+    except RuntimeError as exc:
+        assert "strict db unavailable" in str(exc)
+    else:
+        raise AssertionError("Expected strict source health trace failure to be raised.")

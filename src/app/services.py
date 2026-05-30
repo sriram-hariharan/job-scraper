@@ -119,6 +119,11 @@ from src.storage.user_pipeline.store import (
     promote_user_seen_jobs_staging_postgres_payload,
     clear_user_seen_jobs_staging_postgres_payload,
 )
+from src.storage.agent_trace.store import (
+    get_agent_run_postgres_payload,
+    list_agent_runs_postgres_payload,
+    list_agent_steps_postgres_payload,
+)
 from src.storage.redis_locks import (
     RedisLockHandle,
     acquire_redis_lock,
@@ -815,6 +820,210 @@ def profile_pipeline_run_detail_payload(
         "run": _pipeline_run_public_row(run),
         "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
+    }
+
+
+def _agent_trace_empty_payload(owner_user_id: str, pipeline_run_id: str) -> Dict[str, Any]:
+    return {
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "agent_runs": [],
+        "counts": {
+            "agent_runs": 0,
+            "agent_steps": 0,
+            "failed_steps": 0,
+            "warning_steps": 0,
+            "succeeded_steps": 0,
+        },
+    }
+
+
+def _agent_trace_json(value: Any) -> Dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _agent_trace_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _agent_trace_public_step(step: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "agent_step_id": _clean_text(step.get("agent_step_id")),
+        "agent_name": _clean_text(step.get("agent_name")),
+        "agent_version": _clean_text(step.get("agent_version")),
+        "status": _clean_text(step.get("status")) or "unknown",
+        "started_at": _clean_text(step.get("started_at")),
+        "completed_at": _clean_text(step.get("completed_at")),
+        "latency_ms": _agent_trace_int(step.get("latency_ms")),
+        "model_provider": _clean_text(step.get("model_provider")),
+        "model_name": _clean_text(step.get("model_name")),
+        "input_json": _agent_trace_json(step.get("input_json")),
+        "output_json": _agent_trace_json(step.get("output_json")),
+        "validation_json": _agent_trace_json(step.get("validation_json")),
+        "token_usage_json": _agent_trace_json(step.get("token_usage_json")),
+        "cost_json": _agent_trace_json(step.get("cost_json")),
+        "error": _clean_text(step.get("error")),
+    }
+
+
+def _agent_trace_public_run(run: Dict[str, Any], steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        "agent_run_id": _clean_text(run.get("agent_run_id")),
+        "context_id": _clean_text(run.get("context_id")),
+        "status": _clean_text(run.get("status")) or "unknown",
+        "started_at": _clean_text(run.get("started_at")),
+        "completed_at": _clean_text(run.get("completed_at")),
+        "summary_json": _agent_trace_json(run.get("summary_json")),
+        "error": _clean_text(run.get("error")),
+        "steps": steps,
+    }
+
+
+def _agent_trace_step_is_warning(step: Dict[str, Any]) -> bool:
+    status = _clean_text(step.get("status")).lower()
+    validation = step.get("validation_json") if isinstance(step.get("validation_json"), dict) else {}
+    validation_status = _clean_text(validation.get("validation_status")).lower()
+    return status == "warning" or validation_status == "warning"
+
+
+def _agent_trace_rows_for_owner_pipeline(
+    rows: List[Dict[str, Any]],
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str = "",
+) -> List[Dict[str, Any]]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
+    filtered: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if _clean_text(row.get("owner_user_id")) != owner:
+            continue
+        if _clean_text(row.get("pipeline_run_id")) != safe_run_id:
+            continue
+        if safe_context_id and _clean_text(row.get("context_id")) != safe_context_id:
+            continue
+        filtered.append(dict(row))
+    return filtered
+
+
+def agent_trace_payload(
+    *,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    agent_run_id: str = "",
+    limit_runs: int = 50,
+    limit_steps: int = 500,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_pipeline_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
+    safe_agent_run_id = _clean_text(agent_run_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_pipeline_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    empty_payload = _agent_trace_empty_payload(owner, safe_pipeline_run_id)
+    try:
+        if safe_agent_run_id:
+            run_payload = get_agent_run_postgres_payload(
+                owner_user_id=owner,
+                agent_run_id=safe_agent_run_id,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            runs = [dict(run_payload.get("run", {}) or {})] if bool(run_payload.get("found", False)) else []
+        else:
+            runs_payload = list_agent_runs_postgres_payload(
+                owner_user_id=owner,
+                pipeline_run_id=safe_pipeline_run_id,
+                context_id=safe_context_id,
+                limit=limit_runs,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            runs = [dict(row or {}) for row in list(runs_payload.get("runs", []) or [])]
+
+        runs = _agent_trace_rows_for_owner_pipeline(
+            runs,
+            owner_user_id=owner,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+        )
+        if safe_agent_run_id:
+            runs = [run for run in runs if _clean_text(run.get("agent_run_id")) == safe_agent_run_id]
+
+        steps_payload = list_agent_steps_postgres_payload(
+            owner_user_id=owner,
+            agent_run_id=safe_agent_run_id,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+            limit=limit_steps,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        steps = [dict(row or {}) for row in list(steps_payload.get("steps", []) or [])]
+    except (SystemExit, ValueError, OSError, subprocess.SubprocessError) as exc:
+        logger.warning(
+            "Agent trace lookup returned empty payload for owner_user_id=%s pipeline_run_id=%s: %s",
+            owner,
+            safe_pipeline_run_id,
+            exc,
+        )
+        return empty_payload
+
+    steps = _agent_trace_rows_for_owner_pipeline(
+        steps,
+        owner_user_id=owner,
+        pipeline_run_id=safe_pipeline_run_id,
+        context_id=safe_context_id,
+    )
+    run_ids = {_clean_text(run.get("agent_run_id")) for run in runs}
+    steps = [
+        step
+        for step in steps
+        if _clean_text(step.get("agent_run_id")) in run_ids
+        and (not safe_agent_run_id or _clean_text(step.get("agent_run_id")) == safe_agent_run_id)
+    ]
+    steps.sort(key=lambda row: (_clean_text(row.get("started_at")), _clean_text(row.get("agent_step_id"))))
+
+    steps_by_run: Dict[str, List[Dict[str, Any]]] = {}
+    for step in steps:
+        steps_by_run.setdefault(_clean_text(step.get("agent_run_id")), []).append(_agent_trace_public_step(step))
+
+    public_runs = [
+        _agent_trace_public_run(run, steps_by_run.get(_clean_text(run.get("agent_run_id")), []))
+        for run in runs
+    ]
+    public_steps = [step for run in public_runs for step in run["steps"]]
+    return {
+        "pipeline_run_id": safe_pipeline_run_id,
+        "owner_user_id": owner,
+        "agent_runs": public_runs,
+        "counts": {
+            "agent_runs": len(public_runs),
+            "agent_steps": len(public_steps),
+            "failed_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "failed"),
+            "warning_steps": sum(1 for step in public_steps if _agent_trace_step_is_warning(step)),
+            "succeeded_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "succeeded"),
+        },
     }
 
 

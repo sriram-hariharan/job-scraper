@@ -240,3 +240,23 @@ def test_list_agent_steps_uses_runtime_query_runner_when_not_print_only(monkeypa
     assert payload["steps"][0]["agent_step_id"] == "agent_step_runtime"
     assert captured["print_only"] is False
     assert "FROM agent_steps" in captured["sql"]
+
+
+def test_agent_trace_list_helpers_support_context_filter_print_only():
+    runs_payload = store.list_agent_runs_postgres_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        context_id="ctx_1",
+        print_only=True,
+        ensure_schema=False,
+    )
+    steps_payload = store.list_agent_steps_postgres_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        context_id="ctx_1",
+        print_only=True,
+        ensure_schema=False,
+    )
+
+    assert "AND context_id = 'ctx_1'" in runs_payload["sql"]
+    assert "AND context_id = 'ctx_1'" in steps_payload["sql"]

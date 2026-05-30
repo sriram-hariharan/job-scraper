@@ -850,6 +850,7 @@ def list_agent_runs_postgres_payload(
     *,
     owner_user_id: str,
     pipeline_run_id: str = "",
+    context_id: str = "",
     limit: int = 50,
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
@@ -860,9 +861,15 @@ def list_agent_runs_postgres_payload(
     owner = _require_owner_user_id(owner_user_id)
     safe_limit = max(1, min(int(limit), 200))
     safe_pipeline_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
     pipeline_filter = (
         f"AND pipeline_run_id = {_sql_quote_text(safe_pipeline_run_id)}"
         if safe_pipeline_run_id
+        else ""
+    )
+    context_filter = (
+        f"AND context_id = {_sql_quote_text(safe_context_id)}"
+        if safe_context_id
         else ""
     )
     sql = _schema_prefix(ensure_schema) + f"""
@@ -870,6 +877,7 @@ WITH run_rows AS (
     SELECT * FROM agent_runs
     WHERE owner_user_id = {_sql_quote_text(owner)}
     {pipeline_filter}
+    {context_filter}
     ORDER BY started_at DESC
     LIMIT {safe_limit}
 )
@@ -895,6 +903,7 @@ def list_agent_steps_postgres_payload(
     owner_user_id: str,
     agent_run_id: str = "",
     pipeline_run_id: str = "",
+    context_id: str = "",
     limit: int = 200,
     database_url: str = "",
     database_url_env: str = "DATABASE_URL",
@@ -906,14 +915,17 @@ def list_agent_steps_postgres_payload(
     safe_limit = max(1, min(int(limit), 500))
     safe_agent_run_id = _clean_text(agent_run_id)
     safe_pipeline_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
     run_filter = f"AND agent_run_id = {_sql_quote_text(safe_agent_run_id)}" if safe_agent_run_id else ""
     pipeline_filter = f"AND pipeline_run_id = {_sql_quote_text(safe_pipeline_run_id)}" if safe_pipeline_run_id else ""
+    context_filter = f"AND context_id = {_sql_quote_text(safe_context_id)}" if safe_context_id else ""
     sql = _schema_prefix(ensure_schema) + f"""
 WITH step_rows AS (
     SELECT * FROM agent_steps
     WHERE owner_user_id = {_sql_quote_text(owner)}
     {run_filter}
     {pipeline_filter}
+    {context_filter}
     ORDER BY started_at ASC
     LIMIT {safe_limit}
 )

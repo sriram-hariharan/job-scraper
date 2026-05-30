@@ -12,6 +12,7 @@ def test_agentic_benchmark_fixture_loads_sanitized_cases():
     assert len(fixture["cases"]) == 6
     assert len(fixture["source_health_rows"]) == 5
     assert len(fixture["selector_rows"]) == 3
+    assert len(fixture["critic_cases"]) == 4
     serialized = json.dumps(fixture).lower()
     assert "sriram" not in serialized
     assert "swatika" not in serialized
@@ -26,6 +27,9 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["fallback_only_block_rate"] == 1.0
     assert result["deterministic_match_allow_rate"] == 1.0
     assert result["low_confidence_block_rate"] == 1.0
+    assert result["critic_unsupported_claim_rejection_rate"] == 1.0
+    assert result["critic_safe_suggestion_approval_rate"] == 1.0
+    assert result["critic_downgrade_rate"] == 1.0
     assert result["validation_pass_rate"] == 1.0
     assert result["failed_case_ids"] == []
     assert "generated_at_utc" in result["summary_json"]
@@ -35,6 +39,9 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "fallback_only_block_rate",
         "deterministic_match_allow_rate",
         "low_confidence_block_rate",
+        "critic_unsupported_claim_rejection_rate",
+        "critic_safe_suggestion_approval_rate",
+        "critic_downgrade_rate",
         "validation_pass_rate",
         "failed_case_ids",
     }
@@ -66,6 +73,24 @@ def test_agentic_benchmark_resume_credibility_guards():
     assert evaluation["validation"]["validation_status"] == "passed"
 
 
+def test_agentic_benchmark_critic_metrics_are_included():
+    fixture = agentic_benchmark.load_benchmark_fixture()
+    evaluation = agentic_benchmark.evaluate_critic_cases(fixture["critic_cases"])
+    decisions = {
+        output["suggestion_id"]: output["decision"]
+        for output in evaluation["outputs"]
+    }
+
+    assert decisions["critic_supported_patch"] == "approve"
+    assert decisions["critic_unsupported_tool"] == "reject"
+    assert decisions["critic_unsupported_metric"] == "reject"
+    assert decisions["critic_guidance_only"] == "downgrade_to_guidance"
+    assert evaluation["critic_unsupported_claim_rejection_rate"] == 1.0
+    assert evaluation["critic_safe_suggestion_approval_rate"] == 1.0
+    assert evaluation["critic_downgrade_rate"] == 1.0
+    assert evaluation["summary"]["agent_name"] == "Critic Agent"
+
+
 def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     result = agentic_benchmark.run_benchmark()
     result["thresholds"] = agentic_benchmark.evaluate_thresholds(result)
@@ -78,6 +103,7 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     assert "## Interpretation" in report
     assert "All configured regression thresholds passed." in report
     assert "Resume Match Agent credibility benchmark" in report
+    assert "Critic Agent suggestion validation benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_files = agentic_benchmark.write_benchmark_outputs(result, tmp_dir)

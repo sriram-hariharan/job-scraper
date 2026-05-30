@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import resume_match_agent, source_health_agent
+from src.agents import critic_agent, resume_match_agent, source_health_agent
 from src.evaluation.metrics import bool_rate, safe_rate
 from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
@@ -20,6 +20,9 @@ THRESHOLD_METRIC_KEYS = [
     "fallback_only_block_rate",
     "deterministic_match_allow_rate",
     "low_confidence_block_rate",
+    "critic_unsupported_claim_rejection_rate",
+    "critic_safe_suggestion_approval_rate",
+    "critic_downgrade_rate",
     "validation_pass_rate",
 ]
 DEFAULT_THRESHOLDS = {
@@ -27,6 +30,9 @@ DEFAULT_THRESHOLDS = {
     "fallback_only_block_rate": 1.0,
     "deterministic_match_allow_rate": 1.0,
     "low_confidence_block_rate": 1.0,
+    "critic_unsupported_claim_rejection_rate": 1.0,
+    "critic_safe_suggestion_approval_rate": 1.0,
+    "critic_downgrade_rate": 1.0,
     "validation_pass_rate": 1.0,
 }
 
@@ -47,6 +53,7 @@ def load_benchmark_fixture(path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str,
     payload.setdefault("cases", [])
     payload.setdefault("source_health_rows", [])
     payload.setdefault("selector_rows", [])
+    payload.setdefault("critic_cases", [])
     return payload
 
 
@@ -162,15 +169,103 @@ def evaluate_resume_selector_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def _critic_input_from_case(row: Dict[str, Any]) -> Dict[str, Any]:
+    return critic_agent.build_critic_agent_input_payload(
+        suggestion_id=_clean_text(row.get("suggestion_id")),
+        original_resume_evidence=row.get("original_resume_evidence", []),
+        jd_required_skills=row.get("jd_required_skills", []),
+        jd_preferred_skills=row.get("jd_preferred_skills", []),
+        proposed_text=_clean_text(row.get("proposed_text")),
+        source_bullet=_clean_text(row.get("source_bullet")),
+        projected_score_delta=row.get("projected_score_delta"),
+        suggestion_type=_clean_text(row.get("suggestion_type")) or "patch_ready",
+        pipeline_run_id="agentic_benchmark",
+        owner_user_id="benchmark",
+        source_artifact_path="tests/fixtures/agentic_benchmark/cases.json",
+    )
+
+
+def evaluate_critic_cases(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    rendered = [critic_agent.render_critic_decision(_critic_input_from_case(row)) for row in rows]
+    outputs = [item["output"] for item in rendered]
+    validations = [item["validation"] for item in rendered]
+    failed_case_ids: List[str] = []
+    for row, output in zip(rows, outputs):
+        expected = _clean_text(row.get("expected_decision"))
+        actual = _clean_text(output.get("decision"))
+        if expected and expected != actual:
+            failed_case_ids.append(_clean_text(row.get("suggestion_id")))
+
+    unsupported_claim_cases = [
+        output
+        for row, output in zip(rows, outputs)
+        if _clean_text(row.get("expected_reason_code")) in {"unsupported_claim", "fake_tool_or_domain"}
+    ]
+    unsupported_claim_rejected = [
+        output.get("decision") == "reject"
+        and _clean_text(row.get("expected_reason_code")) in set(output.get("reason_codes", []) or [])
+        for row, output in zip(rows, outputs)
+        if _clean_text(row.get("expected_reason_code")) in {"unsupported_claim", "fake_tool_or_domain"}
+    ]
+    safe_suggestion_cases = [
+        output
+        for row, output in zip(rows, outputs)
+        if _clean_text(row.get("expected_decision")) == "approve"
+    ]
+    safe_suggestion_approved = [
+        output.get("decision") == "approve"
+        for output in safe_suggestion_cases
+    ]
+    guidance_cases = [
+        output
+        for row, output in zip(rows, outputs)
+        if _clean_text(row.get("expected_decision")) == "downgrade_to_guidance"
+    ]
+    guidance_downgraded = [
+        output.get("decision") == "downgrade_to_guidance"
+        for output in guidance_cases
+    ]
+
+    input_payloads = [_critic_input_from_case(row) for row in rows]
+    summary = critic_agent.build_critic_agent_summary_payload(
+        input_payloads=input_payloads,
+        output_payloads=outputs,
+        validation_payloads=validations,
+    )
+    return {
+        "outputs": outputs,
+        "validations": validations,
+        "summary": summary,
+        "critic_unsupported_claim_rejection_rate": bool_rate(unsupported_claim_rejected),
+        "critic_safe_suggestion_approval_rate": bool_rate(safe_suggestion_approved),
+        "critic_downgrade_rate": bool_rate(guidance_downgraded),
+        "failed_case_ids": failed_case_ids,
+        "validation_passed": all(
+            validation.get("validation_status") == "passed" for validation in validations
+        ),
+        "case_counts": {
+            "unsupported_claim_or_tool_cases": len(unsupported_claim_cases),
+            "safe_suggestion_cases": len(safe_suggestion_cases),
+            "guidance_cases": len(guidance_cases),
+        },
+    }
+
+
 def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, Any]:
     fixture = load_benchmark_fixture(fixture_path)
     source_health = evaluate_source_health_rows(list(fixture.get("source_health_rows", []) or []))
     resume_match = evaluate_resume_selector_rows(list(fixture.get("selector_rows", []) or []))
+    critic = evaluate_critic_cases(list(fixture.get("critic_cases", []) or []))
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
+        bool(critic["validation_passed"]),
     ]
-    failed_case_ids = list(source_health["failed_case_ids"]) + list(resume_match["failed_case_ids"])
+    failed_case_ids = (
+        list(source_health["failed_case_ids"])
+        + list(resume_match["failed_case_ids"])
+        + list(critic["failed_case_ids"])
+    )
 
     metrics = {
         "benchmark_case_count": len(fixture.get("cases", []) or []),
@@ -178,6 +273,9 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "fallback_only_block_rate": resume_match["fallback_only_block_rate"],
         "deterministic_match_allow_rate": resume_match["deterministic_match_allow_rate"],
         "low_confidence_block_rate": resume_match["low_confidence_block_rate"],
+        "critic_unsupported_claim_rejection_rate": critic["critic_unsupported_claim_rejection_rate"],
+        "critic_safe_suggestion_approval_rate": critic["critic_safe_suggestion_approval_rate"],
+        "critic_downgrade_rate": critic["critic_downgrade_rate"],
         "validation_pass_rate": bool_rate(validation_passes),
         "failed_case_ids": failed_case_ids,
     }
@@ -193,10 +291,12 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
                 output_payload=resume_match["output"],
                 validation_payload=resume_match["validation"],
             ),
+            "critic_summary": critic["summary"],
         },
         "component_results": {
             "source_health": source_health,
             "resume_match": resume_match,
+            "critic": critic,
         },
     }
 
@@ -208,6 +308,9 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "fallback_only_block_rate": args.min_fallback_only_block_rate,
         "deterministic_match_allow_rate": args.min_deterministic_match_allow_rate,
         "low_confidence_block_rate": args.min_low_confidence_block_rate,
+        "critic_unsupported_claim_rejection_rate": args.min_critic_unsupported_claim_rejection_rate,
+        "critic_safe_suggestion_approval_rate": args.min_critic_safe_suggestion_approval_rate,
+        "critic_downgrade_rate": args.min_critic_downgrade_rate,
         "validation_pass_rate": args.min_validation_pass_rate,
     }
     for key, value in overrides.items():
@@ -261,6 +364,9 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "fallback_only_block_rate",
         "deterministic_match_allow_rate",
         "low_confidence_block_rate",
+        "critic_unsupported_claim_rejection_rate",
+        "critic_safe_suggestion_approval_rate",
+        "critic_downgrade_rate",
         "validation_pass_rate",
     ]:
         lines.append(f"- `{key}`: {metrics.get(key)}")
@@ -283,6 +389,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.extend(["", "## Components", ""])
     lines.append("- Source Health Agent advisory benchmark")
     lines.append("- Resume Match Agent credibility benchmark")
+    lines.append("- Critic Agent suggestion validation benchmark")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -319,6 +426,9 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-fallback-only-block-rate", type=float, default=None)
     parser.add_argument("--min-deterministic-match-allow-rate", type=float, default=None)
     parser.add_argument("--min-low-confidence-block-rate", type=float, default=None)
+    parser.add_argument("--min-critic-unsupported-claim-rejection-rate", type=float, default=None)
+    parser.add_argument("--min-critic-safe-suggestion-approval-rate", type=float, default=None)
+    parser.add_argument("--min-critic-downgrade-rate", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)
     return parser
 

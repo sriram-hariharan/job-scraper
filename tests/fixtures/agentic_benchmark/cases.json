@@ -208,5 +208,63 @@
       "llm_fallback_status": "generated",
       "expected_credibility": "fallback_only_blocked"
     }
+  ],
+  "critic_cases": [
+    {
+      "suggestion_id": "critic_supported_patch",
+      "original_resume_evidence": [
+        "Built Python APIs and PostgreSQL-backed batch workers for internal operations."
+      ],
+      "jd_required_skills": ["Python", "APIs"],
+      "jd_preferred_skills": ["PostgreSQL"],
+      "source_bullet": "Built Python APIs and PostgreSQL-backed batch workers for internal operations.",
+      "proposed_text": "Built Python APIs and PostgreSQL-backed batch workers for internal operations.",
+      "projected_score_delta": "0.120000",
+      "suggestion_type": "patch_ready",
+      "expected_decision": "approve",
+      "expected_reason_code": ""
+    },
+    {
+      "suggestion_id": "critic_unsupported_tool",
+      "original_resume_evidence": [
+        "Built Python APIs and PostgreSQL-backed batch workers for internal operations."
+      ],
+      "jd_required_skills": ["Python", "APIs"],
+      "jd_preferred_skills": ["PostgreSQL"],
+      "source_bullet": "Built Python APIs and PostgreSQL-backed batch workers for internal operations.",
+      "proposed_text": "Built Kubernetes automation for Python APIs and PostgreSQL workers.",
+      "projected_score_delta": "0.160000",
+      "suggestion_type": "patch_ready",
+      "expected_decision": "reject",
+      "expected_reason_code": "fake_tool_or_domain"
+    },
+    {
+      "suggestion_id": "critic_unsupported_metric",
+      "original_resume_evidence": [
+        "Built Python APIs and PostgreSQL-backed batch workers for internal operations."
+      ],
+      "jd_required_skills": ["Python", "APIs"],
+      "jd_preferred_skills": ["PostgreSQL"],
+      "source_bullet": "Built Python APIs and PostgreSQL-backed batch workers for internal operations.",
+      "proposed_text": "Built Python APIs and reduced batch processing latency by 40%.",
+      "projected_score_delta": "0.140000",
+      "suggestion_type": "patch_ready",
+      "expected_decision": "reject",
+      "expected_reason_code": "unsupported_claim"
+    },
+    {
+      "suggestion_id": "critic_guidance_only",
+      "original_resume_evidence": [
+        "Created API tests and release dashboards for synthetic workflows."
+      ],
+      "jd_required_skills": ["API Testing"],
+      "jd_preferred_skills": ["Dashboards"],
+      "source_bullet": "Created API tests and release dashboards for synthetic workflows.",
+      "proposed_text": "Emphasize API testing and dashboard work when tailoring this resume.",
+      "projected_score_delta": "0.000000",
+      "suggestion_type": "guidance_only",
+      "expected_decision": "downgrade_to_guidance",
+      "expected_reason_code": "safe_guidance_only"
+    }
   ]
 }

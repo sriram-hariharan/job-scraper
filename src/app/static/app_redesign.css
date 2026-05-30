@@ -5748,6 +5748,111 @@ html:not([data-theme="light"]) #pipelineRunRerunModal .pipeline-run-rerun-confir
   color: #bbf7d0;
 }
 
+.agent-trace-panel {
+  gap: 14px;
+}
+
+.agent-trace-counts {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 14px;
+  background: var(--app-inset);
+}
+
+.agent-trace-run-list,
+.agent-trace-step-list {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-trace-run,
+.agent-trace-step {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 14px;
+  background: var(--app-inset);
+}
+
+.agent-trace-step {
+  background: var(--app-surface-2);
+}
+
+.agent-trace-run-header,
+.agent-trace-step-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-trace-run-id,
+.agent-trace-step-name {
+  color: var(--app-text);
+  font-weight: 900;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-step-meta,
+.agent-trace-step-times {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-step-status {
+  min-width: 76px;
+  flex: 0 0 auto;
+}
+
+.agent-trace-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(251, 113, 133, 0.38);
+  border-radius: 12px;
+  background: rgba(251, 113, 133, 0.12);
+  color: #fecdd3;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-json-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.agent-trace-json-detail {
+  border: 1px solid var(--app-border-2);
+  border-radius: 12px;
+  background: var(--app-surface);
+  overflow: hidden;
+}
+
+.agent-trace-json-detail summary {
+  cursor: pointer;
+  padding: 9px 11px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-trace-json-detail pre {
+  margin: 0;
+  padding: 11px;
+  max-height: 220px;
+  overflow: auto;
+  border-top: 1px solid var(--app-border-2);
+  color: var(--app-text-2);
+  font-size: 12px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 html[data-theme="light"] .pipeline-runs-table-wrap,
 html[data-theme="light"] .pipeline-runs-table td,
 html[data-theme="light"] .pipeline-run-detail-panel {
@@ -5771,7 +5876,9 @@ html[data-theme="light"] .pipeline-run-summary-cell,
 html[data-theme="light"] .pipeline-run-compact-cell,
 html[data-theme="light"] .pipeline-run-detail-label,
 html[data-theme="light"] .pipeline-run-count-tile span,
-html[data-theme="light"] .pipeline-run-stage-chip {
+html[data-theme="light"] .pipeline-run-stage-chip,
+html[data-theme="light"] .agent-trace-step-meta,
+html[data-theme="light"] .agent-trace-step-times {
   color: #475569;
 }
 
@@ -5800,9 +5907,31 @@ html[data-theme="light"] .pipeline-run-rerun-btn {
 }
 
 html[data-theme="light"] .pipeline-run-count-tile,
-html[data-theme="light"] .pipeline-run-stage-chip {
+html[data-theme="light"] .pipeline-run-stage-chip,
+html[data-theme="light"] .agent-trace-counts,
+html[data-theme="light"] .agent-trace-run,
+html[data-theme="light"] .agent-trace-step,
+html[data-theme="light"] .agent-trace-json-detail {
   border-color: #d8e2f0;
   background: #f8fafc;
+}
+
+html[data-theme="light"] .agent-trace-step,
+html[data-theme="light"] .agent-trace-json-detail {
+  background: #ffffff;
+}
+
+html[data-theme="light"] .agent-trace-run-id,
+html[data-theme="light"] .agent-trace-step-name,
+html[data-theme="light"] .agent-trace-json-detail summary,
+html[data-theme="light"] .agent-trace-json-detail pre {
+  color: #0f172a;
+}
+
+html[data-theme="light"] .agent-trace-error {
+  border-color: #fca5a5;
+  background: #fff1f2;
+  color: #9f1239;
 }
 
 html[data-theme="light"] .pipeline-run-count-tile.is-blue {

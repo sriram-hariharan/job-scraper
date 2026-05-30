@@ -775,7 +775,106 @@ function renderKeyValueList(items) {
   `).join("");
 }
 
-function renderPipelineRunDetail(data) {
+function renderJsonDetails(label, value) {
+  const payload = value && typeof value === "object" && Object.keys(value).length
+    ? JSON.stringify(value, null, 2)
+    : "";
+  if (!payload) return "";
+  return `
+    <details class="agent-trace-json-detail">
+      <summary>${escapeHtml(label)}</summary>
+      <pre>${escapeHtml(payload)}</pre>
+    </details>
+  `;
+}
+
+function renderAgentTraceStep(step) {
+  const status = pipelineRunStatusLabel(step?.status || "");
+  const tone = pipelineRunStatusTone(step?.status || "");
+  const modelText = [step?.model_provider, step?.model_name].filter(Boolean).join(" / ");
+  const latency = Number(step?.latency_ms || 0);
+  return `
+    <article class="agent-trace-step">
+      <div class="agent-trace-step-header">
+        <div>
+          <div class="agent-trace-step-name">${escapeHtml(step?.agent_name || "Agent step")}</div>
+          <div class="agent-trace-step-meta">
+            ${escapeHtml(step?.agent_version || "")}
+            ${modelText ? ` · ${escapeHtml(modelText)}` : ""}
+            ${latency ? ` · ${escapeHtml(`${latency} ms`)}` : ""}
+          </div>
+        </div>
+        <span class="pipeline-run-status agent-trace-step-status is-${escapeHtml(tone)}">${escapeHtml(status)}</span>
+      </div>
+      <div class="agent-trace-step-times">
+        ${escapeHtml(formatDateTime(step?.started_at || "") || "Start unavailable")}
+        ${step?.completed_at ? ` → ${escapeHtml(formatDateTime(step.completed_at))}` : ""}
+      </div>
+      ${step?.error ? `<div class="agent-trace-error">${escapeHtml(step.error)}</div>` : ""}
+      <div class="agent-trace-json-grid">
+        ${renderJsonDetails("Input", step?.input_json)}
+        ${renderJsonDetails("Output", step?.output_json)}
+        ${renderJsonDetails("Validation", step?.validation_json)}
+        ${renderJsonDetails("Token usage", step?.token_usage_json)}
+        ${renderJsonDetails("Cost", step?.cost_json)}
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentTraceRun(run) {
+  const steps = Array.isArray(run?.steps) ? run.steps : [];
+  return `
+    <article class="agent-trace-run">
+      <div class="agent-trace-run-header">
+        <div>
+          <div class="agent-trace-run-id">${escapeHtml(run?.agent_run_id || "Agent run")}</div>
+          <div class="agent-trace-step-meta">${escapeHtml(run?.context_id || "")}</div>
+        </div>
+        <span class="pipeline-run-status agent-trace-step-status is-${escapeHtml(pipelineRunStatusTone(run?.status || ""))}">
+          ${escapeHtml(pipelineRunStatusLabel(run?.status || ""))}
+        </span>
+      </div>
+      ${renderJsonDetails("Run summary", run?.summary_json)}
+      ${run?.error ? `<div class="agent-trace-error">${escapeHtml(run.error)}</div>` : ""}
+      <div class="agent-trace-step-list">
+        ${steps.length
+          ? steps.map(renderAgentTraceStep).join("")
+          : `<div class="pipeline-runs-empty-cell">No agent steps recorded for this agent run.</div>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentTracePanel(tracePayload, traceError = "") {
+  const runs = Array.isArray(tracePayload?.agent_runs) ? tracePayload.agent_runs : [];
+  const counts = tracePayload?.counts && typeof tracePayload.counts === "object" ? tracePayload.counts : {};
+  const hasSteps = runs.some((run) => Array.isArray(run?.steps) && run.steps.length);
+  return `
+    <section class="pipeline-run-detail-panel agent-trace-panel">
+      <h4>Agent trace</h4>
+      ${traceError ? `<div class="agent-trace-error">${escapeHtml(traceError)}</div>` : ""}
+      ${runs.length || hasSteps
+        ? `
+          <div class="agent-trace-counts">
+            ${renderKeyValueList([
+              ["Agent runs", counts.agent_runs ?? runs.length],
+              ["Agent steps", counts.agent_steps ?? 0],
+              ["Succeeded steps", counts.succeeded_steps ?? 0],
+              ["Warning steps", counts.warning_steps ?? 0],
+              ["Failed steps", counts.failed_steps ?? 0],
+            ])}
+          </div>
+          <div class="agent-trace-run-list">
+            ${runs.map(renderAgentTraceRun).join("")}
+          </div>
+        `
+        : `<div class="pipeline-runs-empty-cell">No agent trace recorded for this run.</div>`}
+    </section>
+  `;
+}
+
+function renderPipelineRunDetail(data, tracePayload = {}, traceError = "") {
   const run = data.run || {};
   const statusJson = data.status_json || {};
   const configJson = data.config_json || {};
@@ -842,14 +941,20 @@ function renderPipelineRunDetail(data) {
           : `<span class="pipeline-runs-empty-cell">No stage list persisted for this run.</span>`}
       </div>
     </section>
+
+    ${renderAgentTracePanel(tracePayload, traceError)}
   `;
 }
 
 async function openPipelineRunStatsModal(runId) {
   qs("pipelineRunStatsBody").innerHTML = `<div class="pipeline-runs-empty-cell">Loading run details...</div>`;
   qs("pipelineRunStatsModal").classList.remove("hidden");
-  const data = await fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
-  renderPipelineRunDetail(data);
+  const detailPromise = fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
+  const tracePromise = fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`)
+    .then((payload) => ({ payload, error: "" }))
+    .catch((err) => ({ payload: {}, error: err.message || "Agent trace could not be loaded." }));
+  const [data, trace] = await Promise.all([detailPromise, tracePromise]);
+  renderPipelineRunDetail(data, trace.payload, trace.error);
 }
 
 function closePipelineRunStatsModal() {

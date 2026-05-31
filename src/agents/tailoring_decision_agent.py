@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import csv
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List
 
 from src.agents import llmops, trace as trace_store
@@ -24,6 +27,24 @@ TAILORING_DECISIONS = {
     "do_not_tailor",
 }
 REQUIRED_ROW_FIELDS = ["job_id", "company", "title"]
+TAILORING_DECISION_FIELDNAMES = [
+    "job_id",
+    "company",
+    "title",
+    "source",
+    "existing_action",
+    "advisory_priority",
+    "tailoring_decision",
+    "tailoring_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "critic_decision",
+    "critic_reason_codes",
+    "winner_resume",
+    "resolved_resume",
+]
 
 
 def _clean_text(value: Any) -> str:
@@ -103,6 +124,7 @@ def _normalize_input_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "job_id": _first_nonblank(row, "job_id", "job_doc_id", "doc_id"),
         "company": _first_nonblank(row, "company", "job_company"),
         "title": _first_nonblank(row, "title", "job_title"),
+        "source": _clean_text(row.get("source")),
         "existing_action": _first_nonblank(row, "existing_action", "action"),
         "advisory_priority": _clean_text(row.get("advisory_priority")),
         "deterministic_winner_score": _first_nonblank(
@@ -123,7 +145,8 @@ def _normalize_input_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "missing_requirement_count": _clean_text(row.get("missing_requirement_count")),
         "winner_missing_requirements": _clean_text(row.get("winner_missing_requirements")),
         "resolved_missing_requirements": _clean_text(row.get("resolved_missing_requirements")),
-        "winner_resume": _first_nonblank(row, "winner_resume", "resolved_resume", "selector_winner_resume"),
+        "winner_resume": _first_nonblank(row, "winner_resume", "selector_winner_resume"),
+        "resolved_resume": _clean_text(row.get("resolved_resume")),
         "missing_gap_count": str(_missing_gap_count(row)),
     }
 
@@ -205,16 +228,20 @@ def build_tailoring_decision_agent_output_payload(
                 "job_id": _clean_text(row.get("job_id")),
                 "company": _clean_text(row.get("company")),
                 "title": _clean_text(row.get("title")),
+                "source": _clean_text(row.get("source")),
                 "existing_action": _clean_text(row.get("existing_action")),
                 "advisory_priority": _clean_text(row.get("advisory_priority")),
                 "tailoring_decision": decision,
                 "tailoring_reason_codes": _decision_reason_codes(row, decision),
                 "deterministic_winner_score": _clean_text(row.get("deterministic_winner_score")),
+                "fallback_only_no_deterministic_match": _clean_text(row.get("fallback_only_no_deterministic_match")),
                 "missing_gap_count": _clean_text(row.get("missing_gap_count")),
                 "winner_resume": _clean_text(row.get("winner_resume")),
+                "resolved_resume": _clean_text(row.get("resolved_resume")),
                 "packet_generation_allowed": _clean_text(row.get("packet_generation_allowed")),
                 "packet_generation_block_reason": _clean_text(row.get("packet_generation_block_reason")),
                 "critic_decision": _clean_text(row.get("critic_decision")),
+                "critic_reason_codes": _clean_text(row.get("critic_reason_codes")),
             }
         )
     return {
@@ -352,6 +379,78 @@ def render_tailoring_decisions(
         "output": output_payload,
         "validation": validation_payload,
         "summary": summary_payload,
+    }
+
+
+def render_tailoring_decision_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    payload = render_tailoring_decisions(rows=rows)
+    rendered_rows: List[Dict[str, str]] = []
+    for item in payload["output"].get("decisions", []) or []:
+        rendered_rows.append(
+            {
+                "job_id": _clean_text(item.get("job_id")),
+                "company": _clean_text(item.get("company")),
+                "title": _clean_text(item.get("title")),
+                "source": _clean_text(item.get("source")),
+                "existing_action": _clean_text(item.get("existing_action")),
+                "advisory_priority": _clean_text(item.get("advisory_priority")),
+                "tailoring_decision": _clean_text(item.get("tailoring_decision")),
+                "tailoring_reason_codes": "|".join(
+                    _clean_text(code)
+                    for code in item.get("tailoring_reason_codes", []) or []
+                    if _clean_text(code)
+                ),
+                "deterministic_winner_score": _clean_text(item.get("deterministic_winner_score")),
+                "fallback_only_no_deterministic_match": _clean_text(item.get("fallback_only_no_deterministic_match")),
+                "packet_generation_allowed": _clean_text(item.get("packet_generation_allowed")),
+                "packet_generation_block_reason": _clean_text(item.get("packet_generation_block_reason")),
+                "critic_decision": _clean_text(item.get("critic_decision")),
+                "critic_reason_codes": _clean_text(item.get("critic_reason_codes")),
+                "winner_resume": _clean_text(item.get("winner_resume")),
+                "resolved_resume": _clean_text(item.get("resolved_resume")),
+            }
+        )
+    return rendered_rows
+
+
+def write_tailoring_decision_artifacts(
+    *,
+    rows: List[Dict[str, Any]],
+    output_csv_path: str | Path,
+    summary_json_path: str | Path | None = None,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    source_artifact_path: str = "",
+) -> Dict[str, Any]:
+    payload = render_tailoring_decisions(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    output_path = Path(output_csv_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=TAILORING_DECISION_FIELDNAMES)
+        writer.writeheader()
+        for row in render_tailoring_decision_rows(rows):
+            writer.writerow({field: row.get(field, "") for field in TAILORING_DECISION_FIELDNAMES})
+
+    summary_path = None
+    if summary_json_path:
+        summary_path = Path(summary_json_path)
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text(
+            json.dumps(payload["summary"], indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    return {
+        "csv_path": str(output_path),
+        "summary_json_path": str(summary_path) if summary_path else "",
+        "row_count": len(payload["output"].get("decisions", []) or []),
+        "summary": payload["summary"],
+        "validation": payload["validation"],
     }
 
 

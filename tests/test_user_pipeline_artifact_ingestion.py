@@ -63,6 +63,11 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
             "job_id,advisory_priority\n1,apply_now\n",
         )
         _write(output_dir / "job_prioritization_summary.json", json.dumps({"row_count": 1}))
+        _write(
+            output_dir / "tailoring_decision_recommendations.csv",
+            "job_id,tailoring_decision\n1,light_tailoring\n",
+        )
+        _write(output_dir / "tailoring_decision_summary.json", json.dumps({"row_count": 1}))
         _write(output_dir / "best_resume_variant_by_job.csv", "job_id,resume\n1,resume.pdf\n")
         _write(output_dir / "current_run_job_corpus.jsonl", json.dumps({"job_id": "1"}) + "\n")
         _write(
@@ -99,13 +104,15 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 14
+    assert result["ingested_count"] == 16
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
     assert "application_execution_queue.csv" in artifact_names
     assert "job_prioritization_recommendations.csv" in artifact_names
     assert "job_prioritization_summary.json" in artifact_names
+    assert "tailoring_decision_recommendations.csv" in artifact_names
+    assert "tailoring_decision_summary.json" in artifact_names
     assert "best_resume_variant_by_job.csv" in artifact_names
     assert "current_run_job_corpus.jsonl" in artifact_names
     assert "role_title_filter_audit.csv" in artifact_names
@@ -120,6 +127,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "application_execution_queue" in artifact_kinds
     assert "job_prioritization_recommendations" in artifact_kinds
     assert "job_prioritization_summary" in artifact_kinds
+    assert "tailoring_decision_recommendations" in artifact_kinds
+    assert "tailoring_decision_summary" in artifact_kinds
     assert "best_resume_variant_by_job" in artifact_kinds
     assert "current_run_job_corpus" in artifact_kinds
     assert "role_title_filter_audit" in artifact_kinds

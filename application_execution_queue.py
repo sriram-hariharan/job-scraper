@@ -6,7 +6,12 @@ from typing import List
 
 from src.agents.job_prioritization_agent import (
     record_job_prioritization_agent_trace,
+    render_job_prioritization_recommendation_rows,
     write_job_prioritization_artifacts,
+)
+from src.agents.tailoring_decision_agent import (
+    record_tailoring_decision_agent_trace,
+    write_tailoring_decision_artifacts,
 )
 from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
 from src.pipeline.resume_selection_credibility import (
@@ -141,6 +146,50 @@ def _load_rows(csv_path: Path) -> List[dict]:
     return rows
 
 
+def _job_key(row: dict) -> str:
+    return _normalize_text(
+        row.get("job_id")
+        or row.get("job_doc_id")
+        or "|".join(
+            [
+                row.get("job_company", "") or row.get("company", ""),
+                row.get("job_title", "") or row.get("title", ""),
+                row.get("job_location", ""),
+            ]
+        )
+    )
+
+
+def _with_priority_overlay(rows: List[dict]) -> List[dict]:
+    priority_by_key = {
+        _job_key(row): row
+        for row in render_job_prioritization_recommendation_rows(rows)
+        if _job_key(row)
+    }
+    merged_rows: List[dict] = []
+    for row in rows:
+        priority_row = priority_by_key.get(_job_key(row), {})
+        merged_rows.append(
+            {
+                **row,
+                "job_id": row.get("job_id", "") or row.get("job_doc_id", ""),
+                "company": row.get("company", "") or row.get("job_company", ""),
+                "title": row.get("title", "") or row.get("job_title", ""),
+                "source": row.get("source", ""),
+                "existing_action": row.get("existing_action", "") or row.get("action", ""),
+                "advisory_priority": priority_row.get("advisory_priority", row.get("advisory_priority", "")),
+                "advisory_reason_codes": priority_row.get("advisory_reason_codes", row.get("advisory_reason_codes", "")),
+                "deterministic_winner_score": (
+                    row.get("deterministic_winner_score", "")
+                    or row.get("selector_winner_score", "")
+                    or row.get("winner_score", "")
+                    or row.get("resolved_score", "")
+                ),
+            }
+        )
+    return merged_rows
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Build a ranked application execution queue from the shortlist CSV."
@@ -170,6 +219,16 @@ def main() -> None:
         "--priority-summary-json",
         default="",
         help="Optional path to write advisory job prioritization summary JSON.",
+    )
+    parser.add_argument(
+        "--tailoring-decision-output-csv",
+        default="",
+        help="Optional path to write advisory tailoring decision recommendations.",
+    )
+    parser.add_argument(
+        "--tailoring-decision-summary-json",
+        default="",
+        help="Optional path to write advisory tailoring decision summary JSON.",
     )
     args = parser.parse_args()
 
@@ -314,12 +373,40 @@ def main() -> None:
         except Exception as exc:
             print(f"Job prioritization advisory artifact skipped: {exc}")
 
+    tailoring_decision_artifact = None
+    tailoring_decision_rows = _with_priority_overlay(queue_rows)
+    if str(args.tailoring_decision_output_csv or "").strip():
+        try:
+            tailoring_decision_artifact = write_tailoring_decision_artifacts(
+                rows=tailoring_decision_rows,
+                output_csv_path=args.tailoring_decision_output_csv,
+                summary_json_path=args.tailoring_decision_summary_json or None,
+                pipeline_run_id=(
+                    os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
+                    or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
+                ),
+                owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
+                source_artifact_path=str(output_csv_path),
+            )
+        except Exception as exc:
+            print(f"Tailoring decision advisory artifact skipped: {exc}")
+
     trace_result = record_job_prioritization_agent_trace(
         rows=queue_rows,
         source_artifact_path=str(output_csv_path),
     )
     if trace_result.get("attempted") and not trace_result.get("recorded"):
         print(f"Job prioritization trace warning: {trace_result.get('warning') or trace_result.get('reason')}")
+
+    tailoring_trace_result = record_tailoring_decision_agent_trace(
+        rows=tailoring_decision_rows,
+        source_artifact_path=str(output_csv_path),
+    )
+    if tailoring_trace_result.get("attempted") and not tailoring_trace_result.get("recorded"):
+        print(
+            "Tailoring decision trace warning: "
+            f"{tailoring_trace_result.get('warning') or tailoring_trace_result.get('reason')}"
+        )
 
     print("=" * 100)
     print("APPLICATION EXECUTION QUEUE")
@@ -329,6 +416,8 @@ def main() -> None:
     print(f"Jobs kept : {len(queue_rows)}")
     if priority_artifact:
         print(f"Priority advisory CSV: {priority_artifact['csv_path']}")
+    if tailoring_decision_artifact:
+        print(f"Tailoring decision advisory CSV: {tailoring_decision_artifact['csv_path']}")
     print()
 
     for row in queue_rows[:args.top_k_console]:

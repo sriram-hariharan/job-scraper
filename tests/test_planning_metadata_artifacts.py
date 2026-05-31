@@ -107,6 +107,8 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         queue_csv = root / "application_execution_queue.csv"
         priority_csv = root / "job_prioritization_recommendations.csv"
         priority_summary = root / "job_prioritization_summary.json"
+        tailoring_decision_csv = root / "tailoring_decision_recommendations.csv"
+        tailoring_decision_summary = root / "tailoring_decision_summary.json"
         _write_selector_fixture(selector_csv)
 
         try:
@@ -131,6 +133,10 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
                 str(priority_csv),
                 "--priority-summary-json",
                 str(priority_summary),
+                "--tailoring-decision-output-csv",
+                str(tailoring_decision_csv),
+                "--tailoring-decision-summary-json",
+                str(tailoring_decision_summary),
                 "--top-k-console",
                 "0",
             ]
@@ -141,7 +147,9 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         shortlist_row = _read_rows(shortlist_csv)[0]
         queue_row = _read_rows(queue_csv)[0]
         priority_row = _read_rows(priority_csv)[0]
+        tailoring_decision_row = _read_rows(tailoring_decision_csv)[0]
         priority_summary_exists = priority_summary.exists()
+        tailoring_decision_summary_exists = tailoring_decision_summary.exists()
 
     for row in (shortlist_row, queue_row):
         assert row["job_location"] == "New York, NY"
@@ -155,6 +163,11 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
     assert priority_row["advisory_priority"] == "apply_now"
     assert priority_row["deterministic_winner_score"] == "0.910000"
     assert priority_summary_exists
+    assert tailoring_decision_row["existing_action"] == queue_row["action"]
+    assert tailoring_decision_row["advisory_priority"] == "apply_now"
+    assert tailoring_decision_row["tailoring_decision"] == "no_tailoring_needed"
+    assert tailoring_decision_row["deterministic_winner_score"] == "0.910000"
+    assert tailoring_decision_summary_exists
 
 
 def test_fallback_only_selector_row_is_visible_but_not_actionable():

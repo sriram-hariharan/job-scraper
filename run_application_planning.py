@@ -463,6 +463,8 @@ def main() -> None:
     execution_queue_csv = output_dir / "application_execution_queue.csv"
     job_prioritization_csv = output_dir / "job_prioritization_recommendations.csv"
     job_prioritization_summary_json = output_dir / "job_prioritization_summary.json"
+    tailoring_decision_csv = output_dir / "tailoring_decision_recommendations.csv"
+    tailoring_decision_summary_json = output_dir / "tailoring_decision_summary.json"
 
     batch_selector_cmd = [
         sys.executable,
@@ -546,6 +548,10 @@ def main() -> None:
         str(job_prioritization_csv),
         "--priority-summary-json",
         str(job_prioritization_summary_json),
+        "--tailoring-decision-output-csv",
+        str(tailoring_decision_csv),
+        "--tailoring-decision-summary-json",
+        str(tailoring_decision_summary_json),
         "--top-k-console",
         str(args.top_k_console),
     ]

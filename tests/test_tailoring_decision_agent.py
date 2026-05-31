@@ -1,3 +1,6 @@
+import csv
+import json
+
 from src.agents import tailoring_decision_agent
 
 
@@ -112,6 +115,52 @@ def test_tailoring_decision_trace_disabled_by_default():
     )
 
     assert result == {"attempted": False, "reason": "trace_disabled"}
+
+
+def test_tailoring_decision_artifact_renders_stable_columns_and_preserves_inputs(tmp_path):
+    rows = [
+        _row(
+            job_doc_id="job_fallback",
+            deterministic_winner_available="false",
+            deterministic_winner_score="0.000000",
+            winner_score="0.000000",
+            fallback_only_no_deterministic_match="true",
+            packet_generation_allowed="false",
+            packet_generation_block_reason="fallback_only_no_deterministic_match",
+        ),
+        _row(job_doc_id="job_critic", critic_decision="reject", critic_reason_codes="unsupported_claim"),
+        _row(job_doc_id="job_light", advisory_priority="apply_now", deterministic_winner_score="0.750000"),
+    ]
+    original_rows = [dict(row) for row in rows]
+    output_csv = tmp_path / "tailoring_decision_recommendations.csv"
+    summary_json = tmp_path / "tailoring_decision_summary.json"
+
+    result = tailoring_decision_agent.write_tailoring_decision_artifacts(
+        rows=rows,
+        output_csv_path=output_csv,
+        summary_json_path=summary_json,
+        pipeline_run_id="run-1",
+        owner_user_id="user-1",
+        source_artifact_path="application_execution_queue.csv",
+    )
+
+    with output_csv.open("r", encoding="utf-8", newline="") as handle:
+        rendered = list(csv.DictReader(handle))
+    summary = json.loads(summary_json.read_text(encoding="utf-8"))
+
+    assert list(rendered[0]) == tailoring_decision_agent.TAILORING_DECISION_FIELDNAMES
+    assert rendered[0]["existing_action"] == "APPLY"
+    assert rendered[0]["advisory_priority"] == "apply_now"
+    assert rendered[0]["tailoring_decision"] == "do_not_tailor"
+    assert rendered[0]["tailoring_reason_codes"] == "fallback_only_no_deterministic_match"
+    assert rendered[1]["tailoring_decision"] == "do_not_tailor"
+    assert rendered[1]["critic_decision"] == "reject"
+    assert rendered[1]["critic_reason_codes"] == "unsupported_claim"
+    assert rendered[2]["tailoring_decision"] == "light_tailoring"
+    assert rendered[2]["winner_resume"] == "backend_resume.pdf"
+    assert result["row_count"] == 3
+    assert summary["agent_name"] == "Tailoring Decision Agent"
+    assert rows == original_rows
 
 
 def test_tailoring_decision_trace_can_be_monkeypatched_without_postgres():

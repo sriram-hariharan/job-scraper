@@ -5,7 +5,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List
 
-from src.agents import trace as trace_store
+from src.agents import llmops, trace as trace_store
 from src.agents.resume_match_agent import (
     TRACE_ENABLED_ENV,
     TRACE_STRICT_ENV,
@@ -433,8 +433,15 @@ def record_critic_agent_trace(
         if not agent_run_id:
             raise RuntimeError("Agent trace run did not return agent_run_id.")
 
-        step_payload = trace_module.record_agent_step(
-            record={
+        llmops_metadata = llmops.build_llmops_metadata(
+            model_provider="deterministic",
+            model_name="critic_rules",
+            agent_name=AGENT_NAME,
+            agent_version=AGENT_VERSION,
+            schema_validation_status=validation_payload.get("validation_status", ""),
+        )
+        step_record = llmops.merge_llmops_into_agent_step_kwargs(
+            {
                 "agent_run_id": agent_run_id,
                 "owner_user_id": context["owner_user_id"],
                 "pipeline_run_id": context["pipeline_run_id"],
@@ -444,7 +451,11 @@ def record_critic_agent_trace(
                 "input_json": {"suggestions": enriched_inputs},
                 "status": "running",
                 "started_at": started_at,
-            }
+            },
+            llmops_metadata,
+        )
+        step_payload = trace_module.record_agent_step(
+            record=step_record
         )
         agent_step_id = _clean_text((step_payload.get("step") or {}).get("agent_step_id"))
         if not agent_step_id:

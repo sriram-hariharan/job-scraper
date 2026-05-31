@@ -145,6 +145,21 @@ def test_critic_trace_can_be_monkeypatched_without_postgres():
         "complete_step",
         "complete_run",
     ]
+    step_record = calls[1][1]
+    assert step_record["model_provider"] == "deterministic"
+    assert step_record["model_name"] == "critic_rules"
+    assert step_record["token_usage_json"] == {
+        "metadata_version": "llmops_metadata_v1",
+        "input_token_count": 0,
+        "output_token_count": 0,
+        "total_token_count": 0,
+    }
+    assert step_record["cost_json"] == {
+        "metadata_version": "llmops_metadata_v1",
+        "estimated_cost": 0.0,
+        "cost_currency": "",
+        "cost_reason": "no_rate_table_configured",
+    }
 
 
 def test_critic_advisory_disabled_keeps_scan_issue_payload_unchanged():

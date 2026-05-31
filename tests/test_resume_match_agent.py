@@ -159,6 +159,20 @@ def test_resume_match_agent_optional_trace_recording_can_be_monkeypatched():
     assert step_record["input_json"]["job_count"] == 1
     assert step_record["owner_user_id"] == "user_1"
     assert step_record["pipeline_run_id"] == "run_1"
+    assert step_record["model_provider"] == "deterministic"
+    assert step_record["model_name"] == "resume_match_rules"
+    assert step_record["token_usage_json"] == {
+        "metadata_version": "llmops_metadata_v1",
+        "input_token_count": 0,
+        "output_token_count": 0,
+        "total_token_count": 0,
+    }
+    assert step_record["cost_json"] == {
+        "metadata_version": "llmops_metadata_v1",
+        "estimated_cost": 0.0,
+        "cost_currency": "",
+        "cost_reason": "no_rate_table_configured",
+    }
 
 
 def test_resume_match_agent_trace_failure_returns_warning_when_not_strict():

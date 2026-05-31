@@ -12,6 +12,7 @@ from src.agents import (
     critic_agent,
     job_prioritization_agent,
     llmops,
+    operator_review_agent,
     resume_match_agent,
     source_health_agent,
     tailoring_decision_agent,
@@ -38,6 +39,10 @@ THRESHOLD_METRIC_KEYS = [
     "fallback_only_do_not_tailor_rate",
     "critic_reject_do_not_tailor_rate",
     "high_score_light_tailoring_rate",
+    "operator_review_accuracy",
+    "ready_to_apply_precision",
+    "hold_or_skip_block_rate",
+    "critic_reject_hold_rate",
     "llmops_metadata_schema_present",
     "llmops_required_keys_present",
     "validation_pass_rate",
@@ -58,6 +63,10 @@ DEFAULT_THRESHOLDS = {
     "fallback_only_do_not_tailor_rate": 1.0,
     "critic_reject_do_not_tailor_rate": 1.0,
     "high_score_light_tailoring_rate": 1.0,
+    "operator_review_accuracy": 1.0,
+    "ready_to_apply_precision": 1.0,
+    "hold_or_skip_block_rate": 1.0,
+    "critic_reject_hold_rate": 1.0,
     "llmops_metadata_schema_present": 1.0,
     "llmops_required_keys_present": 1.0,
     "validation_pass_rate": 1.0,
@@ -83,6 +92,7 @@ def load_benchmark_fixture(path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str,
     payload.setdefault("critic_cases", [])
     payload.setdefault("job_priority_rows", [])
     payload.setdefault("tailoring_decision_rows", [])
+    payload.setdefault("operator_review_rows", [])
     return payload
 
 
@@ -397,6 +407,66 @@ def evaluate_tailoring_decision_rows(rows: List[Dict[str, Any]]) -> Dict[str, An
     }
 
 
+def evaluate_operator_review_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    payload = operator_review_agent.render_operator_review(
+        rows=rows,
+        pipeline_run_id="agentic_benchmark",
+        owner_user_id="benchmark",
+        source_artifact_path="tests/fixtures/agentic_benchmark/cases.json",
+    )
+    actual_by_id = {
+        _clean_text(item.get("job_id")): _clean_text(item.get("operator_review_lane"))
+        for item in payload["output"].get("reviews", []) or []
+    }
+    comparisons = []
+    failed_case_ids: List[str] = []
+    for row in rows:
+        case_id = _clean_text(row.get("job_id") or row.get("job_doc_id"))
+        expected = _clean_text(row.get("expected_operator_lane"))
+        if not expected:
+            continue
+        actual = actual_by_id.get(case_id, "")
+        comparisons.append((expected, actual))
+        if expected != actual:
+            failed_case_ids.append(case_id)
+
+    rendered_rows = list(payload["input"].get("rows", []) or [])
+    reviews = list(payload["output"].get("reviews", []) or [])
+    ready_rows = [
+        _clean_text(row.get("expected_operator_lane")) == "ready_to_apply"
+        for row, item in zip(rows, reviews)
+        if item.get("operator_review_lane") == "ready_to_apply"
+    ]
+    hold_block_rows = [
+        item.get("operator_review_lane") == "hold_or_skip"
+        for row, item in zip(rendered_rows, reviews)
+        if parse_bool(row.get("fallback_only_no_deterministic_match"))
+        or (
+            not parse_bool(row.get("packet_generation_allowed"))
+            and parse_float(row.get("deterministic_winner_score")) <= 0
+        )
+        or _clean_text(row.get("tailoring_decision")).lower() == "do_not_tailor"
+    ]
+    critic_reject_rows = [
+        item.get("operator_review_lane") == "hold_or_skip"
+        for row, item in zip(rendered_rows, reviews)
+        if _clean_text(row.get("critic_decision")).lower() == "reject"
+    ]
+
+    return {
+        "payload": payload,
+        "accuracy": safe_rate(
+            sum(1 for expected, actual in comparisons if expected == actual),
+            len(comparisons),
+        ),
+        "ready_to_apply_precision": bool_rate(ready_rows),
+        "hold_or_skip_block_rate": bool_rate(hold_block_rows),
+        "critic_reject_hold_rate": bool_rate(critic_reject_rows),
+        "failed_case_ids": failed_case_ids,
+        "validation_passed": payload["validation"].get("validation_status") in {"passed", "warning"},
+    }
+
+
 def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, Any]:
     fixture = load_benchmark_fixture(fixture_path)
     source_health = evaluate_source_health_rows(list(fixture.get("source_health_rows", []) or []))
@@ -406,6 +476,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
     tailoring_decision = evaluate_tailoring_decision_rows(
         list(fixture.get("tailoring_decision_rows", []) or [])
     )
+    operator_review = evaluate_operator_review_rows(list(fixture.get("operator_review_rows", []) or []))
     llmops_readiness = llmops.llmops_schema_readiness_payload()
     validation_passes = [
         bool(source_health["validation_passed"]),
@@ -413,6 +484,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         bool(critic["validation_passed"]),
         bool(job_priority["validation_passed"]),
         bool(tailoring_decision["validation_passed"]),
+        bool(operator_review["validation_passed"]),
     ]
     failed_case_ids = (
         list(source_health["failed_case_ids"])
@@ -420,6 +492,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         + list(critic["failed_case_ids"])
         + list(job_priority["failed_case_ids"])
         + list(tailoring_decision["failed_case_ids"])
+        + list(operator_review["failed_case_ids"])
     )
 
     metrics = {
@@ -439,6 +512,10 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "fallback_only_do_not_tailor_rate": tailoring_decision["fallback_only_do_not_tailor_rate"],
         "critic_reject_do_not_tailor_rate": tailoring_decision["critic_reject_do_not_tailor_rate"],
         "high_score_light_tailoring_rate": tailoring_decision["high_score_light_tailoring_rate"],
+        "operator_review_accuracy": operator_review["accuracy"],
+        "ready_to_apply_precision": operator_review["ready_to_apply_precision"],
+        "hold_or_skip_block_rate": operator_review["hold_or_skip_block_rate"],
+        "critic_reject_hold_rate": operator_review["critic_reject_hold_rate"],
         "llmops_metadata_schema_present": 1.0 if llmops_readiness.get("metadata_version") else 0.0,
         "llmops_required_keys_present": 1.0 if llmops_readiness.get("required_keys_present") else 0.0,
         "validation_pass_rate": bool_rate(validation_passes),
@@ -459,6 +536,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "critic_summary": critic["summary"],
             "job_prioritization_summary": job_priority["payload"]["summary"],
             "tailoring_decision_summary": tailoring_decision["payload"]["summary"],
+            "operator_review_summary": operator_review["payload"]["summary"],
             "llmops_observability_readiness": llmops_readiness,
         },
         "component_results": {
@@ -467,6 +545,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "critic": critic,
             "job_prioritization": job_priority,
             "tailoring_decision": tailoring_decision,
+            "operator_review": operator_review,
             "llmops": llmops_readiness,
         },
     }
@@ -490,6 +569,10 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "fallback_only_do_not_tailor_rate": args.min_fallback_only_do_not_tailor_rate,
         "critic_reject_do_not_tailor_rate": args.min_critic_reject_do_not_tailor_rate,
         "high_score_light_tailoring_rate": args.min_high_score_light_tailoring_rate,
+        "operator_review_accuracy": args.min_operator_review_accuracy,
+        "ready_to_apply_precision": args.min_ready_to_apply_precision,
+        "hold_or_skip_block_rate": args.min_hold_or_skip_block_rate,
+        "critic_reject_hold_rate": args.min_critic_reject_hold_rate,
         "llmops_metadata_schema_present": args.min_llmops_metadata_schema_present,
         "llmops_required_keys_present": args.min_llmops_required_keys_present,
         "validation_pass_rate": args.min_validation_pass_rate,
@@ -556,6 +639,10 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "fallback_only_do_not_tailor_rate",
         "critic_reject_do_not_tailor_rate",
         "high_score_light_tailoring_rate",
+        "operator_review_accuracy",
+        "ready_to_apply_precision",
+        "hold_or_skip_block_rate",
+        "critic_reject_hold_rate",
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "validation_pass_rate",
@@ -583,6 +670,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.append("- Critic Agent suggestion validation benchmark")
     lines.append("- Job Prioritization Agent advisory benchmark")
     lines.append("- Tailoring Decision Agent advisory benchmark")
+    lines.append("- Operator Review Agent advisory benchmark")
     lines.append("- LLMOps metadata schema readiness benchmark")
     return "\n".join(lines).strip() + "\n"
 
@@ -631,6 +719,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-fallback-only-do-not-tailor-rate", type=float, default=None)
     parser.add_argument("--min-critic-reject-do-not-tailor-rate", type=float, default=None)
     parser.add_argument("--min-high-score-light-tailoring-rate", type=float, default=None)
+    parser.add_argument("--min-operator-review-accuracy", type=float, default=None)
+    parser.add_argument("--min-ready-to-apply-precision", type=float, default=None)
+    parser.add_argument("--min-hold-or-skip-block-rate", type=float, default=None)
+    parser.add_argument("--min-critic-reject-hold-rate", type=float, default=None)
     parser.add_argument("--min-llmops-metadata-schema-present", type=float, default=None)
     parser.add_argument("--min-llmops-required-keys-present", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)

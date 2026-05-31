@@ -14,6 +14,7 @@ def test_agentic_benchmark_fixture_loads_sanitized_cases():
     assert len(fixture["selector_rows"]) == 3
     assert len(fixture["critic_cases"]) == 4
     assert len(fixture["job_priority_rows"]) == 6
+    assert len(fixture["tailoring_decision_rows"]) == 6
     serialized = json.dumps(fixture).lower()
     assert "sriram" not in serialized
     assert "swatika" not in serialized
@@ -35,6 +36,10 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["fallback_only_skip_rate"] == 1.0
     assert result["high_score_apply_rate"] == 1.0
     assert result["packet_block_skip_rate"] == 1.0
+    assert result["tailoring_decision_accuracy"] == 1.0
+    assert result["fallback_only_do_not_tailor_rate"] == 1.0
+    assert result["critic_reject_do_not_tailor_rate"] == 1.0
+    assert result["high_score_light_tailoring_rate"] == 1.0
     assert result["llmops_metadata_schema_present"] == 1.0
     assert result["llmops_required_keys_present"] == 1.0
     assert result["validation_pass_rate"] == 1.0
@@ -53,6 +58,10 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "fallback_only_skip_rate",
         "high_score_apply_rate",
         "packet_block_skip_rate",
+        "tailoring_decision_accuracy",
+        "fallback_only_do_not_tailor_rate",
+        "critic_reject_do_not_tailor_rate",
+        "high_score_light_tailoring_rate",
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "validation_pass_rate",
@@ -125,6 +134,29 @@ def test_agentic_benchmark_job_prioritization_metrics_are_included():
     assert evaluation["payload"]["summary"]["agent_name"] == "Job Prioritization Agent"
 
 
+def test_agentic_benchmark_tailoring_decision_metrics_are_included():
+    fixture = agentic_benchmark.load_benchmark_fixture()
+    evaluation = agentic_benchmark.evaluate_tailoring_decision_rows(
+        fixture["tailoring_decision_rows"]
+    )
+    decisions = {
+        item["job_id"]: item["tailoring_decision"]
+        for item in evaluation["payload"]["output"]["decisions"]
+    }
+
+    assert decisions["tailoring_fallback_only"] == "do_not_tailor"
+    assert decisions["tailoring_critic_reject"] == "do_not_tailor"
+    assert decisions["tailoring_manual_review"] == "manual_review_before_tailoring"
+    assert decisions["tailoring_tailor_first"] == "tailor_before_apply"
+    assert decisions["tailoring_light"] == "light_tailoring"
+    assert decisions["tailoring_no_needed"] == "no_tailoring_needed"
+    assert evaluation["accuracy"] == 1.0
+    assert evaluation["fallback_only_do_not_tailor_rate"] == 1.0
+    assert evaluation["critic_reject_do_not_tailor_rate"] == 1.0
+    assert evaluation["high_score_light_tailoring_rate"] == 1.0
+    assert evaluation["payload"]["summary"]["agent_name"] == "Tailoring Decision Agent"
+
+
 def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     result = agentic_benchmark.run_benchmark()
     result["thresholds"] = agentic_benchmark.evaluate_thresholds(result)
@@ -139,6 +171,7 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     assert "Resume Match Agent credibility benchmark" in report
     assert "Critic Agent suggestion validation benchmark" in report
     assert "Job Prioritization Agent advisory benchmark" in report
+    assert "Tailoring Decision Agent advisory benchmark" in report
     assert "LLMOps metadata schema readiness benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:

@@ -8,7 +8,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import critic_agent, job_prioritization_agent, llmops, resume_match_agent, source_health_agent
+from src.agents import (
+    critic_agent,
+    job_prioritization_agent,
+    llmops,
+    resume_match_agent,
+    source_health_agent,
+    tailoring_decision_agent,
+)
 from src.evaluation.metrics import bool_rate, safe_rate
 from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
@@ -27,6 +34,10 @@ THRESHOLD_METRIC_KEYS = [
     "fallback_only_skip_rate",
     "high_score_apply_rate",
     "packet_block_skip_rate",
+    "tailoring_decision_accuracy",
+    "fallback_only_do_not_tailor_rate",
+    "critic_reject_do_not_tailor_rate",
+    "high_score_light_tailoring_rate",
     "llmops_metadata_schema_present",
     "llmops_required_keys_present",
     "validation_pass_rate",
@@ -43,6 +54,10 @@ DEFAULT_THRESHOLDS = {
     "fallback_only_skip_rate": 1.0,
     "high_score_apply_rate": 1.0,
     "packet_block_skip_rate": 1.0,
+    "tailoring_decision_accuracy": 1.0,
+    "fallback_only_do_not_tailor_rate": 1.0,
+    "critic_reject_do_not_tailor_rate": 1.0,
+    "high_score_light_tailoring_rate": 1.0,
     "llmops_metadata_schema_present": 1.0,
     "llmops_required_keys_present": 1.0,
     "validation_pass_rate": 1.0,
@@ -67,6 +82,7 @@ def load_benchmark_fixture(path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str,
     payload.setdefault("selector_rows", [])
     payload.setdefault("critic_cases", [])
     payload.setdefault("job_priority_rows", [])
+    payload.setdefault("tailoring_decision_rows", [])
     return payload
 
 
@@ -323,24 +339,87 @@ def evaluate_job_priority_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def evaluate_tailoring_decision_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    payload = tailoring_decision_agent.render_tailoring_decisions(
+        rows=rows,
+        pipeline_run_id="agentic_benchmark",
+        owner_user_id="benchmark",
+        source_artifact_path="tests/fixtures/agentic_benchmark/cases.json",
+    )
+    actual_by_id = {
+        _clean_text(item.get("job_id")): _clean_text(item.get("tailoring_decision"))
+        for item in payload["output"].get("decisions", []) or []
+    }
+    comparisons = []
+    failed_case_ids: List[str] = []
+    for row in rows:
+        case_id = _clean_text(row.get("job_id") or row.get("job_doc_id"))
+        expected = _clean_text(row.get("expected_tailoring_decision"))
+        if not expected:
+            continue
+        actual = actual_by_id.get(case_id, "")
+        comparisons.append((expected, actual))
+        if expected != actual:
+            failed_case_ids.append(case_id)
+
+    rendered_rows = list(payload["input"].get("rows", []) or [])
+    decisions = list(payload["output"].get("decisions", []) or [])
+    fallback_only_rows = [
+        item.get("tailoring_decision") == "do_not_tailor"
+        for row, item in zip(rendered_rows, decisions)
+        if parse_bool(row.get("fallback_only_no_deterministic_match"))
+    ]
+    critic_reject_rows = [
+        item.get("tailoring_decision") == "do_not_tailor"
+        for row, item in zip(rendered_rows, decisions)
+        if _clean_text(row.get("critic_decision")).lower() == "reject"
+    ]
+    high_score_light_rows = [
+        item.get("tailoring_decision") == "light_tailoring"
+        for row, item in zip(rendered_rows, decisions)
+        if parse_float(row.get("deterministic_winner_score")) >= 0.70
+        and parse_float(row.get("deterministic_winner_score")) < 0.80
+        and _clean_text(row.get("advisory_priority")).lower() == "apply_now"
+        and _clean_text(row.get("critic_decision")).lower() != "reject"
+    ]
+
+    return {
+        "payload": payload,
+        "accuracy": safe_rate(
+            sum(1 for expected, actual in comparisons if expected == actual),
+            len(comparisons),
+        ),
+        "fallback_only_do_not_tailor_rate": bool_rate(fallback_only_rows),
+        "critic_reject_do_not_tailor_rate": bool_rate(critic_reject_rows),
+        "high_score_light_tailoring_rate": bool_rate(high_score_light_rows),
+        "failed_case_ids": failed_case_ids,
+        "validation_passed": payload["validation"].get("validation_status") in {"passed", "warning"},
+    }
+
+
 def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, Any]:
     fixture = load_benchmark_fixture(fixture_path)
     source_health = evaluate_source_health_rows(list(fixture.get("source_health_rows", []) or []))
     resume_match = evaluate_resume_selector_rows(list(fixture.get("selector_rows", []) or []))
     critic = evaluate_critic_cases(list(fixture.get("critic_cases", []) or []))
     job_priority = evaluate_job_priority_rows(list(fixture.get("job_priority_rows", []) or []))
+    tailoring_decision = evaluate_tailoring_decision_rows(
+        list(fixture.get("tailoring_decision_rows", []) or [])
+    )
     llmops_readiness = llmops.llmops_schema_readiness_payload()
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
         bool(critic["validation_passed"]),
         bool(job_priority["validation_passed"]),
+        bool(tailoring_decision["validation_passed"]),
     ]
     failed_case_ids = (
         list(source_health["failed_case_ids"])
         + list(resume_match["failed_case_ids"])
         + list(critic["failed_case_ids"])
         + list(job_priority["failed_case_ids"])
+        + list(tailoring_decision["failed_case_ids"])
     )
 
     metrics = {
@@ -356,6 +435,10 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "fallback_only_skip_rate": job_priority["fallback_only_skip_rate"],
         "high_score_apply_rate": job_priority["high_score_apply_rate"],
         "packet_block_skip_rate": job_priority["packet_block_skip_rate"],
+        "tailoring_decision_accuracy": tailoring_decision["accuracy"],
+        "fallback_only_do_not_tailor_rate": tailoring_decision["fallback_only_do_not_tailor_rate"],
+        "critic_reject_do_not_tailor_rate": tailoring_decision["critic_reject_do_not_tailor_rate"],
+        "high_score_light_tailoring_rate": tailoring_decision["high_score_light_tailoring_rate"],
         "llmops_metadata_schema_present": 1.0 if llmops_readiness.get("metadata_version") else 0.0,
         "llmops_required_keys_present": 1.0 if llmops_readiness.get("required_keys_present") else 0.0,
         "validation_pass_rate": bool_rate(validation_passes),
@@ -375,6 +458,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             ),
             "critic_summary": critic["summary"],
             "job_prioritization_summary": job_priority["payload"]["summary"],
+            "tailoring_decision_summary": tailoring_decision["payload"]["summary"],
             "llmops_observability_readiness": llmops_readiness,
         },
         "component_results": {
@@ -382,6 +466,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "resume_match": resume_match,
             "critic": critic,
             "job_prioritization": job_priority,
+            "tailoring_decision": tailoring_decision,
             "llmops": llmops_readiness,
         },
     }
@@ -401,6 +486,10 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "fallback_only_skip_rate": args.min_fallback_only_skip_rate,
         "high_score_apply_rate": args.min_high_score_apply_rate,
         "packet_block_skip_rate": args.min_packet_block_skip_rate,
+        "tailoring_decision_accuracy": args.min_tailoring_decision_accuracy,
+        "fallback_only_do_not_tailor_rate": args.min_fallback_only_do_not_tailor_rate,
+        "critic_reject_do_not_tailor_rate": args.min_critic_reject_do_not_tailor_rate,
+        "high_score_light_tailoring_rate": args.min_high_score_light_tailoring_rate,
         "llmops_metadata_schema_present": args.min_llmops_metadata_schema_present,
         "llmops_required_keys_present": args.min_llmops_required_keys_present,
         "validation_pass_rate": args.min_validation_pass_rate,
@@ -463,6 +552,10 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "fallback_only_skip_rate",
         "high_score_apply_rate",
         "packet_block_skip_rate",
+        "tailoring_decision_accuracy",
+        "fallback_only_do_not_tailor_rate",
+        "critic_reject_do_not_tailor_rate",
+        "high_score_light_tailoring_rate",
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "validation_pass_rate",
@@ -489,6 +582,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.append("- Resume Match Agent credibility benchmark")
     lines.append("- Critic Agent suggestion validation benchmark")
     lines.append("- Job Prioritization Agent advisory benchmark")
+    lines.append("- Tailoring Decision Agent advisory benchmark")
     lines.append("- LLMOps metadata schema readiness benchmark")
     return "\n".join(lines).strip() + "\n"
 
@@ -533,6 +627,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-fallback-only-skip-rate", type=float, default=None)
     parser.add_argument("--min-high-score-apply-rate", type=float, default=None)
     parser.add_argument("--min-packet-block-skip-rate", type=float, default=None)
+    parser.add_argument("--min-tailoring-decision-accuracy", type=float, default=None)
+    parser.add_argument("--min-fallback-only-do-not-tailor-rate", type=float, default=None)
+    parser.add_argument("--min-critic-reject-do-not-tailor-rate", type=float, default=None)
+    parser.add_argument("--min-high-score-light-tailoring-rate", type=float, default=None)
     parser.add_argument("--min-llmops-metadata-schema-present", type=float, default=None)
     parser.add_argument("--min-llmops-required-keys-present", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)

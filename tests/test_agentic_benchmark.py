@@ -13,6 +13,7 @@ def test_agentic_benchmark_fixture_loads_sanitized_cases():
     assert len(fixture["source_health_rows"]) == 5
     assert len(fixture["selector_rows"]) == 3
     assert len(fixture["critic_cases"]) == 4
+    assert len(fixture["job_priority_rows"]) == 6
     serialized = json.dumps(fixture).lower()
     assert "sriram" not in serialized
     assert "swatika" not in serialized
@@ -30,6 +31,10 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["critic_unsupported_claim_rejection_rate"] == 1.0
     assert result["critic_safe_suggestion_approval_rate"] == 1.0
     assert result["critic_downgrade_rate"] == 1.0
+    assert result["job_priority_accuracy"] == 1.0
+    assert result["fallback_only_skip_rate"] == 1.0
+    assert result["high_score_apply_rate"] == 1.0
+    assert result["packet_block_skip_rate"] == 1.0
     assert result["llmops_metadata_schema_present"] == 1.0
     assert result["llmops_required_keys_present"] == 1.0
     assert result["validation_pass_rate"] == 1.0
@@ -44,6 +49,10 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "critic_unsupported_claim_rejection_rate",
         "critic_safe_suggestion_approval_rate",
         "critic_downgrade_rate",
+        "job_priority_accuracy",
+        "fallback_only_skip_rate",
+        "high_score_apply_rate",
+        "packet_block_skip_rate",
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "validation_pass_rate",
@@ -95,6 +104,27 @@ def test_agentic_benchmark_critic_metrics_are_included():
     assert evaluation["summary"]["agent_name"] == "Critic Agent"
 
 
+def test_agentic_benchmark_job_prioritization_metrics_are_included():
+    fixture = agentic_benchmark.load_benchmark_fixture()
+    evaluation = agentic_benchmark.evaluate_job_priority_rows(fixture["job_priority_rows"])
+    priorities = {
+        item["job_id"]: item["advisory_priority"]
+        for item in evaluation["payload"]["output"]["recommendations"]
+    }
+
+    assert priorities["priority_fallback_only"] == "skip_for_now"
+    assert priorities["priority_packet_blocked"] == "skip_for_now"
+    assert priorities["priority_manual_review"] == "manual_review"
+    assert priorities["priority_tailor_first"] == "tailor_first"
+    assert priorities["priority_apply_now"] == "apply_now"
+    assert priorities["priority_watch_source"] == "watch_source"
+    assert evaluation["accuracy"] == 1.0
+    assert evaluation["fallback_only_skip_rate"] == 1.0
+    assert evaluation["high_score_apply_rate"] == 1.0
+    assert evaluation["packet_block_skip_rate"] == 1.0
+    assert evaluation["payload"]["summary"]["agent_name"] == "Job Prioritization Agent"
+
+
 def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     result = agentic_benchmark.run_benchmark()
     result["thresholds"] = agentic_benchmark.evaluate_thresholds(result)
@@ -108,6 +138,7 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     assert "All configured regression thresholds passed." in report
     assert "Resume Match Agent credibility benchmark" in report
     assert "Critic Agent suggestion validation benchmark" in report
+    assert "Job Prioritization Agent advisory benchmark" in report
     assert "LLMOps metadata schema readiness benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:

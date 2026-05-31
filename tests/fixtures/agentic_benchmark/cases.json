@@ -209,6 +209,87 @@
       "expected_credibility": "fallback_only_blocked"
     }
   ],
+  "job_priority_rows": [
+    {
+      "job_id": "priority_fallback_only",
+      "company": "Fallback Example",
+      "title": "Software Engineer",
+      "source": "greenhouse",
+      "action": "APPLY",
+      "deterministic_winner_available": "false",
+      "deterministic_winner_score": "0.000000",
+      "fallback_only_no_deterministic_match": "true",
+      "packet_generation_allowed": "false",
+      "packet_generation_block_reason": "fallback_only_no_deterministic_match",
+      "expected_priority": "skip_for_now"
+    },
+    {
+      "job_id": "priority_packet_blocked",
+      "company": "Blocked Example",
+      "title": "Backend Engineer",
+      "source": "lever",
+      "action": "APPLY",
+      "deterministic_winner_available": "false",
+      "deterministic_winner_score": "0.000000",
+      "fallback_only_no_deterministic_match": "false",
+      "packet_generation_allowed": "false",
+      "packet_generation_block_reason": "no_deterministic_winner",
+      "expected_priority": "skip_for_now"
+    },
+    {
+      "job_id": "priority_manual_review",
+      "company": "Review Example",
+      "title": "Data Engineer",
+      "source": "ashby",
+      "action": "APPLY",
+      "deterministic_winner_available": "true",
+      "deterministic_winner_score": "0.550000",
+      "fallback_only_no_deterministic_match": "false",
+      "packet_generation_allowed": "true",
+      "packet_generation_block_reason": "",
+      "expected_priority": "manual_review"
+    },
+    {
+      "job_id": "priority_tailor_first",
+      "company": "Tailor Example",
+      "title": "ML Engineer",
+      "source": "builtin",
+      "action": "MAYBE_TAILOR",
+      "deterministic_winner_available": "true",
+      "deterministic_winner_score": "0.650000",
+      "fallback_only_no_deterministic_match": "false",
+      "packet_generation_allowed": "true",
+      "packet_generation_block_reason": "",
+      "expected_priority": "tailor_first"
+    },
+    {
+      "job_id": "priority_apply_now",
+      "company": "Apply Example",
+      "title": "Backend Software Engineer",
+      "source": "greenhouse",
+      "action": "APPLY",
+      "deterministic_winner_available": "true",
+      "deterministic_winner_score": "0.750000",
+      "fallback_only_no_deterministic_match": "false",
+      "packet_generation_allowed": "true",
+      "packet_generation_block_reason": "",
+      "expected_priority": "apply_now"
+    },
+    {
+      "job_id": "priority_watch_source",
+      "company": "Watch Example",
+      "title": "Infrastructure Engineer",
+      "source": "greenhouse",
+      "action": "APPLY",
+      "deterministic_winner_available": "true",
+      "deterministic_winner_score": "0.760000",
+      "fallback_only_no_deterministic_match": "false",
+      "packet_generation_allowed": "true",
+      "packet_generation_block_reason": "",
+      "source_recommendation": "monitor",
+      "expected_priority": "watch_source"
+    }
+  ],
   "critic_cases": [
     {
       "suggestion_id": "critic_supported_patch",

@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import critic_agent, llmops, resume_match_agent, source_health_agent
+from src.agents import critic_agent, job_prioritization_agent, llmops, resume_match_agent, source_health_agent
 from src.evaluation.metrics import bool_rate, safe_rate
 from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
@@ -23,6 +23,10 @@ THRESHOLD_METRIC_KEYS = [
     "critic_unsupported_claim_rejection_rate",
     "critic_safe_suggestion_approval_rate",
     "critic_downgrade_rate",
+    "job_priority_accuracy",
+    "fallback_only_skip_rate",
+    "high_score_apply_rate",
+    "packet_block_skip_rate",
     "llmops_metadata_schema_present",
     "llmops_required_keys_present",
     "validation_pass_rate",
@@ -35,6 +39,10 @@ DEFAULT_THRESHOLDS = {
     "critic_unsupported_claim_rejection_rate": 1.0,
     "critic_safe_suggestion_approval_rate": 1.0,
     "critic_downgrade_rate": 1.0,
+    "job_priority_accuracy": 1.0,
+    "fallback_only_skip_rate": 1.0,
+    "high_score_apply_rate": 1.0,
+    "packet_block_skip_rate": 1.0,
     "llmops_metadata_schema_present": 1.0,
     "llmops_required_keys_present": 1.0,
     "validation_pass_rate": 1.0,
@@ -58,6 +66,7 @@ def load_benchmark_fixture(path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str,
     payload.setdefault("source_health_rows", [])
     payload.setdefault("selector_rows", [])
     payload.setdefault("critic_cases", [])
+    payload.setdefault("job_priority_rows", [])
     return payload
 
 
@@ -255,21 +264,83 @@ def evaluate_critic_cases(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def evaluate_job_priority_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    payload = job_prioritization_agent.render_job_prioritization_recommendations(
+        rows=rows,
+        pipeline_run_id="agentic_benchmark",
+        owner_user_id="benchmark",
+        source_artifact_path="tests/fixtures/agentic_benchmark/cases.json",
+    )
+    actual_by_id = {
+        _clean_text(item.get("job_id")): _clean_text(item.get("advisory_priority"))
+        for item in payload["output"].get("recommendations", []) or []
+    }
+    comparisons = []
+    failed_case_ids: List[str] = []
+    for row in rows:
+        case_id = _clean_text(row.get("job_id") or row.get("job_doc_id"))
+        expected = _clean_text(row.get("expected_priority"))
+        if not expected:
+            continue
+        actual = actual_by_id.get(case_id, "")
+        comparisons.append((expected, actual))
+        if expected != actual:
+            failed_case_ids.append(case_id)
+
+    rendered_rows = list(payload["input"].get("rows", []) or [])
+    recommendations = list(payload["output"].get("recommendations", []) or [])
+    fallback_rows = [
+        rec.get("advisory_priority") == "skip_for_now"
+        for row, rec in zip(rendered_rows, recommendations)
+        if parse_bool(row.get("fallback_only_no_deterministic_match"))
+    ]
+    high_score_rows = [
+        rec.get("advisory_priority") == "apply_now"
+        for row, rec in zip(rendered_rows, recommendations)
+        if parse_bool(row.get("deterministic_winner_available"))
+        and parse_float(row.get("deterministic_winner_score")) >= 0.70
+        and parse_bool(row.get("packet_generation_allowed"))
+        and _clean_text(row.get("source_recommendation")) not in {"monitor", "demote", "needs_timestamp_fix"}
+        and _clean_text(row.get("critic_decision")).lower() != "reject"
+    ]
+    packet_block_rows = [
+        rec.get("advisory_priority") != "apply_now"
+        for row, rec in zip(rendered_rows, recommendations)
+        if not parse_bool(row.get("packet_generation_allowed"))
+    ]
+
+    return {
+        "payload": payload,
+        "accuracy": safe_rate(
+            sum(1 for expected, actual in comparisons if expected == actual),
+            len(comparisons),
+        ),
+        "fallback_only_skip_rate": bool_rate(fallback_rows),
+        "high_score_apply_rate": bool_rate(high_score_rows),
+        "packet_block_skip_rate": bool_rate(packet_block_rows),
+        "failed_case_ids": failed_case_ids,
+        "validation_passed": payload["validation"].get("validation_status") in {"passed", "warning"},
+    }
+
+
 def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, Any]:
     fixture = load_benchmark_fixture(fixture_path)
     source_health = evaluate_source_health_rows(list(fixture.get("source_health_rows", []) or []))
     resume_match = evaluate_resume_selector_rows(list(fixture.get("selector_rows", []) or []))
     critic = evaluate_critic_cases(list(fixture.get("critic_cases", []) or []))
+    job_priority = evaluate_job_priority_rows(list(fixture.get("job_priority_rows", []) or []))
     llmops_readiness = llmops.llmops_schema_readiness_payload()
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
         bool(critic["validation_passed"]),
+        bool(job_priority["validation_passed"]),
     ]
     failed_case_ids = (
         list(source_health["failed_case_ids"])
         + list(resume_match["failed_case_ids"])
         + list(critic["failed_case_ids"])
+        + list(job_priority["failed_case_ids"])
     )
 
     metrics = {
@@ -281,6 +352,10 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "critic_unsupported_claim_rejection_rate": critic["critic_unsupported_claim_rejection_rate"],
         "critic_safe_suggestion_approval_rate": critic["critic_safe_suggestion_approval_rate"],
         "critic_downgrade_rate": critic["critic_downgrade_rate"],
+        "job_priority_accuracy": job_priority["accuracy"],
+        "fallback_only_skip_rate": job_priority["fallback_only_skip_rate"],
+        "high_score_apply_rate": job_priority["high_score_apply_rate"],
+        "packet_block_skip_rate": job_priority["packet_block_skip_rate"],
         "llmops_metadata_schema_present": 1.0 if llmops_readiness.get("metadata_version") else 0.0,
         "llmops_required_keys_present": 1.0 if llmops_readiness.get("required_keys_present") else 0.0,
         "validation_pass_rate": bool_rate(validation_passes),
@@ -299,12 +374,14 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
                 validation_payload=resume_match["validation"],
             ),
             "critic_summary": critic["summary"],
+            "job_prioritization_summary": job_priority["payload"]["summary"],
             "llmops_observability_readiness": llmops_readiness,
         },
         "component_results": {
             "source_health": source_health,
             "resume_match": resume_match,
             "critic": critic,
+            "job_prioritization": job_priority,
             "llmops": llmops_readiness,
         },
     }
@@ -320,6 +397,10 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "critic_unsupported_claim_rejection_rate": args.min_critic_unsupported_claim_rejection_rate,
         "critic_safe_suggestion_approval_rate": args.min_critic_safe_suggestion_approval_rate,
         "critic_downgrade_rate": args.min_critic_downgrade_rate,
+        "job_priority_accuracy": args.min_job_priority_accuracy,
+        "fallback_only_skip_rate": args.min_fallback_only_skip_rate,
+        "high_score_apply_rate": args.min_high_score_apply_rate,
+        "packet_block_skip_rate": args.min_packet_block_skip_rate,
         "llmops_metadata_schema_present": args.min_llmops_metadata_schema_present,
         "llmops_required_keys_present": args.min_llmops_required_keys_present,
         "validation_pass_rate": args.min_validation_pass_rate,
@@ -378,6 +459,10 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "critic_unsupported_claim_rejection_rate",
         "critic_safe_suggestion_approval_rate",
         "critic_downgrade_rate",
+        "job_priority_accuracy",
+        "fallback_only_skip_rate",
+        "high_score_apply_rate",
+        "packet_block_skip_rate",
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "validation_pass_rate",
@@ -403,6 +488,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.append("- Source Health Agent advisory benchmark")
     lines.append("- Resume Match Agent credibility benchmark")
     lines.append("- Critic Agent suggestion validation benchmark")
+    lines.append("- Job Prioritization Agent advisory benchmark")
     lines.append("- LLMOps metadata schema readiness benchmark")
     return "\n".join(lines).strip() + "\n"
 
@@ -443,6 +529,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-critic-unsupported-claim-rejection-rate", type=float, default=None)
     parser.add_argument("--min-critic-safe-suggestion-approval-rate", type=float, default=None)
     parser.add_argument("--min-critic-downgrade-rate", type=float, default=None)
+    parser.add_argument("--min-job-priority-accuracy", type=float, default=None)
+    parser.add_argument("--min-fallback-only-skip-rate", type=float, default=None)
+    parser.add_argument("--min-high-score-apply-rate", type=float, default=None)
+    parser.add_argument("--min-packet-block-skip-rate", type=float, default=None)
     parser.add_argument("--min-llmops-metadata-schema-present", type=float, default=None)
     parser.add_argument("--min-llmops-required-keys-present", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)

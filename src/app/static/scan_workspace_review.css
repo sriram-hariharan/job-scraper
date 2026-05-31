@@ -1066,6 +1066,136 @@ body .scan-workspace-page.page[data-bs-theme="dark"] > .page-header .scan-worksp
   color: #fda4af !important;
 }
 
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card-badge,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card-meta,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-reason {
+  display: inline-flex !important;
+  align-items: center !important;
+  min-height: 22px !important;
+  border-radius: 999px !important;
+  font-size: 10px !important;
+  font-weight: 850 !important;
+  line-height: 1 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini {
+  gap: 5px !important;
+  max-width: 220px !important;
+  padding: 0 8px !important;
+  border: 1px solid var(--scan-border) !important;
+  background: var(--scan-panel-soft) !important;
+  color: var(--scan-text) !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini-label {
+  color: var(--scan-muted) !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini-decision,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini-confidence,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini-reasons {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini--approve {
+  border-color: rgba(16, 185, 129, 0.42) !important;
+  background: rgba(16, 185, 129, 0.12) !important;
+  color: #bbf7d0 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini--reject {
+  border-color: rgba(244, 63, 94, 0.5) !important;
+  background: rgba(244, 63, 94, 0.14) !important;
+  color: #fecdd3 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-mini--guidance {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  background: rgba(245, 158, 11, 0.14) !important;
+  color: #fde68a !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card {
+  display: grid !important;
+  gap: 7px !important;
+  margin-top: 8px !important;
+  padding: 9px 10px !important;
+  border: 1px solid var(--scan-border) !important;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--scan-panel-strong) 78%, var(--scan-panel-soft) 22%) !important;
+  color: var(--scan-text) !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card-header,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-reasons {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 6px !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card-kicker {
+  color: var(--scan-muted) !important;
+  font-size: 10px !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.04em !important;
+  text-transform: uppercase !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card-badge,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card-meta,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-reason {
+  padding: 0 7px !important;
+  border: 1px solid var(--scan-border) !important;
+  background: var(--scan-panel-soft) !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card--approve .scan-workspace-critic-card-badge {
+  border-color: rgba(16, 185, 129, 0.42) !important;
+  color: #bbf7d0 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card--reject .scan-workspace-critic-card-badge {
+  border-color: rgba(244, 63, 94, 0.5) !important;
+  color: #fecdd3 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-card--guidance .scan-workspace-critic-card-badge {
+  border-color: rgba(245, 158, 11, 0.5) !important;
+  color: #fde68a !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-notes,
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-evidence {
+  color: var(--scan-muted) !important;
+  font-size: 11px !important;
+  font-weight: 650 !important;
+  line-height: 1.35 !important;
+}
+
+#scanWorkspaceInteractiveSummary .scan-workspace-critic-evidence {
+  display: grid !important;
+  gap: 4px !important;
+}
+
+html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-critic-mini--approve,
+html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-critic-card--approve .scan-workspace-critic-card-badge {
+  color: #047857 !important;
+}
+
+html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-critic-mini--reject,
+html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-critic-card--reject .scan-workspace-critic-card-badge {
+  color: #be123c !important;
+}
+
+html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-critic-mini--guidance,
+html[data-theme="light"] #scanWorkspaceInteractiveSummary .scan-workspace-critic-card--guidance .scan-workspace-critic-card-badge {
+  color: #b45309 !important;
+}
+
 .scan-review-toolbar {
   display: flex !important;
   flex: 0 0 auto !important;

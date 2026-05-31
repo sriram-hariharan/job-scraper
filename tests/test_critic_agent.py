@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from src.agents import critic_agent
 from src.app.services import _build_tailoring_scan_issue_contract
 
@@ -301,3 +303,23 @@ def test_critic_advisory_trace_enabled_can_be_monkeypatched_without_postgres():
         "complete_step",
         "complete_run",
     ]
+
+
+def test_scan_workspace_ui_renders_critic_advisory_when_present():
+    script = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    styles = Path("src/app/static/scan_workspace_review.css").read_text(encoding="utf-8")
+
+    assert "renderScanWorkspaceCriticAdvisorySummary" in script
+    assert "renderScanWorkspaceCriticAdvisoryDetails" in script
+    assert "critic_advisory_only" in script
+    assert "critic_reason_codes" in script
+    assert "scan-workspace-critic-mini" in script
+    assert "scan-workspace-critic-card" in script
+    assert "scan-workspace-critic-mini--reject" in styles
+    assert "scan-workspace-critic-mini--guidance" in styles
+
+
+def test_scan_workspace_ui_critic_render_helpers_return_empty_without_metadata():
+    script = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+
+    assert "if (!hasScanWorkspaceCriticAdvisory(item)) return \"\";" in script

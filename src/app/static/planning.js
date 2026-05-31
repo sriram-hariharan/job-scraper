@@ -8017,6 +8017,7 @@ function renderReplacementDecisionSection({
                   projectedDelta: item.projected_overall_delta,
                 })
               : "";
+          const criticDetailsHtml = renderScanWorkspaceCriticAdvisoryDetails(item);
 
           return `
             <article
@@ -8076,6 +8077,8 @@ function renderReplacementDecisionSection({
                   ${compactImpactHtml}
                 </div>
               ` : ""}
+
+              ${criticDetailsHtml}
 
               ${reviewActionsEnabled && mode === "direction_only" && candidateId ? `
                 <div class="tailoring-card-actions tailoring-card-actions--compact tailoring-card-actions--review">
@@ -10290,6 +10293,109 @@ function getScanWorkspaceIssueToneClassForItem(item, bucket) {
   return "is-missing";
 }
 
+function getScanWorkspaceCriticDecisionLabel(value) {
+  const safeValue = String(value || "").trim();
+  if (!safeValue) return "";
+  if (safeValue === "downgrade_to_guidance") return "Guidance";
+  return humanizeUnderscoreLabel(safeValue, "").replace(/^\w/, (char) => char.toUpperCase());
+}
+
+function getScanWorkspaceCriticTone(value) {
+  const safeValue = String(value || "").trim();
+  if (safeValue === "approve") return "approve";
+  if (safeValue === "reject") return "reject";
+  if (safeValue === "downgrade_to_guidance") return "guidance";
+  return "neutral";
+}
+
+function hasScanWorkspaceCriticAdvisory(item) {
+  return Boolean(item?.critic_advisory_only && String(item?.critic_decision || "").trim());
+}
+
+function formatScanWorkspaceCriticConfidence(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  return `${Math.round(percent)}%`;
+}
+
+function formatScanWorkspaceCriticScoreDelta(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  const normalized = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+  const prefix = normalized > 0 ? "+" : "";
+  return `${prefix}${normalized.toFixed(1)} pts`;
+}
+
+function renderScanWorkspaceCriticAdvisorySummary(item) {
+  if (!hasScanWorkspaceCriticAdvisory(item)) return "";
+
+  const decision = String(item.critic_decision || "").trim();
+  const decisionLabel = getScanWorkspaceCriticDecisionLabel(decision);
+  const tone = getScanWorkspaceCriticTone(decision);
+  const reasonCodes = Array.isArray(item.critic_reason_codes)
+    ? item.critic_reason_codes.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const confidence = formatScanWorkspaceCriticConfidence(item.critic_confidence);
+
+  return `
+    <span class="scan-workspace-critic-mini scan-workspace-critic-mini--${escapeHtml(tone)}">
+      <span class="scan-workspace-critic-mini-label">Critic</span>
+      <span class="scan-workspace-critic-mini-decision">${escapeHtml(decisionLabel)}</span>
+      ${confidence ? `<span class="scan-workspace-critic-mini-confidence">${escapeHtml(confidence)}</span>` : ""}
+      ${reasonCodes.length ? `
+        <span class="scan-workspace-critic-mini-reasons">
+          ${reasonCodes.slice(0, 2).map((code) => escapeHtml(humanizeUnderscoreLabel(code, ""))).join(" · ")}
+        </span>
+      ` : ""}
+    </span>
+  `;
+}
+
+function renderScanWorkspaceCriticAdvisoryDetails(item) {
+  if (!hasScanWorkspaceCriticAdvisory(item)) return "";
+
+  const decision = String(item.critic_decision || "").trim();
+  const tone = getScanWorkspaceCriticTone(decision);
+  const decisionLabel = getScanWorkspaceCriticDecisionLabel(decision);
+  const confidence = formatScanWorkspaceCriticConfidence(item.critic_confidence);
+  const scoreDelta = formatScanWorkspaceCriticScoreDelta(item.critic_score_delta);
+  const reasonCodes = Array.isArray(item.critic_reason_codes)
+    ? item.critic_reason_codes.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const evidenceSpans = Array.isArray(item.critic_evidence_spans)
+    ? item.critic_evidence_spans.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const notes = String(item.critic_notes || "").trim();
+
+  return `
+    <div class="scan-workspace-critic-card scan-workspace-critic-card--${escapeHtml(tone)}">
+      <div class="scan-workspace-critic-card-header">
+        <span class="scan-workspace-critic-card-kicker">Critic advisory</span>
+        <span class="scan-workspace-critic-card-badge">${escapeHtml(decisionLabel)}</span>
+        ${confidence ? `<span class="scan-workspace-critic-card-meta">${escapeHtml(confidence)}</span>` : ""}
+        ${scoreDelta ? `<span class="scan-workspace-critic-card-meta">${escapeHtml(scoreDelta)}</span>` : ""}
+      </div>
+      ${reasonCodes.length ? `
+        <div class="scan-workspace-critic-reasons">
+          ${reasonCodes.map((code) => `
+            <span class="scan-workspace-critic-reason">${escapeHtml(humanizeUnderscoreLabel(code, ""))}</span>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${notes ? `<div class="scan-workspace-critic-notes">${escapeHtml(notes)}</div>` : ""}
+      ${evidenceSpans.length ? `
+        <div class="scan-workspace-critic-evidence">
+          ${evidenceSpans.slice(0, 2).map((span) => `
+            <span>${escapeHtml(span)}</span>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
 function isScanWorkspaceIssueExcludable(item) {
   const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
   const issueId = String(item?.scan_issue_id || item?.issue_id || "").trim();
@@ -10361,6 +10467,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const countIcon = !metaIcon && showFlagIcon ? "⚑" : "";
           const shouldShowStandaloneIcon = (hasAiBadge || showFlagIcon) && !meta && !visibleCountLabel;
           const shouldRenderMetaIconOutside = Boolean(metaIcon && meta);
+          const criticSummaryHtml = renderScanWorkspaceCriticAdvisorySummary(item);
 
           return `
             <button
@@ -10432,6 +10539,8 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                     `
                     : ""
                 }
+
+                ${criticSummaryHtml}
 
                 ${
                   visibleCountLabel

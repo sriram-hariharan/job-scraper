@@ -9589,6 +9589,22 @@ JOB_PRIORITIZATION_OVERLAY_FIELDS = [
 ]
 
 
+TAILORING_DECISION_OVERLAY_FIELDS = [
+    "existing_action",
+    "advisory_priority",
+    "tailoring_decision",
+    "tailoring_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "critic_decision",
+    "critic_reason_codes",
+    "winner_resume",
+    "resolved_resume",
+]
+
+
 def _job_prioritization_overlay_from_rows(
     rows: List[Dict[str, Any]],
 ) -> Dict[str, Dict[str, Any]]:
@@ -9619,6 +9635,36 @@ def _job_prioritization_overlay_from_rows(
     return latest_by_key
 
 
+def _tailoring_decision_overlay_from_rows(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        key_row = {
+            "job_doc_id": _clean_text(row.get("job_id") or row.get("job_doc_id")),
+            "job_company": _clean_text(row.get("company") or row.get("job_company")),
+            "job_title": _clean_text(row.get("title") or row.get("job_title")),
+            "source": _clean_text(row.get("source")),
+        }
+        if not any([key_row["job_doc_id"], key_row["job_company"], key_row["job_title"]]):
+            continue
+
+        overlay = {
+            field: _clean_text(row.get(field))
+            for field in TAILORING_DECISION_OVERLAY_FIELDS
+            if _clean_text(row.get(field))
+        }
+        if not overlay:
+            continue
+
+        for key in _application_row_key_candidates(key_row):
+            if key:
+                latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
 def _overlay_job_prioritization(
     rows: List[Dict[str, Any]],
     priority_by_key: Dict[str, Dict[str, Any]],
@@ -9631,6 +9677,25 @@ def _overlay_job_prioritization(
         merged = dict(row)
         for key in _application_row_key_candidates(merged):
             overlay = priority_by_key.get(key)
+            if overlay:
+                merged.update(overlay)
+                break
+        overlaid_rows.append(merged)
+    return overlaid_rows
+
+
+def _overlay_tailoring_decisions(
+    rows: List[Dict[str, Any]],
+    tailoring_decision_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not tailoring_decision_by_key:
+        return rows
+
+    overlaid_rows = []
+    for row in rows:
+        merged = dict(row)
+        for key in _application_row_key_candidates(merged):
+            overlay = tailoring_decision_by_key.get(key)
             if overlay:
                 merged.update(overlay)
                 break
@@ -9831,6 +9896,7 @@ def _latest_user_pipeline_artifact_context(
     queue_text = _artifact_text_by_name(artifacts, "application_execution_queue.csv")
     manifest_text = _artifact_text_by_name(artifacts, "job_packet_manifest.csv")
     priority_text = _artifact_text_by_name(artifacts, "job_prioritization_recommendations.csv")
+    tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
 
     if not any([best_text, queue_text, manifest_text]):
@@ -9848,6 +9914,7 @@ def _latest_user_pipeline_artifact_context(
         "queue_rows": _csv_rows_from_text(queue_text),
         "manifest_rows": _csv_rows_from_text(manifest_text),
         "job_prioritization_rows": _csv_rows_from_text(priority_text),
+        "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
     }
@@ -9962,6 +10029,7 @@ def status_payload(
         queue_rows = list(artifact_context.get("queue_rows", []) or [])
         manifest_rows = list(artifact_context.get("manifest_rows", []) or [])
         job_prioritization_rows = list(artifact_context.get("job_prioritization_rows", []) or [])
+        tailoring_decision_rows = list(artifact_context.get("tailoring_decision_rows", []) or [])
         merged_rows = _build_job_index_from_planning_rows(
             ja,
             best_rows=best_rows,
@@ -9980,6 +10048,7 @@ def status_payload(
         queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
         manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
         job_prioritization_rows = ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
+        tailoring_decision_rows = ja._load_csv_rows(output_dir / "tailoring_decision_recommendations.csv")
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
         planning_output_dir_value = str(output_dir)
@@ -10016,6 +10085,7 @@ def status_payload(
         else _load_job_metadata_overlay_from_corpus(job_corpus)
     )
     job_prioritization_by_key = _job_prioritization_overlay_from_rows(job_prioritization_rows)
+    tailoring_decision_by_key = _tailoring_decision_overlay_from_rows(tailoring_decision_rows)
 
     top_rows = sorted(
         queue_rows,
@@ -10071,6 +10141,12 @@ def status_payload(
             priority_overlay = job_prioritization_by_key.get(key)
             if priority_overlay:
                 overlay_row.update(priority_overlay)
+                break
+
+        for key in _application_row_key_candidates(overlay_row):
+            tailoring_overlay = tailoring_decision_by_key.get(key)
+            if tailoring_overlay:
+                overlay_row.update(tailoring_overlay)
                 break
         
         for field in APPLICATION_ACTION_OVERLAY_FIELDS:
@@ -10148,6 +10224,9 @@ def browse_payload(
             job_prioritization_by_key = _job_prioritization_overlay_from_rows(
                 list(artifact_context.get("job_prioritization_rows", []) or [])
             )
+            tailoring_decision_by_key = _tailoring_decision_overlay_from_rows(
+                list(artifact_context.get("tailoring_decision_rows", []) or [])
+            )
             rows = _build_job_index_from_planning_rows(
                 ja,
                 best_rows=list(artifact_context.get("best_rows", []) or []),
@@ -10162,9 +10241,13 @@ def browse_payload(
             job_prioritization_by_key = _job_prioritization_overlay_from_rows(
                 ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
             )
+            tailoring_decision_by_key = _tailoring_decision_overlay_from_rows(
+                ja._load_csv_rows(output_dir / "tailoring_decision_recommendations.csv")
+            )
             job_metadata_by_key = {}
 
         rows = _overlay_job_prioritization(rows, job_prioritization_by_key)
+        rows = _overlay_tailoring_decisions(rows, tailoring_decision_by_key)
 
         selection_filters = dict(resolved_filters)
         selection_filters["limit"] = max(len(rows), 1)

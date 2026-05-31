@@ -963,6 +963,46 @@ function buildAdvisoryPriorityHtml(row, { simple = false } = {}) {
   `;
 }
 
+function formatTailoringDecisionLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    no_tailoring_needed: "No tailoring needed",
+    light_tailoring: "Light tailoring",
+    tailor_before_apply: "Tailor before apply",
+    manual_review_before_tailoring: "Review before tailoring",
+    do_not_tailor: "Do not tailor",
+  }[normalized] || "";
+}
+
+function buildTailoringDecisionHtml(row, { simple = false } = {}) {
+  const decision = String(row?.tailoring_decision || "").trim().toLowerCase();
+  const label = formatTailoringDecisionLabel(decision);
+  if (!label) return "";
+
+  const reasonCodes = String(row?.tailoring_reason_codes || "").trim();
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const advisoryPriority = String(row?.advisory_priority || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const criticDecision = String(row?.critic_decision || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+    criticDecision ? `Critic: ${criticDecision}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="${simple ? "queue-tailoring-decision queue-tailoring-decision--simple" : "queue-tailoring-decision"}">
+      <span class="queue-tailoring-kicker">Tailoring advisory</span>
+      <span class="queue-tailoring-pill queue-tailoring-pill--${escapeHtml(decision)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-tailoring-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
 function formatDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -1854,7 +1894,7 @@ function buildQueueRowDetailedHtml(row) {
   return `
     <tr>
       <td>${queueRank}</td>
-      <td><span class="pill">${action || "-"}</span>${buildAdvisoryPriorityHtml(row)}</td>
+      <td><span class="pill">${action || "-"}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}</td>
       <td>${company}</td>
       <td class="title-cell">${titleHtml}</td>
       <td>${buildPostedAtCellHtml(row)}</td>
@@ -1889,6 +1929,7 @@ function buildQueueRowSimpleHtml(row) {
         <div class="queue-simple-posted">Posted: ${postedAt}</div>
         <div class="queue-simple-action">${action || "-"}</div>
         ${buildAdvisoryPriorityHtml(row, { simple: true })}
+        ${buildTailoringDecisionHtml(row, { simple: true })}
       </td>
       <td>
         ${buildResumeOptionHtml("Best", row.winner_resume || "", row.winner_score || "")}

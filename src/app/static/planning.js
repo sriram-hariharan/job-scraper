@@ -740,6 +740,46 @@ function buildAdvisoryPriorityHtml(row) {
   `;
 }
 
+function formatTailoringDecisionLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    no_tailoring_needed: "No tailoring needed",
+    light_tailoring: "Light tailoring",
+    tailor_before_apply: "Tailor before apply",
+    manual_review_before_tailoring: "Review before tailoring",
+    do_not_tailor: "Do not tailor",
+  }[normalized] || "";
+}
+
+function buildTailoringDecisionHtml(row) {
+  const decision = String(row?.tailoring_decision || "").trim().toLowerCase();
+  const label = formatTailoringDecisionLabel(decision);
+  if (!label) return "";
+
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const advisoryPriority = String(row?.advisory_priority || "").trim();
+  const reasonCodes = String(row?.tailoring_reason_codes || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const criticDecision = String(row?.critic_decision || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+    criticDecision ? `Critic: ${criticDecision}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="queue-tailoring-decision planning-tailoring-decision">
+      <span class="queue-tailoring-kicker">Tailoring advisory</span>
+      <span class="queue-tailoring-pill queue-tailoring-pill--${escapeHtml(decision)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-tailoring-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
 function formatScore100(value) {
   if (value === null || value === undefined || String(value).trim() === "") return "-";
   const parsed = Number(String(value).replaceAll(",", "").trim());
@@ -11757,7 +11797,7 @@ function renderPlanningRows(rows, metaLabel) {
     return `
       <tr>
         <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}</td>
+        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}</td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">
           <div>${titleHtml}</div>

@@ -2222,6 +2222,98 @@ html[data-theme="dark"] .queue-advisory-pill--watch_source {
   color: #99f6e4;
 }
 
+.queue-tailoring-decision {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 8px;
+  max-width: 240px;
+}
+
+.queue-tailoring-kicker {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.queue-tailoring-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 999px;
+  background: var(--app-inset);
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.queue-tailoring-pill--no_tailoring_needed {
+  border-color: rgba(34, 197, 94, 0.42);
+  background: rgba(34, 197, 94, 0.12);
+  color: #15803d;
+}
+
+.queue-tailoring-pill--light_tailoring {
+  border-color: rgba(14, 165, 233, 0.42);
+  background: rgba(14, 165, 233, 0.12);
+  color: #0369a1;
+}
+
+.queue-tailoring-pill--tailor_before_apply {
+  border-color: rgba(124, 58, 237, 0.38);
+  background: rgba(124, 58, 237, 0.12);
+  color: #6d28d9;
+}
+
+.queue-tailoring-pill--manual_review_before_tailoring {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+
+.queue-tailoring-pill--do_not_tailor {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.12);
+  color: #be123c;
+}
+
+.queue-tailoring-details {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+html[data-theme="dark"] .queue-tailoring-pill--no_tailoring_needed {
+  color: #bbf7d0;
+}
+
+html[data-theme="dark"] .queue-tailoring-pill--light_tailoring {
+  color: #bae6fd;
+}
+
+html[data-theme="dark"] .queue-tailoring-pill--tailor_before_apply {
+  color: #ddd6fe;
+}
+
+html[data-theme="dark"] .queue-tailoring-pill--manual_review_before_tailoring {
+  color: #fde68a;
+}
+
+html[data-theme="dark"] .queue-tailoring-pill--do_not_tailor {
+  color: #fecdd3;
+}
+
 #planningTable tbody td *,
 #queueTable tbody td *,
 #decisionsTable tbody td *,

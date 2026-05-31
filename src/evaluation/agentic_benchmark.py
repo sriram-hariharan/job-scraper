@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import critic_agent, resume_match_agent, source_health_agent
+from src.agents import critic_agent, llmops, resume_match_agent, source_health_agent
 from src.evaluation.metrics import bool_rate, safe_rate
 from src.pipeline.resume_selection_credibility import parse_bool, parse_float
 
@@ -23,6 +23,8 @@ THRESHOLD_METRIC_KEYS = [
     "critic_unsupported_claim_rejection_rate",
     "critic_safe_suggestion_approval_rate",
     "critic_downgrade_rate",
+    "llmops_metadata_schema_present",
+    "llmops_required_keys_present",
     "validation_pass_rate",
 ]
 DEFAULT_THRESHOLDS = {
@@ -33,6 +35,8 @@ DEFAULT_THRESHOLDS = {
     "critic_unsupported_claim_rejection_rate": 1.0,
     "critic_safe_suggestion_approval_rate": 1.0,
     "critic_downgrade_rate": 1.0,
+    "llmops_metadata_schema_present": 1.0,
+    "llmops_required_keys_present": 1.0,
     "validation_pass_rate": 1.0,
 }
 
@@ -256,6 +260,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
     source_health = evaluate_source_health_rows(list(fixture.get("source_health_rows", []) or []))
     resume_match = evaluate_resume_selector_rows(list(fixture.get("selector_rows", []) or []))
     critic = evaluate_critic_cases(list(fixture.get("critic_cases", []) or []))
+    llmops_readiness = llmops.llmops_schema_readiness_payload()
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
@@ -276,6 +281,8 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "critic_unsupported_claim_rejection_rate": critic["critic_unsupported_claim_rejection_rate"],
         "critic_safe_suggestion_approval_rate": critic["critic_safe_suggestion_approval_rate"],
         "critic_downgrade_rate": critic["critic_downgrade_rate"],
+        "llmops_metadata_schema_present": 1.0 if llmops_readiness.get("metadata_version") else 0.0,
+        "llmops_required_keys_present": 1.0 if llmops_readiness.get("required_keys_present") else 0.0,
         "validation_pass_rate": bool_rate(validation_passes),
         "failed_case_ids": failed_case_ids,
     }
@@ -292,11 +299,13 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
                 validation_payload=resume_match["validation"],
             ),
             "critic_summary": critic["summary"],
+            "llmops_observability_readiness": llmops_readiness,
         },
         "component_results": {
             "source_health": source_health,
             "resume_match": resume_match,
             "critic": critic,
+            "llmops": llmops_readiness,
         },
     }
 
@@ -311,6 +320,8 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "critic_unsupported_claim_rejection_rate": args.min_critic_unsupported_claim_rejection_rate,
         "critic_safe_suggestion_approval_rate": args.min_critic_safe_suggestion_approval_rate,
         "critic_downgrade_rate": args.min_critic_downgrade_rate,
+        "llmops_metadata_schema_present": args.min_llmops_metadata_schema_present,
+        "llmops_required_keys_present": args.min_llmops_required_keys_present,
         "validation_pass_rate": args.min_validation_pass_rate,
     }
     for key, value in overrides.items():
@@ -367,6 +378,8 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "critic_unsupported_claim_rejection_rate",
         "critic_safe_suggestion_approval_rate",
         "critic_downgrade_rate",
+        "llmops_metadata_schema_present",
+        "llmops_required_keys_present",
         "validation_pass_rate",
     ]:
         lines.append(f"- `{key}`: {metrics.get(key)}")
@@ -390,6 +403,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.append("- Source Health Agent advisory benchmark")
     lines.append("- Resume Match Agent credibility benchmark")
     lines.append("- Critic Agent suggestion validation benchmark")
+    lines.append("- LLMOps metadata schema readiness benchmark")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -429,6 +443,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-critic-unsupported-claim-rejection-rate", type=float, default=None)
     parser.add_argument("--min-critic-safe-suggestion-approval-rate", type=float, default=None)
     parser.add_argument("--min-critic-downgrade-rate", type=float, default=None)
+    parser.add_argument("--min-llmops-metadata-schema-present", type=float, default=None)
+    parser.add_argument("--min-llmops-required-keys-present", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)
     return parser
 

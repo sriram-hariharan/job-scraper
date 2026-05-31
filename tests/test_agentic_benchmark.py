@@ -30,6 +30,8 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["critic_unsupported_claim_rejection_rate"] == 1.0
     assert result["critic_safe_suggestion_approval_rate"] == 1.0
     assert result["critic_downgrade_rate"] == 1.0
+    assert result["llmops_metadata_schema_present"] == 1.0
+    assert result["llmops_required_keys_present"] == 1.0
     assert result["validation_pass_rate"] == 1.0
     assert result["failed_case_ids"] == []
     assert "generated_at_utc" in result["summary_json"]
@@ -42,6 +44,8 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "critic_unsupported_claim_rejection_rate",
         "critic_safe_suggestion_approval_rate",
         "critic_downgrade_rate",
+        "llmops_metadata_schema_present",
+        "llmops_required_keys_present",
         "validation_pass_rate",
         "failed_case_ids",
     }
@@ -104,6 +108,7 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     assert "All configured regression thresholds passed." in report
     assert "Resume Match Agent credibility benchmark" in report
     assert "Critic Agent suggestion validation benchmark" in report
+    assert "LLMOps metadata schema readiness benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_files = agentic_benchmark.write_benchmark_outputs(result, tmp_dir)

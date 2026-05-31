@@ -2130,6 +2130,98 @@ th .sort-header-btn {
   white-space: nowrap;
 }
 
+.queue-advisory-priority {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 8px;
+  max-width: 220px;
+}
+
+.queue-advisory-kicker {
+  color: var(--app-muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.queue-advisory-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 5px 9px;
+  border: 1px solid var(--app-border-2);
+  border-radius: 999px;
+  background: var(--app-inset);
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.queue-advisory-pill--apply_now {
+  border-color: rgba(16, 185, 129, 0.42);
+  background: rgba(16, 185, 129, 0.13);
+  color: #047857;
+}
+
+.queue-advisory-pill--tailor_first {
+  border-color: rgba(37, 99, 235, 0.38);
+  background: rgba(37, 99, 235, 0.12);
+  color: #1d4ed8;
+}
+
+.queue-advisory-pill--manual_review {
+  border-color: rgba(245, 158, 11, 0.42);
+  background: rgba(245, 158, 11, 0.14);
+  color: #92400e;
+}
+
+.queue-advisory-pill--skip_for_now {
+  border-color: rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.12);
+  color: #be123c;
+}
+
+.queue-advisory-pill--watch_source {
+  border-color: rgba(20, 184, 166, 0.4);
+  background: rgba(20, 184, 166, 0.12);
+  color: #0f766e;
+}
+
+.queue-advisory-details {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+html[data-theme="dark"] .queue-advisory-pill--apply_now {
+  color: #a7f3d0;
+}
+
+html[data-theme="dark"] .queue-advisory-pill--tailor_first {
+  color: #bfdbfe;
+}
+
+html[data-theme="dark"] .queue-advisory-pill--manual_review {
+  color: #fde68a;
+}
+
+html[data-theme="dark"] .queue-advisory-pill--skip_for_now {
+  color: #fecdd3;
+}
+
+html[data-theme="dark"] .queue-advisory-pill--watch_source {
+  color: #99f6e4;
+}
+
 #planningTable tbody td *,
 #queueTable tbody td *,
 #decisionsTable tbody td *,

@@ -927,6 +927,42 @@ function buildJobTitleCellHtml(row, { simple = false } = {}) {
   return `${titleHtml}${locationHtml}`;
 }
 
+function formatAdvisoryPriorityLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    apply_now: "Apply now",
+    tailor_first: "Tailor first",
+    manual_review: "Manual review",
+    skip_for_now: "Skip for now",
+    watch_source: "Watch source",
+  }[normalized] || "";
+}
+
+function buildAdvisoryPriorityHtml(row, { simple = false } = {}) {
+  const priority = String(row?.advisory_priority || "").trim().toLowerCase();
+  const label = formatAdvisoryPriorityLabel(priority);
+  if (!label) return "";
+
+  const reasonCodes = String(row?.advisory_reason_codes || "").trim();
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="${simple ? "queue-advisory-priority queue-advisory-priority--simple" : "queue-advisory-priority"}">
+      <span class="queue-advisory-kicker">Advisory</span>
+      <span class="queue-advisory-pill queue-advisory-pill--${escapeHtml(priority)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-advisory-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
 function formatDateTime(value) {
   if (!value) return "";
   const date = new Date(value);
@@ -1818,7 +1854,7 @@ function buildQueueRowDetailedHtml(row) {
   return `
     <tr>
       <td>${queueRank}</td>
-      <td><span class="pill">${action || "-"}</span></td>
+      <td><span class="pill">${action || "-"}</span>${buildAdvisoryPriorityHtml(row)}</td>
       <td>${company}</td>
       <td class="title-cell">${titleHtml}</td>
       <td>${buildPostedAtCellHtml(row)}</td>
@@ -1852,6 +1888,7 @@ function buildQueueRowSimpleHtml(row) {
         <div class="queue-simple-title">${titleHtml}</div>
         <div class="queue-simple-posted">Posted: ${postedAt}</div>
         <div class="queue-simple-action">${action || "-"}</div>
+        ${buildAdvisoryPriorityHtml(row, { simple: true })}
       </td>
       <td>
         ${buildResumeOptionHtml("Best", row.winner_resume || "", row.winner_score || "")}

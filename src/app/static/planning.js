@@ -704,6 +704,42 @@ function buildDateTimeCellHtml(value) {
   `;
 }
 
+function formatAdvisoryPriorityLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    apply_now: "Apply now",
+    tailor_first: "Tailor first",
+    manual_review: "Manual review",
+    skip_for_now: "Skip for now",
+    watch_source: "Watch source",
+  }[normalized] || "";
+}
+
+function buildAdvisoryPriorityHtml(row) {
+  const priority = String(row?.advisory_priority || "").trim().toLowerCase();
+  const label = formatAdvisoryPriorityLabel(priority);
+  if (!label) return "";
+
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const reasonCodes = String(row?.advisory_reason_codes || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="queue-advisory-priority planning-advisory-priority">
+      <span class="queue-advisory-kicker">Advisory</span>
+      <span class="queue-advisory-pill queue-advisory-pill--${escapeHtml(priority)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-advisory-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
 function formatScore100(value) {
   if (value === null || value === undefined || String(value).trim() === "") return "-";
   const parsed = Number(String(value).replaceAll(",", "").trim());
@@ -11721,7 +11757,7 @@ function renderPlanningRows(rows, metaLabel) {
     return `
       <tr>
         <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td><span class="pill">${escapeHtml(row.action || "")}</span></td>
+        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}</td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">
           <div>${titleHtml}</div>

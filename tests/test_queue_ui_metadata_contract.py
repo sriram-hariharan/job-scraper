@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from src.app import services
+
 
 def test_queue_ui_renders_job_location_below_title():
     source = Path("src/app/static/app.js").read_text(encoding="utf-8")
@@ -22,3 +24,32 @@ def test_queue_ui_labels_allowed_unknown_timestamps():
     assert "Timestamp unavailable" in source
     assert "timestamp-unavailable-label" in source
     assert ".timestamp-unavailable-label" in css
+
+
+def test_queue_ui_renders_job_prioritization_advisory_separately():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        assert "buildAdvisoryPriorityHtml" in source
+        assert "advisory_priority" in source
+        assert "existing_action" in source
+        assert "Apply now" in source
+        assert "Skip for now" in source
+        assert "Watch source" in source
+        assert "Advisory" in source
+        assert "row.action" in source
+
+    assert ".queue-advisory-priority" in css
+    assert ".queue-advisory-pill--skip_for_now" in css
+    assert ".queue-advisory-pill--watch_source" in css
+    assert "job_prioritization_recommendations.csv" in services_source
+    assert "JOB_PRIORITIZATION_OVERLAY_FIELDS" in services_source
+
+
+def test_missing_job_prioritization_overlay_is_safe():
+    rows = [{"job_doc_id": "job_1", "job_company": "Acme", "job_title": "Backend Engineer", "action": "APPLY"}]
+
+    assert services._overlay_job_prioritization(rows, {}) == rows

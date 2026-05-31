@@ -9572,6 +9572,68 @@ def _artifact_text_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> st
     return str(row.get("content_text", "") or "")
 
 
+JOB_PRIORITIZATION_OVERLAY_FIELDS = [
+    "existing_action",
+    "advisory_priority",
+    "advisory_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "source_recommendation",
+    "critic_decision",
+]
+
+
+def _job_prioritization_overlay_from_rows(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        key_row = {
+            "job_doc_id": _clean_text(row.get("job_id") or row.get("job_doc_id")),
+            "job_company": _clean_text(row.get("company") or row.get("job_company")),
+            "job_title": _clean_text(row.get("title") or row.get("job_title")),
+            "source": _clean_text(row.get("source")),
+        }
+        if not any([key_row["job_doc_id"], key_row["job_company"], key_row["job_title"]]):
+            continue
+
+        overlay = {
+            field: _clean_text(row.get(field))
+            for field in JOB_PRIORITIZATION_OVERLAY_FIELDS
+            if _clean_text(row.get(field))
+        }
+        if not overlay:
+            continue
+
+        for key in _application_row_key_candidates(key_row):
+            if key:
+                latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _overlay_job_prioritization(
+    rows: List[Dict[str, Any]],
+    priority_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not priority_by_key:
+        return rows
+
+    overlaid_rows = []
+    for row in rows:
+        merged = dict(row)
+        for key in _application_row_key_candidates(merged):
+            overlay = priority_by_key.get(key)
+            if overlay:
+                merged.update(overlay)
+                break
+        overlaid_rows.append(merged)
+    return overlaid_rows
+
+
 def _build_job_index_from_planning_rows(
     ja: Any,
     *,
@@ -9764,6 +9826,7 @@ def _latest_user_pipeline_artifact_context(
     shortlist_text = _artifact_text_by_name(artifacts, "application_shortlist_by_job.csv")
     queue_text = _artifact_text_by_name(artifacts, "application_execution_queue.csv")
     manifest_text = _artifact_text_by_name(artifacts, "job_packet_manifest.csv")
+    priority_text = _artifact_text_by_name(artifacts, "job_prioritization_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
 
     if not any([best_text, queue_text, manifest_text]):
@@ -9780,6 +9843,7 @@ def _latest_user_pipeline_artifact_context(
         "shortlist_rows": _csv_rows_from_text(shortlist_text),
         "queue_rows": _csv_rows_from_text(queue_text),
         "manifest_rows": _csv_rows_from_text(manifest_text),
+        "job_prioritization_rows": _csv_rows_from_text(priority_text),
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
     }
@@ -9893,6 +9957,7 @@ def status_payload(
         shortlist_rows = list(artifact_context.get("shortlist_rows", []) or [])
         queue_rows = list(artifact_context.get("queue_rows", []) or [])
         manifest_rows = list(artifact_context.get("manifest_rows", []) or [])
+        job_prioritization_rows = list(artifact_context.get("job_prioritization_rows", []) or [])
         merged_rows = _build_job_index_from_planning_rows(
             ja,
             best_rows=best_rows,
@@ -9910,6 +9975,7 @@ def status_payload(
         shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
         queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
         manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
+        job_prioritization_rows = ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
         planning_output_dir_value = str(output_dir)
@@ -9945,6 +10011,7 @@ def status_payload(
         if artifact_context
         else _load_job_metadata_overlay_from_corpus(job_corpus)
     )
+    job_prioritization_by_key = _job_prioritization_overlay_from_rows(job_prioritization_rows)
 
     top_rows = sorted(
         queue_rows,
@@ -9995,6 +10062,12 @@ def status_payload(
             if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
                 overlay_row["job_url"] = metadata["job_url"]
             break
+
+        for key in _application_row_key_candidates(overlay_row):
+            priority_overlay = job_prioritization_by_key.get(key)
+            if priority_overlay:
+                overlay_row.update(priority_overlay)
+                break
         
         for field in APPLICATION_ACTION_OVERLAY_FIELDS:
             if field == "application_label":
@@ -10068,6 +10141,9 @@ def browse_payload(
     try:
         artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
         if artifact_context:
+            job_prioritization_by_key = _job_prioritization_overlay_from_rows(
+                list(artifact_context.get("job_prioritization_rows", []) or [])
+            )
             rows = _build_job_index_from_planning_rows(
                 ja,
                 best_rows=list(artifact_context.get("best_rows", []) or []),
@@ -10079,7 +10155,12 @@ def browse_payload(
             )
         else:
             rows = ja._build_job_index(output_dir)
+            job_prioritization_by_key = _job_prioritization_overlay_from_rows(
+                ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
+            )
             job_metadata_by_key = {}
+
+        rows = _overlay_job_prioritization(rows, job_prioritization_by_key)
 
         selection_filters = dict(resolved_filters)
         selection_filters["limit"] = max(len(rows), 1)

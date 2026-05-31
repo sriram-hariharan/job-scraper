@@ -1,3 +1,7 @@
+import csv
+import json
+from pathlib import Path
+
 from src.agents import job_prioritization_agent
 
 
@@ -186,3 +190,53 @@ def test_job_prioritization_trace_can_be_monkeypatched_without_postgres():
         "cost_currency": "",
         "cost_reason": "no_rate_table_configured",
     }
+
+
+def test_job_prioritization_artifact_helper_renders_stable_csv_columns(tmp_path):
+    rows = [
+        _row(
+            job_doc_id="skip_job",
+            job_company="Fallback Co",
+            job_title="Software Engineer",
+            deterministic_winner_available="false",
+            deterministic_winner_score="0.000000",
+            winner_score="0.000000",
+            fallback_only_no_deterministic_match="true",
+            packet_generation_allowed="false",
+            packet_generation_block_reason="fallback_only_no_deterministic_match",
+        ),
+        _row(
+            job_doc_id="apply_job",
+            job_company="Apply Co",
+            job_title="Backend Software Engineer",
+            deterministic_winner_score="0.750000",
+            winner_score="0.750000",
+            packet_generation_allowed="true",
+        ),
+    ]
+    original_rows = [dict(row) for row in rows]
+    csv_path = tmp_path / "job_prioritization_recommendations.csv"
+    summary_path = tmp_path / "job_prioritization_summary.json"
+
+    result = job_prioritization_agent.write_job_prioritization_artifacts(
+        rows=rows,
+        output_csv_path=csv_path,
+        summary_json_path=summary_path,
+        pipeline_run_id="run_1",
+        owner_user_id="user_1",
+        source_artifact_path="application_execution_queue.csv",
+    )
+
+    with csv_path.open("r", encoding="utf-8", newline="") as handle:
+        rendered = list(csv.DictReader(handle))
+
+    assert rows == original_rows
+    assert result["row_count"] == 2
+    assert list(rendered[0].keys()) == job_prioritization_agent.RECOMMENDATION_FIELDNAMES
+    assert rendered[0]["existing_action"] == "APPLY"
+    assert rendered[0]["advisory_priority"] == "skip_for_now"
+    assert rendered[0]["advisory_reason_codes"] == "fallback_only_no_deterministic_match"
+    assert rendered[1]["advisory_priority"] == "apply_now"
+    summary = json.loads(Path(summary_path).read_text(encoding="utf-8"))
+    assert summary["agent_name"] == job_prioritization_agent.AGENT_NAME
+    assert summary["priority_counts"] == {"apply_now": 1, "skip_for_now": 1}

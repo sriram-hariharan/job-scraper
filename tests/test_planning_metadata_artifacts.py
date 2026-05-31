@@ -105,6 +105,8 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         selector_csv = root / "best_resume_variant_by_job.csv"
         shortlist_csv = root / "application_shortlist_by_job.csv"
         queue_csv = root / "application_execution_queue.csv"
+        priority_csv = root / "job_prioritization_recommendations.csv"
+        priority_summary = root / "job_prioritization_summary.json"
         _write_selector_fixture(selector_csv)
 
         try:
@@ -125,6 +127,10 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
                 str(shortlist_csv),
                 "--output-csv",
                 str(queue_csv),
+                "--priority-output-csv",
+                str(priority_csv),
+                "--priority-summary-json",
+                str(priority_summary),
                 "--top-k-console",
                 "0",
             ]
@@ -134,6 +140,8 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
 
         shortlist_row = _read_rows(shortlist_csv)[0]
         queue_row = _read_rows(queue_csv)[0]
+        priority_row = _read_rows(priority_csv)[0]
+        priority_summary_exists = priority_summary.exists()
 
     for row in (shortlist_row, queue_row):
         assert row["job_location"] == "New York, NY"
@@ -143,6 +151,10 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         assert row["deterministic_winner_available"] == "true"
         assert row["deterministic_winner_score"] == "0.910000"
         assert row["packet_generation_allowed"] == "true"
+    assert priority_row["existing_action"] == queue_row["action"]
+    assert priority_row["advisory_priority"] == "apply_now"
+    assert priority_row["deterministic_winner_score"] == "0.910000"
+    assert priority_summary_exists
 
 
 def test_fallback_only_selector_row_is_visible_but_not_actionable():

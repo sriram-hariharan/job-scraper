@@ -1,8 +1,13 @@
 import argparse
 import csv
+import os
 from pathlib import Path
 from typing import List
 
+from src.agents.job_prioritization_agent import (
+    record_job_prioritization_agent_trace,
+    write_job_prioritization_artifacts,
+)
 from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
@@ -156,6 +161,16 @@ def main() -> None:
         default=15,
         help="How many queue rows to print to the console.",
     )
+    parser.add_argument(
+        "--priority-output-csv",
+        default="",
+        help="Optional path to write advisory job prioritization recommendations.",
+    )
+    parser.add_argument(
+        "--priority-summary-json",
+        default="",
+        help="Optional path to write advisory job prioritization summary JSON.",
+    )
     args = parser.parse_args()
 
     rows = _load_rows(Path(args.input_csv))
@@ -282,12 +297,38 @@ def main() -> None:
             output_row = {name: row.get(name, "") for name in fieldnames}
             writer.writerow(output_row)
 
+    priority_artifact = None
+    if str(args.priority_output_csv or "").strip():
+        try:
+            priority_artifact = write_job_prioritization_artifacts(
+                rows=queue_rows,
+                output_csv_path=args.priority_output_csv,
+                summary_json_path=args.priority_summary_json or None,
+                pipeline_run_id=(
+                    os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
+                    or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
+                ),
+                owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
+                source_artifact_path=str(output_csv_path),
+            )
+        except Exception as exc:
+            print(f"Job prioritization advisory artifact skipped: {exc}")
+
+    trace_result = record_job_prioritization_agent_trace(
+        rows=queue_rows,
+        source_artifact_path=str(output_csv_path),
+    )
+    if trace_result.get("attempted") and not trace_result.get("recorded"):
+        print(f"Job prioritization trace warning: {trace_result.get('warning') or trace_result.get('reason')}")
+
     print("=" * 100)
     print("APPLICATION EXECUTION QUEUE")
     print("=" * 100)
     print(f"Input CSV : {args.input_csv}")
     print(f"Output CSV: {output_csv_path}")
     print(f"Jobs kept : {len(queue_rows)}")
+    if priority_artifact:
+        print(f"Priority advisory CSV: {priority_artifact['csv_path']}")
     print()
 
     for row in queue_rows[:args.top_k_console]:

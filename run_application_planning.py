@@ -461,6 +461,8 @@ def main() -> None:
     best_variant_csv = output_dir / "best_resume_variant_by_job.csv"
     shortlist_csv = output_dir / "application_shortlist_by_job.csv"
     execution_queue_csv = output_dir / "application_execution_queue.csv"
+    job_prioritization_csv = output_dir / "job_prioritization_recommendations.csv"
+    job_prioritization_summary_json = output_dir / "job_prioritization_summary.json"
 
     batch_selector_cmd = [
         sys.executable,
@@ -540,6 +542,10 @@ def main() -> None:
         str(shortlist_csv),
         "--output-csv",
         str(execution_queue_csv),
+        "--priority-output-csv",
+        str(job_prioritization_csv),
+        "--priority-summary-json",
+        str(job_prioritization_summary_json),
         "--top-k-console",
         str(args.top_k_console),
     ]

@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import os
 import re
 import subprocess
 import sys
@@ -9,6 +10,8 @@ from typing import Dict, List, Set
 from src.matching.job_adapter import build_job_evidence
 
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.agents.workflow_summary import write_agentic_workflow_summary_artifacts
+from src.agents.workflow_verifier import write_agentic_workflow_verification_artifact
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
     compute_resume_selection_credibility,
@@ -226,7 +229,7 @@ def _count_by(rows: List[dict], key: str) -> Dict[str, int]:
     return dict(sorted(counts.items(), key=lambda item: (item[0] != "<empty>", item[0])))
 
 def _parse_bool(value: str) -> bool:
-    return str(value).strip().lower() == "true"
+    return str(value).strip().lower() in {"1", "true", "yes", "y", "on"}
 
 
 def _resolve_packet_resume_selection(row: dict) -> Dict[str, str]:
@@ -461,6 +464,15 @@ def main() -> None:
     best_variant_csv = output_dir / "best_resume_variant_by_job.csv"
     shortlist_csv = output_dir / "application_shortlist_by_job.csv"
     execution_queue_csv = output_dir / "application_execution_queue.csv"
+    job_prioritization_csv = output_dir / "job_prioritization_recommendations.csv"
+    job_prioritization_summary_json = output_dir / "job_prioritization_summary.json"
+    tailoring_decision_csv = output_dir / "tailoring_decision_recommendations.csv"
+    tailoring_decision_summary_json = output_dir / "tailoring_decision_summary.json"
+    operator_review_csv = output_dir / "operator_review_recommendations.csv"
+    operator_review_summary_json = output_dir / "operator_review_summary.json"
+    agentic_workflow_summary_json = output_dir / "agentic_workflow_summary.json"
+    agentic_workflow_summary_md = output_dir / "agentic_workflow_summary.md"
+    agentic_workflow_verification_json = output_dir / "agentic_workflow_verification.json"
 
     batch_selector_cmd = [
         sys.executable,
@@ -540,6 +552,18 @@ def main() -> None:
         str(shortlist_csv),
         "--output-csv",
         str(execution_queue_csv),
+        "--priority-output-csv",
+        str(job_prioritization_csv),
+        "--priority-summary-json",
+        str(job_prioritization_summary_json),
+        "--tailoring-decision-output-csv",
+        str(tailoring_decision_csv),
+        "--tailoring-decision-summary-json",
+        str(tailoring_decision_summary_json),
+        "--operator-review-output-csv",
+        str(operator_review_csv),
+        "--operator-review-summary-json",
+        str(operator_review_summary_json),
         "--top-k-console",
         str(args.top_k_console),
     ]
@@ -859,6 +883,34 @@ def main() -> None:
         writer.writeheader()
         for manifest_row in manifest_rows:
             writer.writerow(manifest_row)
+
+    try:
+        workflow_summary_artifact = write_agentic_workflow_summary_artifacts(
+            output_dir=output_dir,
+            summary_json_path=agentic_workflow_summary_json,
+            summary_md_path=agentic_workflow_summary_md,
+        )
+    except Exception as exc:
+        workflow_summary_artifact = {}
+        print(f"Agentic workflow summary artifact skipped: {exc}")
+
+    verifier_strict = _parse_bool(os.getenv("APPLYLENS_WORKFLOW_VERIFIER_STRICT", ""))
+    try:
+        workflow_verification_artifact = write_agentic_workflow_verification_artifact(
+            output_dir=output_dir,
+            output_json_path=agentic_workflow_verification_json,
+            strict=verifier_strict,
+        )
+        verification_status = workflow_verification_artifact.get("validation_status", "")
+        if verification_status not in {"passed", "warning"} and verifier_strict:
+            raise RuntimeError(f"Agentic workflow verifier failed: {verification_status}")
+        if verification_status and verification_status != "passed":
+            print(f"Agentic workflow verifier status: {verification_status}")
+    except Exception as exc:
+        workflow_verification_artifact = {}
+        if verifier_strict:
+            raise
+        print(f"Agentic workflow verification artifact skipped: {exc}")
     
     packet_status_counts = _count_by(manifest_rows, "packet_status")
     packet_resume_source_counts = _count_by(manifest_rows, "packet_resume_source")
@@ -909,6 +961,10 @@ def main() -> None:
     print(f"Shortlist CSV    : {shortlist_csv}")
     print(f"Execution queue  : {execution_queue_csv}")
     print(f"Packet manifest  : {manifest_csv}")
+    if workflow_summary_artifact:
+        print(f"Agentic summary  : {workflow_summary_artifact['summary_json_path']}")
+    if workflow_verification_artifact:
+        print(f"Agentic verifier : {workflow_verification_artifact['json_path']}")
     print(f"Job packets dir  : {job_packets_dir}")
     print(f"Training log     : {training_log_jsonl_path}")
     print(f"Packets created  : {packet_created_count}")

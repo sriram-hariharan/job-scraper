@@ -1162,6 +1162,24 @@ def profile_pipeline_run_detail(run_id: str, http_request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/profile/pipeline-runs/{run_id}/agent-trace")
+def profile_pipeline_run_agent_trace(
+    run_id: str,
+    http_request: Request,
+    context_id: str = "",
+    agent_run_id: str = "",
+):
+    try:
+        return services.agent_trace_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=run_id,
+            context_id=context_id,
+            agent_run_id=agent_run_id,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/profile/pipeline-runs/{run_id}/rerun")
 def profile_pipeline_run_rerun(run_id: str, http_request: Request):
     try:

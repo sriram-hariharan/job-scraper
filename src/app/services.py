@@ -825,11 +825,26 @@ def profile_pipeline_run_detail_payload(
         raise ValueError("Pipeline run not found.")
 
     run = _reconciled_user_pipeline_run_record(owner, dict(payload.get("run", {}) or {}))
+    try:
+        artifacts_payload = get_user_pipeline_artifacts_postgres_payload(
+            owner_user_id=owner,
+            run_id=safe_run_id,
+            limit=100000,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        artifacts = list(artifacts_payload.get("rows", []) or [])
+    except Exception:
+        artifacts = []
     return {
         "ok": True,
         "run": _pipeline_run_public_row(run),
         "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
+        "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
     }
 
 
@@ -9584,6 +9599,59 @@ def _artifact_text_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> st
     return str(row.get("content_text", "") or "")
 
 
+def _artifact_json_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> Dict[str, Any]:
+    row = _artifact_row_by_name(rows).get(_clean_text(artifact_name), {})
+    content_json = row.get("content_json")
+    if isinstance(content_json, dict):
+        return dict(content_json)
+
+    content_text = str(row.get("content_text", "") or "").strip()
+    if not content_text:
+        return {}
+    try:
+        parsed = json.loads(content_text)
+    except Exception:
+        return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
+    summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")
+    return {
+        "available": bool(summary_json or summary_markdown),
+        "summary_json": summary_json,
+        "summary_markdown": summary_markdown,
+    }
+
+
+def _agentic_workflow_summary_from_dir(output_dir: Path) -> Dict[str, Any]:
+    root = Path(output_dir).expanduser()
+    json_path = root / "agentic_workflow_summary.json"
+    md_path = root / "agentic_workflow_summary.md"
+    summary_json: Dict[str, Any] = {}
+    summary_markdown = ""
+
+    if json_path.exists() and json_path.is_file():
+        try:
+            parsed = json.loads(json_path.read_text(encoding="utf-8"))
+            summary_json = dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            summary_json = {}
+
+    if md_path.exists() and md_path.is_file():
+        try:
+            summary_markdown = md_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            summary_markdown = ""
+
+    return {
+        "available": bool(summary_json or summary_markdown),
+        "summary_json": summary_json,
+        "summary_markdown": summary_markdown,
+    }
+
+
 JOB_PRIORITIZATION_OVERLAY_FIELDS = [
     "existing_action",
     "advisory_priority",
@@ -9973,6 +10041,7 @@ def _latest_user_pipeline_artifact_context(
     tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
     operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
+    workflow_summary = _agentic_workflow_summary_from_artifacts(artifacts)
 
     if not any([best_text, queue_text, manifest_text]):
         return {}
@@ -9991,6 +10060,7 @@ def _latest_user_pipeline_artifact_context(
         "job_prioritization_rows": _csv_rows_from_text(priority_text),
         "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
         "operator_review_rows": _csv_rows_from_text(operator_review_text),
+        "agentic_workflow_summary": workflow_summary,
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
     }
@@ -10107,6 +10177,7 @@ def status_payload(
         job_prioritization_rows = list(artifact_context.get("job_prioritization_rows", []) or [])
         tailoring_decision_rows = list(artifact_context.get("tailoring_decision_rows", []) or [])
         operator_review_rows = list(artifact_context.get("operator_review_rows", []) or [])
+        agentic_workflow_summary = dict(artifact_context.get("agentic_workflow_summary", {}) or {})
         merged_rows = _build_job_index_from_planning_rows(
             ja,
             best_rows=best_rows,
@@ -10127,6 +10198,7 @@ def status_payload(
         job_prioritization_rows = ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
         tailoring_decision_rows = ja._load_csv_rows(output_dir / "tailoring_decision_recommendations.csv")
         operator_review_rows = ja._load_csv_rows(output_dir / "operator_review_recommendations.csv")
+        agentic_workflow_summary = _agentic_workflow_summary_from_dir(output_dir)
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
         planning_output_dir_value = str(output_dir)
@@ -10269,6 +10341,7 @@ def status_payload(
         "operator_decision_counts": dict(sorted(decision_counts.items())),
         "undecided_review_counts": dict(sorted(undecided_review_counts.items())),
         "llm_tailoring_status_counts": dict(sorted(llm_tailoring_counts.items())),
+        "agentic_workflow_summary": agentic_workflow_summary,
         "top_queue_rows": top_queue,
     }
 

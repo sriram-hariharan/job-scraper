@@ -94,6 +94,31 @@ def test_queue_ui_renders_operator_review_advisory_separately():
     assert "OPERATOR_REVIEW_OVERLAY_FIELDS" in services_source
 
 
+def test_agentic_workflow_summary_ui_contract():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    profile_source = Path("src/app/static/profile.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source, profile_source):
+        assert "renderAgenticWorkflowSummaryPanel" in source
+        assert "Agentic Workflow Summary" in source
+        assert "ready_to_apply_count" in source
+        assert "hold_or_skip_count" in source
+        assert "missing_artifacts" in source
+        assert "summary_markdown" in source
+        assert "escapeHtml(markdown)" in source
+
+    assert "No agentic workflow summary recorded for this run." in profile_source
+    assert ".agentic-workflow-summary-card" in css
+    assert ".agentic-workflow-markdown" in css
+    assert "agentic_workflow_summary.json" in services_source
+    assert "agentic_workflow_summary.md" in services_source
+    assert "agentic_workflow_summary_json" in services_source
+    assert "agentic_workflow_summary_md" in services_source
+
+
 def test_missing_job_prioritization_overlay_is_safe():
     rows = [{"job_doc_id": "job_1", "job_company": "Acme", "job_title": "Backend Engineer", "action": "APPLY"}]
 

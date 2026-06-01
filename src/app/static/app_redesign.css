@@ -2406,6 +2406,132 @@ html[data-theme="dark"] .queue-operator-pill--source_watch {
   color: #a5f3fc;
 }
 
+.agentic-workflow-summary-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.agentic-workflow-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.agentic-workflow-header h2,
+.agentic-workflow-header h4 {
+  margin: 0;
+}
+
+.agentic-workflow-header p {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.agentic-workflow-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border: 1px solid rgba(79, 70, 229, 0.34);
+  border-radius: 999px;
+  background: rgba(79, 70, 229, 0.11);
+  color: #4338ca;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.agentic-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+}
+
+.agentic-workflow-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-inset);
+}
+
+.agentic-workflow-metric span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.agentic-workflow-metric strong {
+  color: var(--app-text);
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.agentic-workflow-counts,
+.agentic-workflow-missing {
+  display: grid;
+  gap: 8px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.agentic-workflow-counts div,
+.agentic-workflow-missing {
+  display: grid;
+  grid-template-columns: minmax(110px, 150px) 1fr;
+  gap: 10px;
+}
+
+.agentic-workflow-counts strong,
+.agentic-workflow-missing strong {
+  color: var(--app-muted);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.agentic-workflow-markdown {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-inset);
+  overflow: hidden;
+}
+
+.agentic-workflow-markdown summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agentic-workflow-markdown pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 12px;
+  overflow: auto;
+  border-top: 1px solid var(--app-border);
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+html[data-theme="dark"] .agentic-workflow-badge {
+  color: #c7d2fe;
+}
+
 #planningTable tbody td *,
 #queueTable tbody td *,
 #decisionsTable tbody td *,

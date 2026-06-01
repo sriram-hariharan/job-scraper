@@ -874,6 +874,73 @@ function renderAgentTracePanel(tracePayload, traceError = "") {
   `;
 }
 
+function formatWorkflowSummaryCounts(counts = {}) {
+  const entries = Object.entries(counts || {}).filter(([, value]) => Number(value || 0) > 0);
+  if (!entries.length) return "none";
+  return entries
+    .map(([key, value]) => `${key.replaceAll("_", " ")}=${value}`)
+    .join(", ");
+}
+
+function renderWorkflowSummaryMetric(label, value) {
+  return `
+    <div class="agentic-workflow-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value ?? 0)}</strong>
+    </div>
+  `;
+}
+
+function renderAgenticWorkflowSummaryPanel(workflowSummary = {}) {
+  const available = Boolean(workflowSummary?.available);
+  const summary = workflowSummary?.summary_json && typeof workflowSummary.summary_json === "object"
+    ? workflowSummary.summary_json
+    : {};
+  const markdown = String(workflowSummary?.summary_markdown || "").trim();
+
+  if (!available && !Object.keys(summary).length && !markdown) {
+    return `
+      <section class="pipeline-run-detail-panel agentic-workflow-summary-card">
+        <h4>Agentic Workflow Summary</h4>
+        <div class="pipeline-runs-empty-cell">No agentic workflow summary recorded for this run.</div>
+      </section>
+    `;
+  }
+
+  const missingArtifacts = Array.isArray(summary.missing_artifacts) ? summary.missing_artifacts : [];
+  return `
+    <section class="pipeline-run-detail-panel agentic-workflow-summary-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Agentic Workflow Summary</h4>
+          <p>Read-only advisory rollup from this run's artifacts.</p>
+        </div>
+        <span class="agentic-workflow-badge">Advisory</span>
+      </div>
+      <div class="agentic-workflow-grid">
+        ${renderWorkflowSummaryMetric("Queue jobs", summary.total_queue_jobs)}
+        ${renderWorkflowSummaryMetric("Packet jobs", summary.total_packet_jobs)}
+        ${renderWorkflowSummaryMetric("Ready to apply", summary.ready_to_apply_count)}
+        ${renderWorkflowSummaryMetric("Tailor then apply", summary.tailor_then_apply_count)}
+        ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count)}
+        ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count)}
+        ${renderWorkflowSummaryMetric("Fallback only", summary.fallback_only_count)}
+        ${renderWorkflowSummaryMetric("Packet blocked", summary.packet_blocked_count)}
+      </div>
+      <div class="agentic-workflow-counts">
+        <div><strong>Priority</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.advisory_priority_counts))}</span></div>
+        <div><strong>Tailoring</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.tailoring_decision_counts))}</span></div>
+        <div><strong>Operator lanes</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.operator_review_lane_counts))}</span></div>
+      </div>
+      <div class="agentic-workflow-missing">
+        <strong>Missing artifacts</strong>
+        <span>${escapeHtml(missingArtifacts.length ? missingArtifacts.join(", ") : "none")}</span>
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Markdown summary</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
 function renderPipelineRunDetail(data, tracePayload = {}, traceError = "") {
   const run = data.run || {};
   const statusJson = data.status_json || {};
@@ -941,6 +1008,8 @@ function renderPipelineRunDetail(data, tracePayload = {}, traceError = "") {
           : `<span class="pipeline-runs-empty-cell">No stage list persisted for this run.</span>`}
       </div>
     </section>
+
+    ${renderAgenticWorkflowSummaryPanel(data.agentic_workflow_summary)}
 
     ${renderAgentTracePanel(tracePayload, traceError)}
   `;

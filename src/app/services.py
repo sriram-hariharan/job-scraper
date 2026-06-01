@@ -846,6 +846,7 @@ def profile_pipeline_run_detail_payload(
         "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
         "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
+        "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
     }
 
 
@@ -9654,6 +9655,32 @@ def _agentic_workflow_summary_from_dir(output_dir: Path) -> Dict[str, Any]:
     }
 
 
+def _agentic_workflow_verification_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    verification_json = _artifact_json_by_name(rows, "agentic_workflow_verification.json")
+    return {
+        "available": bool(verification_json),
+        "verification_json": verification_json,
+    }
+
+
+def _agentic_workflow_verification_from_dir(output_dir: Path) -> Dict[str, Any]:
+    root = Path(output_dir).expanduser()
+    json_path = root / "agentic_workflow_verification.json"
+    verification_json: Dict[str, Any] = {}
+
+    if json_path.exists() and json_path.is_file():
+        try:
+            parsed = json.loads(json_path.read_text(encoding="utf-8"))
+            verification_json = dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            verification_json = {}
+
+    return {
+        "available": bool(verification_json),
+        "verification_json": verification_json,
+    }
+
+
 JOB_PRIORITIZATION_OVERLAY_FIELDS = [
     "existing_action",
     "advisory_priority",
@@ -10044,6 +10071,7 @@ def _latest_user_pipeline_artifact_context(
     operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
     workflow_summary = _agentic_workflow_summary_from_artifacts(artifacts)
+    workflow_verification = _agentic_workflow_verification_from_artifacts(artifacts)
 
     if not any([best_text, queue_text, manifest_text]):
         return {}
@@ -10063,6 +10091,7 @@ def _latest_user_pipeline_artifact_context(
         "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
         "operator_review_rows": _csv_rows_from_text(operator_review_text),
         "agentic_workflow_summary": workflow_summary,
+        "agentic_workflow_verification": workflow_verification,
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
     }
@@ -10180,6 +10209,7 @@ def status_payload(
         tailoring_decision_rows = list(artifact_context.get("tailoring_decision_rows", []) or [])
         operator_review_rows = list(artifact_context.get("operator_review_rows", []) or [])
         agentic_workflow_summary = dict(artifact_context.get("agentic_workflow_summary", {}) or {})
+        agentic_workflow_verification = dict(artifact_context.get("agentic_workflow_verification", {}) or {})
         merged_rows = _build_job_index_from_planning_rows(
             ja,
             best_rows=best_rows,
@@ -10201,6 +10231,7 @@ def status_payload(
         tailoring_decision_rows = ja._load_csv_rows(output_dir / "tailoring_decision_recommendations.csv")
         operator_review_rows = ja._load_csv_rows(output_dir / "operator_review_recommendations.csv")
         agentic_workflow_summary = _agentic_workflow_summary_from_dir(output_dir)
+        agentic_workflow_verification = _agentic_workflow_verification_from_dir(output_dir)
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
         planning_output_dir_value = str(output_dir)
@@ -10344,6 +10375,7 @@ def status_payload(
         "undecided_review_counts": dict(sorted(undecided_review_counts.items())),
         "llm_tailoring_status_counts": dict(sorted(llm_tailoring_counts.items())),
         "agentic_workflow_summary": agentic_workflow_summary,
+        "agentic_workflow_verification": agentic_workflow_verification,
         "top_queue_rows": top_queue,
     }
 

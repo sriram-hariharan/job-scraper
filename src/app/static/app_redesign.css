@@ -2413,6 +2413,13 @@ html[data-theme="dark"] .queue-operator-pill--source_watch {
   margin-bottom: 18px;
 }
 
+.agentic-workflow-verification-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
 .agentic-workflow-header {
   display: flex;
   align-items: flex-start;
@@ -2530,6 +2537,123 @@ html[data-theme="dark"] .queue-operator-pill--source_watch {
 
 html[data-theme="dark"] .agentic-workflow-badge {
   color: #c7d2fe;
+}
+
+.agentic-workflow-verification-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 6px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.agentic-workflow-verification-status--passed {
+  border-color: rgba(22, 163, 74, 0.34);
+  background: rgba(22, 163, 74, 0.12);
+  color: #166534;
+}
+
+.agentic-workflow-verification-status--warning {
+  border-color: rgba(217, 119, 6, 0.36);
+  background: rgba(217, 119, 6, 0.13);
+  color: #92400e;
+}
+
+.agentic-workflow-verification-status--failed {
+  border-color: rgba(220, 38, 38, 0.36);
+  background: rgba(220, 38, 38, 0.13);
+  color: #991b1b;
+}
+
+.agentic-workflow-verification-status--unknown {
+  border-color: rgba(100, 116, 139, 0.34);
+  background: rgba(100, 116, 139, 0.12);
+  color: #475569;
+}
+
+.agentic-workflow-verification-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+
+.agentic-workflow-verification-sections > div,
+.agentic-workflow-verification-details {
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-inset);
+  padding: 10px 12px;
+}
+
+.agentic-workflow-verification-sections strong,
+.agentic-workflow-verification-details summary {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.agentic-workflow-verification-details summary {
+  cursor: pointer;
+}
+
+.agentic-workflow-verification-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.45;
+}
+
+.agentic-workflow-verification-empty {
+  display: block;
+  margin-top: 8px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.agentic-workflow-verification-checks {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agentic-workflow-verification-check {
+  display: grid;
+  grid-template-columns: minmax(130px, 220px) 1fr;
+  gap: 10px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.agentic-workflow-verification-check strong {
+  color: var(--app-muted);
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+html[data-theme="dark"] .agentic-workflow-verification-status--passed {
+  color: #bbf7d0;
+}
+
+html[data-theme="dark"] .agentic-workflow-verification-status--warning {
+  color: #fde68a;
+}
+
+html[data-theme="dark"] .agentic-workflow-verification-status--failed {
+  color: #fecaca;
+}
+
+html[data-theme="dark"] .agentic-workflow-verification-status--unknown {
+  color: #cbd5e1;
 }
 
 #planningTable tbody td *,

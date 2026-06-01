@@ -1219,6 +1219,7 @@ function renderStats(statusData) {
   qs("statUndecidedApplyReview").textContent = undecided.APPLY_REVIEW_VARIANTS ?? 0;
   qs("statUndecidedMaybeTailor").textContent = undecided.MAYBE_TAILOR ?? 0;
   renderAgenticWorkflowSummaryPanel(statusData.agentic_workflow_summary);
+  renderAgenticWorkflowVerificationPanel(statusData.agentic_workflow_verification);
 }
 
 function formatWorkflowSummaryCounts(counts = {}) {
@@ -1284,6 +1285,115 @@ function renderAgenticWorkflowSummaryPanel(workflowSummary = {}) {
       <span>${escapeHtml(missingArtifacts.length ? missingArtifacts.join(", ") : "none")}</span>
     </div>
     ${markdown ? `<details class="agentic-workflow-markdown"><summary>Markdown summary</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+  `;
+}
+
+function formatWorkflowVerificationStatus(status) {
+  const value = String(status || "unknown").trim().toLowerCase();
+  if (value === "passed") return "Passed";
+  if (value === "warning") return "Warning";
+  if (value === "failed") return "Failed";
+  return "Unknown";
+}
+
+function renderWorkflowVerificationList(values, emptyLabel = "none") {
+  const entries = Array.isArray(values)
+    ? values
+    : Object.entries(values || {}).map(([key, value]) => `${key}: ${value}`);
+  const cleanEntries = entries.map((value) => String(value || "").trim()).filter(Boolean);
+  if (!cleanEntries.length) {
+    return `<span class="agentic-workflow-verification-empty">${escapeHtml(emptyLabel)}</span>`;
+  }
+  return `
+    <ul class="agentic-workflow-verification-list">
+      ${cleanEntries.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderWorkflowVerificationChecks(checks = {}) {
+  const entries = Array.isArray(checks)
+    ? checks.map((value, index) => [`check_${index + 1}`, value])
+    : Object.entries(checks || {});
+  if (!entries.length) {
+    return `<span class="agentic-workflow-verification-empty">none</span>`;
+  }
+  return `
+    <div class="agentic-workflow-verification-checks">
+      ${entries.map(([key, value]) => `
+        <div class="agentic-workflow-verification-check">
+          <strong>${escapeHtml(String(key).replaceAll("_", " "))}</strong>
+          <span>${escapeHtml(typeof value === "object" ? JSON.stringify(value) : value)}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAgenticWorkflowVerificationPanel(workflowVerification = {}) {
+  const panel = qs("agenticWorkflowVerificationPanel");
+  if (!panel) return;
+
+  const available = Boolean(workflowVerification?.available);
+  const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
+    ? workflowVerification.verification_json
+    : {};
+
+  if (!available && !Object.keys(verification).length) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+
+  const status = String(verification.validation_status || "unknown").trim().toLowerCase();
+  const checkedArtifacts = Array.isArray(verification.checked_artifacts) ? verification.checked_artifacts : [];
+  const missingArtifacts = Array.isArray(verification.missing_artifacts) ? verification.missing_artifacts : [];
+  const reasonCodes = Array.isArray(verification.reason_codes) ? verification.reason_codes : [];
+  const rowCounts = verification.row_counts && typeof verification.row_counts === "object" ? verification.row_counts : {};
+  const consistencyChecks = verification.consistency_checks && typeof verification.consistency_checks === "object"
+    ? verification.consistency_checks
+    : {};
+  const summary = verification.summary && typeof verification.summary === "object" ? verification.summary : {};
+
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="agentic-workflow-header">
+      <div>
+        <h2>Agentic Workflow Verification</h2>
+        <p>Read-only diagnostic checks for the latest run artifacts.</p>
+      </div>
+      <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(status)}">
+        ${escapeHtml(formatWorkflowVerificationStatus(status))}
+      </span>
+    </div>
+    <div class="agentic-workflow-grid">
+      ${renderWorkflowSummaryMetric("Strict mode", verification.strict ? "Yes" : "No")}
+      ${renderWorkflowSummaryMetric("Checked artifacts", checkedArtifacts.length)}
+      ${renderWorkflowSummaryMetric("Missing artifacts", missingArtifacts.length)}
+      ${renderWorkflowSummaryMetric("Reason codes", reasonCodes.length)}
+    </div>
+    <div class="agentic-workflow-verification-sections">
+      <div>
+        <strong>Summary</strong>
+        ${renderWorkflowVerificationList(summary)}
+      </div>
+      <div>
+        <strong>Row counts</strong>
+        ${renderWorkflowVerificationList(rowCounts)}
+      </div>
+      <div>
+        <strong>Missing artifacts</strong>
+        ${renderWorkflowVerificationList(missingArtifacts)}
+      </div>
+      <div>
+        <strong>Reason codes</strong>
+        ${renderWorkflowVerificationList(reasonCodes)}
+      </div>
+    </div>
+    <details class="agentic-workflow-verification-details">
+      <summary>Consistency checks</summary>
+      ${renderWorkflowVerificationChecks(consistencyChecks)}
+    </details>
   `;
 }
 

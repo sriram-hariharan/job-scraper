@@ -109,6 +109,8 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         priority_summary = root / "job_prioritization_summary.json"
         tailoring_decision_csv = root / "tailoring_decision_recommendations.csv"
         tailoring_decision_summary = root / "tailoring_decision_summary.json"
+        operator_review_csv = root / "operator_review_recommendations.csv"
+        operator_review_summary = root / "operator_review_summary.json"
         _write_selector_fixture(selector_csv)
 
         try:
@@ -137,6 +139,10 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
                 str(tailoring_decision_csv),
                 "--tailoring-decision-summary-json",
                 str(tailoring_decision_summary),
+                "--operator-review-output-csv",
+                str(operator_review_csv),
+                "--operator-review-summary-json",
+                str(operator_review_summary),
                 "--top-k-console",
                 "0",
             ]
@@ -148,8 +154,10 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
         queue_row = _read_rows(queue_csv)[0]
         priority_row = _read_rows(priority_csv)[0]
         tailoring_decision_row = _read_rows(tailoring_decision_csv)[0]
+        operator_review_row = _read_rows(operator_review_csv)[0]
         priority_summary_exists = priority_summary.exists()
         tailoring_decision_summary_exists = tailoring_decision_summary.exists()
+        operator_review_summary_exists = operator_review_summary.exists()
 
     for row in (shortlist_row, queue_row):
         assert row["job_location"] == "New York, NY"
@@ -168,6 +176,12 @@ def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metad
     assert tailoring_decision_row["tailoring_decision"] == "no_tailoring_needed"
     assert tailoring_decision_row["deterministic_winner_score"] == "0.910000"
     assert tailoring_decision_summary_exists
+    assert operator_review_row["existing_action"] == queue_row["action"]
+    assert operator_review_row["advisory_priority"] == "apply_now"
+    assert operator_review_row["tailoring_decision"] == "no_tailoring_needed"
+    assert operator_review_row["operator_review_lane"] == "ready_to_apply"
+    assert operator_review_row["deterministic_winner_score"] == "0.910000"
+    assert operator_review_summary_exists
 
 
 def test_fallback_only_selector_row_is_visible_but_not_actionable():

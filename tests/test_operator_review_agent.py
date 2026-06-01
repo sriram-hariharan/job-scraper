@@ -1,3 +1,6 @@
+import csv
+import json
+
 from src.agents import operator_review_agent
 
 
@@ -133,6 +136,50 @@ def test_operator_review_trace_disabled_by_default():
     )
 
     assert result == {"attempted": False, "reason": "trace_disabled"}
+
+
+def test_operator_review_artifact_renders_stable_columns_and_preserves_inputs(tmp_path):
+    rows = [
+        _row(
+            job_doc_id="job_fallback",
+            deterministic_winner_score="0.000000",
+            fallback_only_no_deterministic_match="true",
+            packet_generation_allowed="false",
+            packet_generation_block_reason="fallback_only_no_deterministic_match",
+        ),
+        _row(job_doc_id="job_critic", critic_decision="reject"),
+        _row(job_doc_id="job_ready", advisory_priority="apply_now", tailoring_decision="no_tailoring_needed"),
+    ]
+    original_rows = [dict(row) for row in rows]
+    output_csv = tmp_path / "operator_review_recommendations.csv"
+    summary_json = tmp_path / "operator_review_summary.json"
+
+    result = operator_review_agent.write_operator_review_artifacts(
+        rows=rows,
+        output_csv_path=output_csv,
+        summary_json_path=summary_json,
+        pipeline_run_id="run-1",
+        owner_user_id="user-1",
+        source_artifact_path="application_execution_queue.csv",
+    )
+
+    with output_csv.open("r", encoding="utf-8", newline="") as handle:
+        rendered = list(csv.DictReader(handle))
+    summary = json.loads(summary_json.read_text(encoding="utf-8"))
+
+    assert list(rendered[0]) == operator_review_agent.OPERATOR_REVIEW_FIELDNAMES
+    assert rendered[0]["existing_action"] == "APPLY"
+    assert rendered[0]["advisory_priority"] == "apply_now"
+    assert rendered[0]["tailoring_decision"] == "no_tailoring_needed"
+    assert rendered[0]["operator_review_lane"] == "hold_or_skip"
+    assert rendered[0]["operator_review_reason_codes"] == "fallback_only_no_deterministic_match"
+    assert rendered[1]["operator_review_lane"] == "hold_or_skip"
+    assert rendered[1]["critic_decision"] == "reject"
+    assert rendered[2]["operator_review_lane"] == "ready_to_apply"
+    assert rendered[2]["winner_resume"] == "backend_resume.pdf"
+    assert result["row_count"] == 3
+    assert summary["agent_name"] == "Operator Review Agent"
+    assert rows == original_rows
 
 
 def test_operator_review_trace_can_be_monkeypatched_without_postgres():

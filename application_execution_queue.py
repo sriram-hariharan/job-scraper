@@ -9,8 +9,13 @@ from src.agents.job_prioritization_agent import (
     render_job_prioritization_recommendation_rows,
     write_job_prioritization_artifacts,
 )
+from src.agents.operator_review_agent import (
+    record_operator_review_agent_trace,
+    write_operator_review_artifacts,
+)
 from src.agents.tailoring_decision_agent import (
     record_tailoring_decision_agent_trace,
+    render_tailoring_decision_rows,
     write_tailoring_decision_artifacts,
 )
 from src.config.settings import APPLICATION_EXECUTION_QUEUE_POLICY
@@ -179,12 +184,35 @@ def _with_priority_overlay(rows: List[dict]) -> List[dict]:
                 "existing_action": row.get("existing_action", "") or row.get("action", ""),
                 "advisory_priority": priority_row.get("advisory_priority", row.get("advisory_priority", "")),
                 "advisory_reason_codes": priority_row.get("advisory_reason_codes", row.get("advisory_reason_codes", "")),
+                "source_recommendation": priority_row.get("source_recommendation", row.get("source_recommendation", "")),
+                "critic_decision": priority_row.get("critic_decision", row.get("critic_decision", "")),
                 "deterministic_winner_score": (
                     row.get("deterministic_winner_score", "")
                     or row.get("selector_winner_score", "")
                     or row.get("winner_score", "")
                     or row.get("resolved_score", "")
                 ),
+            }
+        )
+    return merged_rows
+
+
+def _with_tailoring_decision_overlay(rows: List[dict]) -> List[dict]:
+    tailoring_by_key = {
+        _job_key(row): row
+        for row in render_tailoring_decision_rows(rows)
+        if _job_key(row)
+    }
+    merged_rows: List[dict] = []
+    for row in rows:
+        tailoring_row = tailoring_by_key.get(_job_key(row), {})
+        merged_rows.append(
+            {
+                **row,
+                "tailoring_decision": tailoring_row.get("tailoring_decision", row.get("tailoring_decision", "")),
+                "tailoring_reason_codes": tailoring_row.get("tailoring_reason_codes", row.get("tailoring_reason_codes", "")),
+                "critic_decision": tailoring_row.get("critic_decision", row.get("critic_decision", "")),
+                "source_recommendation": row.get("source_recommendation", ""),
             }
         )
     return merged_rows
@@ -229,6 +257,16 @@ def main() -> None:
         "--tailoring-decision-summary-json",
         default="",
         help="Optional path to write advisory tailoring decision summary JSON.",
+    )
+    parser.add_argument(
+        "--operator-review-output-csv",
+        default="",
+        help="Optional path to write advisory operator review recommendations.",
+    )
+    parser.add_argument(
+        "--operator-review-summary-json",
+        default="",
+        help="Optional path to write advisory operator review summary JSON.",
     )
     args = parser.parse_args()
 
@@ -391,6 +429,24 @@ def main() -> None:
         except Exception as exc:
             print(f"Tailoring decision advisory artifact skipped: {exc}")
 
+    operator_review_artifact = None
+    operator_review_rows = _with_tailoring_decision_overlay(tailoring_decision_rows)
+    if str(args.operator_review_output_csv or "").strip():
+        try:
+            operator_review_artifact = write_operator_review_artifacts(
+                rows=operator_review_rows,
+                output_csv_path=args.operator_review_output_csv,
+                summary_json_path=args.operator_review_summary_json or None,
+                pipeline_run_id=(
+                    os.getenv("JOB_APP_PIPELINE_RUN_ID", "").strip()
+                    or os.getenv("JOB_STACK_USER_PIPELINE_RUN_ID", "").strip()
+                ),
+                owner_user_id=os.getenv("JOB_STACK_OWNER_USER_ID", "").strip(),
+                source_artifact_path=str(output_csv_path),
+            )
+        except Exception as exc:
+            print(f"Operator review advisory artifact skipped: {exc}")
+
     trace_result = record_job_prioritization_agent_trace(
         rows=queue_rows,
         source_artifact_path=str(output_csv_path),
@@ -408,6 +464,16 @@ def main() -> None:
             f"{tailoring_trace_result.get('warning') or tailoring_trace_result.get('reason')}"
         )
 
+    operator_review_trace_result = record_operator_review_agent_trace(
+        rows=operator_review_rows,
+        source_artifact_path=str(output_csv_path),
+    )
+    if operator_review_trace_result.get("attempted") and not operator_review_trace_result.get("recorded"):
+        print(
+            "Operator review trace warning: "
+            f"{operator_review_trace_result.get('warning') or operator_review_trace_result.get('reason')}"
+        )
+
     print("=" * 100)
     print("APPLICATION EXECUTION QUEUE")
     print("=" * 100)
@@ -418,6 +484,8 @@ def main() -> None:
         print(f"Priority advisory CSV: {priority_artifact['csv_path']}")
     if tailoring_decision_artifact:
         print(f"Tailoring decision advisory CSV: {tailoring_decision_artifact['csv_path']}")
+    if operator_review_artifact:
+        print(f"Operator review advisory CSV: {operator_review_artifact['csv_path']}")
     print()
 
     for row in queue_rows[:args.top_k_console]:

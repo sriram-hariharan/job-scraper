@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import csv
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List
 
 from src.agents import llmops, trace as trace_store
@@ -27,6 +30,25 @@ SOURCE_WATCH_RECOMMENDATIONS = {"monitor", "demote", "needs_timestamp_fix"}
 READY_TAILORING_DECISIONS = {"no_tailoring_needed", "light_tailoring"}
 TAILORING_SIGNAL_DECISIONS = {"tailor_before_apply", "light_tailoring"}
 REQUIRED_ROW_FIELDS = ["job_id", "company", "title"]
+OPERATOR_REVIEW_FIELDNAMES = [
+    "job_id",
+    "company",
+    "title",
+    "source",
+    "existing_action",
+    "advisory_priority",
+    "tailoring_decision",
+    "operator_review_lane",
+    "operator_review_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "critic_decision",
+    "source_recommendation",
+    "winner_resume",
+    "resolved_resume",
+]
 
 
 def _clean_text(value: Any) -> str:
@@ -345,6 +367,79 @@ def render_operator_review(
         "output": output_payload,
         "validation": validation_payload,
         "summary": summary_payload,
+    }
+
+
+def render_operator_review_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, str]]:
+    payload = render_operator_review(rows=rows)
+    rendered_rows: List[Dict[str, str]] = []
+    for item in payload["output"].get("reviews", []) or []:
+        rendered_rows.append(
+            {
+                "job_id": _clean_text(item.get("job_id")),
+                "company": _clean_text(item.get("company")),
+                "title": _clean_text(item.get("title")),
+                "source": _clean_text(item.get("source")),
+                "existing_action": _clean_text(item.get("existing_action")),
+                "advisory_priority": _clean_text(item.get("advisory_priority")),
+                "tailoring_decision": _clean_text(item.get("tailoring_decision")),
+                "operator_review_lane": _clean_text(item.get("operator_review_lane")),
+                "operator_review_reason_codes": "|".join(
+                    _clean_text(code)
+                    for code in item.get("operator_reason_codes", []) or []
+                    if _clean_text(code)
+                ),
+                "deterministic_winner_score": _clean_text(item.get("deterministic_winner_score")),
+                "fallback_only_no_deterministic_match": _clean_text(item.get("fallback_only_no_deterministic_match")),
+                "packet_generation_allowed": _clean_text(item.get("packet_generation_allowed")),
+                "packet_generation_block_reason": _clean_text(item.get("packet_generation_block_reason")),
+                "critic_decision": _clean_text(item.get("critic_decision")),
+                "source_recommendation": _clean_text(item.get("source_recommendation")),
+                "winner_resume": _clean_text(item.get("winner_resume")),
+                "resolved_resume": _clean_text(item.get("resolved_resume")),
+            }
+        )
+    return rendered_rows
+
+
+def write_operator_review_artifacts(
+    *,
+    rows: List[Dict[str, Any]],
+    output_csv_path: str | Path,
+    summary_json_path: str | Path | None = None,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+    source_artifact_path: str = "",
+) -> Dict[str, Any]:
+    payload = render_operator_review(
+        rows=rows,
+        pipeline_run_id=pipeline_run_id,
+        owner_user_id=owner_user_id,
+        source_artifact_path=source_artifact_path,
+    )
+    output_path = Path(output_csv_path)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with output_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=OPERATOR_REVIEW_FIELDNAMES)
+        writer.writeheader()
+        for row in render_operator_review_rows(rows):
+            writer.writerow({field: row.get(field, "") for field in OPERATOR_REVIEW_FIELDNAMES})
+
+    summary_path = None
+    if summary_json_path:
+        summary_path = Path(summary_json_path)
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text(
+            json.dumps(payload["summary"], indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    return {
+        "csv_path": str(output_path),
+        "summary_json_path": str(summary_path) if summary_path else "",
+        "row_count": len(payload["output"].get("reviews", []) or []),
+        "summary": payload["summary"],
+        "validation": payload["validation"],
     }
 
 

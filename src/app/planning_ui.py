@@ -33,6 +33,9 @@ def planning_dashboard() -> str:
       </div>
     </header>
 
+    <section id="agenticWorkflowSummaryPanel" class="card agentic-workflow-summary-card hidden"></section>
+    <section id="agenticWorkflowVerificationPanel" class="card agentic-workflow-verification-card hidden"></section>
+
     <section class="card controls-card">
       <div class="dashboard-toolbar dashboard-toolbar--planning">
         <div class="dashboard-toolbar-left dashboard-toolbar-left--planning">

@@ -15,7 +15,6 @@ class _FakeTqdm:
 
 
 sys.modules.setdefault("pycountry", types.SimpleNamespace(countries=[]))
-sys.modules.setdefault("requests", types.SimpleNamespace())
 sys.modules.setdefault("tqdm", types.SimpleNamespace(tqdm=_FakeTqdm()))
 sys.modules.setdefault(
     "src.utils.workday_timestamp",
@@ -59,6 +58,24 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
         output_dir = _scratch_output_dir(Path(tmp_dir), owner, run_id)
         _write(output_dir / "application_shortlist_by_job.csv", "job_id,title\n1,Backend Engineer\n")
         _write(output_dir / "application_execution_queue.csv", "job_id,rank\n1,1\n")
+        _write(
+            output_dir / "job_prioritization_recommendations.csv",
+            "job_id,advisory_priority\n1,apply_now\n",
+        )
+        _write(output_dir / "job_prioritization_summary.json", json.dumps({"row_count": 1}))
+        _write(
+            output_dir / "tailoring_decision_recommendations.csv",
+            "job_id,tailoring_decision\n1,light_tailoring\n",
+        )
+        _write(output_dir / "tailoring_decision_summary.json", json.dumps({"row_count": 1}))
+        _write(
+            output_dir / "operator_review_recommendations.csv",
+            "job_id,operator_review_lane\n1,ready_to_apply\n",
+        )
+        _write(output_dir / "operator_review_summary.json", json.dumps({"row_count": 1}))
+        _write(output_dir / "agentic_workflow_summary.json", json.dumps({"total_queue_jobs": 1}))
+        _write(output_dir / "agentic_workflow_summary.md", "# Agentic Workflow Summary\n")
+        _write(output_dir / "agentic_workflow_verification.json", json.dumps({"validation_status": "passed"}))
         _write(output_dir / "best_resume_variant_by_job.csv", "job_id,resume\n1,resume.pdf\n")
         _write(output_dir / "current_run_job_corpus.jsonl", json.dumps({"job_id": "1"}) + "\n")
         _write(
@@ -95,11 +112,20 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 12
+    assert result["ingested_count"] == 21
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
     assert "application_execution_queue.csv" in artifact_names
+    assert "job_prioritization_recommendations.csv" in artifact_names
+    assert "job_prioritization_summary.json" in artifact_names
+    assert "tailoring_decision_recommendations.csv" in artifact_names
+    assert "tailoring_decision_summary.json" in artifact_names
+    assert "operator_review_recommendations.csv" in artifact_names
+    assert "operator_review_summary.json" in artifact_names
+    assert "agentic_workflow_summary.json" in artifact_names
+    assert "agentic_workflow_summary.md" in artifact_names
+    assert "agentic_workflow_verification.json" in artifact_names
     assert "best_resume_variant_by_job.csv" in artifact_names
     assert "current_run_job_corpus.jsonl" in artifact_names
     assert "role_title_filter_audit.csv" in artifact_names
@@ -112,6 +138,15 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "job_packets/backend_engineer.md" in artifact_names
     assert "application_shortlist_by_job" in artifact_kinds
     assert "application_execution_queue" in artifact_kinds
+    assert "job_prioritization_recommendations" in artifact_kinds
+    assert "job_prioritization_summary" in artifact_kinds
+    assert "tailoring_decision_recommendations" in artifact_kinds
+    assert "tailoring_decision_summary" in artifact_kinds
+    assert "operator_review_recommendations" in artifact_kinds
+    assert "operator_review_summary" in artifact_kinds
+    assert "agentic_workflow_summary_json" in artifact_kinds
+    assert "agentic_workflow_summary_md" in artifact_kinds
+    assert "agentic_workflow_verification_json" in artifact_kinds
     assert "best_resume_variant_by_job" in artifact_kinds
     assert "current_run_job_corpus" in artifact_kinds
     assert "role_title_filter_audit" in artifact_kinds

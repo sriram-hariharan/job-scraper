@@ -7,7 +7,7 @@ import time
 from uuid import uuid4
 from pathlib import Path
 
-from src.pipeline.runtime_status import complete_stage, start_stage
+from src.pipeline.runtime_status import complete_stage, start_stage, update_counts
 from src.utils.log_sections import section
 from src.utils.logging import get_logger
 
@@ -57,6 +57,45 @@ def _pipeline_preferences_from_env() -> Dict[str, List[str]]:
         "preferred_locations": _json_list_from_env("JOB_STACK_PREFERRED_LOCATIONS"),
         "preferred_skills": _json_list_from_env("JOB_STACK_PREFERRED_SKILLS"),
         "excluded_keywords": _json_list_from_env("JOB_STACK_EXCLUDED_KEYWORDS"),
+    }
+
+
+def _truthy_env_value(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _record_source_health_agent_trace(
+    *,
+    source_health_rows: List[Dict[str, Any]],
+    artifact_path: Path,
+) -> Dict[str, Any]:
+    try:
+        from src.agents.source_health_agent import record_source_health_agent_trace
+
+        return record_source_health_agent_trace(
+            rows=source_health_rows,
+            artifact_path=str(artifact_path),
+            artifact_name=artifact_path.name,
+        )
+    except Exception as exc:
+        if _truthy_env_value(os.environ.get("APPLYLENS_AGENT_TRACE_STRICT")):
+            raise
+        return {"attempted": True, "recorded": False, "warning": str(exc)}
+
+
+def _agent_trace_status_counts(trace_result: Dict[str, Any]) -> Dict[str, int]:
+    if not trace_result.get("attempted"):
+        return {"agent_trace_enabled": 0}
+    if trace_result.get("recorded"):
+        return {
+            "agent_trace_enabled": 1,
+            "agent_trace_steps_recorded": 1,
+            "agent_trace_write_failed": 0,
+        }
+    return {
+        "agent_trace_enabled": 1,
+        "agent_trace_steps_recorded": 0,
+        "agent_trace_write_failed": 1,
     }
 
 
@@ -136,6 +175,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     from src.pipeline.embedding_prefilter import prefilter_jobs_by_embedding
     from src.pipeline.job_details import enrich_job_details
     from src.pipeline.job_filter import (
+        build_source_health_report_rows,
         filter_jobs,
         role_title_filter_audit_counts,
         write_source_health_report_csv,
@@ -533,8 +573,22 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")
+        source_health_rows = build_source_health_report_rows(role_title_audit_rows, scored_jobs)
         write_source_health_report_csv(role_title_audit_rows, scored_jobs, source_health_path)
         logger.info("Source health report written: %s", source_health_path)
+        trace_result = _record_source_health_agent_trace(
+            source_health_rows=source_health_rows,
+            artifact_path=source_health_path,
+        )
+        if trace_result.get("recorded"):
+            logger.info(
+                "Source Health Agent trace recorded: %s %s",
+                trace_result.get("agent_run_id", ""),
+                trace_result.get("agent_step_id", ""),
+            )
+        elif trace_result.get("warning"):
+            logger.warning("Source Health Agent trace skipped: %s", trace_result.get("warning"))
+        update_counts(**_agent_trace_status_counts(trace_result))
 
     start_stage("rag_export", f"Exporting {len(scored_jobs)} jobs to RAG corpus")
 

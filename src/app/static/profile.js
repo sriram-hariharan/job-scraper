@@ -775,7 +775,283 @@ function renderKeyValueList(items) {
   `).join("");
 }
 
-function renderPipelineRunDetail(data) {
+function renderJsonDetails(label, value) {
+  const payload = value && typeof value === "object" && Object.keys(value).length
+    ? JSON.stringify(value, null, 2)
+    : "";
+  if (!payload) return "";
+  return `
+    <details class="agent-trace-json-detail">
+      <summary>${escapeHtml(label)}</summary>
+      <pre>${escapeHtml(payload)}</pre>
+    </details>
+  `;
+}
+
+function renderAgentTraceStep(step) {
+  const status = pipelineRunStatusLabel(step?.status || "");
+  const tone = pipelineRunStatusTone(step?.status || "");
+  const modelText = [step?.model_provider, step?.model_name].filter(Boolean).join(" / ");
+  const latency = Number(step?.latency_ms || 0);
+  return `
+    <article class="agent-trace-step">
+      <div class="agent-trace-step-header">
+        <div>
+          <div class="agent-trace-step-name">${escapeHtml(step?.agent_name || "Agent step")}</div>
+          <div class="agent-trace-step-meta">
+            ${escapeHtml(step?.agent_version || "")}
+            ${modelText ? ` · ${escapeHtml(modelText)}` : ""}
+            ${latency ? ` · ${escapeHtml(`${latency} ms`)}` : ""}
+          </div>
+        </div>
+        <span class="pipeline-run-status agent-trace-step-status is-${escapeHtml(tone)}">${escapeHtml(status)}</span>
+      </div>
+      <div class="agent-trace-step-times">
+        ${escapeHtml(formatDateTime(step?.started_at || "") || "Start unavailable")}
+        ${step?.completed_at ? ` → ${escapeHtml(formatDateTime(step.completed_at))}` : ""}
+      </div>
+      ${step?.error ? `<div class="agent-trace-error">${escapeHtml(step.error)}</div>` : ""}
+      <div class="agent-trace-json-grid">
+        ${renderJsonDetails("Input", step?.input_json)}
+        ${renderJsonDetails("Output", step?.output_json)}
+        ${renderJsonDetails("Validation", step?.validation_json)}
+        ${renderJsonDetails("Token usage", step?.token_usage_json)}
+        ${renderJsonDetails("Cost", step?.cost_json)}
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentTraceRun(run) {
+  const steps = Array.isArray(run?.steps) ? run.steps : [];
+  return `
+    <article class="agent-trace-run">
+      <div class="agent-trace-run-header">
+        <div>
+          <div class="agent-trace-run-id">${escapeHtml(run?.agent_run_id || "Agent run")}</div>
+          <div class="agent-trace-step-meta">${escapeHtml(run?.context_id || "")}</div>
+        </div>
+        <span class="pipeline-run-status agent-trace-step-status is-${escapeHtml(pipelineRunStatusTone(run?.status || ""))}">
+          ${escapeHtml(pipelineRunStatusLabel(run?.status || ""))}
+        </span>
+      </div>
+      ${renderJsonDetails("Run summary", run?.summary_json)}
+      ${run?.error ? `<div class="agent-trace-error">${escapeHtml(run.error)}</div>` : ""}
+      <div class="agent-trace-step-list">
+        ${steps.length
+          ? steps.map(renderAgentTraceStep).join("")
+          : `<div class="pipeline-runs-empty-cell">No agent steps recorded for this agent run.</div>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentTracePanel(tracePayload, traceError = "") {
+  const runs = Array.isArray(tracePayload?.agent_runs) ? tracePayload.agent_runs : [];
+  const counts = tracePayload?.counts && typeof tracePayload.counts === "object" ? tracePayload.counts : {};
+  const hasSteps = runs.some((run) => Array.isArray(run?.steps) && run.steps.length);
+  return `
+    <section class="pipeline-run-detail-panel agent-trace-panel">
+      <h4>Agent trace</h4>
+      ${traceError ? `<div class="agent-trace-error">${escapeHtml(traceError)}</div>` : ""}
+      ${runs.length || hasSteps
+        ? `
+          <div class="agent-trace-counts">
+            ${renderKeyValueList([
+              ["Agent runs", counts.agent_runs ?? runs.length],
+              ["Agent steps", counts.agent_steps ?? 0],
+              ["Succeeded steps", counts.succeeded_steps ?? 0],
+              ["Warning steps", counts.warning_steps ?? 0],
+              ["Failed steps", counts.failed_steps ?? 0],
+            ])}
+          </div>
+          <div class="agent-trace-run-list">
+            ${runs.map(renderAgentTraceRun).join("")}
+          </div>
+        `
+        : `<div class="pipeline-runs-empty-cell">No agent trace recorded for this run.</div>`}
+    </section>
+  `;
+}
+
+function formatWorkflowSummaryCounts(counts = {}) {
+  const entries = Object.entries(counts || {}).filter(([, value]) => Number(value || 0) > 0);
+  if (!entries.length) return "none";
+  return entries
+    .map(([key, value]) => `${key.replaceAll("_", " ")}=${value}`)
+    .join(", ");
+}
+
+function renderWorkflowSummaryMetric(label, value) {
+  return `
+    <div class="agentic-workflow-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value ?? 0)}</strong>
+    </div>
+  `;
+}
+
+function renderAgenticWorkflowSummaryPanel(workflowSummary = {}) {
+  const available = Boolean(workflowSummary?.available);
+  const summary = workflowSummary?.summary_json && typeof workflowSummary.summary_json === "object"
+    ? workflowSummary.summary_json
+    : {};
+  const markdown = String(workflowSummary?.summary_markdown || "").trim();
+
+  if (!available && !Object.keys(summary).length && !markdown) {
+    return `
+      <section class="pipeline-run-detail-panel agentic-workflow-summary-card">
+        <h4>Agentic Workflow Summary</h4>
+        <div class="pipeline-runs-empty-cell">No agentic workflow summary recorded for this run.</div>
+      </section>
+    `;
+  }
+
+  const missingArtifacts = Array.isArray(summary.missing_artifacts) ? summary.missing_artifacts : [];
+  return `
+    <section class="pipeline-run-detail-panel agentic-workflow-summary-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Agentic Workflow Summary</h4>
+          <p>Read-only advisory rollup from this run's artifacts.</p>
+        </div>
+        <span class="agentic-workflow-badge">Advisory</span>
+      </div>
+      <div class="agentic-workflow-grid">
+        ${renderWorkflowSummaryMetric("Queue jobs", summary.total_queue_jobs)}
+        ${renderWorkflowSummaryMetric("Packet jobs", summary.total_packet_jobs)}
+        ${renderWorkflowSummaryMetric("Ready to apply", summary.ready_to_apply_count)}
+        ${renderWorkflowSummaryMetric("Tailor then apply", summary.tailor_then_apply_count)}
+        ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count)}
+        ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count)}
+        ${renderWorkflowSummaryMetric("Fallback only", summary.fallback_only_count)}
+        ${renderWorkflowSummaryMetric("Packet blocked", summary.packet_blocked_count)}
+      </div>
+      <div class="agentic-workflow-counts">
+        <div><strong>Priority</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.advisory_priority_counts))}</span></div>
+        <div><strong>Tailoring</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.tailoring_decision_counts))}</span></div>
+        <div><strong>Operator lanes</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.operator_review_lane_counts))}</span></div>
+      </div>
+      <div class="agentic-workflow-missing">
+        <strong>Missing artifacts</strong>
+        <span>${escapeHtml(missingArtifacts.length ? missingArtifacts.join(", ") : "none")}</span>
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Markdown summary</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
+function formatWorkflowVerificationStatus(status) {
+  const value = String(status || "unknown").trim().toLowerCase();
+  if (value === "passed") return "Passed";
+  if (value === "warning") return "Warning";
+  if (value === "failed") return "Failed";
+  return "Unknown";
+}
+
+function renderWorkflowVerificationList(values, emptyLabel = "none") {
+  const entries = Array.isArray(values)
+    ? values
+    : Object.entries(values || {}).map(([key, value]) => `${key}: ${value}`);
+  const cleanEntries = entries.map((value) => String(value || "").trim()).filter(Boolean);
+  if (!cleanEntries.length) {
+    return `<span class="agentic-workflow-verification-empty">${escapeHtml(emptyLabel)}</span>`;
+  }
+  return `
+    <ul class="agentic-workflow-verification-list">
+      ${cleanEntries.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderWorkflowVerificationChecks(checks = {}) {
+  const entries = Array.isArray(checks)
+    ? checks.map((value, index) => [`check_${index + 1}`, value])
+    : Object.entries(checks || {});
+  if (!entries.length) {
+    return `<span class="agentic-workflow-verification-empty">none</span>`;
+  }
+  return `
+    <div class="agentic-workflow-verification-checks">
+      ${entries.map(([key, value]) => `
+        <div class="agentic-workflow-verification-check">
+          <strong>${escapeHtml(String(key).replaceAll("_", " "))}</strong>
+          <span>${escapeHtml(typeof value === "object" ? JSON.stringify(value) : value)}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAgenticWorkflowVerificationPanel(workflowVerification = {}) {
+  const available = Boolean(workflowVerification?.available);
+  const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
+    ? workflowVerification.verification_json
+    : {};
+
+  if (!available && !Object.keys(verification).length) {
+    return `
+      <section class="pipeline-run-detail-panel agentic-workflow-verification-card">
+        <h4>Agentic Workflow Verification</h4>
+        <div class="pipeline-runs-empty-cell">No agentic workflow verification recorded for this run.</div>
+      </section>
+    `;
+  }
+
+  const status = String(verification.validation_status || "unknown").trim().toLowerCase();
+  const checkedArtifacts = Array.isArray(verification.checked_artifacts) ? verification.checked_artifacts : [];
+  const missingArtifacts = Array.isArray(verification.missing_artifacts) ? verification.missing_artifacts : [];
+  const reasonCodes = Array.isArray(verification.reason_codes) ? verification.reason_codes : [];
+  const rowCounts = verification.row_counts && typeof verification.row_counts === "object" ? verification.row_counts : {};
+  const consistencyChecks = verification.consistency_checks && typeof verification.consistency_checks === "object"
+    ? verification.consistency_checks
+    : {};
+  const summary = verification.summary && typeof verification.summary === "object" ? verification.summary : {};
+
+  return `
+    <section class="pipeline-run-detail-panel agentic-workflow-verification-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Agentic Workflow Verification</h4>
+          <p>Read-only diagnostic checks for this run's artifacts.</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(status)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(status))}
+        </span>
+      </div>
+      <div class="agentic-workflow-grid">
+        ${renderWorkflowSummaryMetric("Strict mode", verification.strict ? "Yes" : "No")}
+        ${renderWorkflowSummaryMetric("Checked artifacts", checkedArtifacts.length)}
+        ${renderWorkflowSummaryMetric("Missing artifacts", missingArtifacts.length)}
+        ${renderWorkflowSummaryMetric("Reason codes", reasonCodes.length)}
+      </div>
+      <div class="agentic-workflow-verification-sections">
+        <div>
+          <strong>Summary</strong>
+          ${renderWorkflowVerificationList(summary)}
+        </div>
+        <div>
+          <strong>Row counts</strong>
+          ${renderWorkflowVerificationList(rowCounts)}
+        </div>
+        <div>
+          <strong>Missing artifacts</strong>
+          ${renderWorkflowVerificationList(missingArtifacts)}
+        </div>
+        <div>
+          <strong>Reason codes</strong>
+          ${renderWorkflowVerificationList(reasonCodes)}
+        </div>
+      </div>
+      <details class="agentic-workflow-verification-details">
+        <summary>Consistency checks</summary>
+        ${renderWorkflowVerificationChecks(consistencyChecks)}
+      </details>
+    </section>
+  `;
+}
+
+function renderPipelineRunDetail(data, tracePayload = {}, traceError = "") {
   const run = data.run || {};
   const statusJson = data.status_json || {};
   const configJson = data.config_json || {};
@@ -842,14 +1118,24 @@ function renderPipelineRunDetail(data) {
           : `<span class="pipeline-runs-empty-cell">No stage list persisted for this run.</span>`}
       </div>
     </section>
+
+    ${renderAgenticWorkflowSummaryPanel(data.agentic_workflow_summary)}
+
+    ${renderAgenticWorkflowVerificationPanel(data.agentic_workflow_verification)}
+
+    ${renderAgentTracePanel(tracePayload, traceError)}
   `;
 }
 
 async function openPipelineRunStatsModal(runId) {
   qs("pipelineRunStatsBody").innerHTML = `<div class="pipeline-runs-empty-cell">Loading run details...</div>`;
   qs("pipelineRunStatsModal").classList.remove("hidden");
-  const data = await fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
-  renderPipelineRunDetail(data);
+  const detailPromise = fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
+  const tracePromise = fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`)
+    .then((payload) => ({ payload, error: "" }))
+    .catch((err) => ({ payload: {}, error: err.message || "Agent trace could not be loaded." }));
+  const [data, trace] = await Promise.all([detailPromise, tracePromise]);
+  renderPipelineRunDetail(data, trace.payload, trace.error);
 }
 
 function closePipelineRunStatsModal() {

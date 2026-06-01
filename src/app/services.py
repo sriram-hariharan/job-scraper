@@ -36,6 +36,7 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
+from src.agents import critic_agent
 from src.matching.dimensions import get_dimension_weights
 from src.matching.job_adapter import build_job_evidence
 from src.matching.models import MatchPrefilterResult
@@ -119,6 +120,11 @@ from src.storage.user_pipeline.store import (
     promote_user_seen_jobs_staging_postgres_payload,
     clear_user_seen_jobs_staging_postgres_payload,
 )
+from src.storage.agent_trace.store import (
+    get_agent_run_postgres_payload,
+    list_agent_runs_postgres_payload,
+    list_agent_steps_postgres_payload,
+)
 from src.storage.redis_locks import (
     RedisLockHandle,
     acquire_redis_lock,
@@ -172,6 +178,7 @@ DEFAULT_PIPELINE_SCRATCH_DIR = Path(
 ).expanduser()
 DEFAULT_SCHEDULER_RUN_HISTORY_PATH = Path(SCHEDULER_RUN_HISTORY_PATH)
 DEFAULT_NOTIFICATION_RECORDS_DIR = Path(DEFAULT_NOTIFICATION_RECORDS_DIR)
+CRITIC_ADVISORY_ENABLED_ENV = "APPLYLENS_CRITIC_ADVISORY_ENABLED"
 
 _PIPELINE_RUN_STATE: Dict[str, Any] = {
     "process": None,
@@ -204,6 +211,15 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "best_resume_variant_by_job.csv",
     "application_shortlist_by_job.csv",
     "application_execution_queue.csv",
+    "job_prioritization_recommendations.csv",
+    "job_prioritization_summary.json",
+    "tailoring_decision_recommendations.csv",
+    "tailoring_decision_summary.json",
+    "operator_review_recommendations.csv",
+    "operator_review_summary.json",
+    "agentic_workflow_summary.json",
+    "agentic_workflow_summary.md",
+    "agentic_workflow_verification.json",
     "job_packet_manifest.csv",
     "role_title_filter_audit.csv",
     "source_health_report.csv",
@@ -810,11 +826,231 @@ def profile_pipeline_run_detail_payload(
         raise ValueError("Pipeline run not found.")
 
     run = _reconciled_user_pipeline_run_record(owner, dict(payload.get("run", {}) or {}))
+    try:
+        artifacts_payload = get_user_pipeline_artifacts_postgres_payload(
+            owner_user_id=owner,
+            run_id=safe_run_id,
+            limit=100000,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        artifacts = list(artifacts_payload.get("rows", []) or [])
+    except Exception:
+        artifacts = []
     return {
         "ok": True,
         "run": _pipeline_run_public_row(run),
         "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
+        "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
+        "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
+    }
+
+
+def _agent_trace_empty_payload(owner_user_id: str, pipeline_run_id: str) -> Dict[str, Any]:
+    return {
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "owner_user_id": _clean_text(owner_user_id),
+        "agent_runs": [],
+        "counts": {
+            "agent_runs": 0,
+            "agent_steps": 0,
+            "failed_steps": 0,
+            "warning_steps": 0,
+            "succeeded_steps": 0,
+        },
+    }
+
+
+def _agent_trace_json(value: Any) -> Dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _agent_trace_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _agent_trace_public_step(step: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "agent_step_id": _clean_text(step.get("agent_step_id")),
+        "agent_name": _clean_text(step.get("agent_name")),
+        "agent_version": _clean_text(step.get("agent_version")),
+        "status": _clean_text(step.get("status")) or "unknown",
+        "started_at": _clean_text(step.get("started_at")),
+        "completed_at": _clean_text(step.get("completed_at")),
+        "latency_ms": _agent_trace_int(step.get("latency_ms")),
+        "model_provider": _clean_text(step.get("model_provider")),
+        "model_name": _clean_text(step.get("model_name")),
+        "input_json": _agent_trace_json(step.get("input_json")),
+        "output_json": _agent_trace_json(step.get("output_json")),
+        "validation_json": _agent_trace_json(step.get("validation_json")),
+        "token_usage_json": _agent_trace_json(step.get("token_usage_json")),
+        "cost_json": _agent_trace_json(step.get("cost_json")),
+        "error": _clean_text(step.get("error")),
+    }
+
+
+def _agent_trace_public_run(run: Dict[str, Any], steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        "agent_run_id": _clean_text(run.get("agent_run_id")),
+        "context_id": _clean_text(run.get("context_id")),
+        "status": _clean_text(run.get("status")) or "unknown",
+        "started_at": _clean_text(run.get("started_at")),
+        "completed_at": _clean_text(run.get("completed_at")),
+        "summary_json": _agent_trace_json(run.get("summary_json")),
+        "error": _clean_text(run.get("error")),
+        "steps": steps,
+    }
+
+
+def _agent_trace_step_is_warning(step: Dict[str, Any]) -> bool:
+    status = _clean_text(step.get("status")).lower()
+    validation = step.get("validation_json") if isinstance(step.get("validation_json"), dict) else {}
+    validation_status = _clean_text(validation.get("validation_status")).lower()
+    return status == "warning" or validation_status == "warning"
+
+
+def _agent_trace_rows_for_owner_pipeline(
+    rows: List[Dict[str, Any]],
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str,
+    context_id: str = "",
+) -> List[Dict[str, Any]]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
+    filtered: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if _clean_text(row.get("owner_user_id")) != owner:
+            continue
+        if _clean_text(row.get("pipeline_run_id")) != safe_run_id:
+            continue
+        if safe_context_id and _clean_text(row.get("context_id")) != safe_context_id:
+            continue
+        filtered.append(dict(row))
+    return filtered
+
+
+def agent_trace_payload(
+    *,
+    owner_user_id: str = "",
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    agent_run_id: str = "",
+    limit_runs: int = 50,
+    limit_steps: int = 500,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_pipeline_run_id = _clean_text(pipeline_run_id)
+    safe_context_id = _clean_text(context_id)
+    safe_agent_run_id = _clean_text(agent_run_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_pipeline_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    empty_payload = _agent_trace_empty_payload(owner, safe_pipeline_run_id)
+    try:
+        if safe_agent_run_id:
+            run_payload = get_agent_run_postgres_payload(
+                owner_user_id=owner,
+                agent_run_id=safe_agent_run_id,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            runs = [dict(run_payload.get("run", {}) or {})] if bool(run_payload.get("found", False)) else []
+        else:
+            runs_payload = list_agent_runs_postgres_payload(
+                owner_user_id=owner,
+                pipeline_run_id=safe_pipeline_run_id,
+                context_id=safe_context_id,
+                limit=limit_runs,
+                database_url="",
+                database_url_env="DATABASE_URL",
+                psql_bin="psql",
+                print_only=False,
+                ensure_schema=True,
+            )
+            runs = [dict(row or {}) for row in list(runs_payload.get("runs", []) or [])]
+
+        runs = _agent_trace_rows_for_owner_pipeline(
+            runs,
+            owner_user_id=owner,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+        )
+        if safe_agent_run_id:
+            runs = [run for run in runs if _clean_text(run.get("agent_run_id")) == safe_agent_run_id]
+
+        steps_payload = list_agent_steps_postgres_payload(
+            owner_user_id=owner,
+            agent_run_id=safe_agent_run_id,
+            pipeline_run_id=safe_pipeline_run_id,
+            context_id=safe_context_id,
+            limit=limit_steps,
+            database_url="",
+            database_url_env="DATABASE_URL",
+            psql_bin="psql",
+            print_only=False,
+            ensure_schema=True,
+        )
+        steps = [dict(row or {}) for row in list(steps_payload.get("steps", []) or [])]
+    except (SystemExit, ValueError, OSError, subprocess.SubprocessError) as exc:
+        logger.warning(
+            "Agent trace lookup returned empty payload for owner_user_id=%s pipeline_run_id=%s: %s",
+            owner,
+            safe_pipeline_run_id,
+            exc,
+        )
+        return empty_payload
+
+    steps = _agent_trace_rows_for_owner_pipeline(
+        steps,
+        owner_user_id=owner,
+        pipeline_run_id=safe_pipeline_run_id,
+        context_id=safe_context_id,
+    )
+    run_ids = {_clean_text(run.get("agent_run_id")) for run in runs}
+    steps = [
+        step
+        for step in steps
+        if _clean_text(step.get("agent_run_id")) in run_ids
+        and (not safe_agent_run_id or _clean_text(step.get("agent_run_id")) == safe_agent_run_id)
+    ]
+    steps.sort(key=lambda row: (_clean_text(row.get("started_at")), _clean_text(row.get("agent_step_id"))))
+
+    steps_by_run: Dict[str, List[Dict[str, Any]]] = {}
+    for step in steps:
+        steps_by_run.setdefault(_clean_text(step.get("agent_run_id")), []).append(_agent_trace_public_step(step))
+
+    public_runs = [
+        _agent_trace_public_run(run, steps_by_run.get(_clean_text(run.get("agent_run_id")), []))
+        for run in runs
+    ]
+    public_steps = [step for run in public_runs for step in run["steps"]]
+    return {
+        "pipeline_run_id": safe_pipeline_run_id,
+        "owner_user_id": owner,
+        "agent_runs": public_runs,
+        "counts": {
+            "agent_runs": len(public_runs),
+            "agent_steps": len(public_steps),
+            "failed_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "failed"),
+            "warning_steps": sum(1 for step in public_steps if _agent_trace_step_is_warning(step)),
+            "succeeded_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "succeeded"),
+        },
     }
 
 
@@ -3151,6 +3387,15 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "best_resume_variant_by_job.csv": "best_resume_variant_by_job",
         "application_shortlist_by_job.csv": "application_shortlist_by_job",
         "application_execution_queue.csv": "application_execution_queue",
+        "job_prioritization_recommendations.csv": "job_prioritization_recommendations",
+        "job_prioritization_summary.json": "job_prioritization_summary",
+        "tailoring_decision_recommendations.csv": "tailoring_decision_recommendations",
+        "tailoring_decision_summary.json": "tailoring_decision_summary",
+        "operator_review_recommendations.csv": "operator_review_recommendations",
+        "operator_review_summary.json": "operator_review_summary",
+        "agentic_workflow_summary.json": "agentic_workflow_summary_json",
+        "agentic_workflow_summary.md": "agentic_workflow_summary_md",
+        "agentic_workflow_verification.json": "agentic_workflow_verification_json",
         "job_packet_manifest.csv": "job_packet_manifest",
         "role_title_filter_audit.csv": "role_title_filter_audit",
         "source_health_report.csv": "source_health_report",
@@ -4535,6 +4780,7 @@ _PIPELINE_CHILD_ENV_PREFIXES = (
     "EMAIL_",
     "AUTH_",
     "SESSION_",
+    "APPLYLENS_",
 )
 
 
@@ -4924,6 +5170,10 @@ def run_live_pipeline_payload(
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
+
+def _env_flag_enabled(name: str, env: Dict[str, str] | None = None) -> bool:
+    env_map = env if env is not None else os.environ
+    return _clean_text(env_map.get(name)).lower() in {"1", "true", "yes", "on"}
 
 def _scan_issue_display_label(value: Any) -> str:
     raw = _clean_text(value)
@@ -7325,6 +7575,108 @@ def _scan_issue_from_replacement_row(
     }
 
 
+def _scan_issue_critic_jd_skills(
+    issue: Dict[str, Any],
+    tailoring_summary: Dict[str, Any] | None,
+) -> Tuple[List[str], List[str]]:
+    summary = tailoring_summary or {}
+    required: List[str] = []
+    preferred: List[str] = []
+    for key in ("matched_required", "missing_required", "required_skills", "required_terms"):
+        required.extend(list(summary.get(key, []) or []))
+    for key in ("matched_preferred", "missing_preferred", "preferred_skills", "preferred_terms"):
+        preferred.extend(list(summary.get(key, []) or []))
+    supported = list(issue.get("supported_jd_signals", []) or [])
+    if supported:
+        required.extend(supported)
+    return (
+        _scan_issue_unique_display_labels(required),
+        _scan_issue_unique_display_labels(preferred),
+    )
+
+
+def _scan_issue_to_critic_input(
+    issue: Dict[str, Any],
+    *,
+    tailoring_summary: Dict[str, Any] | None = None,
+) -> Dict[str, Any] | None:
+    proposed_text = _clean_text(issue.get("suggested_text")) or _clean_text(issue.get("reason"))
+    if not proposed_text:
+        return None
+
+    source_bullet = (
+        _clean_text(issue.get("original_text"))
+        or _clean_text(issue.get("current_text"))
+        or _clean_text((issue.get("raw") or {}).get("parent_bullet"))
+    )
+    jd_required, jd_preferred = _scan_issue_critic_jd_skills(issue, tailoring_summary)
+    suggestion_type = "patch_ready" if issue.get("can_accept") else "guidance_only"
+    return critic_agent.build_critic_agent_input_payload(
+        suggestion_id=_clean_text(issue.get("candidate_id")) or _clean_text(issue.get("issue_id")),
+        original_resume_evidence=[source_bullet] if source_bullet else [],
+        jd_required_skills=jd_required,
+        jd_preferred_skills=jd_preferred,
+        proposed_text=proposed_text,
+        source_bullet=source_bullet,
+        projected_score_delta=issue.get("projected_overall_delta"),
+        suggestion_type=suggestion_type,
+    )
+
+
+def _attach_critic_advisory_to_scan_issues(
+    issues: List[Dict[str, Any]],
+    *,
+    tailoring_summary: Dict[str, Any] | None = None,
+    env: Dict[str, str] | None = None,
+    trace_module: Any = None,
+) -> Dict[str, Any]:
+    if not _env_flag_enabled(CRITIC_ADVISORY_ENABLED_ENV, env):
+        return {"enabled": False, "suggestion_count": 0, "trace": {"attempted": False, "reason": "advisory_disabled"}}
+
+    critic_inputs: List[Dict[str, Any]] = []
+    issue_by_suggestion_id: Dict[str, Dict[str, Any]] = {}
+    for issue in issues:
+        if not isinstance(issue, dict) or not issue.get("candidate_id"):
+            continue
+        critic_input = _scan_issue_to_critic_input(issue, tailoring_summary=tailoring_summary)
+        if not critic_input:
+            continue
+        suggestion_id = _clean_text(critic_input.get("suggestion_id"))
+        if not suggestion_id:
+            continue
+        critic_inputs.append(critic_input)
+        issue_by_suggestion_id[suggestion_id] = issue
+
+    for critic_input in critic_inputs:
+        rendered = critic_agent.render_critic_decision(critic_input)
+        output = rendered["output"]
+        issue = issue_by_suggestion_id.get(_clean_text(output.get("suggestion_id")))
+        if not issue:
+            continue
+        issue.update(
+            {
+                "critic_advisory_only": True,
+                "critic_decision": _clean_text(output.get("decision")),
+                "critic_confidence": output.get("confidence"),
+                "critic_reason_codes": list(output.get("reason_codes", []) or []),
+                "critic_notes": _clean_text(output.get("notes")),
+                "critic_evidence_spans": list(output.get("evidence_spans", []) or []),
+                "critic_score_delta": output.get("score_delta"),
+            }
+        )
+
+    trace_payload = critic_agent.record_critic_agent_trace(
+        input_payloads=critic_inputs,
+        env=env,
+        trace_module=trace_module or critic_agent.trace_store,
+    )
+    return {
+        "enabled": True,
+        "suggestion_count": len(critic_inputs),
+        "trace": trace_payload,
+    }
+
+
 def _build_tailoring_scan_issue_contract(
     *,
     trusted_ready: List[Dict[str, Any]],
@@ -7334,6 +7686,8 @@ def _build_tailoring_scan_issue_contract(
     resume_evidence: Any = None,
     tailoring_summary: Dict[str, Any] | None = None,
     jd_record: Dict[str, Any] | None = None,
+    env: Dict[str, str] | None = None,
+    critic_trace_module: Any = None,
 ) -> Dict[str, Any]:
     replacement_issues: List[Dict[str, Any]] = []
 
@@ -7449,6 +7803,15 @@ def _build_tailoring_scan_issue_contract(
         "actionable": sum(1 for issue in visible_issues if issue.get("can_accept")),
         "accept_all_eligible": sum(1 for issue in visible_issues if issue.get("can_accept_all")),
     }
+
+    critic_advisory = _attach_critic_advisory_to_scan_issues(
+        issues,
+        tailoring_summary=tailoring_summary,
+        env=env,
+        trace_module=critic_trace_module,
+    )
+    if critic_advisory.get("enabled"):
+        counts["critic_advisory_labeled"] = int(critic_advisory.get("suggestion_count", 0) or 0)
 
     def _group_counts(group_id: str) -> Dict[str, int]:
         group_issues = [
@@ -7591,7 +7954,7 @@ def _build_tailoring_scan_issue_contract(
         },
     ]
 
-    return {
+    contract = {
         "version": "scan_issue_contract_v2",
         "source": "tailoring_keyword_scan",
         "groups": groups,
@@ -7622,6 +7985,9 @@ def _build_tailoring_scan_issue_contract(
             },
         },
     }
+    if critic_advisory.get("enabled"):
+        contract["critic_advisory"] = critic_advisory
+    return contract
 
 
 def _coerce_scan_score_value(*values: Any) -> int | None:
@@ -9236,6 +9602,278 @@ def _artifact_text_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> st
     return str(row.get("content_text", "") or "")
 
 
+def _artifact_json_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> Dict[str, Any]:
+    row = _artifact_row_by_name(rows).get(_clean_text(artifact_name), {})
+    content_json = row.get("content_json")
+    if isinstance(content_json, dict):
+        return dict(content_json)
+
+    content_text = str(row.get("content_text", "") or "").strip()
+    if not content_text:
+        return {}
+    try:
+        parsed = json.loads(content_text)
+    except Exception:
+        return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
+    summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")
+    return {
+        "available": bool(summary_json or summary_markdown),
+        "summary_json": summary_json,
+        "summary_markdown": summary_markdown,
+    }
+
+
+def _agentic_workflow_summary_from_dir(output_dir: Path) -> Dict[str, Any]:
+    root = Path(output_dir).expanduser()
+    json_path = root / "agentic_workflow_summary.json"
+    md_path = root / "agentic_workflow_summary.md"
+    summary_json: Dict[str, Any] = {}
+    summary_markdown = ""
+
+    if json_path.exists() and json_path.is_file():
+        try:
+            parsed = json.loads(json_path.read_text(encoding="utf-8"))
+            summary_json = dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            summary_json = {}
+
+    if md_path.exists() and md_path.is_file():
+        try:
+            summary_markdown = md_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            summary_markdown = ""
+
+    return {
+        "available": bool(summary_json or summary_markdown),
+        "summary_json": summary_json,
+        "summary_markdown": summary_markdown,
+    }
+
+
+def _agentic_workflow_verification_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    verification_json = _artifact_json_by_name(rows, "agentic_workflow_verification.json")
+    return {
+        "available": bool(verification_json),
+        "verification_json": verification_json,
+    }
+
+
+def _agentic_workflow_verification_from_dir(output_dir: Path) -> Dict[str, Any]:
+    root = Path(output_dir).expanduser()
+    json_path = root / "agentic_workflow_verification.json"
+    verification_json: Dict[str, Any] = {}
+
+    if json_path.exists() and json_path.is_file():
+        try:
+            parsed = json.loads(json_path.read_text(encoding="utf-8"))
+            verification_json = dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            verification_json = {}
+
+    return {
+        "available": bool(verification_json),
+        "verification_json": verification_json,
+    }
+
+
+JOB_PRIORITIZATION_OVERLAY_FIELDS = [
+    "existing_action",
+    "advisory_priority",
+    "advisory_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "source_recommendation",
+    "critic_decision",
+]
+
+
+TAILORING_DECISION_OVERLAY_FIELDS = [
+    "existing_action",
+    "advisory_priority",
+    "tailoring_decision",
+    "tailoring_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "critic_decision",
+    "critic_reason_codes",
+    "winner_resume",
+    "resolved_resume",
+]
+
+
+OPERATOR_REVIEW_OVERLAY_FIELDS = [
+    "existing_action",
+    "advisory_priority",
+    "tailoring_decision",
+    "operator_review_lane",
+    "operator_review_reason_codes",
+    "deterministic_winner_score",
+    "fallback_only_no_deterministic_match",
+    "packet_generation_allowed",
+    "packet_generation_block_reason",
+    "critic_decision",
+    "source_recommendation",
+    "winner_resume",
+    "resolved_resume",
+]
+
+
+def _job_prioritization_overlay_from_rows(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        key_row = {
+            "job_doc_id": _clean_text(row.get("job_id") or row.get("job_doc_id")),
+            "job_company": _clean_text(row.get("company") or row.get("job_company")),
+            "job_title": _clean_text(row.get("title") or row.get("job_title")),
+            "source": _clean_text(row.get("source")),
+        }
+        if not any([key_row["job_doc_id"], key_row["job_company"], key_row["job_title"]]):
+            continue
+
+        overlay = {
+            field: _clean_text(row.get(field))
+            for field in JOB_PRIORITIZATION_OVERLAY_FIELDS
+            if _clean_text(row.get(field))
+        }
+        if not overlay:
+            continue
+
+        for key in _application_row_key_candidates(key_row):
+            if key:
+                latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _tailoring_decision_overlay_from_rows(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        key_row = {
+            "job_doc_id": _clean_text(row.get("job_id") or row.get("job_doc_id")),
+            "job_company": _clean_text(row.get("company") or row.get("job_company")),
+            "job_title": _clean_text(row.get("title") or row.get("job_title")),
+            "source": _clean_text(row.get("source")),
+        }
+        if not any([key_row["job_doc_id"], key_row["job_company"], key_row["job_title"]]):
+            continue
+
+        overlay = {
+            field: _clean_text(row.get(field))
+            for field in TAILORING_DECISION_OVERLAY_FIELDS
+            if _clean_text(row.get(field))
+        }
+        if not overlay:
+            continue
+
+        for key in _application_row_key_candidates(key_row):
+            if key:
+                latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _operator_review_overlay_from_rows(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    latest_by_key: Dict[str, Dict[str, Any]] = {}
+
+    for row in rows:
+        key_row = {
+            "job_doc_id": _clean_text(row.get("job_id") or row.get("job_doc_id")),
+            "job_company": _clean_text(row.get("company") or row.get("job_company")),
+            "job_title": _clean_text(row.get("title") or row.get("job_title")),
+            "source": _clean_text(row.get("source")),
+        }
+        if not any([key_row["job_doc_id"], key_row["job_company"], key_row["job_title"]]):
+            continue
+
+        overlay = {
+            field: _clean_text(row.get(field))
+            for field in OPERATOR_REVIEW_OVERLAY_FIELDS
+            if _clean_text(row.get(field))
+        }
+        if not overlay:
+            continue
+
+        for key in _application_row_key_candidates(key_row):
+            if key:
+                latest_by_key[key] = overlay
+
+    return latest_by_key
+
+
+def _overlay_job_prioritization(
+    rows: List[Dict[str, Any]],
+    priority_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not priority_by_key:
+        return rows
+
+    overlaid_rows = []
+    for row in rows:
+        merged = dict(row)
+        for key in _application_row_key_candidates(merged):
+            overlay = priority_by_key.get(key)
+            if overlay:
+                merged.update(overlay)
+                break
+        overlaid_rows.append(merged)
+    return overlaid_rows
+
+
+def _overlay_tailoring_decisions(
+    rows: List[Dict[str, Any]],
+    tailoring_decision_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not tailoring_decision_by_key:
+        return rows
+
+    overlaid_rows = []
+    for row in rows:
+        merged = dict(row)
+        for key in _application_row_key_candidates(merged):
+            overlay = tailoring_decision_by_key.get(key)
+            if overlay:
+                merged.update(overlay)
+                break
+        overlaid_rows.append(merged)
+    return overlaid_rows
+
+
+def _overlay_operator_review(
+    rows: List[Dict[str, Any]],
+    operator_review_by_key: Dict[str, Dict[str, Any]],
+) -> List[Dict[str, Any]]:
+    if not operator_review_by_key:
+        return rows
+
+    overlaid_rows = []
+    for row in rows:
+        merged = dict(row)
+        for key in _application_row_key_candidates(merged):
+            overlay = operator_review_by_key.get(key)
+            if overlay:
+                merged.update(overlay)
+                break
+        overlaid_rows.append(merged)
+    return overlaid_rows
+
+
 def _build_job_index_from_planning_rows(
     ja: Any,
     *,
@@ -9428,7 +10066,12 @@ def _latest_user_pipeline_artifact_context(
     shortlist_text = _artifact_text_by_name(artifacts, "application_shortlist_by_job.csv")
     queue_text = _artifact_text_by_name(artifacts, "application_execution_queue.csv")
     manifest_text = _artifact_text_by_name(artifacts, "job_packet_manifest.csv")
+    priority_text = _artifact_text_by_name(artifacts, "job_prioritization_recommendations.csv")
+    tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
+    operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
     corpus_text = _artifact_text_by_name(artifacts, "current_run_job_corpus.jsonl")
+    workflow_summary = _agentic_workflow_summary_from_artifacts(artifacts)
+    workflow_verification = _agentic_workflow_verification_from_artifacts(artifacts)
 
     if not any([best_text, queue_text, manifest_text]):
         return {}
@@ -9444,6 +10087,11 @@ def _latest_user_pipeline_artifact_context(
         "shortlist_rows": _csv_rows_from_text(shortlist_text),
         "queue_rows": _csv_rows_from_text(queue_text),
         "manifest_rows": _csv_rows_from_text(manifest_text),
+        "job_prioritization_rows": _csv_rows_from_text(priority_text),
+        "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
+        "operator_review_rows": _csv_rows_from_text(operator_review_text),
+        "agentic_workflow_summary": workflow_summary,
+        "agentic_workflow_verification": workflow_verification,
         "current_run_job_corpus_text": corpus_text,
         "job_corpus_rows": _jsonl_row_count_from_text(corpus_text),
     }
@@ -9557,6 +10205,11 @@ def status_payload(
         shortlist_rows = list(artifact_context.get("shortlist_rows", []) or [])
         queue_rows = list(artifact_context.get("queue_rows", []) or [])
         manifest_rows = list(artifact_context.get("manifest_rows", []) or [])
+        job_prioritization_rows = list(artifact_context.get("job_prioritization_rows", []) or [])
+        tailoring_decision_rows = list(artifact_context.get("tailoring_decision_rows", []) or [])
+        operator_review_rows = list(artifact_context.get("operator_review_rows", []) or [])
+        agentic_workflow_summary = dict(artifact_context.get("agentic_workflow_summary", {}) or {})
+        agentic_workflow_verification = dict(artifact_context.get("agentic_workflow_verification", {}) or {})
         merged_rows = _build_job_index_from_planning_rows(
             ja,
             best_rows=best_rows,
@@ -9574,6 +10227,11 @@ def status_payload(
         shortlist_rows = ja._load_csv_rows(output_dir / "application_shortlist_by_job.csv")
         queue_rows = ja._load_csv_rows(output_dir / "application_execution_queue.csv")
         manifest_rows = ja._load_csv_rows(output_dir / "job_packet_manifest.csv")
+        job_prioritization_rows = ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
+        tailoring_decision_rows = ja._load_csv_rows(output_dir / "tailoring_decision_recommendations.csv")
+        operator_review_rows = ja._load_csv_rows(output_dir / "operator_review_recommendations.csv")
+        agentic_workflow_summary = _agentic_workflow_summary_from_dir(output_dir)
+        agentic_workflow_verification = _agentic_workflow_verification_from_dir(output_dir)
         merged_rows = ja._build_job_index(output_dir)
         job_corpus_rows = ja._count_jsonl_rows(job_corpus)
         planning_output_dir_value = str(output_dir)
@@ -9609,6 +10267,9 @@ def status_payload(
         if artifact_context
         else _load_job_metadata_overlay_from_corpus(job_corpus)
     )
+    job_prioritization_by_key = _job_prioritization_overlay_from_rows(job_prioritization_rows)
+    tailoring_decision_by_key = _tailoring_decision_overlay_from_rows(tailoring_decision_rows)
+    operator_review_by_key = _operator_review_overlay_from_rows(operator_review_rows)
 
     top_rows = sorted(
         queue_rows,
@@ -9659,6 +10320,24 @@ def status_payload(
             if metadata.get("job_url") and not _clean_text(overlay_row.get("job_url")):
                 overlay_row["job_url"] = metadata["job_url"]
             break
+
+        for key in _application_row_key_candidates(overlay_row):
+            priority_overlay = job_prioritization_by_key.get(key)
+            if priority_overlay:
+                overlay_row.update(priority_overlay)
+                break
+
+        for key in _application_row_key_candidates(overlay_row):
+            tailoring_overlay = tailoring_decision_by_key.get(key)
+            if tailoring_overlay:
+                overlay_row.update(tailoring_overlay)
+                break
+
+        for key in _application_row_key_candidates(overlay_row):
+            operator_review_overlay = operator_review_by_key.get(key)
+            if operator_review_overlay:
+                overlay_row.update(operator_review_overlay)
+                break
         
         for field in APPLICATION_ACTION_OVERLAY_FIELDS:
             if field == "application_label":
@@ -9695,6 +10374,8 @@ def status_payload(
         "operator_decision_counts": dict(sorted(decision_counts.items())),
         "undecided_review_counts": dict(sorted(undecided_review_counts.items())),
         "llm_tailoring_status_counts": dict(sorted(llm_tailoring_counts.items())),
+        "agentic_workflow_summary": agentic_workflow_summary,
+        "agentic_workflow_verification": agentic_workflow_verification,
         "top_queue_rows": top_queue,
     }
 
@@ -9732,6 +10413,15 @@ def browse_payload(
     try:
         artifact_context = _latest_user_pipeline_artifact_context(owner_user_id=owner_user_id)
         if artifact_context:
+            job_prioritization_by_key = _job_prioritization_overlay_from_rows(
+                list(artifact_context.get("job_prioritization_rows", []) or [])
+            )
+            tailoring_decision_by_key = _tailoring_decision_overlay_from_rows(
+                list(artifact_context.get("tailoring_decision_rows", []) or [])
+            )
+            operator_review_by_key = _operator_review_overlay_from_rows(
+                list(artifact_context.get("operator_review_rows", []) or [])
+            )
             rows = _build_job_index_from_planning_rows(
                 ja,
                 best_rows=list(artifact_context.get("best_rows", []) or []),
@@ -9743,7 +10433,20 @@ def browse_payload(
             )
         else:
             rows = ja._build_job_index(output_dir)
+            job_prioritization_by_key = _job_prioritization_overlay_from_rows(
+                ja._load_csv_rows(output_dir / "job_prioritization_recommendations.csv")
+            )
+            tailoring_decision_by_key = _tailoring_decision_overlay_from_rows(
+                ja._load_csv_rows(output_dir / "tailoring_decision_recommendations.csv")
+            )
+            operator_review_by_key = _operator_review_overlay_from_rows(
+                ja._load_csv_rows(output_dir / "operator_review_recommendations.csv")
+            )
             job_metadata_by_key = {}
+
+        rows = _overlay_job_prioritization(rows, job_prioritization_by_key)
+        rows = _overlay_tailoring_decisions(rows, tailoring_decision_by_key)
+        rows = _overlay_operator_review(rows, operator_review_by_key)
 
         selection_filters = dict(resolved_filters)
         selection_filters["limit"] = max(len(rows), 1)

@@ -12,6 +12,10 @@ from src.ai.llm_client import (
     get_default_provider,
     run_chat_completion,
 )
+from src.agents.resume_match_agent import (
+    agent_trace_strict,
+    record_resume_match_agent_trace,
+)
 from src.matching.job_adapter import build_job_evidence
 from src.matching.scorer import score_resume_job_match
 from src.resume.document_store import load_resume_documents
@@ -1846,6 +1850,25 @@ def main() -> None:
         writer.writeheader()
         for row in output_rows:
             writer.writerow(row)
+
+    try:
+        trace_result = record_resume_match_agent_trace(
+            rows=output_rows,
+            candidate_resume_names=[doc.resume_name for doc in resume_docs],
+            source_artifact_path=str(output_csv_path),
+        )
+        if trace_result.get("attempted") and trace_result.get("recorded"):
+            print(
+                "Resume Match Agent trace recorded:",
+                trace_result.get("agent_run_id", ""),
+                trace_result.get("agent_step_id", ""),
+            )
+        elif trace_result.get("warning"):
+            print(f"WARNING: Resume Match Agent trace skipped: {trace_result.get('warning')}")
+    except Exception as exc:
+        if agent_trace_strict():
+            raise
+        print(f"WARNING: Resume Match Agent trace skipped after error: {exc}")
 
     print("=" * 100)
     print("BATCH BEST RESUME VARIANT SELECTOR")

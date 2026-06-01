@@ -704,6 +704,325 @@ function buildDateTimeCellHtml(value) {
   `;
 }
 
+function formatAdvisoryPriorityLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    apply_now: "Apply now",
+    tailor_first: "Tailor first",
+    manual_review: "Manual review",
+    skip_for_now: "Skip for now",
+    watch_source: "Watch source",
+  }[normalized] || "";
+}
+
+function buildAdvisoryPriorityHtml(row) {
+  const priority = String(row?.advisory_priority || "").trim().toLowerCase();
+  const label = formatAdvisoryPriorityLabel(priority);
+  if (!label) return "";
+
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const reasonCodes = String(row?.advisory_reason_codes || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="queue-advisory-priority planning-advisory-priority">
+      <span class="queue-advisory-kicker">Advisory</span>
+      <span class="queue-advisory-pill queue-advisory-pill--${escapeHtml(priority)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-advisory-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
+function formatTailoringDecisionLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    no_tailoring_needed: "No tailoring needed",
+    light_tailoring: "Light tailoring",
+    tailor_before_apply: "Tailor before apply",
+    manual_review_before_tailoring: "Review before tailoring",
+    do_not_tailor: "Do not tailor",
+  }[normalized] || "";
+}
+
+function buildTailoringDecisionHtml(row) {
+  const decision = String(row?.tailoring_decision || "").trim().toLowerCase();
+  const label = formatTailoringDecisionLabel(decision);
+  if (!label) return "";
+
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const advisoryPriority = String(row?.advisory_priority || "").trim();
+  const reasonCodes = String(row?.tailoring_reason_codes || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const criticDecision = String(row?.critic_decision || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+    criticDecision ? `Critic: ${criticDecision}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="queue-tailoring-decision planning-tailoring-decision">
+      <span class="queue-tailoring-kicker">Tailoring advisory</span>
+      <span class="queue-tailoring-pill queue-tailoring-pill--${escapeHtml(decision)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-tailoring-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
+function formatOperatorReviewLaneLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    ready_to_apply: "Ready to apply",
+    tailor_then_apply: "Tailor then apply",
+    review_before_action: "Review before action",
+    hold_or_skip: "Hold / skip",
+    source_watch: "Source watch",
+  }[normalized] || "";
+}
+
+function buildOperatorReviewHtml(row) {
+  const lane = String(row?.operator_review_lane || "").trim().toLowerCase();
+  const label = formatOperatorReviewLaneLabel(lane);
+  if (!label) return "";
+
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const advisoryPriority = String(row?.advisory_priority || "").trim();
+  const tailoringDecision = String(row?.tailoring_decision || "").trim();
+  const reasonCodes = String(row?.operator_review_reason_codes || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const criticDecision = String(row?.critic_decision || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
+    tailoringDecision ? `Tailoring: ${formatTailoringDecisionLabel(tailoringDecision) || tailoringDecision}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+    criticDecision ? `Critic: ${criticDecision}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="queue-operator-review planning-operator-review">
+      <span class="queue-operator-kicker">Operator review</span>
+      <span class="queue-operator-pill queue-operator-pill--${escapeHtml(lane)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-operator-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
+function formatWorkflowSummaryCounts(counts = {}) {
+  const entries = Object.entries(counts || {}).filter(([, value]) => Number(value || 0) > 0);
+  if (!entries.length) return "none";
+  return entries
+    .map(([key, value]) => `${key.replaceAll("_", " ")}=${value}`)
+    .join(", ");
+}
+
+function renderWorkflowSummaryMetric(label, value) {
+  return `
+    <div class="agentic-workflow-metric">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value ?? 0)}</strong>
+    </div>
+  `;
+}
+
+function renderAgenticWorkflowSummaryPanel(workflowSummary = {}) {
+  const panel = qs("agenticWorkflowSummaryPanel");
+  if (!panel) return;
+
+  const available = Boolean(workflowSummary?.available);
+  const summary = workflowSummary?.summary_json && typeof workflowSummary.summary_json === "object"
+    ? workflowSummary.summary_json
+    : {};
+  const markdown = String(workflowSummary?.summary_markdown || "").trim();
+
+  if (!available && !Object.keys(summary).length && !markdown) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+
+  const missingArtifacts = Array.isArray(summary.missing_artifacts) ? summary.missing_artifacts : [];
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="agentic-workflow-header">
+      <div>
+        <h2>Agentic Workflow Summary</h2>
+        <p>Read-only advisory rollup from the latest run artifacts.</p>
+      </div>
+      <span class="agentic-workflow-badge">Advisory</span>
+    </div>
+    <div class="agentic-workflow-grid">
+      ${renderWorkflowSummaryMetric("Queue jobs", summary.total_queue_jobs)}
+      ${renderWorkflowSummaryMetric("Packet jobs", summary.total_packet_jobs)}
+      ${renderWorkflowSummaryMetric("Ready to apply", summary.ready_to_apply_count)}
+      ${renderWorkflowSummaryMetric("Tailor then apply", summary.tailor_then_apply_count)}
+      ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count)}
+      ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count)}
+      ${renderWorkflowSummaryMetric("Fallback only", summary.fallback_only_count)}
+      ${renderWorkflowSummaryMetric("Packet blocked", summary.packet_blocked_count)}
+    </div>
+    <div class="agentic-workflow-counts">
+      <div><strong>Priority</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.advisory_priority_counts))}</span></div>
+      <div><strong>Tailoring</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.tailoring_decision_counts))}</span></div>
+      <div><strong>Operator lanes</strong><span>${escapeHtml(formatWorkflowSummaryCounts(summary.operator_review_lane_counts))}</span></div>
+    </div>
+    <div class="agentic-workflow-missing">
+      <strong>Missing artifacts</strong>
+      <span>${escapeHtml(missingArtifacts.length ? missingArtifacts.join(", ") : "none")}</span>
+    </div>
+    ${markdown ? `<details class="agentic-workflow-markdown"><summary>Markdown summary</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+  `;
+}
+
+function formatWorkflowVerificationStatus(status) {
+  const value = String(status || "unknown").trim().toLowerCase();
+  if (value === "passed") return "Passed";
+  if (value === "warning") return "Warning";
+  if (value === "failed") return "Failed";
+  return "Unknown";
+}
+
+function renderWorkflowVerificationList(values, emptyLabel = "none") {
+  const entries = Array.isArray(values)
+    ? values
+    : Object.entries(values || {}).map(([key, value]) => `${key}: ${value}`);
+  const cleanEntries = entries.map((value) => String(value || "").trim()).filter(Boolean);
+  if (!cleanEntries.length) {
+    return `<span class="agentic-workflow-verification-empty">${escapeHtml(emptyLabel)}</span>`;
+  }
+  return `
+    <ul class="agentic-workflow-verification-list">
+      ${cleanEntries.map((value) => `<li>${escapeHtml(value)}</li>`).join("")}
+    </ul>
+  `;
+}
+
+function renderWorkflowVerificationChecks(checks = {}) {
+  const entries = Array.isArray(checks)
+    ? checks.map((value, index) => [`check_${index + 1}`, value])
+    : Object.entries(checks || {});
+  if (!entries.length) {
+    return `<span class="agentic-workflow-verification-empty">none</span>`;
+  }
+  return `
+    <div class="agentic-workflow-verification-checks">
+      ${entries.map(([key, value]) => `
+        <div class="agentic-workflow-verification-check">
+          <strong>${escapeHtml(String(key).replaceAll("_", " "))}</strong>
+          <span>${escapeHtml(typeof value === "object" ? JSON.stringify(value) : value)}</span>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAgenticWorkflowVerificationPanel(workflowVerification = {}) {
+  const panel = qs("agenticWorkflowVerificationPanel");
+  if (!panel) return;
+
+  const available = Boolean(workflowVerification?.available);
+  const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
+    ? workflowVerification.verification_json
+    : {};
+
+  if (!available && !Object.keys(verification).length) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    return;
+  }
+
+  const status = String(verification.validation_status || "unknown").trim().toLowerCase();
+  const checkedArtifacts = Array.isArray(verification.checked_artifacts) ? verification.checked_artifacts : [];
+  const missingArtifacts = Array.isArray(verification.missing_artifacts) ? verification.missing_artifacts : [];
+  const reasonCodes = Array.isArray(verification.reason_codes) ? verification.reason_codes : [];
+  const rowCounts = verification.row_counts && typeof verification.row_counts === "object" ? verification.row_counts : {};
+  const consistencyChecks = verification.consistency_checks && typeof verification.consistency_checks === "object"
+    ? verification.consistency_checks
+    : {};
+  const summary = verification.summary && typeof verification.summary === "object" ? verification.summary : {};
+
+  panel.classList.remove("hidden");
+  panel.innerHTML = `
+    <div class="agentic-workflow-header">
+      <div>
+        <h2>Agentic Workflow Verification</h2>
+        <p>Read-only diagnostic checks for the latest run artifacts.</p>
+      </div>
+      <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(status)}">
+        ${escapeHtml(formatWorkflowVerificationStatus(status))}
+      </span>
+    </div>
+    <div class="agentic-workflow-grid">
+      ${renderWorkflowSummaryMetric("Strict mode", verification.strict ? "Yes" : "No")}
+      ${renderWorkflowSummaryMetric("Checked artifacts", checkedArtifacts.length)}
+      ${renderWorkflowSummaryMetric("Missing artifacts", missingArtifacts.length)}
+      ${renderWorkflowSummaryMetric("Reason codes", reasonCodes.length)}
+    </div>
+    <div class="agentic-workflow-verification-sections">
+      <div>
+        <strong>Summary</strong>
+        ${renderWorkflowVerificationList(summary)}
+      </div>
+      <div>
+        <strong>Row counts</strong>
+        ${renderWorkflowVerificationList(rowCounts)}
+      </div>
+      <div>
+        <strong>Missing artifacts</strong>
+        ${renderWorkflowVerificationList(missingArtifacts)}
+      </div>
+      <div>
+        <strong>Reason codes</strong>
+        ${renderWorkflowVerificationList(reasonCodes)}
+      </div>
+    </div>
+    <details class="agentic-workflow-verification-details">
+      <summary>Consistency checks</summary>
+      ${renderWorkflowVerificationChecks(consistencyChecks)}
+    </details>
+  `;
+}
+
+async function loadAgenticWorkflowSummaryPanel() {
+  const panel = qs("agenticWorkflowSummaryPanel");
+  if (!panel) return;
+  try {
+    const data = await fetchJson("/status");
+    renderAgenticWorkflowSummaryPanel(data.agentic_workflow_summary);
+  } catch (err) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    console.warn("Failed to load agentic workflow summary", err);
+  }
+}
+
+async function loadAgenticWorkflowVerificationPanel() {
+  const panel = qs("agenticWorkflowVerificationPanel");
+  if (!panel) return;
+  try {
+    const data = await fetchJson("/status");
+    renderAgenticWorkflowVerificationPanel(data.agentic_workflow_verification);
+  } catch (err) {
+    panel.classList.add("hidden");
+    panel.innerHTML = "";
+    console.warn("Failed to load agentic workflow verification", err);
+  }
+}
+
 function formatScore100(value) {
   if (value === null || value === undefined || String(value).trim() === "") return "-";
   const parsed = Number(String(value).replaceAll(",", "").trim());
@@ -8017,6 +8336,7 @@ function renderReplacementDecisionSection({
                   projectedDelta: item.projected_overall_delta,
                 })
               : "";
+          const criticDetailsHtml = renderScanWorkspaceCriticAdvisoryDetails(item);
 
           return `
             <article
@@ -8076,6 +8396,8 @@ function renderReplacementDecisionSection({
                   ${compactImpactHtml}
                 </div>
               ` : ""}
+
+              ${criticDetailsHtml}
 
               ${reviewActionsEnabled && mode === "direction_only" && candidateId ? `
                 <div class="tailoring-card-actions tailoring-card-actions--compact tailoring-card-actions--review">
@@ -10290,6 +10612,109 @@ function getScanWorkspaceIssueToneClassForItem(item, bucket) {
   return "is-missing";
 }
 
+function getScanWorkspaceCriticDecisionLabel(value) {
+  const safeValue = String(value || "").trim();
+  if (!safeValue) return "";
+  if (safeValue === "downgrade_to_guidance") return "Guidance";
+  return humanizeUnderscoreLabel(safeValue, "").replace(/^\w/, (char) => char.toUpperCase());
+}
+
+function getScanWorkspaceCriticTone(value) {
+  const safeValue = String(value || "").trim();
+  if (safeValue === "approve") return "approve";
+  if (safeValue === "reject") return "reject";
+  if (safeValue === "downgrade_to_guidance") return "guidance";
+  return "neutral";
+}
+
+function hasScanWorkspaceCriticAdvisory(item) {
+  return Boolean(item?.critic_advisory_only && String(item?.critic_decision || "").trim());
+}
+
+function formatScanWorkspaceCriticConfidence(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  const percent = numeric <= 1 ? numeric * 100 : numeric;
+  return `${Math.round(percent)}%`;
+}
+
+function formatScanWorkspaceCriticScoreDelta(value) {
+  if (value === null || value === undefined || String(value).trim() === "") return "";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "";
+  const normalized = Math.abs(numeric) <= 1 ? numeric * 100 : numeric;
+  const prefix = normalized > 0 ? "+" : "";
+  return `${prefix}${normalized.toFixed(1)} pts`;
+}
+
+function renderScanWorkspaceCriticAdvisorySummary(item) {
+  if (!hasScanWorkspaceCriticAdvisory(item)) return "";
+
+  const decision = String(item.critic_decision || "").trim();
+  const decisionLabel = getScanWorkspaceCriticDecisionLabel(decision);
+  const tone = getScanWorkspaceCriticTone(decision);
+  const reasonCodes = Array.isArray(item.critic_reason_codes)
+    ? item.critic_reason_codes.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const confidence = formatScanWorkspaceCriticConfidence(item.critic_confidence);
+
+  return `
+    <span class="scan-workspace-critic-mini scan-workspace-critic-mini--${escapeHtml(tone)}">
+      <span class="scan-workspace-critic-mini-label">Critic</span>
+      <span class="scan-workspace-critic-mini-decision">${escapeHtml(decisionLabel)}</span>
+      ${confidence ? `<span class="scan-workspace-critic-mini-confidence">${escapeHtml(confidence)}</span>` : ""}
+      ${reasonCodes.length ? `
+        <span class="scan-workspace-critic-mini-reasons">
+          ${reasonCodes.slice(0, 2).map((code) => escapeHtml(humanizeUnderscoreLabel(code, ""))).join(" · ")}
+        </span>
+      ` : ""}
+    </span>
+  `;
+}
+
+function renderScanWorkspaceCriticAdvisoryDetails(item) {
+  if (!hasScanWorkspaceCriticAdvisory(item)) return "";
+
+  const decision = String(item.critic_decision || "").trim();
+  const tone = getScanWorkspaceCriticTone(decision);
+  const decisionLabel = getScanWorkspaceCriticDecisionLabel(decision);
+  const confidence = formatScanWorkspaceCriticConfidence(item.critic_confidence);
+  const scoreDelta = formatScanWorkspaceCriticScoreDelta(item.critic_score_delta);
+  const reasonCodes = Array.isArray(item.critic_reason_codes)
+    ? item.critic_reason_codes.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const evidenceSpans = Array.isArray(item.critic_evidence_spans)
+    ? item.critic_evidence_spans.map((value) => String(value || "").trim()).filter(Boolean)
+    : [];
+  const notes = String(item.critic_notes || "").trim();
+
+  return `
+    <div class="scan-workspace-critic-card scan-workspace-critic-card--${escapeHtml(tone)}">
+      <div class="scan-workspace-critic-card-header">
+        <span class="scan-workspace-critic-card-kicker">Critic advisory</span>
+        <span class="scan-workspace-critic-card-badge">${escapeHtml(decisionLabel)}</span>
+        ${confidence ? `<span class="scan-workspace-critic-card-meta">${escapeHtml(confidence)}</span>` : ""}
+        ${scoreDelta ? `<span class="scan-workspace-critic-card-meta">${escapeHtml(scoreDelta)}</span>` : ""}
+      </div>
+      ${reasonCodes.length ? `
+        <div class="scan-workspace-critic-reasons">
+          ${reasonCodes.map((code) => `
+            <span class="scan-workspace-critic-reason">${escapeHtml(humanizeUnderscoreLabel(code, ""))}</span>
+          `).join("")}
+        </div>
+      ` : ""}
+      ${notes ? `<div class="scan-workspace-critic-notes">${escapeHtml(notes)}</div>` : ""}
+      ${evidenceSpans.length ? `
+        <div class="scan-workspace-critic-evidence">
+          ${evidenceSpans.slice(0, 2).map((span) => `
+            <span>${escapeHtml(span)}</span>
+          `).join("")}
+        </div>
+      ` : ""}
+    </div>
+  `;
+}
+
 function isScanWorkspaceIssueExcludable(item) {
   const groupId = String(item?.scan_issue_group_id || item?.group_id || "").trim();
   const issueId = String(item?.scan_issue_id || item?.issue_id || "").trim();
@@ -10361,6 +10786,7 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
           const countIcon = !metaIcon && showFlagIcon ? "⚑" : "";
           const shouldShowStandaloneIcon = (hasAiBadge || showFlagIcon) && !meta && !visibleCountLabel;
           const shouldRenderMetaIconOutside = Boolean(metaIcon && meta);
+          const criticSummaryHtml = renderScanWorkspaceCriticAdvisorySummary(item);
 
           return `
             <button
@@ -10432,6 +10858,8 @@ function renderScanWorkspaceIssueInventory(items, bucket) {
                     `
                     : ""
                 }
+
+                ${criticSummaryHtml}
 
                 ${
                   visibleCountLabel
@@ -11612,7 +12040,7 @@ function renderPlanningRows(rows, metaLabel) {
     return `
       <tr>
         <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td><span class="pill">${escapeHtml(row.action || "")}</span></td>
+        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}${buildOperatorReviewHtml(row)}</td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">
           <div>${titleHtml}</div>
@@ -11986,6 +12414,8 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
 
     try {
+      await loadAgenticWorkflowSummaryPanel();
+      await loadAgenticWorkflowVerificationPanel();
       await loadPlanningTable();
     } catch (err) {
       showAppError("Failed to initialize planning dashboard", err);

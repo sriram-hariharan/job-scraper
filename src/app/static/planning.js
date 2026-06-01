@@ -780,6 +780,48 @@ function buildTailoringDecisionHtml(row) {
   `;
 }
 
+function formatOperatorReviewLaneLabel(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return {
+    ready_to_apply: "Ready to apply",
+    tailor_then_apply: "Tailor then apply",
+    review_before_action: "Review before action",
+    hold_or_skip: "Hold / skip",
+    source_watch: "Source watch",
+  }[normalized] || "";
+}
+
+function buildOperatorReviewHtml(row) {
+  const lane = String(row?.operator_review_lane || "").trim().toLowerCase();
+  const label = formatOperatorReviewLaneLabel(lane);
+  if (!label) return "";
+
+  const existingAction = String(row?.existing_action || row?.action || "").trim();
+  const advisoryPriority = String(row?.advisory_priority || "").trim();
+  const tailoringDecision = String(row?.tailoring_decision || "").trim();
+  const reasonCodes = String(row?.operator_review_reason_codes || "").trim();
+  const packetAllowed = String(row?.packet_generation_allowed || "").trim();
+  const packetBlockReason = String(row?.packet_generation_block_reason || "").trim();
+  const criticDecision = String(row?.critic_decision || "").trim();
+  const details = [
+    existingAction ? `Action: ${existingAction}` : "",
+    advisoryPriority ? `Priority: ${formatAdvisoryPriorityLabel(advisoryPriority) || advisoryPriority}` : "",
+    tailoringDecision ? `Tailoring: ${formatTailoringDecisionLabel(tailoringDecision) || tailoringDecision}` : "",
+    reasonCodes ? `Reason: ${reasonCodes.replaceAll("|", ", ")}` : "",
+    packetAllowed ? `Packet: ${packetAllowed}` : "",
+    packetBlockReason ? `Block: ${packetBlockReason}` : "",
+    criticDecision ? `Critic: ${criticDecision}` : "",
+  ].filter(Boolean);
+
+  return `
+    <div class="queue-operator-review planning-operator-review">
+      <span class="queue-operator-kicker">Operator review</span>
+      <span class="queue-operator-pill queue-operator-pill--${escapeHtml(lane)}">${escapeHtml(label)}</span>
+      ${details.length ? `<div class="queue-operator-details">${escapeHtml(details.join(" · "))}</div>` : ""}
+    </div>
+  `;
+}
+
 function formatScore100(value) {
   if (value === null || value === undefined || String(value).trim() === "") return "-";
   const parsed = Number(String(value).replaceAll(",", "").trim());
@@ -11797,7 +11839,7 @@ function renderPlanningRows(rows, metaLabel) {
     return `
       <tr>
         <td>${escapeHtml(row.queue_rank || "")}</td>
-        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}</td>
+        <td><span class="pill">${escapeHtml(row.action || "")}</span>${buildAdvisoryPriorityHtml(row)}${buildTailoringDecisionHtml(row)}${buildOperatorReviewHtml(row)}</td>
         <td>${escapeHtml(row.job_company || "")}</td>
         <td class="title-cell">
           <div>${titleHtml}</div>

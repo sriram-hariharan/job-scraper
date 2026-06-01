@@ -72,6 +72,28 @@ def test_queue_ui_renders_tailoring_decision_advisory_separately():
     assert "TAILORING_DECISION_OVERLAY_FIELDS" in services_source
 
 
+def test_queue_ui_renders_operator_review_advisory_separately():
+    app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
+    planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
+    css = Path("src/app/static/app_redesign.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    for source in (app_source, planning_source):
+        assert "buildOperatorReviewHtml" in source
+        assert "operator_review_lane" in source
+        assert "operator_review_reason_codes" in source
+        assert "Ready to apply" in source
+        assert "Hold / skip" in source
+        assert "Operator review" in source
+        assert "row.action" in source
+
+    assert ".queue-operator-review" in css
+    assert ".queue-operator-pill--ready_to_apply" in css
+    assert ".queue-operator-pill--hold_or_skip" in css
+    assert "operator_review_recommendations.csv" in services_source
+    assert "OPERATOR_REVIEW_OVERLAY_FIELDS" in services_source
+
+
 def test_missing_job_prioritization_overlay_is_safe():
     rows = [{"job_doc_id": "job_1", "job_company": "Acme", "job_title": "Backend Engineer", "action": "APPLY"}]
 
@@ -82,3 +104,9 @@ def test_missing_tailoring_decision_overlay_is_safe():
     rows = [{"job_doc_id": "job_1", "job_company": "Acme", "job_title": "Backend Engineer", "action": "APPLY"}]
 
     assert services._overlay_tailoring_decisions(rows, {}) == rows
+
+
+def test_missing_operator_review_overlay_is_safe():
+    rows = [{"job_doc_id": "job_1", "job_company": "Acme", "job_title": "Backend Engineer", "action": "APPLY"}]
+
+    assert services._overlay_operator_review(rows, {}) == rows

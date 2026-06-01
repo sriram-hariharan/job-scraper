@@ -9,6 +9,7 @@ from typing import Dict, List, Set
 from src.matching.job_adapter import build_job_evidence
 
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
+from src.agents.workflow_summary import write_agentic_workflow_summary_artifacts
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
     compute_resume_selection_credibility,
@@ -467,6 +468,8 @@ def main() -> None:
     tailoring_decision_summary_json = output_dir / "tailoring_decision_summary.json"
     operator_review_csv = output_dir / "operator_review_recommendations.csv"
     operator_review_summary_json = output_dir / "operator_review_summary.json"
+    agentic_workflow_summary_json = output_dir / "agentic_workflow_summary.json"
+    agentic_workflow_summary_md = output_dir / "agentic_workflow_summary.md"
 
     batch_selector_cmd = [
         sys.executable,
@@ -877,6 +880,16 @@ def main() -> None:
         writer.writeheader()
         for manifest_row in manifest_rows:
             writer.writerow(manifest_row)
+
+    try:
+        workflow_summary_artifact = write_agentic_workflow_summary_artifacts(
+            output_dir=output_dir,
+            summary_json_path=agentic_workflow_summary_json,
+            summary_md_path=agentic_workflow_summary_md,
+        )
+    except Exception as exc:
+        workflow_summary_artifact = {}
+        print(f"Agentic workflow summary artifact skipped: {exc}")
     
     packet_status_counts = _count_by(manifest_rows, "packet_status")
     packet_resume_source_counts = _count_by(manifest_rows, "packet_resume_source")
@@ -927,6 +940,8 @@ def main() -> None:
     print(f"Shortlist CSV    : {shortlist_csv}")
     print(f"Execution queue  : {execution_queue_csv}")
     print(f"Packet manifest  : {manifest_csv}")
+    if workflow_summary_artifact:
+        print(f"Agentic summary  : {workflow_summary_artifact['summary_json_path']}")
     print(f"Job packets dir  : {job_packets_dir}")
     print(f"Training log     : {training_log_jsonl_path}")
     print(f"Packets created  : {packet_created_count}")

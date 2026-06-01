@@ -97,6 +97,14 @@ def test_job_packet_manifest_includes_location_and_timestamp_metadata():
     assert '"job_location",' in source
 
 
+def test_planning_writes_agentic_workflow_summary_artifacts():
+    source = Path("run_application_planning.py").read_text(encoding="utf-8")
+
+    assert "agentic_workflow_summary.json" in source
+    assert "agentic_workflow_summary.md" in source
+    assert "write_agentic_workflow_summary_artifacts" in source
+
+
 def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metadata():
     original_argv = sys.argv[:]
 

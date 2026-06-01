@@ -26,6 +26,7 @@ OPTIONAL_ARTIFACTS = [
 ]
 
 EXPECTED_ARTIFACTS = REQUIRED_ARTIFACTS + OPTIONAL_ARTIFACTS
+VERIFICATION_JSON_NAME = "agentic_workflow_verification.json"
 
 
 def _clean_text(value: Any) -> str:
@@ -282,6 +283,23 @@ def verify_agentic_workflow_artifacts(
             "optional_missing_count": len(missing_optional),
             "failed_check_count": sum(1 for check in checks if not check["passed"]),
         },
+    }
+
+
+def write_agentic_workflow_verification_artifact(
+    *,
+    output_dir: str | Path,
+    output_json_path: str | Path | None = None,
+    strict: bool = False,
+) -> Dict[str, Any]:
+    payload = verify_agentic_workflow_artifacts(output_dir=output_dir, strict=strict)
+    output_path = Path(output_json_path) if output_json_path else Path(output_dir) / VERIFICATION_JSON_NAME
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    return {
+        "json_path": str(output_path),
+        "payload": payload,
+        "validation_status": payload.get("validation_status", ""),
     }
 
 

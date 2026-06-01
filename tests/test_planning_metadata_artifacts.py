@@ -103,6 +103,9 @@ def test_planning_writes_agentic_workflow_summary_artifacts():
     assert "agentic_workflow_summary.json" in source
     assert "agentic_workflow_summary.md" in source
     assert "write_agentic_workflow_summary_artifacts" in source
+    assert "agentic_workflow_verification.json" in source
+    assert "write_agentic_workflow_verification_artifact" in source
+    assert "APPLYLENS_WORKFLOW_VERIFIER_STRICT" in source
 
 
 def test_shortlist_and_execution_queue_preserve_job_location_and_freshness_metadata():

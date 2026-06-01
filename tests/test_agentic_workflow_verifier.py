@@ -1,7 +1,11 @@
 import csv
 import json
 
-from src.agents.workflow_verifier import main, verify_agentic_workflow_artifacts
+from src.agents.workflow_verifier import (
+    main,
+    verify_agentic_workflow_artifacts,
+    write_agentic_workflow_verification_artifact,
+)
 
 
 def _write_csv(path, rows, fieldnames):
@@ -193,3 +197,15 @@ def test_workflow_verifier_cli_non_strict_returns_success_on_temp_fixture(tmp_pa
     root = _complete_artifact_dir(tmp_path)
 
     assert main(["--output-dir", str(root), "--json"]) == 0
+
+
+def test_workflow_verifier_writes_warning_artifact_for_missing_optional_files(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "best_resume_variant_by_job.csv").unlink()
+
+    result = write_agentic_workflow_verification_artifact(output_dir=root)
+    payload = json.loads((root / "agentic_workflow_verification.json").read_text(encoding="utf-8"))
+
+    assert result["validation_status"] == "warning"
+    assert payload["validation_status"] == "warning"
+    assert "best_resume_variant_by_job.csv" in payload["missing_artifacts"]

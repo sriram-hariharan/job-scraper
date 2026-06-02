@@ -182,10 +182,12 @@ function renderAgenticReviewDiagnosticsPanel(
   workflowExecutionPlan = {},
   workflowDryRun = {},
   agentFeedback = {},
+  ragEvaluation = {},
 ) {
   const panel = qs("agenticReviewDiagnosticsPanel");
   if (!panel) return;
   const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
+  const ragEvaluationSection = renderRagEvaluationSection(ragEvaluation);
   const available = Boolean(workflowVerification?.available);
   const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
     ? workflowVerification.verification_json
@@ -216,6 +218,7 @@ function renderAgenticReviewDiagnosticsPanel(
         </div>
       </div>
       <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, dry run, or verification recorded for this run.</div>
+      ${ragEvaluationSection}
       ${feedbackSection}
     `;
     return;
@@ -269,7 +272,59 @@ function renderAgenticReviewDiagnosticsPanel(
     ${renderAgenticWorkflowManifestSection(workflowManifest)}
     ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
     ${renderAgenticWorkflowDryRunSection(workflowDryRun)}
+    ${ragEvaluationSection}
     ${feedbackSection}
+  `;
+}
+
+function getRagEvaluationSummary(ragEvaluation = {}) {
+  const summary = ragEvaluation?.summary_json && typeof ragEvaluation.summary_json === "object"
+    ? ragEvaluation.summary_json
+    : {};
+  return {
+    query_count: Number(summary.query_count || 0),
+    retrieved_chunk_count: Number(summary.retrieved_chunk_count || 0),
+    average_retrieval_score: summary.average_retrieval_score ?? null,
+    top_k_hit_rate: summary.top_k_hit_rate ?? null,
+    missing_evidence_warning_count: Number(summary.missing_evidence_warning_count || 0),
+    validation_status: String(summary.validation_status || "warning"),
+    reason_codes: Array.isArray(summary.reason_codes) ? summary.reason_codes : [],
+  };
+}
+
+function formatRagMetric(value) {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "number") return Number.isInteger(value) ? value : value.toFixed(3).replace(/0+$/, "").replace(/\.$/, "");
+  return value;
+}
+
+function renderRagEvaluationSection(ragEvaluation = {}) {
+  const summary = getRagEvaluationSummary(ragEvaluation);
+  const hasRows = summary.retrieved_chunk_count > 0 || summary.query_count > 0;
+  return `
+    <section class="rag-evaluation-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>RAG Evaluation</h2>
+          <p>Read-only retrieval quality diagnostics. These metrics do not change retrieval, scoring, queue order, or tailoring decisions.</p>
+        </div>
+        ${renderReviewPill(summary.validation_status)}
+      </div>
+      <div class="rag-evaluation-metrics">
+        ${renderWorkflowSummaryMetric("Queries", summary.query_count)}
+        ${renderWorkflowSummaryMetric("Retrieved chunks", summary.retrieved_chunk_count)}
+        ${renderWorkflowSummaryMetric("Avg score", formatRagMetric(summary.average_retrieval_score))}
+        ${renderWorkflowSummaryMetric("Top-k hit rate", formatRagMetric(summary.top_k_hit_rate))}
+        ${renderWorkflowSummaryMetric("Missing evidence", summary.missing_evidence_warning_count)}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(summary.validation_status))}
+      </div>
+      ${hasRows ? `
+        <div class="agentic-review-section-counts">
+          <strong>Reason codes</strong>
+          <span>${renderReasonChips(summary.reason_codes)}</span>
+        </div>
+      ` : `<div class="pipeline-runs-empty-cell">No RAG evaluation data recorded for this run yet.</div>`}
+    </section>
   `;
 }
 
@@ -723,6 +778,7 @@ function renderAgenticReviewData(payload, tracePayload) {
     payload.agentic_workflow_execution_plan,
     payload.agentic_workflow_dry_run,
     payload.agent_feedback,
+    payload.rag_evaluation,
   );
 
   const traceNode = qs("agenticReviewTracePanel");

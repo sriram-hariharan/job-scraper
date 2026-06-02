@@ -49,6 +49,7 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["llmops_required_keys_present"] == 1.0
     assert result["workflow_registry_validation_passed"] == 1.0
     assert result["agent_feedback_export_schema_valid"] == 1.0
+    assert result["rag_evaluation_schema_valid"] == 1.0
     assert result["workflow_registry_agent_count"] == 6
     assert result["validation_pass_rate"] == 1.0
     assert result["failed_case_ids"] == []
@@ -78,6 +79,7 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "llmops_required_keys_present",
         "workflow_registry_validation_passed",
         "agent_feedback_export_schema_valid",
+        "rag_evaluation_schema_valid",
         "workflow_registry_agent_count",
         "validation_pass_rate",
         "failed_case_ids",
@@ -214,6 +216,7 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     assert "LLMOps metadata schema readiness benchmark" in report
     assert "Agentic workflow registry manifest benchmark" in report
     assert "Agent feedback export schema benchmark" in report
+    assert "RAG evaluation schema benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_files = agentic_benchmark.write_benchmark_outputs(result, tmp_dir)
@@ -264,3 +267,13 @@ def test_agentic_benchmark_feedback_export_schema_metric_is_offline():
     assert export_payload["export_version"] == "agent_feedback_export_v1"
     assert export_payload["evaluation_rows"][0]["feedback_label"] == "positive"
     assert export_payload["evaluation_rows"][0]["feedback_value"] == 1.0
+
+
+def test_agentic_benchmark_rag_evaluation_schema_metric_is_offline():
+    evaluation = agentic_benchmark.evaluate_rag_evaluation_schema()
+
+    assert evaluation["schema_valid"] is True
+    payload = evaluation["summary_payload"]
+    assert payload["evaluation_version"] == "rag_evaluation_v1"
+    assert payload["average_retrieval_score"] == 0.82
+    assert payload["rows"][0]["retrieved_text_preview"]

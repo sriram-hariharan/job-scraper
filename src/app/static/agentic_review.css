@@ -520,6 +520,7 @@
 .agentic-workflow-manifest-card,
 .agentic-workflow-execution-plan-card,
 .agentic-workflow-dry-run-card,
+.rag-evaluation-card,
 .agentic-feedback-card {
   display: grid;
   gap: 14px;
@@ -557,9 +558,18 @@
     var(--app-inset);
 }
 
+.rag-evaluation-card {
+  border-color: rgba(14, 165, 233, 0.22);
+  border-left-color: rgba(14, 165, 233, 0.78);
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(99, 102, 241, 0.04)),
+    var(--app-inset);
+}
+
 .agentic-review-manifest-metrics,
 .agentic-review-plan-metrics,
 .agentic-review-dry-run-metrics,
+.rag-evaluation-metrics,
 .agentic-feedback-metrics {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));

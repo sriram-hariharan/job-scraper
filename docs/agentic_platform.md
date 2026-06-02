@@ -229,6 +229,12 @@ Core helpers live in `src/storage/agent_feedback/store.py`:
 
 The export includes event counts, target counts, raw feedback events, and normalized evaluation rows with deterministic feedback labels such as `positive`, `negative`, `neutral_positive`, `mixed`, `neutral`, and `correction`. The Agentic Benchmark includes an offline `agent_feedback_export_schema_valid` metric that validates this export shape without reading a live database.
 
+## RAG Evaluation Dashboard Foundation
+
+RAG evaluation is diagnostic/read-only. Helpers in `src/evaluation/rag_evaluation.py` normalize retrieval rows, compute summary metrics, validate payload shape, and render a markdown report without changing retrieval, embeddings, corpus generation, ranking, scoring, queue action, packet generation, or tailoring behavior.
+
+The foundation supports `rag_evaluation_summary.json` and `rag_evaluation_report.md` artifacts for future runs. Agentic Review can display a compact RAG Evaluation section when the summary artifact exists, and otherwise shows a safe empty warning state. The Agentic Benchmark includes an offline `rag_evaluation_schema_valid` metric using sanitized fake rows.
+
 ## Workflow Verifier
 
 The run verifier lives in `src/agents/workflow_verifier.py`. It checks completed run artifact folders or loaded artifact rows for expected agentic artifacts and consistency rules.

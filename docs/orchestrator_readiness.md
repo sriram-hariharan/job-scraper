@@ -6,6 +6,8 @@ There is no autonomous execution in this phase. There is no LangGraph integratio
 
 No production decision mutation is implemented or enabled by this readiness audit.
 
+Phase 19B adds `src/agents/orchestrator_adapters.py` as a static adapter contract metadata module. It is contract-only: it does not execute agents, does not enable autonomous execution, does not wire into live planning, and does not change runtime behavior.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.
@@ -16,6 +18,8 @@ No production decision mutation is implemented or enabled by this readiness audi
 - `application_execution_queue.py` writes current advisory artifacts for job prioritization, tailoring decision, and operator review, and may record aggregate trace rows when tracing is explicitly enabled.
 
 Real execution is not enabled because there is no adapter boundary that can safely load inputs, validate context, call each agent in read-only mode, write diagnostics idempotently, and record trace rows without affecting production decisions.
+
+The adapter contract layer now defines the proposed boundary as static metadata and validation helpers. It stores callable entrypoint names as strings only, records allowed future read-only modes, and validates that no adapter mutates production decisions or enables live execution.
 
 ## Readiness Matrix
 

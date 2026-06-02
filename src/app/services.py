@@ -125,6 +125,10 @@ from src.storage.agent_trace.store import (
     list_agent_runs_postgres_payload,
     list_agent_steps_postgres_payload,
 )
+from src.storage.agent_feedback.store import (
+    record_agent_feedback_event,
+    summarize_agent_feedback_events,
+)
 from src.storage.redis_locks import (
     RedisLockHandle,
     acquire_redis_lock,
@@ -1104,6 +1108,71 @@ def agent_trace_payload(
             "succeeded_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "succeeded"),
         },
     }
+
+
+def record_agent_feedback_payload(
+    *,
+    owner_user_id: str,
+    event_type: str,
+    target_type: str,
+    target_id: str,
+    payload_json: Dict[str, Any] | None = None,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    agent_run_id: str = "",
+    agent_step_id: str = "",
+    source: str = "api",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    payload = record_agent_feedback_event(
+        record={
+            "owner_user_id": owner,
+            "pipeline_run_id": pipeline_run_id,
+            "context_id": context_id,
+            "agent_run_id": agent_run_id,
+            "agent_step_id": agent_step_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "event_type": event_type,
+            "payload_json": payload_json or {},
+            "source": source or "api",
+        },
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "recorded": bool(payload.get("recorded", False)),
+        "event": dict(payload.get("event", {}) or {}),
+    }
+
+
+def agent_feedback_summary_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    limit: int = 1000,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    return summarize_agent_feedback_events(
+        owner_user_id=owner,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+        limit=limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
 
 
 def _rerun_config_from_pipeline_record(run: Dict[str, Any]) -> Dict[str, Any]:

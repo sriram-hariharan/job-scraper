@@ -6,6 +6,7 @@ from src.agents.workflow_verifier import (
     verify_agentic_workflow_artifacts,
     write_agentic_workflow_verification_artifact,
 )
+from src.agents.orchestrator_adapter_harness import write_read_only_adapter_preflight_artifacts
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 from src.agents.workflow_runner import write_agentic_workflow_dry_run_artifacts
@@ -129,6 +130,7 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
     write_agentic_workflow_manifest_artifacts(output_dir=root)
     write_agentic_workflow_execution_plan_artifacts(output_dir=root)
     write_agentic_workflow_dry_run_artifacts(output_dir=root)
+    write_read_only_adapter_preflight_artifacts(output_dir=root)
     write_rag_evaluation_artifacts(
         output_dir=root,
         rows=[
@@ -182,6 +184,48 @@ def test_workflow_verifier_warns_when_rag_evaluation_missing_non_strict(tmp_path
     assert payload["validation_status"] == "warning"
     assert "rag_evaluation_summary.json" in payload["missing_artifacts"]
     assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_validates_read_only_adapter_preflight_when_present(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "read_only_adapter_preflight_validation_passed_or_warning" in check_names
+    assert "read_only_adapter_preflight_mode" in check_names
+    assert "read_only_adapter_preflight_agent_execution_disallowed" in check_names
+    assert "read_only_adapter_preflight_executable_count_zero" in check_names
+    assert "read_only_adapter_preflight_adapters_disabled" in check_names
+    assert "read_only_adapter_preflight_adapters_not_executed" in check_names
+    assert payload["row_counts"]["read_only_adapter_preflight_results"] == 6
+
+
+def test_workflow_verifier_warns_when_read_only_adapter_preflight_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "read_only_adapter_preflight.json").unlink()
+    (root / "read_only_adapter_preflight.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "read_only_adapter_preflight.json" in payload["missing_artifacts"]
+    assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_fails_invalid_read_only_adapter_preflight(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    preflight_path = root / "read_only_adapter_preflight.json"
+    preflight = json.loads(preflight_path.read_text(encoding="utf-8"))
+    preflight["adapter_preflight_results"][0]["execution_enabled"] = True
+    _write_json(preflight_path, preflight)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "read_only_adapter_preflight_validation_failed" in payload["reason_codes"]
+    assert "read_only_adapter_preflight_adapter_enabled" in payload["reason_codes"]
 
 
 def test_workflow_verifier_validates_rag_evaluation_artifact_when_present(tmp_path):

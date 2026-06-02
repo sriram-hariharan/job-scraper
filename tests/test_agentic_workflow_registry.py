@@ -59,6 +59,8 @@ def test_workflow_registry_required_flags_and_artifact_kinds_are_present():
         "agentic_workflow_verification_json",
         "agentic_workflow_execution_plan_json",
         "agentic_workflow_execution_plan_md",
+        "agentic_workflow_dry_run_result_json",
+        "agentic_workflow_dry_run_report_md",
     ]:
         assert artifact_kind in manifest["generated_artifact_kinds"]
 

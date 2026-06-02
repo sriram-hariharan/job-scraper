@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import workflow_planner, workflow_registry
+from src.agents import workflow_planner, workflow_registry, workflow_runner
 
 
 REQUIRED_ARTIFACTS = [
@@ -27,6 +27,8 @@ OPTIONAL_ARTIFACTS = [
     "agentic_workflow_manifest.md",
     "agentic_workflow_execution_plan.json",
     "agentic_workflow_execution_plan.md",
+    "agentic_workflow_dry_run_result.json",
+    "agentic_workflow_dry_run_report.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
 ]
@@ -51,6 +53,8 @@ ARTIFACT_KIND_TO_NAME = {
     "agentic_workflow_manifest_md": "agentic_workflow_manifest.md",
     "agentic_workflow_execution_plan_json": "agentic_workflow_execution_plan.json",
     "agentic_workflow_execution_plan_md": "agentic_workflow_execution_plan.md",
+    "agentic_workflow_dry_run_result_json": "agentic_workflow_dry_run_result.json",
+    "agentic_workflow_dry_run_report_md": "agentic_workflow_dry_run_report.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
     "job_packet_manifest": "job_packet_manifest.csv",
 }
@@ -127,6 +131,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "agentic_workflow_summary.json": _read_json(root / "agentic_workflow_summary.json"),
         "agentic_workflow_manifest.json": _read_json(root / "agentic_workflow_manifest.json"),
         "agentic_workflow_execution_plan.json": _read_json(root / "agentic_workflow_execution_plan.json"),
+        "agentic_workflow_dry_run_result.json": _read_json(root / "agentic_workflow_dry_run_result.json"),
     }
 
 
@@ -203,6 +208,7 @@ def verify_agentic_workflow_artifacts(
     summary_json = dict(loaded.get("agentic_workflow_summary.json") or {})
     manifest_json = dict(loaded.get("agentic_workflow_manifest.json") or {})
     execution_plan_json = dict(loaded.get("agentic_workflow_execution_plan.json") or {})
+    dry_run_json = dict(loaded.get("agentic_workflow_dry_run_result.json") or {})
 
     reason_codes: List[str] = []
     checks: List[Dict[str, Any]] = []
@@ -333,6 +339,98 @@ def verify_agentic_workflow_artifacts(
         )
         if not order_matches:
             reason_codes.append("workflow_execution_plan_order_mismatch")
+
+    if not dry_run_json:
+        reason_codes.append("missing_workflow_dry_run_result")
+    else:
+        dry_run_validation = workflow_runner.validate_agentic_workflow_dry_run_result(
+            dry_run_json,
+            plan=execution_plan_json if execution_plan_json else None,
+        )
+        dry_run_validation_passed = dry_run_validation.get("validation_status") == "passed"
+        checks.append(
+            _check(
+                "workflow_dry_run_validation_passed",
+                dry_run_validation_passed,
+                ", ".join(dry_run_validation.get("reason_codes", []) or [])
+                if not dry_run_validation_passed else "",
+            )
+        )
+        if not dry_run_validation_passed:
+            reason_codes.append("workflow_dry_run_validation_failed")
+
+        dry_run_mode = _clean_text(dry_run_json.get("execution_mode")) == "dry_run"
+        checks.append(_check("workflow_dry_run_mode", dry_run_mode))
+        if not dry_run_mode:
+            reason_codes.append("workflow_dry_run_not_dry_run")
+
+        executed_zero = int(dry_run_json.get("executed_step_count") or 0) == 0
+        checks.append(_check("workflow_dry_run_executed_step_count_zero", executed_zero))
+        if not executed_zero:
+            reason_codes.append("workflow_dry_run_executed_step_count_nonzero")
+
+        dry_run_steps = list(dry_run_json.get("ordered_step_results") or [])
+        executed_steps = [
+            _clean_text(step.get("agent_key"))
+            for step in dry_run_steps
+            if step.get("did_execute")
+        ]
+        checks.append(
+            _check(
+                "workflow_dry_run_steps_not_executed",
+                not executed_steps,
+                f"executed: {', '.join(executed_steps)}" if executed_steps else "",
+            )
+        )
+        if executed_steps:
+            reason_codes.append("workflow_dry_run_step_executed")
+
+        enabled_dry_run_steps = [
+            _clean_text(step.get("agent_key"))
+            for step in dry_run_steps
+            if step.get("execution_enabled")
+        ]
+        checks.append(
+            _check(
+                "workflow_dry_run_steps_disabled",
+                not enabled_dry_run_steps,
+                f"enabled: {', '.join(enabled_dry_run_steps)}" if enabled_dry_run_steps else "",
+            )
+        )
+        if enabled_dry_run_steps:
+            reason_codes.append("workflow_dry_run_step_enabled")
+
+        not_skipped_steps = [
+            _clean_text(step.get("agent_key"))
+            for step in dry_run_steps
+            if _clean_text(step.get("execution_status")) != "skipped_dry_run"
+        ]
+        checks.append(
+            _check(
+                "workflow_dry_run_steps_skipped",
+                not not_skipped_steps,
+                f"not skipped: {', '.join(not_skipped_steps)}" if not_skipped_steps else "",
+            )
+        )
+        if not_skipped_steps:
+            reason_codes.append("workflow_dry_run_step_not_skipped")
+
+        expected_count = (
+            len(list(execution_plan_json.get("ordered_steps") or []))
+            if execution_plan_json
+            else len(workflow_registry.ORDERED_AGENT_KEYS)
+        )
+        count_matches = int(dry_run_json.get("planned_step_count") or 0) == expected_count
+        checks.append(
+            _check(
+                "workflow_dry_run_planned_step_count_matches_registry",
+                count_matches,
+                f"expected {expected_count}, found {dry_run_json.get('planned_step_count')}"
+                if not count_matches else "",
+            )
+        )
+        if not count_matches:
+            reason_codes.append("workflow_dry_run_planned_step_count_mismatch")
 
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [

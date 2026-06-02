@@ -50,6 +50,18 @@ Useful helpers:
 
 The current planner is diagnostic only. Every planned step has `execution_status=planned` and `execution_enabled=false`.
 
+## Dry-Run Workflow Runner
+
+The dry-run runner skeleton lives in `src/agents/workflow_runner.py`. It consumes the dry-run execution plan and produces a simulated result without executing agents, calling LLMs, writing production decisions, or changing pipeline behavior.
+
+Useful command:
+
+```bash
+python -m src.agents.workflow_runner --dry-run --json
+```
+
+Every simulated step has `execution_status=skipped_dry_run`, `execution_enabled=false`, and `did_execute=false`.
+
 ## Design Principles
 
 - Advisory first: agent outputs are recommendations, summaries, validations, or diagnostics.

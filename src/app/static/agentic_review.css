@@ -568,6 +568,7 @@
 }
 
 .agentic-feedback-counts,
+.agentic-feedback-actions,
 .agentic-review-manifest-agent-list,
 .agentic-review-plan-step-list,
 .agentic-review-dry-run-step-list,
@@ -575,6 +576,64 @@
   display: grid;
   gap: 8px;
   min-width: 0;
+}
+
+.agentic-feedback-actions {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), max-content)) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.agentic-feedback-action {
+  appearance: none;
+  min-height: 32px;
+  padding: 7px 11px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--app-text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.agentic-feedback-action:hover {
+  transform: translateY(-1px);
+}
+
+.agentic-feedback-action:disabled {
+  cursor: wait;
+  opacity: 0.62;
+  transform: none;
+}
+
+.agentic-feedback-action.is-helpful {
+  border-color: rgba(34, 197, 94, 0.36);
+  background: rgba(34, 197, 94, 0.14);
+  color: #bbf7d0;
+}
+
+.agentic-feedback-action.is-not-helpful {
+  border-color: rgba(244, 63, 94, 0.36);
+  background: rgba(244, 63, 94, 0.14);
+  color: #fecdd3;
+}
+
+.agentic-feedback-status {
+  min-width: 0;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 820;
+}
+
+.agentic-feedback-status.is-success {
+  color: #86efac;
+}
+
+.agentic-feedback-status.is-error {
+  color: #fecdd3;
 }
 
 .agentic-feedback-counts > div {

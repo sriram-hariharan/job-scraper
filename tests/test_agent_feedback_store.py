@@ -54,6 +54,8 @@ def test_agent_feedback_schema_contains_required_table_and_columns():
     health = agent_feedback_contract_health_payload()
     assert health["all_checks_pass"] is True
     assert "suggestion_accepted" in health["event_types"]
+    assert "agentic_review_helpful" in health["event_types"]
+    assert "agentic_review_not_helpful" in health["event_types"]
     assert "operator_review_lane" in health["target_types"]
 
 
@@ -76,6 +78,26 @@ def test_valid_feedback_event_can_be_recorded_print_only():
 def test_invalid_event_type_rejected():
     with pytest.raises(ValueError, match="Unsupported agent feedback event_type"):
         agent_feedback_event_db_row(_valid_record(event_type="score_adjusted"))
+
+
+def test_agentic_review_feedback_event_types_are_accepted():
+    helpful = agent_feedback_event_db_row(
+        _valid_record(
+            event_type="agentic_review_helpful",
+            target_type="agentic_review_section",
+            target_id="run_1",
+        )
+    )
+    not_helpful = agent_feedback_event_db_row(
+        _valid_record(
+            event_type="agentic_review_not_helpful",
+            target_type="agentic_review_section",
+            target_id="run_1",
+        )
+    )
+
+    assert helpful["event_type"] == "agentic_review_helpful"
+    assert not_helpful["event_type"] == "agentic_review_not_helpful"
 
 
 def test_invalid_target_type_rejected():

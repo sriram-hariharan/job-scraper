@@ -25,6 +25,8 @@ SUPPORTED_AGENT_FEEDBACK_EVENT_TYPES = {
     "resume_selected",
     "scan_rerun",
     "operator_lane_overridden",
+    "agentic_review_helpful",
+    "agentic_review_not_helpful",
 }
 
 SUPPORTED_AGENT_FEEDBACK_TARGET_TYPES = {

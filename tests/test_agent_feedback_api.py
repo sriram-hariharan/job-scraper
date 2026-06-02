@@ -82,6 +82,34 @@ def test_agent_feedback_api_returns_validation_error(monkeypatch):
     assert "Unsupported agent feedback event_type" in exc.value.detail
 
 
+def test_agentic_review_feedback_api_event_types_are_recordable(monkeypatch):
+    captured = []
+
+    def fake_record_agent_feedback_payload(**kwargs):
+        captured.append(dict(kwargs))
+        return {"ok": True, "recorded": True, "event": {"event_type": kwargs["event_type"]}}
+
+    monkeypatch.setattr(services, "record_agent_feedback_payload", fake_record_agent_feedback_payload)
+
+    for event_type in ("agentic_review_helpful", "agentic_review_not_helpful"):
+        request = api.AgentFeedbackRequest(
+            pipeline_run_id="run_1",
+            target_type="agentic_review_section",
+            target_id="run_1",
+            event_type=event_type,
+            payload_json={"section": "human_feedback"},
+            source="agentic_review_ui",
+        )
+        payload = api.record_agent_feedback(request, _request("user_1"))
+        assert payload["recorded"] is True
+
+    assert [row["event_type"] for row in captured] == [
+        "agentic_review_helpful",
+        "agentic_review_not_helpful",
+    ]
+    assert all(row["owner_user_id"] == "user_1" for row in captured)
+
+
 def test_agent_feedback_summary_api_uses_authenticated_owner_and_filters(monkeypatch):
     captured = {}
 

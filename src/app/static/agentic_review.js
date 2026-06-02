@@ -2,6 +2,11 @@ function getAgenticReviewRunId() {
   return document.querySelector("[data-agentic-review-run-id]")?.dataset?.agenticReviewRunId || "";
 }
 
+const AGENTIC_REVIEW_FEEDBACK_EVENTS = {
+  helpful: "agentic_review_helpful",
+  not_helpful: "agentic_review_not_helpful",
+};
+
 function getWorkflowSummary(payload = {}) {
   const summary = payload?.agentic_workflow_summary?.summary_json;
   return summary && typeof summary === "object" ? summary : {};
@@ -322,6 +327,7 @@ function renderAgentFeedbackRecentEvents(events = []) {
 function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
   const summary = getAgentFeedbackSummary(agentFeedback);
   const events = Array.isArray(agentFeedback?.events) ? agentFeedback.events : [];
+  const runId = escapeHtml(agentFeedback?.pipeline_run_id || getAgenticReviewRunId());
   return `
     <section class="agentic-feedback-card">
       <div class="agentic-workflow-header">
@@ -330,6 +336,15 @@ function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
           <p>Read-only feedback events captured for this pipeline run. These diagnostics do not change scoring, queue order, or tailoring decisions.</p>
         </div>
         <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      <div class="agentic-feedback-actions" data-agentic-feedback-run-id="${runId}">
+        <button type="button" class="agentic-feedback-action is-helpful" data-agentic-feedback-event="agentic_review_helpful">
+          Mark review useful
+        </button>
+        <button type="button" class="agentic-feedback-action is-not-helpful" data-agentic-feedback-event="agentic_review_not_helpful">
+          Mark review not useful
+        </button>
+        <span class="agentic-feedback-status" data-agentic-feedback-status aria-live="polite"></span>
       </div>
       <div class="agentic-feedback-metrics">
         ${renderWorkflowSummaryMetric("Total events", summary.total_events)}
@@ -348,6 +363,64 @@ function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
       ${renderAgentFeedbackRecentEvents(events)}
     </section>
   `;
+}
+
+async function refreshAgenticReviewFeedbackSummary(runId = getAgenticReviewRunId()) {
+  const safeRunId = String(runId || "").trim();
+  if (!safeRunId) return;
+  try {
+    const feedbackPayload = await fetchJson(`/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(safeRunId)}&limit=50`);
+    const card = document.querySelector(".agentic-feedback-card");
+    if (card) {
+      card.outerHTML = renderAgenticReviewFeedbackSection(feedbackPayload || {});
+    }
+  } catch {
+    // Keep the page responsive; the explicit click already reported success/failure.
+  }
+}
+
+function setAgenticReviewFeedbackStatus(message, tone = "info") {
+  const status = document.querySelector("[data-agentic-feedback-status]");
+  if (!status) return;
+  status.textContent = message || "";
+  status.className = `agentic-feedback-status is-${tone}`;
+}
+
+async function recordAgenticReviewFeedback(eventType, button) {
+  const runId = getAgenticReviewRunId();
+  if (!runId || !eventType) return;
+  const previousDisabled = Boolean(button?.disabled);
+  if (button) button.disabled = true;
+  setAgenticReviewFeedbackStatus("Recording feedback...", "info");
+  try {
+    await fetchJson("/api/agent-feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pipeline_run_id: runId,
+        target_type: "agentic_review_section",
+        target_id: runId,
+        event_type: eventType,
+        payload_json: {
+          action: eventType === AGENTIC_REVIEW_FEEDBACK_EVENTS.helpful ? "mark_review_useful" : "mark_review_not_useful",
+          section: "human_feedback",
+        },
+        source: "agentic_review_ui",
+      }),
+    });
+    setAgenticReviewFeedbackStatus("Feedback recorded.", "success");
+    await refreshAgenticReviewFeedbackSummary(runId);
+  } catch (err) {
+    setAgenticReviewFeedbackStatus(err?.message || "Could not record feedback.", "error");
+  } finally {
+    if (button) {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  }
 }
 
 function renderAgenticWorkflowManifestSection(workflowManifest = {}) {
@@ -691,6 +764,14 @@ function bindAgenticReviewTabs() {
       button,
       button.dataset.agenticAdvisoryTarget || "",
     );
+  });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agentic-feedback-event]");
+    if (!button) return;
+    const eventType = String(button.dataset.agenticFeedbackEvent || "").trim();
+    if (!Object.values(AGENTIC_REVIEW_FEEDBACK_EVENTS).includes(eventType)) return;
+    recordAgenticReviewFeedback(eventType, button);
   });
 }
 

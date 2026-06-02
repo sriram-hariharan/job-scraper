@@ -46,6 +46,16 @@ def test_agentic_review_human_feedback_diagnostics_contract():
 
     assert "Human Feedback" in review_js
     assert "renderAgenticReviewFeedbackSection" in review_js
+    assert "Mark review useful" in review_js
+    assert "Mark review not useful" in review_js
+    assert "agentic_review_helpful" in review_js
+    assert "agentic_review_not_helpful" in review_js
+    assert "agentic_review_ui" in review_js
+    assert 'fetchJson("/api/agent-feedback"' in review_js
+    assert "recordAgenticReviewFeedback" in review_js
+    assert "refreshAgenticReviewFeedbackSummary" in review_js
+    assert "Feedback recorded." in review_js
+    assert "Could not record feedback." in review_js
     assert "total_events" in review_js
     assert "event_type_counts" in review_js
     assert "target_type_counts" in review_js
@@ -56,10 +66,21 @@ def test_agentic_review_human_feedback_diagnostics_contract():
     feedback_fetch_start = review_js.index("/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}")
     feedback_fetch_snippet = review_js[feedback_fetch_start : feedback_fetch_start + 220]
     assert "owner_user_id" not in feedback_fetch_snippet
+    feedback_post_start = review_js.index('fetchJson("/api/agent-feedback"')
+    feedback_post_snippet = review_js[feedback_post_start : feedback_post_start + 700]
+    assert "owner_user_id" not in feedback_post_snippet
+    assert "pipeline_run_id" in feedback_post_snippet
+    assert "target_type" in feedback_post_snippet
+    assert "target_id" in feedback_post_snippet
+    assert "event_type" in feedback_post_snippet
+    assert "payload_json" in feedback_post_snippet
+    assert "source" in feedback_post_snippet
 
     assert ".agentic-feedback-card" in review_css
     assert ".agentic-feedback-event" in review_css
     assert ".agentic-feedback-metrics" in review_css
+    assert ".agentic-feedback-action" in review_css
+    assert ".agentic-feedback-status" in review_css
     assert '@app.get("/api/agent-feedback/summary")' in api_source
     assert '@app.get("/api/agent-feedback")' in api_source
     assert "agent_feedback_summary_payload" in services_source

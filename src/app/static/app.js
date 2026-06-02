@@ -1218,8 +1218,6 @@ function renderStats(statusData) {
   qs("statDecisionRows").textContent = summary.operator_decisions_rows ?? "-";
   qs("statUndecidedApplyReview").textContent = undecided.APPLY_REVIEW_VARIANTS ?? 0;
   qs("statUndecidedMaybeTailor").textContent = undecided.MAYBE_TAILOR ?? 0;
-  renderAgenticWorkflowSummaryPanel(statusData.agentic_workflow_summary);
-  renderAgenticWorkflowVerificationPanel(statusData.agentic_workflow_verification);
 }
 
 function formatWorkflowSummaryCounts(counts = {}) {

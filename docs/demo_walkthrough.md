@@ -1,0 +1,76 @@
+# ApplyLens AI Demo Walkthrough
+
+This is a 2-3 minute portfolio script for showing the implemented system with sanitized/local data only. Do not show private resumes, real application data, real emails, or private company/client details.
+
+## Setup
+
+- Start the local FastAPI app.
+- Use a sanitized local account and sanitized pipeline artifacts.
+- Keep the Agentic Benchmark command ready:
+
+```bash
+python -m src.evaluation.agentic_benchmark --no-write --print-summary
+```
+
+## Script
+
+0:00 - Open the dashboard or profile pipeline runs.
+
+"ApplyLens AI is a job-application intelligence workspace. The core pipeline scrapes and normalizes jobs, matches them against saved resumes, and creates reviewable planning artifacts."
+
+0:20 - Open one pipeline run.
+
+"Each run is owner-scoped and artifact-backed. The app keeps run status, counts, generated planning outputs, and diagnostic metadata available from the UI."
+
+0:40 - Open Agentic Review.
+
+"This is the recruiter-friendly view of the agentic layer. It shows what the advisory system saw and validated without changing what jobs are shown or how the queue is ordered."
+
+0:55 - Show Agent Trace.
+
+"Agent Trace records aggregate run and step diagnostics when tracing is enabled. It is traceability for the workflow layer, not hidden autonomous execution."
+
+1:10 - Show Workflow Verification.
+
+"The verifier checks whether expected agentic artifacts are present and internally consistent. Missing optional data is a warning in non-strict mode, which keeps the operator page usable."
+
+1:25 - Show Manifest, Execution Plan, and Dry Run.
+
+"The workflow registry defines the implemented advisory agents and safety guarantees. The execution plan is diagnostic. The runner is dry-run only: `src/agents/workflow_runner.py` reports skipped steps and does not execute agents or mutate production decisions."
+
+1:50 - Show Human Feedback.
+
+"The Human Feedback section lets the user explicitly mark the Agentic Review as useful or not useful. Feedback is append-only and read-only for evaluation; it does not tune ranking, scoring, queue action, tailoring, or packet generation."
+
+2:05 - Show RAG Evaluation.
+
+"RAG Evaluation summarizes retrieval diagnostics such as average retrieval score, top-k hit rate, and missing evidence warnings. It does not alter retrieval behavior, embeddings, ranking, or production decisions."
+
+2:20 - Show benchmark command.
+
+"The project includes an offline deterministic benchmark using sanitized/offline fixtures. This validates advisory-agent behavior, workflow registry contracts, agent feedback export shape, and RAG Evaluation schema shape without live scraping or LLM calls."
+
+2:40 - End with safety guarantees.
+
+"The important engineering choice is separation: the production pipeline creates the real application-planning outputs, while the agentic layer explains, verifies, traces, and evaluates them. No production decision mutation happens from these diagnostics."
+
+## What Not To Claim
+
+- Do not claim real autonomous agent execution; the runner is dry-run only.
+- Do not claim feedback tunes ranking, scoring, queue action, resume selection, tailoring generation, or packet generation.
+- Do not claim RAG Evaluation changes retrieval, embeddings, ranking, scoring, or queue behavior.
+- Do not claim benchmark results from a live production run unless you are showing a real sanitized run and clearly label it.
+- Do not show private user data, real resumes, real applications, real emails, or confidential company details.
+
+## Quick Feature Checklist
+
+- Dashboard/profile pipeline runs
+- Pipeline run details
+- Agentic Review
+- Agent Trace
+- Workflow Verification
+- Manifest / Execution Plan / Dry Run
+- Human Feedback
+- RAG Evaluation
+- Agentic Benchmark command
+- Safety close: no production decision mutation

@@ -217,6 +217,18 @@ Write mode produces:
 
 The benchmark is offline and deterministic. It does not call LLMs, scrape websites, use private resume text, or depend on live pipeline state.
 
+## Human Feedback Export
+
+Human feedback events are append-only diagnostics stored separately from production scoring, ranking, queue action, packet generation, and tailoring behavior. The feedback export foundation provides a read-only payload and normalized evaluation rows for future calibration work.
+
+Core helpers live in `src/storage/agent_feedback/store.py`:
+
+- `export_agent_feedback_events()`
+- `build_agent_feedback_evaluation_dataset()`
+- `render_agent_feedback_export_markdown()`
+
+The export includes event counts, target counts, raw feedback events, and normalized evaluation rows with deterministic feedback labels such as `positive`, `negative`, `neutral_positive`, `mixed`, `neutral`, and `correction`. The Agentic Benchmark includes an offline `agent_feedback_export_schema_valid` metric that validates this export shape without reading a live database.
+
 ## Workflow Verifier
 
 The run verifier lives in `src/agents/workflow_verifier.py`. It checks completed run artifact folders or loaded artifact rows for expected agentic artifacts and consistency rules.
@@ -271,6 +283,7 @@ Runs workflow verification in strict mode during planning artifact generation wh
 - No advisory agent mutates packet generation.
 - No advisory agent generates resume text.
 - No advisory agent changes tailoring generation.
+- Human feedback export is read-only and diagnostic.
 - The workflow verifier is diagnostic only.
 - Trace failures do not break normal operation unless strict tracing is explicitly enabled.
 - Missing advisory artifacts are displayed safely or ignored by UI surfaces.

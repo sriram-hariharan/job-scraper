@@ -125,6 +125,12 @@ from src.storage.agent_trace.store import (
     list_agent_runs_postgres_payload,
     list_agent_steps_postgres_payload,
 )
+from src.storage.agent_feedback.store import (
+    export_agent_feedback_events,
+    list_agent_feedback_events,
+    record_agent_feedback_event,
+    summarize_agent_feedback_events,
+)
 from src.storage.redis_locks import (
     RedisLockHandle,
     acquire_redis_lock,
@@ -166,6 +172,10 @@ from src.tailoring.score_utils import (
 )
 
 logger = logging.getLogger(__name__)
+
+AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
+AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
+AGENT_FEEDBACK_EXPORT_MAX_LIMIT = 5000
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -880,6 +890,20 @@ def profile_pipeline_run_agentic_review_payload(
     priority_text = _artifact_text_by_name(artifacts, "job_prioritization_recommendations.csv")
     tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
     operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
+    feedback_summary = _empty_agent_feedback_summary_payload(owner, safe_run_id)
+    try:
+        feedback_summary = agent_feedback_summary_payload(
+            owner_user_id=owner,
+            pipeline_run_id=safe_run_id,
+            limit=50,
+        )
+    except (SystemExit, ValueError, OSError, subprocess.SubprocessError) as exc:
+        logger.warning(
+            "Agent feedback summary lookup returned empty payload for owner_user_id=%s pipeline_run_id=%s: %s",
+            owner,
+            safe_run_id,
+            exc,
+        )
 
     return {
         "ok": True,
@@ -894,6 +918,7 @@ def profile_pipeline_run_agentic_review_payload(
         "job_prioritization_rows": _csv_rows_from_text(priority_text),
         "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
         "operator_review_rows": _csv_rows_from_text(operator_review_text),
+        "agent_feedback": feedback_summary,
         "artifact_names": sorted(
             _clean_text(row.get("artifact_name"))
             for row in artifacts
@@ -1104,6 +1129,187 @@ def agent_trace_payload(
             "succeeded_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "succeeded"),
         },
     }
+
+
+def record_agent_feedback_payload(
+    *,
+    owner_user_id: str,
+    event_type: str,
+    target_type: str,
+    target_id: str,
+    payload_json: Dict[str, Any] | None = None,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    agent_run_id: str = "",
+    agent_step_id: str = "",
+    source: str = "api",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    payload = record_agent_feedback_event(
+        record={
+            "owner_user_id": owner,
+            "pipeline_run_id": pipeline_run_id,
+            "context_id": context_id,
+            "agent_run_id": agent_run_id,
+            "agent_step_id": agent_step_id,
+            "target_type": target_type,
+            "target_id": target_id,
+            "event_type": event_type,
+            "payload_json": payload_json or {},
+            "source": source or "api",
+        },
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": bool(payload.get("ok", False)),
+        "recorded": bool(payload.get("recorded", False)),
+        "event": dict(payload.get("event", {}) or {}),
+    }
+
+
+def _safe_feedback_limit(value: Any, *, default: int, max_limit: int) -> int:
+    try:
+        safe_limit = int(value)
+    except (TypeError, ValueError):
+        safe_limit = default
+    return max(1, min(safe_limit, max_limit))
+
+
+def _empty_agent_feedback_summary_payload(
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+) -> Dict[str, Any]:
+    return {
+        "ok": True,
+        "owner_user_id": _clean_text(owner_user_id),
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+        "summary": {
+            "total_events": 0,
+            "event_type_counts": {},
+            "target_type_counts": {},
+            "latest_event_at": "",
+        },
+        "events": [],
+    }
+
+
+def list_agent_feedback_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 200,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    safe_limit = _safe_feedback_limit(
+        limit,
+        default=200,
+        max_limit=AGENT_FEEDBACK_LIST_MAX_LIMIT,
+    )
+    payload = list_agent_feedback_events(
+        owner_user_id=owner,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+        target_type=target_type,
+        event_type=event_type,
+        limit=safe_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    return {
+        "ok": True,
+        "owner_user_id": owner,
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "context_id": _clean_text(context_id),
+        "target_type": _clean_text(target_type),
+        "event_type": _clean_text(event_type),
+        "limit": safe_limit,
+        "events": [dict(row or {}) for row in list(payload.get("events", []) or [])],
+        "count": int(payload.get("count", 0) or 0),
+    }
+
+
+def agent_feedback_summary_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    safe_limit = _safe_feedback_limit(
+        limit,
+        default=1000,
+        max_limit=AGENT_FEEDBACK_SUMMARY_MAX_LIMIT,
+    )
+    payload = summarize_agent_feedback_events(
+        owner_user_id=owner,
+        pipeline_run_id=pipeline_run_id,
+        context_id=context_id,
+        target_type=target_type,
+        event_type=event_type,
+        limit=safe_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    payload["limit"] = safe_limit
+    payload["target_type"] = _clean_text(target_type)
+    payload["event_type"] = _clean_text(event_type)
+    return payload
+
+
+def agent_feedback_export_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    safe_limit = _safe_feedback_limit(
+        limit,
+        default=1000,
+        max_limit=AGENT_FEEDBACK_EXPORT_MAX_LIMIT,
+    )
+    payload = export_agent_feedback_events(
+        owner_user_id=owner,
+        pipeline_run_id=pipeline_run_id,
+        target_type=target_type,
+        event_type=event_type,
+        limit=safe_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    payload["limit"] = safe_limit
+    return payload
 
 
 def _rerun_config_from_pipeline_record(run: Dict[str, Any]) -> Dict[str, Any]:

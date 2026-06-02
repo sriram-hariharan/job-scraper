@@ -115,6 +115,18 @@ class PlanningSavedScanStateRequest(BaseModel):
     excluded_scan_issue_ids: list[str] = Field(default_factory=list)
     personal_details: dict[str, str] = Field(default_factory=dict)
 
+
+class AgentFeedbackRequest(BaseModel):
+    pipeline_run_id: str = ""
+    context_id: str = ""
+    agent_run_id: str = ""
+    agent_step_id: str = ""
+    target_type: str
+    target_id: str
+    event_type: str
+    payload_json: dict[str, object] = Field(default_factory=dict)
+    source: str = "api"
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -186,6 +198,89 @@ app.include_router(onboarding_ui_router)
 @app.get("/health")
 def health():
     return services.health_payload()
+
+
+@app.post("/api/agent-feedback")
+def record_agent_feedback(request: AgentFeedbackRequest, http_request: Request):
+    try:
+        return services.record_agent_feedback_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=request.pipeline_run_id,
+            context_id=request.context_id,
+            agent_run_id=request.agent_run_id,
+            agent_step_id=request.agent_step_id,
+            target_type=request.target_type,
+            target_id=request.target_id,
+            event_type=request.event_type,
+            payload_json=request.payload_json,
+            source=request.source or "api",
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/agent-feedback/summary")
+def agent_feedback_summary(
+    http_request: Request,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+):
+    try:
+        return services.agent_feedback_summary_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            target_type=target_type,
+            event_type=event_type,
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/agent-feedback/export")
+def agent_feedback_export(
+    http_request: Request,
+    pipeline_run_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+):
+    try:
+        return services.agent_feedback_export_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+            target_type=target_type,
+            event_type=event_type,
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/agent-feedback")
+def list_agent_feedback(
+    http_request: Request,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 200,
+):
+    try:
+        return services.list_agent_feedback_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            target_type=target_type,
+            event_type=event_type,
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @app.get("/user/workspace-state")

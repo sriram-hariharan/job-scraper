@@ -36,6 +36,9 @@ def test_agentic_platform_docs_cover_agents_flags_and_commands():
     assert "src/agents/workflow_planner.py" in source
     assert "build_agentic_workflow_execution_plan()" in source
     assert "execution_enabled=false" in source
+    assert "src/agents/workflow_runner.py" in source
+    assert "python -m src.agents.workflow_runner --dry-run --json" in source
+    assert "did_execute=false" in source
 
 
 def test_agentic_platform_docs_state_safety_guarantees():

@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from src.agents import workflow_planner, workflow_registry, workflow_runner
+from src.evaluation.rag_evaluation import (
+    RAG_EVALUATION_SUMMARY_ARTIFACT,
+    validate_rag_evaluation_payload,
+)
 
 
 REQUIRED_ARTIFACTS = [
@@ -31,6 +35,8 @@ OPTIONAL_ARTIFACTS = [
     "agentic_workflow_dry_run_report.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
+    "rag_evaluation_summary.json",
+    "rag_evaluation_report.md",
 ]
 
 EXPECTED_ARTIFACTS = REQUIRED_ARTIFACTS + OPTIONAL_ARTIFACTS
@@ -56,6 +62,8 @@ ARTIFACT_KIND_TO_NAME = {
     "agentic_workflow_dry_run_result_json": "agentic_workflow_dry_run_result.json",
     "agentic_workflow_dry_run_report_md": "agentic_workflow_dry_run_report.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
+    "rag_evaluation_summary_json": "rag_evaluation_summary.json",
+    "rag_evaluation_report_md": "rag_evaluation_report.md",
     "job_packet_manifest": "job_packet_manifest.csv",
 }
 
@@ -132,6 +140,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "agentic_workflow_manifest.json": _read_json(root / "agentic_workflow_manifest.json"),
         "agentic_workflow_execution_plan.json": _read_json(root / "agentic_workflow_execution_plan.json"),
         "agentic_workflow_dry_run_result.json": _read_json(root / "agentic_workflow_dry_run_result.json"),
+        RAG_EVALUATION_SUMMARY_ARTIFACT: _read_json(root / RAG_EVALUATION_SUMMARY_ARTIFACT),
     }
 
 
@@ -209,6 +218,7 @@ def verify_agentic_workflow_artifacts(
     manifest_json = dict(loaded.get("agentic_workflow_manifest.json") or {})
     execution_plan_json = dict(loaded.get("agentic_workflow_execution_plan.json") or {})
     dry_run_json = dict(loaded.get("agentic_workflow_dry_run_result.json") or {})
+    rag_evaluation_json = dict(loaded.get(RAG_EVALUATION_SUMMARY_ARTIFACT) or {})
 
     reason_codes: List[str] = []
     checks: List[Dict[str, Any]] = []
@@ -432,6 +442,23 @@ def verify_agentic_workflow_artifacts(
         if not count_matches:
             reason_codes.append("workflow_dry_run_planned_step_count_mismatch")
 
+    if RAG_EVALUATION_SUMMARY_ARTIFACT in present_artifacts:
+        rag_validation = validate_rag_evaluation_payload(rag_evaluation_json)
+        rag_validation_status = _clean_text(rag_validation.get("validation_status"))
+        rag_validation_passed = rag_validation_status in {"passed", "warning"}
+        checks.append(
+            _check(
+                "rag_evaluation_validation_passed_or_warning",
+                rag_validation_passed,
+                ", ".join(rag_validation.get("reason_codes", []) or [])
+                if not rag_validation_passed else "",
+            )
+        )
+        if not rag_validation_passed:
+            reason_codes.append("rag_evaluation_validation_failed")
+        if rag_validation_status == "warning":
+            reason_codes.append("rag_evaluation_warning")
+
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [
         ("job_prioritization_recommendations.csv", priority_rows),
@@ -507,9 +534,10 @@ def verify_agentic_workflow_artifacts(
     required_failure = bool(missing_required)
     strict_missing_failure = bool(strict and missing_artifacts)
     consistency_failure = any(not check["passed"] for check in checks)
+    diagnostic_warning = "rag_evaluation_warning" in reason_codes
     if required_failure or strict_missing_failure or consistency_failure:
         validation_status = "failed"
-    elif missing_optional:
+    elif missing_optional or diagnostic_warning:
         validation_status = "warning"
     else:
         validation_status = "passed"
@@ -523,6 +551,7 @@ def verify_agentic_workflow_artifacts(
             "application_execution_queue": len(queue_rows),
             "best_resume_variant_by_job": len(list(loaded.get("best_resume_variant_by_job.csv") or [])),
             "source_health_report": len(list(loaded.get("source_health_report.csv") or [])),
+            "rag_evaluation_rows": len(list(rag_evaluation_json.get("rows") or [])),
             "job_prioritization_recommendations": len(priority_rows),
             "tailoring_decision_recommendations": len(tailoring_rows),
             "operator_review_recommendations": len(operator_rows),

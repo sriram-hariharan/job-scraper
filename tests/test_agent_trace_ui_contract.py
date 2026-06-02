@@ -85,3 +85,27 @@ def test_agentic_review_human_feedback_diagnostics_contract():
     assert '@app.get("/api/agent-feedback")' in api_source
     assert "agent_feedback_summary_payload" in services_source
     assert "list_agent_feedback_payload" in services_source
+
+
+def test_agentic_review_rag_evaluation_diagnostics_contract():
+    review_js = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "RAG Evaluation" in review_js
+    assert "renderRagEvaluationSection" in review_js
+    assert "getRagEvaluationSummary" in review_js
+    assert "query_count" in review_js
+    assert "retrieved_chunk_count" in review_js
+    assert "average_retrieval_score" in review_js
+    assert "top_k_hit_rate" in review_js
+    assert "missing_evidence_warning_count" in review_js
+    assert "No RAG evaluation data recorded for this run yet." in review_js
+
+    assert ".rag-evaluation-card" in review_css
+    assert ".rag-evaluation-metrics" in review_css
+
+    assert "rag_evaluation_summary.json" in services_source
+    assert "rag_evaluation_report.md" in services_source
+    assert "_rag_evaluation_from_artifacts" in services_source
+    assert "build_rag_evaluation_summary" in services_source

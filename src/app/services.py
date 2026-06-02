@@ -131,6 +131,10 @@ from src.storage.agent_feedback.store import (
     record_agent_feedback_event,
     summarize_agent_feedback_events,
 )
+from src.evaluation.rag_evaluation import (
+    RAG_EVALUATION_SUMMARY_ARTIFACT,
+    build_rag_evaluation_summary,
+)
 from src.storage.redis_locks import (
     RedisLockHandle,
     acquire_redis_lock,
@@ -236,6 +240,8 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "agentic_workflow_dry_run_result.json",
     "agentic_workflow_dry_run_report.md",
     "agentic_workflow_verification.json",
+    "rag_evaluation_summary.json",
+    "rag_evaluation_report.md",
     "job_packet_manifest.csv",
     "role_title_filter_audit.csv",
     "source_health_report.csv",
@@ -871,6 +877,11 @@ def profile_pipeline_run_detail_payload(
         "agentic_workflow_execution_plan": _agentic_workflow_execution_plan_from_artifacts(artifacts),
         "agentic_workflow_dry_run": _agentic_workflow_dry_run_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
+        "rag_evaluation": _rag_evaluation_from_artifacts(
+            artifacts,
+            pipeline_run_id=safe_run_id,
+            owner_user_id=owner,
+        ),
     }
 
 
@@ -915,6 +926,11 @@ def profile_pipeline_run_agentic_review_payload(
         "agentic_workflow_execution_plan": _agentic_workflow_execution_plan_from_artifacts(artifacts),
         "agentic_workflow_dry_run": _agentic_workflow_dry_run_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
+        "rag_evaluation": _rag_evaluation_from_artifacts(
+            artifacts,
+            pipeline_run_id=safe_run_id,
+            owner_user_id=owner,
+        ),
         "job_prioritization_rows": _csv_rows_from_text(priority_text),
         "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
         "operator_review_rows": _csv_rows_from_text(operator_review_text),
@@ -3660,6 +3676,8 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "agentic_workflow_dry_run_result.json": "agentic_workflow_dry_run_result_json",
         "agentic_workflow_dry_run_report.md": "agentic_workflow_dry_run_report_md",
         "agentic_workflow_verification.json": "agentic_workflow_verification_json",
+        "rag_evaluation_summary.json": "rag_evaluation_summary_json",
+        "rag_evaluation_report.md": "rag_evaluation_report_md",
         "job_packet_manifest.csv": "job_packet_manifest",
         "role_title_filter_audit.csv": "role_title_filter_audit",
         "source_health_report.csv": "source_health_report",
@@ -9954,6 +9972,25 @@ def _agentic_workflow_dry_run_from_artifacts(rows: List[Dict[str, Any]]) -> Dict
         "available": bool(result_json or report_markdown),
         "result_json": result_json,
         "report_markdown": report_markdown,
+    }
+
+
+def _rag_evaluation_from_artifacts(
+    rows: List[Dict[str, Any]],
+    *,
+    pipeline_run_id: str = "",
+    owner_user_id: str = "",
+) -> Dict[str, Any]:
+    summary_json = _artifact_json_by_name(rows, RAG_EVALUATION_SUMMARY_ARTIFACT)
+    if not summary_json:
+        summary_json = build_rag_evaluation_summary(
+            [],
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+        )
+    return {
+        "available": bool(_artifact_json_by_name(rows, RAG_EVALUATION_SUMMARY_ARTIFACT)),
+        "summary_json": summary_json,
     }
 
 

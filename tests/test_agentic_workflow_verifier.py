@@ -9,6 +9,7 @@ from src.agents.workflow_verifier import (
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 from src.agents.workflow_runner import write_agentic_workflow_dry_run_artifacts
+from src.evaluation.rag_evaluation import write_rag_evaluation_artifacts
 
 
 def _write_csv(path, rows, fieldnames):
@@ -128,6 +129,20 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
     write_agentic_workflow_manifest_artifacts(output_dir=root)
     write_agentic_workflow_execution_plan_artifacts(output_dir=root)
     write_agentic_workflow_dry_run_artifacts(output_dir=root)
+    write_rag_evaluation_artifacts(
+        output_dir=root,
+        rows=[
+            {
+                "query_id": "q1",
+                "query_text": "backend engineer",
+                "retrieved_doc_id": "job_1",
+                "retrieval_score": 0.8,
+                "rank": 1,
+            }
+        ],
+        pipeline_run_id="run_test",
+        owner_user_id="user_test",
+    )
     return root
 
 
@@ -145,13 +160,56 @@ def test_workflow_verifier_warns_with_missing_optional_artifacts_non_strict(tmp_
     root = _complete_artifact_dir(tmp_path)
     (root / "best_resume_variant_by_job.csv").unlink()
     (root / "source_health_report.csv").unlink()
+    (root / "rag_evaluation_summary.json").unlink()
+    (root / "rag_evaluation_report.md").unlink()
 
     payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
 
     assert payload["validation_status"] == "warning"
     assert "best_resume_variant_by_job.csv" in payload["missing_artifacts"]
     assert "source_health_report.csv" in payload["missing_artifacts"]
+    assert "rag_evaluation_summary.json" in payload["missing_artifacts"]
     assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_warns_when_rag_evaluation_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "rag_evaluation_summary.json").unlink()
+    (root / "rag_evaluation_report.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "rag_evaluation_summary.json" in payload["missing_artifacts"]
+    assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_validates_rag_evaluation_artifact_when_present(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "rag_evaluation_validation_passed_or_warning" in check_names
+    assert payload["row_counts"]["rag_evaluation_rows"] == 1
+
+
+def test_workflow_verifier_fails_invalid_rag_evaluation_artifact(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    _write_json(
+        root / "rag_evaluation_summary.json",
+        {
+            "evaluation_version": "rag_evaluation_v1",
+            "validation_status": "failed",
+            "rows": [{"retrieval_score": 3.0, "rank": -1}],
+        },
+    )
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "rag_evaluation_validation_failed" in payload["reason_codes"]
 
 
 def test_workflow_verifier_warns_when_manifest_missing_non_strict(tmp_path):

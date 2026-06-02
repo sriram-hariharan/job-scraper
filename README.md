@@ -27,6 +27,7 @@
 - [Running Pipelines from the CLI](#running-pipelines-from-the-cli)
 - [Environment Variables](#environment-variables)
 - [Testing and Validation](#testing-and-validation)
+- [Portfolio and Demo Docs](#portfolio-and-demo-docs)
 - [Deployment Notes](#deployment-notes)
 - [Roadmap Ideas](#roadmap-ideas)
 
@@ -567,6 +568,19 @@ python run_matching_smoke.py
 
 ---
 
+## Portfolio and Demo Docs
+
+For a recruiter- or hiring-manager-friendly view of the agentic system:
+
+- [Portfolio overview](docs/portfolio_overview.md)
+- [Architecture summary](docs/architecture_summary.md)
+- [Demo walkthrough](docs/demo_walkthrough.md)
+- [Agentic platform runbook](docs/agentic_platform.md)
+
+These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.
+
+---
+
 ## Deployment Notes
 
 The repo includes a production-style Docker setup:
@@ -609,4 +623,3 @@ Potential next improvements:
 ## Notes
 
 This repository is built as an operator-first system: deterministic pipelines where possible, LLM assistance where useful, and reviewable user decisions before important resume/application changes are committed.
-

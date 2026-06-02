@@ -2,6 +2,11 @@ from pathlib import Path
 
 
 DOC_PATH = Path("docs/agentic_platform.md")
+PORTFOLIO_DOC_PATHS = [
+    Path("docs/portfolio_overview.md"),
+    Path("docs/architecture_summary.md"),
+    Path("docs/demo_walkthrough.md"),
+]
 
 
 def test_agentic_platform_docs_cover_agents_flags_and_commands():
@@ -60,5 +65,33 @@ def test_agentic_platform_docs_state_safety_guarantees():
         "The workflow verifier is diagnostic only.",
         "There is no LangGraph integration.",
         "Per-job trace rows are intentionally not implemented yet.",
+    ]:
+        assert phrase in source
+
+
+def test_portfolio_demo_docs_cover_phase_18a_contract():
+    for doc_path in PORTFOLIO_DOC_PATHS:
+        assert doc_path.exists()
+
+    source = "\n".join(path.read_text(encoding="utf-8") for path in PORTFOLIO_DOC_PATHS)
+
+    for phrase in [
+        "ApplyLens AI",
+        "Agentic Review",
+        "src/agents/workflow_registry.py",
+        "src/agents/workflow_runner.py",
+        "dry-run only",
+        "agent feedback export",
+        "RAG Evaluation",
+        "sanitized/offline fixtures",
+        "no production decision mutation",
+        "Human feedback is append-only/read-only for evaluation.",
+        "RAG Evaluation does not alter retrieval or ranking.",
+        "The dry-run runner does not execute agents.",
+        "Not Yet Implemented / Roadmap",
+        "AI Engineer",
+        "Applied AI Engineer",
+        "Data Scientist",
+        "ML Platform",
     ]:
         assert phrase in source

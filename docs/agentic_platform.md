@@ -12,6 +12,31 @@ existing pipeline stage -> agent wrapper -> structured output -> validation -> t
 
 The current system is intentionally conservative. Advisory agents label and summarize existing outputs; they do not mutate production decisions.
 
+## Workflow Registry
+
+The orchestration contract lives in `src/agents/workflow_registry.py`. It is a deterministic manifest for the implemented agentic workflow, not an orchestration engine.
+
+The registry records:
+
+- workflow name and version
+- ordered agent keys
+- agent names, versions, owner modules, and deterministic model metadata
+- input and output artifacts for each implemented agent
+- generated artifact kinds
+- required feature flags
+- safety guarantees
+- benchmark metric keys
+
+Useful helpers:
+
+- `get_agentic_workflow_manifest()`
+- `list_agentic_agents()`
+- `get_agent_manifest(agent_key)`
+- `validate_agentic_workflow_manifest()`
+- `render_agentic_workflow_manifest_markdown()`
+
+The registry validates that no agent mutates production decisions, tracing is disabled by default, expected feature flags are documented, and expected agentic artifact kinds are present.
+
 ## Design Principles
 
 - Advisory first: agent outputs are recommendations, summaries, validations, or diagnostics.
@@ -271,4 +296,3 @@ Runs workflow verification in strict mode during planning artifact generation wh
 - Per-job trace rows are intentionally not implemented yet.
 - Agentic artifacts are diagnostic/advisory and should not be treated as production action authority.
 - The benchmark uses sanitized fixtures and does not measure live scraping or real LLM quality.
-

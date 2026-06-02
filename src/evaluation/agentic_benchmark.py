@@ -16,6 +16,7 @@ from src.agents import (
     resume_match_agent,
     source_health_agent,
     tailoring_decision_agent,
+    workflow_registry,
 )
 from src.evaluation.metrics import bool_rate, safe_rate
 from src.pipeline.resume_selection_credibility import parse_bool, parse_float
@@ -45,6 +46,7 @@ THRESHOLD_METRIC_KEYS = [
     "critic_reject_hold_rate",
     "llmops_metadata_schema_present",
     "llmops_required_keys_present",
+    "workflow_registry_validation_passed",
     "validation_pass_rate",
 ]
 DEFAULT_THRESHOLDS = {
@@ -69,6 +71,7 @@ DEFAULT_THRESHOLDS = {
     "critic_reject_hold_rate": 1.0,
     "llmops_metadata_schema_present": 1.0,
     "llmops_required_keys_present": 1.0,
+    "workflow_registry_validation_passed": 1.0,
     "validation_pass_rate": 1.0,
 }
 
@@ -478,6 +481,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
     )
     operator_review = evaluate_operator_review_rows(list(fixture.get("operator_review_rows", []) or []))
     llmops_readiness = llmops.llmops_schema_readiness_payload()
+    registry_validation = workflow_registry.validate_agentic_workflow_manifest()
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
@@ -518,6 +522,10 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "critic_reject_hold_rate": operator_review["critic_reject_hold_rate"],
         "llmops_metadata_schema_present": 1.0 if llmops_readiness.get("metadata_version") else 0.0,
         "llmops_required_keys_present": 1.0 if llmops_readiness.get("required_keys_present") else 0.0,
+        "workflow_registry_validation_passed": 1.0
+        if registry_validation.get("validation_status") == "passed"
+        else 0.0,
+        "workflow_registry_agent_count": registry_validation.get("agent_count", 0),
         "validation_pass_rate": bool_rate(validation_passes),
         "failed_case_ids": failed_case_ids,
     }
@@ -538,6 +546,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "tailoring_decision_summary": tailoring_decision["payload"]["summary"],
             "operator_review_summary": operator_review["payload"]["summary"],
             "llmops_observability_readiness": llmops_readiness,
+            "workflow_registry_validation": registry_validation,
         },
         "component_results": {
             "source_health": source_health,
@@ -547,6 +556,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "tailoring_decision": tailoring_decision,
             "operator_review": operator_review,
             "llmops": llmops_readiness,
+            "workflow_registry": registry_validation,
         },
     }
 
@@ -575,6 +585,7 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "critic_reject_hold_rate": args.min_critic_reject_hold_rate,
         "llmops_metadata_schema_present": args.min_llmops_metadata_schema_present,
         "llmops_required_keys_present": args.min_llmops_required_keys_present,
+        "workflow_registry_validation_passed": args.min_workflow_registry_validation_passed,
         "validation_pass_rate": args.min_validation_pass_rate,
     }
     for key, value in overrides.items():
@@ -645,6 +656,8 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "critic_reject_hold_rate",
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
+        "workflow_registry_validation_passed",
+        "workflow_registry_agent_count",
         "validation_pass_rate",
     ]:
         lines.append(f"- `{key}`: {metrics.get(key)}")
@@ -672,6 +685,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.append("- Tailoring Decision Agent advisory benchmark")
     lines.append("- Operator Review Agent advisory benchmark")
     lines.append("- LLMOps metadata schema readiness benchmark")
+    lines.append("- Agentic workflow registry manifest benchmark")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -725,6 +739,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-critic-reject-hold-rate", type=float, default=None)
     parser.add_argument("--min-llmops-metadata-schema-present", type=float, default=None)
     parser.add_argument("--min-llmops-required-keys-present", type=float, default=None)
+    parser.add_argument("--min-workflow-registry-validation-passed", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)
     return parser
 

@@ -171,6 +171,20 @@ def test_validation_catches_changed_existing_action():
     assert "existing_action_changed" in validation["reason_codes"]
 
 
+def test_validation_catches_tailoring_scoring_and_ranking_mutation_signals():
+    result = read_only_tailoring_decision_adapter.run_tailoring_decision_read_only_adapter(
+        queue_rows=[_queue_row(score="0.75", rank="1", tailoring_status="pending")]
+    )
+    result["decisions"][0]["score"] = "0.80"
+    result["decisions"][0]["rank"] = "2"
+    result["decisions"][0]["tailoring_status"] = "generated"
+
+    validation = read_only_tailoring_decision_adapter.validate_tailoring_decision_adapter_result(result)
+
+    assert validation["validation_status"] == "failed"
+    assert "production_action_field_written" in validation["reason_codes"]
+
+
 def test_artifact_writer_writes_adapter_specific_files_only(tmp_path):
     result = read_only_tailoring_decision_adapter.run_tailoring_decision_read_only_adapter(
         queue_rows=[_queue_row()],

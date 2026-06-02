@@ -56,6 +56,8 @@ GENERATED_ARTIFACT_KINDS = [
     "agentic_workflow_dry_run_result_json",
     "agentic_workflow_dry_run_report_md",
     "agentic_workflow_verification_json",
+    "rag_evaluation_summary_json",
+    "rag_evaluation_report_md",
     "job_packet_manifest",
 ]
 
@@ -75,6 +77,8 @@ EXPECTED_AGENTIC_ARTIFACT_KINDS = [
     "agentic_workflow_dry_run_result_json",
     "agentic_workflow_dry_run_report_md",
     "agentic_workflow_verification_json",
+    "rag_evaluation_summary_json",
+    "rag_evaluation_report_md",
 ]
 
 ARTIFACT_DEPENDENCY_ORDER = [
@@ -97,6 +101,8 @@ ARTIFACT_DEPENDENCY_ORDER = [
     "agentic_workflow_dry_run_result.json",
     "agentic_workflow_dry_run_report.md",
     "agentic_workflow_verification.json",
+    "rag_evaluation_summary.json",
+    "rag_evaluation_report.md",
 ]
 
 SAFETY_GUARANTEES = [

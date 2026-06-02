@@ -15,6 +15,7 @@ from src.agents.workflow_verifier import write_agentic_workflow_verification_art
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
 from src.agents.workflow_runner import write_agentic_workflow_dry_run_artifacts
+from src.evaluation.rag_evaluation import write_rag_evaluation_artifacts
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
     compute_resume_selection_credibility,
@@ -482,6 +483,8 @@ def main() -> None:
     agentic_workflow_dry_run_result_json = output_dir / "agentic_workflow_dry_run_result.json"
     agentic_workflow_dry_run_report_md = output_dir / "agentic_workflow_dry_run_report.md"
     agentic_workflow_verification_json = output_dir / "agentic_workflow_verification.json"
+    rag_evaluation_summary_json = output_dir / "rag_evaluation_summary.json"
+    rag_evaluation_report_md = output_dir / "rag_evaluation_report.md"
 
     batch_selector_cmd = [
         sys.executable,
@@ -933,6 +936,17 @@ def main() -> None:
         workflow_dry_run_artifact = {}
         print(f"Agentic workflow dry-run artifact skipped: {exc}")
 
+    try:
+        rag_evaluation_artifact = write_rag_evaluation_artifacts(
+            output_dir=output_dir,
+            rows=[],
+            pipeline_run_id="",
+            owner_user_id="",
+        )
+    except Exception as exc:
+        rag_evaluation_artifact = {}
+        print(f"RAG evaluation artifact skipped: {exc}")
+
     verifier_strict = _parse_bool(os.getenv("APPLYLENS_WORKFLOW_VERIFIER_STRICT", ""))
     try:
         workflow_verification_artifact = write_agentic_workflow_verification_artifact(
@@ -1006,6 +1020,8 @@ def main() -> None:
         print(f"Agentic plan     : {workflow_execution_plan_artifact['json_path']}")
     if workflow_dry_run_artifact:
         print(f"Agentic dry-run  : {workflow_dry_run_artifact['json_path']}")
+    if rag_evaluation_artifact:
+        print(f"RAG evaluation   : {rag_evaluation_artifact['summary_json']}")
     if workflow_verification_artifact:
         print(f"Agentic verifier : {workflow_verification_artifact['json_path']}")
     print(f"Job packets dir  : {job_packets_dir}")

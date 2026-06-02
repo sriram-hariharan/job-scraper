@@ -172,10 +172,23 @@ def build_rag_evaluation_summary(
 
 def validate_rag_evaluation_payload(payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = payload if isinstance(payload, dict) else {}
-    rows = data.get("rows") if isinstance(data.get("rows"), list) else []
     reason_codes: List[str] = []
-    if _clean_text(data.get("evaluation_version")) not in {"", RAG_EVALUATION_VERSION}:
+
+    evaluation_version = _clean_text(data.get("evaluation_version"))
+    if not evaluation_version:
+        reason_codes.append("missing_evaluation_version")
+    elif evaluation_version != RAG_EVALUATION_VERSION:
         reason_codes.append("unknown_evaluation_version")
+
+    rows_value = data.get("rows")
+    rows = rows_value if isinstance(rows_value, list) else []
+    if not isinstance(rows_value, list):
+        reason_codes.append("invalid_rows")
+
+    validation_status = _clean_text(data.get("validation_status"))
+    if validation_status and validation_status not in {"passed", "warning"}:
+        reason_codes.append("invalid_validation_status")
+
     if not rows:
         reason_codes.append(RAG_EVALUATION_EMPTY_STATE_REASON)
 
@@ -195,7 +208,10 @@ def validate_rag_evaluation_payload(payload: Dict[str, Any] | None = None) -> Di
     unique_reasons = sorted(set(reason_codes))
     invalid_reasons = {
         "unknown_evaluation_version",
+        "missing_evaluation_version",
         "invalid_row",
+        "invalid_rows",
+        "invalid_validation_status",
         RAG_EVALUATION_INVALID_SCORE_REASON,
         RAG_EVALUATION_INVALID_RANK_REASON,
     }

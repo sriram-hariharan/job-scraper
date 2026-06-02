@@ -112,6 +112,12 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "RAG Evaluation does not change retrieval",
         "No active runner adapter exists.",
         "workflow_runner.py remains dry-run only",
+        "src/agents/orchestrator_adapter_harness.py",
+        "read_only_preflight",
+        "allow_agent_execution=false",
+        "executable_adapter_count=0",
+        "python -m src.agents.orchestrator_adapter_harness --preflight --json",
+        "Future real execution still requires a separate reviewed phase.",
     ]:
         assert phrase in source
 

@@ -8,11 +8,14 @@ No production decision mutation is implemented or enabled by this readiness audi
 
 Phase 19B adds `src/agents/orchestrator_adapters.py` as a static adapter contract metadata module. It is contract-only: it does not execute agents, does not enable autonomous execution, does not wire into live planning, and does not change runtime behavior.
 
+Phase 20A adds `src/agents/orchestrator_adapter_harness.py` as a read-only preflight harness. It inspects the workflow registry order, adapter contract metadata, and optional artifact presence only. It does not import or call agent execution functions, does not enable autonomous execution, does not wire into live planning, and does not change production behavior. Future real execution still requires a separate reviewed phase.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.
 - `src/agents/workflow_planner.py` builds a diagnostic dry-run plan with `execution_enabled=false` and `execution_status=planned`.
 - `src/agents/workflow_runner.py` only emits skipped dry-run step results with `did_execute=false`.
+- `src/agents/orchestrator_adapter_harness.py` builds a `read_only_preflight` plan with `allow_agent_execution=false`, `executable_adapter_count=0`, and `did_execute=false` for every adapter.
 - `src/agents/workflow_verifier.py` validates artifacts and dry-run payloads when present.
 - `run_application_planning.py` writes manifest, execution-plan, dry-run, verifier, and RAG Evaluation diagnostics through existing artifact hooks.
 - `application_execution_queue.py` writes current advisory artifacts for job prioritization, tailoring decision, and operator review, and may record aggregate trace rows when tracing is explicitly enabled.
@@ -20,6 +23,8 @@ Phase 19B adds `src/agents/orchestrator_adapters.py` as a static adapter contrac
 Real execution is not enabled because there is no adapter boundary that can safely load inputs, validate context, call each agent in read-only mode, write diagnostics idempotently, and record trace rows without affecting production decisions.
 
 The adapter contract layer now defines the proposed boundary as static metadata and validation helpers. It stores callable entrypoint names as strings only, records allowed future read-only modes, and validates that no adapter mutates production decisions or enables live execution.
+
+The read-only adapter harness is a diagnostic preflight for that metadata. It reports whether each adapter is contract-ready, needs more adapter work, or is blocked, but it never calls the callable entrypoints listed in the contract.
 
 ## Readiness Matrix
 
@@ -104,6 +109,7 @@ Contract expectations:
 
 - No active runner adapter exists.
 - `workflow_runner.py` is intentionally dry-run only and must not be changed to execute agents without a separate reviewed phase.
+- `src/agents/orchestrator_adapter_harness.py` is preflight only; `python -m src.agents.orchestrator_adapter_harness --preflight --json` produces deterministic metadata and does not execute agents.
 - A central owner-scoped input loader is missing.
 - Source health, resume match, and critic need diagnostic artifact policies.
 - Idempotent artifact write rules are not defined for a real orchestrator.

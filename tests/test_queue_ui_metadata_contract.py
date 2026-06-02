@@ -231,6 +231,41 @@ def test_agentic_workflow_dry_run_ui_contract():
     assert "_agentic_workflow_dry_run_from_artifacts" in services_source
 
 
+def test_read_only_adapter_preflight_ui_contract():
+    review_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Read-Only Adapter Preflight" in review_source
+    assert "read_only_adapter_preflight" in review_source
+    assert "renderReadOnlyAdapterPreflightSection" in review_source
+    assert "renderReadOnlyAdapterPreflightRow" in review_source
+    assert "adapter_preflight_results" in review_source
+    assert "planned_adapter_count" in review_source
+    assert "executable_adapter_count" in review_source
+    assert "ready_read_only_contract_count" in review_source
+    assert "needs_adapter_count" in review_source
+    assert "blocked_count" in review_source
+    assert "preflight_status" in review_source
+    assert "allowed_execution_mode" in review_source
+    assert "execution_enabled" in review_source
+    assert "did_execute" in review_source
+    assert "No read-only adapter preflight recorded for this run." in review_source
+    assert "Preflight report markdown" in review_source
+    assert "no agents executed" in review_source
+
+    assert ".read-only-adapter-preflight-card" in review_css
+    assert ".read-only-adapter-preflight-metrics" in review_css
+    assert ".read-only-adapter-preflight-row" in review_css
+    assert ".read-only-adapter-preflight-pills" in review_css
+
+    assert "read_only_adapter_preflight.json" in services_source
+    assert "read_only_adapter_preflight.md" in services_source
+    assert "read_only_adapter_preflight_json" in services_source
+    assert "read_only_adapter_preflight_md" in services_source
+    assert "_read_only_adapter_preflight_from_artifacts" in services_source
+
+
 def test_agentic_review_dedicated_page_contract():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")

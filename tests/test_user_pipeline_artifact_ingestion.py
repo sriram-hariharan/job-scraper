@@ -81,6 +81,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
         _write(output_dir / "agentic_workflow_execution_plan.md", "# Agentic Workflow Execution Plan\n")
         _write(output_dir / "agentic_workflow_dry_run_result.json", json.dumps({"execution_mode": "dry_run", "executed_step_count": 0}))
         _write(output_dir / "agentic_workflow_dry_run_report.md", "# Agentic Workflow Dry-Run Report\n")
+        _write(output_dir / "read_only_adapter_preflight.json", json.dumps({"execution_mode": "read_only_preflight", "executable_adapter_count": 0}))
+        _write(output_dir / "read_only_adapter_preflight.md", "# Read-Only Adapter Preflight\n")
         _write(output_dir / "agentic_workflow_verification.json", json.dumps({"validation_status": "passed"}))
         _write(output_dir / "rag_evaluation_summary.json", json.dumps({"evaluation_version": "rag_evaluation_v1", "validation_status": "warning", "rows": []}))
         _write(output_dir / "rag_evaluation_report.md", "# RAG Evaluation Report\n")
@@ -120,7 +122,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 29
+    assert result["ingested_count"] == 31
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
@@ -139,6 +141,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "agentic_workflow_execution_plan.md" in artifact_names
     assert "agentic_workflow_dry_run_result.json" in artifact_names
     assert "agentic_workflow_dry_run_report.md" in artifact_names
+    assert "read_only_adapter_preflight.json" in artifact_names
+    assert "read_only_adapter_preflight.md" in artifact_names
     assert "agentic_workflow_verification.json" in artifact_names
     assert "rag_evaluation_summary.json" in artifact_names
     assert "rag_evaluation_report.md" in artifact_names
@@ -168,6 +172,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "agentic_workflow_execution_plan_md" in artifact_kinds
     assert "agentic_workflow_dry_run_result_json" in artifact_kinds
     assert "agentic_workflow_dry_run_report_md" in artifact_kinds
+    assert "read_only_adapter_preflight_json" in artifact_kinds
+    assert "read_only_adapter_preflight_md" in artifact_kinds
     assert "agentic_workflow_verification_json" in artifact_kinds
     assert "rag_evaluation_summary_json" in artifact_kinds
     assert "rag_evaluation_report_md" in artifact_kinds

@@ -8,7 +8,7 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import workflow_planner, workflow_registry, workflow_runner
+from src.agents import orchestrator_adapter_harness, workflow_planner, workflow_registry, workflow_runner
 from src.evaluation.rag_evaluation import (
     RAG_EVALUATION_SUMMARY_ARTIFACT,
     validate_rag_evaluation_payload,
@@ -33,6 +33,8 @@ OPTIONAL_ARTIFACTS = [
     "agentic_workflow_execution_plan.md",
     "agentic_workflow_dry_run_result.json",
     "agentic_workflow_dry_run_report.md",
+    "read_only_adapter_preflight.json",
+    "read_only_adapter_preflight.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
     "rag_evaluation_summary.json",
@@ -61,6 +63,8 @@ ARTIFACT_KIND_TO_NAME = {
     "agentic_workflow_execution_plan_md": "agentic_workflow_execution_plan.md",
     "agentic_workflow_dry_run_result_json": "agentic_workflow_dry_run_result.json",
     "agentic_workflow_dry_run_report_md": "agentic_workflow_dry_run_report.md",
+    "read_only_adapter_preflight_json": "read_only_adapter_preflight.json",
+    "read_only_adapter_preflight_md": "read_only_adapter_preflight.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
     "rag_evaluation_summary_json": "rag_evaluation_summary.json",
     "rag_evaluation_report_md": "rag_evaluation_report.md",
@@ -140,6 +144,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "agentic_workflow_manifest.json": _read_json(root / "agentic_workflow_manifest.json"),
         "agentic_workflow_execution_plan.json": _read_json(root / "agentic_workflow_execution_plan.json"),
         "agentic_workflow_dry_run_result.json": _read_json(root / "agentic_workflow_dry_run_result.json"),
+        "read_only_adapter_preflight.json": _read_json(root / "read_only_adapter_preflight.json"),
         RAG_EVALUATION_SUMMARY_ARTIFACT: _read_json(root / RAG_EVALUATION_SUMMARY_ARTIFACT),
     }
 
@@ -218,6 +223,7 @@ def verify_agentic_workflow_artifacts(
     manifest_json = dict(loaded.get("agentic_workflow_manifest.json") or {})
     execution_plan_json = dict(loaded.get("agentic_workflow_execution_plan.json") or {})
     dry_run_json = dict(loaded.get("agentic_workflow_dry_run_result.json") or {})
+    read_only_preflight_json = dict(loaded.get("read_only_adapter_preflight.json") or {})
     rag_evaluation_json = dict(loaded.get(RAG_EVALUATION_SUMMARY_ARTIFACT) or {})
 
     reason_codes: List[str] = []
@@ -459,6 +465,72 @@ def verify_agentic_workflow_artifacts(
         if rag_validation_status == "warning":
             reason_codes.append("rag_evaluation_warning")
 
+    if "read_only_adapter_preflight.json" in present_artifacts:
+        preflight_validation = orchestrator_adapter_harness.validate_read_only_adapter_preflight_plan(
+            read_only_preflight_json,
+            manifest=manifest_json if manifest_json else None,
+        )
+        preflight_validation_status = _clean_text(preflight_validation.get("validation_status"))
+        preflight_validation_passed = preflight_validation_status in {"passed", "warning"}
+        checks.append(
+            _check(
+                "read_only_adapter_preflight_validation_passed_or_warning",
+                preflight_validation_passed,
+                ", ".join(preflight_validation.get("reason_codes", []) or [])
+                if not preflight_validation_passed else "",
+            )
+        )
+        if not preflight_validation_passed:
+            reason_codes.append("read_only_adapter_preflight_validation_failed")
+        if preflight_validation_status == "warning":
+            reason_codes.append("read_only_adapter_preflight_warning")
+
+        preflight_results = list(read_only_preflight_json.get("adapter_preflight_results") or [])
+        preflight_mode = _clean_text(read_only_preflight_json.get("execution_mode")) == "read_only_preflight"
+        checks.append(_check("read_only_adapter_preflight_mode", preflight_mode))
+        if not preflight_mode:
+            reason_codes.append("read_only_adapter_preflight_wrong_mode")
+
+        allow_execution_false = not bool(read_only_preflight_json.get("allow_agent_execution"))
+        checks.append(_check("read_only_adapter_preflight_agent_execution_disallowed", allow_execution_false))
+        if not allow_execution_false:
+            reason_codes.append("read_only_adapter_preflight_allows_agent_execution")
+
+        executable_zero = int(read_only_preflight_json.get("executable_adapter_count") or 0) == 0
+        checks.append(_check("read_only_adapter_preflight_executable_count_zero", executable_zero))
+        if not executable_zero:
+            reason_codes.append("read_only_adapter_preflight_executable_count_nonzero")
+
+        enabled_adapters = [
+            _clean_text(result.get("agent_key"))
+            for result in preflight_results
+            if result.get("execution_enabled")
+        ]
+        checks.append(
+            _check(
+                "read_only_adapter_preflight_adapters_disabled",
+                not enabled_adapters,
+                f"enabled: {', '.join(enabled_adapters)}" if enabled_adapters else "",
+            )
+        )
+        if enabled_adapters:
+            reason_codes.append("read_only_adapter_preflight_adapter_enabled")
+
+        executed_adapters = [
+            _clean_text(result.get("agent_key"))
+            for result in preflight_results
+            if result.get("did_execute")
+        ]
+        checks.append(
+            _check(
+                "read_only_adapter_preflight_adapters_not_executed",
+                not executed_adapters,
+                f"executed: {', '.join(executed_adapters)}" if executed_adapters else "",
+            )
+        )
+        if executed_adapters:
+            reason_codes.append("read_only_adapter_preflight_adapter_executed")
+
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [
         ("job_prioritization_recommendations.csv", priority_rows),
@@ -534,7 +606,10 @@ def verify_agentic_workflow_artifacts(
     required_failure = bool(missing_required)
     strict_missing_failure = bool(strict and missing_artifacts)
     consistency_failure = any(not check["passed"] for check in checks)
-    diagnostic_warning = "rag_evaluation_warning" in reason_codes
+    diagnostic_warning = (
+        "rag_evaluation_warning" in reason_codes
+        or "read_only_adapter_preflight_warning" in reason_codes
+    )
     if required_failure or strict_missing_failure or consistency_failure:
         validation_status = "failed"
     elif missing_optional or diagnostic_warning:
@@ -552,6 +627,7 @@ def verify_agentic_workflow_artifacts(
             "best_resume_variant_by_job": len(list(loaded.get("best_resume_variant_by_job.csv") or [])),
             "source_health_report": len(list(loaded.get("source_health_report.csv") or [])),
             "rag_evaluation_rows": len(list(rag_evaluation_json.get("rows") or [])),
+            "read_only_adapter_preflight_results": len(list(read_only_preflight_json.get("adapter_preflight_results") or [])),
             "job_prioritization_recommendations": len(priority_rows),
             "tailoring_decision_recommendations": len(tailoring_rows),
             "operator_review_recommendations": len(operator_rows),

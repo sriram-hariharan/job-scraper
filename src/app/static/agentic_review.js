@@ -181,11 +181,13 @@ function renderAgenticReviewDiagnosticsPanel(
   workflowManifest = {},
   workflowExecutionPlan = {},
   workflowDryRun = {},
+  readOnlyAdapterPreflight = {},
   agentFeedback = {},
   ragEvaluation = {},
 ) {
   const panel = qs("agenticReviewDiagnosticsPanel");
   if (!panel) return;
+  const preflightSection = renderReadOnlyAdapterPreflightSection(readOnlyAdapterPreflight);
   const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
   const ragEvaluationSection = renderRagEvaluationSection(ragEvaluation);
   const available = Boolean(workflowVerification?.available);
@@ -204,11 +206,16 @@ function renderAgenticReviewDiagnosticsPanel(
   const dryRunResult = workflowDryRun?.result_json && typeof workflowDryRun.result_json === "object"
     ? workflowDryRun.result_json
     : {};
+  const preflightAvailable = Boolean(readOnlyAdapterPreflight?.available);
+  const preflightPlan = readOnlyAdapterPreflight?.plan_json && typeof readOnlyAdapterPreflight.plan_json === "object"
+    ? readOnlyAdapterPreflight.plan_json
+    : {};
   if (
     !available && !Object.keys(verification).length
     && !manifestAvailable && !Object.keys(manifest).length
     && !planAvailable && !Object.keys(executionPlan).length
     && !dryRunAvailable && !Object.keys(dryRunResult).length
+    && !preflightAvailable && !Object.keys(preflightPlan).length
   ) {
     panel.innerHTML = `
       <div class="agentic-workflow-header">
@@ -218,6 +225,7 @@ function renderAgenticReviewDiagnosticsPanel(
         </div>
       </div>
       <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, dry run, or verification recorded for this run.</div>
+      ${preflightSection}
       ${ragEvaluationSection}
       ${feedbackSection}
     `;
@@ -272,6 +280,7 @@ function renderAgenticReviewDiagnosticsPanel(
     ${renderAgenticWorkflowManifestSection(workflowManifest)}
     ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
     ${renderAgenticWorkflowDryRunSection(workflowDryRun)}
+    ${preflightSection}
     ${ragEvaluationSection}
     ${feedbackSection}
   `;
@@ -711,6 +720,82 @@ function renderAgenticWorkflowDryRunStepRow(step = {}) {
   `;
 }
 
+function renderReadOnlyAdapterPreflightSection(readOnlyAdapterPreflight = {}) {
+  const available = Boolean(readOnlyAdapterPreflight?.available);
+  const plan = readOnlyAdapterPreflight?.plan_json && typeof readOnlyAdapterPreflight.plan_json === "object"
+    ? readOnlyAdapterPreflight.plan_json
+    : {};
+  const markdown = String(readOnlyAdapterPreflight?.report_markdown || "");
+  if (!available && !Object.keys(plan).length) {
+    return `
+      <section class="read-only-adapter-preflight-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Read-Only Adapter Preflight</h2>
+            <p>The adapter preflight artifact was not recorded for this run. Missing preflight diagnostics do not affect planning results.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No read-only adapter preflight recorded for this run.</div>
+      </section>
+    `;
+  }
+
+  const validation = plan.validation && typeof plan.validation === "object" ? plan.validation : {};
+  const summary = plan.summary && typeof plan.summary === "object" ? plan.summary : {};
+  const validationStatus = String(validation.validation_status || "unknown").toLowerCase();
+  const results = Array.isArray(plan.adapter_preflight_results) ? plan.adapter_preflight_results : [];
+
+  return `
+    <section class="read-only-adapter-preflight-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Read-Only Adapter Preflight</h2>
+          <p>Preflight-only diagnostics. No agents execute, autonomous execution remains disabled, and production decisions are unchanged.</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(validationStatus)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(validationStatus))}
+        </span>
+      </div>
+      <div class="read-only-adapter-preflight-metrics">
+        ${renderWorkflowSummaryMetric("Execution mode", plan.execution_mode || "-")}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+        ${renderWorkflowSummaryMetric("Planned", plan.planned_adapter_count ?? results.length)}
+        ${renderWorkflowSummaryMetric("Executable", plan.executable_adapter_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Ready", summary.ready_read_only_contract_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Needs adapter", summary.needs_adapter_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Blocked", summary.blocked_count ?? 0)}
+      </div>
+      <div class="read-only-adapter-preflight-notice">
+        ${renderReviewPill(plan.allow_agent_execution ? "agent execution enabled" : "agent execution disabled")}
+        ${renderReviewPill((summary.did_execute_count || 0) > 0 ? "agents executed" : "no agents executed")}
+      </div>
+      <div class="read-only-adapter-preflight-list">
+        ${results.length ? results.map(renderReadOnlyAdapterPreflightRow).join("") : `<div class="pipeline-runs-empty-cell">No adapter preflight rows listed.</div>`}
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Preflight report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
+function renderReadOnlyAdapterPreflightRow(result = {}) {
+  return `
+    <article class="read-only-adapter-preflight-row">
+      <div>
+        <strong>${escapeHtml(result.step_index || "-")}. ${escapeHtml(result.agent_name || result.agent_key || "Unknown adapter")}</strong>
+        <span>${escapeHtml(result.agent_key || "")}</span>
+      </div>
+      <div class="read-only-adapter-preflight-pills">
+        ${renderReviewPill(result.adapter_status || "-")}
+        ${renderReviewPill(result.preflight_status || "-")}
+        ${renderReviewPill(result.allowed_execution_mode || "-")}
+        ${renderReviewPill(result.execution_enabled ? "enabled" : "disabled")}
+        ${renderReviewPill(result.did_execute ? "executed" : "not executed")}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgenticReviewData(payload, tracePayload) {
   renderAgenticReviewStatus(payload || {});
 
@@ -777,6 +862,7 @@ function renderAgenticReviewData(payload, tracePayload) {
     payload.agentic_workflow_manifest,
     payload.agentic_workflow_execution_plan,
     payload.agentic_workflow_dry_run,
+    payload.read_only_adapter_preflight,
     payload.agent_feedback,
     payload.rag_evaluation,
   );

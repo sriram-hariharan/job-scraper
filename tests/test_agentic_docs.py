@@ -2,6 +2,7 @@ from pathlib import Path
 
 
 DOC_PATH = Path("docs/agentic_platform.md")
+ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -95,3 +96,37 @@ def test_portfolio_demo_docs_cover_phase_18a_contract():
         "ML Platform",
     ]:
         assert phrase in source
+
+
+def test_orchestrator_readiness_docs_cover_phase_19a_contract():
+    assert ORCHESTRATOR_READINESS_DOC_PATH.exists()
+    source = ORCHESTRATOR_READINESS_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "dry-run only",
+        "There is no autonomous execution in this phase.",
+        "No production decision mutation",
+        "Future Adapter Contract",
+        "This is a proposed contract only.",
+        "Human feedback does not tune ranking or scoring.",
+        "RAG Evaluation does not change retrieval",
+        "No active runner adapter exists.",
+        "workflow_runner.py remains dry-run only",
+    ]:
+        assert phrase in source
+
+    for agent_key in [
+        "source_health",
+        "resume_match",
+        "critic",
+        "job_prioritization",
+        "tailoring_decision",
+        "operator_review",
+    ]:
+        assert f"`{agent_key}`" in source
+
+    for status in [
+        "ready_for_read_only_orchestrator",
+        "needs_adapter",
+    ]:
+        assert status in source

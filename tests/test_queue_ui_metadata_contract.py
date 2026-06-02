@@ -202,6 +202,35 @@ def test_agentic_workflow_execution_plan_ui_contract():
     assert "_agentic_workflow_execution_plan_from_artifacts" in services_source
 
 
+def test_agentic_workflow_dry_run_ui_contract():
+    review_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Agentic Workflow Dry Run" in review_source
+    assert "agentic_workflow_dry_run" in review_source
+    assert "result_json" in review_source
+    assert "report_markdown" in review_source
+    assert "ordered_step_results" in review_source
+    assert "runner_version" in review_source
+    assert "executed_step_count" in review_source
+    assert "did_execute" in review_source
+    assert "would_trace" in review_source
+    assert "No agentic workflow dry run recorded for this run." in review_source
+    assert "Dry-run report markdown" in review_source
+    assert "escapeHtml(markdown)" in review_source
+
+    assert ".agentic-workflow-dry-run-card" in review_css
+    assert ".agentic-review-dry-run-step" in review_css
+    assert ".agentic-review-dry-run-metrics" in review_css
+
+    assert "agentic_workflow_dry_run_result.json" in services_source
+    assert "agentic_workflow_dry_run_report.md" in services_source
+    assert "agentic_workflow_dry_run_result_json" in services_source
+    assert "agentic_workflow_dry_run_report_md" in services_source
+    assert "_agentic_workflow_dry_run_from_artifacts" in services_source
+
+
 def test_agentic_review_dedicated_page_contract():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")

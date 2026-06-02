@@ -14,6 +14,7 @@ from src.agents.workflow_summary import write_agentic_workflow_summary_artifacts
 from src.agents.workflow_verifier import write_agentic_workflow_verification_artifact
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
+from src.agents.workflow_runner import write_agentic_workflow_dry_run_artifacts
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
     compute_resume_selection_credibility,
@@ -478,6 +479,8 @@ def main() -> None:
     agentic_workflow_manifest_md = output_dir / "agentic_workflow_manifest.md"
     agentic_workflow_execution_plan_json = output_dir / "agentic_workflow_execution_plan.json"
     agentic_workflow_execution_plan_md = output_dir / "agentic_workflow_execution_plan.md"
+    agentic_workflow_dry_run_result_json = output_dir / "agentic_workflow_dry_run_result.json"
+    agentic_workflow_dry_run_report_md = output_dir / "agentic_workflow_dry_run_report.md"
     agentic_workflow_verification_json = output_dir / "agentic_workflow_verification.json"
 
     batch_selector_cmd = [
@@ -920,6 +923,16 @@ def main() -> None:
         workflow_execution_plan_artifact = {}
         print(f"Agentic workflow execution plan artifact skipped: {exc}")
 
+    try:
+        workflow_dry_run_artifact = write_agentic_workflow_dry_run_artifacts(
+            output_dir=output_dir,
+            result_json_path=agentic_workflow_dry_run_result_json,
+            report_md_path=agentic_workflow_dry_run_report_md,
+        )
+    except Exception as exc:
+        workflow_dry_run_artifact = {}
+        print(f"Agentic workflow dry-run artifact skipped: {exc}")
+
     verifier_strict = _parse_bool(os.getenv("APPLYLENS_WORKFLOW_VERIFIER_STRICT", ""))
     try:
         workflow_verification_artifact = write_agentic_workflow_verification_artifact(
@@ -991,6 +1004,8 @@ def main() -> None:
         print(f"Agentic summary  : {workflow_summary_artifact['summary_json_path']}")
     if workflow_execution_plan_artifact:
         print(f"Agentic plan     : {workflow_execution_plan_artifact['json_path']}")
+    if workflow_dry_run_artifact:
+        print(f"Agentic dry-run  : {workflow_dry_run_artifact['json_path']}")
     if workflow_verification_artifact:
         print(f"Agentic verifier : {workflow_verification_artifact['json_path']}")
     print(f"Job packets dir  : {job_packets_dir}")

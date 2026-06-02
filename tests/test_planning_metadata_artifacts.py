@@ -109,6 +109,9 @@ def test_planning_writes_agentic_workflow_summary_artifacts():
     assert "agentic_workflow_execution_plan.json" in source
     assert "agentic_workflow_execution_plan.md" in source
     assert "write_agentic_workflow_execution_plan_artifacts" in source
+    assert "agentic_workflow_dry_run_result.json" in source
+    assert "agentic_workflow_dry_run_report.md" in source
+    assert "write_agentic_workflow_dry_run_artifacts" in source
     assert "agentic_workflow_verification.json" in source
     assert "write_agentic_workflow_verification_artifact" in source
     assert "APPLYLENS_WORKFLOW_VERIFIER_STRICT" in source

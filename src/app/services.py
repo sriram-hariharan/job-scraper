@@ -239,6 +239,8 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "agentic_workflow_execution_plan.md",
     "agentic_workflow_dry_run_result.json",
     "agentic_workflow_dry_run_report.md",
+    "read_only_adapter_preflight.json",
+    "read_only_adapter_preflight.md",
     "agentic_workflow_verification.json",
     "rag_evaluation_summary.json",
     "rag_evaluation_report.md",
@@ -876,6 +878,7 @@ def profile_pipeline_run_detail_payload(
         "agentic_workflow_manifest": _agentic_workflow_manifest_from_artifacts(artifacts),
         "agentic_workflow_execution_plan": _agentic_workflow_execution_plan_from_artifacts(artifacts),
         "agentic_workflow_dry_run": _agentic_workflow_dry_run_from_artifacts(artifacts),
+        "read_only_adapter_preflight": _read_only_adapter_preflight_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "rag_evaluation": _rag_evaluation_from_artifacts(
             artifacts,
@@ -925,6 +928,7 @@ def profile_pipeline_run_agentic_review_payload(
         "agentic_workflow_manifest": _agentic_workflow_manifest_from_artifacts(artifacts),
         "agentic_workflow_execution_plan": _agentic_workflow_execution_plan_from_artifacts(artifacts),
         "agentic_workflow_dry_run": _agentic_workflow_dry_run_from_artifacts(artifacts),
+        "read_only_adapter_preflight": _read_only_adapter_preflight_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "rag_evaluation": _rag_evaluation_from_artifacts(
             artifacts,
@@ -3675,6 +3679,8 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "agentic_workflow_execution_plan.md": "agentic_workflow_execution_plan_md",
         "agentic_workflow_dry_run_result.json": "agentic_workflow_dry_run_result_json",
         "agentic_workflow_dry_run_report.md": "agentic_workflow_dry_run_report_md",
+        "read_only_adapter_preflight.json": "read_only_adapter_preflight_json",
+        "read_only_adapter_preflight.md": "read_only_adapter_preflight_md",
         "agentic_workflow_verification.json": "agentic_workflow_verification_json",
         "rag_evaluation_summary.json": "rag_evaluation_summary_json",
         "rag_evaluation_report.md": "rag_evaluation_report_md",
@@ -9971,6 +9977,16 @@ def _agentic_workflow_dry_run_from_artifacts(rows: List[Dict[str, Any]]) -> Dict
     return {
         "available": bool(result_json or report_markdown),
         "result_json": result_json,
+        "report_markdown": report_markdown,
+    }
+
+
+def _read_only_adapter_preflight_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    plan_json = _artifact_json_by_name(rows, "read_only_adapter_preflight.json")
+    report_markdown = _artifact_text_by_name(rows, "read_only_adapter_preflight.md")
+    return {
+        "available": bool(plan_json or report_markdown),
+        "plan_json": plan_json,
         "report_markdown": report_markdown,
     }
 

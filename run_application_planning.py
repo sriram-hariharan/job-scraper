@@ -15,6 +15,7 @@ from src.agents.workflow_verifier import write_agentic_workflow_verification_art
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
 from src.agents.workflow_runner import write_agentic_workflow_dry_run_artifacts
+from src.agents.orchestrator_adapter_harness import write_read_only_adapter_preflight_artifacts
 from src.evaluation.rag_evaluation import write_rag_evaluation_artifacts
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
@@ -482,6 +483,8 @@ def main() -> None:
     agentic_workflow_execution_plan_md = output_dir / "agentic_workflow_execution_plan.md"
     agentic_workflow_dry_run_result_json = output_dir / "agentic_workflow_dry_run_result.json"
     agentic_workflow_dry_run_report_md = output_dir / "agentic_workflow_dry_run_report.md"
+    read_only_adapter_preflight_json = output_dir / "read_only_adapter_preflight.json"
+    read_only_adapter_preflight_md = output_dir / "read_only_adapter_preflight.md"
     agentic_workflow_verification_json = output_dir / "agentic_workflow_verification.json"
     rag_evaluation_summary_json = output_dir / "rag_evaluation_summary.json"
     rag_evaluation_report_md = output_dir / "rag_evaluation_report.md"
@@ -937,6 +940,16 @@ def main() -> None:
         print(f"Agentic workflow dry-run artifact skipped: {exc}")
 
     try:
+        read_only_adapter_preflight_artifact = write_read_only_adapter_preflight_artifacts(
+            output_dir=output_dir,
+            plan_json_path=read_only_adapter_preflight_json,
+            report_md_path=read_only_adapter_preflight_md,
+        )
+    except Exception as exc:
+        read_only_adapter_preflight_artifact = {}
+        print(f"Read-only adapter preflight artifact skipped: {exc}")
+
+    try:
         rag_evaluation_artifact = write_rag_evaluation_artifacts(
             output_dir=output_dir,
             rows=[],
@@ -1020,6 +1033,8 @@ def main() -> None:
         print(f"Agentic plan     : {workflow_execution_plan_artifact['json_path']}")
     if workflow_dry_run_artifact:
         print(f"Agentic dry-run  : {workflow_dry_run_artifact['json_path']}")
+    if read_only_adapter_preflight_artifact:
+        print(f"Adapter preflight: {read_only_adapter_preflight_artifact['json_path']}")
     if rag_evaluation_artifact:
         print(f"RAG evaluation   : {rag_evaluation_artifact['summary_json']}")
     if workflow_verification_artifact:

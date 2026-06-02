@@ -80,3 +80,119 @@ def test_agent_feedback_api_returns_validation_error(monkeypatch):
 
     assert exc.value.status_code == 400
     assert "Unsupported agent feedback event_type" in exc.value.detail
+
+
+def test_agent_feedback_summary_api_uses_authenticated_owner_and_filters(monkeypatch):
+    captured = {}
+
+    def fake_agent_feedback_summary_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "owner_user_id": kwargs["owner_user_id"],
+            "summary": {
+                "total_events": 0,
+                "event_type_counts": {},
+                "target_type_counts": {},
+                "latest_event_at": "",
+            },
+            "events": [],
+        }
+
+    monkeypatch.setattr(services, "agent_feedback_summary_payload", fake_agent_feedback_summary_payload)
+
+    payload = api.agent_feedback_summary(
+        _request("user_1"),
+        pipeline_run_id="run_1",
+        context_id="ctx_1",
+        target_type="pipeline_run_job",
+        event_type="job_saved",
+        limit=25,
+    )
+
+    assert payload["owner_user_id"] == "user_1"
+    assert captured == {
+        "owner_user_id": "user_1",
+        "pipeline_run_id": "run_1",
+        "context_id": "ctx_1",
+        "target_type": "pipeline_run_job",
+        "event_type": "job_saved",
+        "limit": 25,
+    }
+
+
+def test_agent_feedback_list_api_uses_authenticated_owner_and_filters(monkeypatch):
+    captured = {}
+
+    def fake_list_agent_feedback_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "owner_user_id": kwargs["owner_user_id"],
+            "events": [],
+            "count": 0,
+        }
+
+    monkeypatch.setattr(services, "list_agent_feedback_payload", fake_list_agent_feedback_payload)
+
+    payload = api.list_agent_feedback(
+        _request("user_1"),
+        pipeline_run_id="run_1",
+        context_id="ctx_1",
+        target_type="operator_review_lane",
+        event_type="operator_lane_overridden",
+        limit=10,
+    )
+
+    assert payload["owner_user_id"] == "user_1"
+    assert captured == {
+        "owner_user_id": "user_1",
+        "pipeline_run_id": "run_1",
+        "context_id": "ctx_1",
+        "target_type": "operator_review_lane",
+        "event_type": "operator_lane_overridden",
+        "limit": 10,
+    }
+
+
+def test_agent_feedback_read_apis_require_auth():
+    with pytest.raises(HTTPException) as summary_exc:
+        api.agent_feedback_summary(_request(""))
+    with pytest.raises(HTTPException) as list_exc:
+        api.list_agent_feedback(_request(""))
+
+    assert summary_exc.value.status_code == 401
+    assert list_exc.value.status_code == 401
+
+
+def test_agent_feedback_service_bounds_read_limits(monkeypatch):
+    captured = {}
+
+    def fake_summarize_agent_feedback_events(**kwargs):
+        captured["summary"] = dict(kwargs)
+        return {
+            "ok": True,
+            "owner_user_id": kwargs["owner_user_id"],
+            "summary": {
+                "total_events": 0,
+                "event_type_counts": {},
+                "target_type_counts": {},
+                "latest_event_at": "",
+            },
+            "events": [],
+        }
+
+    def fake_list_agent_feedback_events(**kwargs):
+        captured["list"] = dict(kwargs)
+        return {"ok": True, "events": [], "count": 0}
+
+    monkeypatch.setattr(services, "summarize_agent_feedback_events", fake_summarize_agent_feedback_events)
+    monkeypatch.setattr(services, "list_agent_feedback_events", fake_list_agent_feedback_events)
+
+    summary_payload = services.agent_feedback_summary_payload(owner_user_id="user_1", limit=999999)
+    list_payload = services.list_agent_feedback_payload(owner_user_id="user_1", limit=999999)
+
+    assert summary_payload["limit"] == services.AGENT_FEEDBACK_SUMMARY_MAX_LIMIT
+    assert list_payload["limit"] == services.AGENT_FEEDBACK_LIST_MAX_LIMIT
+    assert captured["summary"]["limit"] == services.AGENT_FEEDBACK_SUMMARY_MAX_LIMIT
+    assert captured["list"]["limit"] == services.AGENT_FEEDBACK_LIST_MAX_LIMIT

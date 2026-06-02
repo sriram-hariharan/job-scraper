@@ -219,6 +219,50 @@ def record_agent_feedback(request: AgentFeedbackRequest, http_request: Request):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/agent-feedback/summary")
+def agent_feedback_summary(
+    http_request: Request,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+):
+    try:
+        return services.agent_feedback_summary_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            target_type=target_type,
+            event_type=event_type,
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/agent-feedback")
+def list_agent_feedback(
+    http_request: Request,
+    pipeline_run_id: str = "",
+    context_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 200,
+):
+    try:
+        return services.list_agent_feedback_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+            context_id=context_id,
+            target_type=target_type,
+            event_type=event_type,
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/user/workspace-state")
 def user_workspace_state(http_request: Request):
     return services.user_workspace_state_payload(

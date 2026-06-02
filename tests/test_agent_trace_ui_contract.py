@@ -36,3 +36,31 @@ def test_profile_agent_trace_fetch_does_not_pass_owner_user_id():
 
     assert "owner_user_id" not in trace_fetch_snippet
     assert "runId" in trace_fetch_snippet
+
+
+def test_agentic_review_human_feedback_diagnostics_contract():
+    review_js = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    api_source = Path("src/app/api.py").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Human Feedback" in review_js
+    assert "renderAgenticReviewFeedbackSection" in review_js
+    assert "total_events" in review_js
+    assert "event_type_counts" in review_js
+    assert "target_type_counts" in review_js
+    assert "latest_event_at" in review_js
+    assert "No feedback events recorded for this run yet." in review_js
+    assert "/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}&limit=50" in review_js
+
+    feedback_fetch_start = review_js.index("/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}")
+    feedback_fetch_snippet = review_js[feedback_fetch_start : feedback_fetch_start + 220]
+    assert "owner_user_id" not in feedback_fetch_snippet
+
+    assert ".agentic-feedback-card" in review_css
+    assert ".agentic-feedback-event" in review_css
+    assert ".agentic-feedback-metrics" in review_css
+    assert '@app.get("/api/agent-feedback/summary")' in api_source
+    assert '@app.get("/api/agent-feedback")' in api_source
+    assert "agent_feedback_summary_payload" in services_source
+    assert "list_agent_feedback_payload" in services_source

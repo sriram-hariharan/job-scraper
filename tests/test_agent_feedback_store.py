@@ -102,6 +102,25 @@ def test_listing_is_scoped_by_owner_user_id_print_only():
     assert "owner_user_id = 'user_2'" not in payload["sql"]
 
 
+def test_listing_supports_feedback_filters_and_bounds_limit_print_only():
+    payload = list_agent_feedback_events(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        context_id="ctx_1",
+        target_type="pipeline_run_job",
+        event_type="job_saved",
+        limit=5000,
+        print_only=True,
+        ensure_schema=False,
+    )
+
+    assert "pipeline_run_id = 'run_1'" in payload["sql"]
+    assert "context_id = 'ctx_1'" in payload["sql"]
+    assert "target_type = 'pipeline_run_job'" in payload["sql"]
+    assert "event_type = 'job_saved'" in payload["sql"]
+    assert "LIMIT 1000" in payload["sql"]
+
+
 def test_summary_counts_event_types_correctly(monkeypatch):
     def fake_list_agent_feedback_events(**kwargs):
         return {

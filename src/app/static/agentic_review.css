@@ -1,0 +1,828 @@
+.agentic-review-page {
+  box-sizing: border-box;
+  width: min(100%, 1440px);
+  max-width: 100%;
+  min-width: 0;
+  margin-inline: auto;
+  display: grid;
+  gap: 18px;
+  overflow-x: clip;
+}
+
+.agentic-review-page *,
+.agentic-review-page *::before,
+.agentic-review-page *::after {
+  box-sizing: border-box;
+}
+
+.agentic-review-page > *,
+.agentic-review-status-content > *,
+.agentic-workflow-header > *,
+.agentic-review-tab-panel,
+.agentic-review-board-shell,
+.agentic-review-section,
+.agent-trace-run,
+.agent-trace-step {
+  min-width: 0;
+}
+
+.agentic-review-header {
+  align-items: center;
+  gap: 18px;
+}
+
+.agentic-review-header h1 {
+  margin: 0;
+  color: var(--app-text);
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.agentic-review-status-card,
+.agentic-workflow-summary-card,
+.agentic-workflow-verification-card,
+.agentic-review-section,
+.agentic-review-diagnostics-card,
+.agent-trace-panel,
+.agentic-review-board-shell {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent),
+    var(--app-surface);
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+}
+
+.agentic-review-board-shell {
+  padding: 18px;
+}
+
+.agentic-review-status-card {
+  border-color: rgba(99, 102, 241, 0.28);
+  border-left: 5px solid rgba(99, 102, 241, 0.86);
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(124, 58, 237, 0.08) 52%, rgba(16, 185, 129, 0.06)),
+    var(--app-surface);
+}
+
+.agentic-review-status-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, auto);
+  gap: 18px;
+  align-items: start;
+}
+
+.agentic-review-status-content h2 {
+  margin: 2px 0 0;
+  color: var(--app-text);
+  font-size: 26px;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-status-content p {
+  margin: 8px 0 0;
+  color: var(--app-muted);
+  font-weight: 780;
+  line-height: 1.5;
+}
+
+.agentic-review-kicker {
+  color: #a5b4fc;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.agentic-review-run-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.agentic-review-health-strip,
+.agentic-workflow-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 148px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.agentic-review-page .agentic-review-tabs {
+  display: flex;
+  gap: 0;
+  max-width: 100%;
+  min-width: 0;
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.24);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.agentic-review-page .agentic-review-tab,
+.agentic-review-page .agentic-review-segment {
+  --agentic-tab-color: #6366f1;
+  appearance: none;
+  flex: 0 0 auto;
+  position: relative;
+  min-height: 46px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--app-muted);
+  font: inherit;
+  font-weight: 820;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: none;
+  outline-offset: 6px;
+  transition: color 0.16s ease;
+}
+
+.agentic-review-page .agentic-review-tab::after,
+.agentic-review-page .agentic-review-segment::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--agentic-tab-color);
+  content: "";
+  opacity: 0;
+  transform: scaleX(0.55);
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.agentic-review-page .agentic-review-tab[data-agentic-tab-target="agenticReviewOverviewTab"] {
+  --agentic-tab-color: #2563eb;
+}
+
+.agentic-review-page .agentic-review-tab[data-agentic-tab-target="agenticReviewAdvisoryTab"] {
+  --agentic-tab-color: #7c3aed;
+}
+
+.agentic-review-page .agentic-review-tab[data-agentic-tab-target="agenticReviewTraceTab"] {
+  --agentic-tab-color: #0891b2;
+}
+
+.agentic-review-page .agentic-review-tab[data-agentic-tab-target="agenticReviewDiagnosticsTab"] {
+  --agentic-tab-color: #d97706;
+}
+
+.agentic-review-page .agentic-review-segment[data-agentic-advisory-target="agenticReviewPriorityPanel"] {
+  --agentic-tab-color: #2563eb;
+}
+
+.agentic-review-page .agentic-review-segment[data-agentic-advisory-target="agenticReviewTailoringPanel"] {
+  --agentic-tab-color: #d97706;
+}
+
+.agentic-review-page .agentic-review-segment[data-agentic-advisory-target="agenticReviewOperatorPanel"] {
+  --agentic-tab-color: #059669;
+}
+
+.agentic-review-page .agentic-review-tab:hover,
+.agentic-review-page .agentic-review-segment:hover {
+  border: 0;
+  background: transparent;
+  transform: none;
+  color: var(--app-text);
+}
+
+.agentic-review-page .agentic-review-tab.is-active,
+.agentic-review-page .agentic-review-segment.is-active {
+  border: 0;
+  background: transparent;
+  color: var(--agentic-tab-color);
+  box-shadow: none;
+}
+
+.agentic-review-page .agentic-review-tab.is-active::after,
+.agentic-review-page .agentic-review-segment.is-active::after {
+  opacity: 1;
+  transform: scaleX(1);
+}
+
+.agentic-review-tab-panels,
+.agentic-review-tab-panel {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 18px;
+}
+
+.agentic-review-tab-panels {
+  margin-top: 4px;
+}
+
+.agentic-review-tab-panel.hidden,
+.agentic-review-section.hidden {
+  display: none;
+}
+
+.agentic-review-page .agentic-review-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  overflow-x: auto;
+  border: 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 0;
+  background: transparent;
+}
+
+.agentic-review-page .agentic-review-segmented + .agentic-review-section {
+  margin-top: 4px;
+}
+
+.agentic-workflow-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.agentic-workflow-header h2,
+.agentic-workflow-header h4,
+.agent-trace-panel h2,
+.agent-trace-panel h4 {
+  margin: 0;
+  color: var(--app-text);
+}
+
+.agentic-workflow-header p {
+  margin: 5px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 730;
+  line-height: 1.45;
+}
+
+.agentic-workflow-badge,
+.agentic-workflow-verification-status,
+.agentic-review-pill {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 28px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1;
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+
+.agentic-workflow-badge,
+.agentic-review-pill.is-info,
+.agentic-review-pill.is-watch {
+  border: 1px solid rgba(99, 102, 241, 0.34);
+  background: rgba(99, 102, 241, 0.14);
+  color: #c7d2fe;
+}
+
+.agentic-review-pill.is-watch {
+  border-color: rgba(14, 165, 233, 0.34);
+  background: rgba(14, 165, 233, 0.14);
+  color: #bae6fd;
+}
+
+.agentic-review-pill.is-ready,
+.agentic-workflow-verification-status--passed,
+.agentic-workflow-verification-status--succeeded {
+  border: 1px solid rgba(34, 197, 94, 0.36);
+  background: rgba(34, 197, 94, 0.14);
+  color: #bbf7d0;
+}
+
+.agentic-review-pill.is-review,
+.agentic-workflow-verification-status--warning,
+.agentic-workflow-verification-status--review {
+  border: 1px solid rgba(245, 158, 11, 0.36);
+  background: rgba(245, 158, 11, 0.14);
+  color: #fde68a;
+}
+
+.agentic-review-pill.is-blocked,
+.agentic-workflow-verification-status--failed,
+.agentic-workflow-verification-status--blocked {
+  border: 1px solid rgba(244, 63, 94, 0.4);
+  background: rgba(244, 63, 94, 0.15);
+  color: #fecdd3;
+}
+
+.agentic-workflow-verification-status--unknown {
+  border: 1px solid rgba(148, 163, 184, 0.3);
+  background: rgba(148, 163, 184, 0.12);
+  color: #cbd5e1;
+}
+
+.agentic-workflow-metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-height: 78px;
+  padding: 12px 14px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 4px solid rgba(99, 102, 241, 0.74);
+  border-radius: 13px;
+  background:
+    linear-gradient(145deg, rgba(37, 99, 235, 0.1), rgba(15, 23, 42, 0.02)),
+    var(--app-inset);
+}
+
+.agentic-workflow-metric span {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.agentic-workflow-metric strong {
+  color: var(--app-text);
+  font-size: 21px;
+  font-weight: 950;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+  min-width: 0;
+}
+
+.agentic-workflow-counts,
+.agentic-workflow-missing,
+.agentic-review-section-counts {
+  display: grid;
+  gap: 9px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.agentic-workflow-counts div,
+.agentic-workflow-missing,
+.agentic-review-section-counts {
+  display: grid;
+  grid-template-columns: minmax(120px, 170px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 4px solid rgba(14, 165, 233, 0.76);
+  border-radius: 12px;
+  background: var(--app-inset);
+}
+
+.agentic-workflow-counts strong,
+.agentic-workflow-missing strong,
+.agentic-review-section-counts strong {
+  color: var(--app-muted);
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.agentic-review-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.agentic-review-chip-list span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--app-text);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.agentic-review-muted {
+  color: var(--app-muted);
+  font-weight: 760;
+}
+
+.agentic-workflow-markdown,
+.agentic-workflow-verification-details,
+.agent-trace-json-detail {
+  max-width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(148, 163, 184, 0.28);
+  border-radius: 12px;
+  background: #f8fafc;
+  overflow: hidden;
+}
+
+.agentic-workflow-markdown summary,
+.agentic-workflow-verification-details summary,
+.agent-trace-json-detail summary {
+  cursor: pointer;
+  padding: 10px 12px;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 920;
+}
+
+.agentic-workflow-markdown pre,
+.agent-trace-json-detail pre {
+  max-height: 280px;
+  margin: 0;
+  padding: 14px;
+  overflow: auto;
+  border-top: 1px solid rgba(148, 163, 184, 0.18);
+  background: #f8fafc;
+  color: #0f172a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.agentic-workflow-verification-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.agentic-workflow-verification-sections > div {
+  min-width: 0;
+  min-height: 96px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 4px solid rgba(245, 158, 11, 0.72);
+  border-radius: 12px;
+  background: var(--app-inset);
+}
+
+.agentic-workflow-verification-sections strong,
+.agentic-workflow-verification-check strong {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.agentic-workflow-verification-list {
+  margin: 9px 0 0;
+  padding-left: 18px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.agentic-workflow-verification-empty {
+  display: block;
+  margin-top: 9px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.agentic-workflow-verification-checks {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+}
+
+.agentic-workflow-verification-check {
+  display: grid;
+  grid-template-columns: minmax(130px, 220px) minmax(0, 1fr);
+  gap: 10px;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.agentic-review-table-wrap {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  max-height: min(62vh, 620px);
+  overflow: auto;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: var(--app-inset);
+}
+
+.agentic-review-table {
+  width: 100%;
+  min-width: 780px;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 12px;
+}
+
+.agentic-review-table th,
+.agentic-review-table td {
+  max-width: 280px;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.13);
+  color: var(--app-text);
+  text-align: left;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: rgba(30, 41, 59, 0.98);
+  color: #cbd5e1;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.agentic-review-table tbody tr {
+  transition: background 0.14s ease;
+}
+
+.agentic-review-table tr:hover td {
+  background: rgba(99, 102, 241, 0.08);
+}
+
+.agentic-review-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.agent-trace-counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.agent-trace-counts .pipeline-run-detail-row {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 4px solid rgba(124, 58, 237, 0.7);
+  border-radius: 12px;
+  background: var(--app-inset);
+}
+
+.agent-trace-counts .pipeline-run-detail-label {
+  color: var(--app-muted);
+  font-size: 11px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.agent-trace-run-list,
+.agent-trace-step-list {
+  display: grid;
+  gap: 12px;
+}
+
+.agent-trace-run,
+.agent-trace-step {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-left: 4px solid rgba(124, 58, 237, 0.72);
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.14);
+}
+
+.agent-trace-step {
+  background: var(--app-inset);
+}
+
+.agent-trace-run-header,
+.agent-trace-step-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.agent-trace-run-id,
+.agent-trace-step-name {
+  color: var(--app-text);
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-step-meta,
+.agent-trace-step-times,
+.agent-trace-step-summary {
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 760;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-step-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.agent-trace-step-summary span {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  background: rgba(148, 163, 184, 0.1);
+}
+
+.agent-trace-step-status {
+  min-width: 78px;
+  flex: 0 0 auto;
+}
+
+.agent-trace-error {
+  padding: 10px 12px;
+  border: 1px solid rgba(244, 63, 94, 0.36);
+  border-radius: 12px;
+  background: rgba(244, 63, 94, 0.14);
+  color: #fecdd3;
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.agent-trace-json-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-tabs {
+  background: transparent;
+  box-shadow: none;
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-tab,
+html[data-theme="light"] .agentic-review-page .agentic-review-segment {
+  border: 0;
+  background: transparent;
+  color: #475569;
+  box-shadow: none;
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-tab:hover,
+html[data-theme="light"] .agentic-review-page .agentic-review-segment:hover {
+  border: 0;
+  background: transparent;
+  color: #1e293b;
+  box-shadow: none;
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-tab.is-active,
+html[data-theme="light"] .agentic-review-page .agentic-review-segment.is-active {
+  border: 0;
+  background: transparent;
+  color: var(--agentic-tab-color);
+  box-shadow: none;
+}
+
+html[data-theme="light"] .agentic-review-status-card,
+html[data-theme="light"] .agentic-workflow-summary-card,
+html[data-theme="light"] .agentic-workflow-verification-card,
+html[data-theme="light"] .agentic-review-section,
+html[data-theme="light"] .agentic-review-diagnostics-card,
+html[data-theme="light"] .agent-trace-panel,
+html[data-theme="light"] .agentic-review-board-shell {
+  border-color: #d8e2f0;
+  background: #ffffff;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.07);
+}
+
+html[data-theme="light"] .agentic-workflow-badge,
+html[data-theme="light"] .agentic-review-pill.is-info {
+  color: #4338ca;
+}
+
+html[data-theme="light"] .agentic-review-pill.is-watch {
+  color: #0369a1;
+}
+
+html[data-theme="light"] .agentic-review-pill.is-ready,
+html[data-theme="light"] .agentic-workflow-verification-status--passed,
+html[data-theme="light"] .agentic-workflow-verification-status--succeeded {
+  color: #166534;
+}
+
+html[data-theme="light"] .agentic-review-pill.is-review,
+html[data-theme="light"] .agentic-workflow-verification-status--warning,
+html[data-theme="light"] .agentic-workflow-verification-status--review {
+  color: #92400e;
+}
+
+html[data-theme="light"] .agentic-review-pill.is-blocked,
+html[data-theme="light"] .agentic-workflow-verification-status--failed,
+html[data-theme="light"] .agentic-workflow-verification-status--blocked {
+  color: #991b1b;
+}
+
+html[data-theme="light"] .agentic-workflow-verification-status--unknown {
+  color: #475569;
+}
+
+html[data-theme="light"] .agentic-workflow-markdown,
+html[data-theme="light"] .agentic-workflow-verification-details,
+html[data-theme="light"] .agent-trace-json-detail,
+html[data-theme="light"] .agentic-review-table-wrap,
+html[data-theme="light"] .agent-trace-run,
+html[data-theme="light"] .agent-trace-step,
+html[data-theme="light"] .agent-trace-counts .pipeline-run-detail-row {
+  border-color: #d8e2f0;
+  background: #f8fafc;
+}
+
+html[data-theme="light"] .agentic-review-page .agentic-review-segmented {
+  border-color: #d8e2f0;
+  background: transparent;
+}
+
+html[data-theme="light"] .agentic-review-table th {
+  background: #eef2ff;
+  color: #475569;
+}
+
+html[data-theme="light"] .agentic-review-table tr:hover td {
+  background: #f8fafc;
+}
+
+html[data-theme="light"] .agentic-workflow-markdown pre,
+html[data-theme="light"] .agent-trace-json-detail pre {
+  background: #f8fafc;
+  color: #0f172a;
+}
+
+html[data-theme="light"] .agent-trace-error {
+  border-color: #fca5a5;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+@media (max-width: 900px) {
+  .agentic-review-status-content,
+  .agentic-workflow-header,
+  .agentic-workflow-verification-check {
+    grid-template-columns: 1fr;
+  }
+
+  .agentic-review-status-content,
+  .agentic-workflow-header,
+  .agent-trace-run-header,
+  .agent-trace-step-header {
+    display: grid;
+  }
+
+  .agentic-review-run-pills {
+    justify-content: flex-start;
+  }
+
+  .agent-trace-json-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .agentic-review-header,
+  .agentic-review-board-shell {
+    padding: 18px;
+  }
+
+  .agentic-review-tab,
+  .agentic-review-segment {
+    min-height: 38px;
+    padding: 0 12px;
+  }
+
+  .agentic-workflow-counts div,
+  .agentic-workflow-missing,
+  .agentic-review-section-counts {
+    grid-template-columns: 1fr;
+  }
+}

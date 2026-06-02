@@ -1180,6 +1180,17 @@ def profile_pipeline_run_agent_trace(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/profile/pipeline-runs/{run_id}/agentic-review-data")
+def profile_pipeline_run_agentic_review_data(run_id: str, http_request: Request):
+    try:
+        return services.profile_pipeline_run_agentic_review_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            run_id=run_id,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.post("/profile/pipeline-runs/{run_id}/rerun")
 def profile_pipeline_run_rerun(run_id: str, http_request: Request):
     try:

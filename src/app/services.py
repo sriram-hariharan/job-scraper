@@ -801,21 +801,10 @@ def profile_pipeline_runs_payload(
     }
 
 
-def profile_pipeline_run_detail_payload(
-    *,
-    owner_user_id: str = "",
-    run_id: str = "",
-) -> Dict[str, Any]:
-    owner = _clean_text(owner_user_id)
-    safe_run_id = _clean_text(run_id)
-    if not owner:
-        raise ValueError("Authenticated user is required.")
-    if not safe_run_id:
-        raise ValueError("Pipeline run id is required.")
-
+def _user_pipeline_run_and_artifacts(owner: str, run_id: str) -> tuple[Dict[str, Any], List[Dict[str, Any]]]:
     payload = get_user_pipeline_run_postgres_payload(
         owner_user_id=owner,
-        run_id=safe_run_id,
+        run_id=run_id,
         database_url="",
         database_url_env="DATABASE_URL",
         psql_bin="psql",
@@ -829,7 +818,7 @@ def profile_pipeline_run_detail_payload(
     try:
         artifacts_payload = get_user_pipeline_artifacts_postgres_payload(
             owner_user_id=owner,
-            run_id=safe_run_id,
+            run_id=run_id,
             limit=100000,
             database_url="",
             database_url_env="DATABASE_URL",
@@ -840,6 +829,22 @@ def profile_pipeline_run_detail_payload(
         artifacts = list(artifacts_payload.get("rows", []) or [])
     except Exception:
         artifacts = []
+    return run, artifacts
+
+
+def profile_pipeline_run_detail_payload(
+    *,
+    owner_user_id: str = "",
+    run_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    run, artifacts = _user_pipeline_run_and_artifacts(owner, safe_run_id)
     return {
         "ok": True,
         "run": _pipeline_run_public_row(run),
@@ -847,6 +852,41 @@ def profile_pipeline_run_detail_payload(
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
         "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
+    }
+
+
+def profile_pipeline_run_agentic_review_payload(
+    *,
+    owner_user_id: str = "",
+    run_id: str = "",
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    safe_run_id = _clean_text(run_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    if not safe_run_id:
+        raise ValueError("Pipeline run id is required.")
+
+    run, artifacts = _user_pipeline_run_and_artifacts(owner, safe_run_id)
+    priority_text = _artifact_text_by_name(artifacts, "job_prioritization_recommendations.csv")
+    tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
+    operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
+
+    return {
+        "ok": True,
+        "run": _pipeline_run_public_row(run),
+        "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
+        "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
+        "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
+        "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
+        "job_prioritization_rows": _csv_rows_from_text(priority_text),
+        "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
+        "operator_review_rows": _csv_rows_from_text(operator_review_text),
+        "artifact_names": sorted(
+            _clean_text(row.get("artifact_name"))
+            for row in artifacts
+            if _clean_text(row.get("artifact_name"))
+        ),
     }
 
 

@@ -7981,7 +7981,7 @@ h2 {
   font-weight: 850;
 }
 
-button,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
 .ghost-btn,
 .primary-btn,
 .danger-btn,
@@ -8000,13 +8000,13 @@ button,
     opacity var(--motion-fast) var(--ease-standard);
 }
 
-button:not(:disabled):active,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(:disabled):active,
 .ghost-btn:not(:disabled):active,
 .primary-btn:not(:disabled):active {
   transform: translateY(1px);
 }
 
-button:disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):disabled,
 .ghost-btn:disabled,
 .primary-btn:disabled,
 .danger-btn:disabled {
@@ -9121,7 +9121,7 @@ body.app-shell-collapsed .app-shell ~ .page {
   min-width: 0;
 }
 
-button,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
 .ghost-btn,
 .primary-btn,
 .danger-btn,
@@ -10187,7 +10187,7 @@ html[data-theme="dark"] .notification-btn-icon {
 .scan-workspace-rescan-btn,
 .scan-workspace-action-btn,
 .scan-workspace-sample-btn,
-button:not(.primary-btn):not(.app-shell-primary-link) {
+button:not(.primary-btn):not(.app-shell-primary-link):not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn) {
   border: 1px solid var(--app-border) !important;
   background: var(--app-panel) !important;
   color: var(--app-text) !important;
@@ -10208,7 +10208,7 @@ button:not(.primary-btn):not(.app-shell-primary-link) {
   color: var(--app-text) !important;
 }
 
-button:disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):disabled,
 .ghost-btn:disabled,
 .primary-btn:disabled,
 .danger-btn:disabled {
@@ -11157,7 +11157,7 @@ html[data-bs-theme="light"] {
 
 /* ui_redesign_v5 interaction and accessibility finish. */
 a:focus-visible,
-button:focus-visible,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
@@ -11171,7 +11171,7 @@ textarea:focus-visible,
   box-shadow: 0 0 0 3px var(--app-focus) !important;
 }
 
-button,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
 a,
 input,
 select,
@@ -11191,7 +11191,7 @@ textarea,
     transform var(--motion-fast, 120ms) var(--ease-standard, ease);
 }
 
-button:active:not(:disabled),
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):active:not(:disabled),
 a:active,
 .resume-choice-card:active:not(:disabled),
 .app-shell-nav-link:active {
@@ -12847,7 +12847,7 @@ html[data-theme="light"] .notification-dropdown {
     var(--app-shadow-md) !important;
 }
 
-button,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
 .btn,
 .ghost-btn,
 .primary-btn,
@@ -12873,7 +12873,7 @@ button,
     opacity var(--app-fast) var(--app-ease);
 }
 
-button:not(:disabled):hover,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(:disabled):hover,
 .btn:not(:disabled):hover,
 .ghost-btn:not(:disabled):hover,
 .application-pagination-btn:not(:disabled):hover,
@@ -12884,7 +12884,7 @@ button:not(:disabled):hover,
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.16);
 }
 
-button:not(:disabled):active,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):not(:disabled):active,
 .btn:not(:disabled):active,
 .ghost-btn:not(:disabled):active,
 .application-pagination-btn:not(:disabled):active,
@@ -12894,7 +12894,7 @@ button:not(:disabled):active,
   transform: translateY(0);
 }
 
-button,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn),
 .primary-btn,
 .app-shell-primary-link {
   background: linear-gradient(135deg, var(--app-primary) 0%, var(--app-violet) 100%) !important;
@@ -12911,7 +12911,7 @@ button,
   color: var(--app-text) !important;
 }
 
-button:disabled,
+button:not(.agentic-review-tab):not(.agentic-review-segment):not(.profile-tab-btn):not(.pipeline-run-icon-btn):disabled,
 .btn:disabled,
 .ghost-btn:disabled,
 .application-pagination-btn:disabled,

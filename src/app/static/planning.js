@@ -12414,8 +12414,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     });
 
     try {
-      await loadAgenticWorkflowSummaryPanel();
-      await loadAgenticWorkflowVerificationPanel();
       await loadPlanningTable();
     } catch (err) {
       showAppError("Failed to initialize planning dashboard", err);

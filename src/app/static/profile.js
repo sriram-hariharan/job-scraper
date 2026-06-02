@@ -639,7 +639,27 @@ function renderPipelineRuns(runs) {
         <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunCountsSummary(run.counts))}</td>
         <td class="pipeline-run-compact-cell">${escapeHtml(pipelineRunSettingsSummary(run.config))}</td>
         <td>
-          <button type="button" class="ghost-btn btn-sm pipeline-run-action-btn pipeline-run-view-btn" data-pipeline-run-view="${runId}">View</button>
+          <div class="pipeline-run-actions-cell" aria-label="Pipeline run actions">
+            <button
+              type="button"
+              class="pipeline-run-icon-btn pipeline-run-view-btn"
+              data-pipeline-run-view="${runId}"
+              data-tooltip="View"
+              aria-label="View"
+              title="View"
+            >
+              <span class="pipeline-run-action-icon pipeline-run-action-icon--view" aria-hidden="true"></span>
+            </button>
+            <a
+              class="pipeline-run-icon-btn pipeline-run-agentic-review-btn"
+              href="/profile/pipeline-runs/${encodeURIComponent(run.run_id || "")}/agentic-review"
+              data-tooltip="Agentic review"
+              aria-label="Agentic review"
+              title="Agentic review"
+            >
+              <span class="pipeline-run-action-icon pipeline-run-action-icon--agentic" aria-hidden="true"></span>
+            </a>
+          </div>
         </td>
         <td>
           <button type="button" class="pipeline-run-action-btn pipeline-run-rerun-btn" data-pipeline-run-rerun="${runId}">Re-run</button>
@@ -793,6 +813,7 @@ function renderAgentTraceStep(step) {
   const tone = pipelineRunStatusTone(step?.status || "");
   const modelText = [step?.model_provider, step?.model_name].filter(Boolean).join(" / ");
   const latency = Number(step?.latency_ms || 0);
+  const validationStatus = step?.validation_json?.validation_status || step?.validation_json?.status || "";
   return `
     <article class="agent-trace-step">
       <div class="agent-trace-step-header">
@@ -805,6 +826,11 @@ function renderAgentTraceStep(step) {
           </div>
         </div>
         <span class="pipeline-run-status agent-trace-step-status is-${escapeHtml(tone)}">${escapeHtml(status)}</span>
+      </div>
+      <div class="agent-trace-step-summary">
+        ${modelText ? `<span>${escapeHtml(modelText)}</span>` : ""}
+        ${validationStatus ? `<span>Validation: ${escapeHtml(String(validationStatus).replaceAll("_", " "))}</span>` : ""}
+        ${latency ? `<span>${escapeHtml(`${latency} ms`)}</span>` : ""}
       </div>
       <div class="agent-trace-step-times">
         ${escapeHtml(formatDateTime(step?.started_at || "") || "Start unavailable")}
@@ -1119,23 +1145,14 @@ function renderPipelineRunDetail(data, tracePayload = {}, traceError = "") {
       </div>
     </section>
 
-    ${renderAgenticWorkflowSummaryPanel(data.agentic_workflow_summary)}
-
-    ${renderAgenticWorkflowVerificationPanel(data.agentic_workflow_verification)}
-
-    ${renderAgentTracePanel(tracePayload, traceError)}
   `;
 }
 
 async function openPipelineRunStatsModal(runId) {
   qs("pipelineRunStatsBody").innerHTML = `<div class="pipeline-runs-empty-cell">Loading run details...</div>`;
   qs("pipelineRunStatsModal").classList.remove("hidden");
-  const detailPromise = fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
-  const tracePromise = fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`)
-    .then((payload) => ({ payload, error: "" }))
-    .catch((err) => ({ payload: {}, error: err.message || "Agent trace could not be loaded." }));
-  const [data, trace] = await Promise.all([detailPromise, tracePromise]);
-  renderPipelineRunDetail(data, trace.payload, trace.error);
+  const data = await fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}`);
+  renderPipelineRunDetail(data);
 }
 
 function closePipelineRunStatsModal() {
@@ -1236,6 +1253,50 @@ async function confirmPipelineRunRerun() {
 function isResumeOnboardingMode() {
   const params = new URLSearchParams(window.location.search);
   return params.get("onboarding") === "resume_upload";
+}
+
+function getProfileTabTargetFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const tab = (params.get("tab") || "").trim().toLowerCase();
+  if (tab === "pipeline-runs" || tab === "pipeline_runs" || tab === "runs") {
+    return "profilePipelineRunsSection";
+  }
+  if (tab === "user-access" || tab === "admin-users" || tab === "users") {
+    return "profileAdminUsersSection";
+  }
+  return "resumeSection";
+}
+
+function activateProfileTab(targetId) {
+  const target = qs(targetId);
+  if (!target) return false;
+
+  document.querySelectorAll(".profile-tab-btn").forEach((tab) => {
+    tab.classList.toggle("is-active", tab.dataset.profileTabTarget === targetId);
+  });
+  document.querySelectorAll("[data-profile-tab-panel]").forEach((panel) => {
+    panel.classList.toggle("hidden", panel.id !== targetId);
+  });
+
+  if (targetId === "profilePipelineRunsSection" && !profileState.pipelineRuns.length) {
+    loadPipelineRuns().catch((err) => {
+      setPipelineRunsStatus(err.message, "error");
+    });
+  }
+
+  if (targetId === "profilePreferencesSection" && !profileState.preferencesLoaded) {
+    loadProfilePreferences().catch((err) => {
+      setProfilePreferencesStatus(err.message, "error");
+    });
+  }
+
+  if (targetId === "profileAdminUsersSection" && !profileState.adminUsers.length) {
+    loadAdminUsers().catch((err) => {
+      setAdminUsersStatus(err.message, "error");
+    });
+  }
+
+  return true;
 }
 
 function ensureResumeOnboardingBanner() {
@@ -1881,33 +1942,7 @@ function bindProfileTabs() {
     if (!button) return;
 
     const targetId = button.dataset.profileTabTarget || "";
-    const target = qs(targetId);
-    if (!target) return;
-
-    document.querySelectorAll(".profile-tab-btn").forEach((tab) => {
-      tab.classList.toggle("is-active", tab === button);
-    });
-    document.querySelectorAll("[data-profile-tab-panel]").forEach((panel) => {
-      panel.classList.toggle("hidden", panel.id !== targetId);
-    });
-
-    if (targetId === "profilePipelineRunsSection" && !profileState.pipelineRuns.length) {
-      loadPipelineRuns().catch((err) => {
-        setPipelineRunsStatus(err.message, "error");
-      });
-    }
-
-    if (targetId === "profilePreferencesSection" && !profileState.preferencesLoaded) {
-      loadProfilePreferences().catch((err) => {
-        setProfilePreferencesStatus(err.message, "error");
-      });
-    }
-
-    if (targetId === "profileAdminUsersSection" && !profileState.adminUsers.length) {
-      loadAdminUsers().catch((err) => {
-        setAdminUsersStatus(err.message, "error");
-      });
-    }
+    activateProfileTab(targetId);
   });
 }
 
@@ -2136,6 +2171,7 @@ async function initProfilePage() {
       qs("profilePipelineRunsSection")?.setAttribute("data-profile-tab-panel", "");
       qs("profileAdminUsersSection")?.setAttribute("data-profile-tab-panel", "");
       await loadResumes();
+      activateProfileTab(getProfileTabTargetFromUrl());
       if (qs("profileAdminUsersSection")) {
         await loadAdminUsers();
       }

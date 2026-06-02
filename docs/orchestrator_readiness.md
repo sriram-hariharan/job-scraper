@@ -1,0 +1,123 @@
+# Real Orchestrator Readiness Audit
+
+Phase 19A is a readiness audit only. The implemented workflow remains dry-run only: `src/agents/workflow_runner.py` does not execute agents, does not call LLMs, does not write production decisions, and does not change pipeline behavior.
+
+There is no autonomous execution in this phase. There is no LangGraph integration or agent framework. Human feedback does not tune ranking or scoring. RAG Evaluation does not change retrieval, embeddings, corpus generation, ranking, scoring, queue action, tailoring, or packet behavior.
+
+No production decision mutation is implemented or enabled by this readiness audit.
+
+Phase 19B adds `src/agents/orchestrator_adapters.py` as a static adapter contract metadata module. It is contract-only: it does not execute agents, does not enable autonomous execution, does not wire into live planning, and does not change runtime behavior.
+
+## Current Status
+
+- `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.
+- `src/agents/workflow_planner.py` builds a diagnostic dry-run plan with `execution_enabled=false` and `execution_status=planned`.
+- `src/agents/workflow_runner.py` only emits skipped dry-run step results with `did_execute=false`.
+- `src/agents/workflow_verifier.py` validates artifacts and dry-run payloads when present.
+- `run_application_planning.py` writes manifest, execution-plan, dry-run, verifier, and RAG Evaluation diagnostics through existing artifact hooks.
+- `application_execution_queue.py` writes current advisory artifacts for job prioritization, tailoring decision, and operator review, and may record aggregate trace rows when tracing is explicitly enabled.
+
+Real execution is not enabled because there is no adapter boundary that can safely load inputs, validate context, call each agent in read-only mode, write diagnostics idempotently, and record trace rows without affecting production decisions.
+
+The adapter contract layer now defines the proposed boundary as static metadata and validation helpers. It stores callable entrypoint names as strings only, records allowed future read-only modes, and validates that no adapter mutates production decisions or enables live execution.
+
+## Readiness Matrix
+
+| Agent | Owner module | Callable/helper entry points found | Required input artifacts/env/context | Output artifacts/payloads | Writes artifacts now | Writes traces now | Database access | Env vars | LLM calls | Mutates production decisions | Readiness status | Reason codes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `source_health` | `src.agents.source_health_agent` | `parse_source_health_report_csv()`, `build_source_health_agent_input_payload()`, `build_source_health_agent_output_payload()`, `build_source_health_agent_validation_payload()`, `render_source_health_recommendations()`, `record_source_health_agent_trace()` | `source_health_report.csv`; optional `pipeline_run_id`, `artifact_name`, `artifact_path`; trace requires `JOB_APP_PIPELINE_RUN_ID` or `JOB_STACK_USER_PIPELINE_RUN_ID`, `JOB_STACK_OWNER_USER_ID`, optional `APPLYLENS_AGENT_CONTEXT_ID` | recommendation payload, validation payload, summary payload; registry declares `source_health_report.csv` | No dedicated artifact writer in the agent module | Yes, only when `APPLYLENS_AGENT_TRACE_ENABLED=1` and owner/run context exists | Only through optional trace store | `APPLYLENS_AGENT_TRACE_ENABLED`, `APPLYLENS_AGENT_TRACE_STRICT`, trace context env | No | No | `needs_adapter` | `no_active_runner_adapter`, `needs_input_loader`, `needs_diagnostic_artifact_policy`, `trace_context_required` |
+| `resume_match` | `src.agents.resume_match_agent` | `build_resume_match_agent_input_payload()`, `build_resume_match_agent_output_payload()`, `build_resume_match_agent_validation_payload()`, `build_resume_match_agent_summary_payload()`, `record_resume_match_agent_trace()` | `best_resume_variant_by_job.csv` rows, candidate resume names, source artifact path; optional run/owner context; trace env as above | input/output/validation/summary payloads; registry declares `best_resume_variant_by_job.csv` | No dedicated artifact writer in the agent module | Yes, only when tracing is enabled and owner/run context exists | Only through optional trace store | `APPLYLENS_AGENT_TRACE_ENABLED`, `APPLYLENS_AGENT_TRACE_STRICT`, trace context env | No | No | `needs_adapter` | `no_active_runner_adapter`, `needs_input_loader`, `needs_candidate_resume_context`, `needs_diagnostic_artifact_policy`, `trace_context_required` |
+| `critic` | `src.agents.critic_agent` | `build_critic_agent_input_payload()`, `evaluate_critic_suggestion()`, `build_critic_agent_validation_payload()`, `render_critic_decision()`, `build_critic_agent_summary_payload()`, `record_critic_agent_trace()` | Scan/tailoring suggestion payloads with resume evidence, JD skills, proposed text, source bullet, score delta, and suggestion type; advisory use is feature-flagged in existing flows | critic decision payloads, validations, summary payload | No dedicated artifact writer in the agent module | Yes, only when tracing is enabled and owner/run context exists | Only through optional trace store | `APPLYLENS_CRITIC_ADVISORY_ENABLED`, `APPLYLENS_AGENT_TRACE_ENABLED`, `APPLYLENS_AGENT_TRACE_STRICT`, trace context env | No | No | `needs_adapter` | `no_active_runner_adapter`, `needs_scan_suggestion_loader`, `needs_feature_flag_policy`, `needs_diagnostic_artifact_policy`, `trace_context_required` |
+| `job_prioritization` | `src.agents.job_prioritization_agent` | `build_job_prioritization_agent_input_payload()`, `recommend_job_priority()`, `build_job_prioritization_agent_output_payload()`, `build_job_prioritization_agent_validation_payload()`, `render_job_prioritization_recommendations()`, `render_job_prioritization_recommendation_rows()`, `write_job_prioritization_artifacts()`, `record_job_prioritization_agent_trace()` | `application_execution_queue.csv` rows plus source health fields when present; run/owner/source artifact context for diagnostics; trace env as above | `job_prioritization_recommendations.csv`, `job_prioritization_summary.json`, payloads | Yes, when called by `application_execution_queue.py` with output paths | Yes, only when tracing is enabled and owner/run context exists | Only through optional trace store | `APPLYLENS_AGENT_TRACE_ENABLED`, `APPLYLENS_AGENT_TRACE_STRICT`, trace context env | No | No | `ready_for_read_only_orchestrator` | `no_active_runner_adapter`, `artifact_writer_exists`, `validation_exists`, `trace_optional` |
+| `tailoring_decision` | `src.agents.tailoring_decision_agent` | `build_tailoring_decision_agent_input_payload()`, `recommend_tailoring_decision()`, `build_tailoring_decision_agent_output_payload()`, `build_tailoring_decision_agent_validation_payload()`, `render_tailoring_decisions()`, `render_tailoring_decision_rows()`, `write_tailoring_decision_artifacts()`, `record_tailoring_decision_agent_trace()` | Queue rows overlaid with job prioritization, critic, resume credibility, and packet eligibility fields; run/owner/source artifact context for diagnostics; trace env as above | `tailoring_decision_recommendations.csv`, `tailoring_decision_summary.json`, payloads | Yes, when called by `application_execution_queue.py` with output paths | Yes, only when tracing is enabled and owner/run context exists | Only through optional trace store | `APPLYLENS_AGENT_TRACE_ENABLED`, `APPLYLENS_AGENT_TRACE_STRICT`, trace context env | No | No | `ready_for_read_only_orchestrator` | `no_active_runner_adapter`, `artifact_writer_exists`, `validation_exists`, `trace_optional` |
+| `operator_review` | `src.agents.operator_review_agent` | `build_operator_review_agent_input_payload()`, `recommend_operator_lane()`, `build_operator_review_agent_output_payload()`, `build_operator_review_agent_validation_payload()`, `render_operator_review()`, `render_operator_review_rows()`, `write_operator_review_artifacts()`, `record_operator_review_agent_trace()` | Queue rows overlaid with prioritization, tailoring decision, critic, source health, resume credibility, and packet eligibility fields; run/owner/source artifact context for diagnostics; trace env as above | `operator_review_recommendations.csv`, `operator_review_summary.json`, payloads | Yes, when called by `application_execution_queue.py` with output paths | Yes, only when tracing is enabled and owner/run context exists | Only through optional trace store | `APPLYLENS_AGENT_TRACE_ENABLED`, `APPLYLENS_AGENT_TRACE_STRICT`, trace context env | No | No | `ready_for_read_only_orchestrator` | `no_active_runner_adapter`, `artifact_writer_exists`, `validation_exists`, `trace_optional` |
+
+## Side-Effect Risk
+
+The current agent helpers are deterministic and advisory, but several helpers can write diagnostic artifacts or trace rows when called directly. A future real orchestrator must treat artifact writes and trace writes as explicit diagnostic side effects with owner/run scoping and idempotency rules.
+
+Known side-effect boundaries:
+
+- Artifact writers exist for job prioritization, tailoring decision, and operator review.
+- Trace writers exist for all six agents, but tracing is disabled by default and requires owner/run context.
+- Source health, resume match, and critic currently expose render/build helpers but no dedicated diagnostic artifact writer.
+- None of the six agent modules makes LLM calls.
+- None of the six agent modules mutates production decisions by design or registry contract.
+
+## Trace Readiness
+
+Trace readiness is partial. All six implemented agents have `record_*_agent_trace()` helpers and deterministic LLMOps metadata. The trace path writes aggregate rows through `src/agents/trace.py` and the agent trace store only when `APPLYLENS_AGENT_TRACE_ENABLED=1`.
+
+Blockers before real execution:
+
+- Central orchestrator context must provide authenticated `owner_user_id`, `pipeline_run_id`, and stable `context_id`.
+- Trace failure policy must be explicit for real execution; current default is warning unless strict tracing is enabled.
+- Per-job trace rows are not implemented and must not be implied by a real orchestrator.
+
+## Artifact Readiness
+
+Artifact readiness is partial.
+
+- Registry, planner, dry-run runner, verifier, RAG Evaluation, job prioritization, tailoring decision, and operator review already have diagnostic artifact writers.
+- Source health, resume match, and critic need a future adapter-level artifact policy if their real orchestrator outputs should be persisted separately.
+- Existing advisory artifacts preserve production fields such as `action` and add separate advisory fields such as `advisory_priority`, `tailoring_decision`, and `operator_review_lane`.
+
+## Validation Readiness
+
+Validation readiness is good for diagnostic execution and incomplete for real orchestration.
+
+- Each implemented agent exposes validation payload helpers or validation inside render helpers.
+- The workflow registry validates ordered agents, feature flags, artifact kinds, and non-mutating contracts.
+- The workflow planner and dry-run runner validate disabled execution.
+- The workflow verifier validates artifact consistency when artifacts exist.
+
+Missing before real execution:
+
+- Adapter-level validation for loaded inputs.
+- Adapter-level validation for output schema and artifact idempotency.
+- A no-production-mutation gate after each proposed step.
+- Tests proving a real orchestrator cannot call production-mutating functions.
+
+## Proposed Future Adapter Contract
+
+This is a proposed contract only. It is not active production behavior and is not implemented in this phase.
+
+```text
+load_inputs(context)
+validate_inputs(inputs)
+run_read_only(inputs, context)
+validate_outputs(outputs)
+write_diagnostics(outputs)
+record_trace(step)
+```
+
+Contract expectations:
+
+- `load_inputs(context)` reads only owner-scoped artifacts and never changes job visibility or ordering.
+- `validate_inputs(inputs)` fails closed or returns diagnostic warnings before any agent helper is called.
+- `run_read_only(inputs, context)` calls deterministic agent helpers only; no LLM calls and no production writes.
+- `validate_outputs(outputs)` checks schema, reason codes, row counts, and non-mutating fields.
+- `write_diagnostics(outputs)` writes only advisory/read-only artifacts under the run's diagnostic artifact scope.
+- `record_trace(step)` records aggregate trace rows only when trace flags and owner/run context are present.
+
+## Blockers Before Real Execution
+
+- No active runner adapter exists.
+- `workflow_runner.py` is intentionally dry-run only and must not be changed to execute agents without a separate reviewed phase.
+- A central owner-scoped input loader is missing.
+- Source health, resume match, and critic need diagnostic artifact policies.
+- Idempotent artifact write rules are not defined for a real orchestrator.
+- Strict/non-strict behavior for adapter failures is not defined.
+- Production mutation checks must be enforced after every future adapter step.
+- Real execution must be tested independently from live planning before any planning integration.
+
+## Safe Next Increment
+
+The safe next increment is to add a read-only adapter interface and static adapter metadata behind tests, without wiring it into `run_application_planning.py`, `application_execution_queue.py`, scheduler flows, API routes, or Agentic Review actions.
+
+That increment should prove:
+
+- all adapters load sanitized fixtures only in tests;
+- every adapter reports `mutates_production_decisions=false`;
+- no adapter changes scoring, ranking, filtering, resume selection, tailoring generation, packet generation, queue action, scheduler behavior, RAG retrieval, source behavior, or pipeline execution;
+- workflow_runner.py remains dry-run only until a later explicitly approved execution phase.

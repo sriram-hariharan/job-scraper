@@ -4,11 +4,14 @@ import pytest
 
 from src.storage.agent_feedback import store
 from src.storage.agent_feedback.store import (
+    build_agent_feedback_evaluation_dataset,
+    export_agent_feedback_events,
     agent_feedback_contract_health_payload,
     agent_feedback_event_db_row,
     agent_feedback_schema_sql_text,
     list_agent_feedback_events,
     record_agent_feedback_event,
+    render_agent_feedback_export_markdown,
     summarize_agent_feedback_events,
 )
 
@@ -179,6 +182,101 @@ def test_summary_counts_event_types_correctly(monkeypatch):
         "target_type_counts": {"pipeline_run_job": 1, "tailoring_suggestion": 2},
         "latest_event_at": "2026-06-02T12:02:00+00:00",
     }
+
+
+def test_feedback_evaluation_dataset_maps_event_types_to_labels():
+    rows = build_agent_feedback_evaluation_dataset(
+        [
+            _valid_record(event_id="feedback_1", event_type="suggestion_accepted"),
+            _valid_record(event_id="feedback_2", event_type="suggestion_rejected"),
+            _valid_record(event_id="feedback_3", event_type="job_saved"),
+            _valid_record(event_id="feedback_4", event_type="operator_lane_overridden"),
+        ]
+    )
+
+    labels = {row["feedback_event_id"]: row["feedback_label"] for row in rows}
+    values = {row["feedback_event_id"]: row["feedback_value"] for row in rows}
+    assert labels == {
+        "feedback_1": "positive",
+        "feedback_2": "negative",
+        "feedback_3": "neutral_positive",
+        "feedback_4": "correction",
+    }
+    assert values["feedback_1"] == 1.0
+    assert values["feedback_2"] == -1.0
+    assert values["feedback_3"] == 0.5
+
+
+def test_feedback_export_includes_counts_rows_and_respects_filters(monkeypatch):
+    captured = {}
+
+    def fake_list_agent_feedback_events(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "events": [
+                _valid_record(
+                    event_id="feedback_1",
+                    event_type="agentic_review_helpful",
+                    target_type="agentic_review_section",
+                    target_id="run_1",
+                ),
+                _valid_record(
+                    event_id="feedback_2",
+                    event_type="agentic_review_not_helpful",
+                    target_type="agentic_review_section",
+                    target_id="run_1",
+                ),
+            ],
+            "count": 2,
+        }
+
+    monkeypatch.setattr(store, "list_agent_feedback_events", fake_list_agent_feedback_events)
+
+    payload = export_agent_feedback_events(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        target_type="agentic_review_section",
+        event_type="agentic_review_helpful",
+        limit=25,
+    )
+
+    assert payload["export_version"] == "agent_feedback_export_v1"
+    assert payload["owner_user_id"] == "user_1"
+    assert payload["pipeline_run_id"] == "run_1"
+    assert payload["total_events"] == 2
+    assert payload["event_type_counts"] == {
+        "agentic_review_helpful": 1,
+        "agentic_review_not_helpful": 1,
+    }
+    assert payload["target_type_counts"] == {"agentic_review_section": 2}
+    assert payload["evaluation_rows"][0]["feedback_label"] == "positive"
+    assert payload["evaluation_rows"][1]["feedback_label"] == "negative"
+    assert captured["owner_user_id"] == "user_1"
+    assert captured["pipeline_run_id"] == "run_1"
+    assert captured["target_type"] == "agentic_review_section"
+    assert captured["event_type"] == "agentic_review_helpful"
+    assert captured["limit"] == 25
+
+
+def test_feedback_export_markdown_is_stable():
+    markdown = render_agent_feedback_export_markdown(
+        {
+            "export_version": "agent_feedback_export_v1",
+            "owner_user_id": "user_1",
+            "pipeline_run_id": "run_1",
+            "generated_at_utc": "2026-06-02T12:00:00+00:00",
+            "total_events": 1,
+            "event_type_counts": {"agentic_review_helpful": 1},
+            "target_type_counts": {"agentic_review_section": 1},
+            "evaluation_rows": [{"feedback_event_id": "feedback_1"}],
+        }
+    )
+
+    assert "# Agent Feedback Export" in markdown
+    assert "agent_feedback_export_v1" in markdown
+    assert "`agentic_review_helpful`: 1" in markdown
+    assert "Rows: `1`" in markdown
 
 
 def test_feedback_store_uses_dbapi_and_psql_fallback():

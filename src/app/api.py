@@ -241,6 +241,26 @@ def agent_feedback_summary(
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@app.get("/api/agent-feedback/export")
+def agent_feedback_export(
+    http_request: Request,
+    pipeline_run_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+):
+    try:
+        return services.agent_feedback_export_payload(
+            owner_user_id=_require_auth_owner_user_id(http_request),
+            pipeline_run_id=pipeline_run_id,
+            target_type=target_type,
+            event_type=event_type,
+            limit=limit,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/agent-feedback")
 def list_agent_feedback(
     http_request: Request,

@@ -224,3 +224,65 @@ def test_agent_feedback_service_bounds_read_limits(monkeypatch):
     assert list_payload["limit"] == services.AGENT_FEEDBACK_LIST_MAX_LIMIT
     assert captured["summary"]["limit"] == services.AGENT_FEEDBACK_SUMMARY_MAX_LIMIT
     assert captured["list"]["limit"] == services.AGENT_FEEDBACK_LIST_MAX_LIMIT
+
+
+def test_agent_feedback_export_api_uses_authenticated_owner_and_filters(monkeypatch):
+    captured = {}
+
+    def fake_agent_feedback_export_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "export_version": "agent_feedback_export_v1",
+            "owner_user_id": kwargs["owner_user_id"],
+            "events": [],
+            "evaluation_rows": [],
+        }
+
+    monkeypatch.setattr(services, "agent_feedback_export_payload", fake_agent_feedback_export_payload)
+
+    payload = api.agent_feedback_export(
+        _request("user_1"),
+        pipeline_run_id="run_1",
+        target_type="agentic_review_section",
+        event_type="agentic_review_helpful",
+        limit=25,
+    )
+
+    assert payload["owner_user_id"] == "user_1"
+    assert captured == {
+        "owner_user_id": "user_1",
+        "pipeline_run_id": "run_1",
+        "target_type": "agentic_review_section",
+        "event_type": "agentic_review_helpful",
+        "limit": 25,
+    }
+
+
+def test_agent_feedback_export_api_requires_auth():
+    with pytest.raises(HTTPException) as exc:
+        api.agent_feedback_export(_request(""))
+
+    assert exc.value.status_code == 401
+
+
+def test_agent_feedback_export_service_bounds_limit(monkeypatch):
+    captured = {}
+
+    def fake_export_agent_feedback_events(**kwargs):
+        captured.update(kwargs)
+        return {
+            "ok": True,
+            "export_version": "agent_feedback_export_v1",
+            "owner_user_id": kwargs["owner_user_id"],
+            "events": [],
+            "evaluation_rows": [],
+        }
+
+    monkeypatch.setattr(services, "export_agent_feedback_events", fake_export_agent_feedback_events)
+
+    payload = services.agent_feedback_export_payload(owner_user_id="user_1", limit=999999)
+
+    assert payload["limit"] == services.AGENT_FEEDBACK_EXPORT_MAX_LIMIT
+    assert captured["owner_user_id"] == "user_1"
+    assert captured["limit"] == services.AGENT_FEEDBACK_EXPORT_MAX_LIMIT

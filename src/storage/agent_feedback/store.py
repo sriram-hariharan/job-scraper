@@ -39,6 +39,31 @@ SUPPORTED_AGENT_FEEDBACK_TARGET_TYPES = {
     "agentic_review_section",
 }
 
+AGENT_FEEDBACK_EXPORT_VERSION = "agent_feedback_export_v1"
+
+AGENT_FEEDBACK_LABELS = {
+    "suggestion_accepted": "positive",
+    "suggestion_rejected": "negative",
+    "agentic_review_helpful": "positive",
+    "agentic_review_not_helpful": "negative",
+    "job_applied": "positive",
+    "job_skipped": "negative",
+    "job_saved": "neutral_positive",
+    "suggestion_edited": "mixed",
+    "resume_selected": "positive",
+    "scan_rerun": "neutral",
+    "operator_lane_overridden": "correction",
+}
+
+AGENT_FEEDBACK_LABEL_VALUES = {
+    "positive": 1.0,
+    "negative": -1.0,
+    "neutral_positive": 0.5,
+    "mixed": 0.0,
+    "neutral": 0.0,
+    "correction": 0.0,
+}
+
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
@@ -556,6 +581,124 @@ def summarize_agent_feedback_events(
     }
 
 
+def feedback_label_for_event_type(event_type: Any) -> str:
+    return AGENT_FEEDBACK_LABELS.get(_clean_text(event_type), "unmapped")
+
+
+def feedback_value_for_label(label: Any) -> float:
+    return float(AGENT_FEEDBACK_LABEL_VALUES.get(_clean_text(label), 0.0))
+
+
+def build_agent_feedback_evaluation_dataset(events: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    rows: List[Dict[str, Any]] = []
+    for event in list(events or []):
+        if not isinstance(event, dict):
+            continue
+        event_type = _clean_text(event.get("event_type"))
+        feedback_label = feedback_label_for_event_type(event_type)
+        rows.append(
+            {
+                "feedback_event_id": _clean_text(event.get("event_id")),
+                "pipeline_run_id": _clean_text(event.get("pipeline_run_id")),
+                "context_id": _clean_text(event.get("context_id")),
+                "agent_run_id": _clean_text(event.get("agent_run_id")),
+                "agent_step_id": _clean_text(event.get("agent_step_id")),
+                "target_type": _clean_text(event.get("target_type")),
+                "target_id": _clean_text(event.get("target_id")),
+                "event_type": event_type,
+                "feedback_label": feedback_label,
+                "feedback_value": feedback_value_for_label(feedback_label),
+                "source": _clean_text(event.get("source")),
+                "created_at": _clean_text(event.get("created_at")),
+            }
+        )
+    return rows
+
+
+def _agent_feedback_counts(events: List[Dict[str, Any]], key: str) -> Dict[str, int]:
+    counts = Counter(_clean_text(event.get(key)) for event in events if isinstance(event, dict))
+    counts.pop("", None)
+    return dict(sorted(counts.items()))
+
+
+def export_agent_feedback_events(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+    database_url: str = "",
+    database_url_env: str = "DATABASE_URL",
+    psql_bin: str = "psql",
+    print_only: bool = False,
+    ensure_schema: bool = True,
+) -> Dict[str, Any]:
+    owner = _require_owner_user_id(owner_user_id)
+    listed = list_agent_feedback_events(
+        owner_user_id=owner,
+        pipeline_run_id=pipeline_run_id,
+        target_type=target_type,
+        event_type=event_type,
+        limit=limit,
+        database_url=database_url,
+        database_url_env=database_url_env,
+        psql_bin=psql_bin,
+        print_only=print_only,
+        ensure_schema=ensure_schema,
+    )
+    events = [dict(row or {}) for row in list(listed.get("events", []) or [])]
+    evaluation_rows = build_agent_feedback_evaluation_dataset(events)
+    return {
+        "ok": True,
+        "export_version": AGENT_FEEDBACK_EXPORT_VERSION,
+        "owner_user_id": owner,
+        "pipeline_run_id": _clean_text(pipeline_run_id),
+        "target_type": _clean_text(target_type),
+        "event_type": _clean_text(event_type),
+        "generated_at_utc": _utc_now_iso(),
+        "total_events": len(events),
+        "event_type_counts": _agent_feedback_counts(events, "event_type"),
+        "target_type_counts": _agent_feedback_counts(events, "target_type"),
+        "events": events,
+        "evaluation_rows": evaluation_rows,
+        "sql": listed.get("sql", ""),
+        "command": listed.get("command", []),
+        "command_text": listed.get("command_text", ""),
+    }
+
+
+def render_agent_feedback_export_markdown(export_payload: Dict[str, Any]) -> str:
+    payload = export_payload if isinstance(export_payload, dict) else {}
+    lines = [
+        "# Agent Feedback Export",
+        "",
+        f"Export version: `{_clean_text(payload.get('export_version'))}`",
+        f"Generated at UTC: `{_clean_text(payload.get('generated_at_utc'))}`",
+        f"Owner user id: `{_clean_text(payload.get('owner_user_id'))}`",
+        f"Pipeline run filter: `{_clean_text(payload.get('pipeline_run_id')) or 'all'}`",
+        f"Total events: `{int(payload.get('total_events') or 0)}`",
+        "",
+        "## Event Type Counts",
+        "",
+    ]
+    event_counts = payload.get("event_type_counts") if isinstance(payload.get("event_type_counts"), dict) else {}
+    target_counts = payload.get("target_type_counts") if isinstance(payload.get("target_type_counts"), dict) else {}
+    if event_counts:
+        lines.extend(f"- `{key}`: {value}" for key, value in sorted(event_counts.items()))
+    else:
+        lines.append("None")
+    lines.extend(["", "## Target Type Counts", ""])
+    if target_counts:
+        lines.extend(f"- `{key}`: {value}" for key, value in sorted(target_counts.items()))
+    else:
+        lines.append("None")
+    lines.extend(["", "## Evaluation Dataset", ""])
+    lines.append(f"Rows: `{len(list(payload.get('evaluation_rows') or []))}`")
+    return "\n".join(lines).strip() + "\n"
+
+
 record_agent_feedback_event_postgres_payload = record_agent_feedback_event
 list_agent_feedback_events_postgres_payload = list_agent_feedback_events
 summarize_agent_feedback_events_postgres_payload = summarize_agent_feedback_events
+export_agent_feedback_events_postgres_payload = export_agent_feedback_events

@@ -20,6 +20,11 @@ from src.agents import (
 )
 from src.evaluation.metrics import bool_rate, safe_rate
 from src.pipeline.resume_selection_credibility import parse_bool, parse_float
+from src.storage.agent_feedback.store import (
+    AGENT_FEEDBACK_EXPORT_VERSION,
+    build_agent_feedback_evaluation_dataset,
+    render_agent_feedback_export_markdown,
+)
 
 
 DEFAULT_FIXTURE_PATH = Path("tests/fixtures/agentic_benchmark/cases.json")
@@ -47,6 +52,7 @@ THRESHOLD_METRIC_KEYS = [
     "llmops_metadata_schema_present",
     "llmops_required_keys_present",
     "workflow_registry_validation_passed",
+    "agent_feedback_export_schema_valid",
     "validation_pass_rate",
 ]
 DEFAULT_THRESHOLDS = {
@@ -72,6 +78,7 @@ DEFAULT_THRESHOLDS = {
     "llmops_metadata_schema_present": 1.0,
     "llmops_required_keys_present": 1.0,
     "workflow_registry_validation_passed": 1.0,
+    "agent_feedback_export_schema_valid": 1.0,
     "validation_pass_rate": 1.0,
 }
 
@@ -470,6 +477,76 @@ def evaluate_operator_review_rows(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
+def evaluate_agent_feedback_export_schema() -> Dict[str, Any]:
+    events = [
+        {
+            "event_id": "feedback_event_1",
+            "owner_user_id": "benchmark",
+            "pipeline_run_id": "agentic_benchmark",
+            "context_id": "ctx_1",
+            "agent_run_id": "agent_run_1",
+            "agent_step_id": "agent_step_1",
+            "target_type": "agentic_review_section",
+            "target_id": "agentic_benchmark",
+            "event_type": "agentic_review_helpful",
+            "payload_json": {"section": "human_feedback"},
+            "source": "benchmark_fixture",
+            "created_at": "2026-06-02T12:00:00+00:00",
+        }
+    ]
+    evaluation_rows = build_agent_feedback_evaluation_dataset(events)
+    export_payload = {
+        "export_version": AGENT_FEEDBACK_EXPORT_VERSION,
+        "owner_user_id": "benchmark",
+        "pipeline_run_id": "agentic_benchmark",
+        "generated_at_utc": _utc_now_iso(),
+        "total_events": len(events),
+        "event_type_counts": {"agentic_review_helpful": 1},
+        "target_type_counts": {"agentic_review_section": 1},
+        "events": events,
+        "evaluation_rows": evaluation_rows,
+    }
+    markdown = render_agent_feedback_export_markdown(export_payload)
+    required_export_keys = {
+        "export_version",
+        "owner_user_id",
+        "pipeline_run_id",
+        "generated_at_utc",
+        "total_events",
+        "event_type_counts",
+        "target_type_counts",
+        "events",
+        "evaluation_rows",
+    }
+    required_row_keys = {
+        "feedback_event_id",
+        "pipeline_run_id",
+        "context_id",
+        "agent_run_id",
+        "agent_step_id",
+        "target_type",
+        "target_id",
+        "event_type",
+        "feedback_label",
+        "feedback_value",
+        "source",
+        "created_at",
+    }
+    schema_valid = (
+        required_export_keys.issubset(export_payload)
+        and len(evaluation_rows) == 1
+        and required_row_keys.issubset(evaluation_rows[0])
+        and evaluation_rows[0]["feedback_label"] == "positive"
+        and "Agent Feedback Export" in markdown
+    )
+    return {
+        "schema_valid": schema_valid,
+        "export_payload": export_payload,
+        "required_export_keys": sorted(required_export_keys),
+        "required_row_keys": sorted(required_row_keys),
+    }
+
+
 def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, Any]:
     fixture = load_benchmark_fixture(fixture_path)
     source_health = evaluate_source_health_rows(list(fixture.get("source_health_rows", []) or []))
@@ -482,6 +559,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
     operator_review = evaluate_operator_review_rows(list(fixture.get("operator_review_rows", []) or []))
     llmops_readiness = llmops.llmops_schema_readiness_payload()
     registry_validation = workflow_registry.validate_agentic_workflow_manifest()
+    feedback_export_schema = evaluate_agent_feedback_export_schema()
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
@@ -525,6 +603,9 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "workflow_registry_validation_passed": 1.0
         if registry_validation.get("validation_status") == "passed"
         else 0.0,
+        "agent_feedback_export_schema_valid": 1.0
+        if feedback_export_schema.get("schema_valid")
+        else 0.0,
         "workflow_registry_agent_count": registry_validation.get("agent_count", 0),
         "validation_pass_rate": bool_rate(validation_passes),
         "failed_case_ids": failed_case_ids,
@@ -547,6 +628,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "operator_review_summary": operator_review["payload"]["summary"],
             "llmops_observability_readiness": llmops_readiness,
             "workflow_registry_validation": registry_validation,
+            "agent_feedback_export_schema": feedback_export_schema,
         },
         "component_results": {
             "source_health": source_health,
@@ -557,6 +639,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "operator_review": operator_review,
             "llmops": llmops_readiness,
             "workflow_registry": registry_validation,
+            "agent_feedback_export_schema": feedback_export_schema,
         },
     }
 
@@ -586,6 +669,7 @@ def threshold_overrides_from_args(args: argparse.Namespace) -> Dict[str, float]:
         "llmops_metadata_schema_present": args.min_llmops_metadata_schema_present,
         "llmops_required_keys_present": args.min_llmops_required_keys_present,
         "workflow_registry_validation_passed": args.min_workflow_registry_validation_passed,
+        "agent_feedback_export_schema_valid": args.min_agent_feedback_export_schema_valid,
         "validation_pass_rate": args.min_validation_pass_rate,
     }
     for key, value in overrides.items():
@@ -657,6 +741,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "workflow_registry_validation_passed",
+        "agent_feedback_export_schema_valid",
         "workflow_registry_agent_count",
         "validation_pass_rate",
     ]:
@@ -686,6 +771,7 @@ def render_markdown_report(result: Dict[str, Any]) -> str:
     lines.append("- Operator Review Agent advisory benchmark")
     lines.append("- LLMOps metadata schema readiness benchmark")
     lines.append("- Agentic workflow registry manifest benchmark")
+    lines.append("- Agent feedback export schema benchmark")
     return "\n".join(lines).strip() + "\n"
 
 
@@ -740,6 +826,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-llmops-metadata-schema-present", type=float, default=None)
     parser.add_argument("--min-llmops-required-keys-present", type=float, default=None)
     parser.add_argument("--min-workflow-registry-validation-passed", type=float, default=None)
+    parser.add_argument("--min-agent-feedback-export-schema-valid", type=float, default=None)
     parser.add_argument("--min-validation-pass-rate", type=float, default=None)
     return parser
 

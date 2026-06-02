@@ -126,6 +126,7 @@ from src.storage.agent_trace.store import (
     list_agent_steps_postgres_payload,
 )
 from src.storage.agent_feedback.store import (
+    export_agent_feedback_events,
     list_agent_feedback_events,
     record_agent_feedback_event,
     summarize_agent_feedback_events,
@@ -174,6 +175,7 @@ logger = logging.getLogger(__name__)
 
 AGENT_FEEDBACK_LIST_MAX_LIMIT = 500
 AGENT_FEEDBACK_SUMMARY_MAX_LIMIT = 1000
+AGENT_FEEDBACK_EXPORT_MAX_LIMIT = 5000
 
 DEFAULT_OUTPUT_DIR = Path(
     os.environ.get("APPLICATION_PLANNING_OUTPUT_DIR", ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR)
@@ -1275,6 +1277,38 @@ def agent_feedback_summary_payload(
     payload["limit"] = safe_limit
     payload["target_type"] = _clean_text(target_type)
     payload["event_type"] = _clean_text(event_type)
+    return payload
+
+
+def agent_feedback_export_payload(
+    *,
+    owner_user_id: str,
+    pipeline_run_id: str = "",
+    target_type: str = "",
+    event_type: str = "",
+    limit: int = 1000,
+) -> Dict[str, Any]:
+    owner = _clean_text(owner_user_id)
+    if not owner:
+        raise ValueError("Authenticated user is required.")
+    safe_limit = _safe_feedback_limit(
+        limit,
+        default=1000,
+        max_limit=AGENT_FEEDBACK_EXPORT_MAX_LIMIT,
+    )
+    payload = export_agent_feedback_events(
+        owner_user_id=owner,
+        pipeline_run_id=pipeline_run_id,
+        target_type=target_type,
+        event_type=event_type,
+        limit=safe_limit,
+        database_url="",
+        database_url_env="DATABASE_URL",
+        psql_bin="psql",
+        print_only=False,
+        ensure_schema=True,
+    )
+    payload["limit"] = safe_limit
     return payload
 
 

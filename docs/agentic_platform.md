@@ -37,6 +37,19 @@ Useful helpers:
 
 The registry validates that no agent mutates production decisions, tracing is disabled by default, expected feature flags are documented, and expected agentic artifact kinds are present.
 
+## Dry-Run Workflow Planner
+
+The dry-run execution planner lives in `src/agents/workflow_planner.py`. It converts the workflow registry into an ordered orchestration plan without executing agents, calling LLMs, moving artifacts, or changing pipeline behavior.
+
+Useful helpers:
+
+- `build_agentic_workflow_execution_plan()`
+- `validate_agentic_workflow_execution_plan()`
+- `render_agentic_workflow_execution_plan_markdown()`
+- `write_agentic_workflow_execution_plan_artifacts()`
+
+The current planner is diagnostic only. Every planned step has `execution_status=planned` and `execution_enabled=false`.
+
 ## Design Principles
 
 - Advisory first: agent outputs are recommendations, summaries, validations, or diagnostics.

@@ -145,6 +145,35 @@ def test_agentic_workflow_verification_ui_contract():
     assert "agentic_workflow_verification_json" in services_source
 
 
+def test_agentic_workflow_manifest_ui_contract():
+    review_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Agentic Workflow Manifest" in review_source
+    assert "agentic_workflow_manifest" in review_source
+    assert "manifest_json" in review_source
+    assert "manifest_markdown" in review_source
+    assert "ordered_agent_keys" in review_source
+    assert "generated_artifact_kinds" in review_source
+    assert "artifact_dependency_order" in review_source
+    assert "mutates_production_decisions" in review_source
+    assert "No agentic workflow manifest recorded for this run." in review_source
+    assert "Manifest markdown" in review_source
+    assert "escapeHtml(markdown)" in review_source
+
+    assert ".agentic-workflow-manifest-card" in review_css
+    assert ".agentic-review-manifest-agent" in review_css
+    assert ".agentic-review-manifest-metrics" in review_css
+    assert ".agentic-review-manifest-agent-pills" in review_css
+
+    assert "agentic_workflow_manifest.json" in services_source
+    assert "agentic_workflow_manifest.md" in services_source
+    assert "agentic_workflow_manifest_json" in services_source
+    assert "agentic_workflow_manifest_md" in services_source
+    assert "_agentic_workflow_manifest_from_artifacts" in services_source
+
+
 def test_agentic_review_dedicated_page_contract():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")
@@ -218,6 +247,7 @@ def test_agentic_review_dedicated_page_contract():
     assert "data-agentic-advisory-target" in profile_ui_source
     assert "bindAgenticReviewTabs" in review_source
     assert "renderAgenticReviewDiagnosticsPanel" in review_source
+    assert "renderAgenticWorkflowManifestSection" in review_source
     assert "owner_user_id" not in review_source
 
     assert ".agentic-review-link-card" not in common_css

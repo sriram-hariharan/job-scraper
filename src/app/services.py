@@ -853,6 +853,7 @@ def profile_pipeline_run_detail_payload(
         "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
         "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
+        "agentic_workflow_manifest": _agentic_workflow_manifest_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
     }
 
@@ -880,6 +881,7 @@ def profile_pipeline_run_agentic_review_payload(
         "status_json": run.get("status_json") if isinstance(run.get("status_json"), dict) else {},
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
         "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
+        "agentic_workflow_manifest": _agentic_workflow_manifest_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "job_prioritization_rows": _csv_rows_from_text(priority_text),
         "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
@@ -9707,6 +9709,16 @@ def _agentic_workflow_verification_from_artifacts(rows: List[Dict[str, Any]]) ->
     }
 
 
+def _agentic_workflow_manifest_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    manifest_json = _artifact_json_by_name(rows, "agentic_workflow_manifest.json")
+    manifest_markdown = _artifact_text_by_name(rows, "agentic_workflow_manifest.md")
+    return {
+        "available": bool(manifest_json or manifest_markdown),
+        "manifest_json": manifest_json,
+        "manifest_markdown": manifest_markdown,
+    }
+
+
 def _agentic_workflow_verification_from_dir(output_dir: Path) -> Dict[str, Any]:
     root = Path(output_dir).expanduser()
     json_path = root / "agentic_workflow_verification.json"
@@ -9722,6 +9734,33 @@ def _agentic_workflow_verification_from_dir(output_dir: Path) -> Dict[str, Any]:
     return {
         "available": bool(verification_json),
         "verification_json": verification_json,
+    }
+
+
+def _agentic_workflow_manifest_from_dir(output_dir: Path) -> Dict[str, Any]:
+    root = Path(output_dir).expanduser()
+    json_path = root / "agentic_workflow_manifest.json"
+    md_path = root / "agentic_workflow_manifest.md"
+    manifest_json: Dict[str, Any] = {}
+    manifest_markdown = ""
+
+    if json_path.exists() and json_path.is_file():
+        try:
+            parsed = json.loads(json_path.read_text(encoding="utf-8"))
+            manifest_json = dict(parsed) if isinstance(parsed, dict) else {}
+        except Exception:
+            manifest_json = {}
+
+    if md_path.exists() and md_path.is_file():
+        try:
+            manifest_markdown = md_path.read_text(encoding="utf-8", errors="replace")
+        except Exception:
+            manifest_markdown = ""
+
+    return {
+        "available": bool(manifest_json or manifest_markdown),
+        "manifest_json": manifest_json,
+        "manifest_markdown": manifest_markdown,
     }
 
 

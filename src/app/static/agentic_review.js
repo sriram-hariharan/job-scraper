@@ -12,6 +12,11 @@ function getWorkflowVerification(payload = {}) {
   return verification && typeof verification === "object" ? verification : {};
 }
 
+function getWorkflowManifest(payload = {}) {
+  const manifest = payload?.agentic_workflow_manifest?.manifest_json;
+  return manifest && typeof manifest === "object" ? manifest : {};
+}
+
 function formatReviewLabel(value) {
   const raw = String(value || "").trim();
   if (!raw) return "-";
@@ -156,22 +161,26 @@ function renderAgenticReviewAdvisoryPanel(panelId, title, description, rows, cou
   `;
 }
 
-function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}) {
+function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}, workflowManifest = {}) {
   const panel = qs("agenticReviewDiagnosticsPanel");
   if (!panel) return;
   const available = Boolean(workflowVerification?.available);
   const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
     ? workflowVerification.verification_json
     : {};
-  if (!available && !Object.keys(verification).length) {
+  const manifestAvailable = Boolean(workflowManifest?.available);
+  const manifest = workflowManifest?.manifest_json && typeof workflowManifest.manifest_json === "object"
+    ? workflowManifest.manifest_json
+    : {};
+  if (!available && !Object.keys(verification).length && !manifestAvailable && !Object.keys(manifest).length) {
     panel.innerHTML = `
       <div class="agentic-workflow-header">
         <div>
           <h2>Artifacts / Diagnostics</h2>
-          <p>Verifier artifacts will appear here after a run produces them.</p>
+          <p>Verifier and manifest artifacts will appear here after a run produces them.</p>
         </div>
       </div>
-      <div class="pipeline-runs-empty-cell">No agentic workflow verification recorded for this run.</div>
+      <div class="pipeline-runs-empty-cell">No agentic workflow manifest or verification recorded for this run.</div>
     `;
     return;
   }
@@ -221,6 +230,104 @@ function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}) {
       <summary>Consistency checks</summary>
       ${renderWorkflowVerificationChecks(consistencyChecks)}
     </details>
+    ${renderAgenticWorkflowManifestSection(workflowManifest)}
+  `;
+}
+
+function renderAgenticWorkflowManifestSection(workflowManifest = {}) {
+  const available = Boolean(workflowManifest?.available);
+  const manifest = workflowManifest?.manifest_json && typeof workflowManifest.manifest_json === "object"
+    ? workflowManifest.manifest_json
+    : {};
+  const markdown = String(workflowManifest?.manifest_markdown || "");
+  if (!available && !Object.keys(manifest).length) {
+    return `
+      <section class="agentic-workflow-manifest-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Agentic Workflow Manifest</h2>
+            <p>The orchestration manifest artifact was not recorded for this run.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No agentic workflow manifest recorded for this run.</div>
+      </section>
+    `;
+  }
+
+  const validation = manifest.validation && typeof manifest.validation === "object" ? manifest.validation : {};
+  const validationStatus = String(validation.validation_status || "unknown").toLowerCase();
+  const orderedKeys = Array.isArray(manifest.ordered_agent_keys) ? manifest.ordered_agent_keys : [];
+  const agents = manifest.agents && typeof manifest.agents === "object" ? manifest.agents : {};
+  const orderedAgents = orderedKeys
+    .map((key) => agents[key] ? { key, ...agents[key] } : { key, agent_name: key })
+    .filter((agent) => String(agent.key || agent.agent_key || "").trim());
+  const generatedKinds = Array.isArray(manifest.generated_artifact_kinds) ? manifest.generated_artifact_kinds : [];
+  const artifactFlow = Array.isArray(manifest.artifact_dependency_order) ? manifest.artifact_dependency_order : [];
+  const featureFlags = Array.isArray(manifest.feature_flags) ? manifest.feature_flags : [];
+  const reasonCodes = Array.isArray(validation.reason_codes) ? validation.reason_codes : [];
+
+  return `
+    <section class="agentic-workflow-manifest-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Agentic Workflow Manifest</h2>
+          <p>${escapeHtml(manifest.workflow_name || "ApplyLens Agentic Workflow")} · ${escapeHtml(manifest.workflow_version || "unknown version")}</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(validationStatus)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(validationStatus))}
+        </span>
+      </div>
+      <div class="agentic-review-manifest-metrics">
+        ${renderWorkflowSummaryMetric("Agents", orderedAgents.length)}
+        ${renderWorkflowSummaryMetric("Artifact kinds", generatedKinds.length)}
+        ${renderWorkflowSummaryMetric("Feature flags", featureFlags.length)}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+      </div>
+      <div class="agentic-workflow-verification-sections">
+        <div>
+          <strong>Ordered agent keys</strong>
+          ${renderWorkflowVerificationList(orderedKeys)}
+        </div>
+        <div>
+          <strong>Feature flags</strong>
+          ${renderWorkflowVerificationList(featureFlags)}
+        </div>
+        <div>
+          <strong>Validation reason codes</strong>
+          ${renderWorkflowVerificationList(reasonCodes)}
+        </div>
+      </div>
+      <div class="agentic-review-manifest-agent-list">
+        ${orderedAgents.length ? orderedAgents.map(renderAgenticWorkflowManifestAgentRow).join("") : `<div class="pipeline-runs-empty-cell">No agents listed in manifest.</div>`}
+      </div>
+      <details class="agentic-workflow-verification-details">
+        <summary>Generated artifact kinds</summary>
+        ${renderWorkflowVerificationList(generatedKinds)}
+      </details>
+      <details class="agentic-workflow-verification-details">
+        <summary>Artifact dependency order</summary>
+        ${renderWorkflowVerificationList(artifactFlow)}
+      </details>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Manifest markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
+function renderAgenticWorkflowManifestAgentRow(agent = {}) {
+  const provider = [agent.model_provider, agent.model_name].filter(Boolean).join(" / ") || "-";
+  return `
+    <article class="agentic-review-manifest-agent">
+      <div>
+        <strong>${escapeHtml(agent.agent_name || agent.key || agent.agent_key || "Unknown agent")}</strong>
+        <span>${escapeHtml(agent.agent_version || "unknown version")} · ${escapeHtml(provider)}</span>
+      </div>
+      <div class="agentic-review-manifest-agent-pills">
+        ${renderReviewPill(agent.advisory_only ? "advisory" : "not advisory")}
+        ${agent.diagnostic_only ? renderReviewPill("diagnostic") : ""}
+        ${renderReviewPill(agent.mutates_production_decisions ? "mutates decisions" : "no mutation")}
+      </div>
+    </article>
   `;
 }
 
@@ -285,7 +392,7 @@ function renderAgenticReviewData(payload, tracePayload) {
     ],
   );
 
-  renderAgenticReviewDiagnosticsPanel(payload.agentic_workflow_verification);
+  renderAgenticReviewDiagnosticsPanel(payload.agentic_workflow_verification, payload.agentic_workflow_manifest);
 
   const traceNode = qs("agenticReviewTracePanel");
   if (traceNode) {

@@ -30,6 +30,12 @@ def test_agentic_platform_docs_cover_agents_flags_and_commands():
     assert "python -m src.evaluation.agentic_benchmark --output-dir outputs/evaluation --print-summary" in source
     assert "python -m src.agents.workflow_verifier --output-dir <artifact_dir>" in source
     assert "python -m src.agents.workflow_verifier --output-dir <artifact_dir> --strict --json" in source
+    assert "src/agents/workflow_registry.py" in source
+    assert "get_agentic_workflow_manifest()" in source
+    assert "validate_agentic_workflow_manifest()" in source
+    assert "src/agents/workflow_planner.py" in source
+    assert "build_agentic_workflow_execution_plan()" in source
+    assert "execution_enabled=false" in source
 
 
 def test_agentic_platform_docs_state_safety_guarantees():
@@ -44,4 +50,3 @@ def test_agentic_platform_docs_state_safety_guarantees():
         "Per-job trace rows are intentionally not implemented yet.",
     ]:
         assert phrase in source
-

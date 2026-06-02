@@ -6,6 +6,8 @@ from src.agents.workflow_verifier import (
     verify_agentic_workflow_artifacts,
     write_agentic_workflow_verification_artifact,
 )
+from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
+from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 
 
 def _write_csv(path, rows, fieldnames):
@@ -122,6 +124,8 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
         {"operator_review_lane_counts": summary_counts, "total_queue_jobs": 2},
     )
     (root / "agentic_workflow_summary.md").write_text("# Agentic Workflow Summary\n", encoding="utf-8")
+    write_agentic_workflow_manifest_artifacts(output_dir=root)
+    write_agentic_workflow_execution_plan_artifacts(output_dir=root)
     return root
 
 
@@ -148,6 +152,18 @@ def test_workflow_verifier_warns_with_missing_optional_artifacts_non_strict(tmp_
     assert "missing_optional_artifacts" in payload["reason_codes"]
 
 
+def test_workflow_verifier_warns_when_manifest_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "agentic_workflow_manifest.json").unlink()
+    (root / "agentic_workflow_manifest.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "agentic_workflow_manifest.json" in payload["missing_artifacts"]
+    assert "missing_workflow_manifest" in payload["reason_codes"]
+
+
 def test_workflow_verifier_fails_missing_required_artifacts_in_strict_mode(tmp_path):
     root = _complete_artifact_dir(tmp_path)
     (root / "operator_review_recommendations.csv").unlink()
@@ -157,6 +173,69 @@ def test_workflow_verifier_fails_missing_required_artifacts_in_strict_mode(tmp_p
     assert payload["validation_status"] == "failed"
     assert "operator_review_recommendations.csv" in payload["missing_artifacts"]
     assert "missing_required_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_strict_fails_when_manifest_missing(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "agentic_workflow_manifest.json").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=True)
+
+    assert payload["validation_status"] == "failed"
+    assert "agentic_workflow_manifest.json" in payload["missing_artifacts"]
+    assert "missing_workflow_manifest" in payload["reason_codes"]
+
+
+def test_workflow_verifier_reads_manifest_and_validates_expected_artifacts(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "workflow_manifest_validation_passed" in check_names
+    assert "workflow_manifest_ordered_agents_known" in check_names
+    assert "workflow_manifest_required_artifacts_present" in check_names
+
+
+def test_workflow_verifier_reads_execution_plan_and_validates_dry_run(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "workflow_execution_plan_validation_passed" in check_names
+    assert "workflow_execution_plan_dry_run_mode" in check_names
+    assert "workflow_execution_plan_steps_disabled" in check_names
+    assert "workflow_execution_plan_steps_planned" in check_names
+    assert "workflow_execution_plan_order_matches_registry" in check_names
+
+
+def test_workflow_verifier_warns_when_execution_plan_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "agentic_workflow_execution_plan.json").unlink()
+    (root / "agentic_workflow_execution_plan.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "agentic_workflow_execution_plan.json" in payload["missing_artifacts"]
+    assert "missing_workflow_execution_plan" in payload["reason_codes"]
+
+
+def test_workflow_verifier_detects_enabled_execution_plan_step(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    plan_path = root / "agentic_workflow_execution_plan.json"
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    plan["ordered_steps"][0]["execution_enabled"] = True
+    _write_json(plan_path, plan)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "workflow_execution_plan_step_enabled" in payload["reason_codes"]
+    assert "workflow_execution_plan_validation_failed" in payload["reason_codes"]
 
 
 def test_workflow_verifier_detects_summary_count_mismatch(tmp_path):

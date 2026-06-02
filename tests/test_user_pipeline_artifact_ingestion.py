@@ -75,6 +75,10 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
         _write(output_dir / "operator_review_summary.json", json.dumps({"row_count": 1}))
         _write(output_dir / "agentic_workflow_summary.json", json.dumps({"total_queue_jobs": 1}))
         _write(output_dir / "agentic_workflow_summary.md", "# Agentic Workflow Summary\n")
+        _write(output_dir / "agentic_workflow_manifest.json", json.dumps({"workflow_name": "ApplyLens Agentic Workflow"}))
+        _write(output_dir / "agentic_workflow_manifest.md", "# Agentic Workflow Manifest\n")
+        _write(output_dir / "agentic_workflow_execution_plan.json", json.dumps({"execution_mode": "dry_run"}))
+        _write(output_dir / "agentic_workflow_execution_plan.md", "# Agentic Workflow Execution Plan\n")
         _write(output_dir / "agentic_workflow_verification.json", json.dumps({"validation_status": "passed"}))
         _write(output_dir / "best_resume_variant_by_job.csv", "job_id,resume\n1,resume.pdf\n")
         _write(output_dir / "current_run_job_corpus.jsonl", json.dumps({"job_id": "1"}) + "\n")
@@ -112,7 +116,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 21
+    assert result["ingested_count"] == 25
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
@@ -125,6 +129,10 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "operator_review_summary.json" in artifact_names
     assert "agentic_workflow_summary.json" in artifact_names
     assert "agentic_workflow_summary.md" in artifact_names
+    assert "agentic_workflow_manifest.json" in artifact_names
+    assert "agentic_workflow_manifest.md" in artifact_names
+    assert "agentic_workflow_execution_plan.json" in artifact_names
+    assert "agentic_workflow_execution_plan.md" in artifact_names
     assert "agentic_workflow_verification.json" in artifact_names
     assert "best_resume_variant_by_job.csv" in artifact_names
     assert "current_run_job_corpus.jsonl" in artifact_names
@@ -146,6 +154,10 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "operator_review_summary" in artifact_kinds
     assert "agentic_workflow_summary_json" in artifact_kinds
     assert "agentic_workflow_summary_md" in artifact_kinds
+    assert "agentic_workflow_manifest_json" in artifact_kinds
+    assert "agentic_workflow_manifest_md" in artifact_kinds
+    assert "agentic_workflow_execution_plan_json" in artifact_kinds
+    assert "agentic_workflow_execution_plan_md" in artifact_kinds
     assert "agentic_workflow_verification_json" in artifact_kinds
     assert "best_resume_variant_by_job" in artifact_kinds
     assert "current_run_job_corpus" in artifact_kinds

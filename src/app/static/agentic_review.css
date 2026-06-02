@@ -517,6 +517,84 @@
   font-weight: 760;
 }
 
+.agentic-workflow-manifest-card,
+.agentic-workflow-execution-plan-card {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid rgba(99, 102, 241, 0.22);
+  border-left: 4px solid rgba(124, 58, 237, 0.78);
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.09), rgba(14, 165, 233, 0.04)),
+    var(--app-inset);
+}
+
+.agentic-workflow-execution-plan-card {
+  border-color: rgba(14, 165, 233, 0.22);
+  border-left-color: rgba(8, 145, 178, 0.78);
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.08), rgba(124, 58, 237, 0.04)),
+    var(--app-inset);
+}
+
+.agentic-review-manifest-metrics,
+.agentic-review-plan-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr));
+  gap: 10px;
+  min-width: 0;
+}
+
+.agentic-review-manifest-agent-list,
+.agentic-review-plan-step-list {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.agentic-review-manifest-agent,
+.agentic-review-plan-step {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  background: var(--app-surface);
+}
+
+.agentic-review-manifest-agent strong,
+.agentic-review-plan-step strong {
+  display: block;
+  color: var(--app-text);
+  font-size: 13px;
+  font-weight: 940;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-manifest-agent span,
+.agentic-review-plan-step span {
+  display: block;
+  margin-top: 3px;
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 740;
+  overflow-wrap: anywhere;
+}
+
+.agentic-review-manifest-agent-pills,
+.agentic-review-plan-step-pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
 .agentic-review-table-wrap {
   width: 100%;
   max-width: 100%;

@@ -8,6 +8,8 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
+from src.agents import workflow_planner, workflow_registry
+
 
 REQUIRED_ARTIFACTS = [
     "application_execution_queue.csv",
@@ -21,12 +23,37 @@ REQUIRED_ARTIFACTS = [
 ]
 
 OPTIONAL_ARTIFACTS = [
+    "agentic_workflow_manifest.json",
+    "agentic_workflow_manifest.md",
+    "agentic_workflow_execution_plan.json",
+    "agentic_workflow_execution_plan.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
 ]
 
 EXPECTED_ARTIFACTS = REQUIRED_ARTIFACTS + OPTIONAL_ARTIFACTS
 VERIFICATION_JSON_NAME = "agentic_workflow_verification.json"
+
+ARTIFACT_KIND_TO_NAME = {
+    "source_health_report": "source_health_report.csv",
+    "best_resume_variant_by_job": "best_resume_variant_by_job.csv",
+    "application_shortlist_by_job": "application_shortlist_by_job.csv",
+    "application_execution_queue": "application_execution_queue.csv",
+    "job_prioritization_recommendations": "job_prioritization_recommendations.csv",
+    "job_prioritization_summary": "job_prioritization_summary.json",
+    "tailoring_decision_recommendations": "tailoring_decision_recommendations.csv",
+    "tailoring_decision_summary": "tailoring_decision_summary.json",
+    "operator_review_recommendations": "operator_review_recommendations.csv",
+    "operator_review_summary": "operator_review_summary.json",
+    "agentic_workflow_summary_json": "agentic_workflow_summary.json",
+    "agentic_workflow_summary_md": "agentic_workflow_summary.md",
+    "agentic_workflow_manifest_json": "agentic_workflow_manifest.json",
+    "agentic_workflow_manifest_md": "agentic_workflow_manifest.md",
+    "agentic_workflow_execution_plan_json": "agentic_workflow_execution_plan.json",
+    "agentic_workflow_execution_plan_md": "agentic_workflow_execution_plan.md",
+    "agentic_workflow_verification_json": "agentic_workflow_verification.json",
+    "job_packet_manifest": "job_packet_manifest.csv",
+}
 
 
 def _clean_text(value: Any) -> str:
@@ -98,6 +125,8 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "tailoring_decision_recommendations.csv": _read_csv_rows(root / "tailoring_decision_recommendations.csv"),
         "operator_review_recommendations.csv": _read_csv_rows(root / "operator_review_recommendations.csv"),
         "agentic_workflow_summary.json": _read_json(root / "agentic_workflow_summary.json"),
+        "agentic_workflow_manifest.json": _read_json(root / "agentic_workflow_manifest.json"),
+        "agentic_workflow_execution_plan.json": _read_json(root / "agentic_workflow_execution_plan.json"),
     }
 
 
@@ -172,6 +201,8 @@ def verify_agentic_workflow_artifacts(
     tailoring_rows = list(loaded.get("tailoring_decision_recommendations.csv") or [])
     operator_rows = list(loaded.get("operator_review_recommendations.csv") or [])
     summary_json = dict(loaded.get("agentic_workflow_summary.json") or {})
+    manifest_json = dict(loaded.get("agentic_workflow_manifest.json") or {})
+    execution_plan_json = dict(loaded.get("agentic_workflow_execution_plan.json") or {})
 
     reason_codes: List[str] = []
     checks: List[Dict[str, Any]] = []
@@ -180,6 +211,128 @@ def verify_agentic_workflow_artifacts(
         reason_codes.append("missing_required_artifacts")
     if missing_optional:
         reason_codes.append("missing_optional_artifacts")
+
+    if not manifest_json:
+        reason_codes.append("missing_workflow_manifest")
+    else:
+        manifest_validation = workflow_registry.validate_agentic_workflow_manifest(manifest_json)
+        manifest_validation_passed = manifest_validation.get("validation_status") == "passed"
+        checks.append(
+            _check(
+                "workflow_manifest_validation_passed",
+                manifest_validation_passed,
+                ", ".join(manifest_validation.get("reason_codes", []) or [])
+                if not manifest_validation_passed else "",
+            )
+        )
+        if not manifest_validation_passed:
+            reason_codes.append("workflow_manifest_validation_failed")
+
+        ordered_keys = list(manifest_json.get("ordered_agent_keys") or [])
+        known_keys = set(workflow_registry.ORDERED_AGENT_KEYS)
+        unknown_keys = [key for key in ordered_keys if key not in known_keys]
+        checks.append(
+            _check(
+                "workflow_manifest_ordered_agents_known",
+                not unknown_keys,
+                f"unknown: {', '.join(unknown_keys)}" if unknown_keys else "",
+            )
+        )
+        if unknown_keys:
+            reason_codes.append("workflow_manifest_unknown_agent_keys")
+
+        generated_kinds = set(manifest_json.get("generated_artifact_kinds") or [])
+        required_from_manifest = [
+            ARTIFACT_KIND_TO_NAME[kind]
+            for kind in sorted(generated_kinds)
+            if ARTIFACT_KIND_TO_NAME.get(kind) in REQUIRED_ARTIFACTS
+        ]
+        missing_manifest_required = [
+            name for name in required_from_manifest if name not in present_artifacts
+        ]
+        checks.append(
+            _check(
+                "workflow_manifest_required_artifacts_present",
+                not missing_manifest_required,
+                f"missing: {', '.join(missing_manifest_required)}"
+                if missing_manifest_required else "",
+            )
+        )
+        if missing_manifest_required:
+            reason_codes.append("workflow_manifest_required_artifacts_missing")
+
+    if not execution_plan_json:
+        reason_codes.append("missing_workflow_execution_plan")
+    else:
+        plan_manifest = manifest_json if manifest_json else None
+        plan_validation = workflow_planner.validate_agentic_workflow_execution_plan(
+            execution_plan_json,
+            manifest=plan_manifest,
+        )
+        plan_validation_passed = plan_validation.get("validation_status") == "passed"
+        checks.append(
+            _check(
+                "workflow_execution_plan_validation_passed",
+                plan_validation_passed,
+                ", ".join(plan_validation.get("reason_codes", []) or [])
+                if not plan_validation_passed else "",
+            )
+        )
+        if not plan_validation_passed:
+            reason_codes.append("workflow_execution_plan_validation_failed")
+
+        dry_run_mode = _clean_text(execution_plan_json.get("execution_mode")) == "dry_run"
+        checks.append(_check("workflow_execution_plan_dry_run_mode", dry_run_mode))
+        if not dry_run_mode:
+            reason_codes.append("workflow_execution_plan_not_dry_run")
+
+        plan_steps = list(execution_plan_json.get("ordered_steps") or [])
+        enabled_steps = [
+            _clean_text(step.get("agent_key"))
+            for step in plan_steps
+            if step.get("execution_enabled")
+        ]
+        checks.append(
+            _check(
+                "workflow_execution_plan_steps_disabled",
+                not enabled_steps,
+                f"enabled: {', '.join(enabled_steps)}" if enabled_steps else "",
+            )
+        )
+        if enabled_steps:
+            reason_codes.append("workflow_execution_plan_step_enabled")
+
+        not_planned_steps = [
+            _clean_text(step.get("agent_key"))
+            for step in plan_steps
+            if _clean_text(step.get("execution_status")) != "planned"
+        ]
+        checks.append(
+            _check(
+                "workflow_execution_plan_steps_planned",
+                not not_planned_steps,
+                f"not planned: {', '.join(not_planned_steps)}" if not_planned_steps else "",
+            )
+        )
+        if not_planned_steps:
+            reason_codes.append("workflow_execution_plan_step_not_planned")
+
+        expected_order = (
+            list(manifest_json.get("ordered_agent_keys") or [])
+            if manifest_json
+            else list(workflow_registry.ORDERED_AGENT_KEYS)
+        )
+        plan_order = [_clean_text(step.get("agent_key")) for step in plan_steps]
+        order_matches = plan_order == expected_order
+        checks.append(
+            _check(
+                "workflow_execution_plan_order_matches_registry",
+                order_matches,
+                f"expected {expected_order}, found {plan_order}" if not order_matches else "",
+            )
+        )
+        if not order_matches:
+            reason_codes.append("workflow_execution_plan_order_mismatch")
 
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [

@@ -12,6 +12,7 @@ from src.matching.job_adapter import build_job_evidence
 from src.config.settings import ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR
 from src.agents.workflow_summary import write_agentic_workflow_summary_artifacts
 from src.agents.workflow_verifier import write_agentic_workflow_verification_artifact
+from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
 from src.pipeline.resume_selection_credibility import (
     CREDIBILITY_COLUMNS,
     compute_resume_selection_credibility,
@@ -472,6 +473,8 @@ def main() -> None:
     operator_review_summary_json = output_dir / "operator_review_summary.json"
     agentic_workflow_summary_json = output_dir / "agentic_workflow_summary.json"
     agentic_workflow_summary_md = output_dir / "agentic_workflow_summary.md"
+    agentic_workflow_manifest_json = output_dir / "agentic_workflow_manifest.json"
+    agentic_workflow_manifest_md = output_dir / "agentic_workflow_manifest.md"
     agentic_workflow_verification_json = output_dir / "agentic_workflow_verification.json"
 
     batch_selector_cmd = [
@@ -893,6 +896,16 @@ def main() -> None:
     except Exception as exc:
         workflow_summary_artifact = {}
         print(f"Agentic workflow summary artifact skipped: {exc}")
+
+    try:
+        workflow_manifest_artifact = write_agentic_workflow_manifest_artifacts(
+            output_dir=output_dir,
+            manifest_json_path=agentic_workflow_manifest_json,
+            manifest_md_path=agentic_workflow_manifest_md,
+        )
+    except Exception as exc:
+        workflow_manifest_artifact = {}
+        print(f"Agentic workflow manifest artifact skipped: {exc}")
 
     verifier_strict = _parse_bool(os.getenv("APPLYLENS_WORKFLOW_VERIFIER_STRICT", ""))
     try:

@@ -86,6 +86,7 @@ def test_workflow_registry_markdown_includes_all_agent_names():
     markdown = workflow_registry.render_agentic_workflow_manifest_markdown()
 
     assert "# Agentic Workflow Manifest" in markdown
+    assert "## Artifact Flow" in markdown
     for agent_name in [
         "Resume Match Agent",
         "Source Health Agent",
@@ -95,3 +96,16 @@ def test_workflow_registry_markdown_includes_all_agent_names():
         "Operator Review Agent",
     ]:
         assert agent_name in markdown
+
+
+def test_workflow_registry_writes_manifest_artifacts(tmp_path):
+    result = workflow_registry.write_agentic_workflow_manifest_artifacts(output_dir=tmp_path)
+
+    json_path = tmp_path / "agentic_workflow_manifest.json"
+    md_path = tmp_path / "agentic_workflow_manifest.md"
+
+    assert result["validation_status"] == "passed"
+    assert json_path.exists()
+    assert md_path.exists()
+    assert "validation" in json_path.read_text(encoding="utf-8")
+    assert "# Agentic Workflow Manifest" in md_path.read_text(encoding="utf-8")

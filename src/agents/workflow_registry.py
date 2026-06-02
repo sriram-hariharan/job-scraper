@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
+import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 from src.agents import (
@@ -15,6 +17,8 @@ from src.agents import (
 
 WORKFLOW_NAME = "ApplyLens Agentic Workflow"
 WORKFLOW_VERSION = "agentic_workflow_manifest_v1"
+MANIFEST_JSON_NAME = "agentic_workflow_manifest.json"
+MANIFEST_MD_NAME = "agentic_workflow_manifest.md"
 
 REQUIRED_FEATURE_FLAGS = [
     "APPLYLENS_AGENT_TRACE_ENABLED",
@@ -45,6 +49,8 @@ GENERATED_ARTIFACT_KINDS = [
     "operator_review_summary",
     "agentic_workflow_summary_json",
     "agentic_workflow_summary_md",
+    "agentic_workflow_manifest_json",
+    "agentic_workflow_manifest_md",
     "agentic_workflow_verification_json",
     "job_packet_manifest",
 ]
@@ -58,6 +64,8 @@ EXPECTED_AGENTIC_ARTIFACT_KINDS = [
     "operator_review_summary",
     "agentic_workflow_summary_json",
     "agentic_workflow_summary_md",
+    "agentic_workflow_manifest_json",
+    "agentic_workflow_manifest_md",
     "agentic_workflow_verification_json",
 ]
 
@@ -74,6 +82,8 @@ ARTIFACT_DEPENDENCY_ORDER = [
     "operator_review_summary.json",
     "agentic_workflow_summary.json",
     "agentic_workflow_summary.md",
+    "agentic_workflow_manifest.json",
+    "agentic_workflow_manifest.md",
     "agentic_workflow_verification.json",
 ]
 
@@ -369,7 +379,10 @@ def render_agentic_workflow_manifest_markdown(
                 "",
             ]
         )
-    lines.extend(["## Feature Flags", ""])
+    lines.extend(["## Artifact Flow", ""])
+    for artifact in payload.get("artifact_dependency_order", []) or []:
+        lines.append(f"- `{artifact}`")
+    lines.extend(["", "## Feature Flags", ""])
     for flag in payload.get("feature_flags", []) or []:
         lines.append(f"- `{flag}`")
     lines.extend(["", "## Generated Artifact Kinds", ""])
@@ -379,3 +392,31 @@ def render_agentic_workflow_manifest_markdown(
     for guarantee in payload.get("safety_guarantees", []) or []:
         lines.append(f"- {guarantee}")
     return "\n".join(lines).strip() + "\n"
+
+
+def build_agentic_workflow_manifest_artifact_payload() -> Dict[str, Any]:
+    manifest = get_agentic_workflow_manifest()
+    manifest["validation"] = validate_agentic_workflow_manifest(manifest)
+    return manifest
+
+
+def write_agentic_workflow_manifest_artifacts(
+    *,
+    output_dir: str | Path,
+    manifest_json_path: str | Path | None = None,
+    manifest_md_path: str | Path | None = None,
+) -> Dict[str, Any]:
+    root = Path(output_dir)
+    json_path = Path(manifest_json_path) if manifest_json_path else root / MANIFEST_JSON_NAME
+    md_path = Path(manifest_md_path) if manifest_md_path else root / MANIFEST_MD_NAME
+    payload = build_agentic_workflow_manifest_artifact_payload()
+    json_path.parent.mkdir(parents=True, exist_ok=True)
+    md_path.parent.mkdir(parents=True, exist_ok=True)
+    json_path.write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+    md_path.write_text(render_agentic_workflow_manifest_markdown(payload), encoding="utf-8")
+    return {
+        "json_path": str(json_path),
+        "md_path": str(md_path),
+        "payload": payload,
+        "validation_status": payload.get("validation", {}).get("validation_status", ""),
+    }

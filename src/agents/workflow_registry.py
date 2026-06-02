@@ -51,6 +51,8 @@ GENERATED_ARTIFACT_KINDS = [
     "agentic_workflow_summary_md",
     "agentic_workflow_manifest_json",
     "agentic_workflow_manifest_md",
+    "agentic_workflow_execution_plan_json",
+    "agentic_workflow_execution_plan_md",
     "agentic_workflow_verification_json",
     "job_packet_manifest",
 ]
@@ -66,6 +68,8 @@ EXPECTED_AGENTIC_ARTIFACT_KINDS = [
     "agentic_workflow_summary_md",
     "agentic_workflow_manifest_json",
     "agentic_workflow_manifest_md",
+    "agentic_workflow_execution_plan_json",
+    "agentic_workflow_execution_plan_md",
     "agentic_workflow_verification_json",
 ]
 
@@ -84,6 +88,8 @@ ARTIFACT_DEPENDENCY_ORDER = [
     "agentic_workflow_summary.md",
     "agentic_workflow_manifest.json",
     "agentic_workflow_manifest.md",
+    "agentic_workflow_execution_plan.json",
+    "agentic_workflow_execution_plan.md",
     "agentic_workflow_verification.json",
 ]
 

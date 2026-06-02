@@ -174,6 +174,34 @@ def test_agentic_workflow_manifest_ui_contract():
     assert "_agentic_workflow_manifest_from_artifacts" in services_source
 
 
+def test_agentic_workflow_execution_plan_ui_contract():
+    review_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Agentic Workflow Execution Plan" in review_source
+    assert "agentic_workflow_execution_plan" in review_source
+    assert "plan_json" in review_source
+    assert "plan_markdown" in review_source
+    assert "ordered_steps" in review_source
+    assert "execution_mode" in review_source
+    assert "execution_enabled" in review_source
+    assert "execution_status" in review_source
+    assert "No agentic workflow execution plan recorded for this run." in review_source
+    assert "Execution plan markdown" in review_source
+    assert "escapeHtml(markdown)" in review_source
+
+    assert ".agentic-workflow-execution-plan-card" in review_css
+    assert ".agentic-review-plan-step" in review_css
+    assert ".agentic-review-plan-metrics" in review_css
+
+    assert "agentic_workflow_execution_plan.json" in services_source
+    assert "agentic_workflow_execution_plan.md" in services_source
+    assert "agentic_workflow_execution_plan_json" in services_source
+    assert "agentic_workflow_execution_plan_md" in services_source
+    assert "_agentic_workflow_execution_plan_from_artifacts" in services_source
+
+
 def test_agentic_review_dedicated_page_contract():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")

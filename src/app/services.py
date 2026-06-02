@@ -221,6 +221,8 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "agentic_workflow_summary.md",
     "agentic_workflow_manifest.json",
     "agentic_workflow_manifest.md",
+    "agentic_workflow_execution_plan.json",
+    "agentic_workflow_execution_plan.md",
     "agentic_workflow_verification.json",
     "job_packet_manifest.csv",
     "role_title_filter_audit.csv",
@@ -854,6 +856,7 @@ def profile_pipeline_run_detail_payload(
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
         "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
         "agentic_workflow_manifest": _agentic_workflow_manifest_from_artifacts(artifacts),
+        "agentic_workflow_execution_plan": _agentic_workflow_execution_plan_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
     }
 
@@ -882,6 +885,7 @@ def profile_pipeline_run_agentic_review_payload(
         "config_json": run.get("config_json") if isinstance(run.get("config_json"), dict) else {},
         "agentic_workflow_summary": _agentic_workflow_summary_from_artifacts(artifacts),
         "agentic_workflow_manifest": _agentic_workflow_manifest_from_artifacts(artifacts),
+        "agentic_workflow_execution_plan": _agentic_workflow_execution_plan_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "job_prioritization_rows": _csv_rows_from_text(priority_text),
         "tailoring_decision_rows": _csv_rows_from_text(tailoring_decision_text),
@@ -3441,6 +3445,8 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "agentic_workflow_summary.md": "agentic_workflow_summary_md",
         "agentic_workflow_manifest.json": "agentic_workflow_manifest_json",
         "agentic_workflow_manifest.md": "agentic_workflow_manifest_md",
+        "agentic_workflow_execution_plan.json": "agentic_workflow_execution_plan_json",
+        "agentic_workflow_execution_plan.md": "agentic_workflow_execution_plan_md",
         "agentic_workflow_verification.json": "agentic_workflow_verification_json",
         "job_packet_manifest.csv": "job_packet_manifest",
         "role_title_filter_audit.csv": "role_title_filter_audit",
@@ -9716,6 +9722,16 @@ def _agentic_workflow_manifest_from_artifacts(rows: List[Dict[str, Any]]) -> Dic
         "available": bool(manifest_json or manifest_markdown),
         "manifest_json": manifest_json,
         "manifest_markdown": manifest_markdown,
+    }
+
+
+def _agentic_workflow_execution_plan_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    plan_json = _artifact_json_by_name(rows, "agentic_workflow_execution_plan.json")
+    plan_markdown = _artifact_text_by_name(rows, "agentic_workflow_execution_plan.md")
+    return {
+        "available": bool(plan_json or plan_markdown),
+        "plan_json": plan_json,
+        "plan_markdown": plan_markdown,
     }
 
 

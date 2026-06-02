@@ -17,6 +17,11 @@ function getWorkflowManifest(payload = {}) {
   return manifest && typeof manifest === "object" ? manifest : {};
 }
 
+function getWorkflowExecutionPlan(payload = {}) {
+  const plan = payload?.agentic_workflow_execution_plan?.plan_json;
+  return plan && typeof plan === "object" ? plan : {};
+}
+
 function formatReviewLabel(value) {
   const raw = String(value || "").trim();
   if (!raw) return "-";
@@ -161,7 +166,7 @@ function renderAgenticReviewAdvisoryPanel(panelId, title, description, rows, cou
   `;
 }
 
-function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}, workflowManifest = {}) {
+function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}, workflowManifest = {}, workflowExecutionPlan = {}) {
   const panel = qs("agenticReviewDiagnosticsPanel");
   if (!panel) return;
   const available = Boolean(workflowVerification?.available);
@@ -172,15 +177,23 @@ function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}, workflow
   const manifest = workflowManifest?.manifest_json && typeof workflowManifest.manifest_json === "object"
     ? workflowManifest.manifest_json
     : {};
-  if (!available && !Object.keys(verification).length && !manifestAvailable && !Object.keys(manifest).length) {
+  const planAvailable = Boolean(workflowExecutionPlan?.available);
+  const executionPlan = workflowExecutionPlan?.plan_json && typeof workflowExecutionPlan.plan_json === "object"
+    ? workflowExecutionPlan.plan_json
+    : {};
+  if (
+    !available && !Object.keys(verification).length
+    && !manifestAvailable && !Object.keys(manifest).length
+    && !planAvailable && !Object.keys(executionPlan).length
+  ) {
     panel.innerHTML = `
       <div class="agentic-workflow-header">
         <div>
           <h2>Artifacts / Diagnostics</h2>
-          <p>Verifier and manifest artifacts will appear here after a run produces them.</p>
+          <p>Verifier, manifest, and dry-run execution plan artifacts will appear here after a run produces them.</p>
         </div>
       </div>
-      <div class="pipeline-runs-empty-cell">No agentic workflow manifest or verification recorded for this run.</div>
+      <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, or verification recorded for this run.</div>
     `;
     return;
   }
@@ -231,6 +244,7 @@ function renderAgenticReviewDiagnosticsPanel(workflowVerification = {}, workflow
       ${renderWorkflowVerificationChecks(consistencyChecks)}
     </details>
     ${renderAgenticWorkflowManifestSection(workflowManifest)}
+    ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
   `;
 }
 
@@ -331,6 +345,72 @@ function renderAgenticWorkflowManifestAgentRow(agent = {}) {
   `;
 }
 
+function renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan = {}) {
+  const available = Boolean(workflowExecutionPlan?.available);
+  const plan = workflowExecutionPlan?.plan_json && typeof workflowExecutionPlan.plan_json === "object"
+    ? workflowExecutionPlan.plan_json
+    : {};
+  const markdown = String(workflowExecutionPlan?.plan_markdown || "");
+  if (!available && !Object.keys(plan).length) {
+    return `
+      <section class="agentic-workflow-execution-plan-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Agentic Workflow Execution Plan</h2>
+            <p>The dry-run execution plan artifact was not recorded for this run.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No agentic workflow execution plan recorded for this run.</div>
+      </section>
+    `;
+  }
+
+  const validation = plan.validation && typeof plan.validation === "object" ? plan.validation : {};
+  const validationStatus = String(validation.validation_status || "unknown").toLowerCase();
+  const orderedSteps = Array.isArray(plan.ordered_steps) ? plan.ordered_steps : [];
+
+  return `
+    <section class="agentic-workflow-execution-plan-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Agentic Workflow Execution Plan</h2>
+          <p>Dry-run diagnostic plan only. These planned steps are not executed from this page or artifact.</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(validationStatus)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(validationStatus))}
+        </span>
+      </div>
+      <div class="agentic-review-plan-metrics">
+        ${renderWorkflowSummaryMetric("Planner version", plan.planner_version || "-")}
+        ${renderWorkflowSummaryMetric("Execution mode", plan.execution_mode || "-")}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+        ${renderWorkflowSummaryMetric("Steps", orderedSteps.length)}
+      </div>
+      <div class="agentic-review-plan-step-list">
+        ${orderedSteps.length ? orderedSteps.map(renderAgenticWorkflowExecutionPlanStepRow).join("") : `<div class="pipeline-runs-empty-cell">No planned steps listed.</div>`}
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Execution plan markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
+function renderAgenticWorkflowExecutionPlanStepRow(step = {}) {
+  const provider = [step.model_provider, step.model_name].filter(Boolean).join(" / ") || "-";
+  return `
+    <article class="agentic-review-plan-step">
+      <div>
+        <strong>${escapeHtml(step.step_index || "-")}. ${escapeHtml(step.agent_name || step.agent_key || "Unknown agent")}</strong>
+        <span>${escapeHtml(step.agent_version || "unknown version")} · ${escapeHtml(provider)}</span>
+      </div>
+      <div class="agentic-review-plan-step-pills">
+        ${renderReviewPill(step.execution_status || "planned")}
+        ${renderReviewPill(step.execution_enabled ? "enabled" : "disabled")}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgenticReviewData(payload, tracePayload) {
   renderAgenticReviewStatus(payload || {});
 
@@ -392,7 +472,11 @@ function renderAgenticReviewData(payload, tracePayload) {
     ],
   );
 
-  renderAgenticReviewDiagnosticsPanel(payload.agentic_workflow_verification, payload.agentic_workflow_manifest);
+  renderAgenticReviewDiagnosticsPanel(
+    payload.agentic_workflow_verification,
+    payload.agentic_workflow_manifest,
+    payload.agentic_workflow_execution_plan,
+  );
 
   const traceNode = qs("agenticReviewTracePanel");
   if (traceNode) {

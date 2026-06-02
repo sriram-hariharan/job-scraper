@@ -39,6 +39,10 @@ def test_agentic_platform_docs_cover_agents_flags_and_commands():
     assert "src/agents/workflow_runner.py" in source
     assert "python -m src.agents.workflow_runner --dry-run --json" in source
     assert "did_execute=false" in source
+    assert "Human Feedback Export" in source
+    assert "export_agent_feedback_events()" in source
+    assert "build_agent_feedback_evaluation_dataset()" in source
+    assert "agent_feedback_export_schema_valid" in source
 
 
 def test_agentic_platform_docs_state_safety_guarantees():
@@ -48,6 +52,7 @@ def test_agentic_platform_docs_state_safety_guarantees():
         "No advisory agent overwrites production `action`.",
         "No advisory agent mutates packet generation.",
         "No advisory agent generates resume text.",
+        "Human feedback export is read-only and diagnostic.",
         "The workflow verifier is diagnostic only.",
         "There is no LangGraph integration.",
         "Per-job trace rows are intentionally not implemented yet.",

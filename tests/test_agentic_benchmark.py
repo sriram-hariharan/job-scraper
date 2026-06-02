@@ -48,6 +48,7 @@ def test_agentic_benchmark_metrics_compute_expected_values():
     assert result["llmops_metadata_schema_present"] == 1.0
     assert result["llmops_required_keys_present"] == 1.0
     assert result["workflow_registry_validation_passed"] == 1.0
+    assert result["agent_feedback_export_schema_valid"] == 1.0
     assert result["workflow_registry_agent_count"] == 6
     assert result["validation_pass_rate"] == 1.0
     assert result["failed_case_ids"] == []
@@ -76,6 +77,7 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "llmops_metadata_schema_present",
         "llmops_required_keys_present",
         "workflow_registry_validation_passed",
+        "agent_feedback_export_schema_valid",
         "workflow_registry_agent_count",
         "validation_pass_rate",
         "failed_case_ids",
@@ -211,6 +213,7 @@ def test_agentic_benchmark_report_rendering_and_output_paths_are_stable():
     assert "Operator Review Agent advisory benchmark" in report
     assert "LLMOps metadata schema readiness benchmark" in report
     assert "Agentic workflow registry manifest benchmark" in report
+    assert "Agent feedback export schema benchmark" in report
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         output_files = agentic_benchmark.write_benchmark_outputs(result, tmp_dir)
@@ -251,3 +254,13 @@ def test_agentic_benchmark_cli_threshold_failure_returns_nonzero(capsys):
     captured = capsys.readouterr()
     assert exit_code == 1
     assert "validation_pass_rate" in captured.err
+
+
+def test_agentic_benchmark_feedback_export_schema_metric_is_offline():
+    evaluation = agentic_benchmark.evaluate_agent_feedback_export_schema()
+
+    assert evaluation["schema_valid"] is True
+    export_payload = evaluation["export_payload"]
+    assert export_payload["export_version"] == "agent_feedback_export_v1"
+    assert export_payload["evaluation_rows"][0]["feedback_label"] == "positive"
+    assert export_payload["evaluation_rows"][0]["feedback_value"] == 1.0

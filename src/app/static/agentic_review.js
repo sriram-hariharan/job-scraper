@@ -2,6 +2,11 @@ function getAgenticReviewRunId() {
   return document.querySelector("[data-agentic-review-run-id]")?.dataset?.agenticReviewRunId || "";
 }
 
+const AGENTIC_REVIEW_FEEDBACK_EVENTS = {
+  helpful: "agentic_review_helpful",
+  not_helpful: "agentic_review_not_helpful",
+};
+
 function getWorkflowSummary(payload = {}) {
   const summary = payload?.agentic_workflow_summary?.summary_json;
   return summary && typeof summary === "object" ? summary : {};
@@ -176,9 +181,11 @@ function renderAgenticReviewDiagnosticsPanel(
   workflowManifest = {},
   workflowExecutionPlan = {},
   workflowDryRun = {},
+  agentFeedback = {},
 ) {
   const panel = qs("agenticReviewDiagnosticsPanel");
   if (!panel) return;
+  const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
   const available = Boolean(workflowVerification?.available);
   const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
     ? workflowVerification.verification_json
@@ -209,6 +216,7 @@ function renderAgenticReviewDiagnosticsPanel(
         </div>
       </div>
       <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, dry run, or verification recorded for this run.</div>
+      ${feedbackSection}
     `;
     return;
   }
@@ -261,7 +269,158 @@ function renderAgenticReviewDiagnosticsPanel(
     ${renderAgenticWorkflowManifestSection(workflowManifest)}
     ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
     ${renderAgenticWorkflowDryRunSection(workflowDryRun)}
+    ${feedbackSection}
   `;
+}
+
+function getAgentFeedbackSummary(agentFeedback = {}) {
+  const summary = agentFeedback?.summary && typeof agentFeedback.summary === "object"
+    ? agentFeedback.summary
+    : {};
+  return {
+    total_events: Number(summary.total_events || 0),
+    event_type_counts: summary.event_type_counts && typeof summary.event_type_counts === "object"
+      ? summary.event_type_counts
+      : {},
+    target_type_counts: summary.target_type_counts && typeof summary.target_type_counts === "object"
+      ? summary.target_type_counts
+      : {},
+    latest_event_at: String(summary.latest_event_at || ""),
+  };
+}
+
+function renderAgentFeedbackCountChips(counts = {}) {
+  const entries = Object.entries(counts || {})
+    .filter(([key, value]) => String(key || "").trim() && Number(value || 0) > 0)
+    .slice(0, 6);
+  if (!entries.length) return `<span class="agentic-review-muted">none</span>`;
+  return `
+    <div class="agentic-review-chip-list">
+      ${entries.map(([key, value]) => `<span>${escapeHtml(formatReviewLabel(key))}: ${escapeHtml(value)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function renderAgentFeedbackRecentEvents(events = []) {
+  const rows = Array.isArray(events) ? events.slice(0, 5) : [];
+  if (!rows.length) {
+    return `<div class="pipeline-runs-empty-cell">No feedback events recorded for this run yet.</div>`;
+  }
+  return `
+    <div class="agentic-feedback-event-list">
+      ${rows.map((event) => `
+        <article class="agentic-feedback-event">
+          <div>
+            <strong>${escapeHtml(formatReviewLabel(event.event_type || "feedback"))}</strong>
+            <span>${escapeHtml(formatReviewLabel(event.target_type || "target"))} · ${escapeHtml(event.target_id || "-")}</span>
+          </div>
+          <div class="agentic-feedback-event-meta">
+            ${renderReviewPill(event.source || "feedback")}
+            <span>${escapeHtml(event.created_at || "-")}</span>
+          </div>
+        </article>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
+  const summary = getAgentFeedbackSummary(agentFeedback);
+  const events = Array.isArray(agentFeedback?.events) ? agentFeedback.events : [];
+  const runId = escapeHtml(agentFeedback?.pipeline_run_id || getAgenticReviewRunId());
+  return `
+    <section class="agentic-feedback-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Human Feedback</h2>
+          <p>Read-only feedback events captured for this pipeline run. These diagnostics do not change scoring, queue order, or tailoring decisions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      <div class="agentic-feedback-actions" data-agentic-feedback-run-id="${runId}">
+        <button type="button" class="agentic-feedback-action is-helpful" data-agentic-feedback-event="agentic_review_helpful">
+          Mark review useful
+        </button>
+        <button type="button" class="agentic-feedback-action is-not-helpful" data-agentic-feedback-event="agentic_review_not_helpful">
+          Mark review not useful
+        </button>
+        <span class="agentic-feedback-status" data-agentic-feedback-status aria-live="polite"></span>
+      </div>
+      <div class="agentic-feedback-metrics">
+        ${renderWorkflowSummaryMetric("Total events", summary.total_events)}
+        ${renderWorkflowSummaryMetric("Latest event", summary.latest_event_at || "-")}
+      </div>
+      <div class="agentic-feedback-counts">
+        <div>
+          <strong>Event types</strong>
+          ${renderAgentFeedbackCountChips(summary.event_type_counts)}
+        </div>
+        <div>
+          <strong>Target types</strong>
+          ${renderAgentFeedbackCountChips(summary.target_type_counts)}
+        </div>
+      </div>
+      ${renderAgentFeedbackRecentEvents(events)}
+    </section>
+  `;
+}
+
+async function refreshAgenticReviewFeedbackSummary(runId = getAgenticReviewRunId()) {
+  const safeRunId = String(runId || "").trim();
+  if (!safeRunId) return;
+  try {
+    const feedbackPayload = await fetchJson(`/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(safeRunId)}&limit=50`);
+    const card = document.querySelector(".agentic-feedback-card");
+    if (card) {
+      card.outerHTML = renderAgenticReviewFeedbackSection(feedbackPayload || {});
+    }
+  } catch {
+    // Keep the page responsive; the explicit click already reported success/failure.
+  }
+}
+
+function setAgenticReviewFeedbackStatus(message, tone = "info") {
+  const status = document.querySelector("[data-agentic-feedback-status]");
+  if (!status) return;
+  status.textContent = message || "";
+  status.className = `agentic-feedback-status is-${tone}`;
+}
+
+async function recordAgenticReviewFeedback(eventType, button) {
+  const runId = getAgenticReviewRunId();
+  if (!runId || !eventType) return;
+  const previousDisabled = Boolean(button?.disabled);
+  if (button) button.disabled = true;
+  setAgenticReviewFeedbackStatus("Recording feedback...", "info");
+  try {
+    await fetchJson("/api/agent-feedback", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        pipeline_run_id: runId,
+        target_type: "agentic_review_section",
+        target_id: runId,
+        event_type: eventType,
+        payload_json: {
+          action: eventType === AGENTIC_REVIEW_FEEDBACK_EVENTS.helpful ? "mark_review_useful" : "mark_review_not_useful",
+          section: "human_feedback",
+        },
+        source: "agentic_review_ui",
+      }),
+    });
+    setAgenticReviewFeedbackStatus("Feedback recorded.", "success");
+    await refreshAgenticReviewFeedbackSummary(runId);
+  } catch (err) {
+    setAgenticReviewFeedbackStatus(err?.message || "Could not record feedback.", "error");
+  } finally {
+    if (button) {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  }
 }
 
 function renderAgenticWorkflowManifestSection(workflowManifest = {}) {
@@ -563,6 +722,7 @@ function renderAgenticReviewData(payload, tracePayload) {
     payload.agentic_workflow_manifest,
     payload.agentic_workflow_execution_plan,
     payload.agentic_workflow_dry_run,
+    payload.agent_feedback,
   );
 
   const traceNode = qs("agenticReviewTracePanel");
@@ -605,6 +765,14 @@ function bindAgenticReviewTabs() {
       button.dataset.agenticAdvisoryTarget || "",
     );
   });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agentic-feedback-event]");
+    if (!button) return;
+    const eventType = String(button.dataset.agenticFeedbackEvent || "").trim();
+    if (!Object.values(AGENTIC_REVIEW_FEEDBACK_EVENTS).includes(eventType)) return;
+    recordAgenticReviewFeedback(eventType, button);
+  });
 }
 
 async function initAgenticReviewPage() {
@@ -612,10 +780,12 @@ async function initAgenticReviewPage() {
   const runId = getAgenticReviewRunId();
   if (!runId) return;
   try {
-    const [payload, tracePayload] = await Promise.all([
+    const [payload, tracePayload, feedbackPayload] = await Promise.all([
       fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review-data`),
       fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`).catch(() => ({})),
+      fetchJson(`/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}&limit=50`).catch(() => ({})),
     ]);
+    if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
     renderAgenticReviewData(payload, tracePayload);
   } catch (err) {
     const panel = qs("agenticReviewStatusCard");

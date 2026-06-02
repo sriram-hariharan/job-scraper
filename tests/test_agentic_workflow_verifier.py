@@ -8,6 +8,7 @@ from src.agents.workflow_verifier import (
 )
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
+from src.agents.workflow_runner import write_agentic_workflow_dry_run_artifacts
 
 
 def _write_csv(path, rows, fieldnames):
@@ -126,6 +127,7 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
     (root / "agentic_workflow_summary.md").write_text("# Agentic Workflow Summary\n", encoding="utf-8")
     write_agentic_workflow_manifest_artifacts(output_dir=root)
     write_agentic_workflow_execution_plan_artifacts(output_dir=root)
+    write_agentic_workflow_dry_run_artifacts(output_dir=root)
     return root
 
 
@@ -236,6 +238,50 @@ def test_workflow_verifier_detects_enabled_execution_plan_step(tmp_path):
     assert payload["validation_status"] == "failed"
     assert "workflow_execution_plan_step_enabled" in payload["reason_codes"]
     assert "workflow_execution_plan_validation_failed" in payload["reason_codes"]
+
+
+def test_workflow_verifier_reads_dry_run_result_and_validates_no_execution(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "workflow_dry_run_validation_passed" in check_names
+    assert "workflow_dry_run_mode" in check_names
+    assert "workflow_dry_run_executed_step_count_zero" in check_names
+    assert "workflow_dry_run_steps_not_executed" in check_names
+    assert "workflow_dry_run_steps_disabled" in check_names
+    assert "workflow_dry_run_steps_skipped" in check_names
+    assert "workflow_dry_run_planned_step_count_matches_registry" in check_names
+
+
+def test_workflow_verifier_warns_when_dry_run_result_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "agentic_workflow_dry_run_result.json").unlink()
+    (root / "agentic_workflow_dry_run_report.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "agentic_workflow_dry_run_result.json" in payload["missing_artifacts"]
+    assert "missing_workflow_dry_run_result" in payload["reason_codes"]
+
+
+def test_workflow_verifier_detects_dry_run_step_execution_bug(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    result_path = root / "agentic_workflow_dry_run_result.json"
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["executed_step_count"] = 1
+    result["ordered_step_results"][0]["did_execute"] = True
+    _write_json(result_path, result)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "workflow_dry_run_step_executed" in payload["reason_codes"]
+    assert "workflow_dry_run_executed_step_count_nonzero" in payload["reason_codes"]
+    assert "workflow_dry_run_validation_failed" in payload["reason_codes"]
 
 
 def test_workflow_verifier_detects_summary_count_mismatch(tmp_path):

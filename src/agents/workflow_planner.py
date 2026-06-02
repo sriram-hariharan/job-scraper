@@ -30,6 +30,8 @@ ARTIFACT_NAME_TO_KIND = {
     "agentic_workflow_manifest.md": "agentic_workflow_manifest_md",
     "agentic_workflow_execution_plan.json": "agentic_workflow_execution_plan_json",
     "agentic_workflow_execution_plan.md": "agentic_workflow_execution_plan_md",
+    "agentic_workflow_dry_run_result.json": "agentic_workflow_dry_run_result_json",
+    "agentic_workflow_dry_run_report.md": "agentic_workflow_dry_run_report_md",
     "agentic_workflow_verification.json": "agentic_workflow_verification_json",
     "job_packet_manifest.csv": "job_packet_manifest",
 }

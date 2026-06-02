@@ -118,6 +118,11 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "executable_adapter_count=0",
         "python -m src.agents.orchestrator_adapter_harness --preflight --json",
         "Future real execution still requires a separate reviewed phase.",
+        "src/agents/read_only_job_prioritization_adapter.py",
+        "manual read-only adapter prototype",
+        "does not update queue action, packet generation, tailoring, scoring, ranking, or production artifacts.",
+        "not wired into live planning",
+        "does not call other agents",
     ]:
         assert phrase in source
 

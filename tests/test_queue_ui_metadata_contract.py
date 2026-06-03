@@ -266,6 +266,20 @@ def test_read_only_adapter_preflight_ui_contract():
     assert "_read_only_adapter_preflight_from_artifacts" in services_source
 
 
+def test_manual_read_only_adapter_chain_empty_read_model_is_safe():
+    payload = services._manual_read_only_adapter_chain_from_artifacts([])
+
+    assert payload["present"] is False
+    assert payload["available"] is False
+    assert payload["validation_status"] == "missing"
+    assert payload["did_execute_chain"] is False
+    assert payload["did_mutate_production"] is False
+    assert payload["adapter_execution_order"] == []
+    assert payload["summary"] == {}
+    assert payload["reason_codes"] == []
+    assert payload["warning_codes"] == []
+
+
 def test_agentic_review_dedicated_page_contract():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")

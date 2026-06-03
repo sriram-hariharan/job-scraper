@@ -182,12 +182,14 @@ function renderAgenticReviewDiagnosticsPanel(
   workflowExecutionPlan = {},
   workflowDryRun = {},
   readOnlyAdapterPreflight = {},
+  manualReadOnlyAdapterChain = {},
   agentFeedback = {},
   ragEvaluation = {},
 ) {
   const panel = qs("agenticReviewDiagnosticsPanel");
   if (!panel) return;
   const preflightSection = renderReadOnlyAdapterPreflightSection(readOnlyAdapterPreflight);
+  const adapterChainSection = renderManualReadOnlyAdapterChainSection(manualReadOnlyAdapterChain);
   const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
   const ragEvaluationSection = renderRagEvaluationSection(ragEvaluation);
   const available = Boolean(workflowVerification?.available);
@@ -210,12 +212,14 @@ function renderAgenticReviewDiagnosticsPanel(
   const preflightPlan = readOnlyAdapterPreflight?.plan_json && typeof readOnlyAdapterPreflight.plan_json === "object"
     ? readOnlyAdapterPreflight.plan_json
     : {};
+  const chainAvailable = Boolean(manualReadOnlyAdapterChain?.present || manualReadOnlyAdapterChain?.available);
   if (
     !available && !Object.keys(verification).length
     && !manifestAvailable && !Object.keys(manifest).length
     && !planAvailable && !Object.keys(executionPlan).length
     && !dryRunAvailable && !Object.keys(dryRunResult).length
     && !preflightAvailable && !Object.keys(preflightPlan).length
+    && !chainAvailable
   ) {
     panel.innerHTML = `
       <div class="agentic-workflow-header">
@@ -226,6 +230,7 @@ function renderAgenticReviewDiagnosticsPanel(
       </div>
       <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, dry run, or verification recorded for this run.</div>
       ${preflightSection}
+      ${adapterChainSection}
       ${ragEvaluationSection}
       ${feedbackSection}
     `;
@@ -281,6 +286,7 @@ function renderAgenticReviewDiagnosticsPanel(
     ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
     ${renderAgenticWorkflowDryRunSection(workflowDryRun)}
     ${preflightSection}
+    ${adapterChainSection}
     ${ragEvaluationSection}
     ${feedbackSection}
   `;
@@ -796,6 +802,64 @@ function renderReadOnlyAdapterPreflightRow(result = {}) {
   `;
 }
 
+function renderManualReadOnlyAdapterChainSection(chain = {}) {
+  const present = Boolean(chain?.present || chain?.available);
+  const summary = chain?.summary && typeof chain.summary === "object" ? chain.summary : {};
+  const order = Array.isArray(chain?.adapter_execution_order) ? chain.adapter_execution_order : [];
+  const validationStatus = String(chain?.validation_status || (present ? "unknown" : "missing")).toLowerCase();
+  const markdown = String(chain?.report_markdown || "");
+  if (!present) {
+    return `
+      <section class="manual-read-only-adapter-chain-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Manual Read-Only Adapter Chain</h2>
+            <p>Manual artifact diagnostics only. Missing chain artifacts do not affect planning results.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No manual read-only adapter chain artifacts recorded for this run yet.</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="manual-read-only-adapter-chain-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Manual Read-Only Adapter Chain</h2>
+          <p>Manual only, read-only, and not wired into the live pipeline. These diagnostics do not change queue action, scoring, ranking, tailoring, packets, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(validationStatus)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(validationStatus))}
+        </span>
+      </div>
+      <div class="manual-read-only-adapter-chain-metrics">
+        ${renderWorkflowSummaryMetric("Execution mode", chain.execution_mode || "-")}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+        ${renderWorkflowSummaryMetric("Did execute", chain.did_execute_chain ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutated production", chain.did_mutate_production ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Input rows", summary.input_row_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Adapters executed", summary.adapters_executed_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Priority recs", summary.job_prioritization_recommendation_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Tailoring decisions", summary.tailoring_decision_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Operator lanes", summary.operator_review_lane_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Warnings", summary.warning_count ?? 0)}
+      </div>
+      <div class="agentic-review-section-counts">
+        <strong>Adapter order</strong>
+        <span>${renderReasonChips(order)}</span>
+      </div>
+      <div class="manual-read-only-adapter-chain-notice">
+        ${renderReviewPill("manual only")}
+        ${renderReviewPill("read-only")}
+        ${renderReviewPill("not live pipeline")}
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Chain report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
 function renderAgenticReviewData(payload, tracePayload) {
   renderAgenticReviewStatus(payload || {});
 
@@ -863,6 +927,7 @@ function renderAgenticReviewData(payload, tracePayload) {
     payload.agentic_workflow_execution_plan,
     payload.agentic_workflow_dry_run,
     payload.read_only_adapter_preflight,
+    payload.manual_read_only_adapter_chain,
     payload.agent_feedback,
     payload.rag_evaluation,
   );

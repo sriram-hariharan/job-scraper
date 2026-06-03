@@ -18,6 +18,8 @@ Phase 23A adds `src/agents/read_only_operator_review_adapter.py` as a manual rea
 
 Phase 24A adds `src/agents/read_only_adapter_chain.py` as a manual read-only adapter chain for `job_prioritization`, `tailoring_decision`, and `operator_review`. The chain runs only explicit/manual adapter prototypes with caller-provided rows or an explicit queue CSV path, writes only chain-specific diagnostics and adapter-specific subdirectory diagnostics when an isolated output directory is provided, and does not update queue action, packet generation, tailoring generation, scoring, ranking, application submission, or production artifacts. It is not wired into live planning, the scheduler, UI actions, or `workflow_runner.py`; future real orchestration still requires a separate reviewed phase.
 
+Phase 25A allows manually produced chain artifacts (`read_only_adapter_chain_result.json` and `read_only_adapter_chain_report.md`) to be ingested, verified, and displayed in Agentic Review diagnostics. This does not run the chain, does not change production decisions, and does not wire the chain into live planning, the scheduler, UI actions, or `workflow_runner.py`. Future real orchestration still requires a separate reviewed phase.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.
@@ -28,6 +30,7 @@ Phase 24A adds `src/agents/read_only_adapter_chain.py` as a manual read-only ada
 - `src/agents/read_only_tailoring_decision_adapter.py` is explicit/manual only and is not wired into live planning, the scheduler, or `workflow_runner.py`.
 - `src/agents/read_only_operator_review_adapter.py` is explicit/manual only and is not wired into live planning, the scheduler, or `workflow_runner.py`.
 - `src/agents/read_only_adapter_chain.py` is explicit/manual only and is not wired into live planning, the scheduler, UI actions, or `workflow_runner.py`.
+- Manual read-only adapter chain artifacts can be displayed in Agentic Review diagnostics when a user has produced them explicitly.
 - `src/agents/workflow_verifier.py` validates artifacts and dry-run payloads when present.
 - `run_application_planning.py` writes manifest, execution-plan, dry-run, verifier, and RAG Evaluation diagnostics through existing artifact hooks.
 - `application_execution_queue.py` writes current advisory artifacts for job prioritization, tailoring decision, and operator review, and may record aggregate trace rows when tracing is explicitly enabled.

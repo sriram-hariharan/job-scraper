@@ -109,3 +109,37 @@ def test_agentic_review_rag_evaluation_diagnostics_contract():
     assert "rag_evaluation_report.md" in services_source
     assert "_rag_evaluation_from_artifacts" in services_source
     assert "build_rag_evaluation_summary" in services_source
+
+
+def test_agentic_review_manual_read_only_adapter_chain_diagnostics_contract():
+    review_js = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Manual Read-Only Adapter Chain" in review_js
+    assert "renderManualReadOnlyAdapterChainSection" in review_js
+    assert "manual_read_only_adapter_chain" in review_js
+    assert "manual only" in review_js
+    assert "read-only" in review_js
+    assert "not live pipeline" in review_js
+    assert "did_execute_chain" in review_js
+    assert "did_mutate_production" in review_js
+    assert "adapter_execution_order" in review_js
+    assert "input_row_count" in review_js
+    assert "adapters_executed_count" in review_js
+    assert "job_prioritization_recommendation_count" in review_js
+    assert "tailoring_decision_count" in review_js
+    assert "operator_review_lane_count" in review_js
+    assert "warning_count" in review_js
+    assert "No manual read-only adapter chain artifacts recorded for this run yet." in review_js
+    assert "Chain report markdown" in review_js
+
+    assert ".manual-read-only-adapter-chain-card" in review_css
+    assert ".manual-read-only-adapter-chain-metrics" in review_css
+    assert ".manual-read-only-adapter-chain-notice" in review_css
+
+    assert "read_only_adapter_chain_result.json" in services_source
+    assert "read_only_adapter_chain_report.md" in services_source
+    assert "read_only_adapter_chain_result_json" in services_source
+    assert "read_only_adapter_chain_report_md" in services_source
+    assert "_manual_read_only_adapter_chain_from_artifacts" in services_source

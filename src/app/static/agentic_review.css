@@ -521,6 +521,7 @@
 .agentic-workflow-execution-plan-card,
 .agentic-workflow-dry-run-card,
 .read-only-adapter-preflight-card,
+.manual-read-only-adapter-chain-card,
 .rag-evaluation-card,
 .agentic-feedback-card {
   display: grid;
@@ -567,6 +568,14 @@
     var(--app-inset);
 }
 
+.manual-read-only-adapter-chain-card {
+  border-color: rgba(20, 184, 166, 0.24);
+  border-left-color: rgba(20, 184, 166, 0.82);
+  background:
+    linear-gradient(135deg, rgba(20, 184, 166, 0.09), rgba(245, 158, 11, 0.04)),
+    var(--app-inset);
+}
+
 .rag-evaluation-card {
   border-color: rgba(14, 165, 233, 0.22);
   border-left-color: rgba(14, 165, 233, 0.78);
@@ -579,6 +588,7 @@
 .agentic-review-plan-metrics,
 .agentic-review-dry-run-metrics,
 .read-only-adapter-preflight-metrics,
+.manual-read-only-adapter-chain-metrics,
 .rag-evaluation-metrics,
 .agentic-feedback-metrics {
   display: grid;
@@ -731,6 +741,13 @@
 }
 
 .read-only-adapter-preflight-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.manual-read-only-adapter-chain-notice {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

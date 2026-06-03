@@ -95,8 +95,27 @@ def test_portfolio_demo_docs_cover_phase_18a_contract():
         "Applied AI Engineer",
         "Data Scientist",
         "ML Platform",
+        "manual read-only adapter chain",
+        "docs/read_only_chain_smoke.md",
+        "manual_read_only_adapter_chain",
+        "did_mutate_production=false",
+        "allow_live_pipeline_wiring=false",
+        "allow_application_submission=false",
+        "not production",
+        "not live orchestration",
+        "remains dry-run only",
     ]:
         assert phrase in source
+
+    forbidden_claims = [
+        "live orchestration is implemented",
+        "automatic application submission is enabled",
+        "the app runs the chain automatically",
+        "workflow_runner.py executes the chain",
+    ]
+    lower_source = source.lower()
+    for claim in forbidden_claims:
+        assert claim.lower() not in lower_source
 
 
 def test_orchestrator_readiness_docs_cover_phase_19a_contract():

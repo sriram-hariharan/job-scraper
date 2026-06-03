@@ -34,6 +34,19 @@ Application planning writes artifacts such as source health, best resume by job,
 - `src/agents/workflow_verifier.py` validates artifacts and reports warnings/failures according to existing strict-mode behavior.
 - Advisory agents read existing rows and emit separate advisory fields. They do not overwrite production `action`, queue ordering, packet generation, resume text, or tailoring behavior.
 
+## Read-Only Adapter Prototypes
+
+The read-only adapter prototypes wrap deterministic advisory helpers behind explicit/manual inputs. The manual chain in `src/agents/read_only_adapter_chain.py` composes only the read-only job prioritization, tailoring decision, and operator review adapters in a fixed order. It writes diagnostic artifacts only when an isolated `output_dir` is provided.
+
+This chain sits on a diagnostic artifact boundary:
+
+- Input is explicit rows or an explicit queue CSV path, including the sanitized fixture documented in `docs/read_only_chain_smoke.md`.
+- Output is chain-specific JSON/Markdown plus adapter-specific files inside adapter subdirectories.
+- Verifier/read-model/UI support can validate and display already-present chain artifacts in Agentic Review.
+- `src/agents/workflow_runner.py` remains a separate dry-run runner and does not invoke the chain.
+
+The chain is not production data flow, not live orchestration, and not an application-submission path. Safety flags such as `did_mutate_production=false`, `allow_live_pipeline_wiring=false`, and `allow_application_submission=false` document that boundary in the result payload.
+
 ## Agent Trace And Agentic Review
 
 Aggregate Agent Trace storage records run/step diagnostics when tracing is enabled. The Agentic Review UI in `src/app/static/agentic_review.js` renders:
@@ -45,6 +58,7 @@ Aggregate Agent Trace storage records run/step diagnostics when tracing is enabl
 - workflow manifest
 - execution plan
 - dry-run result
+- manual read-only adapter chain diagnostics when artifacts are present
 - Human Feedback
 - RAG Evaluation
 

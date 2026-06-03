@@ -310,9 +310,14 @@ def render_chain_artifact_generation_report_markdown(result: Dict[str, Any] | No
 
 
 def main(argv: List[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate manual read-only adapter chain diagnostics.")
+    parser = argparse.ArgumentParser(
+        description=(
+            "Explicit/manual read-only utility that writes diagnostic artifacts only; "
+            "it does not update production decisions."
+        )
+    )
     parser.add_argument("--queue-input", default="", help="Required explicit application_execution_queue.csv-like input path.")
-    parser.add_argument("--output-dir", default="", help="Required explicit output directory for diagnostics.")
+    parser.add_argument("--output-dir", default="", help="Required explicit output directory for read-only diagnostic artifacts.")
     parser.add_argument("--pipeline-run-id", default="", help="Optional diagnostic pipeline run id.")
     parser.add_argument("--owner-user-id", default="", help="Optional diagnostic owner user id.")
     parser.add_argument("--json", action="store_true", help="Print machine-readable JSON.")

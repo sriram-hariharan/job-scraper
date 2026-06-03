@@ -145,6 +145,20 @@ def test_cli_missing_args_fails_safely(capsys):
     assert "missing_explicit_output_dir" in payload["validation"]["reason_codes"]
 
 
+def test_cli_help_states_manual_read_only_diagnostic_contract(capsys):
+    try:
+        read_only_chain_artifact_generator.main(["--help"])
+    except SystemExit as exc:
+        assert exc.code == 0
+    output = capsys.readouterr().out
+
+    assert "--queue-input" in output
+    assert "--output-dir" in output
+    assert "read-only" in output
+    assert "diagnostic artifacts" in output
+    assert "does not update production decisions" in output
+
+
 def test_cli_fixture_run_succeeds(tmp_path, capsys):
     exit_code = read_only_chain_artifact_generator.main(
         [

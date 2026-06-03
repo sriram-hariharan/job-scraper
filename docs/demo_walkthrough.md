@@ -91,5 +91,6 @@ find "$TMP_CHAIN_DIR" -maxdepth 3 -type f -print | sort
 - Human Feedback
 - RAG Evaluation
 - Manual read-only adapter chain smoke fixture: `docs/read_only_chain_smoke.md`
+- Operator runbook for the explicit generator: `docs/read_only_chain_operator_runbook.md`
 - Agentic Benchmark command
 - Safety close: no production decision mutation

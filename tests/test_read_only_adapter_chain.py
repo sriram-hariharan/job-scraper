@@ -1,7 +1,21 @@
 import csv
 import json
+from pathlib import Path
 
 from src.agents import orchestrator_adapter_harness, read_only_adapter_chain, workflow_runner
+
+SMOKE_FIXTURE_PATH = Path("tests/fixtures/agentic_read_only_chain_smoke/application_execution_queue.csv")
+PRIVATE_MARKERS = {
+    "sriram",
+    "gmail",
+    "linkedin",
+    "greenhouse.io",
+    "lever.co",
+    "ashbyhq",
+    "workday",
+    "real_resume",
+    "real",
+}
 
 
 def _queue_row(**overrides):
@@ -172,6 +186,47 @@ def test_artifact_writer_writes_chain_root_and_adapter_subdirectory_files_only(t
     assert not (tmp_path / "operator_review_recommendations.csv").exists()
     payload = json.loads((tmp_path / "read_only_adapter_chain_result.json").read_text(encoding="utf-8"))
     assert payload["execution_mode"] == "manual_read_only_adapter_chain"
+
+
+def test_smoke_fixture_exists_and_is_sanitized():
+    assert SMOKE_FIXTURE_PATH.exists()
+
+    rows = list(csv.DictReader(SMOKE_FIXTURE_PATH.read_text(encoding="utf-8").splitlines()))
+    assert 3 <= len(rows) <= 6
+    fixture_text = SMOKE_FIXTURE_PATH.read_text(encoding="utf-8").lower()
+    for marker in PRIVATE_MARKERS:
+        assert marker not in fixture_text
+    assert all(str(row.get("job_doc_id", "")).startswith("fake_job_") for row in rows)
+    assert all(str(row.get("source", "")) == "fixture" for row in rows)
+
+
+def test_manual_chain_smoke_fixture_runs_and_writes_only_diagnostics(tmp_path):
+    result = read_only_adapter_chain.run_read_only_adapter_chain(
+        queue_input_artifact_path=SMOKE_FIXTURE_PATH,
+        output_dir=tmp_path,
+        pipeline_run_id="smoke_fixture",
+        owner_user_id="smoke_user",
+    )
+
+    assert result["execution_mode"] == "manual_read_only_adapter_chain"
+    assert result["did_execute_chain"] is True
+    assert result["did_mutate_production"] is False
+    assert result["allow_live_pipeline_wiring"] is False
+    assert result["allow_application_submission"] is False
+    assert result["adapter_execution_order"] == ["job_prioritization", "tailoring_decision", "operator_review"]
+    assert result["summary"]["input_row_count"] == 4
+    assert result["summary"]["adapters_executed_count"] == 3
+    assert result["validation"]["validation_status"] == "passed"
+
+    root_files = {path.name for path in tmp_path.iterdir() if path.is_file()}
+    assert root_files == {"read_only_adapter_chain_result.json", "read_only_adapter_chain_report.md"}
+    assert (tmp_path / "job_prioritization" / "job_prioritization_read_only_adapter_recommendations.csv").exists()
+    assert (tmp_path / "tailoring_decision" / "tailoring_decision_read_only_adapter_decisions.csv").exists()
+    assert (tmp_path / "operator_review" / "operator_review_read_only_adapter_reviews.csv").exists()
+    assert not (tmp_path / "application_execution_queue.csv").exists()
+    assert not (tmp_path / "job_prioritization_recommendations.csv").exists()
+    assert not (tmp_path / "tailoring_decision_recommendations.csv").exists()
+    assert not (tmp_path / "operator_review_recommendations.csv").exists()
 
 
 def test_cli_json_no_input_returns_safe_warning(capsys):

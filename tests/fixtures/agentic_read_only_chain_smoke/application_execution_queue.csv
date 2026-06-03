@@ -1,0 +1,5 @@
+job_doc_id,job_company,job_title,source,action,deterministic_winner_available,deterministic_winner_score,winner_score,winner_resume,fallback_only_no_deterministic_match,packet_generation_allowed,packet_generation_block_reason,critic_decision,missing_requirement_count
+fake_job_001,Example Systems Lab,Backend Platform Engineer,fixture,APPLY,true,0.910000,0.910000,fake_backend_resume.pdf,false,true,,approve,0
+fake_job_002,Northstar Demo Analytics,Machine Learning Tools Engineer,fixture,REVIEW,true,0.740000,0.740000,fake_ml_resume.pdf,false,true,,approve,1
+fake_job_003,Acorn Sample Robotics,Data Infrastructure Engineer,fixture,SKIP_FOR_NOW,false,0.000000,0.000000,fake_data_resume.pdf,true,false,fallback_only_no_deterministic_match,reject,3
+fake_job_004,Riverbend Test Cloud,Developer Experience Engineer,fixture,SAVED,true,0.620000,0.620000,fake_platform_resume.pdf,false,true,,downgrade_to_guidance,2

@@ -133,6 +133,10 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "manual read-only adapter chain",
         "It calls only the existing read-only adapter modules",
         "It is not wired into live planning, the scheduler, UI actions, or `workflow_runner.py`",
+        "read_only_adapter_chain_result.json",
+        "read_only_adapter_chain_report.md",
+        "This does not run the chain",
+        "Manual read-only adapter chain artifacts can be displayed in Agentic Review diagnostics",
     ]:
         assert phrase in source
 

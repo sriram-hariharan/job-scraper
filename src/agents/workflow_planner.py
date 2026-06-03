@@ -34,6 +34,8 @@ ARTIFACT_NAME_TO_KIND = {
     "agentic_workflow_dry_run_report.md": "agentic_workflow_dry_run_report_md",
     "read_only_adapter_preflight.json": "read_only_adapter_preflight_json",
     "read_only_adapter_preflight.md": "read_only_adapter_preflight_md",
+    "read_only_adapter_chain_result.json": "read_only_adapter_chain_result_json",
+    "read_only_adapter_chain_report.md": "read_only_adapter_chain_report_md",
     "agentic_workflow_verification.json": "agentic_workflow_verification_json",
     "job_packet_manifest.csv": "job_packet_manifest",
 }

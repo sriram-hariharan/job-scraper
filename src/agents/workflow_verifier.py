@@ -8,7 +8,13 @@ from collections import Counter
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import orchestrator_adapter_harness, workflow_planner, workflow_registry, workflow_runner
+from src.agents import (
+    orchestrator_adapter_harness,
+    read_only_adapter_chain,
+    workflow_planner,
+    workflow_registry,
+    workflow_runner,
+)
 from src.evaluation.rag_evaluation import (
     RAG_EVALUATION_SUMMARY_ARTIFACT,
     validate_rag_evaluation_payload,
@@ -35,6 +41,8 @@ OPTIONAL_ARTIFACTS = [
     "agentic_workflow_dry_run_report.md",
     "read_only_adapter_preflight.json",
     "read_only_adapter_preflight.md",
+    "read_only_adapter_chain_result.json",
+    "read_only_adapter_chain_report.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
     "rag_evaluation_summary.json",
@@ -65,6 +73,8 @@ ARTIFACT_KIND_TO_NAME = {
     "agentic_workflow_dry_run_report_md": "agentic_workflow_dry_run_report.md",
     "read_only_adapter_preflight_json": "read_only_adapter_preflight.json",
     "read_only_adapter_preflight_md": "read_only_adapter_preflight.md",
+    "read_only_adapter_chain_result_json": "read_only_adapter_chain_result.json",
+    "read_only_adapter_chain_report_md": "read_only_adapter_chain_report.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
     "rag_evaluation_summary_json": "rag_evaluation_summary.json",
     "rag_evaluation_report_md": "rag_evaluation_report.md",
@@ -145,6 +155,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "agentic_workflow_execution_plan.json": _read_json(root / "agentic_workflow_execution_plan.json"),
         "agentic_workflow_dry_run_result.json": _read_json(root / "agentic_workflow_dry_run_result.json"),
         "read_only_adapter_preflight.json": _read_json(root / "read_only_adapter_preflight.json"),
+        "read_only_adapter_chain_result.json": _read_json(root / "read_only_adapter_chain_result.json"),
         RAG_EVALUATION_SUMMARY_ARTIFACT: _read_json(root / RAG_EVALUATION_SUMMARY_ARTIFACT),
     }
 
@@ -224,6 +235,7 @@ def verify_agentic_workflow_artifacts(
     execution_plan_json = dict(loaded.get("agentic_workflow_execution_plan.json") or {})
     dry_run_json = dict(loaded.get("agentic_workflow_dry_run_result.json") or {})
     read_only_preflight_json = dict(loaded.get("read_only_adapter_preflight.json") or {})
+    read_only_chain_json = dict(loaded.get("read_only_adapter_chain_result.json") or {})
     rag_evaluation_json = dict(loaded.get(RAG_EVALUATION_SUMMARY_ARTIFACT) or {})
 
     reason_codes: List[str] = []
@@ -531,6 +543,66 @@ def verify_agentic_workflow_artifacts(
         if executed_adapters:
             reason_codes.append("read_only_adapter_preflight_adapter_executed")
 
+    if "read_only_adapter_chain_result.json" in present_artifacts:
+        chain_validation = read_only_adapter_chain.validate_read_only_adapter_chain_result(
+            read_only_chain_json
+        )
+        chain_validation_status = _clean_text(chain_validation.get("validation_status"))
+        chain_validation_passed = chain_validation_status in {"passed", "warning"}
+        checks.append(
+            _check(
+                "read_only_adapter_chain_validation_passed_or_warning",
+                chain_validation_passed,
+                ", ".join(chain_validation.get("reason_codes", []) or [])
+                if not chain_validation_passed else "",
+            )
+        )
+        if not chain_validation_passed:
+            reason_codes.append("read_only_adapter_chain_validation_failed")
+        if chain_validation_status == "warning":
+            reason_codes.append("read_only_adapter_chain_warning")
+
+        chain_mode = (
+            _clean_text(read_only_chain_json.get("execution_mode"))
+            == read_only_adapter_chain.EXECUTION_MODE
+        )
+        checks.append(_check("read_only_adapter_chain_manual_mode", chain_mode))
+        if not chain_mode:
+            reason_codes.append("read_only_adapter_chain_wrong_mode")
+
+        chain_not_mutated = not bool(read_only_chain_json.get("did_mutate_production"))
+        checks.append(_check("read_only_adapter_chain_did_not_mutate_production", chain_not_mutated))
+        if not chain_not_mutated:
+            reason_codes.append("read_only_adapter_chain_mutated_production")
+
+        for flag in [
+            "allow_production_mutation",
+            "allow_queue_action_update",
+            "allow_packet_update",
+            "allow_tailoring_generation_update",
+            "allow_scoring_update",
+            "allow_ranking_update",
+            "allow_application_submission",
+            "allow_live_pipeline_wiring",
+        ]:
+            flag_disabled = not bool(read_only_chain_json.get(flag))
+            checks.append(_check(f"read_only_adapter_chain_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"read_only_adapter_chain_{flag}_true")
+
+        chain_order = list(read_only_chain_json.get("adapter_execution_order") or [])
+        chain_order_ok = chain_order == read_only_adapter_chain.ADAPTER_EXECUTION_ORDER
+        checks.append(
+            _check(
+                "read_only_adapter_chain_order_matches_expected",
+                chain_order_ok,
+                f"expected {read_only_adapter_chain.ADAPTER_EXECUTION_ORDER}, found {chain_order}"
+                if not chain_order_ok else "",
+            )
+        )
+        if not chain_order_ok:
+            reason_codes.append("read_only_adapter_chain_order_mismatch")
+
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [
         ("job_prioritization_recommendations.csv", priority_rows),
@@ -609,6 +681,7 @@ def verify_agentic_workflow_artifacts(
     diagnostic_warning = (
         "rag_evaluation_warning" in reason_codes
         or "read_only_adapter_preflight_warning" in reason_codes
+        or "read_only_adapter_chain_warning" in reason_codes
     )
     if required_failure or strict_missing_failure or consistency_failure:
         validation_status = "failed"
@@ -628,6 +701,7 @@ def verify_agentic_workflow_artifacts(
             "source_health_report": len(list(loaded.get("source_health_report.csv") or [])),
             "rag_evaluation_rows": len(list(rag_evaluation_json.get("rows") or [])),
             "read_only_adapter_preflight_results": len(list(read_only_preflight_json.get("adapter_preflight_results") or [])),
+            "read_only_adapter_chain_adapters": len(list(read_only_chain_json.get("adapter_execution_order") or [])),
             "job_prioritization_recommendations": len(priority_rows),
             "tailoring_decision_recommendations": len(tailoring_rows),
             "operator_review_recommendations": len(operator_rows),

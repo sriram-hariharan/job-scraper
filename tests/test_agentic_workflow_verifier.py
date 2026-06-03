@@ -6,6 +6,7 @@ from src.agents.workflow_verifier import (
     verify_agentic_workflow_artifacts,
     write_agentic_workflow_verification_artifact,
 )
+from src.agents.read_only_adapter_chain import write_read_only_adapter_chain_artifacts
 from src.agents.orchestrator_adapter_harness import write_read_only_adapter_preflight_artifacts
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
 from src.agents.workflow_registry import write_agentic_workflow_manifest_artifacts
@@ -131,6 +132,12 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
     write_agentic_workflow_execution_plan_artifacts(output_dir=root)
     write_agentic_workflow_dry_run_artifacts(output_dir=root)
     write_read_only_adapter_preflight_artifacts(output_dir=root)
+    write_read_only_adapter_chain_artifacts(
+        output_dir=root,
+        queue_rows=queue_rows,
+        pipeline_run_id="run_test",
+        owner_user_id="user_test",
+    )
     write_rag_evaluation_artifacts(
         output_dir=root,
         rows=[
@@ -200,6 +207,48 @@ def test_workflow_verifier_validates_read_only_adapter_preflight_when_present(tm
     assert "read_only_adapter_preflight_adapters_disabled" in check_names
     assert "read_only_adapter_preflight_adapters_not_executed" in check_names
     assert payload["row_counts"]["read_only_adapter_preflight_results"] == 6
+
+
+def test_workflow_verifier_validates_read_only_adapter_chain_when_present(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "read_only_adapter_chain_validation_passed_or_warning" in check_names
+    assert "read_only_adapter_chain_manual_mode" in check_names
+    assert "read_only_adapter_chain_did_not_mutate_production" in check_names
+    assert "read_only_adapter_chain_allow_application_submission_false" in check_names
+    assert "read_only_adapter_chain_allow_live_pipeline_wiring_false" in check_names
+    assert "read_only_adapter_chain_order_matches_expected" in check_names
+    assert payload["row_counts"]["read_only_adapter_chain_adapters"] == 3
+
+
+def test_workflow_verifier_warns_when_read_only_adapter_chain_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "read_only_adapter_chain_result.json").unlink()
+    (root / "read_only_adapter_chain_report.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "read_only_adapter_chain_result.json" in payload["missing_artifacts"]
+    assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_fails_unsafe_read_only_adapter_chain(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    chain_path = root / "read_only_adapter_chain_result.json"
+    chain = json.loads(chain_path.read_text(encoding="utf-8"))
+    chain["allow_application_submission"] = True
+    _write_json(chain_path, chain)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "read_only_adapter_chain_validation_failed" in payload["reason_codes"]
+    assert "read_only_adapter_chain_allow_application_submission_true" in payload["reason_codes"]
 
 
 def test_workflow_verifier_warns_when_read_only_adapter_preflight_missing_non_strict(tmp_path):

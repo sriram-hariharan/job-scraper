@@ -85,6 +85,19 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
         _write(output_dir / "read_only_adapter_preflight.md", "# Read-Only Adapter Preflight\n")
         _write(output_dir / "read_only_adapter_chain_result.json", json.dumps({"execution_mode": "manual_read_only_adapter_chain", "did_mutate_production": False}))
         _write(output_dir / "read_only_adapter_chain_report.md", "# Manual Read-Only Adapter Chain\n")
+        _write(
+            output_dir / "read_only_chain_artifact_generation_result.json",
+            json.dumps(
+                {
+                    "execution_mode": "explicit_operator_read_only_chain_artifact_generation",
+                    "did_run_chain": True,
+                    "did_mutate_production": False,
+                    "require_explicit_input": True,
+                    "require_explicit_output_dir": True,
+                }
+            ),
+        )
+        _write(output_dir / "read_only_chain_artifact_generation_report.md", "# Explicit Read-Only Chain Generator\n")
         _write(output_dir / "agentic_workflow_verification.json", json.dumps({"validation_status": "passed"}))
         _write(output_dir / "rag_evaluation_summary.json", json.dumps({"evaluation_version": "rag_evaluation_v1", "validation_status": "warning", "rows": []}))
         _write(output_dir / "rag_evaluation_report.md", "# RAG Evaluation Report\n")
@@ -124,7 +137,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 33
+    assert result["ingested_count"] == 35
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
@@ -147,6 +160,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "read_only_adapter_preflight.md" in artifact_names
     assert "read_only_adapter_chain_result.json" in artifact_names
     assert "read_only_adapter_chain_report.md" in artifact_names
+    assert "read_only_chain_artifact_generation_result.json" in artifact_names
+    assert "read_only_chain_artifact_generation_report.md" in artifact_names
     assert "agentic_workflow_verification.json" in artifact_names
     assert "rag_evaluation_summary.json" in artifact_names
     assert "rag_evaluation_report.md" in artifact_names
@@ -180,6 +195,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "read_only_adapter_preflight_md" in artifact_kinds
     assert "read_only_adapter_chain_result_json" in artifact_kinds
     assert "read_only_adapter_chain_report_md" in artifact_kinds
+    assert "read_only_chain_artifact_generation_result_json" in artifact_kinds
+    assert "read_only_chain_artifact_generation_report_md" in artifact_kinds
     assert "agentic_workflow_verification_json" in artifact_kinds
     assert "rag_evaluation_summary_json" in artifact_kinds
     assert "rag_evaluation_report_md" in artifact_kinds

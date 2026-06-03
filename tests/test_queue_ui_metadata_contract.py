@@ -280,6 +280,24 @@ def test_manual_read_only_adapter_chain_empty_read_model_is_safe():
     assert payload["warning_codes"] == []
 
 
+def test_explicit_read_only_chain_generator_empty_read_model_is_safe():
+    payload = services._explicit_read_only_chain_artifact_generation_from_artifacts([])
+
+    assert payload["present"] is False
+    assert payload["available"] is False
+    assert payload["validation_status"] == "missing"
+    assert payload["did_run_chain"] is False
+    assert payload["did_mutate_production"] is False
+    assert payload["require_explicit_input"] is False
+    assert payload["require_explicit_output_dir"] is False
+    assert payload["queue_input_artifact_path"] == ""
+    assert payload["output_dir"] == ""
+    assert payload["chain_result_summary"] == {}
+    assert payload["generator_artifacts"] == []
+    assert payload["reason_codes"] == []
+    assert payload["warning_codes"] == []
+
+
 def test_agentic_review_dedicated_page_contract():
     app_source = Path("src/app/static/app.js").read_text(encoding="utf-8")
     planning_source = Path("src/app/static/planning.js").read_text(encoding="utf-8")

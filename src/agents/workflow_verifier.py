@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 from src.agents import (
     orchestrator_adapter_harness,
     read_only_adapter_chain,
+    read_only_chain_artifact_generator,
     workflow_planner,
     workflow_registry,
     workflow_runner,
@@ -43,6 +44,8 @@ OPTIONAL_ARTIFACTS = [
     "read_only_adapter_preflight.md",
     "read_only_adapter_chain_result.json",
     "read_only_adapter_chain_report.md",
+    "read_only_chain_artifact_generation_result.json",
+    "read_only_chain_artifact_generation_report.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
     "rag_evaluation_summary.json",
@@ -75,6 +78,8 @@ ARTIFACT_KIND_TO_NAME = {
     "read_only_adapter_preflight_md": "read_only_adapter_preflight.md",
     "read_only_adapter_chain_result_json": "read_only_adapter_chain_result.json",
     "read_only_adapter_chain_report_md": "read_only_adapter_chain_report.md",
+    "read_only_chain_artifact_generation_result_json": "read_only_chain_artifact_generation_result.json",
+    "read_only_chain_artifact_generation_report_md": "read_only_chain_artifact_generation_report.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
     "rag_evaluation_summary_json": "rag_evaluation_summary.json",
     "rag_evaluation_report_md": "rag_evaluation_report.md",
@@ -156,6 +161,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "agentic_workflow_dry_run_result.json": _read_json(root / "agentic_workflow_dry_run_result.json"),
         "read_only_adapter_preflight.json": _read_json(root / "read_only_adapter_preflight.json"),
         "read_only_adapter_chain_result.json": _read_json(root / "read_only_adapter_chain_result.json"),
+        "read_only_chain_artifact_generation_result.json": _read_json(root / "read_only_chain_artifact_generation_result.json"),
         RAG_EVALUATION_SUMMARY_ARTIFACT: _read_json(root / RAG_EVALUATION_SUMMARY_ARTIFACT),
     }
 
@@ -236,6 +242,7 @@ def verify_agentic_workflow_artifacts(
     dry_run_json = dict(loaded.get("agentic_workflow_dry_run_result.json") or {})
     read_only_preflight_json = dict(loaded.get("read_only_adapter_preflight.json") or {})
     read_only_chain_json = dict(loaded.get("read_only_adapter_chain_result.json") or {})
+    read_only_chain_generation_json = dict(loaded.get("read_only_chain_artifact_generation_result.json") or {})
     rag_evaluation_json = dict(loaded.get(RAG_EVALUATION_SUMMARY_ARTIFACT) or {})
 
     reason_codes: List[str] = []
@@ -603,6 +610,85 @@ def verify_agentic_workflow_artifacts(
         if not chain_order_ok:
             reason_codes.append("read_only_adapter_chain_order_mismatch")
 
+    if "read_only_chain_artifact_generation_result.json" in present_artifacts:
+        generation_validation = (
+            read_only_chain_artifact_generator.validate_chain_artifact_generation_result(
+                read_only_chain_generation_json
+            )
+        )
+        generation_validation_status = _clean_text(generation_validation.get("validation_status"))
+        generation_validation_passed = generation_validation_status in {"passed", "warning"}
+        checks.append(
+            _check(
+                "read_only_chain_artifact_generation_validation_passed_or_warning",
+                generation_validation_passed,
+                ", ".join(generation_validation.get("reason_codes", []) or [])
+                if not generation_validation_passed else "",
+            )
+        )
+        if not generation_validation_passed:
+            reason_codes.append("read_only_chain_artifact_generation_validation_failed")
+        if generation_validation_status == "warning":
+            reason_codes.append("read_only_chain_artifact_generation_warning")
+
+        generation_mode = (
+            _clean_text(read_only_chain_generation_json.get("execution_mode"))
+            == read_only_chain_artifact_generator.EXECUTION_MODE
+        )
+        checks.append(_check("read_only_chain_artifact_generation_explicit_operator_mode", generation_mode))
+        if not generation_mode:
+            reason_codes.append("read_only_chain_artifact_generation_wrong_mode")
+
+        generation_not_mutated = not bool(read_only_chain_generation_json.get("did_mutate_production"))
+        checks.append(_check("read_only_chain_artifact_generation_did_not_mutate_production", generation_not_mutated))
+        if not generation_not_mutated:
+            reason_codes.append("read_only_chain_artifact_generation_mutated_production")
+
+        generation_context = dict(read_only_chain_generation_json.get("context") or {})
+        for required_flag in ["require_explicit_input", "require_explicit_output_dir"]:
+            flag_enabled = bool(
+                read_only_chain_generation_json.get(required_flag)
+                if required_flag in read_only_chain_generation_json
+                else generation_context.get(required_flag)
+            )
+            checks.append(_check(f"read_only_chain_artifact_generation_{required_flag}_true", flag_enabled))
+            if not flag_enabled:
+                reason_codes.append(f"read_only_chain_artifact_generation_{required_flag}_false")
+
+        for flag in [
+            "allow_production_mutation",
+            "allow_live_pipeline_wiring",
+            "allow_application_submission",
+            "allow_queue_action_update",
+            "allow_packet_update",
+            "allow_tailoring_generation_update",
+            "allow_scoring_update",
+            "allow_ranking_update",
+        ]:
+            flag_disabled = not bool(read_only_chain_generation_json.get(flag))
+            checks.append(_check(f"read_only_chain_artifact_generation_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"read_only_chain_artifact_generation_{flag}_true")
+
+        generation_root_names = set(
+            generation_validation.get("output_root_file_names") or []
+        )
+        production_root_names = sorted(
+            generation_root_names.intersection(
+                read_only_chain_artifact_generator.PRODUCTION_ROOT_ARTIFACT_NAMES
+            )
+        )
+        root_names_safe = not production_root_names
+        checks.append(
+            _check(
+                "read_only_chain_artifact_generation_no_production_root_artifact_names",
+                root_names_safe,
+                ", ".join(production_root_names) if production_root_names else "",
+            )
+        )
+        if not root_names_safe:
+            reason_codes.append("read_only_chain_artifact_generation_production_root_artifact_names")
+
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [
         ("job_prioritization_recommendations.csv", priority_rows),
@@ -682,6 +768,7 @@ def verify_agentic_workflow_artifacts(
         "rag_evaluation_warning" in reason_codes
         or "read_only_adapter_preflight_warning" in reason_codes
         or "read_only_adapter_chain_warning" in reason_codes
+        or "read_only_chain_artifact_generation_warning" in reason_codes
     )
     if required_failure or strict_missing_failure or consistency_failure:
         validation_status = "failed"
@@ -702,6 +789,7 @@ def verify_agentic_workflow_artifacts(
             "rag_evaluation_rows": len(list(rag_evaluation_json.get("rows") or [])),
             "read_only_adapter_preflight_results": len(list(read_only_preflight_json.get("adapter_preflight_results") or [])),
             "read_only_adapter_chain_adapters": len(list(read_only_chain_json.get("adapter_execution_order") or [])),
+            "read_only_chain_artifact_generation_did_run_chain": 1 if bool(read_only_chain_generation_json.get("did_run_chain")) else 0,
             "job_prioritization_recommendations": len(priority_rows),
             "tailoring_decision_recommendations": len(tailoring_rows),
             "operator_review_recommendations": len(operator_rows),

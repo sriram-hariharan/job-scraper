@@ -6,6 +6,7 @@ from src.agents.workflow_verifier import (
     verify_agentic_workflow_artifacts,
     write_agentic_workflow_verification_artifact,
 )
+from src.agents.read_only_chain_artifact_generator import generate_read_only_chain_artifacts
 from src.agents.read_only_adapter_chain import write_read_only_adapter_chain_artifacts
 from src.agents.orchestrator_adapter_harness import write_read_only_adapter_preflight_artifacts
 from src.agents.workflow_planner import write_agentic_workflow_execution_plan_artifacts
@@ -138,6 +139,21 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
         pipeline_run_id="run_test",
         owner_user_id="user_test",
     )
+    generator_output_dir = root / "explicit_generator_output"
+    generate_read_only_chain_artifacts(
+        queue_input_artifact_path=root / "application_execution_queue.csv",
+        output_dir=generator_output_dir,
+        pipeline_run_id="run_test",
+        owner_user_id="user_test",
+    )
+    for artifact_name in [
+        "read_only_chain_artifact_generation_result.json",
+        "read_only_chain_artifact_generation_report.md",
+    ]:
+        (root / artifact_name).write_text(
+            (generator_output_dir / artifact_name).read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     write_rag_evaluation_artifacts(
         output_dir=root,
         rows=[
@@ -249,6 +265,52 @@ def test_workflow_verifier_fails_unsafe_read_only_adapter_chain(tmp_path):
     assert payload["validation_status"] == "failed"
     assert "read_only_adapter_chain_validation_failed" in payload["reason_codes"]
     assert "read_only_adapter_chain_allow_application_submission_true" in payload["reason_codes"]
+
+
+def test_workflow_verifier_validates_read_only_chain_artifact_generation_when_present(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "read_only_chain_artifact_generation_validation_passed_or_warning" in check_names
+    assert "read_only_chain_artifact_generation_explicit_operator_mode" in check_names
+    assert "read_only_chain_artifact_generation_did_not_mutate_production" in check_names
+    assert "read_only_chain_artifact_generation_require_explicit_input_true" in check_names
+    assert "read_only_chain_artifact_generation_require_explicit_output_dir_true" in check_names
+    assert "read_only_chain_artifact_generation_allow_live_pipeline_wiring_false" in check_names
+    assert "read_only_chain_artifact_generation_allow_application_submission_false" in check_names
+    assert "read_only_chain_artifact_generation_no_production_root_artifact_names" in check_names
+    assert payload["row_counts"]["read_only_chain_artifact_generation_did_run_chain"] == 1
+
+
+def test_workflow_verifier_warns_when_read_only_chain_artifact_generation_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "read_only_chain_artifact_generation_result.json").unlink()
+    (root / "read_only_chain_artifact_generation_report.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "read_only_chain_artifact_generation_result.json" in payload["missing_artifacts"]
+    assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_fails_unsafe_read_only_chain_artifact_generation(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    generation_path = root / "read_only_chain_artifact_generation_result.json"
+    generation = json.loads(generation_path.read_text(encoding="utf-8"))
+    generation["allow_application_submission"] = True
+    generation["require_explicit_input"] = False
+    _write_json(generation_path, generation)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "read_only_chain_artifact_generation_validation_failed" in payload["reason_codes"]
+    assert "read_only_chain_artifact_generation_allow_application_submission_true" in payload["reason_codes"]
+    assert "read_only_chain_artifact_generation_require_explicit_input_false" in payload["reason_codes"]
 
 
 def test_workflow_verifier_warns_when_read_only_adapter_preflight_missing_non_strict(tmp_path):

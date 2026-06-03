@@ -126,6 +126,9 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "src/agents/read_only_tailoring_decision_adapter.py",
         "does not update queue action, packet generation, tailoring generation, scoring, ranking, or production artifacts.",
         "deterministic Tailoring Decision advisory helpers only",
+        "src/agents/read_only_operator_review_adapter.py",
+        "does not update queue action, packet generation, tailoring generation, scoring, ranking, application submission, or production artifacts.",
+        "deterministic Operator Review advisory helpers only",
     ]:
         assert phrase in source
 

@@ -56,14 +56,14 @@ python -m src.evaluation.agentic_benchmark --no-write --print-summary
 
 ```bash
 TMP_CHAIN_DIR="$(mktemp -d)"
-python -m src.agents.read_only_adapter_chain \
+python -m src.agents.read_only_chain_artifact_generator \
   --queue-input tests/fixtures/agentic_read_only_chain_smoke/application_execution_queue.csv \
   --output-dir "$TMP_CHAIN_DIR" \
   --json
 find "$TMP_CHAIN_DIR" -maxdepth 3 -type f -print | sort
 ```
 
-"The root output is only `read_only_adapter_chain_result.json` and `read_only_adapter_chain_report.md`; adapter-specific CSV/JSON/Markdown files stay inside adapter subdirectories. The result uses `execution_mode=manual_read_only_adapter_chain` and safety flags such as `did_mutate_production=false`, `allow_live_pipeline_wiring=false`, and `allow_application_submission=false`."
+"The generator requires both `--queue-input` and `--output-dir`; it refuses to run without explicit paths. The root output includes `read_only_adapter_chain_result.json`, `read_only_adapter_chain_report.md`, and generator-specific report files; adapter-specific CSV/JSON/Markdown files stay inside adapter subdirectories. The chain result uses `execution_mode=manual_read_only_adapter_chain` and safety flags such as `did_mutate_production=false`, `allow_live_pipeline_wiring=false`, and `allow_application_submission=false`."
 
 "For viewer testing, those two root chain artifacts can be copied into a sanitized run artifact set so Agentic Review can display them. That copy is manual; the app does not run the chain from UI actions, live planning, the scheduler, or `workflow_runner.py`."
 

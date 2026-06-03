@@ -2,6 +2,8 @@
 
 This smoke fixture exercises the manual read-only adapter chain on sanitized offline rows. It is for local diagnostics, demos, and tests only.
 
+For operator steps, troubleshooting, and safety checks, see `docs/read_only_chain_operator_runbook.md`.
+
 Fixture path:
 
 ```text

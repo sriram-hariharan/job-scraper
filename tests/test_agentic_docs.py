@@ -4,6 +4,7 @@ from pathlib import Path
 DOC_PATH = Path("docs/agentic_platform.md")
 ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
 READ_ONLY_CHAIN_SMOKE_DOC_PATH = Path("docs/read_only_chain_smoke.md")
+READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH = Path("docs/read_only_chain_operator_runbook.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -216,6 +217,61 @@ def test_read_only_chain_smoke_docs_cover_manual_fixture_contract():
         "LangGraph is integrated",
         "feedback tunes scoring",
         "RAG evaluation changes retrieval",
+        "application submission is automated",
+    ]
+    lower_source = source.lower()
+    for claim in forbidden_claims:
+        assert claim.lower() not in lower_source
+
+
+def test_read_only_chain_operator_runbook_covers_manual_generator_contract():
+    assert READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH.exists()
+    source = READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/read_only_chain_operator_runbook.md",
+        "--queue-input",
+        "--output-dir",
+        "explicit/manual only",
+        "read-only",
+        "not live orchestration",
+        "No application submission.",
+        "No queue update.",
+        "No tailoring generation.",
+        "No packet generation.",
+        "No scoring or ranking change.",
+        "No database write.",
+        "No live planning.",
+        "No `workflow_runner.py` execution.",
+        "No scheduler or background run.",
+        "workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "missing_explicit_queue_input",
+        "missing_explicit_output_dir",
+        "queue_input_artifact_not_found",
+        "Agentic Review",
+        "does not run the generator automatically",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            READ_ONLY_CHAIN_SMOKE_DOC_PATH,
+            Path("docs/demo_walkthrough.md"),
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/read_only_chain_operator_runbook.md" in linked_docs
+
+    forbidden_claims = [
+        "live orchestration is implemented",
+        "autonomous execution is implemented",
+        "scheduler runs the chain",
+        "ui runs the generator",
+        "LangGraph is integrated",
+        "feedback tunes scoring",
         "application submission is automated",
     ]
     lower_source = source.lower()

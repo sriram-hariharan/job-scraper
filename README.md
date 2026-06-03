@@ -576,6 +576,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Architecture summary](docs/architecture_summary.md)
 - [Demo walkthrough](docs/demo_walkthrough.md)
 - [Manual read-only chain smoke demo](docs/read_only_chain_smoke.md)
+- [Read-only chain operator runbook](docs/read_only_chain_operator_runbook.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

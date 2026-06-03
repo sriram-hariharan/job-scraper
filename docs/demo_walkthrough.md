@@ -50,13 +50,31 @@ python -m src.evaluation.agentic_benchmark --no-write --print-summary
 
 "The project includes an offline deterministic benchmark using sanitized/offline fixtures. This validates advisory-agent behavior, workflow registry contracts, agent feedback export shape, and RAG Evaluation schema shape without live scraping or LLM calls."
 
-2:40 - End with safety guarantees.
+2:40 - Optional 60-90 second manual chain smoke demo.
+
+"There is also a manual read-only adapter chain smoke fixture for technical reviewers. It is not production and not live orchestration; it runs only from an explicit local command against sanitized rows."
+
+```bash
+TMP_CHAIN_DIR="$(mktemp -d)"
+python -m src.agents.read_only_adapter_chain \
+  --queue-input tests/fixtures/agentic_read_only_chain_smoke/application_execution_queue.csv \
+  --output-dir "$TMP_CHAIN_DIR" \
+  --json
+find "$TMP_CHAIN_DIR" -maxdepth 3 -type f -print | sort
+```
+
+"The root output is only `read_only_adapter_chain_result.json` and `read_only_adapter_chain_report.md`; adapter-specific CSV/JSON/Markdown files stay inside adapter subdirectories. The result uses `execution_mode=manual_read_only_adapter_chain` and safety flags such as `did_mutate_production=false`, `allow_live_pipeline_wiring=false`, and `allow_application_submission=false`."
+
+"For viewer testing, those two root chain artifacts can be copied into a sanitized run artifact set so Agentic Review can display them. That copy is manual; the app does not run the chain from UI actions, live planning, the scheduler, or `workflow_runner.py`."
+
+3:50 - End with safety guarantees.
 
 "The important engineering choice is separation: the production pipeline creates the real application-planning outputs, while the agentic layer explains, verifies, traces, and evaluates them. No production decision mutation happens from these diagnostics."
 
 ## What Not To Claim
 
 - Do not claim real autonomous agent execution; the runner is dry-run only.
+- Do not claim the manual read-only adapter chain is live orchestration.
 - Do not claim feedback tunes ranking, scoring, queue action, resume selection, tailoring generation, or packet generation.
 - Do not claim RAG Evaluation changes retrieval, embeddings, ranking, scoring, or queue behavior.
 - Do not claim benchmark results from a live production run unless you are showing a real sanitized run and clearly label it.
@@ -72,5 +90,6 @@ python -m src.evaluation.agentic_benchmark --no-write --print-summary
 - Manifest / Execution Plan / Dry Run
 - Human Feedback
 - RAG Evaluation
+- Manual read-only adapter chain smoke fixture: `docs/read_only_chain_smoke.md`
 - Agentic Benchmark command
 - Safety close: no production decision mutation

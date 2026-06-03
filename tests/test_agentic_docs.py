@@ -129,6 +129,10 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "src/agents/read_only_operator_review_adapter.py",
         "does not update queue action, packet generation, tailoring generation, scoring, ranking, application submission, or production artifacts.",
         "deterministic Operator Review advisory helpers only",
+        "src/agents/read_only_adapter_chain.py",
+        "manual read-only adapter chain",
+        "It calls only the existing read-only adapter modules",
+        "It is not wired into live planning, the scheduler, UI actions, or `workflow_runner.py`",
     ]:
         assert phrase in source
 

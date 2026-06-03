@@ -14,6 +14,8 @@ Phase 21A adds `src/agents/read_only_job_prioritization_adapter.py` as a manual 
 
 Phase 22A adds `src/agents/read_only_tailoring_decision_adapter.py` as a manual read-only adapter prototype for `tailoring_decision` only. The prototype accepts explicit queue rows or an explicit queue input CSV path, may use optional explicit prioritization rows or an explicit prioritization CSV path, writes only adapter-specific diagnostics when an isolated output directory is provided, and does not update queue action, packet generation, tailoring generation, scoring, ranking, or production artifacts. `workflow_runner.py` remains dry-run only, and future multi-agent execution still requires a separate reviewed phase.
 
+Phase 23A adds `src/agents/read_only_operator_review_adapter.py` as a manual read-only adapter prototype for `operator_review` only. The prototype accepts explicit queue rows or an explicit queue input CSV path, may use optional explicit prioritization or tailoring rows or explicit CSV paths, writes only adapter-specific diagnostics when an isolated output directory is provided, and does not update queue action, packet generation, tailoring generation, scoring, ranking, application submission, or production artifacts. `workflow_runner.py` remains dry-run only, and future multi-agent execution still requires a separate reviewed phase.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.
@@ -22,6 +24,7 @@ Phase 22A adds `src/agents/read_only_tailoring_decision_adapter.py` as a manual 
 - `src/agents/orchestrator_adapter_harness.py` builds a `read_only_preflight` plan with `allow_agent_execution=false`, `executable_adapter_count=0`, and `did_execute=false` for every adapter.
 - `src/agents/read_only_job_prioritization_adapter.py` is explicit/manual only and is not wired into live planning, the scheduler, or `workflow_runner.py`.
 - `src/agents/read_only_tailoring_decision_adapter.py` is explicit/manual only and is not wired into live planning, the scheduler, or `workflow_runner.py`.
+- `src/agents/read_only_operator_review_adapter.py` is explicit/manual only and is not wired into live planning, the scheduler, or `workflow_runner.py`.
 - `src/agents/workflow_verifier.py` validates artifacts and dry-run payloads when present.
 - `run_application_planning.py` writes manifest, execution-plan, dry-run, verifier, and RAG Evaluation diagnostics through existing artifact hooks.
 - `application_execution_queue.py` writes current advisory artifacts for job prioritization, tailoring decision, and operator review, and may record aggregate trace rows when tracing is explicitly enabled.
@@ -35,6 +38,8 @@ The read-only adapter harness is a diagnostic preflight for that metadata. It re
 The Job Prioritization read-only adapter prototype is narrower than a runner. It can call deterministic Job Prioritization advisory helpers only when invoked directly by tests, helpers, or its CLI. It does not call other agents, does not call LLMs, does not write to the database, and does not mutate source input rows.
 
 The Tailoring Decision read-only adapter prototype is narrower than a runner. It can call deterministic Tailoring Decision advisory helpers only when invoked directly by tests, helpers, or its CLI. It does not call other agents, does not call LLMs, does not write to the database, and does not mutate source input rows.
+
+The Operator Review read-only adapter prototype is narrower than a runner. It can call deterministic Operator Review advisory helpers only when invoked directly by tests, helpers, or its CLI. It does not call other agents, does not call LLMs, does not write to the database, and does not mutate source input rows.
 
 ## Readiness Matrix
 

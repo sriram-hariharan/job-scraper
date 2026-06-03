@@ -141,6 +141,16 @@ def test_validation_catches_unsafe_adapter_result_mutation():
     assert "operator_review:unsafe_flag_true" in validation["reason_codes"]
 
 
+def test_validation_catches_allow_application_submission_true():
+    result = read_only_adapter_chain.run_read_only_adapter_chain(queue_rows=[_queue_row()])
+    result["allow_application_submission"] = True
+
+    validation = read_only_adapter_chain.validate_read_only_adapter_chain_result(result)
+
+    assert validation["validation_status"] == "failed"
+    assert "allow_application_submission_true" in validation["reason_codes"]
+
+
 def test_artifact_writer_writes_chain_root_and_adapter_subdirectory_files_only(tmp_path):
     result = read_only_adapter_chain.run_read_only_adapter_chain(
         queue_rows=[_queue_row()],

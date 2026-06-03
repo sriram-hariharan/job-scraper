@@ -66,6 +66,8 @@ Agentic Review can display chain diagnostics when these artifacts already exist 
 - `read_only_adapter_chain_result.json`
 - `read_only_adapter_chain_report.md`
 
+The explicit generator artifacts are regression-tested through workflow verification and the Agentic Review read model, but this does not run the generator automatically.
+
 For manual viewer testing only, copy those two root files into a sanitized run output directory before artifact ingestion. Do not copy smoke outputs into production runs or real application artifacts.
 
 ## Safety Guarantees

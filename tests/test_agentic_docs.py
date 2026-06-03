@@ -3,6 +3,7 @@ from pathlib import Path
 
 DOC_PATH = Path("docs/agentic_platform.md")
 ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
+READ_ONLY_CHAIN_SMOKE_DOC_PATH = Path("docs/read_only_chain_smoke.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -155,3 +156,40 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "needs_adapter",
     ]:
         assert status in source
+
+
+def test_read_only_chain_smoke_docs_cover_manual_fixture_contract():
+    assert READ_ONLY_CHAIN_SMOKE_DOC_PATH.exists()
+    source = READ_ONLY_CHAIN_SMOKE_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "tests/fixtures/agentic_read_only_chain_smoke/application_execution_queue.csv",
+        "python -m src.agents.read_only_adapter_chain",
+        "--queue-input tests/fixtures/agentic_read_only_chain_smoke/application_execution_queue.csv",
+        "read_only_adapter_chain_result.json",
+        "read_only_adapter_chain_report.md",
+        "job_prioritization/job_prioritization_read_only_adapter_recommendations.csv",
+        "tailoring_decision/tailoring_decision_read_only_adapter_decisions.csv",
+        "operator_review/operator_review_read_only_adapter_reviews.csv",
+        "This fixture does not run automatically.",
+        "This fixture is not production data.",
+        "not wired into live planning",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "does not implement real orchestration",
+        "automated application submission",
+    ]:
+        assert phrase in source
+
+    forbidden_claims = [
+        "real orchestration is implemented",
+        "agents run automatically",
+        "live pipeline uses the chain",
+        "LangGraph is integrated",
+        "feedback tunes scoring",
+        "RAG evaluation changes retrieval",
+        "application submission is automated",
+    ]
+    lower_source = source.lower()
+    for claim in forbidden_claims:
+        assert claim.lower() not in lower_source

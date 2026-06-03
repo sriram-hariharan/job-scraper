@@ -36,7 +36,7 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
-from src.agents import critic_agent, read_only_adapter_chain
+from src.agents import critic_agent, read_only_adapter_chain, read_only_chain_artifact_generator
 from src.matching.dimensions import get_dimension_weights
 from src.matching.job_adapter import build_job_evidence
 from src.matching.models import MatchPrefilterResult
@@ -243,6 +243,8 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "read_only_adapter_preflight.md",
     "read_only_adapter_chain_result.json",
     "read_only_adapter_chain_report.md",
+    "read_only_chain_artifact_generation_result.json",
+    "read_only_chain_artifact_generation_report.md",
     "agentic_workflow_verification.json",
     "rag_evaluation_summary.json",
     "rag_evaluation_report.md",
@@ -882,6 +884,7 @@ def profile_pipeline_run_detail_payload(
         "agentic_workflow_dry_run": _agentic_workflow_dry_run_from_artifacts(artifacts),
         "read_only_adapter_preflight": _read_only_adapter_preflight_from_artifacts(artifacts),
         "manual_read_only_adapter_chain": _manual_read_only_adapter_chain_from_artifacts(artifacts),
+        "explicit_read_only_chain_artifact_generation": _explicit_read_only_chain_artifact_generation_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "rag_evaluation": _rag_evaluation_from_artifacts(
             artifacts,
@@ -933,6 +936,7 @@ def profile_pipeline_run_agentic_review_payload(
         "agentic_workflow_dry_run": _agentic_workflow_dry_run_from_artifacts(artifacts),
         "read_only_adapter_preflight": _read_only_adapter_preflight_from_artifacts(artifacts),
         "manual_read_only_adapter_chain": _manual_read_only_adapter_chain_from_artifacts(artifacts),
+        "explicit_read_only_chain_artifact_generation": _explicit_read_only_chain_artifact_generation_from_artifacts(artifacts),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "rag_evaluation": _rag_evaluation_from_artifacts(
             artifacts,
@@ -3687,6 +3691,8 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "read_only_adapter_preflight.md": "read_only_adapter_preflight_md",
         "read_only_adapter_chain_result.json": "read_only_adapter_chain_result_json",
         "read_only_adapter_chain_report.md": "read_only_adapter_chain_report_md",
+        "read_only_chain_artifact_generation_result.json": "read_only_chain_artifact_generation_result_json",
+        "read_only_chain_artifact_generation_report.md": "read_only_chain_artifact_generation_report_md",
         "agentic_workflow_verification.json": "agentic_workflow_verification_json",
         "rag_evaluation_summary.json": "rag_evaluation_summary_json",
         "rag_evaluation_report.md": "rag_evaluation_report_md",
@@ -10015,6 +10021,46 @@ def _manual_read_only_adapter_chain_from_artifacts(rows: List[Dict[str, Any]]) -
         "did_mutate_production": bool(result_json.get("did_mutate_production")) if result_json else False,
         "adapter_execution_order": list(result_json.get("adapter_execution_order") or []),
         "summary": summary,
+        "reason_codes": list(result_json.get("reason_codes") or []),
+        "warning_codes": list(validation.get("warning_codes") or []),
+        "report_markdown": report_markdown,
+    }
+
+
+def _explicit_read_only_chain_artifact_generation_from_artifacts(
+    rows: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    result_json = _artifact_json_by_name(
+        rows,
+        read_only_chain_artifact_generator.RESULT_JSON_NAME,
+    )
+    report_markdown = _artifact_text_by_name(
+        rows,
+        read_only_chain_artifact_generator.REPORT_MD_NAME,
+    )
+    validation = (
+        read_only_chain_artifact_generator.validate_chain_artifact_generation_result(result_json)
+        if result_json
+        else {"validation_status": "missing", "reason_codes": [], "warning_codes": []}
+    )
+    chain_summary = dict(result_json.get("chain_result_summary") or {}) if result_json else {}
+    return {
+        "present": bool(result_json or report_markdown),
+        "available": bool(result_json or report_markdown),
+        "execution_mode": _clean_text(result_json.get("execution_mode")) if result_json else "",
+        "validation_status": _clean_text(validation.get("validation_status")),
+        "did_run_chain": bool(result_json.get("did_run_chain")) if result_json else False,
+        "did_mutate_production": bool(result_json.get("did_mutate_production")) if result_json else False,
+        "require_explicit_input": bool(
+            (result_json.get("require_explicit_input") if "require_explicit_input" in result_json else dict(result_json.get("context") or {}).get("require_explicit_input"))
+        ) if result_json else False,
+        "require_explicit_output_dir": bool(
+            (result_json.get("require_explicit_output_dir") if "require_explicit_output_dir" in result_json else dict(result_json.get("context") or {}).get("require_explicit_output_dir"))
+        ) if result_json else False,
+        "queue_input_artifact_path": _clean_text(result_json.get("queue_input_artifact_path")) if result_json else "",
+        "output_dir": _clean_text(result_json.get("output_dir")) if result_json else "",
+        "chain_result_summary": chain_summary,
+        "generator_artifacts": list(result_json.get("generator_artifacts") or []) if result_json else [],
         "reason_codes": list(result_json.get("reason_codes") or []),
         "warning_codes": list(validation.get("warning_codes") or []),
         "report_markdown": report_markdown,

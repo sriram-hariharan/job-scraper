@@ -36,6 +36,8 @@ ARTIFACT_NAME_TO_KIND = {
     "read_only_adapter_preflight.md": "read_only_adapter_preflight_md",
     "read_only_adapter_chain_result.json": "read_only_adapter_chain_result_json",
     "read_only_adapter_chain_report.md": "read_only_adapter_chain_report_md",
+    "read_only_chain_artifact_generation_result.json": "read_only_chain_artifact_generation_result_json",
+    "read_only_chain_artifact_generation_report.md": "read_only_chain_artifact_generation_report_md",
     "agentic_workflow_verification.json": "agentic_workflow_verification_json",
     "job_packet_manifest.csv": "job_packet_manifest",
 }

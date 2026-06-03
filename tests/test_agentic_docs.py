@@ -157,6 +157,10 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "read_only_adapter_chain_report.md",
         "This does not run the chain",
         "Manual read-only adapter chain artifacts can be displayed in Agentic Review diagnostics",
+        "read_only_chain_artifact_generation_result.json",
+        "read_only_chain_artifact_generation_report.md",
+        "This does not run the generator",
+        "displayed in Agentic Review diagnostics",
     ]:
         assert phrase in source
 

@@ -77,6 +77,8 @@ def _base_result(
         "context": dict(context),
         "did_run_chain": False,
         "did_mutate_production": False,
+        "require_explicit_input": True,
+        "require_explicit_output_dir": True,
         "allow_production_mutation": False,
         "allow_live_pipeline_wiring": False,
         "allow_application_submission": False,
@@ -192,6 +194,11 @@ def validate_chain_artifact_generation_result(result: Dict[str, Any]) -> Dict[st
         reason_codes.append("missing_explicit_queue_input")
     if not _clean_text(result.get("output_dir")):
         reason_codes.append("missing_explicit_output_dir")
+    context = dict(result.get("context") or {})
+    for flag in ["require_explicit_input", "require_explicit_output_dir"]:
+        value = result.get(flag) if flag in result else context.get(flag)
+        if not bool(value):
+            reason_codes.append(f"{flag}_false")
     if bool(result.get("did_mutate_production")):
         reason_codes.append("did_mutate_production")
 

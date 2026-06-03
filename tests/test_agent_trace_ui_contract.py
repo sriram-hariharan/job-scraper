@@ -143,3 +143,39 @@ def test_agentic_review_manual_read_only_adapter_chain_diagnostics_contract():
     assert "read_only_adapter_chain_result_json" in services_source
     assert "read_only_adapter_chain_report_md" in services_source
     assert "_manual_read_only_adapter_chain_from_artifacts" in services_source
+
+
+def test_agentic_review_explicit_read_only_chain_generator_diagnostics_contract():
+    review_js = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Explicit Read-Only Chain Generator" in review_js
+    assert "renderExplicitReadOnlyChainGeneratorSection" in review_js
+    assert "explicit_read_only_chain_artifact_generation" in review_js
+    assert "explicit operator-triggered only" in review_js
+    assert "read-only" in review_js
+    assert "not automatic" in review_js
+    assert "not live pipeline" in review_js
+    assert "did_run_chain" in review_js
+    assert "did_mutate_production" in review_js
+    assert "require_explicit_input" in review_js
+    assert "require_explicit_output_dir" in review_js
+    assert "input_row_count" in review_js
+    assert "adapters_executed_count" in review_js
+    assert "job_prioritization_recommendation_count" in review_js
+    assert "tailoring_decision_count" in review_js
+    assert "operator_review_lane_count" in review_js
+    assert "warning_count" in review_js
+    assert "No explicit read-only chain generator artifacts recorded for this run yet." in review_js
+    assert "Generator report markdown" in review_js
+
+    assert ".explicit-read-only-chain-generator-card" in review_css
+    assert ".explicit-read-only-chain-generator-metrics" in review_css
+    assert ".explicit-read-only-chain-generator-notice" in review_css
+
+    assert "read_only_chain_artifact_generation_result.json" in services_source
+    assert "read_only_chain_artifact_generation_report.md" in services_source
+    assert "read_only_chain_artifact_generation_result_json" in services_source
+    assert "read_only_chain_artifact_generation_report_md" in services_source
+    assert "_explicit_read_only_chain_artifact_generation_from_artifacts" in services_source

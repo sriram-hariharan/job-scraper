@@ -20,6 +20,8 @@ Phase 24A adds `src/agents/read_only_adapter_chain.py` as a manual read-only ada
 
 Phase 25A allows manually produced chain artifacts (`read_only_adapter_chain_result.json` and `read_only_adapter_chain_report.md`) to be ingested, verified, and displayed in Agentic Review diagnostics. This does not run the chain, does not change production decisions, and does not wire the chain into live planning, the scheduler, UI actions, or `workflow_runner.py`. Future real orchestration still requires a separate reviewed phase.
 
+Phase 29A allows explicitly produced read-only chain generator artifacts (`read_only_chain_artifact_generation_result.json` and `read_only_chain_artifact_generation_report.md`) to be ingested, verified, and displayed in Agentic Review diagnostics. This does not run the generator, does not change production decisions, and does not wire the generator into live planning, the scheduler, UI actions, or `workflow_runner.py`. Future real orchestration still requires a separate reviewed phase.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

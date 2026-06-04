@@ -32,6 +32,8 @@ Phase 35A mutation policy and approval gate boundaries are tracked in `docs/muta
 
 Phase 36A live-run audit ledger schema boundaries are tracked in `docs/live_run_audit_ledger_schema_design.md`. That document is design/schema proposal-only and does not enable persistence, ledger writes, live execution, or mutation execution.
 
+Phase 37A idempotency and locking boundaries are tracked in `docs/idempotency_locking_design.md`. That document is design-only and does not add lock tables, migrations, idempotency stores, runtime lock checks, live execution, or mutation execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -44,6 +44,8 @@ Phase 41A proposal-only mutation planning is tracked in `docs/proposal_only_muta
 
 Phase 42A displays proposal-only planner diagnostics in Agentic Review. The display is read-only/non-actionable and still does not enable live execution, mutation, approval APIs, approval storage, DB writes, queue updates, application submission, or scheduler execution.
 
+Phase 43A release safety checkpoint is tracked in `docs/proposal_planner_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the proposal-planner stack remains explicit/manual/read-only/non-mutating before any future release work.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

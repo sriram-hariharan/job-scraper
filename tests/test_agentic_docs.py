@@ -9,6 +9,7 @@ LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH = Path("docs/live_orchestration_readin
 PRODUCTION_EXECUTION_CONTRACT_DOC_PATH = Path("docs/production_execution_contract_design.md")
 MUTATION_POLICY_APPROVAL_GATE_DOC_PATH = Path("docs/mutation_policy_approval_gate_design.md")
 LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH = Path("docs/live_run_audit_ledger_schema_design.md")
+IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH = Path("docs/idempotency_locking_design.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -174,6 +175,8 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "design-only and does not enable mutation execution",
         "docs/live_run_audit_ledger_schema_design.md",
         "design/schema proposal-only and does not enable persistence",
+        "docs/idempotency_locking_design.md",
+        "design-only and does not add lock tables",
     ]:
         assert phrase in source
 
@@ -313,6 +316,7 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "35A: mutation policy and approval gate design doc only.",
         "36A: live-run audit ledger schema proposal only.",
         "37A: idempotency/locking design doc only.",
+        "docs/idempotency_locking_design.md",
         "38A: dry-run execution simulator, still no mutation.",
         "39A: operator approval UI mock/read-only only.",
         "40A+: only then consider controlled execution prototype, still behind explicit feature flags.",
@@ -321,6 +325,7 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "docs/production_execution_contract_design.md",
         "docs/mutation_policy_approval_gate_design.md",
         "docs/live_run_audit_ledger_schema_design.md",
+        "docs/idempotency_locking_design.md",
     ]:
         assert phrase in source
 
@@ -413,6 +418,7 @@ def test_production_execution_contract_design_covers_phase_34a_contract():
         "Operator runbook update.",
         "docs/mutation_policy_approval_gate_design.md",
         "docs/live_run_audit_ledger_schema_design.md",
+        "docs/idempotency_locking_design.md",
     ]:
         assert phrase in source
 
@@ -634,6 +640,7 @@ def test_live_run_audit_ledger_schema_design_covers_phase_36a_contract():
         "Ledger write transaction design.",
         "Read-only ledger viewer mock.",
         "Failure-mode tests.",
+        "docs/idempotency_locking_design.md",
     ]:
         assert phrase in source
 
@@ -665,3 +672,152 @@ def test_live_run_audit_ledger_schema_design_covers_phase_36a_contract():
         ]
     )
     assert "docs/live_run_audit_ledger_schema_design.md" in linked_docs
+
+
+def test_idempotency_locking_design_covers_phase_37a_contract():
+    assert IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH.exists()
+    source = IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/idempotency_locking_design.md",
+        "Phase 37A is design only.",
+        "No implementation in this phase",
+        "No lock table or migration is added.",
+        "No idempotency store is added.",
+        "No runtime lock checks are added.",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "read-only adapters",
+        "manual read-only chain",
+        "explicit generator",
+        "diagnostic artifacts only",
+        "No DB write.",
+        "No queue mutation.",
+        "No application submission.",
+        "No live orchestration.",
+        "No idempotency enforcement.",
+        "No execution locking.",
+        "Every future execution request must have a stable idempotency key.",
+        "Retries must return the prior result or block duplicate mutation.",
+        "Same key plus same payload must be safe.",
+        "Same key plus different payload must be rejected.",
+        "Mutation idempotency must be scoped to target and mutation type.",
+        "Idempotency records must link to audit ledger entries.",
+        "Idempotency must be checked before approval consumption and before mutation attempt.",
+        "No application submission can be retried without separate submission-specific idempotency policy.",
+        "Every mutable target requires an execution lock.",
+        "Locks must be scoped narrowly",
+        "owner/run identity",
+        "TTL/expiry",
+        "Stale locks require safe recovery.",
+        "Lock acquisition must occur before mutation execution.",
+        "Lock release must be audited.",
+        "Lock collision must block mutation and produce diagnostic output.",
+        "No global broad lock for the first prototype unless explicitly approved.",
+        "execution_request",
+        "execution_plan",
+        "mutation_proposal",
+        "approval_consumption",
+        "mutation_attempt",
+        "rollback_attempt",
+        "owner_user_id",
+        "pipeline_run_id",
+        "target_type",
+        "target_id",
+        "mutation_type",
+        "source_agent_key",
+        "artifact_version_hash",
+        "proposed_after_value_hash",
+        "approval_id",
+        "pipeline_run_lock",
+        "job_target_lock",
+        "queue_row_lock",
+        "artifact_status_lock",
+        "approval_consumption_lock",
+        "rollback_lock",
+        "requested",
+        "acquired",
+        "renewed",
+        "released",
+        "expired",
+        "force_released",
+        "blocked",
+        "reserved",
+        "running",
+        "succeeded",
+        "failed_retryable",
+        "failed_terminal",
+        "duplicate_replayed",
+        "duplicate_conflict",
+        "Duplicate request same payload",
+        "Duplicate request different payload",
+        "Concurrent mutation on same queue row",
+        "Concurrent rollback for same mutation",
+        "Stale approval consumption",
+        "Stale artifact version",
+        "Lock unavailable",
+        "Lock expired mid-run",
+        "Idempotency store unavailable",
+        "No mutation without idempotency key.",
+        "No mutation without execution lock.",
+        "No approval consumption without idempotency record.",
+        "No retry can apply same mutation twice.",
+        "No application submission without separate submission idempotency design.",
+        "No live execution if lock store unavailable.",
+        "No live execution if idempotency store unavailable.",
+        "No lock bypass in production.",
+        "All lock/idempotency decisions must link to audit ledger entries.",
+        "Future idempotency reservations should write ledger events",
+        "Future lock acquire/release decisions should write ledger events",
+        "Future duplicate replay/conflict outcomes should write ledger events",
+        "The current phase does not write ledger rows",
+        "Approval consumption must be idempotent.",
+        "Consumed approvals cannot be reused.",
+        "Approval scope mismatch blocks lock acquisition.",
+        "Expired or revoked approval blocks idempotency reservation.",
+        "The chain/generator remains diagnostic only.",
+        "The smoke fixture and roundtrip tests do not require locks.",
+        "Future proposal artifacts may include calculated keys, but not enforce in this phase.",
+        "DB schema/migration design for idempotency records and locks.",
+        "Storage API design.",
+        "Transaction boundary design.",
+        "Lock TTL/recovery design.",
+        "Audit ledger integration design.",
+        "Dry-run simulator.",
+        "Failure-mode tests.",
+        "Operator runbook update.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Purpose",
+        "## Current Boundary",
+        "## Idempotency Principles",
+        "## Locking Principles",
+        "## Proposed Idempotency Key Structure",
+        "## Proposed Lock Scopes",
+        "## Lock Lifecycle",
+        "## Idempotency Record Lifecycle",
+        "## Collision And Duplicate Behavior",
+        "## Safety Invariants",
+        "## Relationship To Audit Ledger",
+        "## Relationship To Approval Gate",
+        "## Relationship To Current Read-Only Chain",
+        "## Future Implementation Gates",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH,
+            MUTATION_POLICY_APPROVAL_GATE_DOC_PATH,
+            PRODUCTION_EXECUTION_CONTRACT_DOC_PATH,
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/idempotency_locking_design.md" in linked_docs

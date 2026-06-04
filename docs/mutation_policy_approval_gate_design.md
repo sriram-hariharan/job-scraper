@@ -14,6 +14,8 @@ This document is planning-only. It does not add mutation APIs, approval storage,
 
 The future live-run audit ledger schema proposal is detailed in `docs/live_run_audit_ledger_schema_design.md`. That document is design/schema proposal-only and does not enable persistence, ledger writes, live execution, or mutation execution.
 
+The future idempotency and locking design is detailed in `docs/idempotency_locking_design.md`. That document is design-only and does not add lock tables, migrations, idempotency stores, runtime lock checks, live execution, or mutation execution.
+
 ## Current State
 
 The current system remains read-only and diagnostic:

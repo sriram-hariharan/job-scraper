@@ -36,6 +36,8 @@ Phase 37A idempotency and locking boundaries are tracked in `docs/idempotency_lo
 
 Phase 38A dry-run execution simulation is tracked in `docs/dry_run_execution_simulator.md`. The simulator is explicit/manual and diagnostic-only; it consumes existing read-only artifacts, does not run the chain/generator, and does not enable live execution, mutation, DB writes, queue updates, application submission, scheduler execution, or `workflow_runner.py` execution.
 
+Phase 39A allows dry-run execution simulation artifacts to be displayed in Agentic Review with an Operator Approval Mock. The mock is read-only and non-actionable; it does not approve, reject, store approval, mutate queues, write to the database, submit applications, or execute anything.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

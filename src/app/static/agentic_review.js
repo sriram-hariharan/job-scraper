@@ -184,6 +184,8 @@ function renderAgenticReviewDiagnosticsPanel(
   readOnlyAdapterPreflight = {},
   manualReadOnlyAdapterChain = {},
   explicitReadOnlyChainArtifactGeneration = {},
+  explicitDryRunExecutionSimulation = {},
+  operatorApprovalMock = {},
   agentFeedback = {},
   ragEvaluation = {},
 ) {
@@ -192,6 +194,8 @@ function renderAgenticReviewDiagnosticsPanel(
   const preflightSection = renderReadOnlyAdapterPreflightSection(readOnlyAdapterPreflight);
   const adapterChainSection = renderManualReadOnlyAdapterChainSection(manualReadOnlyAdapterChain);
   const chainGeneratorSection = renderExplicitReadOnlyChainGeneratorSection(explicitReadOnlyChainArtifactGeneration);
+  const dryRunSimulationSection = renderDryRunExecutionSimulationSection(explicitDryRunExecutionSimulation);
+  const operatorApprovalMockSection = renderOperatorApprovalMockSection(operatorApprovalMock);
   const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
   const ragEvaluationSection = renderRagEvaluationSection(ragEvaluation);
   const available = Boolean(workflowVerification?.available);
@@ -219,6 +223,11 @@ function renderAgenticReviewDiagnosticsPanel(
     explicitReadOnlyChainArtifactGeneration?.present
     || explicitReadOnlyChainArtifactGeneration?.available
   );
+  const dryRunSimulationAvailable = Boolean(
+    explicitDryRunExecutionSimulation?.present
+    || explicitDryRunExecutionSimulation?.available
+  );
+  const operatorApprovalMockAvailable = Boolean(operatorApprovalMock?.present);
   if (
     !available && !Object.keys(verification).length
     && !manifestAvailable && !Object.keys(manifest).length
@@ -227,6 +236,8 @@ function renderAgenticReviewDiagnosticsPanel(
     && !preflightAvailable && !Object.keys(preflightPlan).length
     && !chainAvailable
     && !chainGeneratorAvailable
+    && !dryRunSimulationAvailable
+    && !operatorApprovalMockAvailable
   ) {
     panel.innerHTML = `
       <div class="agentic-workflow-header">
@@ -239,6 +250,8 @@ function renderAgenticReviewDiagnosticsPanel(
       ${preflightSection}
       ${adapterChainSection}
       ${chainGeneratorSection}
+      ${dryRunSimulationSection}
+      ${operatorApprovalMockSection}
       ${ragEvaluationSection}
       ${feedbackSection}
     `;
@@ -296,6 +309,8 @@ function renderAgenticReviewDiagnosticsPanel(
     ${preflightSection}
     ${adapterChainSection}
     ${chainGeneratorSection}
+    ${dryRunSimulationSection}
+    ${operatorApprovalMockSection}
     ${ragEvaluationSection}
     ${feedbackSection}
   `;
@@ -934,6 +949,129 @@ function renderExplicitReadOnlyChainGeneratorSection(generator = {}) {
   `;
 }
 
+function renderDryRunExecutionSimulationSection(simulation = {}) {
+  const present = Boolean(simulation?.present || simulation?.available);
+  const plan = simulation?.simulated_execution_plan && typeof simulation.simulated_execution_plan === "object"
+    ? simulation.simulated_execution_plan
+    : {};
+  const blockedReasons = Array.isArray(simulation?.blocked_live_execution_reasons)
+    ? simulation.blocked_live_execution_reasons
+    : [];
+  const validationStatus = String(simulation?.validation_status || (present ? "unknown" : "missing")).toLowerCase();
+  const markdown = String(simulation?.report_markdown || "");
+  if (!present) {
+    return `
+      <section class="dry-run-execution-simulation-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Dry-Run Execution Simulation</h2>
+            <p>Simulation artifact diagnostics only. Missing simulator artifacts do not affect planning results.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No dry-run execution simulation artifacts recorded for this run yet.</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="dry-run-execution-simulation-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Dry-Run Execution Simulation</h2>
+          <p>Explicit/manual simulation display only. This page does not run the simulator, execute agents, write to the database, update queues, submit applications, or mutate production.</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(validationStatus)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(validationStatus))}
+        </span>
+      </div>
+      <div class="dry-run-execution-simulation-metrics">
+        ${renderWorkflowSummaryMetric("Execution mode", simulation.execution_mode || "-")}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+        ${renderWorkflowSummaryMetric("Did simulate", simulation.did_simulate ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Did execute live", simulation.did_execute_live ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Mutated production", simulation.did_mutate_production ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Can execute live", plan.can_execute_live ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Requires approval", plan.requires_operator_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Requires audit ledger", plan.requires_audit_ledger ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Requires idempotency", plan.requires_idempotency_key ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Requires lock", plan.requires_execution_lock ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Requires rollback", plan.requires_rollback_plan ? "yes" : "no")}
+      </div>
+      <div class="agentic-review-section-counts">
+        <strong>Blocked live execution reasons</strong>
+        <span>${renderReasonChips(blockedReasons)}</span>
+      </div>
+      <div class="dry-run-execution-simulation-notice">
+        ${renderReviewPill("explicit/manual only")}
+        ${renderReviewPill("read-only")}
+        ${renderReviewPill("not live orchestration")}
+        ${renderReviewPill("no mutation")}
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Simulation report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
+function renderOperatorApprovalMockSection(mock = {}) {
+  const present = Boolean(mock?.present);
+  const requiredGates = Array.isArray(mock?.required_future_gates) ? mock.required_future_gates : [];
+  const blockedActions = Array.isArray(mock?.blocked_actions) ? mock.blocked_actions : [];
+  const proposalTypes = Array.isArray(mock?.simulated_proposal_types) ? mock.simulated_proposal_types : [];
+  const validationStatus = String(mock?.validation_status || (present ? "unknown" : "missing")).toLowerCase();
+  if (!present) {
+    return `
+      <section class="operator-approval-mock-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Operator Approval Mock</h2>
+            <p>Read-only approval preview appears after dry-run execution simulation artifacts are recorded.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No operator approval mock available because no dry-run execution simulation artifacts are recorded for this run yet.</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="operator-approval-mock-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Operator Approval Mock</h2>
+          <p>Mock-only, read-only, and non-actionable. This section does not approve, reject, store approval, call an API, execute mutations, write to the database, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Mock only</span>
+      </div>
+      <div class="operator-approval-mock-warning">
+        Future approval requires separate reviewed implementation for approval storage, audit ledger, idempotency, locking, rollback, and feature gates.
+      </div>
+      <div class="operator-approval-mock-metrics">
+        ${renderWorkflowSummaryMetric("approval_enabled", mock.approval_enabled ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("approval_storage_enabled", mock.approval_storage_enabled ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("mutation_execution_enabled", mock.mutation_execution_enabled ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("can_execute_live", mock.can_execute_live ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+        ${renderWorkflowSummaryMetric("Simulated proposals", mock.simulated_proposal_count ?? 0)}
+      </div>
+      <div class="agentic-workflow-verification-sections">
+        <div>
+          <strong>Required future gates</strong>
+          ${renderWorkflowVerificationList(requiredGates)}
+        </div>
+        <div>
+          <strong>Blocked actions</strong>
+          ${renderWorkflowVerificationList(blockedActions)}
+        </div>
+        <div>
+          <strong>Simulated proposal types</strong>
+          ${renderWorkflowVerificationList(proposalTypes)}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
 function renderAgenticReviewData(payload, tracePayload) {
   renderAgenticReviewStatus(payload || {});
 
@@ -1003,6 +1141,8 @@ function renderAgenticReviewData(payload, tracePayload) {
     payload.read_only_adapter_preflight,
     payload.manual_read_only_adapter_chain,
     payload.explicit_read_only_chain_artifact_generation,
+    payload.explicit_dry_run_execution_simulation,
+    payload.operator_approval_mock,
     payload.agent_feedback,
     payload.rag_evaluation,
   );

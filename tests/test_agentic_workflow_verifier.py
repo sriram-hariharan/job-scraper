@@ -6,6 +6,7 @@ from src.agents.workflow_verifier import (
     verify_agentic_workflow_artifacts,
     write_agentic_workflow_verification_artifact,
 )
+from src.agents.dry_run_execution_simulator import simulate_dry_run_execution
 from src.agents.read_only_chain_artifact_generator import generate_read_only_chain_artifacts
 from src.agents.read_only_adapter_chain import write_read_only_adapter_chain_artifacts
 from src.agents.orchestrator_adapter_harness import write_read_only_adapter_preflight_artifacts
@@ -154,6 +155,21 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
             (generator_output_dir / artifact_name).read_text(encoding="utf-8"),
             encoding="utf-8",
         )
+    simulation_output_dir = root / "dry_run_simulator_output"
+    simulate_dry_run_execution(
+        input_artifact_dir=root,
+        output_dir=simulation_output_dir,
+        pipeline_run_id="run_test",
+        owner_user_id="user_test",
+    )
+    for artifact_name in [
+        "dry_run_execution_simulation_result.json",
+        "dry_run_execution_simulation_report.md",
+    ]:
+        (root / artifact_name).write_text(
+            (simulation_output_dir / artifact_name).read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
     write_rag_evaluation_artifacts(
         output_dir=root,
         rows=[
@@ -283,6 +299,66 @@ def test_workflow_verifier_validates_read_only_chain_artifact_generation_when_pr
     assert "read_only_chain_artifact_generation_allow_application_submission_false" in check_names
     assert "read_only_chain_artifact_generation_no_production_root_artifact_names" in check_names
     assert payload["row_counts"]["read_only_chain_artifact_generation_did_run_chain"] == 1
+
+
+def test_workflow_verifier_validates_dry_run_execution_simulation_when_present(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "dry_run_execution_simulation_validation_passed_or_warning" in check_names
+    assert "dry_run_execution_simulation_explicit_mode" in check_names
+    assert "dry_run_execution_simulation_did_simulate_boolean" in check_names
+    assert "dry_run_execution_simulation_did_execute_live_false" in check_names
+    assert "dry_run_execution_simulation_did_mutate_production_false" in check_names
+    assert "dry_run_execution_simulation_allow_db_write_false" in check_names
+    assert "dry_run_execution_simulation_allow_live_pipeline_wiring_false" in check_names
+    assert "dry_run_execution_simulation_allow_application_submission_false" in check_names
+    assert "dry_run_execution_simulation_allow_queue_action_update_false" in check_names
+    assert "dry_run_execution_simulation_allow_packet_update_false" in check_names
+    assert "dry_run_execution_simulation_allow_tailoring_generation_update_false" in check_names
+    assert "dry_run_execution_simulation_allow_scoring_update_false" in check_names
+    assert "dry_run_execution_simulation_allow_ranking_update_false" in check_names
+    assert "dry_run_execution_simulation_allow_scheduler_execution_false" in check_names
+    assert "dry_run_execution_simulation_can_execute_live_false" in check_names
+    assert "dry_run_execution_simulation_proposals_non_executable" in check_names
+    assert "dry_run_execution_simulation_no_production_root_artifact_names" in check_names
+    assert payload["row_counts"]["dry_run_execution_simulation_proposals"] == 3
+
+
+def test_workflow_verifier_warns_when_dry_run_execution_simulation_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "dry_run_execution_simulation_result.json").unlink()
+    (root / "dry_run_execution_simulation_report.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "dry_run_execution_simulation_result.json" in payload["missing_artifacts"]
+    assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_fails_unsafe_dry_run_execution_simulation(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    simulation_path = root / "dry_run_execution_simulation_result.json"
+    simulation = json.loads(simulation_path.read_text(encoding="utf-8"))
+    simulation["did_execute_live"] = True
+    simulation["safety_flags"]["allow_db_write"] = True
+    simulation["simulated_execution_plan"]["can_execute_live"] = True
+    simulation["simulated_mutation_proposals"][0]["proposal_mode"] = "live"
+    simulation["simulated_mutation_proposals"][0]["mutation_type"] = "application_submission"
+    _write_json(simulation_path, simulation)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "dry_run_execution_simulation_validation_failed" in payload["reason_codes"]
+    assert "dry_run_execution_simulation_did_execute_live_true" in payload["reason_codes"]
+    assert "dry_run_execution_simulation_allow_db_write_true" in payload["reason_codes"]
+    assert "dry_run_execution_simulation_can_execute_live_true" in payload["reason_codes"]
+    assert "dry_run_execution_simulation_unsafe_proposal" in payload["reason_codes"]
 
 
 def test_workflow_verifier_warns_when_read_only_chain_artifact_generation_missing_non_strict(tmp_path):

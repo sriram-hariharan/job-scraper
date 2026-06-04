@@ -24,6 +24,8 @@ Phase 29A allows explicitly produced read-only chain generator artifacts (`read_
 
 Operator-facing steps for the explicit generator live in `docs/read_only_chain_operator_runbook.md`; the runbook is manual/read-only documentation and does not enable live orchestration.
 
+Phase 33A live orchestration readiness gaps are tracked in `docs/live_orchestration_readiness_gap_analysis.md`. That document is planning-only and does not enable live orchestration.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -7,6 +7,7 @@ READ_ONLY_CHAIN_SMOKE_DOC_PATH = Path("docs/read_only_chain_smoke.md")
 READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH = Path("docs/read_only_chain_operator_runbook.md")
 LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH = Path("docs/live_orchestration_readiness_gap_analysis.md")
 PRODUCTION_EXECUTION_CONTRACT_DOC_PATH = Path("docs/production_execution_contract_design.md")
+MUTATION_POLICY_APPROVAL_GATE_DOC_PATH = Path("docs/mutation_policy_approval_gate_design.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -168,6 +169,8 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "planning-only and does not enable live orchestration",
         "docs/production_execution_contract_design.md",
         "design-only and does not enable live orchestration",
+        "docs/mutation_policy_approval_gate_design.md",
+        "design-only and does not enable mutation execution",
     ]:
         assert phrase in source
 
@@ -313,6 +316,7 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "No queue mutation.",
         "No scoring/ranking changes.",
         "docs/production_execution_contract_design.md",
+        "docs/mutation_policy_approval_gate_design.md",
     ]:
         assert phrase in source
 
@@ -403,6 +407,7 @@ def test_production_execution_contract_design_covers_phase_34a_contract():
         "Read-only approval UI mock.",
         "Feature flag policy.",
         "Operator runbook update.",
+        "docs/mutation_policy_approval_gate_design.md",
     ]:
         assert phrase in source
 
@@ -433,3 +438,131 @@ def test_production_execution_contract_design_covers_phase_34a_contract():
         ]
     )
     assert "docs/production_execution_contract_design.md" in linked_docs
+
+
+def test_mutation_policy_approval_gate_design_covers_phase_35a_contract():
+    assert MUTATION_POLICY_APPROVAL_GATE_DOC_PATH.exists()
+    source = MUTATION_POLICY_APPROVAL_GATE_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/mutation_policy_approval_gate_design.md",
+        "Phase 35A is design only.",
+        "No implementation in this phase",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "No approval API/UI/storage is implemented.",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "## Mutation Classification",
+        "forbidden_mutation",
+        "approval_required_mutation",
+        "diagnostic_artifact_write",
+        "read_only_observation",
+        "operator_note",
+        "future_deferred_mutation",
+        "## Approval Gate Contract",
+        "approval_id",
+        "mutation_ids",
+        "requested_by",
+        "approved_by",
+        "approval_status",
+        "approval_scope",
+        "required_evidence_refs",
+        "approved_mutation_types",
+        "blocked_mutation_types",
+        "idempotency_key",
+        "audit_ledger_ref",
+        "## Approval States",
+        "draft",
+        "pending_review",
+        "approved",
+        "rejected",
+        "expired",
+        "revoked",
+        "consumed",
+        "blocked_by_policy",
+        "## Evidence Required Before Approval",
+        "before_value",
+        "proposed_after_value",
+        "source_agent_key",
+        "reason_codes",
+        "evidence_refs",
+        "validation_status",
+        "rollback_strategy",
+        "artifact_version_refs",
+        "Operator-visible summary.",
+        "Risk classification.",
+        "## Policy Evaluation Order",
+        "Feature flag and environment gate.",
+        "Mutation type allow/deny list.",
+        "Required evidence presence.",
+        "Idempotency key presence.",
+        "Lock availability.",
+        "Approval state/scope/expiry.",
+        "Rollback requirement.",
+        "Audit ledger write readiness.",
+        "Final pre-execution validation.",
+        "No application submission is allowed by this policy.",
+        "No mutation without approval can pass this order.",
+        "audit ledger",
+        "idempotency key",
+        "execution lock",
+        "Application submission.",
+        "Resume rewriting.",
+        "Tailoring generation.",
+        "Packet generation.",
+        "Scoring formula changes.",
+        "Ranking changes.",
+        "Scraper/source mutation.",
+        "RAG corpus mutation.",
+        "Deletion of production records.",
+        "Credential/token mutation.",
+        "User profile mutation.",
+        "Hidden scheduler/background execution.",
+        "Mutation without before/after capture.",
+        "Mutation without approval.",
+        "Mutation without audit ledger entry.",
+        "Mutation without idempotency key.",
+        "Mutation without execution lock.",
+        "Mutation without rollback plan where rollback is possible.",
+        "can become evidence for future mutation proposals, but cannot directly mutate anything",
+        "Audit ledger schema design.",
+        "Idempotency/locking design.",
+        "Dry-run mutation simulator.",
+        "Read-only approval UI mock.",
+        "Feature flag and environment gate policy.",
+        "Rollback design.",
+        "Approval API/storage design.",
+        "Operator runbook update.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Purpose",
+        "## Current State",
+        "## Mutation Classification",
+        "## Allowed First-Phase Mutation Proposals",
+        "## Explicitly Forbidden Mutations",
+        "## Approval Gate Contract",
+        "## Approval States",
+        "## Approval Scope",
+        "## Evidence Required Before Approval",
+        "## Human Review Checklist",
+        "## Policy Evaluation Order",
+        "## Failure And Denial Behavior",
+        "## Audit And Trace Requirements",
+        "## Relationship To Current Read-Only Chain",
+        "## Future Implementation Gates",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            PRODUCTION_EXECUTION_CONTRACT_DOC_PATH,
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/mutation_policy_approval_gate_design.md" in linked_docs

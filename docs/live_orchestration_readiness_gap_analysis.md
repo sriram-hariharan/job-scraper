@@ -128,7 +128,7 @@ Phase 33A is a planning/readiness gap analysis only. It does not implement live 
 ## Proposed Future Milestones
 
 - 34A: production execution contract design doc only. See `docs/production_execution_contract_design.md`.
-- 35A: mutation policy and approval gate design doc only.
+- 35A: mutation policy and approval gate design doc only. See `docs/mutation_policy_approval_gate_design.md`.
 - 36A: live-run audit ledger schema proposal only.
 - 37A: idempotency/locking design doc only.
 - 38A: dry-run execution simulator, still no mutation.

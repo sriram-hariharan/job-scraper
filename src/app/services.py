@@ -36,7 +36,12 @@ from src.config.settings import (
     ACTIVE_APPLICATION_PLANNING_OUTPUT_DIR,
     SCHEDULER_RUN_HISTORY_PATH,
 )
-from src.agents import critic_agent, read_only_adapter_chain, read_only_chain_artifact_generator
+from src.agents import (
+    critic_agent,
+    dry_run_execution_simulator,
+    read_only_adapter_chain,
+    read_only_chain_artifact_generator,
+)
 from src.matching.dimensions import get_dimension_weights
 from src.matching.job_adapter import build_job_evidence
 from src.matching.models import MatchPrefilterResult
@@ -245,6 +250,8 @@ _PIPELINE_ROOT_ARTIFACT_NAMES = {
     "read_only_adapter_chain_report.md",
     "read_only_chain_artifact_generation_result.json",
     "read_only_chain_artifact_generation_report.md",
+    "dry_run_execution_simulation_result.json",
+    "dry_run_execution_simulation_report.md",
     "agentic_workflow_verification.json",
     "rag_evaluation_summary.json",
     "rag_evaluation_report.md",
@@ -873,6 +880,7 @@ def profile_pipeline_run_detail_payload(
         raise ValueError("Pipeline run id is required.")
 
     run, artifacts = _user_pipeline_run_and_artifacts(owner, safe_run_id)
+    dry_run_simulation = _dry_run_execution_simulation_from_artifacts(artifacts)
     return {
         "ok": True,
         "run": _pipeline_run_public_row(run),
@@ -885,6 +893,8 @@ def profile_pipeline_run_detail_payload(
         "read_only_adapter_preflight": _read_only_adapter_preflight_from_artifacts(artifacts),
         "manual_read_only_adapter_chain": _manual_read_only_adapter_chain_from_artifacts(artifacts),
         "explicit_read_only_chain_artifact_generation": _explicit_read_only_chain_artifact_generation_from_artifacts(artifacts),
+        "explicit_dry_run_execution_simulation": dry_run_simulation,
+        "operator_approval_mock": _operator_approval_mock_from_simulation(dry_run_simulation),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "rag_evaluation": _rag_evaluation_from_artifacts(
             artifacts,
@@ -907,6 +917,7 @@ def profile_pipeline_run_agentic_review_payload(
         raise ValueError("Pipeline run id is required.")
 
     run, artifacts = _user_pipeline_run_and_artifacts(owner, safe_run_id)
+    dry_run_simulation = _dry_run_execution_simulation_from_artifacts(artifacts)
     priority_text = _artifact_text_by_name(artifacts, "job_prioritization_recommendations.csv")
     tailoring_decision_text = _artifact_text_by_name(artifacts, "tailoring_decision_recommendations.csv")
     operator_review_text = _artifact_text_by_name(artifacts, "operator_review_recommendations.csv")
@@ -937,6 +948,8 @@ def profile_pipeline_run_agentic_review_payload(
         "read_only_adapter_preflight": _read_only_adapter_preflight_from_artifacts(artifacts),
         "manual_read_only_adapter_chain": _manual_read_only_adapter_chain_from_artifacts(artifacts),
         "explicit_read_only_chain_artifact_generation": _explicit_read_only_chain_artifact_generation_from_artifacts(artifacts),
+        "explicit_dry_run_execution_simulation": dry_run_simulation,
+        "operator_approval_mock": _operator_approval_mock_from_simulation(dry_run_simulation),
         "agentic_workflow_verification": _agentic_workflow_verification_from_artifacts(artifacts),
         "rag_evaluation": _rag_evaluation_from_artifacts(
             artifacts,
@@ -3693,6 +3706,8 @@ def _pipeline_artifact_kind(*, output_dir: Path, path: Path) -> str:
         "read_only_adapter_chain_report.md": "read_only_adapter_chain_report_md",
         "read_only_chain_artifact_generation_result.json": "read_only_chain_artifact_generation_result_json",
         "read_only_chain_artifact_generation_report.md": "read_only_chain_artifact_generation_report_md",
+        "dry_run_execution_simulation_result.json": "dry_run_execution_simulation_result_json",
+        "dry_run_execution_simulation_report.md": "dry_run_execution_simulation_report_md",
         "agentic_workflow_verification.json": "agentic_workflow_verification_json",
         "rag_evaluation_summary.json": "rag_evaluation_summary_json",
         "rag_evaluation_report.md": "rag_evaluation_report_md",
@@ -10064,6 +10079,79 @@ def _explicit_read_only_chain_artifact_generation_from_artifacts(
         "reason_codes": list(result_json.get("reason_codes") or []),
         "warning_codes": list(validation.get("warning_codes") or []),
         "report_markdown": report_markdown,
+    }
+
+
+def _dry_run_execution_simulation_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    result_json = _artifact_json_by_name(rows, dry_run_execution_simulator.RESULT_JSON_NAME)
+    report_markdown = _artifact_text_by_name(rows, dry_run_execution_simulator.REPORT_MD_NAME)
+    validation = (
+        dry_run_execution_simulator.validate_dry_run_execution_simulation_result(result_json)
+        if result_json
+        else {"validation_status": "missing", "reason_codes": [], "warning_codes": []}
+    )
+    plan = dict(result_json.get("simulated_execution_plan") or {}) if result_json else {}
+    return {
+        "present": bool(result_json or report_markdown),
+        "available": bool(result_json or report_markdown),
+        "empty_state": "No dry-run execution simulation artifacts recorded for this run yet.",
+        "execution_mode": _clean_text(result_json.get("execution_mode")) if result_json else "",
+        "validation_status": _clean_text(validation.get("validation_status")),
+        "did_simulate": bool(result_json.get("did_simulate")) if result_json else False,
+        "did_execute_live": bool(result_json.get("did_execute_live")) if result_json else False,
+        "did_mutate_production": bool(result_json.get("did_mutate_production")) if result_json else False,
+        "input_artifact_dir": _clean_text(result_json.get("input_artifact_dir")) if result_json else "",
+        "output_dir": _clean_text(result_json.get("output_dir")) if result_json else "",
+        "chain_artifact_summary": dict(result_json.get("chain_artifact_summary") or {}) if result_json else {},
+        "generator_artifact_summary": dict(result_json.get("generator_artifact_summary") or {}) if result_json else {},
+        "simulated_execution_plan": plan,
+        "simulated_mutation_proposals": list(result_json.get("simulated_mutation_proposals") or []) if result_json else [],
+        "blocked_live_execution_reasons": list(result_json.get("blocked_live_execution_reasons") or []) if result_json else [],
+        "safety_flags": dict(result_json.get("safety_flags") or {}) if result_json else {},
+        "reason_codes": list(result_json.get("reason_codes") or []),
+        "warning_codes": list(validation.get("warning_codes") or []),
+        "report_markdown": report_markdown,
+        "can_execute_live": bool(plan.get("can_execute_live")) if plan else False,
+    }
+
+
+def _operator_approval_mock_from_simulation(simulation: Dict[str, Any]) -> Dict[str, Any]:
+    proposals = list(simulation.get("simulated_mutation_proposals") or [])
+    proposal_types = sorted(
+        {
+            _clean_text(dict(proposal).get("mutation_type"))
+            for proposal in proposals
+            if _clean_text(dict(proposal).get("mutation_type"))
+        }
+    )
+    return {
+        "present": bool(simulation.get("present") or simulation.get("available")),
+        "mock_only": True,
+        "approval_enabled": False,
+        "approval_storage_enabled": False,
+        "mutation_execution_enabled": False,
+        "can_execute_live": False,
+        "validation_status": _clean_text(simulation.get("validation_status")) or "missing",
+        "required_future_gates": [
+            "operator approval",
+            "audit ledger",
+            "idempotency key",
+            "execution lock",
+            "rollback plan",
+            "feature flag/environment gate",
+        ],
+        "blocked_actions": [
+            "application submission",
+            "queue mutation",
+            "tailoring generation",
+            "packet generation",
+            "scoring/ranking changes",
+            "DB write",
+            "scheduler execution",
+        ],
+        "simulated_proposal_count": len(proposals),
+        "simulated_proposal_types": proposal_types,
+        "simulated_mutation_proposals": proposals,
     }
 
 

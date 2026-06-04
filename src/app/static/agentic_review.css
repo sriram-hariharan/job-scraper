@@ -523,6 +523,8 @@
 .read-only-adapter-preflight-card,
 .manual-read-only-adapter-chain-card,
 .explicit-read-only-chain-generator-card,
+.dry-run-execution-simulation-card,
+.operator-approval-mock-card,
 .rag-evaluation-card,
 .agentic-feedback-card {
   display: grid;
@@ -585,6 +587,22 @@
     var(--app-inset);
 }
 
+.dry-run-execution-simulation-card {
+  border-color: rgba(16, 185, 129, 0.24);
+  border-left-color: rgba(16, 185, 129, 0.82);
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(59, 130, 246, 0.04)),
+    var(--app-inset);
+}
+
+.operator-approval-mock-card {
+  border-color: rgba(245, 158, 11, 0.26);
+  border-left-color: rgba(245, 158, 11, 0.86);
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, 0.09), rgba(20, 184, 166, 0.04)),
+    var(--app-inset);
+}
+
 .rag-evaluation-card {
   border-color: rgba(14, 165, 233, 0.22);
   border-left-color: rgba(14, 165, 233, 0.78);
@@ -599,6 +617,8 @@
 .read-only-adapter-preflight-metrics,
 .manual-read-only-adapter-chain-metrics,
 .explicit-read-only-chain-generator-metrics,
+.dry-run-execution-simulation-metrics,
+.operator-approval-mock-metrics,
 .rag-evaluation-metrics,
 .agentic-feedback-metrics {
   display: grid;
@@ -769,6 +789,23 @@
   flex-wrap: wrap;
   gap: 8px;
   min-width: 0;
+}
+
+.dry-run-execution-simulation-notice {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.operator-approval-mock-warning {
+  padding: 10px 12px;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 820;
 }
 
 .agentic-review-table-wrap {

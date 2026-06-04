@@ -12,6 +12,7 @@ from src.agents import (
     orchestrator_adapter_harness,
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
+    dry_run_execution_simulator,
     workflow_planner,
     workflow_registry,
     workflow_runner,
@@ -46,6 +47,8 @@ OPTIONAL_ARTIFACTS = [
     "read_only_adapter_chain_report.md",
     "read_only_chain_artifact_generation_result.json",
     "read_only_chain_artifact_generation_report.md",
+    "dry_run_execution_simulation_result.json",
+    "dry_run_execution_simulation_report.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
     "rag_evaluation_summary.json",
@@ -80,6 +83,8 @@ ARTIFACT_KIND_TO_NAME = {
     "read_only_adapter_chain_report_md": "read_only_adapter_chain_report.md",
     "read_only_chain_artifact_generation_result_json": "read_only_chain_artifact_generation_result.json",
     "read_only_chain_artifact_generation_report_md": "read_only_chain_artifact_generation_report.md",
+    "dry_run_execution_simulation_result_json": "dry_run_execution_simulation_result.json",
+    "dry_run_execution_simulation_report_md": "dry_run_execution_simulation_report.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
     "rag_evaluation_summary_json": "rag_evaluation_summary.json",
     "rag_evaluation_report_md": "rag_evaluation_report.md",
@@ -162,6 +167,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "read_only_adapter_preflight.json": _read_json(root / "read_only_adapter_preflight.json"),
         "read_only_adapter_chain_result.json": _read_json(root / "read_only_adapter_chain_result.json"),
         "read_only_chain_artifact_generation_result.json": _read_json(root / "read_only_chain_artifact_generation_result.json"),
+        "dry_run_execution_simulation_result.json": _read_json(root / "dry_run_execution_simulation_result.json"),
         RAG_EVALUATION_SUMMARY_ARTIFACT: _read_json(root / RAG_EVALUATION_SUMMARY_ARTIFACT),
     }
 
@@ -243,6 +249,7 @@ def verify_agentic_workflow_artifacts(
     read_only_preflight_json = dict(loaded.get("read_only_adapter_preflight.json") or {})
     read_only_chain_json = dict(loaded.get("read_only_adapter_chain_result.json") or {})
     read_only_chain_generation_json = dict(loaded.get("read_only_chain_artifact_generation_result.json") or {})
+    dry_run_simulation_json = dict(loaded.get("dry_run_execution_simulation_result.json") or {})
     rag_evaluation_json = dict(loaded.get(RAG_EVALUATION_SUMMARY_ARTIFACT) or {})
 
     reason_codes: List[str] = []
@@ -689,6 +696,120 @@ def verify_agentic_workflow_artifacts(
         if not root_names_safe:
             reason_codes.append("read_only_chain_artifact_generation_production_root_artifact_names")
 
+    if "dry_run_execution_simulation_result.json" in present_artifacts:
+        simulation_validation = (
+            dry_run_execution_simulator.validate_dry_run_execution_simulation_result(
+                dry_run_simulation_json
+            )
+        )
+        simulation_validation_status = _clean_text(simulation_validation.get("validation_status"))
+        simulation_validation_passed = simulation_validation_status in {"passed", "warning"}
+        checks.append(
+            _check(
+                "dry_run_execution_simulation_validation_passed_or_warning",
+                simulation_validation_passed,
+                ", ".join(simulation_validation.get("reason_codes", []) or [])
+                if not simulation_validation_passed else "",
+            )
+        )
+        if not simulation_validation_passed:
+            reason_codes.append("dry_run_execution_simulation_validation_failed")
+        if simulation_validation_status == "warning":
+            reason_codes.append("dry_run_execution_simulation_warning")
+
+        simulation_mode = (
+            _clean_text(dry_run_simulation_json.get("execution_mode"))
+            == dry_run_execution_simulator.EXECUTION_MODE
+        )
+        checks.append(_check("dry_run_execution_simulation_explicit_mode", simulation_mode))
+        if not simulation_mode:
+            reason_codes.append("dry_run_execution_simulation_wrong_mode")
+
+        did_simulate_boolean = isinstance(dry_run_simulation_json.get("did_simulate"), bool)
+        checks.append(_check("dry_run_execution_simulation_did_simulate_boolean", did_simulate_boolean))
+        if not did_simulate_boolean:
+            reason_codes.append("dry_run_execution_simulation_did_simulate_not_boolean")
+
+        for flag in ["did_execute_live", "did_mutate_production"]:
+            flag_disabled = not bool(dry_run_simulation_json.get(flag))
+            checks.append(_check(f"dry_run_execution_simulation_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"dry_run_execution_simulation_{flag}_true")
+
+        safety_flags = dict(dry_run_simulation_json.get("safety_flags") or {})
+        context = dict(dry_run_simulation_json.get("context") or {})
+        for flag in [
+            "allow_db_write",
+            "allow_live_pipeline_wiring",
+            "allow_application_submission",
+            "allow_queue_action_update",
+            "allow_packet_update",
+            "allow_tailoring_generation_update",
+            "allow_scoring_update",
+            "allow_ranking_update",
+            "allow_scheduler_execution",
+        ]:
+            value = (
+                safety_flags.get(flag)
+                if flag in safety_flags
+                else context.get(flag, dry_run_simulation_json.get(flag))
+            )
+            flag_disabled = not bool(value)
+            checks.append(_check(f"dry_run_execution_simulation_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"dry_run_execution_simulation_{flag}_true")
+
+        simulation_plan = dict(dry_run_simulation_json.get("simulated_execution_plan") or {})
+        can_execute_live_false = not bool(simulation_plan.get("can_execute_live"))
+        checks.append(_check("dry_run_execution_simulation_can_execute_live_false", can_execute_live_false))
+        if not can_execute_live_false:
+            reason_codes.append("dry_run_execution_simulation_can_execute_live_true")
+
+        allowed_types = set(dry_run_execution_simulator.SIMULATED_MUTATION_TYPES)
+        proposals_safe = True
+        bad_proposal_reasons: List[str] = []
+        for proposal in list(dry_run_simulation_json.get("simulated_mutation_proposals") or []):
+            proposal_mode = _clean_text(dict(proposal).get("proposal_mode"))
+            mutation_type = _clean_text(dict(proposal).get("mutation_type"))
+            if proposal_mode != "simulated_non_executable":
+                proposals_safe = False
+                bad_proposal_reasons.append("proposal_mode")
+            if bool(dict(proposal).get("can_execute_live")):
+                proposals_safe = False
+                bad_proposal_reasons.append("can_execute_live")
+            if not bool(dict(proposal).get("blocked_by_default")):
+                proposals_safe = False
+                bad_proposal_reasons.append("blocked_by_default")
+            if mutation_type not in allowed_types:
+                proposals_safe = False
+                bad_proposal_reasons.append("mutation_type")
+        checks.append(
+            _check(
+                "dry_run_execution_simulation_proposals_non_executable",
+                proposals_safe,
+                ", ".join(sorted(set(bad_proposal_reasons))) if bad_proposal_reasons else "",
+            )
+        )
+        if not proposals_safe:
+            reason_codes.append("dry_run_execution_simulation_unsafe_proposal")
+
+        simulation_root_names = set(simulation_validation.get("output_root_file_names") or [])
+        production_root_names = sorted(
+            simulation_root_names.intersection(
+                dry_run_execution_simulator.PRODUCTION_ROOT_ARTIFACT_NAMES
+            )
+        )
+        root_names_safe = not production_root_names
+        checks.append(
+            _check(
+                "dry_run_execution_simulation_no_production_root_artifact_names",
+                root_names_safe,
+                ", ".join(production_root_names) if production_root_names else "",
+            )
+        )
+        if not root_names_safe:
+            reason_codes.append("dry_run_execution_simulation_production_root_artifact_names")
+
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [
         ("job_prioritization_recommendations.csv", priority_rows),
@@ -769,6 +890,7 @@ def verify_agentic_workflow_artifacts(
         or "read_only_adapter_preflight_warning" in reason_codes
         or "read_only_adapter_chain_warning" in reason_codes
         or "read_only_chain_artifact_generation_warning" in reason_codes
+        or "dry_run_execution_simulation_warning" in reason_codes
     )
     if required_failure or strict_missing_failure or consistency_failure:
         validation_status = "failed"
@@ -790,6 +912,7 @@ def verify_agentic_workflow_artifacts(
             "read_only_adapter_preflight_results": len(list(read_only_preflight_json.get("adapter_preflight_results") or [])),
             "read_only_adapter_chain_adapters": len(list(read_only_chain_json.get("adapter_execution_order") or [])),
             "read_only_chain_artifact_generation_did_run_chain": 1 if bool(read_only_chain_generation_json.get("did_run_chain")) else 0,
+            "dry_run_execution_simulation_proposals": len(list(dry_run_simulation_json.get("simulated_mutation_proposals") or [])),
             "job_prioritization_recommendations": len(priority_rows),
             "tailoring_decision_recommendations": len(tailoring_rows),
             "operator_review_recommendations": len(operator_rows),

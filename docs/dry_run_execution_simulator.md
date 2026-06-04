@@ -14,6 +14,8 @@ It writes only these simulator diagnostics to an explicit output directory:
 - `dry_run_execution_simulation_result.json`
 - `dry_run_execution_simulation_report.md`
 
+Phase 39A allows these artifacts to be ingested and displayed in Agentic Review diagnostics. The Agentic Review display is read-only and does not run the simulator.
+
 It must not write production artifact names at the output root:
 
 - `application_execution_queue.csv`
@@ -38,6 +40,7 @@ It must not write production artifact names at the output root:
 - Is not wired into `run_application_planning.py`.
 - Is not wired into `application_execution_queue.py`.
 - Is not wired into scheduler, background jobs, app routes, or Agentic Review buttons.
+- Can be displayed in Agentic Review only after artifacts already exist.
 
 ## Safety Guarantees
 
@@ -55,6 +58,14 @@ It must not write production artifact names at the output root:
 - No filtering, scraping/source, resume selection, RAG, scheduler, or application workflow behavior changes.
 - No new dependencies.
 - No LangGraph or agent framework.
+
+## Agentic Review Display
+
+Agentic Review can show a compact Dry-Run Execution Simulation section and an Operator Approval Mock section when simulator artifacts have already been recorded for a run.
+
+The Operator Approval Mock is read-only and non-actionable. It does not approve, reject, store approval, mutate queue state, write to the database, submit applications, execute anything, call approval APIs, call mutation APIs, or add approval storage.
+
+Future real approval requires a separate approved phase with operator approval storage, audit ledger, idempotency key, execution lock, rollback plan, and feature flag/environment gates.
 
 ## CLI
 

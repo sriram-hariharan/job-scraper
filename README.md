@@ -587,6 +587,8 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.
 
+Agentic Review can display dry-run execution simulation artifacts and an Operator Approval Mock as read-only diagnostics only; the mock does not approve, reject, store approval, mutate queues, write to the database, submit applications, or execute anything.
+
 ---
 
 ## Deployment Notes

@@ -179,3 +179,66 @@ def test_agentic_review_explicit_read_only_chain_generator_diagnostics_contract(
     assert "read_only_chain_artifact_generation_result_json" in services_source
     assert "read_only_chain_artifact_generation_report_md" in services_source
     assert "_explicit_read_only_chain_artifact_generation_from_artifacts" in services_source
+
+
+def test_agentic_review_dry_run_execution_simulation_and_operator_approval_mock_contract():
+    review_js = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Dry-Run Execution Simulation" in review_js
+    assert "renderDryRunExecutionSimulationSection" in review_js
+    assert "explicit_dry_run_execution_simulation" in review_js
+    assert "No dry-run execution simulation artifacts recorded for this run yet." in review_js
+    assert "did_simulate" in review_js
+    assert "did_execute_live" in review_js
+    assert "did_mutate_production" in review_js
+    assert "can_execute_live" in review_js
+    assert "requires_operator_approval" in review_js
+    assert "requires_audit_ledger" in review_js
+    assert "requires_idempotency_key" in review_js
+    assert "requires_execution_lock" in review_js
+    assert "requires_rollback_plan" in review_js
+    assert "Blocked live execution reasons" in review_js
+    assert "Simulation report markdown" in review_js
+
+    assert "Operator Approval Mock" in review_js
+    assert "renderOperatorApprovalMockSection" in review_js
+    assert "operator_approval_mock" in review_js
+    assert "Mock-only" in review_js
+    assert "read-only" in review_js
+    assert "non-actionable" in review_js
+    assert "approval_enabled" in review_js
+    assert "approval_storage_enabled" in review_js
+    assert "mutation_execution_enabled" in review_js
+    assert "required_future_gates" in review_js
+    assert "blocked_actions" in review_js
+    assert "simulated_proposal_count" in review_js
+    assert "simulated_proposal_types" in review_js
+
+    mock_start = review_js.index("function renderOperatorApprovalMockSection")
+    mock_snippet = review_js[mock_start : mock_start + 4200]
+    for forbidden in [
+        "<button",
+        "Approve",
+        "Reject",
+        "Submit",
+        "Run",
+        "fetchJson(",
+        "method: \"POST\"",
+        "method: 'POST'",
+    ]:
+        assert forbidden not in mock_snippet
+
+    assert ".dry-run-execution-simulation-card" in review_css
+    assert ".dry-run-execution-simulation-metrics" in review_css
+    assert ".operator-approval-mock-card" in review_css
+    assert ".operator-approval-mock-metrics" in review_css
+    assert ".operator-approval-mock-warning" in review_css
+
+    assert "dry_run_execution_simulation_result.json" in services_source
+    assert "dry_run_execution_simulation_report.md" in services_source
+    assert "dry_run_execution_simulation_result_json" in services_source
+    assert "dry_run_execution_simulation_report_md" in services_source
+    assert "_dry_run_execution_simulation_from_artifacts" in services_source
+    assert "_operator_approval_mock_from_simulation" in services_source

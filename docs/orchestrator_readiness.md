@@ -26,6 +26,8 @@ Operator-facing steps for the explicit generator live in `docs/read_only_chain_o
 
 Phase 33A live orchestration readiness gaps are tracked in `docs/live_orchestration_readiness_gap_analysis.md`. That document is planning-only and does not enable live orchestration.
 
+Phase 34A production execution contract boundaries are tracked in `docs/production_execution_contract_design.md`. That document is design-only and does not enable live orchestration.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -34,6 +34,8 @@ Phase 36A live-run audit ledger schema boundaries are tracked in `docs/live_run_
 
 Phase 37A idempotency and locking boundaries are tracked in `docs/idempotency_locking_design.md`. That document is design-only and does not add lock tables, migrations, idempotency stores, runtime lock checks, live execution, or mutation execution.
 
+Phase 38A dry-run execution simulation is tracked in `docs/dry_run_execution_simulator.md`. The simulator is explicit/manual and diagnostic-only; it consumes existing read-only artifacts, does not run the chain/generator, and does not enable live execution, mutation, DB writes, queue updates, application submission, scheduler execution, or `workflow_runner.py` execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -131,7 +131,7 @@ Phase 33A is a planning/readiness gap analysis only. It does not implement live 
 - 35A: mutation policy and approval gate design doc only. See `docs/mutation_policy_approval_gate_design.md`.
 - 36A: live-run audit ledger schema proposal only. See `docs/live_run_audit_ledger_schema_design.md`.
 - 37A: idempotency/locking design doc only. See `docs/idempotency_locking_design.md`.
-- 38A: dry-run execution simulator, still no mutation.
+- 38A: dry-run execution simulator, still no mutation. See `docs/dry_run_execution_simulator.md`.
 - 39A: operator approval UI mock/read-only only.
 - 40A+: only then consider controlled execution prototype, still behind explicit feature flags.
 

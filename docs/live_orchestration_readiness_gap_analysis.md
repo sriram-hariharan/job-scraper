@@ -6,6 +6,8 @@ Phase 33A is a planning/readiness gap analysis only. It does not implement live 
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `allow_agent_execution=false` and `executable_adapter_count=0`.
 
+Phase 40A controlled execution readiness is gated by `docs/controlled_execution_decision_gate.md`. That decision gate is planning-only and does not enable live execution or mutation.
+
 ## What Exists Today
 
 - Read-only adapter modules exist for Job Prioritization, Tailoring Decision, and Operator Review:
@@ -133,7 +135,8 @@ Phase 33A is a planning/readiness gap analysis only. It does not implement live 
 - 37A: idempotency/locking design doc only. See `docs/idempotency_locking_design.md`.
 - 38A: dry-run execution simulator, still no mutation. See `docs/dry_run_execution_simulator.md`.
 - 39A: operator approval UI mock/read-only only.
-- 40A+: only then consider controlled execution prototype, still behind explicit feature flags.
+- 40A: controlled execution decision gate only. See `docs/controlled_execution_decision_gate.md`.
+- 40B+: only consider proposal-only safety scaffolding until storage, approval, audit, idempotency, locking, rollback, and feature gates are implemented in reviewed phases.
 
 ## Hard Blockers
 

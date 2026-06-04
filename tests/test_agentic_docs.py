@@ -13,6 +13,7 @@ IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH = Path("docs/idempotency_locking_design.md")
 DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH = Path("docs/dry_run_execution_simulator.md")
 CONTROLLED_EXECUTION_DECISION_GATE_DOC_PATH = Path("docs/controlled_execution_decision_gate.md")
 PROPOSAL_ONLY_MUTATION_PLANNER_DOC_PATH = Path("docs/proposal_only_mutation_planner.md")
+PROPOSAL_PLANNER_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path("docs/proposal_planner_release_safety_checkpoint.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -631,6 +632,105 @@ def test_proposal_only_mutation_planner_docs_cover_phase_41a_contract():
         ]
     )
     assert "docs/proposal_only_mutation_planner.md" in linked_docs
+
+
+def test_proposal_planner_release_safety_checkpoint_docs_cover_phase_43a_contract():
+    assert PROPOSAL_PLANNER_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    source = PROPOSAL_PLANNER_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "release safety checkpoint only",
+        "There is no implementation in this phase.",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "No approval API/storage is enabled.",
+        "No DB writes are enabled.",
+        "No queue updates are enabled.",
+        "No application submission is enabled.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "Read-only chain artifact generator",
+        "Dry-run execution simulator",
+        "Proposal-only mutation planner",
+        "Agentic Review display for dry-run simulation diagnostics and proposal-only plan diagnostics",
+        "Explicit/manual inputs only.",
+        "No production path discovery.",
+        "Diagnostic/proposal-only artifacts only.",
+        "No approval API/storage.",
+        "No mutation API/storage.",
+        "No audit ledger storage.",
+        "No lock/idempotency storage.",
+        "No scheduler/background execution.",
+        "No `workflow_runner.py` execution.",
+        "No live planning hooks.",
+        "Sanitized or explicit queue input.",
+        "read_only_chain_artifact_generation_result.json",
+        "read_only_chain_artifact_generation_report.md",
+        "read_only_adapter_chain_result.json",
+        "read_only_adapter_chain_report.md",
+        "dry_run_execution_simulation_result.json",
+        "dry_run_execution_simulation_report.md",
+        "proposal_only_mutation_plan_result.json",
+        "proposal_only_mutation_plan_report.md",
+        "Agentic Review read-only display",
+        "application_execution_queue.csv",
+        "job_prioritization_recommendations.csv",
+        "tailoring_decision_recommendations.csv",
+        "operator_review_recommendations.csv",
+        "approval_record.json",
+        "mutation_record.json",
+        "audit_ledger_entry.json",
+        "Agentic Review displays diagnostic sections only.",
+        "Operator Approval Mock is non-actionable.",
+        "Proposal-Only Mutation Plan is non-actionable.",
+        "There are no approve, reject, run, or submit buttons",
+        "There are no approval API calls.",
+        "There are no mutation API calls.",
+        "Release checkpoint: `PASS`",
+        "Live mutation: `NO_GO`",
+        "Queue mutation: `NO_GO`",
+        "Application submission: `NO_GO`",
+        "Approval action: `NO_GO`",
+        "Proposal-only diagnostics: `GO`",
+        "Read-only display: `GO`",
+        "Audit ledger storage missing.",
+        "Approval storage/API missing.",
+        "Idempotency store missing.",
+        "Execution lock store missing.",
+        "Rollback implementation missing.",
+        "Mutation transaction boundary missing.",
+        "Feature flag/environment gate implementation missing.",
+        "Operator approval workflow missing.",
+        "Failure recovery tests missing.",
+        "Dry-run-to-live promotion policy missing.",
+        "Production mutation API contract missing.",
+        "Security review missing.",
+        "Recommended next phase: 44A storage design review for audit ledger/idempotency/locks, no migration.",
+        "Do not start live mutation next.",
+        "Do not implement approval API/storage next unless a separate design review phase is approved.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Checkpoint Scope",
+        "## Confirmed Safe Boundaries",
+        "## Artifact Chain",
+        "## Forbidden Root Artifacts",
+        "## Current UI Boundary",
+        "## Current Release Decision",
+        "## Remaining Blockers Before Live Execution",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/proposal_planner_release_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

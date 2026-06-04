@@ -185,6 +185,7 @@ function renderAgenticReviewDiagnosticsPanel(
   manualReadOnlyAdapterChain = {},
   explicitReadOnlyChainArtifactGeneration = {},
   explicitDryRunExecutionSimulation = {},
+  proposalOnlyMutationPlan = {},
   operatorApprovalMock = {},
   agentFeedback = {},
   ragEvaluation = {},
@@ -195,6 +196,7 @@ function renderAgenticReviewDiagnosticsPanel(
   const adapterChainSection = renderManualReadOnlyAdapterChainSection(manualReadOnlyAdapterChain);
   const chainGeneratorSection = renderExplicitReadOnlyChainGeneratorSection(explicitReadOnlyChainArtifactGeneration);
   const dryRunSimulationSection = renderDryRunExecutionSimulationSection(explicitDryRunExecutionSimulation);
+  const proposalOnlyMutationPlanSection = renderProposalOnlyMutationPlanSection(proposalOnlyMutationPlan);
   const operatorApprovalMockSection = renderOperatorApprovalMockSection(operatorApprovalMock);
   const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
   const ragEvaluationSection = renderRagEvaluationSection(ragEvaluation);
@@ -228,6 +230,10 @@ function renderAgenticReviewDiagnosticsPanel(
     || explicitDryRunExecutionSimulation?.available
   );
   const operatorApprovalMockAvailable = Boolean(operatorApprovalMock?.present);
+  const proposalOnlyMutationPlanAvailable = Boolean(
+    proposalOnlyMutationPlan?.present
+    || proposalOnlyMutationPlan?.available
+  );
   if (
     !available && !Object.keys(verification).length
     && !manifestAvailable && !Object.keys(manifest).length
@@ -237,6 +243,7 @@ function renderAgenticReviewDiagnosticsPanel(
     && !chainAvailable
     && !chainGeneratorAvailable
     && !dryRunSimulationAvailable
+    && !proposalOnlyMutationPlanAvailable
     && !operatorApprovalMockAvailable
   ) {
     panel.innerHTML = `
@@ -251,6 +258,7 @@ function renderAgenticReviewDiagnosticsPanel(
       ${adapterChainSection}
       ${chainGeneratorSection}
       ${dryRunSimulationSection}
+      ${proposalOnlyMutationPlanSection}
       ${operatorApprovalMockSection}
       ${ragEvaluationSection}
       ${feedbackSection}
@@ -310,6 +318,7 @@ function renderAgenticReviewDiagnosticsPanel(
     ${adapterChainSection}
     ${chainGeneratorSection}
     ${dryRunSimulationSection}
+    ${proposalOnlyMutationPlanSection}
     ${operatorApprovalMockSection}
     ${ragEvaluationSection}
     ${feedbackSection}
@@ -1013,6 +1022,96 @@ function renderDryRunExecutionSimulationSection(simulation = {}) {
   `;
 }
 
+function renderProposalOnlyMutationPlanSection(planPayload = {}) {
+  const present = Boolean(planPayload?.present || planPayload?.available);
+  const proposalPlan = planPayload?.proposal_plan && typeof planPayload.proposal_plan === "object"
+    ? planPayload.proposal_plan
+    : {};
+  const proposalItems = Array.isArray(planPayload?.proposal_only_mutation_items)
+    ? planPayload.proposal_only_mutation_items
+    : [];
+  const blockedReasons = Array.isArray(planPayload?.blocked_execution_reasons)
+    ? planPayload.blocked_execution_reasons
+    : [];
+  const validationStatus = String(planPayload?.validation_status || (present ? "unknown" : "missing")).toLowerCase();
+  const markdown = String(planPayload?.report_markdown || "");
+  const mutationTypes = [...new Set(proposalItems.map((item) => String(item?.mutation_type || "").trim()).filter(Boolean))];
+  if (!present) {
+    return `
+      <section class="proposal-only-mutation-plan-card">
+        <div class="agentic-workflow-header">
+          <div>
+            <h2>Proposal-Only Mutation Plan</h2>
+            <p>Proposal-only planner artifacts are optional diagnostics and do not affect planning results.</p>
+          </div>
+          <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
+        </div>
+        <div class="pipeline-runs-empty-cell">No proposal-only mutation plan artifacts recorded for this run yet.</div>
+      </section>
+    `;
+  }
+
+  return `
+    <section class="proposal-only-mutation-plan-card">
+      <div class="agentic-workflow-header">
+        <div>
+          <h2>Proposal-Only Mutation Plan</h2>
+          <p>Read-only proposal diagnostics. This section does not approve, reject, store approval, call approval APIs, call mutation APIs, execute anything, write to the database, update queues, submit applications, or mutate production.</p>
+        </div>
+        <span class="agentic-workflow-verification-status agentic-workflow-verification-status--${escapeHtml(validationStatus)}">
+          ${escapeHtml(formatWorkflowVerificationStatus(validationStatus))}
+        </span>
+      </div>
+      <div class="proposal-only-mutation-plan-warning">
+        Proposal-only and non-actionable. Future real approval or mutation requires separate reviewed phases.
+      </div>
+      <div class="proposal-only-mutation-plan-metrics">
+        ${renderWorkflowSummaryMetric("execution_mode", planPayload.execution_mode || "-")}
+        ${renderWorkflowSummaryMetric("Validation", formatWorkflowVerificationStatus(validationStatus))}
+        ${renderWorkflowSummaryMetric("did_plan", planPayload.did_plan ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("did_execute_live", planPayload.did_execute_live ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("did_mutate_production", planPayload.did_mutate_production ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("did_approve", planPayload.did_approve ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("did_store_approval", planPayload.did_store_approval ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("did_write_db", planPayload.did_write_db ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("can_execute_live", proposalPlan.can_execute_live ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("can_mutate", proposalPlan.can_mutate ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("can_approve", proposalPlan.can_approve ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Proposal items", proposalItems.length)}
+      </div>
+      <div class="agentic-workflow-verification-sections">
+        <div>
+          <strong>Proposal mutation types</strong>
+          ${renderWorkflowVerificationList(mutationTypes)}
+        </div>
+        <div>
+          <strong>Blocked execution reasons</strong>
+          ${renderWorkflowVerificationList(blockedReasons)}
+        </div>
+        <div>
+          <strong>Required future gates</strong>
+          ${renderWorkflowVerificationList([
+            proposalPlan.requires_operator_approval ? "operator approval" : "",
+            proposalPlan.requires_approval_api ? "approval API" : "",
+            proposalPlan.requires_approval_storage ? "approval storage" : "",
+            proposalPlan.requires_audit_ledger ? "audit ledger" : "",
+            proposalPlan.requires_idempotency_key ? "idempotency key" : "",
+            proposalPlan.requires_execution_lock ? "execution lock" : "",
+            proposalPlan.requires_rollback_plan ? "rollback plan" : "",
+          ].filter(Boolean))}
+        </div>
+      </div>
+      <div class="proposal-only-mutation-plan-notice">
+        ${renderReviewPill("read-only")}
+        ${renderReviewPill("proposal-only")}
+        ${renderReviewPill("non-actionable")}
+        ${renderReviewPill("no mutation")}
+      </div>
+      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Proposal plan report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+    </section>
+  `;
+}
+
 function renderOperatorApprovalMockSection(mock = {}) {
   const present = Boolean(mock?.present);
   const requiredGates = Array.isArray(mock?.required_future_gates) ? mock.required_future_gates : [];
@@ -1142,6 +1241,7 @@ function renderAgenticReviewData(payload, tracePayload) {
     payload.manual_read_only_adapter_chain,
     payload.explicit_read_only_chain_artifact_generation,
     payload.explicit_dry_run_execution_simulation,
+    payload.proposal_only_mutation_plan,
     payload.operator_approval_mock,
     payload.agent_feedback,
     payload.rag_evaluation,

@@ -181,6 +181,8 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "docs/dry_run_execution_simulator.md",
         "explicit/manual and diagnostic-only",
         "does not run the chain/generator",
+        "Operator Approval Mock",
+        "read-only and non-actionable",
     ]:
         assert phrase in source
 
@@ -412,12 +414,18 @@ def test_dry_run_execution_simulator_docs_cover_phase_38a_contract():
         "Is not wired into `application_execution_queue.py`",
         "No DB schema, migration, storage, or persistence implementation.",
         "No runtime/pipeline behavior changes.",
+        "Agentic Review can show",
+        "Operator Approval Mock",
+        "read-only and non-actionable",
+        "does not approve, reject, store approval, mutate queue state, write to the database, submit applications, execute anything, call approval APIs, call mutation APIs, or add approval storage.",
+        "Future real approval requires a separate approved phase",
     ]:
         assert phrase in source
 
     for section in [
         "## Current Boundary",
         "## Safety Guarantees",
+        "## Agentic Review Display",
         "## CLI",
         "## Simulation Payload",
         "## Validation Rules",

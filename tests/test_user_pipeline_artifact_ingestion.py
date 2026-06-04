@@ -98,6 +98,25 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
             ),
         )
         _write(output_dir / "read_only_chain_artifact_generation_report.md", "# Explicit Read-Only Chain Generator\n")
+        _write(
+            output_dir / "dry_run_execution_simulation_result.json",
+            json.dumps(
+                {
+                    "execution_mode": "explicit_dry_run_execution_simulation",
+                    "did_simulate": True,
+                    "did_execute_live": False,
+                    "did_mutate_production": False,
+                    "simulated_execution_plan": {"can_execute_live": False},
+                    "simulated_mutation_proposals": [],
+                    "safety_flags": {"allow_db_write": False},
+                    "blocked_live_execution_reasons": [
+                        "queue_mutation_blocked",
+                        "application_submission_blocked",
+                    ],
+                }
+            ),
+        )
+        _write(output_dir / "dry_run_execution_simulation_report.md", "# Dry-Run Execution Simulation\n")
         _write(output_dir / "agentic_workflow_verification.json", json.dumps({"validation_status": "passed"}))
         _write(output_dir / "rag_evaluation_summary.json", json.dumps({"evaluation_version": "rag_evaluation_v1", "validation_status": "warning", "rows": []}))
         _write(output_dir / "rag_evaluation_report.md", "# RAG Evaluation Report\n")
@@ -137,7 +156,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 35
+    assert result["ingested_count"] == 37
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
@@ -162,6 +181,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "read_only_adapter_chain_report.md" in artifact_names
     assert "read_only_chain_artifact_generation_result.json" in artifact_names
     assert "read_only_chain_artifact_generation_report.md" in artifact_names
+    assert "dry_run_execution_simulation_result.json" in artifact_names
+    assert "dry_run_execution_simulation_report.md" in artifact_names
     assert "agentic_workflow_verification.json" in artifact_names
     assert "rag_evaluation_summary.json" in artifact_names
     assert "rag_evaluation_report.md" in artifact_names
@@ -197,6 +218,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "read_only_adapter_chain_report_md" in artifact_kinds
     assert "read_only_chain_artifact_generation_result_json" in artifact_kinds
     assert "read_only_chain_artifact_generation_report_md" in artifact_kinds
+    assert "dry_run_execution_simulation_result_json" in artifact_kinds
+    assert "dry_run_execution_simulation_report_md" in artifact_kinds
     assert "agentic_workflow_verification_json" in artifact_kinds
     assert "rag_evaluation_summary_json" in artifact_kinds
     assert "rag_evaluation_report_md" in artifact_kinds
@@ -264,3 +287,105 @@ def test_scratch_cleanup_runs_after_artifact_ingestion_records_planning_results(
         assert records[-1]["artifact_kind"] == "artifact_ingestion_manifest"
         assert cleanup["scratch_deleted"] is True
         assert not run_root.exists()
+
+
+def test_dry_run_execution_simulation_read_model_missing_is_safe_empty():
+    simulation = services._dry_run_execution_simulation_from_artifacts([])
+    mock = services._operator_approval_mock_from_simulation(simulation)
+
+    assert simulation["present"] is False
+    assert simulation["available"] is False
+    assert simulation["empty_state"] == "No dry-run execution simulation artifacts recorded for this run yet."
+    assert simulation["validation_status"] == "missing"
+    assert mock["present"] is False
+    assert mock["mock_only"] is True
+    assert mock["approval_enabled"] is False
+    assert mock["approval_storage_enabled"] is False
+    assert mock["mutation_execution_enabled"] is False
+    assert mock["can_execute_live"] is False
+
+
+def test_dry_run_execution_simulation_read_model_and_operator_approval_mock_from_artifacts():
+    result = {
+        "execution_mode": "explicit_dry_run_execution_simulation",
+        "input_artifact_dir": "/tmp/chain",
+        "output_dir": "/tmp/sim",
+        "did_simulate": True,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "context": {
+            "require_explicit_input_artifact_dir": True,
+            "require_explicit_output_dir": True,
+        },
+        "chain_artifact_summary": {"input_row_count": 4},
+        "generator_artifact_summary": {"validation_status": "passed"},
+        "simulated_execution_plan": {
+            "can_execute_live": False,
+            "requires_operator_approval": True,
+            "requires_audit_ledger": True,
+            "requires_idempotency_key": True,
+            "requires_execution_lock": True,
+            "requires_rollback_plan": True,
+        },
+        "simulated_mutation_proposals": [
+            {
+                "proposal_mode": "simulated_non_executable",
+                "mutation_type": "operator_note",
+                "can_execute_live": False,
+                "requires_approval": True,
+                "blocked_by_default": True,
+            }
+        ],
+        "blocked_live_execution_reasons": [
+            "queue_mutation_blocked",
+            "application_submission_blocked",
+        ],
+        "safety_flags": {
+            "allow_db_write": False,
+            "allow_live_pipeline_wiring": False,
+            "allow_application_submission": False,
+            "allow_queue_action_update": False,
+            "allow_packet_update": False,
+            "allow_tailoring_generation_update": False,
+            "allow_scoring_update": False,
+            "allow_ranking_update": False,
+            "allow_scheduler_execution": False,
+            "did_execute_live": False,
+            "did_mutate_production": False,
+        },
+        "reason_codes": [],
+    }
+    rows = [
+        {
+            "artifact_name": "dry_run_execution_simulation_result.json",
+            "content_json": result,
+            "content_text": "",
+        },
+        {
+            "artifact_name": "dry_run_execution_simulation_report.md",
+            "content_json": None,
+            "content_text": "# Dry-Run Execution Simulation\n",
+        },
+    ]
+
+    simulation = services._dry_run_execution_simulation_from_artifacts(rows)
+    mock = services._operator_approval_mock_from_simulation(simulation)
+
+    assert simulation["present"] is True
+    assert simulation["execution_mode"] == "explicit_dry_run_execution_simulation"
+    assert simulation["validation_status"] == "passed"
+    assert simulation["did_simulate"] is True
+    assert simulation["did_execute_live"] is False
+    assert simulation["did_mutate_production"] is False
+    assert simulation["chain_artifact_summary"]["input_row_count"] == 4
+    assert simulation["report_markdown"] == "# Dry-Run Execution Simulation\n"
+    assert mock["present"] is True
+    assert mock["mock_only"] is True
+    assert mock["approval_enabled"] is False
+    assert mock["approval_storage_enabled"] is False
+    assert mock["mutation_execution_enabled"] is False
+    assert mock["can_execute_live"] is False
+    assert "operator approval" in mock["required_future_gates"]
+    assert "DB write" in mock["blocked_actions"]
+    assert mock["simulated_proposal_count"] == 1
+    assert mock["simulated_proposal_types"] == ["operator_note"]

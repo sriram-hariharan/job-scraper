@@ -40,6 +40,8 @@ Phase 39A allows dry-run execution simulation artifacts to be displayed in Agent
 
 Phase 40A controlled execution decisions are tracked in `docs/controlled_execution_decision_gate.md`. That decision gate is planning-only: live mutation is `NO_GO`, proposal-only mutation planning is `LIMITED_GO` only if explicit/manual/read-only/non-mutating, and no execution or approval implementation is enabled.
 
+Phase 41A proposal-only mutation planning is tracked in `docs/proposal_only_mutation_planner.md`. The planner is explicit/manual and diagnostic-only; it consumes an existing dry-run simulation result, does not run the simulator/chain/generator, and does not enable live execution, mutation, approval, DB writes, queue updates, application submission, scheduler execution, or `workflow_runner.py` execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

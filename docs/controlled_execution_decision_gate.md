@@ -114,3 +114,5 @@ Until these blockers are closed in reviewed phases, live mutation remains `NO_GO
 Do not start live execution.
 
 Build a proposal-only mutation planner next, or finish storage design reviews first. If choosing code, code must stay explicit/manual and write diagnostic artifacts only.
+
+Phase 41A proposal-only mutation planner details live in `docs/proposal_only_mutation_planner.md`. That planner is explicit/manual/read-only/non-mutating and does not enable live execution.

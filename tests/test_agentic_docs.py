@@ -5,6 +5,7 @@ DOC_PATH = Path("docs/agentic_platform.md")
 ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
 READ_ONLY_CHAIN_SMOKE_DOC_PATH = Path("docs/read_only_chain_smoke.md")
 READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH = Path("docs/read_only_chain_operator_runbook.md")
+LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH = Path("docs/live_orchestration_readiness_gap_analysis.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -162,6 +163,8 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "read_only_chain_artifact_generation_report.md",
         "This does not run the generator",
         "displayed in Agentic Review diagnostics",
+        "docs/live_orchestration_readiness_gap_analysis.md",
+        "planning-only and does not enable live orchestration",
     ]:
         assert phrase in source
 
@@ -277,3 +280,64 @@ def test_read_only_chain_operator_runbook_covers_manual_generator_contract():
     lower_source = source.lower()
     for claim in forbidden_claims:
         assert claim.lower() not in lower_source
+
+
+def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
+    assert LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH.exists()
+    source = LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/live_orchestration_readiness_gap_analysis.md",
+        "No live orchestration.",
+        "workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "No production queue mutation.",
+        "No application submission automation.",
+        "operator approval gate",
+        "rollback mechanism",
+        "idempotent production execution contract",
+        "audit ledger",
+        "feature flags",
+        "dry-run-to-live promotion gate",
+        "per-agent production adapter contracts",
+        "34A: production execution contract design doc only.",
+        "35A: mutation policy and approval gate design doc only.",
+        "36A: live-run audit ledger schema proposal only.",
+        "37A: idempotency/locking design doc only.",
+        "38A: dry-run execution simulator, still no mutation.",
+        "39A: operator approval UI mock/read-only only.",
+        "40A+: only then consider controlled execution prototype, still behind explicit feature flags.",
+        "No queue mutation.",
+        "No scoring/ranking changes.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## What Exists Today",
+        "## What Does Not Exist Yet",
+        "## Required Gaps Before Live Orchestration",
+        "### Execution Architecture",
+        "### Safety Gates",
+        "### Mutation Policy",
+        "### Approval Workflow",
+        "### Rollback/Recovery",
+        "### Observability/Audit Logging",
+        "### Idempotency and Locking",
+        "### Artifact/Version Compatibility",
+        "### UI/Operator Controls",
+        "### Test Strategy",
+        "### Deployment/Feature Flag Strategy",
+        "## Proposed Future Milestones",
+        "## Hard Blockers",
+        "## Non-Goals",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/live_orchestration_readiness_gap_analysis.md" in linked_docs

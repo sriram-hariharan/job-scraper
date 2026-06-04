@@ -6,6 +6,8 @@ Phase 36A is a design/schema proposal only. No implementation in this phase adds
 
 No DB table or migration is added. No live execution is enabled. No mutation is enabled. No approval API/UI/storage is implemented. `workflow_runner.py` remains dry-run only, and read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
+The future idempotency and locking design is detailed in `docs/idempotency_locking_design.md`. That document is design-only and does not add lock tables, migrations, idempotency stores, runtime lock checks, live execution, or mutation execution.
+
 ## Purpose
 
 Define a future immutable audit trail for production-capable agent execution, approvals, mutations, validation, rollback, and blocked attempts before any live orchestration implementation exists.

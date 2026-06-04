@@ -11,6 +11,7 @@ MUTATION_POLICY_APPROVAL_GATE_DOC_PATH = Path("docs/mutation_policy_approval_gat
 LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH = Path("docs/live_run_audit_ledger_schema_design.md")
 IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH = Path("docs/idempotency_locking_design.md")
 DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH = Path("docs/dry_run_execution_simulator.md")
+CONTROLLED_EXECUTION_DECISION_GATE_DOC_PATH = Path("docs/controlled_execution_decision_gate.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -326,7 +327,9 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "38A: dry-run execution simulator, still no mutation.",
         "docs/dry_run_execution_simulator.md",
         "39A: operator approval UI mock/read-only only.",
-        "40A+: only then consider controlled execution prototype, still behind explicit feature flags.",
+        "40A: controlled execution decision gate only.",
+        "docs/controlled_execution_decision_gate.md",
+        "40B+: only consider proposal-only safety scaffolding",
         "No queue mutation.",
         "No scoring/ranking changes.",
         "docs/production_execution_contract_design.md",
@@ -443,6 +446,86 @@ def test_dry_run_execution_simulator_docs_cover_phase_38a_contract():
         ]
     )
     assert "docs/dry_run_execution_simulator.md" in linked_docs
+
+
+def test_controlled_execution_decision_gate_covers_phase_40a_contract():
+    assert CONTROLLED_EXECUTION_DECISION_GATE_DOC_PATH.exists()
+    source = CONTROLLED_EXECUTION_DECISION_GATE_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/controlled_execution_decision_gate.md",
+        "decision gate only",
+        "no live execution enabled",
+        "no mutation enabled",
+        "no approval API/storage enabled",
+        "no DB writes",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "Live mutation: `NO_GO`",
+        "Application submission automation: `NO_GO`",
+        "Queue mutation: `NO_GO`",
+        "Approval UI/action: `NO_GO`",
+        "DB-backed audit ledger implementation: `NOT YET`",
+        "Proposal-only mutation planner: `LIMITED_GO`",
+        "Live pipeline execution",
+        "Queue action mutation",
+        "Application submission",
+        "DB-backed audit ledger",
+        "Approval API/storage",
+        "Lock/idempotency store",
+        "Read-only approval review UI",
+        "Dry-run simulator enhancement",
+        "Implemented audit ledger storage missing.",
+        "Implemented approval storage/API missing.",
+        "Implemented idempotency store missing.",
+        "Implemented execution lock store missing.",
+        "Rollback implementation missing.",
+        "Mutation transaction boundary missing.",
+        "Feature flag/environment gate implementation missing.",
+        "Operator approval workflow missing.",
+        "Failure recovery tests missing.",
+        "Production dry-run-to-live promotion policy missing.",
+        "No reviewed mutation API contract implemented.",
+        "40B: proposal-only mutation planner design or utility, no mutation.",
+        "41A: audit ledger storage implementation design review, no migration yet.",
+        "42A: idempotency/lock storage implementation design review, no migration yet.",
+        "43A: approval API/storage design review, no implementation yet.",
+        "44A: read-only approval review UI mock v2, no actions.",
+        "45A+: only after approved storage designs, consider migrations behind feature flags.",
+        "No live execution in this phase.",
+        "No queue updates.",
+        "No application submission.",
+        "No approval/reject buttons.",
+        "No DB writes.",
+        "No scheduler.",
+        "No agent framework integration.",
+        "Do not start live execution.",
+        "Build a proposal-only mutation planner next, or finish storage design reviews first.",
+        "code must stay explicit/manual and write diagnostic artifacts only",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current State",
+        "## Current Hard Safety Boundary",
+        "## Decision",
+        "## Decision Matrix",
+        "## Blockers Before Live Mutation",
+        "## Allowed Next Phases",
+        "## Explicit Non-Goals",
+        "## Recommended Next Step",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/controlled_execution_decision_gate.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

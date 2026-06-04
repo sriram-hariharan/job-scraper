@@ -28,6 +28,8 @@ Phase 33A live orchestration readiness gaps are tracked in `docs/live_orchestrat
 
 Phase 34A production execution contract boundaries are tracked in `docs/production_execution_contract_design.md`. That document is design-only and does not enable live orchestration.
 
+Phase 35A mutation policy and approval gate boundaries are tracked in `docs/mutation_policy_approval_gate_design.md`. That document is design-only and does not enable mutation execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

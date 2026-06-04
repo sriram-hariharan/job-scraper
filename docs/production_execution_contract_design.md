@@ -12,6 +12,8 @@ Define the future production execution contract before any live orchestration pr
 
 This document is planning-only. It does not add runtime behavior, adapters, scheduler behavior, UI behavior, database schema, LLM calls, or application submission behavior.
 
+The future mutation policy and approval gate boundary is detailed in `docs/mutation_policy_approval_gate_design.md`. That document is design-only and does not enable mutation execution.
+
 ## Current Boundary
 
 - `workflow_runner.py` emits skipped dry-run steps only and must not invoke adapters, chains, generators, LLM calls, database writes, queue mutation, or application submission.

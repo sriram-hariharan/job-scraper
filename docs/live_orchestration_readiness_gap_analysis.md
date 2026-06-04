@@ -8,6 +8,8 @@ Phase 33A is a planning/readiness gap analysis only. It does not implement live 
 
 Phase 40A controlled execution readiness is gated by `docs/controlled_execution_decision_gate.md`. That decision gate is planning-only and does not enable live execution or mutation.
 
+Phase 41A proposal-only mutation planning is documented in `docs/proposal_only_mutation_planner.md`. It remains explicit/manual and diagnostic-only, consumes existing dry-run simulation artifacts, and does not enable live execution or mutation.
+
 ## What Exists Today
 
 - Read-only adapter modules exist for Job Prioritization, Tailoring Decision, and Operator Review:
@@ -136,7 +138,8 @@ Phase 40A controlled execution readiness is gated by `docs/controlled_execution_
 - 38A: dry-run execution simulator, still no mutation. See `docs/dry_run_execution_simulator.md`.
 - 39A: operator approval UI mock/read-only only.
 - 40A: controlled execution decision gate only. See `docs/controlled_execution_decision_gate.md`.
-- 40B+: only consider proposal-only safety scaffolding until storage, approval, audit, idempotency, locking, rollback, and feature gates are implemented in reviewed phases.
+- 41A: proposal-only mutation planner, still no mutation. See `docs/proposal_only_mutation_planner.md`.
+- 41B+: only consider additional proposal-only safety scaffolding until storage, approval, audit, idempotency, locking, rollback, and feature gates are implemented in reviewed phases.
 
 ## Hard Blockers
 

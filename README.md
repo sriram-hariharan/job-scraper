@@ -584,6 +584,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Idempotency and locking design](docs/idempotency_locking_design.md)
 - [Dry-run execution simulator](docs/dry_run_execution_simulator.md)
 - [Controlled execution decision gate](docs/controlled_execution_decision_gate.md)
+- [Proposal-only mutation planner](docs/proposal_only_mutation_planner.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

@@ -38,6 +38,8 @@ Phase 38A dry-run execution simulation is tracked in `docs/dry_run_execution_sim
 
 Phase 39A allows dry-run execution simulation artifacts to be displayed in Agentic Review with an Operator Approval Mock. The mock is read-only and non-actionable; it does not approve, reject, store approval, mutate queues, write to the database, submit applications, or execute anything.
 
+Phase 40A controlled execution decisions are tracked in `docs/controlled_execution_decision_gate.md`. That decision gate is planning-only: live mutation is `NO_GO`, proposal-only mutation planning is `LIMITED_GO` only if explicit/manual/read-only/non-mutating, and no execution or approval implementation is enabled.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

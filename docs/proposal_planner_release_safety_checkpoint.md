@@ -98,3 +98,5 @@ There are no approve, reject, run, or submit buttons for proposal execution. The
 Recommended next phase: 44A storage design review for audit ledger/idempotency/locks, no migration.
 
 Do not start live mutation next. Do not implement approval API/storage next unless a separate design review phase is approved.
+
+Phase 44A storage design review remains docs-only and does not add migrations, storage APIs, storage modules, or DB writes.

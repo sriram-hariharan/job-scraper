@@ -10,6 +10,7 @@ PRODUCTION_EXECUTION_CONTRACT_DOC_PATH = Path("docs/production_execution_contrac
 MUTATION_POLICY_APPROVAL_GATE_DOC_PATH = Path("docs/mutation_policy_approval_gate_design.md")
 LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH = Path("docs/live_run_audit_ledger_schema_design.md")
 IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH = Path("docs/idempotency_locking_design.md")
+DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH = Path("docs/dry_run_execution_simulator.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -177,6 +178,9 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "design/schema proposal-only and does not enable persistence",
         "docs/idempotency_locking_design.md",
         "design-only and does not add lock tables",
+        "docs/dry_run_execution_simulator.md",
+        "explicit/manual and diagnostic-only",
+        "does not run the chain/generator",
     ]:
         assert phrase in source
 
@@ -318,6 +322,7 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "37A: idempotency/locking design doc only.",
         "docs/idempotency_locking_design.md",
         "38A: dry-run execution simulator, still no mutation.",
+        "docs/dry_run_execution_simulator.md",
         "39A: operator approval UI mock/read-only only.",
         "40A+: only then consider controlled execution prototype, still behind explicit feature flags.",
         "No queue mutation.",
@@ -355,9 +360,81 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         for path in [
             ORCHESTRATOR_READINESS_DOC_PATH,
             Path("README.md"),
+            DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH,
         ]
     )
     assert "docs/live_orchestration_readiness_gap_analysis.md" in linked_docs
+
+
+def test_dry_run_execution_simulator_docs_cover_phase_38a_contract():
+    assert DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH.exists()
+    source = DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/dry_run_execution_simulator.md",
+        "explicit/manual dry-run execution simulator only",
+        "consumes existing diagnostic artifacts",
+        "Does not run the chain/generator.",
+        "Does not run agents.",
+        "does not mutate production",
+        "No DB write.",
+        "No queue mutation.",
+        "No application submission.",
+        "No tailoring generation.",
+        "No packet generation.",
+        "No scoring/ranking changes.",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "read_only_adapter_chain_result.json",
+        "read_only_chain_artifact_generation_result.json",
+        "dry_run_execution_simulation_result.json",
+        "dry_run_execution_simulation_report.md",
+        "application_execution_queue.csv",
+        "job_prioritization_recommendations.csv",
+        "tailoring_decision_recommendations.csv",
+        "operator_review_recommendations.csv",
+        "simulated_mutation_proposals",
+        "proposal_mode=simulated_non_executable",
+        "can_execute_live=false",
+        "requires_approval=true",
+        "blocked_by_default=true",
+        "queue_diagnostic_status_marker",
+        "operator_note",
+        "artifact_status_marker",
+        "operator approval gate",
+        "audit ledger",
+        "idempotency key",
+        "execution lock",
+        "rollback plan",
+        "Does not call `run_read_only_adapter_chain()`",
+        "Does not call `generate_read_only_chain_artifacts()`",
+        "Is not wired into `run_application_planning.py`",
+        "Is not wired into `application_execution_queue.py`",
+        "No DB schema, migration, storage, or persistence implementation.",
+        "No runtime/pipeline behavior changes.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Boundary",
+        "## Safety Guarantees",
+        "## CLI",
+        "## Simulation Payload",
+        "## Validation Rules",
+        "## Non-Goals",
+        "## Relationship To Future Milestones",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/dry_run_execution_simulator.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

@@ -582,6 +582,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Mutation policy and approval gate design](docs/mutation_policy_approval_gate_design.md)
 - [Live-run audit ledger schema design](docs/live_run_audit_ledger_schema_design.md)
 - [Idempotency and locking design](docs/idempotency_locking_design.md)
+- [Dry-run execution simulator](docs/dry_run_execution_simulator.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

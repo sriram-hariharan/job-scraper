@@ -28,7 +28,9 @@ Future live readiness depends on separate, versioned entities. These names are c
 - `execution_plan`: the validated plan derived from an execution request.
 - `mutation_proposal`: a proposed production change, separated from execution and commit.
 - `approval_record`: the human approval or rejection record for one or more mutation proposals.
+- `execution_attempt`: a single bounded attempt to execute an approved plan after gates, locks, and audit writes are satisfied.
 - `execution_result`: the final status and validation summary for an attempted execution.
+- `rollback_plan`: the documented recovery path for each mutable field or approved non-reversible action.
 - `audit_ledger_entry`: an immutable audit record for every proposal, approval, execution attempt, validation, rollback, and blocked operation.
 - `idempotency_key`: the stable duplicate-protection key for a request, plan, proposal, or mutation.
 - `execution_lock`: the persisted lock that prevents concurrent mutation of the same target scope.
@@ -84,6 +86,7 @@ Validation rules:
 - `allowed_mutation_types` must be empty unless a future approved policy explicitly allows each mutation class.
 - `blocked_mutation_types` must include application submission, resume rewriting, tailoring generation, packet generation, scoring formula changes, ranking changes, scraper/source mutation, RAG corpus mutation, and deletion of production records for the first live prototype.
 - `rollback_required` must be true for any mutable production field unless the policy explicitly marks the action non-reversible and blocks automatic retry.
+- A `rollback_plan` must be present before `can_execute_live` can be true.
 
 ## Mutation Proposal Contract
 
@@ -136,7 +139,7 @@ Validation rules:
 
 ## Execution Result Contract
 
-An `execution_result` records the outcome of an attempted plan. It must be paired with audit ledger entries.
+An `execution_attempt` records one bounded try to execute an approved plan. An `execution_result` records the outcome of that attempted plan. Both must be paired with audit ledger entries.
 
 Required fields:
 

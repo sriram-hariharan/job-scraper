@@ -8,6 +8,7 @@ READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH = Path("docs/read_only_chain_operator_
 LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH = Path("docs/live_orchestration_readiness_gap_analysis.md")
 PRODUCTION_EXECUTION_CONTRACT_DOC_PATH = Path("docs/production_execution_contract_design.md")
 MUTATION_POLICY_APPROVAL_GATE_DOC_PATH = Path("docs/mutation_policy_approval_gate_design.md")
+LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH = Path("docs/live_run_audit_ledger_schema_design.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -171,6 +172,8 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "design-only and does not enable live orchestration",
         "docs/mutation_policy_approval_gate_design.md",
         "design-only and does not enable mutation execution",
+        "docs/live_run_audit_ledger_schema_design.md",
+        "design/schema proposal-only and does not enable persistence",
     ]:
         assert phrase in source
 
@@ -317,6 +320,7 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "No scoring/ranking changes.",
         "docs/production_execution_contract_design.md",
         "docs/mutation_policy_approval_gate_design.md",
+        "docs/live_run_audit_ledger_schema_design.md",
     ]:
         assert phrase in source
 
@@ -408,6 +412,7 @@ def test_production_execution_contract_design_covers_phase_34a_contract():
         "Feature flag policy.",
         "Operator runbook update.",
         "docs/mutation_policy_approval_gate_design.md",
+        "docs/live_run_audit_ledger_schema_design.md",
     ]:
         assert phrase in source
 
@@ -534,6 +539,7 @@ def test_mutation_policy_approval_gate_design_covers_phase_35a_contract():
         "Rollback design.",
         "Approval API/storage design.",
         "Operator runbook update.",
+        "docs/live_run_audit_ledger_schema_design.md",
     ]:
         assert phrase in source
 
@@ -566,3 +572,96 @@ def test_mutation_policy_approval_gate_design_covers_phase_35a_contract():
         ]
     )
     assert "docs/mutation_policy_approval_gate_design.md" in linked_docs
+
+
+def test_live_run_audit_ledger_schema_design_covers_phase_36a_contract():
+    assert LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH.exists()
+    source = LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/live_run_audit_ledger_schema_design.md",
+        "design/schema proposal only",
+        "No DB table or migration is added.",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "No approval API/UI/storage is implemented.",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "future immutable audit trail",
+        "No live orchestration.",
+        "No scheduler/background execution.",
+        "No UI run button.",
+        "No DB write for live orchestration.",
+        "No queue mutation.",
+        "No application submission.",
+        "No scoring/ranking changes.",
+        "agentic_execution_requests",
+        "agentic_execution_plans",
+        "agentic_mutation_proposals",
+        "agentic_approval_records",
+        "agentic_execution_attempts",
+        "agentic_audit_ledger_entries",
+        "agentic_rollback_plans",
+        "agentic_execution_locks",
+        "before_value_json",
+        "after_value_json",
+        "proposed_after_value_json",
+        "idempotency_key",
+        "execution_lock_key",
+        "execution_request_created",
+        "mutation_proposed",
+        "approval_approved",
+        "mutation_applied",
+        "rollback_succeeded",
+        "policy_denied",
+        "pending",
+        "approved",
+        "blocked",
+        "running",
+        "succeeded",
+        "failed",
+        "rolled_back",
+        "rollback_failed",
+        "Every mutation proposal links to `request_id` and `plan_id`.",
+        "Every approval links to `mutation_ids` or an explicit approval scope.",
+        "Every execution attempt links to `approval_id` when mutation-capable.",
+        "Every mutable target includes `execution_lock_key`.",
+        "block mutation if ledger unavailable",
+        "must not write ledger rows directly in this phase",
+        "Idempotency/locking design.",
+        "DB migration design.",
+        "Storage API design.",
+        "Ledger write transaction design.",
+        "Read-only ledger viewer mock.",
+        "Failure-mode tests.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Purpose",
+        "## Current Boundary",
+        "## Ledger Design Principles",
+        "## Proposed Tables/Entities",
+        "## `agentic_audit_ledger_entries` Fields",
+        "## Event Types",
+        "## Status Values",
+        "## Linkage Rules",
+        "## Retention And Privacy",
+        "## Query Examples",
+        "## Failure Behavior",
+        "## Relationship To Current Read-Only Chain",
+        "## Future Gates",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            PRODUCTION_EXECUTION_CONTRACT_DOC_PATH,
+            MUTATION_POLICY_APPROVAL_GATE_DOC_PATH,
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/live_run_audit_ledger_schema_design.md" in linked_docs

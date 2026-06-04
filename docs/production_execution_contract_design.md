@@ -14,6 +14,8 @@ This document is planning-only. It does not add runtime behavior, adapters, sche
 
 The future mutation policy and approval gate boundary is detailed in `docs/mutation_policy_approval_gate_design.md`. That document is design-only and does not enable mutation execution.
 
+The future live-run audit ledger schema proposal is detailed in `docs/live_run_audit_ledger_schema_design.md`. That document is design/schema proposal-only and does not enable persistence, ledger writes, live execution, or mutation execution.
+
 ## Current Boundary
 
 - `workflow_runner.py` emits skipped dry-run steps only and must not invoke adapters, chains, generators, LLM calls, database writes, queue mutation, or application submission.

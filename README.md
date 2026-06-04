@@ -586,6 +586,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Controlled execution decision gate](docs/controlled_execution_decision_gate.md)
 - [Proposal-only mutation planner](docs/proposal_only_mutation_planner.md)
 - [Proposal planner release safety checkpoint](docs/proposal_planner_release_safety_checkpoint.md)
+- [Storage design review for audit ledger, idempotency, and locks](docs/storage_design_review_audit_idempotency_locks.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

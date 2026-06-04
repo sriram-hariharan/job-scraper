@@ -22,6 +22,7 @@ sys.modules.setdefault(
 )
 
 from src.app import services
+from src.agents import proposal_only_mutation_planner
 
 
 def _write(path: Path, text: str) -> None:
@@ -117,6 +118,73 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
             ),
         )
         _write(output_dir / "dry_run_execution_simulation_report.md", "# Dry-Run Execution Simulation\n")
+        _write(
+            output_dir / "proposal_only_mutation_plan_result.json",
+            json.dumps(
+                {
+                    "planner_version": "proposal_only_mutation_planner_v1",
+                    "execution_mode": "explicit_proposal_only_mutation_planning",
+                    "simulation_result_path": str(output_dir / "dry_run_execution_simulation_result.json"),
+                    "output_dir": str(output_dir),
+                    "did_plan": True,
+                    "did_execute_live": False,
+                    "did_mutate_production": False,
+                    "did_approve": False,
+                    "did_store_approval": False,
+                    "did_write_db": False,
+                    "context": {
+                        "require_explicit_simulation_result_path": True,
+                        "require_explicit_output_dir": True,
+                    },
+                    "proposal_plan": {
+                        "plan_mode": "proposal_only_non_executable",
+                        "can_execute_live": False,
+                        "can_mutate": False,
+                        "can_approve": False,
+                        "requires_operator_approval": True,
+                        "requires_approval_api": True,
+                        "requires_approval_storage": True,
+                        "requires_audit_ledger": True,
+                        "requires_idempotency_key": True,
+                        "requires_execution_lock": True,
+                        "requires_rollback_plan": True,
+                        "proposed_next_review_steps": [
+                            "review_non_executable_proposals",
+                            "verify_mutation_type_allowlist",
+                            "require_future_approval_gate",
+                            "require_future_audit_ledger",
+                            "require_future_idempotency_locking",
+                            "block_live_execution",
+                            "block_application_submission",
+                            "block_queue_mutation",
+                        ],
+                    },
+                    "proposal_only_mutation_items": [],
+                    "blocked_execution_reasons": [
+                        "live_execution_disabled",
+                        "queue_mutation_blocked",
+                        "application_submission_blocked",
+                        "db_write_blocked",
+                    ],
+                    "safety_flags": {
+                        "allow_db_write": False,
+                        "allow_live_pipeline_wiring": False,
+                        "allow_application_submission": False,
+                        "allow_queue_action_update": False,
+                        "allow_packet_update": False,
+                        "allow_tailoring_generation_update": False,
+                        "allow_scoring_update": False,
+                        "allow_ranking_update": False,
+                        "allow_scheduler_execution": False,
+                        "allow_approval_action": False,
+                        "allow_mutation_execution": False,
+                    },
+                    "reason_codes": [],
+                    "warning_codes": [],
+                }
+            ),
+        )
+        _write(output_dir / "proposal_only_mutation_plan_report.md", "# Proposal-Only Mutation Plan\n")
         _write(output_dir / "agentic_workflow_verification.json", json.dumps({"validation_status": "passed"}))
         _write(output_dir / "rag_evaluation_summary.json", json.dumps({"evaluation_version": "rag_evaluation_v1", "validation_status": "warning", "rows": []}))
         _write(output_dir / "rag_evaluation_report.md", "# RAG Evaluation Report\n")
@@ -156,7 +224,7 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
 
     assert result["ok"] is True
     assert result["attempted"] is True
-    assert result["ingested_count"] == 37
+    assert result["ingested_count"] == 39
     assert result["skipped_count"] == 0
     assert result["error_count"] == 0
     assert "application_shortlist_by_job.csv" in artifact_names
@@ -183,6 +251,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "read_only_chain_artifact_generation_report.md" in artifact_names
     assert "dry_run_execution_simulation_result.json" in artifact_names
     assert "dry_run_execution_simulation_report.md" in artifact_names
+    assert "proposal_only_mutation_plan_result.json" in artifact_names
+    assert "proposal_only_mutation_plan_report.md" in artifact_names
     assert "agentic_workflow_verification.json" in artifact_names
     assert "rag_evaluation_summary.json" in artifact_names
     assert "rag_evaluation_report.md" in artifact_names
@@ -220,6 +290,8 @@ def test_pipeline_artifact_ingestion_preserves_planning_outputs_and_job_packets(
     assert "read_only_chain_artifact_generation_report_md" in artifact_kinds
     assert "dry_run_execution_simulation_result_json" in artifact_kinds
     assert "dry_run_execution_simulation_report_md" in artifact_kinds
+    assert "proposal_only_mutation_plan_result_json" in artifact_kinds
+    assert "proposal_only_mutation_plan_report_md" in artifact_kinds
     assert "agentic_workflow_verification_json" in artifact_kinds
     assert "rag_evaluation_summary_json" in artifact_kinds
     assert "rag_evaluation_report_md" in artifact_kinds
@@ -303,6 +375,135 @@ def test_dry_run_execution_simulation_read_model_missing_is_safe_empty():
     assert mock["approval_storage_enabled"] is False
     assert mock["mutation_execution_enabled"] is False
     assert mock["can_execute_live"] is False
+
+
+def test_proposal_only_mutation_plan_read_model_missing_is_safe_empty():
+    plan = services._proposal_only_mutation_plan_from_artifacts([])
+
+    assert plan["present"] is False
+    assert plan["available"] is False
+    assert plan["empty_state"] == "No proposal-only mutation plan artifacts recorded for this run yet."
+    assert plan["validation_status"] == "missing"
+    assert plan["did_plan"] is False
+    assert plan["did_execute_live"] is False
+    assert plan["did_mutate_production"] is False
+    assert plan["did_approve"] is False
+    assert plan["did_store_approval"] is False
+    assert plan["did_write_db"] is False
+    assert plan["can_mutate"] is False
+    assert plan["can_approve"] is False
+
+
+def test_proposal_only_mutation_plan_read_model_from_artifacts():
+    result = {
+        "planner_version": "proposal_only_mutation_planner_v1",
+        "execution_mode": "explicit_proposal_only_mutation_planning",
+        "simulation_result_path": "/tmp/sim/dry_run_execution_simulation_result.json",
+        "output_dir": "/tmp/plan",
+        "did_plan": True,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_approve": False,
+        "did_store_approval": False,
+        "did_write_db": False,
+        "context": {
+            "require_explicit_simulation_result_path": True,
+            "require_explicit_output_dir": True,
+        },
+        "source_simulation_summary": {"validation_status": "passed"},
+        "proposal_plan": {
+            "plan_mode": "proposal_only_non_executable",
+            "can_execute_live": False,
+            "can_mutate": False,
+            "can_approve": False,
+            "requires_operator_approval": True,
+            "requires_approval_api": True,
+            "requires_approval_storage": True,
+            "requires_audit_ledger": True,
+            "requires_idempotency_key": True,
+            "requires_execution_lock": True,
+            "requires_rollback_plan": True,
+            "proposed_next_review_steps": [
+                "review_non_executable_proposals",
+                "verify_mutation_type_allowlist",
+                "require_future_approval_gate",
+                "require_future_audit_ledger",
+                "require_future_idempotency_locking",
+                "block_live_execution",
+                "block_application_submission",
+                "block_queue_mutation",
+            ],
+        },
+        "proposal_only_mutation_items": [
+            {
+                "proposal_id": "proposal_only_item_1",
+                "proposal_mode": "proposal_only_non_executable",
+                "source_proposal_id": "simulated_proposal_1",
+                "mutation_type": "operator_note",
+                "can_execute_live": False,
+                "can_mutate": False,
+                "can_approve": False,
+                "blocked_by_default": True,
+                "requires_operator_approval": True,
+                "requires_audit_ledger": True,
+                "requires_idempotency_key": True,
+                "requires_execution_lock": True,
+                "requires_rollback_plan": True,
+                "reason_codes": ["proposal_only"],
+                "evidence_refs": [{"artifact_name": "dry_run_execution_simulation_result.json"}],
+                "review_notes": "Review only.",
+            }
+        ],
+        "blocked_execution_reasons": [
+            "live_execution_disabled",
+            "queue_mutation_blocked",
+            "application_submission_blocked",
+            "db_write_blocked",
+        ],
+        "safety_flags": {
+            "allow_db_write": False,
+            "allow_live_pipeline_wiring": False,
+            "allow_application_submission": False,
+            "allow_queue_action_update": False,
+            "allow_packet_update": False,
+            "allow_tailoring_generation_update": False,
+            "allow_scoring_update": False,
+            "allow_ranking_update": False,
+            "allow_scheduler_execution": False,
+            "allow_approval_action": False,
+            "allow_mutation_execution": False,
+        },
+        "reason_codes": [],
+        "warning_codes": [],
+    }
+    rows = [
+        {
+            "artifact_name": proposal_only_mutation_planner.RESULT_JSON_NAME,
+            "content_json": result,
+            "content_text": "",
+        },
+        {
+            "artifact_name": proposal_only_mutation_planner.REPORT_MD_NAME,
+            "content_json": None,
+            "content_text": "# Proposal-Only Mutation Plan\n",
+        },
+    ]
+
+    plan = services._proposal_only_mutation_plan_from_artifacts(rows)
+
+    assert plan["present"] is True
+    assert plan["execution_mode"] == "explicit_proposal_only_mutation_planning"
+    assert plan["validation_status"] == "passed"
+    assert plan["did_plan"] is True
+    assert plan["did_execute_live"] is False
+    assert plan["did_mutate_production"] is False
+    assert plan["did_approve"] is False
+    assert plan["did_store_approval"] is False
+    assert plan["did_write_db"] is False
+    assert plan["can_mutate"] is False
+    assert plan["can_approve"] is False
+    assert plan["proposal_only_mutation_items"][0]["mutation_type"] == "operator_note"
+    assert "Proposal-Only Mutation Plan" in plan["report_markdown"]
 
 
 def test_dry_run_execution_simulation_read_model_and_operator_approval_mock_from_artifacts():

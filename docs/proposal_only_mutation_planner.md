@@ -171,3 +171,14 @@ Invalid simulator artifacts return safe JSON and a nonzero exit code:
 The controlled execution decision gate allows proposal-only safety scaffolding as `LIMITED_GO` only if it remains explicit/manual/read-only/non-mutating.
 
 This planner satisfies that boundary by producing diagnostic proposal-only artifacts. It does not close the blockers for live mutation. Future live execution still requires reviewed approval storage/API, audit ledger storage, idempotency storage, execution lock storage, rollback implementation, feature flag/environment gates, failure recovery tests, and a dry-run-to-live promotion policy.
+
+## Agentic Review Display
+
+Proposal-only planner artifacts can now be displayed in Agentic Review.
+
+- `proposal_only_mutation_plan_result.json`
+- `proposal_only_mutation_plan_report.md`
+
+The display is read-only and non-actionable. It does not approve, reject, store approval, mutate queue state, write DB rows, submit applications, execute anything, call approval APIs, call mutation APIs, or add approval storage.
+
+Future real approval or mutation behavior requires separate reviewed phases.

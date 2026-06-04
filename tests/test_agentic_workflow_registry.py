@@ -69,6 +69,8 @@ def test_workflow_registry_required_flags_and_artifact_kinds_are_present():
         "read_only_chain_artifact_generation_report_md",
         "dry_run_execution_simulation_result_json",
         "dry_run_execution_simulation_report_md",
+        "proposal_only_mutation_plan_result_json",
+        "proposal_only_mutation_plan_report_md",
         "rag_evaluation_summary_json",
         "rag_evaluation_report_md",
     ]:

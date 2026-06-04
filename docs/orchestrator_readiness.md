@@ -42,6 +42,8 @@ Phase 40A controlled execution decisions are tracked in `docs/controlled_executi
 
 Phase 41A proposal-only mutation planning is tracked in `docs/proposal_only_mutation_planner.md`. The planner is explicit/manual and diagnostic-only; it consumes an existing dry-run simulation result, does not run the simulator/chain/generator, and does not enable live execution, mutation, approval, DB writes, queue updates, application submission, scheduler execution, or `workflow_runner.py` execution.
 
+Phase 42A displays proposal-only planner diagnostics in Agentic Review. The display is read-only/non-actionable and still does not enable live execution, mutation, approval APIs, approval storage, DB writes, queue updates, application submission, or scheduler execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

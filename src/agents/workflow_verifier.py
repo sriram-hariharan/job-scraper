@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 
 from src.agents import (
     orchestrator_adapter_harness,
+    proposal_only_mutation_planner,
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
     dry_run_execution_simulator,
@@ -49,6 +50,8 @@ OPTIONAL_ARTIFACTS = [
     "read_only_chain_artifact_generation_report.md",
     "dry_run_execution_simulation_result.json",
     "dry_run_execution_simulation_report.md",
+    "proposal_only_mutation_plan_result.json",
+    "proposal_only_mutation_plan_report.md",
     "best_resume_variant_by_job.csv",
     "source_health_report.csv",
     "rag_evaluation_summary.json",
@@ -85,6 +88,8 @@ ARTIFACT_KIND_TO_NAME = {
     "read_only_chain_artifact_generation_report_md": "read_only_chain_artifact_generation_report.md",
     "dry_run_execution_simulation_result_json": "dry_run_execution_simulation_result.json",
     "dry_run_execution_simulation_report_md": "dry_run_execution_simulation_report.md",
+    "proposal_only_mutation_plan_result_json": "proposal_only_mutation_plan_result.json",
+    "proposal_only_mutation_plan_report_md": "proposal_only_mutation_plan_report.md",
     "agentic_workflow_verification_json": "agentic_workflow_verification.json",
     "rag_evaluation_summary_json": "rag_evaluation_summary.json",
     "rag_evaluation_report_md": "rag_evaluation_report.md",
@@ -168,6 +173,7 @@ def _load_artifacts_from_dir(output_dir: str | Path) -> Dict[str, Any]:
         "read_only_adapter_chain_result.json": _read_json(root / "read_only_adapter_chain_result.json"),
         "read_only_chain_artifact_generation_result.json": _read_json(root / "read_only_chain_artifact_generation_result.json"),
         "dry_run_execution_simulation_result.json": _read_json(root / "dry_run_execution_simulation_result.json"),
+        "proposal_only_mutation_plan_result.json": _read_json(root / "proposal_only_mutation_plan_result.json"),
         RAG_EVALUATION_SUMMARY_ARTIFACT: _read_json(root / RAG_EVALUATION_SUMMARY_ARTIFACT),
     }
 
@@ -250,6 +256,7 @@ def verify_agentic_workflow_artifacts(
     read_only_chain_json = dict(loaded.get("read_only_adapter_chain_result.json") or {})
     read_only_chain_generation_json = dict(loaded.get("read_only_chain_artifact_generation_result.json") or {})
     dry_run_simulation_json = dict(loaded.get("dry_run_execution_simulation_result.json") or {})
+    proposal_plan_json = dict(loaded.get("proposal_only_mutation_plan_result.json") or {})
     rag_evaluation_json = dict(loaded.get(RAG_EVALUATION_SUMMARY_ARTIFACT) or {})
 
     reason_codes: List[str] = []
@@ -810,6 +817,141 @@ def verify_agentic_workflow_artifacts(
         if not root_names_safe:
             reason_codes.append("dry_run_execution_simulation_production_root_artifact_names")
 
+    if "proposal_only_mutation_plan_result.json" in present_artifacts:
+        proposal_validation = (
+            proposal_only_mutation_planner.validate_proposal_only_mutation_plan_result(
+                proposal_plan_json
+            )
+        )
+        proposal_validation_status = _clean_text(proposal_validation.get("validation_status"))
+        proposal_validation_passed = proposal_validation_status in {"passed", "warning"}
+        checks.append(
+            _check(
+                "proposal_only_mutation_plan_validation_passed_or_warning",
+                proposal_validation_passed,
+                ", ".join(proposal_validation.get("reason_codes", []) or [])
+                if not proposal_validation_passed else "",
+            )
+        )
+        if not proposal_validation_passed:
+            reason_codes.append("proposal_only_mutation_plan_validation_failed")
+        if proposal_validation_status == "warning":
+            reason_codes.append("proposal_only_mutation_plan_warning")
+
+        proposal_mode = (
+            _clean_text(proposal_plan_json.get("execution_mode"))
+            == proposal_only_mutation_planner.EXECUTION_MODE
+        )
+        checks.append(_check("proposal_only_mutation_plan_explicit_mode", proposal_mode))
+        if not proposal_mode:
+            reason_codes.append("proposal_only_mutation_plan_wrong_mode")
+
+        did_plan_boolean = isinstance(proposal_plan_json.get("did_plan"), bool)
+        checks.append(_check("proposal_only_mutation_plan_did_plan_boolean", did_plan_boolean))
+        if not did_plan_boolean:
+            reason_codes.append("proposal_only_mutation_plan_did_plan_not_boolean")
+
+        for flag in ["did_execute_live", "did_mutate_production", "did_approve", "did_store_approval", "did_write_db"]:
+            flag_disabled = not bool(proposal_plan_json.get(flag))
+            checks.append(_check(f"proposal_only_mutation_plan_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"proposal_only_mutation_plan_{flag}_true")
+
+        safety_flags = dict(proposal_plan_json.get("safety_flags") or {})
+        context = dict(proposal_plan_json.get("context") or {})
+        for flag in [
+            "allow_db_write",
+            "allow_live_pipeline_wiring",
+            "allow_application_submission",
+            "allow_queue_action_update",
+            "allow_packet_update",
+            "allow_tailoring_generation_update",
+            "allow_scoring_update",
+            "allow_ranking_update",
+            "allow_scheduler_execution",
+            "allow_approval_action",
+            "allow_mutation_execution",
+        ]:
+            value = (
+                safety_flags.get(flag)
+                if flag in safety_flags
+                else context.get(flag, proposal_plan_json.get(flag))
+            )
+            flag_disabled = not bool(value)
+            checks.append(_check(f"proposal_only_mutation_plan_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"proposal_only_mutation_plan_{flag}_true")
+
+        proposal_plan = dict(proposal_plan_json.get("proposal_plan") or {})
+        plan_mode_ok = _clean_text(proposal_plan.get("plan_mode")) == "proposal_only_non_executable"
+        checks.append(_check("proposal_only_mutation_plan_non_executable_mode", plan_mode_ok))
+        if not plan_mode_ok:
+            reason_codes.append("proposal_only_mutation_plan_wrong_plan_mode")
+        for flag in ["can_execute_live", "can_mutate", "can_approve"]:
+            flag_disabled = not bool(proposal_plan.get(flag))
+            checks.append(_check(f"proposal_only_mutation_plan_{flag}_false", flag_disabled))
+            if not flag_disabled:
+                reason_codes.append(f"proposal_only_mutation_plan_{flag}_true")
+
+        allowed_types = set(proposal_only_mutation_planner.ALLOWED_MUTATION_TYPES)
+        proposals_safe = True
+        bad_proposal_reasons: List[str] = []
+        for proposal in list(proposal_plan_json.get("proposal_only_mutation_items") or []):
+            proposal_payload = dict(proposal)
+            mutation_type = _clean_text(proposal_payload.get("mutation_type"))
+            if _clean_text(proposal_payload.get("proposal_mode")) != "proposal_only_non_executable":
+                proposals_safe = False
+                bad_proposal_reasons.append("proposal_mode")
+            for flag in ["can_execute_live", "can_mutate", "can_approve"]:
+                if bool(proposal_payload.get(flag)):
+                    proposals_safe = False
+                    bad_proposal_reasons.append(flag)
+            if not bool(proposal_payload.get("blocked_by_default")):
+                proposals_safe = False
+                bad_proposal_reasons.append("blocked_by_default")
+            if mutation_type not in allowed_types:
+                proposals_safe = False
+                bad_proposal_reasons.append("mutation_type")
+        checks.append(
+            _check(
+                "proposal_only_mutation_plan_items_non_executable",
+                proposals_safe,
+                ", ".join(sorted(set(bad_proposal_reasons))) if bad_proposal_reasons else "",
+            )
+        )
+        if not proposals_safe:
+            reason_codes.append("proposal_only_mutation_plan_unsafe_item")
+
+        proposal_root_names = set(proposal_validation.get("output_root_file_names") or [])
+        production_root_names = sorted(
+            proposal_root_names.intersection(
+                proposal_only_mutation_planner.PRODUCTION_ROOT_ARTIFACT_NAMES
+            )
+        )
+        record_root_names = sorted(
+            proposal_root_names.intersection(
+                {"approval_record.json", "mutation_record.json", "audit_ledger_entry.json"}
+            )
+        )
+        checks.append(
+            _check(
+                "proposal_only_mutation_plan_no_production_root_artifact_names",
+                not production_root_names,
+                ", ".join(production_root_names) if production_root_names else "",
+            )
+        )
+        if production_root_names:
+            reason_codes.append("proposal_only_mutation_plan_production_root_artifact_names")
+        checks.append(
+            _check(
+                "proposal_only_mutation_plan_no_approval_audit_mutation_records",
+                not record_root_names,
+                ", ".join(record_root_names) if record_root_names else "",
+            )
+        )
+        if record_root_names:
+            reason_codes.append("proposal_only_mutation_plan_record_artifact_names")
+
     queue_action_by_key = {_job_key(row): _clean_text(row.get("action")) for row in queue_rows if _job_key(row)}
     for artifact_name, rows in [
         ("job_prioritization_recommendations.csv", priority_rows),
@@ -891,6 +1033,7 @@ def verify_agentic_workflow_artifacts(
         or "read_only_adapter_chain_warning" in reason_codes
         or "read_only_chain_artifact_generation_warning" in reason_codes
         or "dry_run_execution_simulation_warning" in reason_codes
+        or "proposal_only_mutation_plan_warning" in reason_codes
     )
     if required_failure or strict_missing_failure or consistency_failure:
         validation_status = "failed"
@@ -913,6 +1056,7 @@ def verify_agentic_workflow_artifacts(
             "read_only_adapter_chain_adapters": len(list(read_only_chain_json.get("adapter_execution_order") or [])),
             "read_only_chain_artifact_generation_did_run_chain": 1 if bool(read_only_chain_generation_json.get("did_run_chain")) else 0,
             "dry_run_execution_simulation_proposals": len(list(dry_run_simulation_json.get("simulated_mutation_proposals") or [])),
+            "proposal_only_mutation_plan_items": len(list(proposal_plan_json.get("proposal_only_mutation_items") or [])),
             "job_prioritization_recommendations": len(priority_rows),
             "tailoring_decision_recommendations": len(tailoring_rows),
             "operator_review_recommendations": len(operator_rows),

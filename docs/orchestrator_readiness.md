@@ -30,6 +30,8 @@ Phase 34A production execution contract boundaries are tracked in `docs/producti
 
 Phase 35A mutation policy and approval gate boundaries are tracked in `docs/mutation_policy_approval_gate_design.md`. That document is design-only and does not enable mutation execution.
 
+Phase 36A live-run audit ledger schema boundaries are tracked in `docs/live_run_audit_ledger_schema_design.md`. That document is design/schema proposal-only and does not enable persistence, ledger writes, live execution, or mutation execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

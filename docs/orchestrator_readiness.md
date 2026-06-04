@@ -46,6 +46,8 @@ Phase 42A displays proposal-only planner diagnostics in Agentic Review. The disp
 
 Phase 43A release safety checkpoint is tracked in `docs/proposal_planner_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the proposal-planner stack remains explicit/manual/read-only/non-mutating before any future release work.
 
+Phase 44A storage design review is tracked in `docs/storage_design_review_audit_idempotency_locks.md`. That review is docs/tests only and does not add DB schemas, migrations, storage APIs, DB writes, approval storage, audit ledger storage, idempotency storage, execution lock storage, or live mutation.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -231,6 +231,47 @@ def test_agentic_workflow_dry_run_ui_contract():
     assert "_agentic_workflow_dry_run_from_artifacts" in services_source
 
 
+def test_proposal_only_mutation_plan_agentic_review_ui_contract():
+    review_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
+    review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")
+    services_source = Path("src/app/services.py").read_text(encoding="utf-8")
+
+    assert "Proposal-Only Mutation Plan" in review_source
+    assert "proposal_only_mutation_plan" in review_source
+    assert "renderProposalOnlyMutationPlanSection" in review_source
+    assert "proposal_only_mutation_planner.EXECUTION_MODE" in services_source or "proposal_only_mutation_planner" in services_source
+    assert "proposal_only_mutation_plan_result.json" in services_source
+    assert "proposal_only_mutation_plan_report.md" in services_source
+    assert "proposal_only_mutation_plan_result_json" in services_source
+    assert "proposal_only_mutation_plan_report_md" in services_source
+    assert "_proposal_only_mutation_plan_from_artifacts" in services_source
+    assert "No proposal-only mutation plan artifacts recorded for this run yet." in review_source
+    assert "can_mutate" in review_source
+    assert "can_approve" in review_source
+    assert "did_store_approval" in review_source
+    assert "Required future gates" in review_source
+    assert "Proposal mutation types" in review_source
+    assert "Blocked execution reasons" in review_source
+    assert "Proposal plan report markdown" in review_source
+    assert "escapeHtml(markdown)" in review_source
+
+    assert ".proposal-only-mutation-plan-card" in review_css
+    assert ".proposal-only-mutation-plan-metrics" in review_css
+    assert ".proposal-only-mutation-plan-warning" in review_css
+    assert ".proposal-only-mutation-plan-notice" in review_css
+
+    for forbidden in [
+        "proposalPlanApprove",
+        "proposalPlanReject",
+        "proposal_only_mutation_approve",
+        "proposal_only_mutation_reject",
+        "/proposal-approval",
+        "/mutation-execution",
+    ]:
+        assert forbidden not in review_source
+        assert forbidden not in services_source
+
+
 def test_read_only_adapter_preflight_ui_contract():
     review_source = Path("src/app/static/agentic_review.js").read_text(encoding="utf-8")
     review_css = Path("src/app/static/agentic_review.css").read_text(encoding="utf-8")

@@ -7,6 +7,7 @@ from src.agents.workflow_verifier import (
     write_agentic_workflow_verification_artifact,
 )
 from src.agents.dry_run_execution_simulator import simulate_dry_run_execution
+from src.agents.proposal_only_mutation_planner import build_proposal_only_mutation_plan
 from src.agents.read_only_chain_artifact_generator import generate_read_only_chain_artifacts
 from src.agents.read_only_adapter_chain import write_read_only_adapter_chain_artifacts
 from src.agents.orchestrator_adapter_harness import write_read_only_adapter_preflight_artifacts
@@ -168,6 +169,21 @@ def _complete_artifact_dir(tmp_path, *, operator_rows=None, summary_counts=None)
     ]:
         (root / artifact_name).write_text(
             (simulation_output_dir / artifact_name).read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
+    proposal_output_dir = root / "proposal_only_mutation_plan_output"
+    build_proposal_only_mutation_plan(
+        simulation_result_path=simulation_output_dir / "dry_run_execution_simulation_result.json",
+        output_dir=proposal_output_dir,
+        pipeline_run_id="run_test",
+        owner_user_id="user_test",
+    )
+    for artifact_name in [
+        "proposal_only_mutation_plan_result.json",
+        "proposal_only_mutation_plan_report.md",
+    ]:
+        (root / artifact_name).write_text(
+            (proposal_output_dir / artifact_name).read_text(encoding="utf-8"),
             encoding="utf-8",
         )
     write_rag_evaluation_artifacts(
@@ -338,6 +354,75 @@ def test_workflow_verifier_warns_when_dry_run_execution_simulation_missing_non_s
     assert payload["validation_status"] == "warning"
     assert "dry_run_execution_simulation_result.json" in payload["missing_artifacts"]
     assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_validates_proposal_only_mutation_plan_when_present(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    check_names = {check["name"] for check in payload["consistency_checks"]}
+    assert payload["validation_status"] == "passed"
+    assert "proposal_only_mutation_plan_validation_passed_or_warning" in check_names
+    assert "proposal_only_mutation_plan_explicit_mode" in check_names
+    assert "proposal_only_mutation_plan_did_plan_boolean" in check_names
+    assert "proposal_only_mutation_plan_did_execute_live_false" in check_names
+    assert "proposal_only_mutation_plan_did_mutate_production_false" in check_names
+    assert "proposal_only_mutation_plan_did_approve_false" in check_names
+    assert "proposal_only_mutation_plan_did_store_approval_false" in check_names
+    assert "proposal_only_mutation_plan_did_write_db_false" in check_names
+    assert "proposal_only_mutation_plan_allow_db_write_false" in check_names
+    assert "proposal_only_mutation_plan_allow_live_pipeline_wiring_false" in check_names
+    assert "proposal_only_mutation_plan_allow_application_submission_false" in check_names
+    assert "proposal_only_mutation_plan_allow_queue_action_update_false" in check_names
+    assert "proposal_only_mutation_plan_allow_packet_update_false" in check_names
+    assert "proposal_only_mutation_plan_allow_tailoring_generation_update_false" in check_names
+    assert "proposal_only_mutation_plan_allow_scoring_update_false" in check_names
+    assert "proposal_only_mutation_plan_allow_ranking_update_false" in check_names
+    assert "proposal_only_mutation_plan_allow_scheduler_execution_false" in check_names
+    assert "proposal_only_mutation_plan_allow_approval_action_false" in check_names
+    assert "proposal_only_mutation_plan_allow_mutation_execution_false" in check_names
+    assert "proposal_only_mutation_plan_non_executable_mode" in check_names
+    assert "proposal_only_mutation_plan_can_execute_live_false" in check_names
+    assert "proposal_only_mutation_plan_can_mutate_false" in check_names
+    assert "proposal_only_mutation_plan_can_approve_false" in check_names
+    assert "proposal_only_mutation_plan_items_non_executable" in check_names
+    assert "proposal_only_mutation_plan_no_production_root_artifact_names" in check_names
+    assert "proposal_only_mutation_plan_no_approval_audit_mutation_records" in check_names
+    assert payload["row_counts"]["proposal_only_mutation_plan_items"] == 3
+
+
+def test_workflow_verifier_warns_when_proposal_only_mutation_plan_missing_non_strict(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    (root / "proposal_only_mutation_plan_result.json").unlink()
+    (root / "proposal_only_mutation_plan_report.md").unlink()
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root, strict=False)
+
+    assert payload["validation_status"] == "warning"
+    assert "proposal_only_mutation_plan_result.json" in payload["missing_artifacts"]
+    assert "missing_optional_artifacts" in payload["reason_codes"]
+
+
+def test_workflow_verifier_fails_unsafe_proposal_only_mutation_plan(tmp_path):
+    root = _complete_artifact_dir(tmp_path)
+    proposal_path = root / "proposal_only_mutation_plan_result.json"
+    proposal = json.loads(proposal_path.read_text(encoding="utf-8"))
+    proposal["did_approve"] = True
+    proposal["safety_flags"]["allow_db_write"] = True
+    proposal["proposal_plan"]["can_mutate"] = True
+    proposal["proposal_only_mutation_items"][0]["mutation_type"] = "application_submission"
+    proposal["proposal_only_mutation_items"][0]["can_approve"] = True
+    _write_json(proposal_path, proposal)
+
+    payload = verify_agentic_workflow_artifacts(output_dir=root)
+
+    assert payload["validation_status"] == "failed"
+    assert "proposal_only_mutation_plan_validation_failed" in payload["reason_codes"]
+    assert "proposal_only_mutation_plan_did_approve_true" in payload["reason_codes"]
+    assert "proposal_only_mutation_plan_allow_db_write_true" in payload["reason_codes"]
+    assert "proposal_only_mutation_plan_can_mutate_true" in payload["reason_codes"]
+    assert "proposal_only_mutation_plan_unsafe_item" in payload["reason_codes"]
 
 
 def test_workflow_verifier_fails_unsafe_dry_run_execution_simulation(tmp_path):

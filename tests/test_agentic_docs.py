@@ -601,6 +601,10 @@ def test_proposal_only_mutation_planner_docs_cover_phase_41a_contract():
         "No runtime/pipeline/app behavior changes.",
         "LIMITED_GO",
         "explicit/manual/read-only/non-mutating",
+        "Proposal-only planner artifacts can now be displayed in Agentic Review.",
+        "The display is read-only and non-actionable.",
+        "does not approve, reject, store approval, mutate queue state, write DB rows, submit applications, execute anything, call approval APIs, call mutation APIs, or add approval storage",
+        "Future real approval or mutation behavior requires separate reviewed phases.",
     ]:
         assert phrase in source
 
@@ -613,6 +617,7 @@ def test_proposal_only_mutation_planner_docs_cover_phase_41a_contract():
         "## CLI",
         "## Non-Goals",
         "## Relationship To Decision Gate",
+        "## Agentic Review Display",
     ]:
         assert section in source
 

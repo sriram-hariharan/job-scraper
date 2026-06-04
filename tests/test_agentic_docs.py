@@ -12,6 +12,7 @@ LIVE_RUN_AUDIT_LEDGER_SCHEMA_DOC_PATH = Path("docs/live_run_audit_ledger_schema_
 IDEMPOTENCY_LOCKING_DESIGN_DOC_PATH = Path("docs/idempotency_locking_design.md")
 DRY_RUN_EXECUTION_SIMULATOR_DOC_PATH = Path("docs/dry_run_execution_simulator.md")
 CONTROLLED_EXECUTION_DECISION_GATE_DOC_PATH = Path("docs/controlled_execution_decision_gate.md")
+PROPOSAL_ONLY_MUTATION_PLANNER_DOC_PATH = Path("docs/proposal_only_mutation_planner.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -329,7 +330,9 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "39A: operator approval UI mock/read-only only.",
         "40A: controlled execution decision gate only.",
         "docs/controlled_execution_decision_gate.md",
-        "40B+: only consider proposal-only safety scaffolding",
+        "41A: proposal-only mutation planner, still no mutation.",
+        "docs/proposal_only_mutation_planner.md",
+        "41B+: only consider additional proposal-only safety scaffolding",
         "No queue mutation.",
         "No scoring/ranking changes.",
         "docs/production_execution_contract_design.md",
@@ -526,6 +529,103 @@ def test_controlled_execution_decision_gate_covers_phase_40a_contract():
         ]
     )
     assert "docs/controlled_execution_decision_gate.md" in linked_docs
+
+
+def test_proposal_only_mutation_planner_docs_cover_phase_41a_contract():
+    assert PROPOSAL_ONLY_MUTATION_PLANNER_DOC_PATH.exists()
+    source = PROPOSAL_ONLY_MUTATION_PLANNER_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/proposal_only_mutation_planner.md",
+        "explicit/manual proposal-only mutation planner",
+        "consumes an existing dry-run simulator result artifact",
+        "does not run the simulator",
+        "does not run the read-only chain",
+        "does not run the explicit generator",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "Does not mutate production.",
+        "Does not update queue state.",
+        "Does not submit applications.",
+        "Does not write DB rows.",
+        "Does not approve, reject, or store approval.",
+        "Does not call approval APIs.",
+        "Does not call mutation APIs.",
+        "Does not add approval storage.",
+        "Does not add audit ledger storage.",
+        "Does not add lock/idempotency storage.",
+        "Does not generate tailoring or packets.",
+        "Does not change scoring/ranking.",
+        "Future live execution remains blocked.",
+        "dry_run_execution_simulation_result.json",
+        "proposal_only_mutation_plan_result.json",
+        "proposal_only_mutation_plan_report.md",
+        "application_execution_queue.csv",
+        "job_prioritization_recommendations.csv",
+        "tailoring_decision_recommendations.csv",
+        "operator_review_recommendations.csv",
+        "plan_mode=proposal_only_non_executable",
+        "can_execute_live=false",
+        "can_mutate=false",
+        "can_approve=false",
+        "requires_operator_approval=true",
+        "requires_approval_api=true",
+        "requires_approval_storage=true",
+        "requires_audit_ledger=true",
+        "requires_idempotency_key=true",
+        "requires_execution_lock=true",
+        "requires_rollback_plan=true",
+        "queue_diagnostic_status_marker",
+        "operator_note",
+        "artifact_status_marker",
+        "application_submission",
+        "queue_action_update",
+        "tailoring_generation",
+        "packet_generation",
+        "scoring_update",
+        "ranking_update",
+        "resume_rewrite",
+        "scraper_source_mutation",
+        "rag_corpus_mutation",
+        "production_record_delete",
+        "python -m src.agents.proposal_only_mutation_planner",
+        "--simulation-result",
+        "--output-dir",
+        "no default production paths",
+        "no automatic discovery",
+        "no DB requirement",
+        "No approval API/storage.",
+        "No mutation API.",
+        "No audit ledger storage.",
+        "No lock/idempotency implementation.",
+        "No runtime/pipeline/app behavior changes.",
+        "LIMITED_GO",
+        "explicit/manual/read-only/non-mutating",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Boundary",
+        "## Inputs",
+        "## Outputs",
+        "## Proposal Plan",
+        "## Proposal Items",
+        "## CLI",
+        "## Non-Goals",
+        "## Relationship To Decision Gate",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            CONTROLLED_EXECUTION_DECISION_GATE_DOC_PATH,
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/proposal_only_mutation_planner.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

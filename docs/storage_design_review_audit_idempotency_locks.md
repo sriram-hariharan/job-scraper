@@ -228,4 +228,6 @@ Recommended next phase: 45A storage schema proposal docs for audit ledger/idempo
 
 Alternative: 45A transaction boundary design doc, still no implementation.
 
+The transaction boundary design is tracked in `docs/transaction_boundary_design.md`.
+
 Do not implement migrations next unless a separate schema proposal audit passes. Do not implement approval API/storage next. Do not start live mutation next.

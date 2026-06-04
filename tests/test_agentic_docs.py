@@ -6,6 +6,7 @@ ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
 READ_ONLY_CHAIN_SMOKE_DOC_PATH = Path("docs/read_only_chain_smoke.md")
 READ_ONLY_CHAIN_OPERATOR_RUNBOOK_DOC_PATH = Path("docs/read_only_chain_operator_runbook.md")
 LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH = Path("docs/live_orchestration_readiness_gap_analysis.md")
+PRODUCTION_EXECUTION_CONTRACT_DOC_PATH = Path("docs/production_execution_contract_design.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -165,6 +166,8 @@ def test_orchestrator_readiness_docs_cover_phase_19a_contract():
         "displayed in Agentic Review diagnostics",
         "docs/live_orchestration_readiness_gap_analysis.md",
         "planning-only and does not enable live orchestration",
+        "docs/production_execution_contract_design.md",
+        "design-only and does not enable live orchestration",
     ]:
         assert phrase in source
 
@@ -309,6 +312,7 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         "40A+: only then consider controlled execution prototype, still behind explicit feature flags.",
         "No queue mutation.",
         "No scoring/ranking changes.",
+        "docs/production_execution_contract_design.md",
     ]:
         assert phrase in source
 
@@ -341,3 +345,91 @@ def test_live_orchestration_readiness_gap_analysis_covers_phase_33a_contract():
         ]
     )
     assert "docs/live_orchestration_readiness_gap_analysis.md" in linked_docs
+
+
+def test_production_execution_contract_design_covers_phase_34a_contract():
+    assert PRODUCTION_EXECUTION_CONTRACT_DOC_PATH.exists()
+    source = PRODUCTION_EXECUTION_CONTRACT_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "docs/production_execution_contract_design.md",
+        "Phase 34A is design only.",
+        "No implementation in this phase",
+        "No live execution is enabled.",
+        "`workflow_runner.py` remains dry-run only",
+        "executable_adapter_count=0",
+        "execution_request",
+        "execution_plan",
+        "mutation_proposal",
+        "approval_record",
+        "execution_attempt",
+        "execution_result",
+        "rollback_plan",
+        "audit_ledger_entry",
+        "idempotency_key",
+        "execution_lock",
+        "No mutation without an approved mutation proposal.",
+        "No application submission",
+        "rollback plan",
+        "feature flag",
+        "Queue diagnostic status update.",
+        "Operator-approved queue action update.",
+        "Artifact status marker.",
+        "Do NOT allow application submission yet.",
+        "Application submission.",
+        "Resume rewriting.",
+        "Tailoring generation.",
+        "Packet generation.",
+        "Scoring formula changes.",
+        "Ranking changes.",
+        "Scraper/source mutation.",
+        "RAG corpus mutation.",
+        "Deletion of production records.",
+        "Partial mutation",
+        "Duplicate execution",
+        "Stale artifact versions",
+        "Missing approval",
+        "Expired approval",
+        "Lock collision",
+        "Validation failure",
+        "Artifact write failure",
+        "Rollback failure",
+        "must not execute mutations directly",
+        "Mutation policy design.",
+        "Approval gate design.",
+        "Audit ledger schema.",
+        "Idempotency/locking design.",
+        "Dry-run simulator.",
+        "Read-only approval UI mock.",
+        "Feature flag policy.",
+        "Operator runbook update.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Purpose",
+        "## Current Boundary",
+        "## Future Execution Contract Entities",
+        "## Execution Request Contract",
+        "## Execution Plan Contract",
+        "## Mutation Proposal Contract",
+        "## Approval Contract",
+        "## Execution Result Contract",
+        "## Safety Invariants",
+        "## Allowed Future Mutation Types",
+        "## Forbidden Mutation Types for First Live Prototype",
+        "## Failure Modes and Rollback Requirements",
+        "## Compatibility With Current Read-Only Chain",
+        "## Future Implementation Gates",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            LIVE_ORCHESTRATION_READINESS_GAP_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/production_execution_contract_design.md" in linked_docs

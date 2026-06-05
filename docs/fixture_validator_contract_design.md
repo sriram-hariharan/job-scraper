@@ -12,6 +12,8 @@ The storage/transaction failure fixture design doc exists at `docs/storage_trans
 
 The fixture release safety checkpoint exists at `docs/storage_transaction_fixture_release_safety_checkpoint.md`.
 
+The fixture naming and reason-code taxonomy checkpoint is tracked in `docs/fixture_naming_reason_code_taxonomy_checkpoint.md`.
+
 Fixture families are proposed only. The future fixture directory is proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

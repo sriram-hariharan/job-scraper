@@ -142,4 +142,6 @@ Only docs/tests/design phases are allowed next:
 
 Recommended next phase: 51A fixture validator contract design doc, docs/tests only.
 
+The fixture validator contract design is tracked in `docs/fixture_validator_contract_design.md`.
+
 Do not add fixture files next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

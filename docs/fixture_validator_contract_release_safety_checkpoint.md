@@ -1,22 +1,20 @@
-# Fixture Validator Contract Design
+# Fixture Validator Contract Release Safety Checkpoint
 
-Doc path: `docs/fixture_validator_contract_design.md`
+Doc path: `docs/fixture_validator_contract_release_safety_checkpoint.md`
 
-Phase 51A is fixture validator contract design only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 52A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Contract Scope
+## Current Checkpoint Scope
 
-The storage/transaction failure fixture design doc exists at `docs/storage_transaction_failure_fixture_design.md`.
+The fixture validator contract design doc exists at `docs/fixture_validator_contract_design.md`.
 
-The fixture release safety checkpoint exists at `docs/storage_transaction_fixture_release_safety_checkpoint.md`.
-
-Fixture families are proposed only. The future fixture directory is proposed only:
+The fixture validator contract is proposed only. fixture validator input/output contracts are proposed only. Validator checks and reason code groups are proposed only. Fixture families remain proposed only. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
 
-No fixture validator implementation exists. No fixture files are created. No fixture directories are created. Current runtime tooling remains explicit/manual/read-only/non-mutating:
+No fixture validator code is created. No fixture files are created. Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
 - read-only chain artifact generator
 - dry-run execution simulator
@@ -25,7 +23,7 @@ No fixture validator implementation exists. No fixture files are created. No fix
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this contract design:
+Confirmed boundaries for this checkpoint:
 
 - no fixture validator code
 - no fixture files
@@ -49,10 +47,11 @@ Confirmed boundaries for this contract design:
 - no live planning hooks
 - no application submission
 
-## Fixture Validator Contract Design Decision
+## Fixture Validator Contract Release Decision
 
-- Fixture validator contract design: `PASS`
-- Fixture validator implementation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture validator contract design: `GO`
+- Fixture validator implementation: `NO_GO`
 - Fixture files: `NO_GO`
 - Fixture directory creation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
@@ -63,25 +62,22 @@ Confirmed boundaries for this contract design:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Contract Goals
+## Contract Coverage Confirmed
 
-The future fixture validator contract should:
+The fixture validator contract design confirms:
 
-- validate future fixture structure before runtime tests exist
-- fail closed on missing required fields
-- produce deterministic reason codes
-- validate safety expectations without executing fixtures
-- reject real identifiers, production paths, secrets, credentials, raw resumes, and full private documents
-- validate expected non-mutating behavior
-- keep validator output diagnostic-only
-- avoid DB writes and runtime side effects
-- keep future implementation explicit/manual only unless separately approved
+- proposed validator input contract
+- proposed validator output contract
+- required validator checks
+- proposed reason code groups
+- fixture family coverage
+- allowed safe mutation proposal fixture types
+- forbidden mutation fixture coverage
+- blockers before validator implementation
+- forbidden next-step shortcuts
+- explicit non-goals
 
-## Proposed Validator Input Contract
-
-Future validator input should accept an explicit fixture object or future fixture file path only. It must not discover production paths, live queue paths, real application URLs, raw private documents, raw resumes, secrets, or credentials.
-
-Proposed input fields:
+## Validator Input Contract Confirmed
 
 - `fixture_schema_version`
 - `fixture_family`
@@ -99,21 +95,7 @@ Proposed input fields:
 - `artifact_refs_json`
 - `payload_hash`
 
-Input safety expectations:
-
-- explicit fixture object or future fixture file path only
-- no production paths
-- no live queue paths
-- no real application URLs
-- no raw private documents
-- no raw resumes
-- no secrets or credentials
-
-## Proposed Validator Output Contract
-
-Future validator output should be diagnostic-only and non-mutating.
-
-Proposed output fields:
+## Validator Output Contract Confirmed
 
 - `validator_version`
 - `validation_status`
@@ -136,9 +118,7 @@ Proposed output fields:
 - `did_mutate_production=false`
 - `did_write_db=false`
 
-## Required Validator Checks
-
-Future validator checks should include:
+## Validator Checks Confirmed
 
 - schema version present
 - fixture family present
@@ -162,9 +142,7 @@ Future validator checks should include:
 - forbidden mutation fixtures are expected blocked
 - allowed mutation proposal fixture types are still non-executable and blocked by default
 
-## Proposed Validator Reason Code Groups
-
-Future validator reason code groups should include:
+## Reason Code Groups Confirmed
 
 - `missing_required_field`
 - `unknown_fixture_family`
@@ -186,9 +164,7 @@ Future validator reason code groups should include:
 - `fixture_execution_forbidden`
 - `storage_write_forbidden`
 
-## Fixture Family Coverage
-
-This is design-only coverage. No fixture files are implemented.
+## Fixture Families Confirmed
 
 - `execution_request_fixtures`
 - `execution_plan_fixtures`
@@ -206,38 +182,12 @@ This is design-only coverage. No fixture files are implemented.
 - `storage_unavailable_fixtures`
 - `security_privacy_redaction_fixtures`
 
-## Allowed Safe Mutation Proposal Fixture Types
-
-Allowed safe mutation proposal fixture types remain:
-
-- `queue_diagnostic_status_marker`
-- `operator_note`
-- `artifact_status_marker`
-
-They are still non-executable and blocked by default until a separately approved implementation phase.
-
-## Forbidden Mutation Fixture Coverage
-
-Forbidden mutation fixture coverage must include:
-
-- `application_submission`
-- `queue_action_update`
-- `tailoring_generation`
-- `packet_generation`
-- `scoring_update`
-- `ranking_update`
-- `resume_rewrite`
-- `scraper_source_mutation`
-- `rag_corpus_mutation`
-- `production_record_delete`
-
-These must validate as blocked/rejected and must never execute.
+These are not implemented fixture files. They are proposed fixture family labels for future review only.
 
 ## Required Blockers Before Validator Implementation
 
-Required blockers before validator implementation:
-
-- fixture validator contract design final audit passed
+- fixture validator contract final audit passed
+- fixture validator contract release checkpoint passed
 - fixture design release checkpoint passed
 - storage schema proposal release checkpoint passed
 - failure-mode test plan approved
@@ -268,6 +218,14 @@ Required blockers before validator implementation:
 - do not start application submission automation next
 - do not enable workflow_runner live execution next
 
+## Allowed Next Phases
+
+Only docs/tests/design phases are allowed next:
+
+- 53A: fixture implementation plan doc, no fixture files
+- 53A: fixture naming and reason-code taxonomy checkpoint, docs/tests only
+- 53A: fixture validator implementation plan doc, docs/tests only
+
 ## Explicit Non-Goals
 
 - no validator implementation in this phase
@@ -286,10 +244,6 @@ Required blockers before validator implementation:
 
 ## Recommended Next Phase
 
-Recommended next phase: 51B fixture validator contract design final audit and merge gate.
+Recommended next phase: 53A fixture naming and reason-code taxonomy checkpoint, docs/tests only.
 
-After 51B: 52A fixture validator contract release safety checkpoint, docs/tests only.
-
-The fixture validator contract release safety checkpoint is tracked in `docs/fixture_validator_contract_release_safety_checkpoint.md`.
-
-Do not add fixture files next. Do not add runtime tests next. Do not implement fixture validators next without a separate approved phase. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.
+Do not implement fixture validators next. Do not add fixture files next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

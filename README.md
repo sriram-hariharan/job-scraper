@@ -596,6 +596,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Fixture validator contract design](docs/fixture_validator_contract_design.md)
 - [Fixture validator contract release safety checkpoint](docs/fixture_validator_contract_release_safety_checkpoint.md)
 - [Fixture naming and reason-code taxonomy checkpoint](docs/fixture_naming_reason_code_taxonomy_checkpoint.md)
+- [Fixture naming and reason-code taxonomy release safety checkpoint](docs/fixture_naming_reason_code_taxonomy_release_safety_checkpoint.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

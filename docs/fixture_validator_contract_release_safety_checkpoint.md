@@ -12,6 +12,8 @@ The fixture validator contract design doc exists at `docs/fixture_validator_cont
 
 The fixture naming and reason-code taxonomy checkpoint is tracked in `docs/fixture_naming_reason_code_taxonomy_checkpoint.md`.
 
+The fixture naming and reason-code taxonomy release safety checkpoint is tracked in `docs/fixture_naming_reason_code_taxonomy_release_safety_checkpoint.md`.
+
 The fixture validator contract is proposed only. fixture validator input/output contracts are proposed only. Validator checks and reason code groups are proposed only. Fixture families remain proposed only. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

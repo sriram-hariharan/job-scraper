@@ -591,6 +591,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Failure-mode test plan](docs/failure_mode_test_plan.md)
 - [Storage schema proposal](docs/storage_schema_proposal.md)
 - [Storage schema release safety checkpoint](docs/storage_schema_release_safety_checkpoint.md)
+- [Storage transaction failure fixture design](docs/storage_transaction_failure_fixture_design.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

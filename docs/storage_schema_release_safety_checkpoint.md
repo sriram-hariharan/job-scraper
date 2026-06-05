@@ -138,4 +138,6 @@ Recommended next phase: 49A test-fixture design doc for future storage/transacti
 
 Alternative: 49A storage API contract design doc, docs/tests only.
 
+The storage/transaction failure fixture design is tracked in `docs/storage_transaction_failure_fixture_design.md`.
+
 Do not implement migrations next. Do not implement storage APIs next. Do not start live mutation next.

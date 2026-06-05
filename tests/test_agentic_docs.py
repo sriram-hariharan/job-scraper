@@ -18,6 +18,7 @@ STORAGE_DESIGN_REVIEW_DOC_PATH = Path("docs/storage_design_review_audit_idempote
 TRANSACTION_BOUNDARY_DESIGN_DOC_PATH = Path("docs/transaction_boundary_design.md")
 FAILURE_MODE_TEST_PLAN_DOC_PATH = Path("docs/failure_mode_test_plan.md")
 STORAGE_SCHEMA_PROPOSAL_DOC_PATH = Path("docs/storage_schema_proposal.md")
+STORAGE_SCHEMA_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path("docs/storage_schema_release_safety_checkpoint.md")
 PORTFOLIO_DOC_PATHS = [
     Path("docs/portfolio_overview.md"),
     Path("docs/architecture_summary.md"),
@@ -1453,6 +1454,138 @@ def test_storage_schema_proposal_docs_cover_phase_47a_contract():
         ]
     )
     assert "docs/storage_schema_proposal.md" in linked_docs
+
+
+def test_storage_schema_release_safety_checkpoint_docs_cover_phase_48a_contract():
+    assert STORAGE_SCHEMA_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    source = STORAGE_SCHEMA_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "release safety checkpoint only",
+        "There is no implementation in this phase.",
+        "No DB schema file is added.",
+        "No migration is added.",
+        "No SQL DDL is added.",
+        "No storage API is added.",
+        "No DB writes are added.",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "No approval API/storage is enabled.",
+        "No queue updates are enabled.",
+        "No application submission is enabled.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "storage schema proposal doc exists",
+        "logical/design-only",
+        "storage design review",
+        "transaction boundary design",
+        "failure-mode test plan",
+        "controlled execution decision gate",
+        "mutation policy approval gate design",
+        "audit ledger schema design",
+        "idempotency/locking design",
+        "explicit/manual/read-only/non-mutating",
+        "no DB schema files",
+        "no migrations",
+        "no SQL DDL",
+        "no storage modules",
+        "no storage API",
+        "no DB writes",
+        "no approval API/storage",
+        "no mutation API/storage",
+        "no audit ledger storage",
+        "no idempotency store",
+        "no execution lock store",
+        "no transaction implementation",
+        "no runtime failure-mode implementation",
+        "no scheduler/background execution",
+        "no workflow_runner execution",
+        "no live planning hooks",
+        "no application submission",
+        "Release checkpoint: `PASS`",
+        "Storage schema proposal: `GO`",
+        "DB schema implementation: `NO_GO`",
+        "DB migrations: `NO_GO`",
+        "SQL DDL files: `NO_GO`",
+        "Storage API implementation: `NO_GO`",
+        "Runtime DB writes: `NO_GO`",
+        "Approval API/storage: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Live execution: `NO_GO`",
+        "agentic_execution_requests",
+        "agentic_execution_plans",
+        "agentic_mutation_proposals",
+        "agentic_approval_records",
+        "agentic_idempotency_records",
+        "agentic_execution_locks",
+        "agentic_audit_ledger_entries",
+        "agentic_rollback_plans",
+        "agentic_execution_attempts",
+        "agentic_validation_results",
+        "not implemented tables/classes/modules",
+        "schema proposal final audit passed",
+        "failure-mode test plan approved",
+        "transaction boundary design approved",
+        "storage design review approved",
+        "test DB migration rehearsal plan created",
+        "migration rollback plan created",
+        "no-secret leakage test plan created",
+        "feature flag strategy approved",
+        "production write block verified",
+        "operator runbook updated",
+        "storage API design review completed",
+        "security/privacy review completed",
+        "do not add Alembic/migration files next",
+        "do not add SQL DDL next",
+        "do not add storage modules next",
+        "do not add approval APIs next",
+        "do not add mutation APIs next",
+        "do not add DB writes next",
+        "do not add live queue updates next",
+        "do not start application submission automation next",
+        "do not enable workflow_runner live execution next",
+        "49A: test-fixture design doc for future storage/transaction failure modes, no runtime tests",
+        "49A: storage API contract design doc, no implementation",
+        "49A: migration rehearsal plan doc, no migration",
+        "no SQL DDL in this phase",
+        "no Alembic/migration files",
+        "no table creation",
+        "no storage module",
+        "no API routes",
+        "no approval actions",
+        "no mutation execution",
+        "no live queue updates",
+        "no application submission",
+        "Recommended next phase: 49A test-fixture design doc for future storage/transaction failure modes, docs/tests only.",
+        "49A storage API contract design doc, docs/tests only.",
+        "Do not implement migrations next.",
+        "Do not implement storage APIs next.",
+        "Do not start live mutation next.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Checkpoint Scope",
+        "## Confirmed Safe Boundaries",
+        "## Storage Schema Proposal Release Decision",
+        "## Proposed Logical Entities Confirmed",
+        "## Required Blockers Before Any Migration",
+        "## Forbidden Next-Step Shortcuts",
+        "## Allowed Next Phases",
+        "## Explicit Non-Goals",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            STORAGE_SCHEMA_PROPOSAL_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/storage_schema_release_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

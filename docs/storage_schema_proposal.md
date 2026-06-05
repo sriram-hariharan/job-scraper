@@ -407,4 +407,6 @@ Recommended next phase: 48A storage schema proposal final audit.
 
 Alternative: 48A test-fixture design doc for future storage/transaction failure modes.
 
+The storage schema release safety checkpoint is tracked in `docs/storage_schema_release_safety_checkpoint.md`.
+
 Do not implement migrations next unless this schema proposal has passed a separate final audit. Do not implement storage APIs next. Do not start live mutation next.

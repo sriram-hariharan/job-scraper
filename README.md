@@ -588,6 +588,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Proposal planner release safety checkpoint](docs/proposal_planner_release_safety_checkpoint.md)
 - [Storage design review for audit ledger, idempotency, and locks](docs/storage_design_review_audit_idempotency_locks.md)
 - [Transaction boundary design](docs/transaction_boundary_design.md)
+- [Failure-mode test plan](docs/failure_mode_test_plan.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

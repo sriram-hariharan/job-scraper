@@ -10,6 +10,8 @@ Phase 52A is a release safety checkpoint only. There is no implementation in thi
 
 The fixture validator contract design doc exists at `docs/fixture_validator_contract_design.md`.
 
+The fixture naming and reason-code taxonomy checkpoint is tracked in `docs/fixture_naming_reason_code_taxonomy_checkpoint.md`.
+
 The fixture validator contract is proposed only. fixture validator input/output contracts are proposed only. Validator checks and reason code groups are proposed only. Fixture families remain proposed only. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

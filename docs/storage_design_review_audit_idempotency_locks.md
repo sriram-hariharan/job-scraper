@@ -230,4 +230,6 @@ Alternative: 45A transaction boundary design doc, still no implementation.
 
 The transaction boundary design is tracked in `docs/transaction_boundary_design.md`.
 
+The storage schema proposal is tracked in `docs/storage_schema_proposal.md`.
+
 Do not implement migrations next unless a separate schema proposal audit passes. Do not implement approval API/storage next. Do not start live mutation next.

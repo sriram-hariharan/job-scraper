@@ -216,4 +216,6 @@ Recommended next phase: 47A storage schema proposal docs for audit ledger/idempo
 
 Alternative: 47A failure-mode fixture design doc, still no runtime tests.
 
+The storage schema proposal is tracked in `docs/storage_schema_proposal.md`.
+
 Do not implement migrations next unless a separate schema proposal audit passes. Do not implement failure-mode runtime tests against production paths. Do not implement transaction code next. Do not implement approval API/storage next. Do not start live mutation next.

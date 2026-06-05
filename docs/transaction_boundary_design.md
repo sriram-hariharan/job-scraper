@@ -246,4 +246,6 @@ Alternative: 46A failure-mode test plan doc, still no implementation.
 
 The failure-mode test plan is tracked in `docs/failure_mode_test_plan.md`.
 
+The storage schema proposal is tracked in `docs/storage_schema_proposal.md`.
+
 Do not implement migrations next unless a separate schema proposal audit passes. Do not implement transaction code next. Do not implement approval API/storage next. Do not start live mutation next.

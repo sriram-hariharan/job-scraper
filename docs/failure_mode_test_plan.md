@@ -218,4 +218,6 @@ Alternative: 47A failure-mode fixture design doc, still no runtime tests.
 
 The storage schema proposal is tracked in `docs/storage_schema_proposal.md`.
 
+The storage/transaction failure fixture design is tracked in `docs/storage_transaction_failure_fixture_design.md`.
+
 Do not implement migrations next unless a separate schema proposal audit passes. Do not implement failure-mode runtime tests against production paths. Do not implement transaction code next. Do not implement approval API/storage next. Do not start live mutation next.

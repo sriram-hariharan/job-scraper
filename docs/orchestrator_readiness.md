@@ -68,6 +68,8 @@ Phase 53A fixture naming and reason-code taxonomy checkpoint is tracked in `docs
 
 Phase 54A fixture naming and reason-code taxonomy release safety checkpoint is tracked in `docs/fixture_naming_reason_code_taxonomy_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the naming and reason-code taxonomy remains design-only before any validator code, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 55A fixture implementation plan is tracked in `docs/fixture_implementation_plan.md`. That implementation plan is docs/tests only and does not create fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

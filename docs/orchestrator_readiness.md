@@ -62,6 +62,8 @@ Phase 50A storage/transaction fixture release safety checkpoint is tracked in `d
 
 Phase 51A fixture validator contract design is tracked in `docs/fixture_validator_contract_design.md`. That document is docs/tests only and defines a future diagnostic validator contract without adding validator code, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 52A fixture validator contract release safety checkpoint is tracked in `docs/fixture_validator_contract_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the validator contract remains design-only before any validator code, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

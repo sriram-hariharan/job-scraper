@@ -58,6 +58,8 @@ Phase 48A storage schema release safety checkpoint is tracked in `docs/storage_s
 
 Phase 49A storage/transaction failure fixture design is tracked in `docs/storage_transaction_failure_fixture_design.md`. That document is docs/tests only and designs future synthetic fixtures without adding fixture files, runtime failure-mode tests, DB schemas, migrations, SQL DDL, storage APIs, DB writes, transaction code, mutation execution, or live execution.
 
+Phase 50A storage/transaction fixture release safety checkpoint is tracked in `docs/storage_transaction_fixture_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture design remains design-only before any fixture files, fixture directories, runtime failure-mode tests, storage integration tests, migrations, storage APIs, DB writes, transaction code, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

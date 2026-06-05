@@ -512,4 +512,6 @@ Recommended next phase: 50A fixture design final audit/release checkpoint, docs/
 
 Alternative: 50A fixture validator contract design doc, docs/tests only.
 
+The storage/transaction fixture release safety checkpoint is tracked in `docs/storage_transaction_fixture_release_safety_checkpoint.md`.
+
 Do not add fixture files next unless fixture design passes final audit. Do not add runtime tests next unless a separate fixture implementation phase is approved. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

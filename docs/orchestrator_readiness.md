@@ -52,6 +52,8 @@ Phase 45A transaction boundary design is tracked in `docs/transaction_boundary_d
 
 Phase 46A failure-mode test planning is tracked in `docs/failure_mode_test_plan.md`. That plan is docs/tests only and does not add runtime failure-mode tests, transaction code, DB schemas, migrations, storage APIs, DB writes, approval storage, audit ledger storage, idempotency storage, execution lock storage, or live mutation.
 
+Phase 47A storage schema proposal is tracked in `docs/storage_schema_proposal.md`. That proposal is docs/tests only and does not add DB schema files, migrations, SQL DDL, storage APIs, DB writes, approval storage, audit ledger storage, idempotency storage, execution lock storage, transaction code, runtime failure-mode tests, or live mutation.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

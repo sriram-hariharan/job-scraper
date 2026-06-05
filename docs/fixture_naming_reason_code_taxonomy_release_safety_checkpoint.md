@@ -10,6 +10,8 @@ Phase 54A is a release safety checkpoint only. There is no implementation in thi
 
 The fixture naming and reason-code taxonomy checkpoint exists at `docs/fixture_naming_reason_code_taxonomy_checkpoint.md`.
 
+The fixture implementation plan is tracked in `docs/fixture_implementation_plan.md`.
+
 The fixture naming convention is proposed only. The validator reason-code taxonomy is proposed only. Fixture filename examples are examples only. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

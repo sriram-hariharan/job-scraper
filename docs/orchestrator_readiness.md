@@ -54,6 +54,8 @@ Phase 46A failure-mode test planning is tracked in `docs/failure_mode_test_plan.
 
 Phase 47A storage schema proposal is tracked in `docs/storage_schema_proposal.md`. That proposal is docs/tests only and does not add DB schema files, migrations, SQL DDL, storage APIs, DB writes, approval storage, audit ledger storage, idempotency storage, execution lock storage, transaction code, runtime failure-mode tests, or live mutation.
 
+Phase 48A storage schema release safety checkpoint is tracked in `docs/storage_schema_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the storage schema proposal remains design-only before any future migration, storage API, DB write, approval storage, mutation API, transaction code, or live mutation work.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

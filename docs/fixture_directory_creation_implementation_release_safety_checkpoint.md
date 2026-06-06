@@ -135,4 +135,6 @@ Recommended next phase: 72B fixture directory creation implementation release sa
 
 After 72B, use a decision point: either start fixture file implementation with explicit approval, or add one more docs/tests-only fixture file implementation authorization packet.
 
+The first synthetic fixture payload implementation is tracked in `docs/first_synthetic_fixture_payload_implementation.md`.
+
 Do not add fixture payload files next unless explicitly approved. Do not implement fixture validators next unless explicitly approved. Do not add validator tests next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

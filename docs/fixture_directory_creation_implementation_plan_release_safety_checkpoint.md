@@ -184,4 +184,6 @@ Recommended next phase: 61A fixture file implementation plan, no fixture files.
 
 This next phase should remain docs/tests only.
 
+The 61A fixture file implementation plan is tracked in `docs/fixture_file_implementation_plan.md`.
+
 Do not create fixture directories next. Do not add fixture files next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

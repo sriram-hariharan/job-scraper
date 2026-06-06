@@ -111,4 +111,6 @@ Recommended next phase: 71B fixture directory creation implementation final audi
 
 After 71B: 72A fixture directory creation implementation release safety checkpoint, docs/tests only.
 
+The 72A release safety checkpoint is tracked in `docs/fixture_directory_creation_implementation_release_safety_checkpoint.md`.
+
 Do not add fixture payload files next. Do not implement fixture validators next. Do not add validator tests next. Do not add runtime tests next.

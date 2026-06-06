@@ -164,4 +164,6 @@ Recommended next phase: 59A fixture directory creation implementation plan, no d
 
 This next phase should remain docs/tests only.
 
+The later fixture directory creation implementation plan release safety checkpoint is tracked in `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`.
+
 Do not create fixture directories next. Do not add fixture files next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

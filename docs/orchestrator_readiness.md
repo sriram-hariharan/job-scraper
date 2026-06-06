@@ -78,6 +78,8 @@ Phase 58A fixture directory skeleton release safety checkpoint is tracked in `do
 
 Phase 59A fixture directory creation implementation plan is tracked in `docs/fixture_directory_creation_implementation_plan.md`. That implementation plan is docs/tests only and does not create fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 60A fixture directory creation implementation plan release safety checkpoint is tracked in `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the directory creation implementation plan remains planning-only before any fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

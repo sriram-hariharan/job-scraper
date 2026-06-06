@@ -10,6 +10,8 @@ Phase 58A is a release safety checkpoint only. There is no implementation in thi
 
 The fixture directory skeleton design exists at `docs/fixture_directory_skeleton_design.md`.
 
+The fixture directory creation implementation plan is tracked in `docs/fixture_directory_creation_implementation_plan.md`.
+
 The fixture directory skeleton remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

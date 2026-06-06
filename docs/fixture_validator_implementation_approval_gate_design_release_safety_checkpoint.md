@@ -1,18 +1,16 @@
-# Fixture Validator Implementation Approval Gate Design
+# Fixture Validator Implementation Approval Gate Design Release Safety Checkpoint
 
-Doc path: `docs/fixture_validator_implementation_approval_gate_design.md`
+Doc path: `docs/fixture_validator_implementation_approval_gate_design_release_safety_checkpoint.md`
 
-Phase 67A is a fixture validator implementation approval gate design only. There is no implementation in this phase. No fixture validator code is added. No fixture validator module is added. No fixture validator CLI is added. No fixture validator tests are added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 68A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture validator module is added. No fixture validator CLI is added. No fixture validator tests are added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Approval Gate Scope
+## Current Checkpoint Scope
 
-The fixture validator implementation design refinement exists at `docs/fixture_validator_implementation_design_refinement.md`.
+The fixture validator implementation approval gate design exists at `docs/fixture_validator_implementation_approval_gate_design.md`.
 
-The fixture validator implementation design refinement release checkpoint exists at `docs/fixture_validator_implementation_design_refinement_release_safety_checkpoint.md`.
-
-The fixture validator implementation remains future work. The approval gate remains design-only. The future validator module remains proposed only. The future validator CLI remains proposed only and separately approvable. The future validator tests remain proposed only. Future fixture files remain proposed only. The future fixture directory remains proposed only:
+The fixture validator implementation approval remains future work. The approval gate remains proposed only. The future validator module remains proposed only. The future validator CLI remains proposed only and separately approvable. The future validator tests remain proposed only. Future fixture files remain proposed only. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
 
@@ -27,7 +25,7 @@ Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this approval gate design:
+Confirmed boundaries for this release safety checkpoint:
 
 - no fixture validator code
 - no fixture validator module
@@ -54,15 +52,16 @@ Confirmed boundaries for this approval gate design:
 - no live planning hooks
 - no application submission
 
-## Fixture Validator Approval Gate Design Decision
+## Fixture Validator Approval Gate Design Release Decision
 
-- Fixture validator implementation approval gate design: `PASS`
-- Fixture validator implementation: `NOT_YET`
-- Fixture validator module: `NOT_YET`
-- Fixture validator CLI: `NOT_YET`
-- Fixture validator tests: `NOT_YET`
-- Fixture file implementation: `NOT_YET`
-- Fixture directory creation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture validator implementation approval gate design: `GO`
+- Fixture validator implementation: `NO_GO`
+- Fixture validator module: `NO_GO`
+- Fixture validator CLI: `NO_GO`
+- Fixture validator tests: `NO_GO`
+- Fixture file implementation: `NO_GO`
+- Fixture directory creation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
 - Storage integration tests: `NO_GO`
 - Transaction integration tests: `NO_GO`
@@ -71,9 +70,9 @@ Confirmed boundaries for this approval gate design:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Future Approval Gate Inputs
+## Future Approval Gate Inputs Confirmed
 
-Future-only approval inputs required before any fixture validator implementation:
+Future-only approval inputs remain required before any fixture validator implementation:
 
 - implementation phase name
 - exact branch name
@@ -92,10 +91,11 @@ Future-only approval inputs required before any fixture validator implementation
 - user approval statement
 - merge readiness criteria
 
-## Future Approval Gate Prerequisites
+## Future Approval Gate Prerequisites Confirmed
 
-Future prerequisites before any validator implementation:
+Prerequisites before any validator implementation:
 
+- fixture validator implementation approval gate design release checkpoint passed
 - fixture validator implementation approval gate design final audit passed
 - fixture validator implementation design refinement release checkpoint passed
 - fixture validator implementation design refinement final audit passed
@@ -114,9 +114,9 @@ Future prerequisites before any validator implementation:
 - fixture validator implementation phase separately approved
 - runtime test scope separately approved before runtime tests
 
-## Future Approval Gate Denied States
+## Future Approval Gate Denied States Confirmed
 
-The future gate must deny implementation if:
+The gate must deny implementation if:
 
 - branch is not the expected implementation branch
 - working tree is dirty before starting
@@ -133,9 +133,9 @@ The future gate must deny implementation if:
 - live planning hooks call generator, simulator, planner, validator, or workflow_runner
 - any production path, live queue path, DB write path, or application submission path is introduced
 
-## Future Approval Gate Command Policy
+## Future Approval Gate Command Policy Confirmed
 
-Future command policy only:
+Future command policy remains:
 
 - approval gate must be explicit and reviewable
 - no implicit approval from passing tests
@@ -151,7 +151,7 @@ Future command policy only:
 - no queue mutation
 - no application submission
 
-## Future Approval Gate Output
+## Future Approval Gate Output Confirmed
 
 Future gate report must include:
 
@@ -171,8 +171,9 @@ Future gate report must include:
 - merge readiness
 - explicit blocked reasons if not ready
 
-## Approval Gate Blockers
+## Required Blockers Before Validator Implementation
 
+- fixture validator implementation approval gate design release checkpoint passed
 - fixture validator implementation approval gate design final audit passed
 - fixture validator implementation design refinement release checkpoint passed
 - fixture validator implementation design refinement final audit passed
@@ -231,10 +232,8 @@ Future gate report must include:
 
 ## Recommended Next Phase
 
-Recommended next phase: 67B fixture validator implementation approval gate design final audit and merge gate.
+Recommended next phase: 69A fixture validator implementation readiness matrix, no validator code.
 
-After 67B: 68A fixture validator implementation approval gate design release safety checkpoint, docs/tests only.
-
-The 68A fixture validator implementation approval gate design release safety checkpoint is tracked in `docs/fixture_validator_implementation_approval_gate_design_release_safety_checkpoint.md`.
+This next phase should remain docs/tests only.
 
 Do not implement fixture validators next. Do not add fixture validator tests next. Do not add fixture files next. Do not create fixture directories next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

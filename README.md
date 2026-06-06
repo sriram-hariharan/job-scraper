@@ -610,6 +610,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)
 - [Fixture validator implementation design refinement release safety checkpoint](docs/fixture_validator_implementation_design_refinement_release_safety_checkpoint.md)
 - [Fixture validator implementation approval gate design](docs/fixture_validator_implementation_approval_gate_design.md)
+- [Fixture validator implementation approval gate design release safety checkpoint](docs/fixture_validator_implementation_approval_gate_design_release_safety_checkpoint.md)
 - [Agentic platform runbook](docs/agentic_platform.md)
 
 These docs distinguish implemented features from future roadmap items and document the dry-run, diagnostic, and no production decision mutation guarantees.

@@ -1,22 +1,22 @@
-# Fixture File Implementation Plan
+# Fixture File Implementation Plan Release Safety Checkpoint
 
-Doc path: `docs/fixture_file_implementation_plan.md`
+Doc path: `docs/fixture_file_implementation_plan_release_safety_checkpoint.md`
 
-Phase 61A is a fixture file implementation plan only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 62A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Implementation-Plan Scope
+## Current Checkpoint Scope
 
-The fixture directory creation implementation plan exists at `docs/fixture_directory_creation_implementation_plan.md`.
+The fixture file implementation plan exists at `docs/fixture_file_implementation_plan.md`.
 
-The fixture directory creation implementation plan release checkpoint exists at `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`.
-
-Future fixture files remain future work. The future fixture directory remains proposed only:
+Fixture file implementation remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
 
-No fixture directories are created. No fixture files are created. No fixture validator implementation exists. Current runtime tooling remains explicit/manual/read-only/non-mutating:
+Future fixture files remain proposed only. Future fixture categories remain proposed only. No fixture validator implementation exists. No fixture files are created. No fixture directories are created.
+
+Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
 - read-only chain artifact generator
 - dry-run execution simulator
@@ -25,7 +25,7 @@ No fixture directories are created. No fixture files are created. No fixture val
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this implementation plan:
+Confirmed boundaries for this release safety checkpoint:
 
 - no fixture validator code
 - no fixture files
@@ -49,12 +49,13 @@ Confirmed boundaries for this implementation plan:
 - no live planning hooks
 - no application submission
 
-## Fixture File Implementation Plan Decision
+## Fixture File Implementation Plan Release Decision
 
-- Fixture file implementation plan: `PASS`
-- Fixture file implementation: `NOT_YET`
-- Fixture directory creation: `NOT_YET`
-- Fixture validator implementation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture file implementation plan: `GO`
+- Fixture file implementation: `NO_GO`
+- Fixture directory creation: `NO_GO`
+- Fixture validator implementation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
 - Storage integration tests: `NO_GO`
 - Transaction integration tests: `NO_GO`
@@ -63,9 +64,9 @@ Confirmed boundaries for this implementation plan:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Future Fixture File Implementation Sequence
+## Future Fixture File Implementation Sequence Confirmed
 
-Future fixture file implementation should proceed only in separately approved phases:
+The future fixture file implementation sequence remains future-only:
 
 1. confirm fixture directory creation phase is approved and complete
 2. add fixture README before any JSON fixture files
@@ -79,7 +80,7 @@ Future fixture file implementation should proceed only in separately approved ph
 
 None of these steps happen in this phase.
 
-## Future Fixture File Categories
+## Future Fixture File Categories Confirmed
 
 Future-only fixture categories:
 
@@ -99,7 +100,7 @@ Future-only fixture categories:
 
 No fixture file is created in this phase.
 
-## Future Fixture File Admission Checklist
+## Fixture File Admission Checklist Confirmed
 
 Before any fixture file is added, require:
 
@@ -125,7 +126,7 @@ Before any fixture file is added, require:
 - payload_hash deterministic or explicitly omitted until validator phase
 - artifact_refs_json synthetic only
 
-## Future Fixture File Command Policy
+## Fixture File Command Policy Confirmed
 
 Future policy only:
 
@@ -143,7 +144,7 @@ Future policy only:
 - no scripts that auto-populate fixtures
 - no runtime test invocation from fixture file creation
 
-## Proposed Future Fixture Filename Examples
+## Proposed Future Fixture Filename Examples Confirmed
 
 Examples only; these files are not created in this phase:
 
@@ -164,8 +165,9 @@ Examples only; these files are not created in this phase:
 - `secret_leakage_payload_redaction_case.json`
 - `raw_resume_payload_redaction_case.json`
 
-## Fixture File Implementation Blockers
+## Required Blockers Before Fixture Files
 
+- fixture file implementation plan release checkpoint passed
 - fixture file implementation plan final audit passed
 - fixture directory creation implementation plan release checkpoint passed
 - fixture directory skeleton release checkpoint passed
@@ -215,10 +217,8 @@ Examples only; these files are not created in this phase:
 
 ## Recommended Next Phase
 
-Recommended next phase: 61B fixture file implementation plan final audit and merge gate.
+Recommended next phase: 63A fixture validator implementation plan, no validator code.
 
-After 61B: 62A fixture file implementation plan release safety checkpoint, docs/tests only.
-
-The 62A release safety checkpoint is tracked in `docs/fixture_file_implementation_plan_release_safety_checkpoint.md`.
+This next phase should remain docs/tests only.
 
 Do not add fixture files next. Do not create fixture directories next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

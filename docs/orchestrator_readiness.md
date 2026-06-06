@@ -84,6 +84,8 @@ Phase 61A fixture file implementation plan is tracked in `docs/fixture_file_impl
 
 Phase 62A fixture file implementation plan release safety checkpoint is tracked in `docs/fixture_file_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture file implementation plan remains planning-only before any fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 63A fixture validator implementation plan is tracked in `docs/fixture_validator_implementation_plan.md`. That implementation plan is docs/tests only and does not add fixture validator code, fixture validator modules, fixture validator CLIs, fixture validator tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -80,6 +80,8 @@ Phase 59A fixture directory creation implementation plan is tracked in `docs/fix
 
 Phase 60A fixture directory creation implementation plan release safety checkpoint is tracked in `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the directory creation implementation plan remains planning-only before any fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 71A fixture directory creation implementation is tracked in `docs/fixture_directory_creation_implementation.md`. That implementation creates only `tests/fixtures/agentic_storage_transaction_failure_modes/.gitkeep`; it adds no fixture payload files, fixture validators, fixture validator tests, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, queue updates, application submission, or live execution.
+
 Phase 61A fixture file implementation plan is tracked in `docs/fixture_file_implementation_plan.md`. That implementation plan is docs/tests only and does not create fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
 Phase 62A fixture file implementation plan release safety checkpoint is tracked in `docs/fixture_file_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture file implementation plan remains planning-only before any fixture files, fixture directories, fixture validators, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.

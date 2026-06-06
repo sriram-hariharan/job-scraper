@@ -12,6 +12,8 @@ The fixture implementation plan exists at `docs/fixture_implementation_plan.md`.
 
 The fixture directory skeleton design is tracked in `docs/fixture_directory_skeleton_design.md`.
 
+The fixture directory skeleton release safety checkpoint is tracked in `docs/fixture_directory_skeleton_release_safety_checkpoint.md`.
+
 Fixture implementation remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

@@ -1,22 +1,20 @@
-# Fixture Directory Skeleton Design
+# Fixture Directory Skeleton Release Safety Checkpoint
 
-Doc path: `docs/fixture_directory_skeleton_design.md`
+Doc path: `docs/fixture_directory_skeleton_release_safety_checkpoint.md`
 
-Phase 57A is a fixture directory skeleton design only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 58A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Skeleton-Design Scope
+## Current Checkpoint Scope
 
-The fixture implementation plan exists at `docs/fixture_implementation_plan.md`.
-
-The fixture implementation plan release checkpoint exists at `docs/fixture_implementation_plan_release_safety_checkpoint.md`.
-
-The fixture directory skeleton release safety checkpoint is tracked in `docs/fixture_directory_skeleton_release_safety_checkpoint.md`.
+The fixture directory skeleton design exists at `docs/fixture_directory_skeleton_design.md`.
 
 The fixture directory skeleton remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
+
+The future fixture README remains proposed only. The future fixture subdirectories remain proposed only.
 
 No fixture validator implementation exists. No fixture files are created. No fixture directories are created. Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
@@ -27,7 +25,7 @@ No fixture validator implementation exists. No fixture files are created. No fix
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this skeleton design:
+Confirmed boundaries for this release checkpoint:
 
 - no fixture validator code
 - no fixture files
@@ -51,12 +49,13 @@ Confirmed boundaries for this skeleton design:
 - no live planning hooks
 - no application submission
 
-## Fixture Directory Skeleton Design Decision
+## Fixture Directory Skeleton Release Decision
 
-- Fixture directory skeleton design: `PASS`
-- Fixture directory creation: `NOT_YET`
-- Fixture file implementation: `NOT_YET`
-- Fixture validator implementation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture directory skeleton design: `GO`
+- Fixture directory creation: `NO_GO`
+- Fixture file implementation: `NO_GO`
+- Fixture validator implementation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
 - Storage integration tests: `NO_GO`
 - Transaction integration tests: `NO_GO`
@@ -65,9 +64,9 @@ Confirmed boundaries for this skeleton design:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Proposed Future Directory Skeleton
+## Future Directory Skeleton Confirmed
 
-Future layout only:
+Future-only layout:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
 - `tests/fixtures/agentic_storage_transaction_failure_modes/README.md`
@@ -82,7 +81,7 @@ Future layout only:
 
 No directory or file is created in this phase.
 
-## Directory Ownership And Naming Rules
+## Directory Ownership And Naming Rules Confirmed
 
 - directory names must be lowercase snake_case
 - directory names must match approved fixture families
@@ -93,7 +92,7 @@ No directory or file is created in this phase.
 - directory names must not imply DB writes
 - new fixture family directories require docs/tests update before creation
 
-## Future Fixture README Requirements
+## Future Fixture README Requirements Confirmed
 
 The future fixture README should document:
 
@@ -110,8 +109,9 @@ The future fixture README should document:
 - validator expectations
 - non-execution guarantee
 
-## Skeleton Creation Blockers
+## Required Blockers Before Directory Creation
 
+- fixture directory skeleton release checkpoint passed
 - fixture directory skeleton design final audit passed
 - fixture implementation plan release checkpoint passed
 - fixture naming and reason-code taxonomy release checkpoint passed
@@ -158,8 +158,8 @@ The future fixture README should document:
 
 ## Recommended Next Phase
 
-Recommended next phase: 57B fixture directory skeleton design final audit and merge gate.
+Recommended next phase: 59A fixture directory creation implementation plan, no directory creation.
 
-After 57B: 58A fixture directory skeleton design release safety checkpoint, docs/tests only.
+This next phase should remain docs/tests only.
 
 Do not create fixture directories next. Do not add fixture files next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

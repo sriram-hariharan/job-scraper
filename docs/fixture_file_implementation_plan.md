@@ -225,4 +225,6 @@ The 63A fixture validator implementation plan is tracked in `docs/fixture_valida
 
 The first synthetic fixture payload implementation is tracked in `docs/first_synthetic_fixture_payload_implementation.md`.
 
+The first synthetic fixture payload implementation release safety checkpoint is tracked in `docs/first_synthetic_fixture_payload_implementation_release_safety_checkpoint.md`.
+
 Do not add fixture files next. Do not create fixture directories next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

@@ -113,4 +113,6 @@ Recommended next phase: 73B first synthetic fixture payload implementation final
 
 After 73B: 74A first synthetic fixture payload implementation release safety checkpoint, docs/tests only.
 
+The 74A release safety checkpoint is tracked in `docs/first_synthetic_fixture_payload_implementation_release_safety_checkpoint.md`.
+
 Do not implement fixture validators next unless explicitly approved. Do not add validator tests next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

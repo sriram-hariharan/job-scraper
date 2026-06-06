@@ -98,6 +98,8 @@ Phase 68A fixture validator implementation approval gate design release safety c
 
 Phase 69A fixture validator implementation readiness matrix is tracked in `docs/fixture_validator_implementation_readiness_matrix.md`. That matrix is docs/tests only and confirms future implementation readiness evidence, denied states, and entry criteria before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 70A fixture validator implementation readiness matrix release safety checkpoint is tracked in `docs/fixture_validator_implementation_readiness_matrix_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the readiness matrix remains documentation-only before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

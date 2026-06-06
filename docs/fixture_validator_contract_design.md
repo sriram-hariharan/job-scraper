@@ -308,4 +308,6 @@ The fixture validator implementation approval gate design release safety checkpo
 
 The fixture validator implementation readiness matrix is tracked in `docs/fixture_validator_implementation_readiness_matrix.md`.
 
+The fixture validator implementation readiness matrix release safety checkpoint is tracked in `docs/fixture_validator_implementation_readiness_matrix_release_safety_checkpoint.md`.
+
 Do not add fixture files next. Do not add runtime tests next. Do not implement fixture validators next without a separate approved phase. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

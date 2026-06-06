@@ -294,4 +294,6 @@ After 51B: 52A fixture validator contract release safety checkpoint, docs/tests 
 
 The fixture validator contract release safety checkpoint is tracked in `docs/fixture_validator_contract_release_safety_checkpoint.md`.
 
+The future fixture validator implementation plan is tracked in `docs/fixture_validator_implementation_plan.md`.
+
 Do not add fixture files next. Do not add runtime tests next. Do not implement fixture validators next without a separate approved phase. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

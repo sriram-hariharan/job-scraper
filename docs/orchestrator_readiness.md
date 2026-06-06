@@ -90,6 +90,8 @@ Phase 64A fixture validator implementation plan release safety checkpoint is tra
 
 Phase 65A fixture validator implementation design refinement is tracked in `docs/fixture_validator_implementation_design_refinement.md`. That refinement is docs/tests only and does not add fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
+Phase 66A fixture validator implementation design refinement release safety checkpoint is tracked in `docs/fixture_validator_implementation_design_refinement_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the design refinement remains design-only before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
+
 ## Current Status
 
 - `src/agents/workflow_registry.py` defines the ordered advisory workflow and marks all six implemented agents as non-mutating.

@@ -46,6 +46,9 @@ FIXTURE_DIRECTORY_CREATION_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PAT
 FIXTURE_DIRECTORY_CREATION_IMPLEMENTATION_DOC_PATH = Path(
     "docs/fixture_directory_creation_implementation.md"
 )
+FIXTURE_DIRECTORY_CREATION_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/fixture_directory_creation_implementation_release_safety_checkpoint.md"
+)
 FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH = Path(
     "tests/fixtures/agentic_storage_transaction_failure_modes"
 )
@@ -6542,6 +6545,188 @@ def test_fixture_directory_creation_implementation_docs_and_marker_cover_phase_7
         ]
     )
     assert "docs/fixture_directory_creation_implementation.md" in linked_docs
+
+
+def test_fixture_directory_creation_implementation_release_checkpoint_covers_phase_72a_contract():
+    assert FIXTURE_DIRECTORY_CREATION_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    assert FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.exists()
+    assert FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.is_dir()
+
+    allowed_marker = FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH / ".gitkeep"
+    assert allowed_marker.exists()
+    assert allowed_marker.is_file()
+    assert allowed_marker.read_text(encoding="utf-8") == ""
+
+    current_contents = sorted(
+        path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
+        for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
+    )
+    assert current_contents == [".gitkeep"]
+
+    forbidden_suffixes = {".json", ".csv", ".yaml", ".yml", ".txt", ".md"}
+    assert not [
+        path
+        for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
+        if path.is_file() and path.suffix.lower() in forbidden_suffixes
+    ]
+
+    source = (
+        FIXTURE_DIRECTORY_CREATION_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "fixture directory creation implementation is complete",
+        "The fixture directory exists intentionally.",
+        "Only the `.gitkeep` marker exists in the fixture directory.",
+        "No fixture payload files are added.",
+        "No JSON fixture files are added.",
+        "No CSV fixture files are added.",
+        "No YAML fixture files are added.",
+        "No TXT fixture files are added.",
+        "No Markdown fixture payload files are added.",
+        "No fixture validator code is added.",
+        "No fixture validator module is added.",
+        "No fixture validator CLI is added.",
+        "No fixture validator tests are added.",
+        "No runtime failure-mode tests are added.",
+        "No storage integration tests are added.",
+        "No DB schema file is added.",
+        "No migration is added.",
+        "No SQL DDL is added.",
+        "No storage API is added.",
+        "No DB writes are added.",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "No approval API/storage is enabled.",
+        "No queue updates are enabled.",
+        "No application submission is enabled.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "fixture directory creation implementation exists",
+        "The fixture directory exists:",
+        "`tests/fixtures/agentic_storage_transaction_failure_modes/`",
+        "The marker file exists:",
+        "`tests/fixtures/agentic_storage_transaction_failure_modes/.gitkeep`",
+        "No fixture payload files exist.",
+        "Fixture files remain future work.",
+        "Fixture validator implementation remains future work.",
+        "Fixture validator tests remain future work.",
+        "Runtime failure-mode tests remain `NO_GO`.",
+        "Storage integration tests remain `NO_GO`.",
+        "explicit/manual/read-only/non-mutating",
+        "Release checkpoint: `PASS`",
+        "Fixture directory creation implementation: `GO`",
+        "Fixture payload files: `NO_GO`",
+        "Fixture validator implementation: `NO_GO`",
+        "Fixture validator module: `NO_GO`",
+        "Fixture validator CLI: `NO_GO`",
+        "Fixture validator tests: `NO_GO`",
+        "Runtime failure-mode tests: `NO_GO`",
+        "Storage integration tests: `NO_GO`",
+        "DB migrations: `NO_GO`",
+        "Runtime DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Live execution: `NO_GO`",
+        "Only this path is allowed in the directory during this checkpoint:",
+        "`.gitkeep` is not a fixture payload.",
+        "JSON fixture files",
+        "CSV fixture files",
+        "YAML fixture files",
+        "TXT fixture files",
+        "Markdown fixture payload files",
+        "generated fixture files",
+        "production-derived fixture files",
+        "private documents",
+        "raw resumes",
+        "secrets or credentials",
+        "runtime test files",
+        "validator test files",
+        "no test should execute fixture payloads yet",
+        "no runtime should read from this directory yet",
+        "no generator should write to this directory",
+        "no validator should run against this directory yet",
+        "no fixture discovery should be wired into runtime",
+        "no workflow_runner execution path should reference this directory",
+        "no live planning path should reference this directory",
+        "fixture directory creation implementation release checkpoint passed",
+        "fixture directory creation implementation final audit passed",
+        "fixture file implementation plan final audit passed",
+        "fixture file implementation plan release checkpoint passed",
+        "fixture file implementation phase separately approved",
+        "exact fixture file allowlist approved",
+        "fixture payload schema approved",
+        "privacy/no-secret strategy approved",
+        "no-production-path strategy approved",
+        "fixture validator implementation separately approved or explicitly deferred with user approval",
+        "do not add fixture payload files next without explicit fixture file implementation approval",
+        "do not implement fixture validators next without explicit validator implementation approval",
+        "do not add fixture validator tests next",
+        "do not add runtime failure-mode tests next",
+        "do not add storage integration tests next",
+        "do not add DB schema files next",
+        "do not add migrations next",
+        "do not add SQL DDL next",
+        "do not add storage APIs next",
+        "do not add approval APIs next",
+        "do not add mutation APIs next",
+        "do not add DB writes next",
+        "do not add live queue updates next",
+        "do not start application submission automation next",
+        "do not enable workflow_runner live execution next",
+        "no fixture payloads in this phase",
+        "no validator implementation in this phase",
+        "no validator module in this phase",
+        "no validator CLI in this phase",
+        "no validator tests in this phase",
+        "no runtime tests in this phase",
+        "no storage integration tests in this phase",
+        "no DB schema/migration",
+        "no SQL DDL",
+        "no storage module",
+        "no API routes",
+        "no approval actions",
+        "no mutation execution",
+        "no live queue updates",
+        "no application submission",
+        "Recommended next phase: 72B fixture directory creation implementation release safety checkpoint final audit and merge gate.",
+        "either start fixture file implementation with explicit approval",
+        "one more docs/tests-only fixture file implementation authorization packet",
+        "Do not add fixture payload files next unless explicitly approved.",
+        "Do not implement fixture validators next unless explicitly approved.",
+        "Do not add validator tests next.",
+        "Do not add runtime tests next.",
+        "Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Checkpoint Scope",
+        "## Fixture Directory Release Decision",
+        "## Confirmed Current Directory Contents",
+        "## Forbidden Current Contents",
+        "## Runtime Isolation Confirmation",
+        "## Future Fixture File Entry Criteria",
+        "## Forbidden Next-Step Shortcuts",
+        "## Explicit Non-Goals",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            FIXTURE_DIRECTORY_CREATION_IMPLEMENTATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/fixture_directory_creation_implementation_release_safety_checkpoint.md"
+        in linked_docs
+    )
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

@@ -10,6 +10,8 @@ Phase 56A is a release safety checkpoint only. There is no implementation in thi
 
 The fixture implementation plan exists at `docs/fixture_implementation_plan.md`.
 
+The fixture directory skeleton design is tracked in `docs/fixture_directory_skeleton_design.md`.
+
 Fixture implementation remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`

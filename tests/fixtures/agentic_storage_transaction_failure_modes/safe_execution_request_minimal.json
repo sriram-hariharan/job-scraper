@@ -1,0 +1,30 @@
+{
+  "fixture_schema_version": "fixture_schema_v1",
+  "fixture_id": "safe_execution_request_minimal",
+  "fixture_family": "safe_execution_request",
+  "description": "Synthetic minimal safe execution request fixture for future validator checks. This file is inert and is not executed.",
+  "synthetic": true,
+  "contains_private_data": false,
+  "contains_secret": false,
+  "contains_production_path": false,
+  "contains_live_queue_path": false,
+  "contains_application_submission_target": false,
+  "request": {
+    "execution_mode": "dry_run_only",
+    "allow_agent_execution": false,
+    "allow_live_execution": false,
+    "allow_mutation": false,
+    "allow_db_write": false,
+    "allow_queue_update": false,
+    "allow_application_submission": false
+  },
+  "expected_validation": {
+    "should_be_valid_fixture": true,
+    "expected_blocked": false,
+    "expected_reason_codes": [],
+    "expected_warning_codes": [],
+    "did_execute_fixture": false,
+    "did_mutate_production": false,
+    "did_write_db": false
+  }
+}

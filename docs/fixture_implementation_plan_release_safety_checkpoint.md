@@ -1,29 +1,20 @@
-# Fixture Implementation Plan
+# Fixture Implementation Plan Release Safety Checkpoint
 
-Doc path: `docs/fixture_implementation_plan.md`
+Doc path: `docs/fixture_implementation_plan_release_safety_checkpoint.md`
 
-Phase 55A is a fixture implementation plan only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 56A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Implementation-Plan Scope
+## Current Checkpoint Scope
 
-The storage/transaction failure fixture design exists at `docs/storage_transaction_failure_fixture_design.md`.
+The fixture implementation plan exists at `docs/fixture_implementation_plan.md`.
 
-The fixture validator contract exists at `docs/fixture_validator_contract_design.md`.
-
-The fixture naming and reason-code taxonomy exists at `docs/fixture_naming_reason_code_taxonomy_checkpoint.md`.
-
-Release checkpoints exist for those design docs:
-
-- fixture design release checkpoint: `docs/storage_transaction_fixture_release_safety_checkpoint.md`
-- fixture validator contract release checkpoint: `docs/fixture_validator_contract_release_safety_checkpoint.md`
-- fixture naming and reason-code taxonomy release checkpoint: `docs/fixture_naming_reason_code_taxonomy_release_safety_checkpoint.md`
-- fixture implementation plan release safety checkpoint: `docs/fixture_implementation_plan_release_safety_checkpoint.md`
-
-Fixture implementation is still future work. The future fixture directory remains proposed only:
+Fixture implementation remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
+
+The future fixture file sequence is proposed only. The future fixture admission checklist is proposed only.
 
 No fixture validator implementation exists. No fixture files are created. No fixture directories are created. Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
@@ -34,7 +25,7 @@ No fixture validator implementation exists. No fixture files are created. No fix
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this implementation plan:
+Confirmed boundaries for this release checkpoint:
 
 - no fixture validator code
 - no fixture files
@@ -58,12 +49,13 @@ Confirmed boundaries for this implementation plan:
 - no live planning hooks
 - no application submission
 
-## Fixture Implementation Planning Decision
+## Fixture Implementation Plan Release Decision
 
-- Fixture implementation plan: `PASS`
-- Fixture file implementation: `NOT_YET`
-- Fixture directory creation: `NOT_YET`
-- Fixture validator implementation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture implementation plan: `GO`
+- Fixture file implementation: `NO_GO`
+- Fixture directory creation: `NO_GO`
+- Fixture validator implementation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
 - Storage integration tests: `NO_GO`
 - Transaction integration tests: `NO_GO`
@@ -72,7 +64,7 @@ Confirmed boundaries for this implementation plan:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Proposed Future Fixture Implementation Sequence
+## Future Implementation Sequence Confirmed
 
 Future fixture work should proceed only in separately approved phases:
 
@@ -86,7 +78,7 @@ Future fixture work should proceed only in separately approved phases:
 
 None of these steps happen in this phase.
 
-## Proposed Future Fixture Directory Plan
+## Future Fixture Directory Plan Confirmed
 
 Design only:
 
@@ -103,7 +95,7 @@ Design only:
 
 No directory is created in this phase.
 
-## Fixture File Admission Checklist
+## Fixture File Admission Checklist Confirmed
 
 Before any fixture file is added, require:
 
@@ -125,8 +117,9 @@ Before any fixture file is added, require:
 - expected_did_write_db=false
 - expected_no_secret_leakage=true for privacy cases
 
-## Fixture Implementation Blockers
+## Required Blockers Before Fixture Files
 
+- fixture implementation plan release checkpoint passed
 - fixture implementation plan final audit passed
 - fixture naming and reason-code taxonomy release checkpoint passed
 - fixture validator contract release checkpoint passed
@@ -173,8 +166,8 @@ Before any fixture file is added, require:
 
 ## Recommended Next Phase
 
-Recommended next phase: 55B fixture implementation plan final audit and merge gate.
+Recommended next phase: 57A fixture directory skeleton design doc, no directories or fixture files.
 
-After 55B: 56A fixture implementation plan release safety checkpoint, docs/tests only. That checkpoint is tracked in `docs/fixture_implementation_plan_release_safety_checkpoint.md`.
+This next phase should remain docs/tests only.
 
 Do not implement fixture validators next. Do not add fixture files next. Do not create fixture directories next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

@@ -300,4 +300,6 @@ The fixture validator implementation plan release safety checkpoint is tracked i
 
 The fixture validator implementation design refinement is tracked in `docs/fixture_validator_implementation_design_refinement.md`.
 
+The fixture validator implementation design refinement release safety checkpoint is tracked in `docs/fixture_validator_implementation_design_refinement_release_safety_checkpoint.md`.
+
 Do not add fixture files next. Do not add runtime tests next. Do not implement fixture validators next without a separate approved phase. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

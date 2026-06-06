@@ -258,4 +258,6 @@ Recommended next phase: 65A fixture validator implementation design refinement, 
 
 This next phase should remain docs/tests only.
 
+The 65A fixture validator implementation design refinement is tracked in `docs/fixture_validator_implementation_design_refinement.md`.
+
 Do not implement fixture validators next. Do not add fixture validator tests next. Do not add fixture files next. Do not create fixture directories next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

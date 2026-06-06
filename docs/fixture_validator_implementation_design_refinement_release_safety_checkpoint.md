@@ -215,4 +215,6 @@ Recommended next phase: 67A fixture validator implementation approval gate desig
 
 This next phase should remain docs/tests only.
 
+The 67A fixture validator implementation approval gate design is tracked in `docs/fixture_validator_implementation_approval_gate_design.md`.
+
 Do not implement fixture validators next. Do not add fixture validator tests next. Do not add fixture files next. Do not create fixture directories next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

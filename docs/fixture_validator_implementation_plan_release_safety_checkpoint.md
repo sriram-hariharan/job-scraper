@@ -1,22 +1,16 @@
-# Fixture Validator Implementation Plan
+# Fixture Validator Implementation Plan Release Safety Checkpoint
 
-Doc path: `docs/fixture_validator_implementation_plan.md`
+Doc path: `docs/fixture_validator_implementation_plan_release_safety_checkpoint.md`
 
-Phase 63A is a fixture validator implementation plan only. There is no implementation in this phase. No fixture validator code is added. No fixture validator module is added. No fixture validator CLI is added. No fixture validator tests are added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 64A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture validator module is added. No fixture validator CLI is added. No fixture validator tests are added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Implementation-Plan Scope
+## Current Checkpoint Scope
 
-The fixture validator contract design exists at `docs/fixture_validator_contract_design.md`.
+The fixture validator implementation plan exists at `docs/fixture_validator_implementation_plan.md`.
 
-The fixture validator contract release safety checkpoint exists at `docs/fixture_validator_contract_release_safety_checkpoint.md`.
-
-The fixture file implementation plan exists at `docs/fixture_file_implementation_plan.md`.
-
-The fixture file implementation plan release safety checkpoint exists at `docs/fixture_file_implementation_plan_release_safety_checkpoint.md`.
-
-Future fixture validator remains future work. Future fixture files remain proposed only. The future fixture directory remains proposed only:
+The fixture validator implementation remains future work. The future validator module remains proposed only. The future validator CLI remains proposed only and separately approvable. The future validator tests remain proposed only. Future fixture files remain proposed only. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
 
@@ -31,7 +25,7 @@ Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this implementation plan:
+Confirmed boundaries for this release safety checkpoint:
 
 - no fixture validator code
 - no fixture validator module
@@ -58,15 +52,16 @@ Confirmed boundaries for this implementation plan:
 - no live planning hooks
 - no application submission
 
-## Fixture Validator Implementation Plan Decision
+## Fixture Validator Implementation Plan Release Decision
 
-- Fixture validator implementation plan: `PASS`
-- Fixture validator implementation: `NOT_YET`
-- Fixture validator module: `NOT_YET`
-- Fixture validator CLI: `NOT_YET`
-- Fixture validator tests: `NOT_YET`
-- Fixture file implementation: `NOT_YET`
-- Fixture directory creation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture validator implementation plan: `GO`
+- Fixture validator implementation: `NO_GO`
+- Fixture validator module: `NO_GO`
+- Fixture validator CLI: `NO_GO`
+- Fixture validator tests: `NO_GO`
+- Fixture file implementation: `NO_GO`
+- Fixture directory creation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
 - Storage integration tests: `NO_GO`
 - Transaction integration tests: `NO_GO`
@@ -75,9 +70,9 @@ Confirmed boundaries for this implementation plan:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Future Validator Implementation Sequence
+## Future Validator Implementation Sequence Confirmed
 
-Future validator implementation should proceed only in separately approved phases:
+The future validator implementation sequence remains future-only:
 
 1. confirm fixture file implementation plan release checkpoint passed
 2. confirm fixture directory creation and fixture file phases are separately approved and complete
@@ -93,9 +88,9 @@ Future validator implementation should proceed only in separately approved phase
 
 None of these steps happen in this phase.
 
-## Future Validator Module Boundary
+## Future Validator Module Boundary Confirmed
 
-Future module boundaries only:
+Future validator module boundaries remain:
 
 - validator must not execute fixture payloads
 - validator must not call workflow_runner
@@ -113,9 +108,9 @@ Future module boundaries only:
 - validator must fail closed on unknown reason codes
 - validator must produce deterministic sorted reason codes
 
-## Future Validator Input Contract Enforcement
+## Future Validator Input Contract Enforcement Confirmed
 
-Future validator will enforce:
+Future validator input contract enforcement remains:
 
 - fixture_schema_version
 - fixture_family
@@ -133,9 +128,9 @@ Future validator will enforce:
 - artifact_refs_json
 - payload_hash
 
-## Future Validator Output Contract Enforcement
+## Future Validator Output Contract Enforcement Confirmed
 
-Future validator output will include:
+Future validator output contract enforcement remains:
 
 - validator_version
 - validation_status
@@ -158,9 +153,9 @@ Future validator output will include:
 - did_mutate_production=false
 - did_write_db=false
 
-## Future Validator Safety Checks
+## Future Validator Safety Checks Confirmed
 
-Future validator safety checks:
+Future validator safety checks remain:
 
 - schema version present
 - fixture family present
@@ -184,9 +179,9 @@ Future validator safety checks:
 - forbidden mutation fixtures are expected blocked
 - allowed mutation proposal fixture types are still non-executable and blocked by default
 
-## Future Validator Command Policy
+## Future Validator Command Policy Confirmed
 
-Future policy only:
+Future validator command policy remains:
 
 - validator execution must be explicit and reviewable
 - no automatic validator invocation from runtime planning
@@ -202,8 +197,9 @@ Future policy only:
 - no approval/mutation side effects
 - validator output must be local and deterministic
 
-## Fixture Validator Implementation Blockers
+## Required Blockers Before Validator Implementation
 
+- fixture validator implementation plan release checkpoint passed
 - fixture validator implementation plan final audit passed
 - fixture file implementation plan release checkpoint passed
 - fixture directory creation implementation plan release checkpoint passed
@@ -258,10 +254,8 @@ Future policy only:
 
 ## Recommended Next Phase
 
-Recommended next phase: 63B fixture validator implementation plan final audit and merge gate.
+Recommended next phase: 65A fixture validator implementation design refinement, no validator code.
 
-After 63B: 64A fixture validator implementation plan release safety checkpoint, docs/tests only.
-
-The 64A release safety checkpoint is tracked in `docs/fixture_validator_implementation_plan_release_safety_checkpoint.md`.
+This next phase should remain docs/tests only.
 
 Do not implement fixture validators next. Do not add fixture validator tests next. Do not add fixture files next. Do not create fixture directories next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

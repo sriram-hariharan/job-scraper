@@ -20,6 +20,7 @@ Release checkpoints exist for those design docs:
 - fixture validator contract release checkpoint: `docs/fixture_validator_contract_release_safety_checkpoint.md`
 - fixture naming and reason-code taxonomy release checkpoint: `docs/fixture_naming_reason_code_taxonomy_release_safety_checkpoint.md`
 - fixture implementation plan release safety checkpoint: `docs/fixture_implementation_plan_release_safety_checkpoint.md`
+- fixture directory skeleton design: `docs/fixture_directory_skeleton_design.md`
 
 Fixture implementation is still future work. The future fixture directory remains proposed only:
 

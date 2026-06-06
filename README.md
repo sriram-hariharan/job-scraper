@@ -603,6 +603,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Fixture directory skeleton release safety checkpoint](docs/fixture_directory_skeleton_release_safety_checkpoint.md)
 - [Fixture directory creation implementation plan](docs/fixture_directory_creation_implementation_plan.md)
 - [Fixture directory creation implementation plan release safety checkpoint](docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md)
+- [Fixture directory creation implementation](docs/fixture_directory_creation_implementation.md)
 - [Fixture file implementation plan](docs/fixture_file_implementation_plan.md)
 - [Fixture file implementation plan release safety checkpoint](docs/fixture_file_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)

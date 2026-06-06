@@ -1,22 +1,22 @@
-# Fixture Directory Creation Implementation Plan
+# Fixture Directory Creation Implementation Plan Release Safety Checkpoint
 
-Doc path: `docs/fixture_directory_creation_implementation_plan.md`
+Doc path: `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`
 
-Phase 59A is a fixture directory creation implementation plan only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
+Phase 60A is a release safety checkpoint only. There is no implementation in this phase. No fixture validator code is added. No fixture files are added. No fixture directory is added. No runtime failure-mode tests are added. No storage integration tests are added. No DB schema file is added. No migration is added. No SQL DDL is added. No storage API is added. No DB writes are added. No live execution is enabled. No mutation is enabled. No approval API/storage is enabled. No queue updates are enabled. No application submission is enabled.
 
 `workflow_runner.py` remains dry-run only. The read-only adapter preflight must continue to report `executable_adapter_count=0`.
 
-## Current Implementation-Plan Scope
+## Current Checkpoint Scope
 
-The fixture directory skeleton design exists at `docs/fixture_directory_skeleton_design.md`.
+The fixture directory creation implementation plan exists at `docs/fixture_directory_creation_implementation_plan.md`.
 
-The fixture directory skeleton release checkpoint exists at `docs/fixture_directory_skeleton_release_safety_checkpoint.md`.
-
-Future directory creation remains future work. The future fixture directory remains proposed only:
+Directory creation remains future work. The future fixture directory remains proposed only:
 
 - `tests/fixtures/agentic_storage_transaction_failure_modes/`
 
-No fixture directories are created. No fixture files are created. No fixture validator implementation exists. Current runtime tooling remains explicit/manual/read-only/non-mutating:
+The future fixture README remains proposed only. The future fixture subdirectories remain proposed only. No fixture validator implementation exists. No fixture files are created. No fixture directories are created.
+
+Current runtime tooling remains explicit/manual/read-only/non-mutating:
 
 - read-only chain artifact generator
 - dry-run execution simulator
@@ -25,7 +25,7 @@ No fixture directories are created. No fixture files are created. No fixture val
 
 ## Confirmed Safe Boundaries
 
-Confirmed boundaries for this implementation plan:
+Confirmed boundaries for this checkpoint:
 
 - no fixture validator code
 - no fixture files
@@ -49,12 +49,13 @@ Confirmed boundaries for this implementation plan:
 - no live planning hooks
 - no application submission
 
-## Fixture Directory Creation Implementation Plan Decision
+## Fixture Directory Creation Implementation Plan Release Decision
 
-- Fixture directory creation implementation plan: `PASS`
-- Fixture directory creation: `NOT_YET`
-- Fixture file implementation: `NOT_YET`
-- Fixture validator implementation: `NOT_YET`
+- Release checkpoint: `PASS`
+- Fixture directory creation implementation plan: `GO`
+- Fixture directory creation: `NO_GO`
+- Fixture file implementation: `NO_GO`
+- Fixture validator implementation: `NO_GO`
 - Runtime failure-mode tests: `NO_GO`
 - Storage integration tests: `NO_GO`
 - Transaction integration tests: `NO_GO`
@@ -63,9 +64,9 @@ Confirmed boundaries for this implementation plan:
 - Mutation execution: `NO_GO`
 - Live execution: `NO_GO`
 
-## Future Directory Creation Sequence
+## Future Directory Creation Sequence Confirmed
 
-Future directory creation should proceed only in a separately approved implementation phase:
+The future directory creation sequence remains future-only:
 
 1. create parent fixture directory in separately approved implementation phase
 2. create fixture README in separately approved implementation phase
@@ -77,9 +78,9 @@ Future directory creation should proceed only in a separately approved implement
 
 None of these steps happen in this phase.
 
-## Future Directory Creation Command Policy
+## Future Directory Creation Command Policy Confirmed
 
-Future policy only:
+Future policy remains:
 
 - directory creation must be explicit and reviewable
 - no generated fixture files during directory creation
@@ -93,7 +94,7 @@ Future policy only:
 - no scripts that auto-populate fixtures
 - no runtime test invocation from directory creation
 
-## Approved Future Directory List
+## Approved Future Directory List Confirmed
 
 Future-only directories:
 
@@ -109,7 +110,7 @@ Future-only directories:
 
 These directories are not created in this phase.
 
-## Future Fixture README Content Plan
+## Future Fixture README Content Plan Confirmed
 
 The future README should include:
 
@@ -128,8 +129,9 @@ The future README should include:
 - directory ownership rules
 - review requirements before adding fixture files
 
-## Directory Creation Blockers
+## Required Blockers Before Directory Creation
 
+- fixture directory creation implementation plan release checkpoint passed
 - fixture directory creation implementation plan final audit passed
 - fixture directory skeleton release checkpoint passed
 - fixture implementation plan release checkpoint passed
@@ -178,10 +180,8 @@ The future README should include:
 
 ## Recommended Next Phase
 
-Recommended next phase: 59B fixture directory creation implementation plan final audit and merge gate.
+Recommended next phase: 61A fixture file implementation plan, no fixture files.
 
-After 59B: 60A fixture directory creation implementation plan release safety checkpoint, docs/tests only.
-
-The 60A release safety checkpoint is tracked in `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`.
+This next phase should remain docs/tests only.
 
 Do not create fixture directories next. Do not add fixture files next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

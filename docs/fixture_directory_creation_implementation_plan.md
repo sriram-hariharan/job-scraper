@@ -184,4 +184,6 @@ After 59B: 60A fixture directory creation implementation plan release safety che
 
 The 60A release safety checkpoint is tracked in `docs/fixture_directory_creation_implementation_plan_release_safety_checkpoint.md`.
 
+The 61A fixture file implementation plan is tracked in `docs/fixture_file_implementation_plan.md`.
+
 Do not create fixture directories next. Do not add fixture files next. Do not implement fixture validators next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

@@ -236,4 +236,6 @@ Recommended next phase: 69A fixture validator implementation readiness matrix, n
 
 This next phase should remain docs/tests only.
 
+The 69A fixture validator implementation readiness matrix is tracked in `docs/fixture_validator_implementation_readiness_matrix.md`.
+
 Do not implement fixture validators next. Do not add fixture validator tests next. Do not add fixture files next. Do not create fixture directories next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

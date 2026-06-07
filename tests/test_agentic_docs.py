@@ -105,6 +105,9 @@ BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_DOC_PATH = Path(
 BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/blocked_application_submission_fixture_implementation_release_safety_checkpoint.md"
 )
+PREFLIGHT_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH = Path(
+    "docs/preflight_fixture_validator_integration.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -8848,6 +8851,75 @@ def test_blocked_application_submission_fixture_release_checkpoint_covers_phase_
         "docs/blocked_application_submission_fixture_implementation_release_safety_checkpoint.md"
         in linked_docs
     )
+
+
+def test_preflight_fixture_validator_integration_covers_phase_88a_contract():
+    assert PREFLIGHT_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH.exists()
+
+    source = PREFLIGHT_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "preflight-only fixture validator integration implementation",
+        "Fixture validation is now wired only into orchestrator preflight JSON",
+        "Fixture validation is read-only.",
+        "validates exactly the approved fixture files",
+        "safe_execution_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "blocked_application_submission_request_minimal.json",
+        "No fixture payload files beyond the approved three are expected.",
+        "workflow_runner.py` remains dry-run only",
+        "`executable_adapter_count` remains 0",
+        "`allow_agent_execution` remains false",
+        "`did_execute_count` remains 0",
+        "`did_execute_live` remains false",
+        "`did_mutate_production` remains false",
+        "`did_write_db` remains false",
+        "does not execute fixtures",
+        "does not call workflow_runner",
+        "does not call live planning",
+        "does not call app services",
+        "does not call queue",
+        "does not call DB",
+        "does not mutate",
+        "does not submit applications",
+        "Blocked fixtures are expected to fail validation and still produce overall preflight pass",
+        "db_write_not_allowed",
+        "application_submission_not_allowed",
+        "fixture_validation",
+        "fixture_validation_enabled",
+        "fixture_validation_status",
+        "fixture_validation_passed",
+        "fixture_validation_checked_count",
+        "fixture_validation_expected_fixture_count",
+        "fixture_validation_results",
+        "fixture_validation_failed_fixture_ids",
+        "fixture_validation_reason_codes",
+        "Preflight-only fixture validator integration: `PASS`",
+        "Runtime-facing integration scope: `PREFLIGHT_ONLY`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Automatic execution: `NO_GO`",
+        "DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Application submission: `NO_GO`",
+        "Approval API/storage: `NO_GO`",
+        "Scheduler/background execution: `NO_GO`",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/preflight_fixture_validator_integration.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

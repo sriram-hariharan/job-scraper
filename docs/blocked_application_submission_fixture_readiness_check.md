@@ -162,3 +162,5 @@ Recommended next phase: 85B blocked application-submission fixture readiness che
 After 85B: 86A blocked application-submission synthetic fixture implementation, only if explicitly approved.
 
 Do not add `blocked_application_submission_request_minimal.json` next unless 85B passes and explicit approval is given. Do not wire validator into workflow_runner next. Do not wire validator into live planning next. Do not auto-discover fixture directories next. Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.
+
+The blocked application-submission fixture implementation is tracked in `docs/blocked_application_submission_fixture_implementation.md`.

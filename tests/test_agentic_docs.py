@@ -62,6 +62,10 @@ FIRST_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PAT
 SAFE_EXECUTION_REQUEST_MINIMAL_FIXTURE_PATH = (
     FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH / "safe_execution_request_minimal.json"
 )
+BLOCKED_DB_WRITE_REQUEST_MINIMAL_FIXTURE_PATH = (
+    FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH
+    / "blocked_db_write_request_minimal.json"
+)
 MINIMAL_FIXTURE_VALIDATOR_MODULE_IMPLEMENTATION_DOC_PATH = Path(
     "docs/minimal_fixture_validator_module_implementation.md"
 )
@@ -79,6 +83,9 @@ RUNTIME_FIXTURE_VALIDATOR_INTEGRATION_DESIGN_DOC_PATH = Path(
 )
 RUNTIME_FIXTURE_VALIDATOR_INTEGRATION_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/runtime_fixture_validator_integration_design_release_safety_checkpoint.md"
+)
+SECOND_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_DOC_PATH = Path(
+    "docs/second_synthetic_fixture_payload_implementation.md"
 )
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
@@ -6748,7 +6755,11 @@ def test_first_synthetic_fixture_payload_implementation_covers_phase_73a_contrac
         path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
         for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
     )
-    assert current_contents == [".gitkeep", "safe_execution_request_minimal.json"]
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
 
     fixture_payload_suffixes = {".json", ".csv", ".yaml", ".yml", ".txt", ".md"}
     current_payload_files = sorted(
@@ -6756,7 +6767,10 @@ def test_first_synthetic_fixture_payload_implementation_covers_phase_73a_contrac
         for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
         if path.is_file() and path.suffix.lower() in fixture_payload_suffixes
     )
-    assert current_payload_files == ["safe_execution_request_minimal.json"]
+    assert current_payload_files == [
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
 
     fixture = json.loads(
         SAFE_EXECUTION_REQUEST_MINIMAL_FIXTURE_PATH.read_text(encoding="utf-8")
@@ -6948,7 +6962,11 @@ def test_first_synthetic_fixture_payload_release_checkpoint_covers_phase_74a_con
         path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
         for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
     )
-    assert current_contents == [".gitkeep", "safe_execution_request_minimal.json"]
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
 
     fixture_payload_suffixes = {".json", ".csv", ".yaml", ".yml", ".txt", ".md"}
     current_payload_files = sorted(
@@ -6956,7 +6974,10 @@ def test_first_synthetic_fixture_payload_release_checkpoint_covers_phase_74a_con
         for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
         if path.is_file() and path.suffix.lower() in fixture_payload_suffixes
     )
-    assert current_payload_files == ["safe_execution_request_minimal.json"]
+    assert current_payload_files == [
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
 
     fixture = json.loads(
         SAFE_EXECUTION_REQUEST_MINIMAL_FIXTURE_PATH.read_text(encoding="utf-8")
@@ -8069,6 +8090,123 @@ def test_runtime_fixture_validator_integration_design_release_checkpoint_covers_
         "docs/runtime_fixture_validator_integration_design_release_safety_checkpoint.md"
         in linked_docs
     )
+
+
+def test_second_synthetic_fixture_payload_implementation_covers_phase_81a_contract():
+    assert SECOND_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_DOC_PATH.exists()
+    assert BLOCKED_DB_WRITE_REQUEST_MINIMAL_FIXTURE_PATH.exists()
+    assert BLOCKED_DB_WRITE_REQUEST_MINIMAL_FIXTURE_PATH.is_file()
+
+    current_contents = sorted(
+        path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
+        for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
+    )
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
+
+    source = SECOND_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "second synthetic fixture payload implementation only",
+        "Exactly one new synthetic fixture payload is added.",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/blocked_db_write_request_minimal.json",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/safe_execution_request_minimal.json",
+        "`.gitkeep` remains.",
+        "The fixture directory contains only `.gitkeep`, `blocked_db_write_request_minimal.json`, and `safe_execution_request_minimal.json`.",
+        "The blocked fixture is inert.",
+        "The blocked fixture is not executed.",
+        "The blocked fixture is not wired into runtime.",
+        "The blocked fixture is not discovered by workflow_runner.",
+        "The blocked fixture is not used by live planning.",
+        "The blocked fixture intentionally sets `request.allow_db_write` true.",
+        "The expected validator result is failed.",
+        "The expected reason code includes `db_write_not_allowed`.",
+        "The expected `did_execute_fixture` false.",
+        "The expected `did_mutate_production` false.",
+        "The expected `did_write_db` false.",
+        "No runtime integration is added.",
+        "No workflow_runner integration is added.",
+        "No live planning integration is added.",
+        "No app services integration is added.",
+        "No queue integration is added.",
+        "No automatic fixture validation is added.",
+        "No fixture execution is added.",
+        "No runtime failure-mode tests are added.",
+        "No storage integration tests are added.",
+        "No DB schema file is added.",
+        "No migration is added.",
+        "No SQL DDL is added.",
+        "No storage API is added.",
+        "No runtime DB writes are added.",
+        "No live execution is enabled.",
+        "No mutation is enabled.",
+        "No approval API/storage is enabled.",
+        "No queue updates are added.",
+        "No application submission is added.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "Second synthetic fixture payload implementation: `PASS`",
+        "Blocked DB-write fixture payload: `PASS`",
+        "Additional fixture payload files beyond approved blocked fixture: `NO_GO`",
+        "Runtime integration implementation: `NO_GO`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture discovery in runtime: `NO_GO`",
+        "Automatic fixture validation: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Runtime failure-mode tests: `NO_GO`",
+        "Storage integration tests: `NO_GO`",
+        "DB migrations: `NO_GO`",
+        "Runtime DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Live execution: `NO_GO`",
+        "direct validator coverage confirms the blocked fixture fails safely",
+        "direct validator coverage confirms `db_write_not_allowed`",
+        "manual CLI coverage confirms the blocked fixture returns exit code `1`",
+        "manual CLI JSON output includes `db_write_not_allowed`",
+        "no runtime path imports/calls the validator or CLI",
+        "do not wire validator into workflow_runner next without explicit approval",
+        "do not wire validator into live planning next without explicit approval",
+        "do not auto-discover fixture directories next",
+        "do not validate fixtures automatically during application planning next",
+        "do not add DB writes next",
+        "do not add queue mutation next",
+        "do not add approval APIs next",
+        "do not add mutation APIs next",
+        "do not add application submission automation next",
+        "do not enable workflow_runner live execution next",
+        "Recommended next phase: 81B second synthetic fixture payload implementation final audit and merge gate.",
+        "After 81B: 82A second synthetic fixture payload implementation release safety checkpoint, docs/tests only.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Implementation Scope",
+        "## Fixture Directory Contents",
+        "## Blocked Fixture Contract",
+        "## Validator/CLI Coverage",
+        "## Runtime Isolation Confirmation",
+        "## Forbidden Next-Step Shortcuts",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            Path("README.md"),
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            RUNTIME_FIXTURE_VALIDATOR_INTEGRATION_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+        ]
+    )
+    assert "docs/second_synthetic_fixture_payload_implementation.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

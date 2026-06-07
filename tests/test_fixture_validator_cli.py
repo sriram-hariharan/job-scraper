@@ -6,6 +6,7 @@ from src.agents import fixture_validator_cli
 
 FIXTURE_DIR = Path("tests/fixtures/agentic_storage_transaction_failure_modes")
 SAFE_FIXTURE_PATH = FIXTURE_DIR / "safe_execution_request_minimal.json"
+BLOCKED_DB_WRITE_FIXTURE_PATH = FIXTURE_DIR / "blocked_db_write_request_minimal.json"
 
 
 def _load_safe_fixture():
@@ -52,6 +53,21 @@ def test_invalid_fixture_returns_one_with_reason_code(tmp_path, capsys):
     assert result["did_write_db"] is False
 
 
+def test_blocked_db_write_fixture_returns_one_with_json_reason(capsys):
+    exit_code = fixture_validator_cli.main(
+        ["--fixture", str(BLOCKED_DB_WRITE_FIXTURE_PATH), "--json"]
+    )
+
+    assert exit_code == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["validation_status"] == "failed"
+    assert result["is_valid"] is False
+    assert "db_write_not_allowed" in result["reason_codes"]
+    assert result["did_execute_fixture"] is False
+    assert result["did_mutate_production"] is False
+    assert result["did_write_db"] is False
+
+
 def test_missing_fixture_argument_returns_usage_error(capsys):
     exit_code = fixture_validator_cli.main([])
 
@@ -72,7 +88,11 @@ def test_directory_fixture_argument_returns_usage_error_without_discovery(capsys
 def test_fixture_directory_still_contains_only_marker_and_approved_json():
     current_contents = sorted(path.name for path in FIXTURE_DIR.iterdir())
 
-    assert current_contents == [".gitkeep", "safe_execution_request_minimal.json"]
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
 
 
 def test_fixture_validator_cli_has_no_runtime_or_side_effect_imports():

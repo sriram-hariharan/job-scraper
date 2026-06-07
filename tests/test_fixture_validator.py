@@ -6,6 +6,7 @@ from src.agents.fixture_validator import validate_fixture_file
 
 FIXTURE_DIR = Path("tests/fixtures/agentic_storage_transaction_failure_modes")
 SAFE_FIXTURE_PATH = FIXTURE_DIR / "safe_execution_request_minimal.json"
+BLOCKED_DB_WRITE_FIXTURE_PATH = FIXTURE_DIR / "blocked_db_write_request_minimal.json"
 
 
 def _load_safe_fixture():
@@ -41,6 +42,19 @@ def test_allow_db_write_true_fails_with_db_write_reason(tmp_path):
     assert result["validation_status"] == "failed"
     assert result["is_valid"] is False
     assert "db_write_not_allowed" in result["reason_codes"]
+    assert result["did_write_db"] is False
+
+
+def test_blocked_db_write_request_minimal_fixture_fails_safely():
+    result = validate_fixture_file(BLOCKED_DB_WRITE_FIXTURE_PATH)
+
+    assert result["validation_status"] == "failed"
+    assert result["fixture_id"] == "blocked_db_write_request_minimal"
+    assert result["fixture_family"] == "blocked_db_write_request"
+    assert result["is_valid"] is False
+    assert "db_write_not_allowed" in result["reason_codes"]
+    assert result["did_execute_fixture"] is False
+    assert result["did_mutate_production"] is False
     assert result["did_write_db"] is False
 
 
@@ -106,4 +120,8 @@ def test_validator_module_has_no_runtime_or_side_effect_imports():
 def test_fixture_directory_contains_only_marker_and_approved_json():
     current_contents = sorted(path.name for path in FIXTURE_DIR.iterdir())
 
-    assert current_contents == [".gitkeep", "safe_execution_request_minimal.json"]
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]

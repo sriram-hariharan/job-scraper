@@ -312,4 +312,6 @@ The fixture validator implementation readiness matrix release safety checkpoint 
 
 The minimal fixture validator module implementation is tracked in `docs/minimal_fixture_validator_module_implementation.md`.
 
+The minimal fixture validator module implementation release safety checkpoint is tracked in `docs/minimal_fixture_validator_module_implementation_release_safety_checkpoint.md`.
+
 Do not add fixture files next. Do not add runtime tests next. Do not implement fixture validators next without a separate approved phase. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

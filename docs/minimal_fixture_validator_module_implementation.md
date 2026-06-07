@@ -106,3 +106,5 @@ Required fields and safety flags:
 Recommended next phase: 75B minimal fixture validator module implementation final audit and merge gate.
 
 After 75B: 76A minimal fixture validator module implementation release safety checkpoint, docs/tests only.
+
+The 76A release safety checkpoint is tracked in `docs/minimal_fixture_validator_module_implementation_release_safety_checkpoint.md`.

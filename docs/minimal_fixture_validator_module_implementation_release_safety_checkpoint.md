@@ -165,3 +165,5 @@ Recommended next phase: 76B minimal fixture validator module implementation rele
 After 76B, use a decision point: either add fixture validator CLI with explicit approval, add a second synthetic fixture with explicit approval, or begin runtime-facing design for validator integration without wiring it yet.
 
 Do not add CLI next unless explicitly approved. Do not wire validator into runtime next unless explicitly approved. Do not add runtime tests next unless explicitly approved. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.
+
+The explicitly approved minimal fixture validator CLI implementation is tracked in `docs/minimal_fixture_validator_cli_implementation.md`.

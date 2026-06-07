@@ -53,6 +53,25 @@ def test_invalid_fixture_returns_one_with_reason_code(tmp_path, capsys):
     assert result["did_write_db"] is False
 
 
+def test_application_submission_fixture_returns_one_with_json_reason(tmp_path, capsys):
+    payload = _load_safe_fixture()
+    payload["request"]["allow_application_submission"] = True
+    invalid_fixture_path = _write_fixture_copy(tmp_path, payload)
+
+    exit_code = fixture_validator_cli.main(
+        ["--fixture", str(invalid_fixture_path), "--json"]
+    )
+
+    assert exit_code == 1
+    result = json.loads(capsys.readouterr().out)
+    assert result["validation_status"] == "failed"
+    assert result["is_valid"] is False
+    assert "application_submission_not_allowed" in result["reason_codes"]
+    assert result["did_execute_fixture"] is False
+    assert result["did_mutate_production"] is False
+    assert result["did_write_db"] is False
+
+
 def test_blocked_db_write_fixture_returns_one_with_json_reason(capsys):
     exit_code = fixture_validator_cli.main(
         ["--fixture", str(BLOCKED_DB_WRITE_FIXTURE_PATH), "--json"]

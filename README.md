@@ -619,6 +619,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Second synthetic fixture payload implementation release safety checkpoint](docs/second_synthetic_fixture_payload_implementation_release_safety_checkpoint.md)
 - [Third synthetic fixture payload implementation plan](docs/third_synthetic_fixture_payload_implementation_plan.md)
 - [Third synthetic fixture payload implementation plan release safety checkpoint](docs/third_synthetic_fixture_payload_implementation_plan_release_safety_checkpoint.md)
+- [Blocked application-submission fixture readiness check](docs/blocked_application_submission_fixture_readiness_check.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

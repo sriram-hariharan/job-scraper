@@ -83,7 +83,76 @@ def test_agentic_benchmark_metrics_compute_expected_values():
         "workflow_registry_agent_count",
         "validation_pass_rate",
         "failed_case_ids",
+        "fixture_validation_passed",
+        "fixture_validation_status",
+        "fixture_validation_checked_count",
+        "fixture_validation_expected_fixture_count",
+        "fixture_validation_failed_fixture_ids",
+        "fixture_validation_reason_codes",
+        "executable_adapter_count",
+        "allow_agent_execution",
+        "did_execute_count",
+        "did_execute_live",
+        "did_mutate_production",
+        "did_write_db",
     }
+
+
+def test_agentic_benchmark_includes_fixture_validation_summary():
+    result = agentic_benchmark.run_benchmark()
+    metrics = result["summary_json"]["metrics"]
+    fixture_validation = result["summary_json"]["fixture_validation"]
+    results_by_filename = {
+        item["fixture_filename"]: item
+        for item in fixture_validation["fixture_validation_results"]
+    }
+
+    assert metrics["fixture_validation_passed"] is True
+    assert metrics["fixture_validation_status"] == "passed"
+    assert metrics["fixture_validation_checked_count"] == 3
+    assert metrics["fixture_validation_expected_fixture_count"] == 3
+    assert metrics["fixture_validation_failed_fixture_ids"] == []
+    assert "db_write_not_allowed" in metrics["fixture_validation_reason_codes"]
+    assert (
+        "application_submission_not_allowed"
+        in metrics["fixture_validation_reason_codes"]
+    )
+    assert sorted(results_by_filename) == [
+        "blocked_application_submission_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
+    assert results_by_filename["safe_execution_request_minimal.json"][
+        "actual_validation_status"
+    ] == "passed"
+    assert results_by_filename["safe_execution_request_minimal.json"][
+        "expected_validation_status"
+    ] == "passed"
+    assert results_by_filename["blocked_db_write_request_minimal.json"][
+        "actual_validation_status"
+    ] == "failed"
+    assert results_by_filename["blocked_db_write_request_minimal.json"][
+        "expected_validation_status"
+    ] == "failed"
+    assert results_by_filename["blocked_application_submission_request_minimal.json"][
+        "actual_validation_status"
+    ] == "failed"
+    assert results_by_filename["blocked_application_submission_request_minimal.json"][
+        "expected_validation_status"
+    ] == "failed"
+    assert result["failed_case_ids"] == []
+    assert result["validation_pass_rate"] == 1.0
+    assert result["workflow_registry_validation_passed"] == 1.0
+    assert metrics["executable_adapter_count"] == 0
+    assert metrics["allow_agent_execution"] is False
+    assert metrics["did_execute_count"] == 0
+    assert metrics["did_execute_live"] is False
+    assert metrics["did_mutate_production"] is False
+    assert metrics["did_write_db"] is False
+    assert all(
+        item["did_execute_fixture"] is False
+        for item in fixture_validation["fixture_validation_results"]
+    )
 
 
 def test_agentic_benchmark_source_health_recommendation_rules_score_correctly():

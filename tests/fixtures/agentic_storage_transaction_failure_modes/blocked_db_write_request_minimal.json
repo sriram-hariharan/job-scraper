@@ -1,0 +1,30 @@
+{
+  "fixture_schema_version": "fixture_schema_v1",
+  "fixture_id": "blocked_db_write_request_minimal",
+  "fixture_family": "blocked_db_write_request",
+  "description": "Synthetic minimal blocked DB-write request fixture for validator checks. This file is inert and is not executed.",
+  "synthetic": true,
+  "contains_private_data": false,
+  "contains_secret": false,
+  "contains_production_path": false,
+  "contains_live_queue_path": false,
+  "contains_application_submission_target": false,
+  "request": {
+    "execution_mode": "dry_run_only",
+    "allow_agent_execution": false,
+    "allow_live_execution": false,
+    "allow_mutation": false,
+    "allow_db_write": true,
+    "allow_queue_update": false,
+    "allow_application_submission": false
+  },
+  "expected_validation": {
+    "validation_status": "failed",
+    "reason_codes": [
+      "db_write_not_allowed"
+    ],
+    "did_execute_fixture": false,
+    "did_mutate_production": false,
+    "did_write_db": false
+  }
+}

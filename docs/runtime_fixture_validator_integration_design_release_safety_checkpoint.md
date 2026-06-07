@@ -127,3 +127,5 @@ Recommended next phase: 80B runtime-facing fixture validator integration design 
 After 80B, use a decision point: either add a second synthetic fixture with explicit approval, start preflight-only validator integration planning without implementation, or start runtime-facing validator integration implementation only after explicit approval.
 
 Do not implement runtime integration next without explicit approval. Do not wire validator into workflow_runner next without explicit approval. Do not wire validator into live planning next without explicit approval. Do not add runtime tests next without explicit approval. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.
+
+The second synthetic fixture payload implementation is tracked in `docs/second_synthetic_fixture_payload_implementation.md`.

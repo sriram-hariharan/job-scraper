@@ -609,6 +609,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Fixture file implementation plan release safety checkpoint](docs/fixture_file_implementation_plan_release_safety_checkpoint.md)
 - [First synthetic fixture payload implementation](docs/first_synthetic_fixture_payload_implementation.md)
 - [First synthetic fixture payload implementation release safety checkpoint](docs/first_synthetic_fixture_payload_implementation_release_safety_checkpoint.md)
+- [Minimal fixture validator module implementation](docs/minimal_fixture_validator_module_implementation.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

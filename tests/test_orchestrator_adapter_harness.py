@@ -34,6 +34,9 @@ def test_preflight_plan_never_enables_or_executes_adapters():
 
     assert plan["allow_agent_execution"] is False
     assert plan["executable_adapter_count"] == 0
+    assert plan["did_execute_live"] is False
+    assert plan["did_mutate_production"] is False
+    assert plan["did_write_db"] is False
     assert plan["summary"]["execution_enabled_count"] == 0
     assert plan["summary"]["did_execute_count"] == 0
     for result in plan["adapter_preflight_results"]:
@@ -44,6 +47,60 @@ def test_preflight_plan_never_enables_or_executes_adapters():
         assert result["allowed_execution_mode"] in {"dry_run_only", "future_read_only"}
         assert "agent_execution_disabled" in result["reason_codes"]
         assert "read_only_preflight" in result["reason_codes"]
+
+
+def test_preflight_plan_includes_read_only_fixture_validation_summary():
+    plan = orchestrator_adapter_harness.build_read_only_adapter_preflight_plan()
+
+    assert plan["fixture_validation_enabled"] is True
+    assert plan["fixture_validation_passed"] is True
+    assert plan["fixture_validation_status"] == "passed"
+    assert plan["fixture_validation_expected_fixture_count"] == 3
+    assert plan["fixture_validation_checked_count"] == 3
+    assert plan["fixture_validation_failed_fixture_ids"] == []
+    assert "db_write_not_allowed" in plan["fixture_validation_reason_codes"]
+    assert "application_submission_not_allowed" in plan["fixture_validation_reason_codes"]
+
+    result_by_filename = {
+        result["fixture_filename"]: result
+        for result in plan["fixture_validation_results"]
+    }
+    assert sorted(result_by_filename) == [
+        "blocked_application_submission_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
+    assert result_by_filename["safe_execution_request_minimal.json"][
+        "actual_validation_status"
+    ] == "passed"
+    assert result_by_filename["blocked_db_write_request_minimal.json"][
+        "actual_validation_status"
+    ] == "failed"
+    assert result_by_filename["blocked_application_submission_request_minimal.json"][
+        "actual_validation_status"
+    ] == "failed"
+    assert "db_write_not_allowed" in result_by_filename[
+        "blocked_db_write_request_minimal.json"
+    ]["actual_reason_codes"]
+    assert "application_submission_not_allowed" in result_by_filename[
+        "blocked_application_submission_request_minimal.json"
+    ]["actual_reason_codes"]
+    assert all(
+        result["expected_matches_actual"]
+        for result in plan["fixture_validation_results"]
+    )
+    assert all(
+        result["did_execute_fixture"] is False
+        and result["did_mutate_production"] is False
+        and result["did_write_db"] is False
+        for result in plan["fixture_validation_results"]
+    )
+    assert plan["allow_agent_execution"] is False
+    assert plan["executable_adapter_count"] == 0
+    assert plan["summary"]["did_execute_count"] == 0
+    assert plan["did_execute_live"] is False
+    assert plan["did_mutate_production"] is False
+    assert plan["did_write_db"] is False
 
 
 def test_preflight_result_contract_fields_are_present():

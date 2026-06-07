@@ -9,13 +9,31 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from src.agents import orchestrator_adapters, workflow_planner, workflow_registry
+from src.agents import (
+    fixture_validator,
+    orchestrator_adapters,
+    workflow_planner,
+    workflow_registry,
+)
 
 
 HARNESS_VERSION = "read_only_adapter_harness_v1"
 EXECUTION_MODE = "read_only_preflight"
 PREFLIGHT_JSON_NAME = "read_only_adapter_preflight.json"
 PREFLIGHT_MD_NAME = "read_only_adapter_preflight.md"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+APPROVED_FIXTURE_DIR = (
+    REPO_ROOT / "tests" / "fixtures" / "agentic_storage_transaction_failure_modes"
+)
+APPROVED_FIXTURE_FILENAMES = tuple(
+    sorted(
+        [
+            "safe_execution_request_minimal.json",
+            "blocked_db_write_request_minimal.json",
+            "blocked_application_submission_request_minimal.json",
+        ]
+    )
+)
 
 
 def _clean_text(value: Any) -> str:
@@ -96,6 +114,130 @@ def _reason_codes_for_result(spec: Dict[str, Any], presence: Dict[str, Dict[str,
     if presence and any(not bool(item.get("exists")) for item in presence.values()):
         reason_codes.append("missing_required_artifacts")
     return sorted(set(reason_codes))
+
+
+def _expected_fixture_status(expected_validation: Dict[str, Any]) -> str:
+    status = _clean_text(expected_validation.get("validation_status"))
+    if status:
+        return status
+    if expected_validation.get("should_be_valid_fixture") is True:
+        return "passed"
+    return "failed"
+
+
+def _expected_fixture_reason_codes(expected_validation: Dict[str, Any]) -> List[str]:
+    reason_codes = expected_validation.get("reason_codes")
+    if reason_codes is None:
+        reason_codes = expected_validation.get("expected_reason_codes")
+    return sorted(_clean_text(item) for item in list(reason_codes or []) if _clean_text(item))
+
+
+def _load_fixture_payload(fixture_path: Path) -> Dict[str, Any]:
+    try:
+        payload = json.loads(fixture_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+def _build_fixture_validation_preflight_summary(
+    fixture_dir: Path = APPROVED_FIXTURE_DIR,
+    fixture_filenames: tuple[str, ...] = APPROVED_FIXTURE_FILENAMES,
+) -> Dict[str, Any]:
+    expected_filenames = sorted(fixture_filenames)
+    existing_filenames = sorted(path.name for path in fixture_dir.iterdir()) if fixture_dir.is_dir() else []
+    unexpected_filenames = [
+        name for name in existing_filenames if name != ".gitkeep" and name not in expected_filenames
+    ]
+    missing_filenames = [name for name in expected_filenames if name not in existing_filenames]
+
+    results: List[Dict[str, Any]] = []
+    failed_fixture_ids: List[str] = []
+    observed_reason_codes: List[str] = []
+
+    for filename in expected_filenames:
+        fixture_path = fixture_dir / filename
+        payload = _load_fixture_payload(fixture_path)
+        expected_validation = payload.get("expected_validation") if isinstance(payload, dict) else {}
+        if not isinstance(expected_validation, dict):
+            expected_validation = {}
+
+        actual_result = fixture_validator.validate_fixture_file(fixture_path)
+        expected_status = _expected_fixture_status(expected_validation)
+        expected_reason_codes = _expected_fixture_reason_codes(expected_validation)
+        actual_reason_codes = sorted(
+            _clean_text(item)
+            for item in list(actual_result.get("reason_codes") or [])
+            if _clean_text(item)
+        )
+        expected_flags = {
+            "did_execute_fixture": expected_validation.get("did_execute_fixture") is False,
+            "did_mutate_production": expected_validation.get("did_mutate_production") is False,
+            "did_write_db": expected_validation.get("did_write_db") is False,
+        }
+        actual_flags = {
+            "did_execute_fixture": actual_result.get("did_execute_fixture") is False,
+            "did_mutate_production": actual_result.get("did_mutate_production") is False,
+            "did_write_db": actual_result.get("did_write_db") is False,
+        }
+        missing_expected_reason_codes = [
+            reason_code
+            for reason_code in expected_reason_codes
+            if reason_code not in actual_reason_codes
+        ]
+        matches_expected = (
+            fixture_path.is_file()
+            and _clean_text(actual_result.get("validation_status")) == expected_status
+            and not missing_expected_reason_codes
+            and all(expected_flags.values())
+            and all(actual_flags.values())
+        )
+        fixture_id = _clean_text(payload.get("fixture_id")) or filename
+        if not matches_expected:
+            failed_fixture_ids.append(fixture_id)
+
+        observed_reason_codes.extend(actual_reason_codes)
+        results.append(
+            {
+                "fixture_filename": filename,
+                "fixture_path": str(fixture_path.relative_to(REPO_ROOT)),
+                "fixture_exists": fixture_path.is_file(),
+                "fixture_id": fixture_id,
+                "fixture_family": _clean_text(payload.get("fixture_family")),
+                "expected_validation_status": expected_status,
+                "actual_validation_status": _clean_text(actual_result.get("validation_status")),
+                "expected_reason_codes": expected_reason_codes,
+                "actual_reason_codes": actual_reason_codes,
+                "missing_expected_reason_codes": missing_expected_reason_codes,
+                "expected_matches_actual": matches_expected,
+                "did_execute_fixture": bool(actual_result.get("did_execute_fixture")),
+                "did_mutate_production": bool(actual_result.get("did_mutate_production")),
+                "did_write_db": bool(actual_result.get("did_write_db")),
+            }
+        )
+
+    reason_codes = sorted(set(observed_reason_codes))
+    if unexpected_filenames:
+        reason_codes.append("unexpected_fixture_file")
+        failed_fixture_ids.extend(unexpected_filenames)
+    if missing_filenames:
+        reason_codes.append("missing_fixture_file")
+        failed_fixture_ids.extend(missing_filenames)
+
+    fixture_validation_passed = not failed_fixture_ids
+    return {
+        "fixture_validation_enabled": True,
+        "fixture_validation_status": "passed" if fixture_validation_passed else "failed",
+        "fixture_validation_passed": fixture_validation_passed,
+        "fixture_validation_checked_count": len(results),
+        "fixture_validation_expected_fixture_count": len(expected_filenames),
+        "fixture_validation_results": results,
+        "fixture_validation_failed_fixture_ids": sorted(set(failed_fixture_ids)),
+        "fixture_validation_reason_codes": sorted(set(reason_codes)),
+        "fixture_validation_approved_fixture_filenames": expected_filenames,
+        "fixture_validation_unexpected_fixture_filenames": unexpected_filenames,
+        "fixture_validation_missing_fixture_filenames": missing_filenames,
+    }
 
 
 def _build_preflight_result(
@@ -179,6 +321,7 @@ def build_read_only_adapter_preflight_plan(
         for artifact in dict(result.get("artifact_presence") or {}).values()
         if not bool(artifact.get("exists"))
     )
+    fixture_validation = _build_fixture_validation_preflight_summary()
     plan = {
         "harness_version": HARNESS_VERSION,
         "execution_mode": EXECUTION_MODE,
@@ -189,6 +332,26 @@ def build_read_only_adapter_preflight_plan(
         "allow_agent_execution": False,
         "planned_adapter_count": len(results),
         "executable_adapter_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "fixture_validation": fixture_validation,
+        "fixture_validation_enabled": fixture_validation["fixture_validation_enabled"],
+        "fixture_validation_status": fixture_validation["fixture_validation_status"],
+        "fixture_validation_passed": fixture_validation["fixture_validation_passed"],
+        "fixture_validation_checked_count": fixture_validation[
+            "fixture_validation_checked_count"
+        ],
+        "fixture_validation_expected_fixture_count": fixture_validation[
+            "fixture_validation_expected_fixture_count"
+        ],
+        "fixture_validation_results": fixture_validation["fixture_validation_results"],
+        "fixture_validation_failed_fixture_ids": fixture_validation[
+            "fixture_validation_failed_fixture_ids"
+        ],
+        "fixture_validation_reason_codes": fixture_validation[
+            "fixture_validation_reason_codes"
+        ],
         "adapter_preflight_results": results,
         "context": context,
         "summary": {
@@ -223,6 +386,14 @@ def validate_read_only_adapter_preflight_plan(
         reason_codes.append("allow_agent_execution_true")
     if int(plan.get("executable_adapter_count") or 0) != 0:
         reason_codes.append("executable_adapter_count_nonzero")
+    if bool(plan.get("did_execute_live")):
+        reason_codes.append("did_execute_live_true")
+    if bool(plan.get("did_mutate_production")):
+        reason_codes.append("did_mutate_production_true")
+    if bool(plan.get("did_write_db")):
+        reason_codes.append("did_write_db_true")
+    if plan.get("fixture_validation") and not bool(plan.get("fixture_validation_passed")):
+        reason_codes.append("fixture_validation_failed")
     if actual_order != expected_order:
         reason_codes.append("adapter_order_mismatch")
 
@@ -294,6 +465,8 @@ def render_read_only_adapter_preflight_markdown(
         f"Execution mode: `{_clean_text(payload.get('execution_mode'))}`",
         f"Allow agent execution: `{bool(payload.get('allow_agent_execution'))}`",
         f"Executable adapter count: `{int(payload.get('executable_adapter_count') or 0)}`",
+        f"Fixture validation: `{_clean_text(payload.get('fixture_validation_status'))}`",
+        f"Fixture validation checked count: `{int(payload.get('fixture_validation_checked_count') or 0)}`",
         f"Validation: `{validation.get('validation_status', '')}`",
         "",
         "## Adapter Results",

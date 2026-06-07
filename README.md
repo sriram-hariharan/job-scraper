@@ -614,6 +614,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Minimal fixture validator CLI implementation](docs/minimal_fixture_validator_cli_implementation.md)
 - [Minimal fixture validator CLI implementation release safety checkpoint](docs/minimal_fixture_validator_cli_implementation_release_safety_checkpoint.md)
 - [Runtime fixture validator integration design](docs/runtime_fixture_validator_integration_design.md)
+- [Runtime fixture validator integration design release safety checkpoint](docs/runtime_fixture_validator_integration_design_release_safety_checkpoint.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

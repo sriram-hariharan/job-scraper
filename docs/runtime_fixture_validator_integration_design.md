@@ -141,3 +141,5 @@ Recommended next phase: 79B runtime-facing fixture validator integration design 
 After 79B: 80A runtime-facing fixture validator integration design release safety checkpoint, docs/tests only.
 
 Do not implement runtime integration next. Do not wire validator into workflow_runner next. Do not wire validator into live planning next. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.
+
+The 80A release safety checkpoint is tracked in `docs/runtime_fixture_validator_integration_design_release_safety_checkpoint.md`.

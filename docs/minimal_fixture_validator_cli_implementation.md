@@ -96,3 +96,5 @@ Phase 77A is minimal fixture validator CLI implementation only. Fixture validato
 Recommended next phase: 77B minimal fixture validator CLI implementation final audit and merge gate.
 
 After 77B: 78A minimal fixture validator CLI implementation release safety checkpoint, docs/tests only.
+
+The 78A release safety checkpoint is tracked in `docs/minimal_fixture_validator_cli_implementation_release_safety_checkpoint.md`.

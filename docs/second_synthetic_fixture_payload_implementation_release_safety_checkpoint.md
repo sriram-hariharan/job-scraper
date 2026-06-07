@@ -157,3 +157,5 @@ Recommended next phase: 82B second synthetic fixture payload implementation rele
 After 82B, use a decision point: add another blocked synthetic fixture with explicit approval, design preflight-only validator integration without implementation, or start implementation only after explicit approval.
 
 Do not wire validator into workflow_runner next without explicit approval. Do not wire validator into live planning next without explicit approval. Do not auto-discover fixture directories next without explicit approval. Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.
+
+The third synthetic fixture payload implementation plan is tracked in `docs/third_synthetic_fixture_payload_implementation_plan.md`.

@@ -90,6 +90,9 @@ SECOND_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_DOC_PATH = Path(
 SECOND_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/second_synthetic_fixture_payload_implementation_release_safety_checkpoint.md"
 )
+THIRD_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_PLAN_DOC_PATH = Path(
+    "docs/third_synthetic_fixture_payload_implementation_plan.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -8333,6 +8336,103 @@ def test_second_synthetic_fixture_payload_release_checkpoint_covers_phase_82a_co
         "docs/second_synthetic_fixture_payload_implementation_release_safety_checkpoint.md"
         in linked_docs
     )
+
+
+def test_third_synthetic_fixture_payload_implementation_plan_covers_phase_83a_contract():
+    assert THIRD_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_PLAN_DOC_PATH.exists()
+    assert not (
+        FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH
+        / "blocked_application_submission_request_minimal.json"
+    ).exists()
+
+    current_contents = sorted(
+        path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
+        for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
+    )
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
+
+    source = THIRD_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_PLAN_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "third synthetic fixture payload implementation plan only",
+        "Third fixture payload file implementation: `NOT_YET`",
+        "No fixture payload file is added in this phase.",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/blocked_application_submission_request_minimal.json",
+        "blocked_application_submission_request",
+        "application_submission_not_allowed",
+        "Reason code support must be verified before future implementation.",
+        "Future implementation cannot assume `application_submission_not_allowed` exists.",
+        "Future implementation must inspect `src/agents/fixture_validator.py` and tests before adding the fixture.",
+        "If the reason code exists, add only the fixture/tests/docs.",
+        "If the reason code does not exist, add the smallest validator-only reason-code support and tests, with no runtime integration.",
+        "Existing fixtures remain unchanged",
+        "The fixture directory still contains only `.gitkeep`, `blocked_db_write_request_minimal.json`, and `safe_execution_request_minimal.json`.",
+        "No `blocked_application_submission_request_minimal.json` fixture file exists yet.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "Third synthetic fixture payload implementation plan: `PASS`",
+        "Third fixture payload file implementation: `NOT_YET`",
+        "Proposed blocked application-submission fixture: `READY_FOR_REVIEW`",
+        "Proposed `application_submission_not_allowed` reason code: `NEEDS_VERIFICATION`",
+        "Existing fixture payload files: `GO`",
+        "Additional fixture payload files in this phase: `NO_GO`",
+        "Runtime integration implementation: `NO_GO`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture discovery in runtime: `NO_GO`",
+        "Automatic fixture validation: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Runtime failure-mode tests: `NO_GO`",
+        "Storage integration tests: `NO_GO`",
+        "DB migrations: `NO_GO`",
+        "Runtime DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Live execution: `NO_GO`",
+        "`fixture_schema_version`: `fixture_schema_v1`",
+        "`fixture_id`: `blocked_application_submission_request_minimal`",
+        "`fixture_family`: `blocked_application_submission_request`",
+        "`request.allow_application_submission`: `true`",
+        "`expected_validation.reason_codes` includes `application_submission_not_allowed`",
+        "Recommended next phase: 83B third synthetic fixture payload implementation plan final audit and merge gate.",
+        "After 83B: 84A third synthetic fixture payload implementation plan release safety checkpoint, docs/tests only.",
+        "Do not add `blocked_application_submission_request_minimal.json` next unless 83B passes and explicit approval is given.",
+        "Do not wire validator into workflow_runner next.",
+        "Do not wire validator into live planning next.",
+        "Do not auto-discover fixture directories next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Plan Scope",
+        "## Existing Fixture Inventory",
+        "## Proposed Future Fixture Contract",
+        "## Reason-Code Readiness Check",
+        "## Future Implementation Constraints",
+        "## Runtime Isolation Confirmation",
+        "## Forbidden Next-Step Shortcuts",
+        "## Explicit Non-Goals",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            SECOND_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/third_synthetic_fixture_payload_implementation_plan.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

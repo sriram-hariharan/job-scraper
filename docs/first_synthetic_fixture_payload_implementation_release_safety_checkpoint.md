@@ -157,4 +157,6 @@ Recommended next phase: 74B first synthetic fixture payload implementation relea
 
 After 74B, use a decision point: either start fixture validator implementation with explicit approval, or add a second synthetic fixture payload with explicit approval.
 
+The minimal fixture validator module implementation is tracked in `docs/minimal_fixture_validator_module_implementation.md`.
+
 Do not implement fixture validators next unless explicitly approved. Do not add validator tests next unless explicitly approved. Do not add additional fixture files next unless explicitly approved. Do not add runtime tests next. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.

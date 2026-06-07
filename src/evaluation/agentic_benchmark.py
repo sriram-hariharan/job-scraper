@@ -13,6 +13,7 @@ from src.agents import (
     job_prioritization_agent,
     llmops,
     operator_review_agent,
+    orchestrator_adapter_harness,
     resume_match_agent,
     source_health_agent,
     tailoring_decision_agent,
@@ -644,6 +645,11 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
     registry_validation = workflow_registry.validate_agentic_workflow_manifest()
     feedback_export_schema = evaluate_agent_feedback_export_schema()
     rag_evaluation_schema = evaluate_rag_evaluation_schema()
+    preflight_plan = orchestrator_adapter_harness.build_read_only_adapter_preflight_plan(
+        pipeline_run_id="agentic_benchmark",
+        owner_user_id="benchmark",
+    )
+    fixture_validation = dict(preflight_plan.get("fixture_validation") or {})
     validation_passes = [
         bool(source_health["validation_passed"]),
         bool(resume_match["validation_passed"]),
@@ -651,6 +657,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         bool(job_priority["validation_passed"]),
         bool(tailoring_decision["validation_passed"]),
         bool(operator_review["validation_passed"]),
+        bool(fixture_validation.get("fixture_validation_passed")),
     ]
     failed_case_ids = (
         list(source_health["failed_case_ids"])
@@ -696,6 +703,30 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
         "workflow_registry_agent_count": registry_validation.get("agent_count", 0),
         "validation_pass_rate": bool_rate(validation_passes),
         "failed_case_ids": failed_case_ids,
+        "fixture_validation_passed": bool(
+            fixture_validation.get("fixture_validation_passed")
+        ),
+        "fixture_validation_status": fixture_validation.get("fixture_validation_status", ""),
+        "fixture_validation_checked_count": fixture_validation.get(
+            "fixture_validation_checked_count", 0
+        ),
+        "fixture_validation_expected_fixture_count": fixture_validation.get(
+            "fixture_validation_expected_fixture_count", 0
+        ),
+        "fixture_validation_failed_fixture_ids": fixture_validation.get(
+            "fixture_validation_failed_fixture_ids", []
+        ),
+        "fixture_validation_reason_codes": fixture_validation.get(
+            "fixture_validation_reason_codes", []
+        ),
+        "executable_adapter_count": preflight_plan.get("executable_adapter_count", 0),
+        "allow_agent_execution": bool(preflight_plan.get("allow_agent_execution")),
+        "did_execute_count": int(
+            dict(preflight_plan.get("summary") or {}).get("did_execute_count") or 0
+        ),
+        "did_execute_live": bool(preflight_plan.get("did_execute_live")),
+        "did_mutate_production": bool(preflight_plan.get("did_mutate_production")),
+        "did_write_db": bool(preflight_plan.get("did_write_db")),
     }
     return {
         **metrics,
@@ -717,6 +748,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "workflow_registry_validation": registry_validation,
             "agent_feedback_export_schema": feedback_export_schema,
             "rag_evaluation_schema": rag_evaluation_schema,
+            "fixture_validation": fixture_validation,
         },
         "component_results": {
             "source_health": source_health,
@@ -729,6 +761,7 @@ def run_benchmark(fixture_path: str | Path = DEFAULT_FIXTURE_PATH) -> Dict[str, 
             "workflow_registry": registry_validation,
             "agent_feedback_export_schema": feedback_export_schema,
             "rag_evaluation_schema": rag_evaluation_schema,
+            "fixture_validation": fixture_validation,
         },
     }
 

@@ -101,3 +101,5 @@ The fixture contains no private data, no secrets, no production paths, no live q
 Recommended next phase: 86B blocked application-submission synthetic fixture implementation final audit and merge gate.
 
 Do not wire validator into workflow_runner next. Do not wire validator into live planning next. Do not auto-discover fixture directories next. Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, live execution, approval API/storage, or application submission next.
+
+The blocked application-submission fixture implementation release safety checkpoint is tracked in `docs/blocked_application_submission_fixture_implementation_release_safety_checkpoint.md`.

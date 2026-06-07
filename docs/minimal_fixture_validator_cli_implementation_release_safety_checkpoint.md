@@ -130,3 +130,5 @@ Recommended next phase: 78B minimal fixture validator CLI implementation release
 After 78B, use a decision point: either begin runtime-facing validator integration design without wiring it yet, add a second synthetic fixture with explicit approval, or add CLI ergonomics only with explicit approval.
 
 Do not wire CLI into runtime next unless explicitly approved. Do not wire validator into workflow_runner next unless explicitly approved. Do not add runtime tests next unless explicitly approved. Do not implement migrations, storage APIs, DB writes, mutation, or live execution next.
+
+The runtime-facing fixture validator integration design is tracked in `docs/runtime_fixture_validator_integration_design.md`.

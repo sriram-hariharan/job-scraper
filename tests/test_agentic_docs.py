@@ -108,6 +108,9 @@ BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_
 PREFLIGHT_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH = Path(
     "docs/preflight_fixture_validator_integration.md"
 )
+BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH = Path(
+    "docs/benchmark_fixture_validator_integration.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -8920,6 +8923,75 @@ def test_preflight_fixture_validator_integration_covers_phase_88a_contract():
         ]
     )
     assert "docs/preflight_fixture_validator_integration.md" in linked_docs
+
+
+def test_benchmark_fixture_validator_integration_covers_phase_89a_contract():
+    assert BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH.exists()
+
+    source = BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "agentic benchmark fixture validator integration implementation",
+        "benchmark now surfaces fixture validation summary",
+        "benchmark integration is read-only",
+        "reuses preflight fixture-validation semantics",
+        "benchmark does not execute fixtures",
+        "benchmark does not call workflow_runner",
+        "benchmark does not call live planning",
+        "benchmark does not call app services",
+        "benchmark does not call queue",
+        "benchmark does not call DB",
+        "benchmark does not mutate",
+        "benchmark does not submit applications",
+        "Blocked fixtures are expected to fail validation and still produce overall benchmark pass",
+        "safe_execution_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "blocked_application_submission_request_minimal.json",
+        "db_write_not_allowed",
+        "application_submission_not_allowed",
+        "fixture_validation_passed",
+        "fixture_validation_status",
+        "fixture_validation_checked_count",
+        "fixture_validation_expected_fixture_count",
+        "fixture_validation_failed_fixture_ids",
+        "fixture_validation_reason_codes",
+        "failed_case_ids",
+        "validation_pass_rate",
+        "workflow_registry_validation_passed",
+        "workflow_runner.py` remains dry-run only",
+        "`executable_adapter_count` remains 0",
+        "`allow_agent_execution` remains false",
+        "`did_execute_count` remains 0",
+        "`did_execute_live` remains false",
+        "`did_mutate_production` remains false",
+        "`did_write_db` remains false",
+        "Benchmark fixture validator integration: `PASS`",
+        "Runtime-facing integration scope: `BENCHMARK_REPORTING_ONLY`",
+        "Preflight fixture validation reuse: `GO`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Automatic execution: `NO_GO`",
+        "DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Application submission: `NO_GO`",
+        "Approval API/storage: `NO_GO`",
+        "Scheduler/background execution: `NO_GO`",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/benchmark_fixture_validator_integration.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

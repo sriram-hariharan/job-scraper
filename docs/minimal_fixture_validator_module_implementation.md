@@ -108,3 +108,5 @@ Recommended next phase: 75B minimal fixture validator module implementation fina
 After 75B: 76A minimal fixture validator module implementation release safety checkpoint, docs/tests only.
 
 The 76A release safety checkpoint is tracked in `docs/minimal_fixture_validator_module_implementation_release_safety_checkpoint.md`.
+
+The minimal fixture validator CLI implementation is tracked in `docs/minimal_fixture_validator_cli_implementation.md`.

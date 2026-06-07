@@ -96,6 +96,9 @@ THIRD_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_PLAN_DOC_PATH = Path(
 THIRD_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/third_synthetic_fixture_payload_implementation_plan_release_safety_checkpoint.md"
 )
+BLOCKED_APPLICATION_SUBMISSION_FIXTURE_READINESS_CHECK_DOC_PATH = Path(
+    "docs/blocked_application_submission_fixture_readiness_check.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -8559,6 +8562,120 @@ def test_third_synthetic_fixture_payload_plan_release_checkpoint_covers_phase_84
         "docs/third_synthetic_fixture_payload_implementation_plan_release_safety_checkpoint.md"
         in linked_docs
     )
+
+
+def test_blocked_application_submission_fixture_readiness_check_covers_phase_85a_contract():
+    assert BLOCKED_APPLICATION_SUBMISSION_FIXTURE_READINESS_CHECK_DOC_PATH.exists()
+    assert not (
+        FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH
+        / "blocked_application_submission_request_minimal.json"
+    ).exists()
+
+    current_contents = sorted(
+        path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
+        for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
+    )
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
+
+    source = BLOCKED_APPLICATION_SUBMISSION_FIXTURE_READINESS_CHECK_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "blocked application-submission fixture readiness check only",
+        "Blocked application-submission fixture implementation: `NOT_YET`",
+        "No fixture payload file is added in this phase.",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/blocked_application_submission_request_minimal.json",
+        "blocked_application_submission_request",
+        "application_submission_not_allowed",
+        "`application_submission_not_allowed` reason-code support: `VERIFIED`",
+        "`application_submission_not_allowed` appears in `src/agents/fixture_validator.py`.",
+        "Existing tests cover `allow_application_submission=true` failure behavior.",
+        "Future fixture implementation can use `application_submission_not_allowed` without changing validator behavior",
+        "Current fixture directory remains unchanged",
+        "`blocked_application_submission_request_minimal.json` does not exist yet.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "Blocked application-submission fixture readiness check: `PASS`",
+        "Blocked application-submission fixture implementation: `NOT_YET`",
+        "Future fixture payload file: `READY_FOR_REVIEW`",
+        "Existing fixture payload files: `GO`",
+        "Additional fixture payload files in this phase: `NO_GO`",
+        "Runtime integration implementation: `NO_GO`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture discovery in runtime: `NO_GO`",
+        "Automatic fixture validation: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Runtime failure-mode tests: `NO_GO`",
+        "Storage integration tests: `NO_GO`",
+        "DB migrations: `NO_GO`",
+        "Runtime DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Live execution: `NO_GO`",
+        "`fixture_schema_version`: `fixture_schema_v1`",
+        "`fixture_id`: `blocked_application_submission_request_minimal`",
+        "`fixture_family`: `blocked_application_submission_request`",
+        "`synthetic`: `true`",
+        "`contains_private_data`: `false`",
+        "`contains_secret`: `false`",
+        "`contains_production_path`: `false`",
+        "`contains_live_queue_path`: `false`",
+        "`contains_application_submission_target`: `false`",
+        "`request.execution_mode`: `dry_run_only`",
+        "`request.allow_agent_execution`: `false`",
+        "`request.allow_live_execution`: `false`",
+        "`request.allow_mutation`: `false`",
+        "`request.allow_db_write`: `false`",
+        "`request.allow_queue_update`: `false`",
+        "`request.allow_application_submission`: `true`",
+        "`expected_validation.validation_status`: `failed`",
+        "`expected_validation.reason_codes` includes `application_submission_not_allowed`",
+        "`expected_validation.did_execute_fixture`: `false`",
+        "`expected_validation.did_mutate_production`: `false`",
+        "`expected_validation.did_write_db`: `false`",
+        "No runtime integration is needed to add the fixture.",
+        "Recommended next phase: 85B blocked application-submission fixture readiness check final audit and merge gate.",
+        "After 85B: 86A blocked application-submission synthetic fixture implementation, only if explicitly approved.",
+        "Do not add `blocked_application_submission_request_minimal.json` next unless 85B passes and explicit approval is given.",
+        "Do not wire validator into workflow_runner next.",
+        "Do not wire validator into live planning next.",
+        "Do not auto-discover fixture directories next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Readiness Scope",
+        "## Existing Fixture Inventory",
+        "## Proposed Future Fixture",
+        "## Reason-Code Support Verification",
+        "## Future Implementation Allowance",
+        "## Runtime Isolation Confirmation",
+        "## Forbidden Next-Step Shortcuts",
+        "## Explicit Non-Goals",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            THIRD_SYNTHETIC_FIXTURE_PAYLOAD_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/blocked_application_submission_fixture_readiness_check.md" in linked_docs
+
+    validator_source = Path("src/agents/fixture_validator.py").read_text(encoding="utf-8")
+    assert "application_submission_not_allowed" in validator_source
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

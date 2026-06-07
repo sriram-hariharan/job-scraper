@@ -102,6 +102,9 @@ BLOCKED_APPLICATION_SUBMISSION_FIXTURE_READINESS_CHECK_DOC_PATH = Path(
 BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_DOC_PATH = Path(
     "docs/blocked_application_submission_fixture_implementation.md"
 )
+BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/blocked_application_submission_fixture_implementation_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -8738,6 +8741,113 @@ def test_blocked_application_submission_fixture_implementation_covers_phase_86a_
         ]
     )
     assert "docs/blocked_application_submission_fixture_implementation.md" in linked_docs
+
+
+def test_blocked_application_submission_fixture_release_checkpoint_covers_phase_87a_contract():
+    assert (
+        BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    )
+
+    current_contents = sorted(
+        path.relative_to(FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH).as_posix()
+        for path in FIXTURE_STORAGE_TRANSACTION_FAILURE_MODE_DIR_PATH.rglob("*")
+    )
+    assert current_contents == [
+        ".gitkeep",
+        "blocked_application_submission_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+    ]
+
+    source = BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "blocked application-submission fixture implementation is complete",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/blocked_application_submission_request_minimal.json",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/blocked_db_write_request_minimal.json",
+        "tests/fixtures/agentic_storage_transaction_failure_modes/safe_execution_request_minimal.json",
+        "The fixture directory contains only:",
+        ".gitkeep",
+        "blocked_application_submission_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "safe_execution_request_minimal.json",
+        "The blocked application-submission fixture is synthetic and inert.",
+        "The blocked application-submission fixture is not executed.",
+        "The blocked application-submission fixture is not wired into runtime.",
+        "The blocked application-submission fixture is not discovered by workflow_runner.",
+        "The blocked application-submission fixture is not used by live planning.",
+        "request.allow_application_submission` true",
+        "The expected validator result is failed.",
+        "The expected reason code includes `application_submission_not_allowed`.",
+        "expected `did_execute_fixture` false",
+        "expected `did_mutate_production` false",
+        "expected `did_write_db` false",
+        "The validator rejects blocked application-submission fixture.",
+        "The CLI rejects blocked application-submission fixture.",
+        "No runtime integration added.",
+        "No workflow_runner integration added.",
+        "No live planning integration added.",
+        "`workflow_runner.py` remains dry-run only.",
+        "executable_adapter_count=0",
+        "Release checkpoint: `PASS`",
+        "Blocked application-submission fixture implementation: `GO`",
+        "Blocked application-submission fixture payload: `GO`",
+        "Existing fixture payload files: `GO`",
+        "Additional fixture payload files in this phase: `NO_GO`",
+        "Runtime integration implementation: `NO_GO`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture discovery in runtime: `NO_GO`",
+        "Automatic fixture validation: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Runtime failure-mode tests: `NO_GO`",
+        "Storage integration tests: `NO_GO`",
+        "DB migrations: `NO_GO`",
+        "Runtime DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Live execution: `NO_GO`",
+        "Recommended next phase: 87B blocked application-submission fixture release safety checkpoint final audit and merge gate.",
+        "add another blocked synthetic fixture with explicit approval",
+        "design preflight-only validator integration without implementation",
+        "pause fixture work and review fixture coverage inventory",
+        "Do not add more fixture payload files next unless explicitly approved.",
+        "Do not wire validator into workflow_runner next.",
+        "Do not wire validator into live planning next.",
+        "Do not auto-discover fixture directories next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    for section in [
+        "## Current Checkpoint Scope",
+        "## Release Decision",
+        "## Fixture Directory Contents",
+        "## Blocked Application-Submission Fixture Safety Contract",
+        "## Validator/CLI Coverage Confirmation",
+        "## Runtime Isolation Confirmation",
+        "## Forbidden Next-Step Shortcuts",
+        "## Explicit Non-Goals",
+        "## Recommended Next Phase",
+    ]:
+        assert section in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            BLOCKED_APPLICATION_SUBMISSION_FIXTURE_IMPLEMENTATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/blocked_application_submission_fixture_implementation_release_safety_checkpoint.md"
+        in linked_docs
+    )
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

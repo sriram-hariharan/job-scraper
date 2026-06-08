@@ -4,6 +4,8 @@ Doc path: `docs/runtime_safety_roadmap_review.md`
 
 Phase 103A is runtime safety roadmap review only. This phase is roadmap-only and docs/tests only.
 
+Follow-up design: `docs/approval_api_storage_design.md`.
+
 Execution enablement: NOT_YET.
 
 Runtime-facing integration scope: ROADMAP_ONLY.

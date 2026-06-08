@@ -129,6 +129,9 @@ FIXTURE_VALIDATION_FAILURE_MODE_TEST_DESIGN_DOC_PATH = Path(
 FIXTURE_VALIDATION_FAILURE_MODE_TEST_IMPLEMENTATION_DOC_PATH = Path(
     "docs/fixture_validation_failure_mode_test_implementation.md"
 )
+FIXTURE_VALIDATION_FAILURE_MODE_TESTS_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/fixture_validation_failure_mode_tests_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9492,6 +9495,84 @@ def test_fixture_validation_failure_mode_test_implementation_covers_phase_95a_co
         ]
     )
     assert "docs/fixture_validation_failure_mode_test_implementation.md" in linked_docs
+
+
+def test_fixture_validation_failure_mode_tests_release_checkpoint_covers_phase_96a_contract():
+    assert FIXTURE_VALIDATION_FAILURE_MODE_TESTS_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = (
+        FIXTURE_VALIDATION_FAILURE_MODE_TESTS_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+            encoding="utf-8"
+        )
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "fixture validation failure-mode test implementation is complete",
+        "tests prove missing fixture validation blocks",
+        "tests prove malformed fixture JSON blocks",
+        "tests prove unexpected extra fixture file blocks",
+        "tests prove wrong fixture counts block",
+        "tests prove fixture_validation_failed_fixture_ids non-empty blocks",
+        "tests prove fixture_validation_status not passed blocks",
+        "tests prove fixture_validation_passed false blocks",
+        "tests prove actual/expected validation mismatch blocks",
+        "tests prove executable_adapter_count greater than 0 blocks",
+        "tests prove allow_agent_execution true blocks",
+        "tests prove did_execute_count non-zero blocks",
+        "tests prove did_execute_live true blocks",
+        "tests prove did_mutate_production true blocks",
+        "tests prove did_write_db true blocks",
+        "Expected blocked-fixture failures are accepted when actual failure matches expected_validation",
+        "Blocked results remain non-executing",
+        "`workflow_runner.py` remains dry-run only",
+        "No real fixture payload JSON files modified",
+        "No permanent malformed fixture payload files added",
+        "The fixture directory remains unchanged",
+        "No runtime behavior added in this checkpoint phase",
+        "No live planning integration added",
+        "No app services integration added",
+        "No queue integration added",
+        "No DB writes added",
+        "No mutation added",
+        "No application submission added",
+        "Release checkpoint: PASS",
+        "Fixture validation failure-mode test implementation: GO",
+        "Runtime-facing integration scope: TESTS_ONLY",
+        "Workflow runner blocking gate reuse: GO",
+        "Real fixture payload mutation: NO_GO",
+        "Permanent malformed fixture files: NO_GO",
+        "Workflow runner runtime behavior changes: NO_GO",
+        "Live planning integration: NO_GO",
+        "App services integration: NO_GO",
+        "Queue integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "Recommended next phase: 96B fixture validation failure-mode tests release safety checkpoint final audit and merge gate.",
+        "Do not wire validator into app services next without a design/checkpoint phase.",
+        "Do not wire validator into queue mutation next without a design/checkpoint phase.",
+        "Do not enable execution next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            FIXTURE_VALIDATION_FAILURE_MODE_TEST_IMPLEMENTATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/fixture_validation_failure_mode_tests_release_safety_checkpoint.md"
+        in linked_docs
+    )
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

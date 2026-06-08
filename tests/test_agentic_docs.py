@@ -138,6 +138,9 @@ APP_SERVICE_SAFETY_GATE_DESIGN_DOC_PATH = Path(
 APP_SERVICE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH = Path(
     "docs/app_service_safety_gate_implementation.md"
 )
+APP_SERVICE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/app_service_safety_gate_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9713,6 +9716,76 @@ def test_app_service_safety_gate_implementation_covers_phase_98a_contract():
         ]
     )
     assert "docs/app_service_safety_gate_implementation.md" in linked_docs
+
+
+def test_app_service_safety_gate_release_checkpoint_covers_phase_99a_contract():
+    assert APP_SERVICE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = APP_SERVICE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "No runtime behavior added in this checkpoint phase",
+        "app-service safety gate implementation is complete",
+        "`src/app/services.py` has blocking-only safety gate",
+        "App services enforce workflow-runner safety gate",
+        "App services do not bypass workflow-runner fixture validation gate",
+        "Blocked app-service results remain non-executing",
+        "`workflow_runner.py` remains dry-run only",
+        "App-service safety gate blocks unsafe workflow-runner output",
+        "App-service safety gate blocks missing fixture validation",
+        "App-service safety gate blocks failed fixture validation",
+        "App-service safety gate blocks executable_adapter_count greater than 0",
+        "App-service safety gate blocks allow_agent_execution true",
+        "App-service safety gate blocks did_execute_count non-zero",
+        "App-service safety gate blocks did_execute_live true",
+        "App-service safety gate blocks did_mutate_production true",
+        "App-service safety gate blocks did_write_db true",
+        "Healthy workflow-runner gated output does not block",
+        "No queue integration added",
+        "No live planning integration added",
+        "No DB writes added",
+        "No mutation added",
+        "No application submission added",
+        "No approval API/storage added",
+        "No scheduler/background execution added",
+        "No UI run/approve/reject buttons added",
+        "No fixture payload JSON modified",
+        "No fixture payload files added",
+        "Release checkpoint: PASS",
+        "App-service safety gate implementation: GO",
+        "Runtime-facing integration scope: APP_SERVICE_BLOCKING_GATE_ONLY",
+        "Workflow runner blocking gate reuse: GO",
+        "App services integration: BLOCKING_GATE_ONLY",
+        "Queue integration: NO_GO",
+        "Live planning integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Recommended next phase: 99B app-service safety gate release safety checkpoint final audit and merge gate.",
+        "100A queue safety gate design, docs/tests only first",
+        "Do not wire queue mutation next without a design/checkpoint phase.",
+        "Do not enable execution next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APP_SERVICE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/app_service_safety_gate_release_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

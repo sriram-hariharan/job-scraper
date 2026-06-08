@@ -122,6 +122,8 @@ Recommended next phase: 99B app-service safety gate release safety checkpoint fi
 
 After 99B, recommend: 100A queue safety gate design, docs/tests only first.
 
+Queue safety gate design: `docs/queue_safety_gate_design.md`.
+
 ## Decisions
 
 - Release checkpoint: PASS

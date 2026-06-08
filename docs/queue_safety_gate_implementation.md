@@ -4,6 +4,8 @@ Doc path: `docs/queue_safety_gate_implementation.md`
 
 Phase 101A adds a blocking-only queue safety gate helper in `application_execution_queue.py`.
 
+Release safety checkpoint: `docs/queue_safety_gate_release_safety_checkpoint.md`.
+
 The queue safety gate implementation is limited to queue-facing safety annotation and refusal semantics. It does not add queue mutation, DB writes, mutation execution, application submission, live planning, fixture execution, automatic execution, approval API/storage, scheduler/background execution, UI run/approve/reject buttons, migrations, SQL DDL, LangGraph, or an agent framework.
 
 ## A. Current Implementation Scope

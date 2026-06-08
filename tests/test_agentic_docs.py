@@ -145,6 +145,9 @@ QUEUE_SAFETY_GATE_DESIGN_DOC_PATH = Path("docs/queue_safety_gate_design.md")
 QUEUE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH = Path(
     "docs/queue_safety_gate_implementation.md"
 )
+QUEUE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/queue_safety_gate_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9939,6 +9942,81 @@ def test_queue_safety_gate_implementation_covers_phase_101a_contract():
         ]
     )
     assert "docs/queue_safety_gate_implementation.md" in linked_docs
+
+
+def test_queue_safety_gate_release_checkpoint_covers_phase_102a_contract():
+    assert QUEUE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = QUEUE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "queue safety gate implementation is complete",
+        "`application_execution_queue.py` has blocking-only queue safety gate",
+        "The queue gate reuses app-service safety gate output.",
+        "The queue gate reuses workflow-runner blocking gate output.",
+        "The queue gate does not bypass app-service safety gate.",
+        "The queue gate does not bypass workflow-runner fixture validation gate.",
+        "Blocked queue results remain non-executing.",
+        "`workflow_runner.py` remains dry-run only.",
+        "app-service gate remains blocking-only",
+        "Queue safety gate blocks missing app-service safety gate output.",
+        "Queue safety gate blocks blocked_by_app_service_safety_gate true.",
+        "Queue safety gate blocks blocked_by_fixture_validation_gate true.",
+        "Queue safety gate blocks missing fixture validation.",
+        "Queue safety gate blocks executable_adapter_count greater than 0.",
+        "Queue safety gate blocks allow_agent_execution true.",
+        "Queue safety gate blocks did_execute_count non-zero.",
+        "Queue safety gate blocks did_execute_live true.",
+        "Queue safety gate blocks did_mutate_production true.",
+        "Queue safety gate blocks did_write_db true.",
+        "Healthy app-service-gated output does not block.",
+        "No runtime behavior added in this checkpoint phase.",
+        "No queue mutation added.",
+        "No DB writes added.",
+        "No mutation added.",
+        "No application submission added.",
+        "No live planning added.",
+        "No approval API/storage added.",
+        "No scheduler/background execution added.",
+        "No UI run/approve/reject buttons added.",
+        "No fixture payload JSON modified.",
+        "No fixture payload files added.",
+        "Release checkpoint: PASS",
+        "Queue safety gate implementation: GO",
+        "Runtime-facing integration scope: QUEUE_BLOCKING_GATE_ONLY",
+        "App-service safety gate reuse: GO",
+        "Workflow runner blocking gate reuse: GO",
+        "Queue integration: BLOCKING_GATE_ONLY",
+        "Queue mutation: NO_GO",
+        "Live planning integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Recommended next phase: 102B queue safety gate release safety checkpoint final audit and merge gate.",
+        "103A runtime safety roadmap review before any execution enablement",
+        "Do not enable execution next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, application submission, scheduler/background execution, or live execution next.",
+        "Do not add UI run/approve/reject buttons next without a design/checkpoint phase.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            QUEUE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/queue_safety_gate_release_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

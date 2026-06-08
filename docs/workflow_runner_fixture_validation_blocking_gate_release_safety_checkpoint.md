@@ -97,3 +97,5 @@ Do not wire validator into live planning next. Do not wire validator into app se
 Recommended next phase: 93B workflow-runner fixture validation blocking gate release safety checkpoint final audit and merge gate.
 
 After 93B, recommend decision point: design missing/malformed fixture failure-mode tests; or design queue/app-service integration safety gates without implementation; or pause and review runtime safety roadmap.
+
+Follow-up design: `docs/fixture_validation_failure_mode_test_design.md`.

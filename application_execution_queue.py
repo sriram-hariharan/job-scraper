@@ -2,7 +2,7 @@ import argparse
 import csv
 import os
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 from src.agents.job_prioritization_agent import (
     record_job_prioritization_agent_trace,
@@ -27,6 +27,144 @@ from src.pipeline.resume_selection_credibility import (
 
 ACTION_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["action_rank"]
 TIE_REVIEW_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["tie_review_rank"]
+QUEUE_SAFETY_GATE_ENABLED = True
+
+_QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
+_QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
+    "app_service_safety_gate_enabled",
+    "app_service_safety_gate_passed",
+    "app_service_safety_gate_status",
+    "blocked_by_app_service_safety_gate",
+}
+_QUEUE_WORKFLOW_RUNNER_REQUIRED_GATE_FIELDS = {
+    "fixture_validation",
+    "fixture_validation_gate_enabled",
+    "fixture_validation_gate_passed",
+    "fixture_validation_gate_status",
+    "blocked_by_fixture_validation_gate",
+    "executable_adapter_count",
+    "allow_agent_execution",
+    "did_execute_count",
+    "did_execute_live",
+    "did_mutate_production",
+    "did_write_db",
+}
+
+
+def _queue_safety_gate_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def queue_safety_gate_payload(
+    app_service_safety_gate_output: Any = _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED,
+) -> Dict[str, Any]:
+    """Return a queue-facing safety gate payload without executing queued work."""
+    if app_service_safety_gate_output is _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED:
+        from src.app import services as app_services
+
+        app_service_safety_gate_output = (
+            app_services.app_service_agentic_workflow_safety_gate_payload()
+        )
+
+    result: Dict[str, Any] = {}
+    reason_codes: List[str] = []
+    if not isinstance(app_service_safety_gate_output, dict):
+        reason_codes.append("missing_app_service_safety_gate_output")
+    else:
+        result = dict(app_service_safety_gate_output)
+
+        missing_app_service_fields = sorted(
+            field
+            for field in _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS
+            if field not in result
+        )
+        if missing_app_service_fields:
+            reason_codes.append("missing_app_service_safety_gate_fields")
+            reason_codes.extend(
+                f"missing_app_service_safety_gate_field:{field}"
+                for field in missing_app_service_fields
+            )
+
+        missing_workflow_runner_fields = sorted(
+            field
+            for field in _QUEUE_WORKFLOW_RUNNER_REQUIRED_GATE_FIELDS
+            if field not in result
+        )
+        if missing_workflow_runner_fields:
+            reason_codes.append("missing_workflow_runner_gate_fields")
+            reason_codes.extend(
+                f"missing_workflow_runner_gate_field:{field}"
+                for field in missing_workflow_runner_fields
+            )
+
+        if result.get("blocked_by_app_service_safety_gate") is True:
+            reason_codes.append("app_service_safety_gate_blocked")
+        if result.get("app_service_safety_gate_passed") is False:
+            reason_codes.append("app_service_safety_gate_not_passed")
+        if (
+            "app_service_safety_gate_status" in result
+            and _normalize_text(result.get("app_service_safety_gate_status")) != "passed"
+        ):
+            reason_codes.append("app_service_safety_gate_status_not_passed")
+
+        fixture_validation = result.get("fixture_validation")
+        if not isinstance(fixture_validation, dict):
+            reason_codes.append("missing_fixture_validation")
+        else:
+            if fixture_validation.get("fixture_validation_passed") is not True:
+                reason_codes.append("fixture_validation_failed")
+            if (
+                _normalize_text(fixture_validation.get("fixture_validation_status"))
+                != "passed"
+            ):
+                reason_codes.append("fixture_validation_status_not_passed")
+
+        if result.get("blocked_by_fixture_validation_gate") is True:
+            reason_codes.append("workflow_runner_fixture_validation_gate_blocked")
+        if result.get("fixture_validation_gate_passed") is False:
+            reason_codes.append("workflow_runner_fixture_validation_gate_not_passed")
+        if (
+            "fixture_validation_gate_status" in result
+            and _normalize_text(result.get("fixture_validation_gate_status")) != "passed"
+        ):
+            reason_codes.append(
+                "workflow_runner_fixture_validation_gate_status_not_passed"
+            )
+
+        if _queue_safety_gate_int(result.get("executable_adapter_count")) > 0:
+            reason_codes.append("executable_adapter_count_nonzero")
+        if result.get("allow_agent_execution") is True:
+            reason_codes.append("allow_agent_execution_true")
+        if _queue_safety_gate_int(result.get("did_execute_count")) != 0:
+            reason_codes.append("did_execute_count_nonzero")
+        if result.get("did_execute_live") is True:
+            reason_codes.append("did_execute_live_true")
+        if result.get("did_mutate_production") is True:
+            reason_codes.append("did_mutate_production_true")
+        if result.get("did_write_db") is True:
+            reason_codes.append("did_write_db_true")
+
+    reason_codes = sorted(set(reason_codes))
+    blocked = bool(reason_codes)
+    result.update(
+        {
+            "queue_safety_gate_enabled": QUEUE_SAFETY_GATE_ENABLED,
+            "queue_safety_gate_passed": not blocked,
+            "queue_safety_gate_status": "failed" if blocked else "passed",
+            "queue_safety_gate_reason_codes": reason_codes,
+            "blocked_by_queue_safety_gate": blocked,
+        }
+    )
+    if blocked:
+        result["did_execute_count"] = 0
+        result["did_execute_live"] = False
+        result["did_mutate_production"] = False
+        result["did_write_db"] = False
+
+    return result
 
 def _parse_bool(value: str) -> bool:
     return str(value).strip().lower() == "true"

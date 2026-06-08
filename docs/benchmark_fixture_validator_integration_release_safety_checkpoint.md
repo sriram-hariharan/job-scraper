@@ -107,3 +107,5 @@ Do not wire validator into workflow_runner next without a design/checkpoint phas
 Recommended next phase: 90B benchmark fixture validator integration release safety checkpoint final audit and merge gate.
 
 After 90B, recommend decision point: design workflow-runner blocking gate, docs/tests only first; or add preflight failure-mode tests around malformed/missing fixture files; or pause and review agentic runtime integration roadmap.
+
+Follow-up design: `docs/workflow_runner_fixture_validation_blocking_gate_design.md`.

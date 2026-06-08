@@ -141,6 +141,7 @@ APP_SERVICE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH = Path(
 APP_SERVICE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/app_service_safety_gate_release_safety_checkpoint.md"
 )
+QUEUE_SAFETY_GATE_DESIGN_DOC_PATH = Path("docs/queue_safety_gate_design.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9786,6 +9787,79 @@ def test_app_service_safety_gate_release_checkpoint_covers_phase_99a_contract():
         ]
     )
     assert "docs/app_service_safety_gate_release_safety_checkpoint.md" in linked_docs
+
+
+def test_queue_safety_gate_design_covers_phase_100a_contract():
+    assert QUEUE_SAFETY_GATE_DESIGN_DOC_PATH.exists()
+
+    source = QUEUE_SAFETY_GATE_DESIGN_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "queue safety gate design only",
+        "Queue safety gate implementation: NOT_YET",
+        "application_execution_queue.py is not modified in this phase",
+        "`src/app/services.py` is not modified in this phase",
+        "`workflow_runner.py` is not modified in this phase",
+        "No runtime behavior changes in this phase",
+        "future queue processing must not bypass app-service safety gate",
+        "future queue processing must not bypass workflow-runner fixture validation gate",
+        "Future queue processing must refuse work if app-service safety gate reports blocked_by_app_service_safety_gate true",
+        "Future queue processing must refuse work if workflow-runner gate reports blocked_by_fixture_validation_gate true",
+        "Future queue processing must refuse work if fixture validation is missing",
+        "Future queue processing must refuse work if fixture validation fails",
+        "Future queue processing must refuse work if executable_adapter_count is greater than 0 without later explicit approval",
+        "Future queue processing must refuse work if allow_agent_execution is true without later explicit approval",
+        "Future queue processing must refuse work if did_execute_count is non-zero",
+        "Future queue processing must refuse work if did_execute_live is true",
+        "Future queue processing must refuse work if did_mutate_production is true",
+        "Future queue processing must refuse work if did_write_db is true",
+        "blocked queue results must remain non-executing",
+        "`workflow_runner.py` remains dry-run only",
+        "App-service gate remains blocking-only",
+        "No queue integration",
+        "No queue mutation",
+        "No live planning integration",
+        "No DB writes",
+        "No mutation",
+        "No application submission",
+        "No approval API/storage",
+        "No scheduler/background execution",
+        "No UI run/approve/reject buttons",
+        "No fixture payload JSON modified",
+        "No fixture payload files added",
+        "Queue safety gate design: PASS",
+        "Queue safety gate implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "App-service safety gate reuse: GO",
+        "Workflow runner blocking gate reuse: GO",
+        "Queue integration implementation: NO_GO",
+        "Queue mutation: NO_GO",
+        "Live planning integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Recommended next phase: 100B queue safety gate design final audit and merge gate.",
+        "101A queue safety gate implementation, only if explicitly approved",
+        "Do not implement queue safety gate next unless 100B passes and explicit approval is given.",
+        "Do not enable execution next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APP_SERVICE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/queue_safety_gate_design.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

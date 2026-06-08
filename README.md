@@ -634,6 +634,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [App-service safety gate design](docs/app_service_safety_gate_design.md)
 - [App-service safety gate implementation](docs/app_service_safety_gate_implementation.md)
 - [App-service safety gate release safety checkpoint](docs/app_service_safety_gate_release_safety_checkpoint.md)
+- [Queue safety gate design](docs/queue_safety_gate_design.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

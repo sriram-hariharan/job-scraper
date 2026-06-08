@@ -4,6 +4,8 @@ Doc path: `docs/benchmark_fixture_validator_integration.md`
 
 Phase 89A is an agentic benchmark fixture validator integration implementation. The benchmark now surfaces fixture validation summary fields in `python -m src.evaluation.agentic_benchmark --no-write --print-summary`.
 
+Release safety checkpoint: `docs/benchmark_fixture_validator_integration_release_safety_checkpoint.md`.
+
 The benchmark integration is read-only. The benchmark integration reuses preflight fixture-validation semantics from the orchestrator adapter harness. The benchmark does not execute fixtures. The benchmark does not call workflow_runner. The benchmark does not call live planning. The benchmark does not call app services. The benchmark does not call queue. The benchmark does not call DB. The benchmark does not mutate. The benchmark does not submit applications.
 
 Blocked fixtures are expected to fail validation and still produce overall benchmark pass when actual failure matches `expected_validation`.

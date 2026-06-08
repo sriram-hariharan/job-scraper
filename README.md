@@ -624,6 +624,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Blocked application-submission fixture implementation release safety checkpoint](docs/blocked_application_submission_fixture_implementation_release_safety_checkpoint.md)
 - [Preflight fixture validator integration](docs/preflight_fixture_validator_integration.md)
 - [Benchmark fixture validator integration](docs/benchmark_fixture_validator_integration.md)
+- [Benchmark fixture validator integration release safety checkpoint](docs/benchmark_fixture_validator_integration_release_safety_checkpoint.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

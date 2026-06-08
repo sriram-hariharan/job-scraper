@@ -638,6 +638,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Queue safety gate implementation](docs/queue_safety_gate_implementation.md)
 - [Queue safety gate release safety checkpoint](docs/queue_safety_gate_release_safety_checkpoint.md)
 - [Runtime safety roadmap review](docs/runtime_safety_roadmap_review.md)
+- [Approval API/storage design](docs/approval_api_storage_design.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

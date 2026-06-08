@@ -120,4 +120,6 @@ No queue mutation added.
 
 Recommended next phase: 98B app-service safety gate implementation final audit and merge gate.
 
+Release safety checkpoint: `docs/app_service_safety_gate_release_safety_checkpoint.md`.
+
 Do not wire queue mutation next. Do not wire live planning next. Do not enable execution next. Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, application submission, or live execution next.

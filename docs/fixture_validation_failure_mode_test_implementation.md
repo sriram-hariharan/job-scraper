@@ -2,6 +2,8 @@
 
 Doc path: `docs/fixture_validation_failure_mode_test_implementation.md`
 
+Release checkpoint: `docs/fixture_validation_failure_mode_tests_release_safety_checkpoint.md`
+
 Phase 95A is fixture validation failure-mode test implementation. This phase is tests only. `workflow_runner.py` remains dry-run only.
 
 Contract phrases: workflow_runner.py remains dry-run only; blocked results remain non-executing; no real fixture payload JSON files modified; no permanent malformed fixture payload files added.

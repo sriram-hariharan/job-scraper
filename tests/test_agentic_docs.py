@@ -120,6 +120,9 @@ WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_DESIGN_DOC_PATH = Path(
 WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_IMPLEMENTATION_DOC_PATH = Path(
     "docs/workflow_runner_fixture_validation_blocking_gate_implementation.md"
 )
+WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/workflow_runner_fixture_validation_blocking_gate_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9229,6 +9232,84 @@ def test_workflow_runner_fixture_validation_blocking_gate_implementation_covers_
     )
     assert (
         "docs/workflow_runner_fixture_validation_blocking_gate_implementation.md"
+        in linked_docs
+    )
+
+
+def test_workflow_runner_fixture_validation_blocking_gate_release_checkpoint_covers_phase_93a_contract():
+    assert (
+        WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    )
+
+    source = WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "workflow-runner fixture validation blocking gate implementation is complete",
+        "`workflow_runner.py` has a blocking-only fixture validation gate",
+        "`workflow_runner.py` remains dry-run only",
+        "The gate is blocking-only, not execution",
+        "the gate reuses preflight fixture-validation semantics",
+        "gate blocks missing fixture validation",
+        "gate blocks malformed fixture validation",
+        "gate blocks unexpected fixture files",
+        "gate blocks mismatched fixture validation",
+        "gate blocks non-empty `fixture_validation_failed_fixture_ids`",
+        "Expected blocked fixture failures are accepted when actual failure matches expected_validation",
+        "safe_execution_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "blocked_application_submission_request_minimal.json",
+        "The fixture directory remains unchanged",
+        "`executable_adapter_count` remains 0",
+        "`allow_agent_execution` remains false",
+        "`did_execute_count` remains 0",
+        "`did_execute_live` remains false",
+        "`did_mutate_production` remains false",
+        "`did_write_db` remains false",
+        "No live planning integration added",
+        "No app services integration added",
+        "No queue integration added",
+        "No DB writes added",
+        "No mutation added",
+        "No application submission added",
+        "No approval API/storage added",
+        "No scheduler/background execution added",
+        "No fixture payload files added",
+        "No fixture payload JSON modified",
+        "No runtime behavior is added in this checkpoint phase",
+        "Release checkpoint: `PASS`",
+        "Workflow-runner fixture validation blocking gate implementation: `GO`",
+        "Runtime-facing integration scope: `WORKFLOW_RUNNER_BLOCKING_GATE_ONLY`",
+        "Workflow runner remains dry-run only: `PASS`",
+        "Expected blocked fixture failures accepted: `PASS`",
+        "Existing fixture payload files: `GO`",
+        "Additional fixture payload files in this phase: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Automatic execution: `NO_GO`",
+        "DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Application submission: `NO_GO`",
+        "Approval API/storage: `NO_GO`",
+        "Scheduler/background execution: `NO_GO`",
+        "Recommended next phase: 93B workflow-runner fixture validation blocking gate release safety checkpoint final audit and merge gate.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_IMPLEMENTATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/workflow_runner_fixture_validation_blocking_gate_release_safety_checkpoint.md"
         in linked_docs
     )
 

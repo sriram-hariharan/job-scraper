@@ -135,6 +135,9 @@ FIXTURE_VALIDATION_FAILURE_MODE_TESTS_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
 APP_SERVICE_SAFETY_GATE_DESIGN_DOC_PATH = Path(
     "docs/app_service_safety_gate_design.md"
 )
+APP_SERVICE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH = Path(
+    "docs/app_service_safety_gate_implementation.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9644,6 +9647,72 @@ def test_app_service_safety_gate_design_covers_phase_97a_contract():
         ]
     )
     assert "docs/app_service_safety_gate_design.md" in linked_docs
+
+
+def test_app_service_safety_gate_implementation_covers_phase_98a_contract():
+    assert APP_SERVICE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH.exists()
+
+    source = APP_SERVICE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "App-service safety gate implementation: PASS",
+        "Runtime-facing integration scope: APP_SERVICE_BLOCKING_GATE_ONLY",
+        "Workflow runner blocking gate reuse: GO",
+        "App services now enforce workflow-runner safety gate",
+        "App services do not bypass workflow-runner fixture validation gate",
+        "blocked results remain non-executing",
+        "`workflow_runner.py` remains dry-run only",
+        "app_service_agentic_workflow_safety_gate_payload()",
+        "No queue integration added",
+        "No live planning integration added",
+        "No DB writes added",
+        "No mutation added",
+        "No application submission added",
+        "No approval API/storage added",
+        "No scheduler/background execution added",
+        "No UI run/approve/reject buttons added",
+        "No fixture payload JSON modified",
+        "No fixture payload files added",
+        "missing workflow-runner fixture validation gate fields",
+        "fixture validation is missing",
+        "fixture validation fails",
+        "blocked_by_fixture_validation_gate true",
+        "`executable_adapter_count` is greater than 0",
+        "`allow_agent_execution` is true",
+        "`did_execute_count` is non-zero",
+        "`did_execute_live` is true",
+        "`did_mutate_production` is true",
+        "`did_write_db` is true",
+        "did_execute_count` 0",
+        "did_execute_live` false",
+        "did_mutate_production` false",
+        "did_write_db` false",
+        "App services integration: BLOCKING_GATE_ONLY",
+        "Queue integration: NO_GO",
+        "Live planning integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Recommended next phase: 98B app-service safety gate implementation final audit and merge gate.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APP_SERVICE_SAFETY_GATE_DESIGN_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/app_service_safety_gate_implementation.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

@@ -138,6 +138,8 @@ Phase 96A fixture validation failure-mode tests release safety checkpoint is tra
 
 Phase 97A app-service safety gate design is tracked in `docs/app_service_safety_gate_design.md`. That phase is design-only and docs/tests only; it adds no runtime behavior, app services integration, queue integration, live planning integration, DB writes, mutation, or application submission.
 
+Phase 98A app-service safety gate implementation is tracked in `docs/app_service_safety_gate_implementation.md`. That phase adds a blocking-only app-service helper that consumes safety-gated workflow-runner dry-run output; it adds no execution, queue integration, live planning integration, DB writes, mutation, or application submission.
+
 Phase 63A fixture validator implementation plan is tracked in `docs/fixture_validator_implementation_plan.md`. That implementation plan is docs/tests only and does not add fixture validator code, fixture validator modules, fixture validator CLIs, fixture validator tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
 Phase 64A fixture validator implementation plan release safety checkpoint is tracked in `docs/fixture_validator_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture validator implementation plan remains design-only before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.

@@ -42,6 +42,7 @@ from src.agents import (
     proposal_only_mutation_planner,
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
+    workflow_runner,
 )
 from src.matching.dimensions import get_dimension_weights
 from src.matching.job_adapter import build_job_evidence
@@ -278,6 +279,22 @@ APPLICATION_ACTION_OVERLAY_FIELDS = [
     "is_applied",
 ]
 
+APP_SERVICE_SAFETY_GATE_ENABLED = True
+
+_APP_SERVICE_WORKFLOW_RUNNER_REQUIRED_GATE_FIELDS = {
+    "fixture_validation",
+    "fixture_validation_gate_enabled",
+    "fixture_validation_gate_passed",
+    "fixture_validation_gate_status",
+    "blocked_by_fixture_validation_gate",
+    "executable_adapter_count",
+    "allow_agent_execution",
+    "did_execute_count",
+    "did_execute_live",
+    "did_mutate_production",
+    "did_write_db",
+}
+
 ALLOWED_OPERATOR_DECISIONS = {
     "SELECT_RESUME",
 }
@@ -288,6 +305,94 @@ _PATCH_SELECTION_OVERLAY_CACHE: Dict[str, Any] = {
     "version": 0,
     "data": None,
 }
+
+
+def _app_service_safety_gate_int(value: Any) -> int:
+    try:
+        return int(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _app_service_safety_gate_result(
+    workflow_runner_result: Dict[str, Any],
+) -> Dict[str, Any]:
+    result = dict(workflow_runner_result or {})
+    reason_codes: List[str] = []
+
+    missing_fields = sorted(
+        field
+        for field in _APP_SERVICE_WORKFLOW_RUNNER_REQUIRED_GATE_FIELDS
+        if field not in result
+    )
+    if missing_fields:
+        reason_codes.append("missing_workflow_runner_gate_fields")
+        reason_codes.extend(
+            f"missing_workflow_runner_gate_field:{field}" for field in missing_fields
+        )
+
+    fixture_validation = result.get("fixture_validation")
+    if not isinstance(fixture_validation, dict):
+        reason_codes.append("missing_fixture_validation")
+    else:
+        if fixture_validation.get("fixture_validation_passed") is not True:
+            reason_codes.append("fixture_validation_failed")
+        if _clean_text(fixture_validation.get("fixture_validation_status")) != "passed":
+            reason_codes.append("fixture_validation_status_not_passed")
+
+    if result.get("blocked_by_fixture_validation_gate") is True:
+        reason_codes.append("workflow_runner_fixture_validation_gate_blocked")
+    if result.get("fixture_validation_gate_passed") is False:
+        reason_codes.append("workflow_runner_fixture_validation_gate_not_passed")
+    if (
+        "fixture_validation_gate_status" in result
+        and _clean_text(result.get("fixture_validation_gate_status")) != "passed"
+    ):
+        reason_codes.append("workflow_runner_fixture_validation_gate_status_not_passed")
+
+    if _app_service_safety_gate_int(result.get("executable_adapter_count")) > 0:
+        reason_codes.append("executable_adapter_count_nonzero")
+    if result.get("allow_agent_execution") is True:
+        reason_codes.append("allow_agent_execution_true")
+    if _app_service_safety_gate_int(result.get("did_execute_count")) != 0:
+        reason_codes.append("did_execute_count_nonzero")
+    if result.get("did_execute_live") is True:
+        reason_codes.append("did_execute_live_true")
+    if result.get("did_mutate_production") is True:
+        reason_codes.append("did_mutate_production_true")
+    if result.get("did_write_db") is True:
+        reason_codes.append("did_write_db_true")
+
+    reason_codes = sorted(set(reason_codes))
+    blocked = bool(reason_codes)
+    result.update(
+        {
+            "app_service_safety_gate_enabled": APP_SERVICE_SAFETY_GATE_ENABLED,
+            "app_service_safety_gate_passed": not blocked,
+            "app_service_safety_gate_status": "failed" if blocked else "passed",
+            "app_service_safety_gate_reason_codes": reason_codes,
+            "blocked_by_app_service_safety_gate": blocked,
+        }
+    )
+    if blocked:
+        result["did_execute_count"] = 0
+        result["did_execute_live"] = False
+        result["did_mutate_production"] = False
+        result["did_write_db"] = False
+
+    return result
+
+
+def app_service_agentic_workflow_safety_gate_payload(
+    workflow_runner_result: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return a safety-gated dry-run workflow payload for app-service callers."""
+    dry_run_result = (
+        workflow_runner.run_agentic_workflow_dry_run()
+        if workflow_runner_result is None
+        else dict(workflow_runner_result)
+    )
+    return _app_service_safety_gate_result(dry_run_result)
 _JOB_METADATA_OVERLAY_CACHE: Dict[Tuple[str, int, int], Dict[str, Dict[str, Any]]] = {}
 _TAILORING_WORKSPACE_BUTTON_STATE_CACHE: Dict[
     Tuple[str, int, int, int, int],

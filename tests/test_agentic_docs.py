@@ -114,6 +114,9 @@ BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH = Path(
 BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/benchmark_fixture_validator_integration_release_safety_checkpoint.md"
 )
+WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_DESIGN_DOC_PATH = Path(
+    "docs/workflow_runner_fixture_validation_blocking_gate_design.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9077,6 +9080,84 @@ def test_benchmark_fixture_validator_integration_release_checkpoint_covers_phase
         "docs/benchmark_fixture_validator_integration_release_safety_checkpoint.md"
         in linked_docs
     )
+
+
+def test_workflow_runner_fixture_validation_blocking_gate_design_covers_phase_91a_contract():
+    assert WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_DESIGN_DOC_PATH.exists()
+
+    source = WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_DESIGN_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "workflow-runner fixture validation blocking gate design only",
+        "Workflow-runner blocking gate implementation: `NOT_YET`",
+        "`workflow_runner.py` is not modified in this phase",
+        "No runtime behavior changes in this phase",
+        "No fixture payload files added",
+        "No fixture payload JSON modified",
+        "Preflight fixture validation remains the source of safety truth",
+        "Benchmark fixture validation remains reporting-only",
+        "Future workflow-runner gate must be blocking-only, not execution",
+        "Future workflow-runner gate must refuse unsafe execution if fixture validation fails",
+        "Future workflow-runner gate must refuse unsafe execution if fixture validation is missing",
+        "Future workflow-runner gate must refuse unsafe execution if expected fixture count is not 3",
+        "Future workflow-runner gate must refuse unsafe execution if unexpected fixture files appear",
+        "Future workflow-runner gate must refuse unsafe execution if `fixture_validation_failed_fixture_ids` is non-empty",
+        "Future workflow-runner gate must refuse unsafe execution if `executable_adapter_count` is greater than 0 without explicit later approval",
+        "Future workflow-runner gate must refuse unsafe execution if `allow_agent_execution` is true without explicit later approval",
+        "Future workflow-runner gate must preserve dry-run-only behavior until a later approved execution phase",
+        "Blocked fixtures are expected failures and should not block if actual failure matches expected_validation",
+        "Malformed, missing, unexpected, or mismatched fixture validation must block",
+        "`workflow_runner.py` remains dry-run only",
+        "`executable_adapter_count` remains 0",
+        "`allow_agent_execution` remains false",
+        "`did_execute_count` remains 0",
+        "`did_execute_live` remains false",
+        "`did_mutate_production` remains false",
+        "`did_write_db` remains false",
+        "no live planning integration",
+        "no app services integration",
+        "no queue integration",
+        "no DB writes",
+        "no mutation",
+        "no application submission",
+        "no approval API/storage",
+        "no scheduler/background execution",
+        "Workflow-runner fixture validation blocking gate design: `PASS`",
+        "Workflow-runner blocking gate implementation: `NOT_YET`",
+        "Runtime-facing integration scope: `DESIGN_ONLY`",
+        "Preflight fixture validation reuse: `GO`",
+        "Benchmark fixture validation reporting: `GO`",
+        "Workflow runner integration implementation: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Automatic execution: `NO_GO`",
+        "DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Application submission: `NO_GO`",
+        "Approval API/storage: `NO_GO`",
+        "Scheduler/background execution: `NO_GO`",
+        "Recommended next phase: 91B workflow-runner fixture validation blocking gate design final audit and merge gate.",
+        "92A workflow-runner fixture validation blocking gate implementation, only if explicitly approved.",
+        "Do not implement workflow_runner blocking next unless 91B passes and explicit approval is given.",
+        "Do not wire validator into live planning next.",
+        "Do not auto-discover arbitrary fixture directories next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/workflow_runner_fixture_validation_blocking_gate_design.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

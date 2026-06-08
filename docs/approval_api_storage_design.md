@@ -164,6 +164,8 @@ Recommended next phase: 104B approval API/storage design final audit and merge g
 
 After 104B, recommend: 105A approval storage schema design, docs/tests only first.
 
+Follow-up schema design: `docs/approval_storage_schema_design.md`.
+
 ## Decisions
 
 - Approval API/storage design: PASS

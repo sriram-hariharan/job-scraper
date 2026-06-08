@@ -94,3 +94,5 @@ Do not wire validator into app services next without a design/checkpoint phase. 
 Recommended next phase: 96B fixture validation failure-mode tests release safety checkpoint final audit and merge gate.
 
 After 96B, recommend decision point: design app-service safety gate, docs/tests only first; or design queue safety gate, docs/tests only first; or pause and review runtime safety roadmap.
+
+Follow-up design: `docs/app_service_safety_gate_design.md`.

@@ -132,6 +132,9 @@ FIXTURE_VALIDATION_FAILURE_MODE_TEST_IMPLEMENTATION_DOC_PATH = Path(
 FIXTURE_VALIDATION_FAILURE_MODE_TESTS_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_validation_failure_mode_tests_release_safety_checkpoint.md"
 )
+APP_SERVICE_SAFETY_GATE_DESIGN_DOC_PATH = Path(
+    "docs/app_service_safety_gate_design.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9573,6 +9576,74 @@ def test_fixture_validation_failure_mode_tests_release_checkpoint_covers_phase_9
         "docs/fixture_validation_failure_mode_tests_release_safety_checkpoint.md"
         in linked_docs
     )
+
+
+def test_app_service_safety_gate_design_covers_phase_97a_contract():
+    assert APP_SERVICE_SAFETY_GATE_DESIGN_DOC_PATH.exists()
+
+    source = APP_SERVICE_SAFETY_GATE_DESIGN_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "app-service safety gate design only",
+        "App-service safety gate implementation: NOT_YET",
+        "`src/app/services.py` is not modified in this phase",
+        "`workflow_runner.py` is not modified in this phase",
+        "No runtime behavior changes in this phase",
+        "app services eventually call a safety-gated workflow-runner path only",
+        "App services must not bypass workflow-runner fixture validation gate",
+        "App services must refuse run/execute actions if workflow-runner gate reports blocked_by_fixture_validation_gate true",
+        "App services must refuse run/execute actions if fixture validation is missing",
+        "App services must refuse run/execute actions if fixture validation fails",
+        "App services must refuse run/execute actions if executable_adapter_count is greater than 0 without later explicit approval",
+        "App services must refuse run/execute actions if allow_agent_execution is true without later explicit approval",
+        "App services must preserve dry-run-only behavior until a later approved execution phase",
+        "Expected blocked-fixture failures are accepted only when actual failure matches expected_validation",
+        "Blocked results must remain non-executing",
+        "`workflow_runner.py` remains dry-run only",
+        "No queue integration",
+        "No live planning integration",
+        "No DB writes",
+        "No mutation",
+        "No application submission",
+        "No approval API/storage",
+        "No scheduler/background execution",
+        "No UI run/approve/reject buttons",
+        "no fixture payload JSON modified",
+        "no fixture payload files added",
+        "App-service safety gate design: PASS",
+        "App-service safety gate implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "Workflow runner blocking gate reuse: GO",
+        "Fixture validation failure-mode coverage reuse: GO",
+        "App services integration implementation: NO_GO",
+        "Queue integration: NO_GO",
+        "Live planning integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Recommended next phase: 97B app-service safety gate design final audit and merge gate.",
+        "98A app-service safety gate implementation, only if explicitly approved.",
+        "Do not implement app-service safety gate next unless 97B passes and explicit approval is given.",
+        "Do not wire queue mutation next.",
+        "Do not enable execution next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            FIXTURE_VALIDATION_FAILURE_MODE_TESTS_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/app_service_safety_gate_design.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

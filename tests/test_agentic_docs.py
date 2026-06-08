@@ -148,6 +148,9 @@ QUEUE_SAFETY_GATE_IMPLEMENTATION_DOC_PATH = Path(
 QUEUE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/queue_safety_gate_release_safety_checkpoint.md"
 )
+RUNTIME_SAFETY_ROADMAP_REVIEW_DOC_PATH = Path(
+    "docs/runtime_safety_roadmap_review.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -10017,6 +10020,86 @@ def test_queue_safety_gate_release_checkpoint_covers_phase_102a_contract():
         ]
     )
     assert "docs/queue_safety_gate_release_safety_checkpoint.md" in linked_docs
+
+
+def test_runtime_safety_roadmap_review_covers_phase_103a_contract():
+    assert RUNTIME_SAFETY_ROADMAP_REVIEW_DOC_PATH.exists()
+
+    source = RUNTIME_SAFETY_ROADMAP_REVIEW_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "runtime safety roadmap review only",
+        "Execution enablement: NOT_YET",
+        "Runtime-facing integration scope: ROADMAP_ONLY",
+        "Workflow-runner blocking gate: COMPLETE",
+        "App-service blocking gate: COMPLETE",
+        "Queue blocking gate: COMPLETE",
+        "`workflow_runner.py` remains dry-run only.",
+        "The app-service gate remains blocking-only.",
+        "The queue gate remains blocking-only.",
+        "Blocked results remain non-executing",
+        "No runtime behavior changes in this phase.",
+        "No execution enabled.",
+        "No queue mutation enabled.",
+        "No DB writes enabled.",
+        "No mutation execution enabled.",
+        "No application submission enabled.",
+        "No approval API/storage enabled.",
+        "No scheduler/background execution enabled.",
+        "No UI run/approve/reject buttons enabled.",
+        "No fixture payload JSON modified.",
+        "No fixture payload files added.",
+        "explicit human approval model",
+        "approval API contract",
+        "approval storage contract",
+        "audit log contract",
+        "queue state transition model",
+        "idempotency key strategy",
+        "dry-run-to-execute promotion contract",
+        "mutation scope allowlist",
+        "application submission allowlist",
+        "rollback/failure recovery policy",
+        "retry policy for execution",
+        "rate limiting for execution",
+        "authorization and user ownership checks",
+        "environment separation between dry-run and execution",
+        "production write guardrails",
+        "observability and stage-level logging",
+        "safety metrics and blocked-run metrics",
+        "kill switch / global disable flag",
+        "integration tests for approval and queue state",
+        "migration/DDL review before any persistent approval or execution state",
+        "manual release checklist before live execution",
+        "Runtime safety roadmap review: PASS",
+        "Approval API/storage: NOT_YET",
+        "Execution queue mutation: NOT_YET",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "Do not enable execution next.",
+        "Do not add DB writes next.",
+        "Do not add queue mutation next.",
+        "Do not add approval storage next without a design/checkpoint phase.",
+        "Do not add application submission next.",
+        "Do not add scheduler/background execution next.",
+        "Do not add UI run/approve/reject buttons next without a design/checkpoint phase.",
+        "Recommended next phase: 103B runtime safety roadmap review final audit and merge gate.",
+        "104A approval API/storage design, docs/tests only first",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            QUEUE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/runtime_safety_roadmap_review.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

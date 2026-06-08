@@ -4,6 +4,8 @@ Doc path: `docs/workflow_runner_fixture_validation_blocking_gate_implementation.
 
 Phase 92A implements the workflow-runner fixture validation blocking gate implementation. `workflow_runner.py` now has a blocking safety gate.
 
+Release safety checkpoint: `docs/workflow_runner_fixture_validation_blocking_gate_release_safety_checkpoint.md`.
+
 The gate is blocking-only, not execution. The gate reuses preflight fixture-validation semantics from the orchestrator adapter harness and adds safety reporting fields to the existing dry-run workflow runner output.
 
 ## Scope

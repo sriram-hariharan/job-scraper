@@ -126,6 +126,9 @@ WORKFLOW_RUNNER_FIXTURE_VALIDATION_BLOCKING_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_P
 FIXTURE_VALIDATION_FAILURE_MODE_TEST_DESIGN_DOC_PATH = Path(
     "docs/fixture_validation_failure_mode_test_design.md"
 )
+FIXTURE_VALIDATION_FAILURE_MODE_TEST_IMPLEMENTATION_DOC_PATH = Path(
+    "docs/fixture_validation_failure_mode_test_implementation.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -9409,6 +9412,86 @@ def test_fixture_validation_failure_mode_test_design_covers_phase_94a_contract()
         ]
     )
     assert "docs/fixture_validation_failure_mode_test_design.md" in linked_docs
+
+
+def test_fixture_validation_failure_mode_test_implementation_covers_phase_95a_contract():
+    assert FIXTURE_VALIDATION_FAILURE_MODE_TEST_IMPLEMENTATION_DOC_PATH.exists()
+
+    source = FIXTURE_VALIDATION_FAILURE_MODE_TEST_IMPLEMENTATION_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "fixture validation failure-mode test implementation",
+        "tests only",
+        "`workflow_runner.py` remains dry-run only",
+        "No real fixture payload JSON files are modified",
+        "No permanent malformed fixture payload files are added",
+        "Tests use temp/mocked fixture-validation states",
+        "malformed, missing, unexpected, and mismatched fixture validation blocks",
+        "expected blocked fixture failures are accepted",
+        "Blocked results remain non-executing",
+        "did_execute_count 0",
+        "did_execute_live false",
+        "did_mutate_production false",
+        "did_write_db false",
+        "no live planning integration",
+        "no app services integration",
+        "no queue integration",
+        "no DB writes",
+        "no mutation",
+        "no application submission",
+        "missing safe_execution_request_minimal.json",
+        "missing blocked_db_write_request_minimal.json",
+        "missing blocked_application_submission_request_minimal.json",
+        "malformed fixture JSON",
+        "unexpected extra fixture file",
+        "wrong fixture_validation_expected_fixture_count",
+        "wrong fixture_validation_checked_count",
+        "fixture_validation_failed_fixture_ids non-empty",
+        "fixture_validation_status not passed",
+        "fixture_validation_passed false",
+        "blocked DB-write fixture actual/expected mismatch",
+        "blocked application-submission fixture actual/expected mismatch",
+        "safe fixture actual/expected mismatch",
+        "executable_adapter_count greater than 0",
+        "allow_agent_execution true",
+        "did_execute_count non-zero",
+        "did_execute_live true",
+        "did_mutate_production true",
+        "did_write_db true",
+        "expected blocked DB-write fixture failure does not block when actual failed matches expected failed",
+        "expected blocked application-submission fixture failure does not block when actual failed matches expected failed",
+        "safe fixture pass does not block when actual passed matches expected passed",
+        "fixture_validation_failed_fixture_ids empty does not block",
+        "all safety fields safe does not block",
+        "Fixture validation failure-mode test implementation: PASS",
+        "Runtime-facing integration scope: TESTS_ONLY",
+        "Workflow runner blocking gate reuse: GO",
+        "Real fixture payload mutation: NO_GO",
+        "Permanent malformed fixture files: NO_GO",
+        "Workflow runner runtime behavior changes: NO_GO",
+        "Live planning integration: NO_GO",
+        "App services integration: NO_GO",
+        "Queue integration: NO_GO",
+        "Fixture execution: NO_GO",
+        "Automatic execution: NO_GO",
+        "DB writes: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Approval API/storage: NO_GO",
+        "Scheduler/background execution: NO_GO",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/fixture_validation_failure_mode_test_implementation.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

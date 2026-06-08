@@ -4,6 +4,8 @@ Doc path: `docs/queue_safety_gate_release_safety_checkpoint.md`
 
 Phase 102A is release safety checkpoint only. This checkpoint is docs/tests only and adds no runtime behavior.
 
+Follow-up roadmap review: `docs/runtime_safety_roadmap_review.md`.
+
 The queue safety gate implementation is complete. `application_execution_queue.py` has blocking-only queue safety gate behavior through the queue safety gate helper added in Phase 101A.
 
 Exact verifier phrases: application_execution_queue.py has blocking-only queue safety gate; blocked queue results remain non-executing; workflow_runner.py remains dry-run only; no queue mutation added; no DB writes added; no mutation added; no application submission added.

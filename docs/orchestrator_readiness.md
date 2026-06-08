@@ -148,6 +148,8 @@ Phase 101A queue safety gate implementation is tracked in `docs/queue_safety_gat
 
 Phase 102A queue safety gate release safety checkpoint is tracked in `docs/queue_safety_gate_release_safety_checkpoint.md`. That checkpoint is release-only and docs/tests only; it confirms the queue safety gate is complete and isolated, and adds no runtime behavior, queue mutation expansion, live planning integration, DB writes, mutation, or application submission.
 
+Phase 103A runtime safety roadmap review is tracked in `docs/runtime_safety_roadmap_review.md`. That phase is roadmap-only and docs/tests only; it adds no runtime behavior, execution, queue mutation, DB writes, mutation execution, application submission, approval API/storage, scheduler/background execution, or UI run/approve/reject buttons.
+
 Phase 63A fixture validator implementation plan is tracked in `docs/fixture_validator_implementation_plan.md`. That implementation plan is docs/tests only and does not add fixture validator code, fixture validator modules, fixture validator CLIs, fixture validator tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
 Phase 64A fixture validator implementation plan release safety checkpoint is tracked in `docs/fixture_validator_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture validator implementation plan remains design-only before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.

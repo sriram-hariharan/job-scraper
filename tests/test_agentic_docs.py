@@ -151,6 +151,9 @@ QUEUE_SAFETY_GATE_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
 RUNTIME_SAFETY_ROADMAP_REVIEW_DOC_PATH = Path(
     "docs/runtime_safety_roadmap_review.md"
 )
+APPROVAL_API_STORAGE_DESIGN_DOC_PATH = Path(
+    "docs/approval_api_storage_design.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -10100,6 +10103,87 @@ def test_runtime_safety_roadmap_review_covers_phase_103a_contract():
         ]
     )
     assert "docs/runtime_safety_roadmap_review.md" in linked_docs
+
+
+def test_approval_api_storage_design_covers_phase_104a_contract():
+    assert APPROVAL_API_STORAGE_DESIGN_DOC_PATH.exists()
+
+    source = APPROVAL_API_STORAGE_DESIGN_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "approval API/storage design only",
+        "Approval API implementation: NOT_YET",
+        "Approval storage implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "No runtime behavior changes in this phase.",
+        "No DB schema file added.",
+        "No migration added.",
+        "No SQL DDL added.",
+        "No storage API added.",
+        "No DB writes added.",
+        "No queue mutation added.",
+        "No execution enabled.",
+        "No mutation execution enabled.",
+        "No application submission enabled.",
+        "No scheduler/background execution enabled.",
+        "No UI run/approve/reject buttons enabled.",
+        "`workflow_runner.py` remains dry-run only.",
+        "The app-service gate remains blocking-only.",
+        "The queue gate remains blocking-only.",
+        "Blocked results remain non-executing.",
+        "Explicit human approval required before execution.",
+        "An approval request must be tied to a dry-run artifact id.",
+        "An approval request must be tied to user ownership.",
+        "An approval request must include proposed action summary.",
+        "An approval request must include safety gate snapshot.",
+        "An approval request must include fixture validation snapshot.",
+        "An approval request must include app-service safety gate snapshot.",
+        "An approval request must include queue safety gate snapshot.",
+        "An approval request must include idempotency key.",
+        "An approval request must include expiry timestamp.",
+        "An approval request must include approval status.",
+        "An approval request must include reviewer identity.",
+        "An approval request must include created_at and updated_at.",
+        "An approval request must include audit log references.",
+        "An approval request must not contain secrets.",
+        "An approval request must not store raw credentials.",
+        "Approval approval/denial must be auditable.",
+        "Approval cannot bypass safety gates.",
+        "Approval cannot enable execution if gates are failing.",
+        "Approval cannot enable application submission without later explicit phase.",
+        "Approval API/storage design: PASS",
+        "DB schema: NOT_YET",
+        "Migration: NOT_YET",
+        "SQL DDL: NOT_YET",
+        "Storage API: NOT_YET",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "Do not add approval storage next unless 104B passes and explicit approval is given.",
+        "Do not add DB writes next.",
+        "Do not add queue mutation next.",
+        "Do not enable execution next.",
+        "Do not add application submission next.",
+        "Do not add UI run/approve/reject buttons next without a design/checkpoint phase.",
+        "Recommended next phase: 104B approval API/storage design final audit and merge gate.",
+        "105A approval storage schema design, docs/tests only first",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            RUNTIME_SAFETY_ROADMAP_REVIEW_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_api_storage_design.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

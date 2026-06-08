@@ -10,13 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
 
-from src.agents import workflow_planner
+from src.agents import orchestrator_adapter_harness, workflow_planner
 
 
 RUNNER_VERSION = "agentic_workflow_runner_v1"
 EXECUTION_MODE = "dry_run"
 DRY_RUN_RESULT_JSON_NAME = "agentic_workflow_dry_run_result.json"
 DRY_RUN_REPORT_MD_NAME = "agentic_workflow_dry_run_report.md"
+FIXTURE_VALIDATION_GATE_ENABLED = True
 
 
 def _clean_text(value: Any) -> str:
@@ -40,6 +41,90 @@ def _feature_flags_snapshot(
         _clean_text(flag): _truthy(env_map.get(_clean_text(flag)))
         for flag in feature_flags
         if _clean_text(flag)
+    }
+
+
+def _fixture_validation_gate_result(
+    preflight_plan: Dict[str, Any] | None,
+) -> Dict[str, Any]:
+    plan = dict(preflight_plan or {})
+    fixture_validation = plan.get("fixture_validation")
+    reason_codes: List[str] = []
+
+    if not isinstance(fixture_validation, dict):
+        fixture_validation = {}
+        reason_codes.append("missing_fixture_validation_summary")
+
+    if fixture_validation.get("fixture_validation_passed") is not True:
+        reason_codes.append("fixture_validation_not_passed")
+    if _clean_text(fixture_validation.get("fixture_validation_status")) != "passed":
+        reason_codes.append("fixture_validation_status_not_passed")
+    if int(fixture_validation.get("fixture_validation_checked_count") or 0) != 3:
+        reason_codes.append("fixture_validation_checked_count_mismatch")
+    if int(fixture_validation.get("fixture_validation_expected_fixture_count") or 0) != 3:
+        reason_codes.append("fixture_validation_expected_count_mismatch")
+    if list(fixture_validation.get("fixture_validation_failed_fixture_ids") or []):
+        reason_codes.append("fixture_validation_failed_fixture_ids_non_empty")
+    if list(fixture_validation.get("fixture_validation_unexpected_fixture_filenames") or []):
+        reason_codes.append("unexpected_fixture_file")
+
+    results = fixture_validation.get("fixture_validation_results")
+    results = list(results or []) if isinstance(results, list) else []
+    results_by_filename = {
+        _clean_text(result.get("fixture_filename")): result
+        for result in results
+        if isinstance(result, dict) and _clean_text(result.get("fixture_filename"))
+    }
+    approved_filenames = set(orchestrator_adapter_harness.APPROVED_FIXTURE_FILENAMES)
+    missing_approved_filenames = sorted(approved_filenames.difference(results_by_filename))
+    if missing_approved_filenames:
+        reason_codes.append("approved_fixture_missing_from_results")
+
+    for filename in sorted(approved_filenames.intersection(results_by_filename)):
+        result = dict(results_by_filename[filename])
+        if result.get("expected_matches_actual") is not True:
+            reason_codes.append(f"{filename}:fixture_expected_mismatch")
+        if result.get("did_execute_fixture") is not False:
+            reason_codes.append(f"{filename}:did_execute_fixture")
+        if result.get("did_mutate_production") is not False:
+            reason_codes.append(f"{filename}:did_mutate_production")
+        if result.get("did_write_db") is not False:
+            reason_codes.append(f"{filename}:did_write_db")
+
+    executable_adapter_count = int(plan.get("executable_adapter_count") or 0)
+    allow_agent_execution = bool(plan.get("allow_agent_execution"))
+    did_execute_count = int(dict(plan.get("summary") or {}).get("did_execute_count") or 0)
+    did_execute_live = bool(plan.get("did_execute_live"))
+    did_mutate_production = bool(plan.get("did_mutate_production"))
+    did_write_db = bool(plan.get("did_write_db"))
+
+    if executable_adapter_count > 0:
+        reason_codes.append("executable_adapter_count_nonzero")
+    if allow_agent_execution:
+        reason_codes.append("allow_agent_execution_true")
+    if did_execute_count != 0:
+        reason_codes.append("did_execute_count_nonzero")
+    if did_execute_live:
+        reason_codes.append("did_execute_live_true")
+    if did_mutate_production:
+        reason_codes.append("did_mutate_production_true")
+    if did_write_db:
+        reason_codes.append("did_write_db_true")
+
+    reason_codes = sorted(set(reason_codes))
+    return {
+        "fixture_validation_gate_enabled": FIXTURE_VALIDATION_GATE_ENABLED,
+        "fixture_validation_gate_status": "failed" if reason_codes else "passed",
+        "fixture_validation_gate_passed": not reason_codes,
+        "fixture_validation_gate_reason_codes": reason_codes,
+        "fixture_validation": fixture_validation,
+        "blocked_by_fixture_validation_gate": bool(reason_codes),
+        "executable_adapter_count": executable_adapter_count,
+        "allow_agent_execution": allow_agent_execution,
+        "did_execute_count": did_execute_count,
+        "did_execute_live": did_execute_live,
+        "did_mutate_production": did_mutate_production,
+        "did_write_db": did_write_db,
     }
 
 
@@ -107,10 +192,21 @@ def run_agentic_workflow_dry_run(
     owner_user_id: str = "",
     input_artifacts_present: Iterable[str] | None = None,
     plan: Dict[str, Any] | None = None,
+    preflight_plan: Dict[str, Any] | None = None,
     context: Dict[str, Any] | None = None,
     env: Dict[str, str] | None = None,
 ) -> Dict[str, Any]:
     execution_plan = deepcopy(plan) if plan is not None else workflow_planner.build_agentic_workflow_execution_plan()
+    preflight_payload = (
+        deepcopy(preflight_plan)
+        if preflight_plan is not None
+        else orchestrator_adapter_harness.build_read_only_adapter_preflight_plan(
+            pipeline_run_id=pipeline_run_id,
+            owner_user_id=owner_user_id,
+            execution_plan=execution_plan,
+        )
+    )
+    gate = _fixture_validation_gate_result(preflight_payload)
     run_context = (
         dict(context)
         if context is not None
@@ -138,6 +234,7 @@ def run_agentic_workflow_dry_run(
         "skipped_step_count": len(step_results),
         "ordered_step_results": step_results,
         "context": run_context,
+        **gate,
     }
     result["validation"] = validate_agentic_workflow_dry_run_result(result, plan=execution_plan)
     result["summary"] = {
@@ -145,6 +242,8 @@ def run_agentic_workflow_dry_run(
         "would_trace_step_count": sum(1 for step in step_results if step.get("would_trace")),
         "missing_input_artifact_count": len(list(run_context.get("input_artifacts_missing") or [])),
         "status_counts": dict(sorted(Counter(step.get("execution_status", "") for step in step_results).items())),
+        "did_execute_count": gate["did_execute_count"],
+        "blocked_by_fixture_validation_gate": gate["blocked_by_fixture_validation_gate"],
     }
     return result
 
@@ -167,6 +266,8 @@ def validate_agentic_workflow_dry_run_result(
         reason_codes.append("execution_mode_not_dry_run")
     if int(result.get("executed_step_count") or 0) != 0:
         reason_codes.append("executed_step_count_nonzero")
+    if result.get("fixture_validation_gate_passed") is False:
+        reason_codes.append("fixture_validation_gate_failed")
     if actual_order != expected_order:
         reason_codes.append("step_order_mismatch")
 
@@ -204,6 +305,7 @@ def render_agentic_workflow_dry_run_report_markdown(
         f"Runner version: `{payload.get('runner_version', '')}`",
         f"Execution mode: `{payload.get('execution_mode', '')}`",
         f"Executed step count: `{payload.get('executed_step_count', 0)}`",
+        f"Fixture validation gate: `{payload.get('fixture_validation_gate_status', '')}`",
         f"Validation: `{validation.get('validation_status', '')}`",
         "",
         "## Step Results",

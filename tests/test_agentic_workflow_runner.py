@@ -28,6 +28,145 @@ def test_workflow_runner_dry_run_includes_all_planned_agents():
     assert [step["agent_key"] for step in steps] == EXPECTED_AGENT_KEYS
 
 
+def test_workflow_runner_includes_fixture_validation_gate_fields():
+    result = workflow_runner.run_agentic_workflow_dry_run()
+
+    assert result["fixture_validation_gate_enabled"] is True
+    assert result["fixture_validation_gate_status"] == "passed"
+    assert result["fixture_validation_gate_passed"] is True
+    assert result["fixture_validation_gate_reason_codes"] == []
+    assert result["blocked_by_fixture_validation_gate"] is False
+    assert result["fixture_validation"]["fixture_validation_passed"] is True
+    assert result["fixture_validation"]["fixture_validation_checked_count"] == 3
+    assert result["executable_adapter_count"] == 0
+    assert result["allow_agent_execution"] is False
+    assert result["did_execute_count"] == 0
+    assert result["did_execute_live"] is False
+    assert result["did_mutate_production"] is False
+    assert result["did_write_db"] is False
+
+
+def test_workflow_runner_expected_blocked_fixture_failures_do_not_block_gate():
+    result = workflow_runner.run_agentic_workflow_dry_run()
+    results_by_filename = {
+        item["fixture_filename"]: item
+        for item in result["fixture_validation"]["fixture_validation_results"]
+    }
+
+    assert result["fixture_validation_gate_passed"] is True
+    assert result["blocked_by_fixture_validation_gate"] is False
+    assert results_by_filename["safe_execution_request_minimal.json"][
+        "actual_validation_status"
+    ] == "passed"
+    assert results_by_filename["safe_execution_request_minimal.json"][
+        "expected_validation_status"
+    ] == "passed"
+    assert results_by_filename["blocked_db_write_request_minimal.json"][
+        "actual_validation_status"
+    ] == "failed"
+    assert results_by_filename["blocked_db_write_request_minimal.json"][
+        "expected_validation_status"
+    ] == "failed"
+    assert results_by_filename["blocked_application_submission_request_minimal.json"][
+        "actual_validation_status"
+    ] == "failed"
+    assert results_by_filename["blocked_application_submission_request_minimal.json"][
+        "expected_validation_status"
+    ] == "failed"
+    assert all(item["expected_matches_actual"] for item in results_by_filename.values())
+
+
+def test_workflow_runner_bad_fixture_validation_summary_blocks_without_execution():
+    result = workflow_runner.run_agentic_workflow_dry_run(
+        preflight_plan={
+            "fixture_validation": {
+                "fixture_validation_passed": False,
+                "fixture_validation_status": "failed",
+                "fixture_validation_checked_count": 0,
+                "fixture_validation_expected_fixture_count": 3,
+                "fixture_validation_failed_fixture_ids": ["missing_fixture"],
+                "fixture_validation_unexpected_fixture_filenames": [],
+                "fixture_validation_results": [],
+            },
+            "executable_adapter_count": 0,
+            "allow_agent_execution": False,
+            "did_execute_live": False,
+            "did_mutate_production": False,
+            "did_write_db": False,
+            "summary": {"did_execute_count": 0},
+        }
+    )
+
+    assert result["blocked_by_fixture_validation_gate"] is True
+    assert result["fixture_validation_gate_passed"] is False
+    assert result["fixture_validation_gate_status"] == "failed"
+    assert "fixture_validation_not_passed" in result["fixture_validation_gate_reason_codes"]
+    assert "fixture_validation_failed_fixture_ids_non_empty" in result[
+        "fixture_validation_gate_reason_codes"
+    ]
+    assert "approved_fixture_missing_from_results" in result[
+        "fixture_validation_gate_reason_codes"
+    ]
+    assert result["validation"]["validation_status"] == "failed"
+    assert "fixture_validation_gate_failed" in result["validation"]["reason_codes"]
+    assert result["executed_step_count"] == 0
+    assert result["did_execute_count"] == 0
+    assert result["did_execute_live"] is False
+    assert result["did_mutate_production"] is False
+    assert result["did_write_db"] is False
+    assert all(step["did_execute"] is False for step in result["ordered_step_results"])
+
+
+def test_workflow_runner_missing_fixture_validation_summary_blocks_without_execution():
+    result = workflow_runner.run_agentic_workflow_dry_run(
+        preflight_plan={
+            "executable_adapter_count": 0,
+            "allow_agent_execution": False,
+            "did_execute_live": False,
+            "did_mutate_production": False,
+            "did_write_db": False,
+            "summary": {"did_execute_count": 0},
+        }
+    )
+
+    assert result["blocked_by_fixture_validation_gate"] is True
+    assert "missing_fixture_validation_summary" in result[
+        "fixture_validation_gate_reason_codes"
+    ]
+    assert result["executed_step_count"] == 0
+    assert result["did_execute_count"] == 0
+    assert result["did_execute_live"] is False
+    assert result["did_mutate_production"] is False
+    assert result["did_write_db"] is False
+
+
+def test_workflow_runner_unsafe_preflight_safety_fields_block_without_execution():
+    healthy = workflow_runner.run_agentic_workflow_dry_run()
+    preflight_plan = {
+        "fixture_validation": healthy["fixture_validation"],
+        "executable_adapter_count": 1,
+        "allow_agent_execution": True,
+        "did_execute_live": True,
+        "did_mutate_production": True,
+        "did_write_db": True,
+        "summary": {"did_execute_count": 1},
+    }
+
+    result = workflow_runner.run_agentic_workflow_dry_run(preflight_plan=preflight_plan)
+
+    assert result["blocked_by_fixture_validation_gate"] is True
+    assert "executable_adapter_count_nonzero" in result[
+        "fixture_validation_gate_reason_codes"
+    ]
+    assert "allow_agent_execution_true" in result["fixture_validation_gate_reason_codes"]
+    assert "did_execute_count_nonzero" in result["fixture_validation_gate_reason_codes"]
+    assert "did_execute_live_true" in result["fixture_validation_gate_reason_codes"]
+    assert "did_mutate_production_true" in result["fixture_validation_gate_reason_codes"]
+    assert "did_write_db_true" in result["fixture_validation_gate_reason_codes"]
+    assert result["executed_step_count"] == 0
+    assert all(step["did_execute"] is False for step in result["ordered_step_results"])
+
+
 def test_workflow_runner_never_executes_steps_in_dry_run():
     result = workflow_runner.run_agentic_workflow_dry_run()
 

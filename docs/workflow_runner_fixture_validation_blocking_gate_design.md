@@ -111,6 +111,8 @@ Recommended next phase: 91B workflow-runner fixture validation blocking gate des
 
 After 91B, recommend: 92A workflow-runner fixture validation blocking gate implementation, only if explicitly approved.
 
+Implementation follow-up: `docs/workflow_runner_fixture_validation_blocking_gate_implementation.md`.
+
 ## Decisions
 
 - Workflow-runner fixture validation blocking gate design: `PASS`

@@ -111,6 +111,9 @@ PREFLIGHT_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH = Path(
 BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH = Path(
     "docs/benchmark_fixture_validator_integration.md"
 )
+BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/benchmark_fixture_validator_integration_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -8992,6 +8995,88 @@ def test_benchmark_fixture_validator_integration_covers_phase_89a_contract():
         ]
     )
     assert "docs/benchmark_fixture_validator_integration.md" in linked_docs
+
+
+def test_benchmark_fixture_validator_integration_release_checkpoint_covers_phase_90a_contract():
+    assert BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "benchmark fixture validator integration is complete",
+        "benchmark now surfaces fixture validation reporting",
+        "benchmark integration is reporting-only/read-only",
+        "benchmark reuses preflight fixture-validation semantics",
+        "benchmark metrics are under `summary[\"metrics\"]`",
+        "`metrics.validation_pass_rate` remains 1.0",
+        "`metrics.workflow_registry_validation_passed` remains 1.0",
+        "`metrics.failed_case_ids` remains []",
+        "`metrics.fixture_validation_passed` remains true",
+        "`metrics.fixture_validation_status` remains passed",
+        "`metrics.fixture_validation_checked_count` remains 3",
+        "`metrics.fixture_validation_expected_fixture_count` remains 3",
+        "`metrics.fixture_validation_failed_fixture_ids` remains []",
+        "`metrics.executable_adapter_count` remains 0",
+        "`metrics.allow_agent_execution` remains false",
+        "`metrics.did_execute_count` remains 0",
+        "`metrics.did_execute_live` remains false",
+        "`metrics.did_mutate_production` remains false",
+        "`metrics.did_write_db` remains false",
+        "safe_execution_request_minimal.json",
+        "blocked_db_write_request_minimal.json",
+        "blocked_application_submission_request_minimal.json",
+        "db_write_not_allowed",
+        "application_submission_not_allowed",
+        "Blocked fixtures are expected to fail validation and still produce overall benchmark pass",
+        "benchmark does not execute fixtures",
+        "benchmark does not call workflow_runner",
+        "benchmark does not call live planning",
+        "benchmark does not call app services",
+        "benchmark does not call queue",
+        "benchmark does not call DB",
+        "benchmark does not mutate",
+        "benchmark does not submit applications",
+        "`workflow_runner.py` remains dry-run only",
+        "Release checkpoint: `PASS`",
+        "Benchmark fixture validator integration: `GO`",
+        "Runtime-facing integration scope: `BENCHMARK_REPORTING_ONLY`",
+        "Preflight fixture validation reuse: `GO`",
+        "Existing fixture payload files: `GO`",
+        "Additional fixture payload files in this phase: `NO_GO`",
+        "Workflow runner integration: `NO_GO`",
+        "Live planning integration: `NO_GO`",
+        "App services integration: `NO_GO`",
+        "Queue integration: `NO_GO`",
+        "Fixture execution: `NO_GO`",
+        "Automatic execution: `NO_GO`",
+        "DB writes: `NO_GO`",
+        "Mutation execution: `NO_GO`",
+        "Application submission: `NO_GO`",
+        "Approval API/storage: `NO_GO`",
+        "Scheduler/background execution: `NO_GO`",
+        "Recommended next phase: 90B benchmark fixture validator integration release safety checkpoint final audit and merge gate.",
+        "Do not wire validator into workflow_runner next without a design/checkpoint phase.",
+        "Do not wire validator into live planning next.",
+        "Do not auto-discover arbitrary fixture directories next.",
+        "Do not add DB writes, queue mutation, storage APIs, migrations, mutation execution, or live execution next.",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            BENCHMARK_FIXTURE_VALIDATOR_INTEGRATION_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/benchmark_fixture_validator_integration_release_safety_checkpoint.md"
+        in linked_docs
+    )
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

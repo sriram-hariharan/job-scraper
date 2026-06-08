@@ -29,25 +29,25 @@ The existing workflow-runner blocking gate accepts healthy fixture validation an
 
 Future failure-mode tests must cover:
 
-- missing `safe_execution_request_minimal.json` blocks
-- missing `blocked_db_write_request_minimal.json` blocks
-- missing `blocked_application_submission_request_minimal.json` blocks
+- missing safe_execution_request_minimal.json blocks
+- missing blocked_db_write_request_minimal.json blocks
+- missing blocked_application_submission_request_minimal.json blocks
 - malformed fixture JSON blocks
 - unexpected extra fixture file blocks
-- wrong `fixture_validation_expected_fixture_count` blocks
-- wrong `fixture_validation_checked_count` blocks
-- `fixture_validation_failed_fixture_ids` non-empty blocks
-- `fixture_validation_status` not passed blocks
-- `fixture_validation_passed` false blocks
+- wrong fixture_validation_expected_fixture_count blocks
+- wrong fixture_validation_checked_count blocks
+- fixture_validation_failed_fixture_ids non-empty blocks
+- fixture_validation_status not passed blocks
+- fixture_validation_passed false blocks
 - blocked DB-write fixture actual/expected mismatch blocks
 - blocked application-submission fixture actual/expected mismatch blocks
 - safe fixture actual/expected mismatch blocks
-- `executable_adapter_count` greater than 0 blocks
-- `allow_agent_execution` true blocks
-- `did_execute_count` non-zero blocks
-- `did_execute_live` true blocks
-- `did_mutate_production` true blocks
-- `did_write_db` true blocks
+- executable_adapter_count greater than 0 blocks
+- allow_agent_execution true blocks
+- did_execute_count non-zero blocks
+- did_execute_live true blocks
+- did_mutate_production true blocks
+- did_write_db true blocks
 
 ## D. Required Block Cases
 
@@ -55,7 +55,7 @@ Missing approved fixtures must block. Malformed fixture JSON must block. Unexpec
 
 ## E. Required Non-Block Cases
 
-Expected blocked-fixture failures do not block when actual failure matches expected_validation.
+expected blocked-fixture failures do not block when actual failure matches expected_validation.
 
 The blocked DB-write fixture should remain non-blocking when actual validation status is failed and expected validation status is failed. The blocked application-submission fixture should remain non-blocking when actual validation status is failed and expected validation status is failed. The safe fixture should remain non-blocking when actual validation status is passed and expected validation status is passed.
 
@@ -106,22 +106,22 @@ After 94B, recommend: 95A malformed/missing fixture validation failure-mode test
 
 ## Decisions
 
-- Fixture validation failure-mode test design: `PASS`
-- Failure-mode test implementation: `NOT_YET`
-- Runtime-facing integration scope: `DESIGN_ONLY`
-- Workflow runner blocking gate reuse: `GO`
-- Preflight fixture validation reuse: `GO`
-- Benchmark fixture validation reporting: `GO`
-- Fixture payload mutation: `NO_GO`
-- Additional fixture payload files in this phase: `NO_GO`
-- Workflow runner implementation changes: `NO_GO`
-- Live planning integration: `NO_GO`
-- App services integration: `NO_GO`
-- Queue integration: `NO_GO`
-- Fixture execution: `NO_GO`
-- Automatic execution: `NO_GO`
-- DB writes: `NO_GO`
-- Mutation execution: `NO_GO`
-- Application submission: `NO_GO`
-- Approval API/storage: `NO_GO`
-- Scheduler/background execution: `NO_GO`
+- Fixture validation failure-mode test design: PASS
+- Failure-mode test implementation: NOT_YET
+- Runtime-facing integration scope: DESIGN_ONLY
+- Workflow runner blocking gate reuse: GO
+- Preflight fixture validation reuse: GO
+- Benchmark fixture validation reporting: GO
+- Fixture payload mutation: NO_GO
+- Additional fixture payload files in this phase: NO_GO
+- Workflow runner implementation changes: NO_GO
+- Live planning integration: NO_GO
+- App services integration: NO_GO
+- Queue integration: NO_GO
+- Fixture execution: NO_GO
+- Automatic execution: NO_GO
+- DB writes: NO_GO
+- Mutation execution: NO_GO
+- Application submission: NO_GO
+- Approval API/storage: NO_GO
+- Scheduler/background execution: NO_GO

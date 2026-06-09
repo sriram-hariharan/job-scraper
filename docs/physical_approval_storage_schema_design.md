@@ -205,6 +205,8 @@ After 107B, recommend: 108A physical approval storage schema design release safe
 
 Only after that, consider migration design, not implementation.
 
+Release safety checkpoint: `docs/physical_approval_storage_schema_release_safety_checkpoint.md`.
+
 ## Decisions
 
 - Physical approval storage schema design: PASS

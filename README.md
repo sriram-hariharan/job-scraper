@@ -642,6 +642,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Approval storage schema design](docs/approval_storage_schema_design.md)
 - [Approval storage schema release safety checkpoint](docs/approval_storage_schema_release_safety_checkpoint.md)
 - [Physical approval storage schema design](docs/physical_approval_storage_schema_design.md)
+- [Physical approval storage schema release safety checkpoint](docs/physical_approval_storage_schema_release_safety_checkpoint.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

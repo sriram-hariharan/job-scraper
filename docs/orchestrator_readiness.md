@@ -156,6 +156,8 @@ Phase 105A approval storage schema design is tracked in `docs/approval_storage_s
 
 Phase 106A approval storage schema release safety checkpoint is tracked in `docs/approval_storage_schema_release_safety_checkpoint.md`. That checkpoint is release-only and docs/tests only; it adds no runtime behavior, schema file, migration, SQL DDL, storage API, DB writes, queue mutation, execution, mutation execution, application submission, scheduler/background execution, or UI run/approve/reject buttons.
 
+Phase 107A physical approval storage schema design is tracked in `docs/physical_approval_storage_schema_design.md`. That phase is design-only and docs/tests only; it adds no runtime behavior, schema file, migration, SQL DDL, storage API, DB writes, queue mutation, execution, mutation execution, application submission, scheduler/background execution, or UI run/approve/reject buttons.
+
 Phase 63A fixture validator implementation plan is tracked in `docs/fixture_validator_implementation_plan.md`. That implementation plan is docs/tests only and does not add fixture validator code, fixture validator modules, fixture validator CLIs, fixture validator tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
 Phase 64A fixture validator implementation plan release safety checkpoint is tracked in `docs/fixture_validator_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture validator implementation plan remains design-only before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.

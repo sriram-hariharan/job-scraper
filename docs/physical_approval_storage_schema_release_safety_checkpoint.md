@@ -157,6 +157,8 @@ After 108B, recommend: 109A approval migration design, docs/tests only first.
 
 ## K. Verification Contract Phrases
 
+Verification contract phrases
+
 - Release checkpoint: PASS
 - Physical approval storage schema design: GO
 - Physical DB schema implementation: NOT_YET

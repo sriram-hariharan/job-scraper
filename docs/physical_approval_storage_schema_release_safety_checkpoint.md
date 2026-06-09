@@ -155,6 +155,8 @@ Recommended next phase: 108B physical approval storage schema design release saf
 
 After 108B, recommend: 109A approval migration design, docs/tests only first.
 
+Follow-up migration design: `docs/approval_migration_design.md`.
+
 ## K. Verification Contract Phrases
 
 Verification contract phrases

@@ -239,6 +239,8 @@ After 106B, recommend: 107A physical approval storage schema design, docs/tests 
 
 Only after that, consider migration design, not implementation.
 
+Follow-up physical schema design: `docs/physical_approval_storage_schema_design.md`.
+
 ## Decisions
 
 - Release checkpoint: PASS

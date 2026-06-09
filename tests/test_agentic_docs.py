@@ -157,6 +157,9 @@ APPROVAL_API_STORAGE_DESIGN_DOC_PATH = Path(
 APPROVAL_STORAGE_SCHEMA_DESIGN_DOC_PATH = Path(
     "docs/approval_storage_schema_design.md"
 )
+APPROVAL_STORAGE_SCHEMA_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_storage_schema_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -10293,6 +10296,116 @@ def test_approval_storage_schema_design_covers_phase_105a_contract():
         ]
     )
     assert "docs/approval_storage_schema_design.md" in linked_docs
+
+
+def test_approval_storage_schema_release_checkpoint_covers_phase_106a_contract():
+    assert APPROVAL_STORAGE_SCHEMA_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = APPROVAL_STORAGE_SCHEMA_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "release safety checkpoint only",
+        "Approval storage schema design is complete.",
+        "DB schema implementation: NOT_YET",
+        "Migration implementation: NOT_YET",
+        "SQL DDL implementation: NOT_YET",
+        "Storage API implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "No runtime behavior changes in this phase.",
+        "No DB schema file added.",
+        "No migration added.",
+        "No SQL DDL added.",
+        "No storage API added.",
+        "No DB writes added.",
+        "No queue mutation added.",
+        "No execution enabled.",
+        "No mutation execution enabled.",
+        "No application submission enabled.",
+        "No scheduler/background execution enabled.",
+        "No UI run/approve/reject buttons enabled.",
+        "`workflow_runner.py` remains dry-run only.",
+        "The app-service gate remains blocking-only.",
+        "The queue gate remains blocking-only.",
+        "Blocked results remain non-executing.",
+        "approval_requests conceptual table",
+        "approval_audit_events conceptual table",
+        "approval_request_id stable identifier",
+        "dry_run_artifact_id required",
+        "user_id or owner_id required",
+        "proposed_action_type required",
+        "proposed_action_summary required",
+        "safety_gate_snapshot required",
+        "fixture_validation_snapshot required",
+        "app_service_safety_gate_snapshot required",
+        "queue_safety_gate_snapshot required",
+        "idempotency_key required and unique",
+        "approval_status required",
+        "reviewer_id nullable until reviewed",
+        "review_decision nullable until reviewed",
+        "review_reason nullable until reviewed",
+        "expires_at required",
+        "created_at required",
+        "updated_at required",
+        "approved_at nullable",
+        "denied_at nullable",
+        "revoked_at nullable",
+        "audit_event_id references",
+        "The request payload must not contain secrets.",
+        "The request payload must not store raw credentials.",
+        "Approval status must be append-audited.",
+        "Approval state transitions must be constrained.",
+        "Approved requests cannot bypass safety gates.",
+        "Approved requests cannot execute if safety gates fail.",
+        "Application submission remains blocked until later explicit phase.",
+        "pending",
+        "approved",
+        "denied",
+        "expired",
+        "revoked",
+        "consumed",
+        "primary key on approval_request_id",
+        "unique idempotency_key",
+        "index on dry_run_artifact_id",
+        "index on user_id or owner_id",
+        "index on approval_status",
+        "index on expires_at",
+        "created_at and updated_at timestamps",
+        "constrained status transitions",
+        "immutable audit events",
+        "Release checkpoint: PASS",
+        "Approval storage schema design: GO",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "Do not add DB schema files next unless explicitly approved.",
+        "Do not add migrations next unless explicitly approved.",
+        "Do not add SQL DDL next unless explicitly approved.",
+        "Do not add storage APIs next.",
+        "Do not add DB writes next.",
+        "Do not enable execution next.",
+        "Do not add queue mutation next.",
+        "Do not add application submission next.",
+        "Recommended next phase: 106B approval storage schema release safety checkpoint final audit and merge gate.",
+        "107A physical approval storage schema design, docs/tests only first",
+    ]:
+        assert phrase in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_STORAGE_SCHEMA_DESIGN_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_storage_schema_release_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

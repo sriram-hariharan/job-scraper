@@ -208,6 +208,8 @@ After 105B, recommend: 106A approval storage schema release safety checkpoint, d
 
 Only after that, consider physical schema or migration design, not implementation.
 
+Release safety checkpoint: `docs/approval_storage_schema_release_safety_checkpoint.md`.
+
 ## Decisions
 
 - Approval storage schema design: PASS

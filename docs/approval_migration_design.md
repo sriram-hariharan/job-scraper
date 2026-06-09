@@ -124,6 +124,8 @@ Recommended next phase: 109B approval migration design final audit and merge gat
 
 After 109B, recommend: 110A approval migration design release safety checkpoint, docs/tests only.
 
+Release safety checkpoint: `docs/approval_migration_design_release_safety_checkpoint.md`.
+
 ## K. Verification Contract Phrases
 
 Verification contract phrases

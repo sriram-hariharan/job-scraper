@@ -160,6 +160,8 @@ Recommended next phase: 110B approval migration design release safety checkpoint
 
 After 110B, recommend: 111A approval SQL DDL design, docs/tests only first.
 
+Next design doc: `docs/approval_sql_ddl_design.md`.
+
 ## K. Verification Contract Phrases
 
 Verification contract phrases

@@ -723,3 +723,5 @@ Potential next improvements:
 This repository is built as an operator-first system: deterministic pipelines where possible, LLM assistance where useful, and reviewable user decisions before important resume/application changes are committed.
 
 - [Approval storage API application integration release safety checkpoint](docs/approval_storage_api_application_integration_release_safety_checkpoint.md)
+
+- [Approval API endpoint implementation readiness review](docs/approval_api_endpoint_implementation_readiness_review.md)

@@ -221,3 +221,7 @@ Verification contract phrases
 - future application integration implementation must preserve deterministic behavior
 - application integration implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 129A release safety checkpoint
+
+See `docs/approval_storage_api_application_integration_release_safety_checkpoint.md` for the release safety checkpoint after approved call-site wiring. This checkpoint confirms no runtime expansion beyond the approved call-site boundary.

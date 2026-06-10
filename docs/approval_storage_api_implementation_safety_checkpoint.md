@@ -154,6 +154,8 @@ Recommended next phase: 122B: approval storage API implementation safety checkpo
 
 After 122B, recommend: 123A: approval storage API implementation, storage module only, no runtime integration.
 
+Storage module-only implementation: `docs/approval_storage_api_implementation_module_only.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

@@ -179,6 +179,8 @@ After 121B, recommend: 122A: approval storage API implementation safety checkpoi
 
 Implementation safety checkpoint: `docs/approval_storage_api_implementation_safety_checkpoint.md`.
 
+Step 123A implements the proposed module path only with no runtime integration: `docs/approval_storage_api_implementation_module_only.md`.
+
 Storage API implementation safety checkpoint must be separate future phase.
 
 Storage API implementation must be separate future phase.

@@ -124,6 +124,12 @@ Recommended next phase: 115B approval SQL DDL file implementation safety checkpo
 
 After 115B, recommend: 116A approval SQL DDL file implementation, SQL file only, no execution.
 
+Step 116A creates the approved static SQL artifact at `src/storage/agentic_approvals/schema.sql`. The SQL file is static only and is not executed by this phase.
+
+Recommended next phase after Step 116A: 116B approval SQL DDL file implementation final audit and merge gate.
+
+After 116B, recommend: 117A approval SQL DDL file implementation final release checkpoint, docs/tests only.
+
 SQL DDL file implementation must be separate future phase.
 
 Migration execution must be separate future phase.

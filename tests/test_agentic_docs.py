@@ -183,6 +183,9 @@ APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH = Path(
 APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/approval_sql_ddl_file_implementation_safety_checkpoint.md"
 )
+APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_FINAL_RELEASE_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_sql_ddl_file_implementation_final_release_checkpoint.md"
+)
 APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH = Path("src/storage/agentic_approvals/schema.sql")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
@@ -11225,6 +11228,83 @@ def test_approval_sql_ddl_static_artifact_covers_step_116a_contract():
     assert "116B approval SQL DDL file implementation final audit and merge gate" in linked_docs
     assert (
         "117A approval SQL DDL file implementation final release checkpoint, docs/tests only"
+        in linked_docs
+    )
+
+
+def test_approval_sql_ddl_file_implementation_final_release_checkpoint_covers_step_117a_contract():
+    assert APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_FINAL_RELEASE_CHECKPOINT_DOC_PATH.exists()
+    assert APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH.exists()
+
+    source = APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_FINAL_RELEASE_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "Verification contract phrases",
+        "Approval SQL DDL file implementation final release checkpoint: PASS",
+        "Approval SQL DDL file implementation: RELEASED_STATIC_ARTIFACT",
+        "SQL file path: src/storage/agentic_approvals/schema.sql",
+        "SQL file implementation: STATIC_ARTIFACT_ONLY",
+        "SQL execution: NOT_INCLUDED",
+        "Migration execution: NOT_INCLUDED",
+        "Runtime-facing integration scope: STATIC_SQL_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no SQL file modified in this phase",
+        "no migration file added",
+        "no DB schema file added",
+        "no storage API added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "static SQL artifact remains inert",
+        "SQL artifact has no automatic execution hook",
+        "SQL artifact creates agentic_approval_requests before agentic_approval_audit_events",
+        "SQL artifact includes primary key on approval_request_id",
+        "SQL artifact includes primary key on audit_event_id",
+        "SQL artifact includes unique idempotency_key",
+        "SQL artifact includes approval_status constraint",
+        "SQL artifact includes foreign key from audit events to approval requests",
+        "SQL artifact includes expires_at index",
+        "SQL artifact includes owner_id index",
+        "SQL artifact includes dry_run_artifact_id index",
+        "SQL artifact stores snapshots as JSON-compatible fields",
+        "SQL artifact does not store secrets",
+        "SQL artifact does not store raw credentials",
+        "storage API implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 117B: approval SQL DDL file implementation final release checkpoint audit and merge gate."
+        in source
+    )
+    assert (
+        "After 117B, recommend: 118A: approval storage API design, docs/tests only first."
+        in source
+    )
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/approval_sql_ddl_file_implementation_final_release_checkpoint.md"
         in linked_docs
     )
 

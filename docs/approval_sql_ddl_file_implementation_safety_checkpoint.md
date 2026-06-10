@@ -130,6 +130,8 @@ Recommended next phase after Step 116A: 116B approval SQL DDL file implementatio
 
 After 116B, recommend: 117A approval SQL DDL file implementation final release checkpoint, docs/tests only.
 
+Final release checkpoint: `docs/approval_sql_ddl_file_implementation_final_release_checkpoint.md`.
+
 SQL DDL file implementation must be separate future phase.
 
 Migration execution must be separate future phase.

@@ -749,3 +749,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Approval execution enablement implementation safety checkpoint](docs/approval_execution_enablement_implementation_safety_checkpoint.md)
 
 - [Approval gated execution only release safety checkpoint](docs/approval_gated_execution_only_release_safety_checkpoint.md)
+
+- [Application submission readiness review](docs/application_submission_readiness_review.md)

@@ -1,6 +1,7 @@
 from pathlib import Path
 import base64
 import binascii
+from typing import Any
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
 from src.app import services
@@ -127,6 +128,13 @@ class AgentFeedbackRequest(BaseModel):
     payload_json: dict[str, object] = Field(default_factory=dict)
     source: str = "api"
 
+
+class AgenticApprovalDecisionRequest(BaseModel):
+    reviewer_id: str
+    review_decision: str
+    review_reason: str = ""
+    decided_at: str | None = None
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -184,6 +192,38 @@ def _require_admin_user(request: Request) -> dict:
         raise HTTPException(status_code=403, detail="Admin access required.")
     return user
 
+
+def _agentic_approval_storage_connection() -> Any:
+    return None
+
+
+def _agentic_approval_decision_safety_payload(
+    *,
+    approval_request_id: str,
+    review_decision: str = "",
+    status: str,
+    reason_codes: list[str] | None = None,
+    approval_request: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    reason_codes = list(reason_codes or [])
+    return {
+        "approval_api_endpoint": "POST /api/agentic-approvals/{approval_request_id}/decision",
+        "approval_request_id": approval_request_id,
+        "review_decision": review_decision,
+        "approval_api_endpoint_status": status,
+        "blocked_by_approval_api_endpoint": status != "passed",
+        "approval_api_endpoint_reason_codes": reason_codes,
+        "approval_request": dict(approval_request or {}),
+        "queue_mutation_enabled": False,
+        "did_mutate_queue": False,
+        "execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_submit_application": False,
+        "scheduler_background_execution_enabled": False,
+    }
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -217,6 +257,84 @@ def record_agent_feedback(request: AgentFeedbackRequest, http_request: Request):
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/agentic-approvals/{approval_request_id}/decision")
+def record_agentic_approval_decision(
+    approval_request_id: str,
+    request: AgenticApprovalDecisionRequest,
+):
+    from src.storage.agentic_approvals import store
+
+    review_decision = request.review_decision.strip().lower()
+    if review_decision not in store.DECISION_STATUS_VALUES:
+        allowed = sorted(store.DECISION_STATUS_VALUES)
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "approval_api_endpoint_status": "failed",
+                "reason_code": "unsupported_review_decision",
+                "allowed_review_decisions": allowed,
+            },
+        )
+
+    connection = _agentic_approval_storage_connection()
+    if connection is None:
+        raise HTTPException(
+            status_code=503,
+            detail=_agentic_approval_decision_safety_payload(
+                approval_request_id=approval_request_id,
+                review_decision=review_decision,
+                status="blocked",
+                reason_codes=["approval_storage_connection_unavailable"],
+            ),
+        )
+
+    try:
+        approval_request = store.record_approval_decision(
+            connection,
+            approval_request_id=approval_request_id,
+            approval_status=review_decision,
+            reviewer_id=request.reviewer_id,
+            review_reason=request.review_reason,
+            decided_at=request.decided_at,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "approval_api_endpoint_status": "failed",
+                "reason_code": "invalid_approval_decision_request",
+                "message": str(exc),
+            },
+        ) from exc
+    except LookupError as exc:
+        raise HTTPException(
+            status_code=404,
+            detail=_agentic_approval_decision_safety_payload(
+                approval_request_id=approval_request_id,
+                review_decision=review_decision,
+                status="failed",
+                reason_codes=["approval_request_not_found"],
+            ),
+        ) from exc
+    except store.ApprovalStorageError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=_agentic_approval_decision_safety_payload(
+                approval_request_id=approval_request_id,
+                review_decision=review_decision,
+                status="failed",
+                reason_codes=[exc.reason_code],
+            ),
+        ) from exc
+
+    return _agentic_approval_decision_safety_payload(
+        approval_request_id=approval_request_id,
+        review_decision=review_decision,
+        status="passed",
+        approval_request=approval_request,
+    )
 
 
 @app.get("/api/agent-feedback/summary")

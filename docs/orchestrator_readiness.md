@@ -352,3 +352,9 @@ That increment should prove:
 See `docs/approval_storage_api_application_integration_release_safety_checkpoint.md`.
 
 This is a release-safety-checkpoint phase only and is docs/tests only. It does not modify runtime files, the storage module, SQL, queue mutation, execution, mutation execution, application submission, approval endpoints, UI actions, or scheduler/background execution.
+
+## Step 130A: approval API endpoint implementation readiness review
+
+See `docs/approval_api_endpoint_implementation_readiness_review.md`.
+
+This is a readiness-review phase only and is docs/tests only. It does not modify runtime files, the storage module, SQL, queue mutation, execution, mutation execution, application submission, approval endpoints, UI actions, or scheduler/background execution.

@@ -129,6 +129,8 @@ After 111B, recommend: 112A approval SQL DDL design release safety checkpoint, d
 
 Release safety checkpoint: `docs/approval_sql_ddl_design_release_safety_checkpoint.md`.
 
+Implementation readiness review: `docs/approval_sql_ddl_implementation_readiness_review.md`.
+
 SQL DDL must be separate future phase.
 
 Migration implementation must be separate future phase.

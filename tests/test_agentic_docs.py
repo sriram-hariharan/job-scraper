@@ -180,6 +180,9 @@ APPROVAL_SQL_DDL_IMPLEMENTATION_READINESS_REVIEW_DOC_PATH = Path(
 APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH = Path(
     "docs/approval_sql_ddl_file_path_content_proposal.md"
 )
+APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_sql_ddl_file_implementation_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -11051,6 +11054,74 @@ def test_approval_sql_ddl_file_path_content_proposal_covers_phase_114a_contract(
         ]
     )
     assert "docs/approval_sql_ddl_file_path_content_proposal.md" in linked_docs
+
+
+def test_approval_sql_ddl_file_implementation_safety_checkpoint_covers_step_115a_contract():
+    assert APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "Approval SQL DDL file implementation safety checkpoint: PASS",
+        "SQL DDL file implementation readiness: GO_FOR_REVIEW_ONLY",
+        "SQL DDL implementation: NOT_YET",
+        "SQL file implementation: NOT_YET",
+        "Migration implementation: NOT_YET",
+        "Migration file implementation: NOT_YET",
+        "Physical DB schema implementation: NOT_YET",
+        "Storage API implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no SQL file added",
+        "no migration file added",
+        "no DB schema file added",
+        "no SQL DDL added",
+        "no storage API added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "future SQL file must be reviewed before creation",
+        "future SQL file must not execute automatically",
+        "future SQL file must be inert documentation-safe artifact until explicitly executed by a human",
+        "future SQL file must create agentic_approval_requests before agentic_approval_audit_events",
+        "future SQL file rollback must drop agentic_approval_audit_events before agentic_approval_requests",
+        "future SQL file must include unique idempotency_key",
+        "future SQL file must include approval_status constraint",
+        "future SQL file must include audit event foreign key behavior",
+        "future SQL file must not store secrets",
+        "future SQL file must not store raw credentials",
+        "SQL DDL file implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 115B approval SQL DDL file implementation safety checkpoint final audit and merge gate."
+        in source
+    )
+    assert "116A approval SQL DDL file implementation, SQL file only, no execution" in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_sql_ddl_file_implementation_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

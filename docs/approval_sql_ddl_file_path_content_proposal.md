@@ -132,6 +132,8 @@ Recommended next phase: 114B approval SQL DDL file path and content proposal fin
 
 After 114B, recommend: 115A approval SQL DDL file implementation safety checkpoint, docs/tests only first.
 
+File implementation safety checkpoint: `docs/approval_sql_ddl_file_implementation_safety_checkpoint.md`.
+
 SQL DDL file implementation must be separate future phase.
 
 Migration execution must be separate future phase.

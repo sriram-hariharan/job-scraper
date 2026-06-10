@@ -104,6 +104,12 @@ After 143B, recommend:
 
 144A: application submission implementation, approval-and-execution-gated only, no scheduler/background execution
 
+## Step 144A implementation note
+
+Step 144A is tracked in `docs/application_submission_gated_only_no_scheduler.md`.
+
+Step 144A adds only an application-submission decision boundary in `application_execution_queue.py`. It requires recorded approval and approval-gated execution, and it does not add scheduler/background execution, automatic submission loops, API route changes, UI changes, storage module changes, SQL changes, migrations, or live scheduler behavior.
+
 ## I. Verification contract phrases
 
 - Application submission implementation safety checkpoint: PASS

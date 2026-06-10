@@ -753,3 +753,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Application submission readiness review](docs/application_submission_readiness_review.md)
 
 - [Application submission implementation safety checkpoint](docs/application_submission_implementation_safety_checkpoint.md)
+
+- [Application submission gated only no scheduler](docs/application_submission_gated_only_no_scheduler.md)

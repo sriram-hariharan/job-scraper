@@ -126,6 +126,8 @@ Recommended next phase: 117B: approval SQL DDL file implementation final release
 
 After 117B, recommend: 118A: approval storage API design, docs/tests only first.
 
+Approval storage API design: `docs/approval_storage_api_design.md`.
+
 Storage API implementation must be separate future phase.
 
 Migration execution must be separate future phase.

@@ -376,3 +376,9 @@ This phase adds only the approval decision endpoint route in `src/app/api.py`. I
 See `docs/approval_api_endpoint_route_only_release_safety_checkpoint.md`.
 
 This release checkpoint confirms the endpoint route-only implementation remains isolated. It is docs/tests only and does not modify runtime files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, UI actions, scheduler/background execution, or migration execution.
+
+## Step 134A: approval UI action readiness review
+
+See `docs/approval_ui_action_readiness_review.md`.
+
+This readiness review prepares a future UI action phase only. It is docs/tests only and does not modify UI files, runtime API files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, or migration execution.

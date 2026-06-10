@@ -13003,3 +13003,64 @@ def test_approval_api_endpoint_route_only_release_safety_checkpoint_doc_contract
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_approval_ui_action_readiness_review_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/approval_ui_action_readiness_review.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Approval UI action readiness review: PASS",
+        "UI action readiness: REVIEW_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI action implementation: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no UI file modified in this phase",
+        "no endpoint route modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "future UI action must call endpoint only",
+        "future UI action must preserve existing queue safety gates",
+        "future UI action must preserve existing execution safety gates",
+        "future UI action must preserve idempotency_key behavior",
+        "future UI action must preserve approval_status constraints",
+        "future UI action must preserve stage-level observability",
+        "future UI action must preserve deterministic behavior",
+        "UI action implementation must be separate future phase",
+        "execution enablement must be separate future phase",
+        "migration execution must be separate future phase",
+        "134B: approval UI action readiness review final audit and merge gate",
+        "135A: approval UI action implementation safety checkpoint, docs/tests only",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "tests/test_approval_api_endpoint_route_only.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

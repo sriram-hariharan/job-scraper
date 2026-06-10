@@ -139,3 +139,9 @@ After 133B, recommend:
 - UI action implementation must be separate future phase
 - execution enablement must be separate future phase
 - migration execution must be separate future phase
+
+## Step 134A approval UI action readiness review
+
+See `docs/approval_ui_action_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify UI files, runtime API files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, or migration execution.

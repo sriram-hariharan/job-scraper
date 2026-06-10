@@ -186,6 +186,7 @@ APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
 APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_FINAL_RELEASE_CHECKPOINT_DOC_PATH = Path(
     "docs/approval_sql_ddl_file_implementation_final_release_checkpoint.md"
 )
+APPROVAL_STORAGE_API_DESIGN_DOC_PATH = Path("docs/approval_storage_api_design.md")
 APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH = Path("src/storage/agentic_approvals/schema.sql")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
@@ -11307,6 +11308,70 @@ def test_approval_sql_ddl_file_implementation_final_release_checkpoint_covers_st
         "docs/approval_sql_ddl_file_implementation_final_release_checkpoint.md"
         in linked_docs
     )
+
+
+def test_approval_storage_api_design_covers_step_118a_contract():
+    assert APPROVAL_STORAGE_API_DESIGN_DOC_PATH.exists()
+
+    source = APPROVAL_STORAGE_API_DESIGN_DOC_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "Verification contract phrases",
+        "Approval storage API design: PASS",
+        "Storage API implementation: NOT_YET",
+        "Storage module implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no storage API file added",
+        "no storage module added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "no SQL file modified in this phase",
+        "static SQL artifact remains inert",
+        "storage API must use explicit future approval before implementation",
+        "storage API must not execute SQL automatically",
+        "storage API must preserve idempotency_key behavior",
+        "storage API must preserve approval_status constraints",
+        "storage API must preserve audit event foreign key behavior",
+        "storage API must not store secrets",
+        "storage API must not store raw credentials",
+        "storage API must preserve stage-level observability",
+        "storage API must preserve deterministic behavior",
+        "storage API implementation must be separate future phase",
+        "application integration must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 118B: approval storage API design final audit and merge gate."
+        in source
+    )
+    assert (
+        "After 118B, recommend: 119A: approval storage API design release safety checkpoint, docs/tests only."
+        in source
+    )
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_FINAL_RELEASE_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_storage_api_design.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

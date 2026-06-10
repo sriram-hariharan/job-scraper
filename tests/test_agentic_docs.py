@@ -13128,3 +13128,57 @@ def test_approval_ui_action_implementation_safety_checkpoint_doc_contract():
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_approval_ui_action_only_no_execution_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/approval_ui_action_only_no_execution.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Approval UI action only no execution: PASS",
+        "UI action implementation: UI_ACTION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "Live execution: NO_GO",
+        "no API route modified in this phase unless blocked and explicitly documented",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "UI action calls approval decision endpoint only",
+        "UI action preserves existing queue safety gates",
+        "UI action preserves existing execution safety gates",
+        "UI action preserves idempotency_key behavior",
+        "UI action preserves approval_status constraints",
+        "UI action preserves stage-level observability",
+        "UI action preserves deterministic behavior",
+        "execution enablement must be separate future phase",
+        "migration execution must be separate future phase",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "tests/test_approval_ui_action_only_no_execution.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

@@ -124,6 +124,8 @@ Recommended next phase: 126B: approval storage API application integration path 
 
 After 126B, recommend: 127A: approval storage API application integration implementation safety checkpoint, docs/tests only first.
 
+Implementation safety checkpoint: `docs/approval_storage_api_application_integration_implementation_safety_checkpoint.md`.
+
 Application integration implementation safety checkpoint must be separate future phase.
 
 Application integration implementation must be separate future phase.

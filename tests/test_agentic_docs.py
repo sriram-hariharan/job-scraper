@@ -13573,3 +13573,71 @@ def test_application_submission_readiness_review_doc_contract():
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_application_submission_implementation_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/application_submission_implementation_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Application submission implementation safety checkpoint: PASS",
+        "Application submission implementation safety: GO_FOR_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY_NEXT",
+        "Application submission readiness: REVIEWED_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Future submission scope: APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Application submission: NO_GO_IN_THIS_PHASE",
+        "Scheduler/background execution: NO_GO",
+        "Live execution: NO_GO",
+        "Live submission: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no execution file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no application submission enabled in this phase",
+        "no scheduler/background execution enabled",
+        "future application submission must require recorded approval",
+        "future application submission must require approval-gated execution",
+        "future application submission must preserve existing queue safety gates",
+        "future application submission must preserve existing execution safety gates",
+        "future application submission must preserve idempotency_key behavior",
+        "future application submission must preserve approval_status constraints",
+        "future application submission must preserve audit event behavior",
+        "future application submission must preserve dry-run artifact behavior",
+        "future application submission must preserve stage-level observability",
+        "future application submission must preserve deterministic behavior",
+        "scheduler/background execution must be separate future phase",
+        "migration execution must be separate future phase",
+        "143B: application submission implementation safety checkpoint final audit and merge gate",
+        "144A: application submission implementation, approval-and-execution-gated only, no scheduler/background execution",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

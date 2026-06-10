@@ -729,3 +729,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Approval API endpoint implementation safety checkpoint](docs/approval_api_endpoint_implementation_safety_checkpoint.md)
 
 - [Approval API endpoint route only no execution](docs/approval_api_endpoint_route_only_no_execution.md)
+
+- [Approval API endpoint route only release safety checkpoint](docs/approval_api_endpoint_route_only_release_safety_checkpoint.md)

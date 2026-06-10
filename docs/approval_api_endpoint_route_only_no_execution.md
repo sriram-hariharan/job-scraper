@@ -80,3 +80,9 @@ Migration execution must be separate future phase.
 - UI action implementation must be separate future phase
 - execution enablement must be separate future phase
 - migration execution must be separate future phase
+
+## Step 133A approval API endpoint route only release safety checkpoint
+
+See `docs/approval_api_endpoint_route_only_release_safety_checkpoint.md`.
+
+This release checkpoint is docs/tests only. It does not modify runtime files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, UI actions, scheduler/background execution, or migration execution.

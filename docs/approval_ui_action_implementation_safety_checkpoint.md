@@ -104,6 +104,12 @@ After 135B, recommend:
 
 136A: approval UI action implementation, UI action only, no execution enablement
 
+## Step 136A implementation note
+
+Step 136A is tracked in `docs/approval_ui_action_only_no_execution.md`.
+
+The Step 136A UI action is limited to Agentic Review UI wiring for the existing approval decision endpoint. It remains safely blocked when reviewer identity or approval request id is unavailable and does not add queue mutation, execution enablement, mutation execution, application submission, scheduler/background execution, SQL changes, migrations, storage module changes, or API route changes.
+
 ## L. Verification contract phrases
 
 - Approval UI action implementation safety checkpoint: PASS

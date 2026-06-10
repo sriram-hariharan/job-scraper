@@ -153,3 +153,9 @@ After 130B, recommend:
 - UI action implementation must be separate future phase
 - execution enablement must be separate future phase
 - migration execution must be separate future phase
+
+## Step 131A approval API endpoint implementation safety checkpoint
+
+See `docs/approval_api_endpoint_implementation_safety_checkpoint.md`.
+
+This checkpoint is docs/tests only and does not add approval API endpoints, app routes, UI actions, queue mutation, execution, mutation execution, application submission, scheduler/background execution, SQL changes, migration execution, or storage module changes.

@@ -358,3 +358,9 @@ This is a release-safety-checkpoint phase only and is docs/tests only. It does n
 See `docs/approval_api_endpoint_implementation_readiness_review.md`.
 
 This is a readiness-review phase only and is docs/tests only. It does not modify runtime files, the storage module, SQL, queue mutation, execution, mutation execution, application submission, approval endpoints, UI actions, or scheduler/background execution.
+
+## Step 131A: approval API endpoint implementation safety checkpoint
+
+See `docs/approval_api_endpoint_implementation_safety_checkpoint.md`.
+
+This is a safety-checkpoint phase only and is docs/tests only. It does not modify runtime files, the storage module, SQL, queue mutation, execution, mutation execution, application submission, approval endpoints, UI actions, or scheduler/background execution.

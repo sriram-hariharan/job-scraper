@@ -166,3 +166,9 @@ After 129B, recommend:
 - approval endpoint implementation must be separate future phase
 - UI action implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 130A approval API endpoint readiness review
+
+See `docs/approval_api_endpoint_implementation_readiness_review.md`.
+
+This readiness review is docs/tests only and does not add approval API endpoints, UI actions, queue mutation, execution, mutation execution, application submission, scheduler/background execution, SQL changes, migration execution, or storage module changes.

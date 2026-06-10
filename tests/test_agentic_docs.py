@@ -13064,3 +13064,67 @@ def test_approval_ui_action_readiness_review_doc_contract():
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_approval_ui_action_implementation_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/approval_ui_action_implementation_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Approval UI action implementation safety checkpoint: PASS",
+        "UI action implementation safety: GO_FOR_UI_ACTION_ONLY_NEXT",
+        "UI action readiness: REVIEWED_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Future UI action scope: UI_ACTION_ONLY",
+        "UI action implementation: NO_GO_IN_THIS_PHASE",
+        "UI run/approve/reject buttons: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no UI file modified in this phase",
+        "no endpoint route modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "future UI action must call endpoint only",
+        "future UI action must preserve existing queue safety gates",
+        "future UI action must preserve existing execution safety gates",
+        "future UI action must preserve idempotency_key behavior",
+        "future UI action must preserve approval_status constraints",
+        "future UI action must preserve stage-level observability",
+        "future UI action must preserve deterministic behavior",
+        "UI action implementation must be separate future phase",
+        "execution enablement must be separate future phase",
+        "migration execution must be separate future phase",
+        "135B: approval UI action implementation safety checkpoint final audit and merge gate",
+        "136A: approval UI action implementation, UI action only, no execution enablement",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "tests/test_approval_api_endpoint_route_only.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

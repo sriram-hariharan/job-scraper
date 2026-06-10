@@ -418,3 +418,9 @@ This readiness review prepares a future execution enablement safety checkpoint o
 See `docs/approval_execution_enablement_implementation_safety_checkpoint.md`.
 
 This safety checkpoint prepares a future approval-gated execution-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, migration files, or migration runners.
+
+## Step 141A: approval gated execution only release safety checkpoint
+
+See `docs/approval_gated_execution_only_release_safety_checkpoint.md`.
+
+This release checkpoint confirms approval-gated execution remains isolated. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, application submission, scheduler/background execution, migration files, or migration runners.

@@ -13440,3 +13440,70 @@ def test_approval_execution_enablement_implementation_safety_checkpoint_doc_cont
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_approval_gated_execution_only_release_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/approval_gated_execution_only_release_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Approval gated execution only release safety checkpoint: PASS",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Approval-gated execution tests: EXIST",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this release checkpoint",
+        "no UI file modified in this release checkpoint",
+        "no execution file modified in this release checkpoint",
+        "no storage module modified in this release checkpoint",
+        "no SQL file modified in this release checkpoint",
+        "no application submission enabled",
+        "no scheduler/background execution enabled",
+        "approval-gated execution requires recorded approval",
+        "approval-gated execution blocks missing approval",
+        "approval-gated execution blocks unsupported approval status",
+        "approval-gated execution preserves existing queue safety gates",
+        "approval-gated execution preserves existing execution safety gates",
+        "approval-gated execution preserves idempotency_key behavior",
+        "approval-gated execution preserves approval_status constraints",
+        "approval-gated execution preserves audit event behavior",
+        "approval-gated execution preserves dry-run artifact behavior",
+        "approval-gated execution preserves stage-level observability",
+        "approval-gated execution preserves deterministic behavior",
+        "application submission must be separate future phase",
+        "scheduler/background execution must be separate future phase",
+        "migration execution must be separate future phase",
+        "141B: approval gated execution only release safety checkpoint final audit and merge gate",
+        "142A: application submission readiness review, docs/tests only first",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

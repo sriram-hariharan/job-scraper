@@ -389,6 +389,12 @@ See `docs/approval_gated_execution_only_no_submission.md`.
 
 This phase adds only an injectable approval-gated execution readiness boundary in `application_execution_queue.py`. It requires recorded approval before the readiness flag can pass, preserves queue and execution safety gates, and does not add application submission, scheduler/background execution, API route changes, UI changes, storage module changes, SQL changes, migrations, or live execution.
 
+## Step 144A: application submission gated only no scheduler
+
+See `docs/application_submission_gated_only_no_scheduler.md`.
+
+This phase adds only an application-submission decision boundary in `application_execution_queue.py`. It requires recorded approval and an approval-gated execution result that is allowed and passed, preserves queue and execution safety gates, and does not add scheduler/background execution, automatic submission loops, API route changes, UI changes, storage module changes, SQL changes, migrations, or live scheduler behavior.
+
 ## Step 134A: approval UI action readiness review
 
 See `docs/approval_ui_action_readiness_review.md`.

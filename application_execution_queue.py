@@ -29,6 +29,7 @@ ACTION_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["action_rank"]
 TIE_REVIEW_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["tie_review_rank"]
 QUEUE_SAFETY_GATE_ENABLED = True
 APPROVAL_GATED_EXECUTION_ENABLED = True
+APPLICATION_SUBMISSION_GATE_ENABLED = True
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -153,6 +154,113 @@ def approval_gated_execution_payload(
         "approval_status": approval_status,
         "application_submission_enabled": False,
         "scheduler_background_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+    }
+
+
+def _application_submission_disabled_payload(
+    *,
+    approval_request_id: str = "",
+    approval_status: str = "",
+    reason_codes: List[str] | None = None,
+    approval_gated_execution_output: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    execution_gate = dict(approval_gated_execution_output or {})
+    return {
+        **execution_gate,
+        "application_submission_gate_enabled": APPLICATION_SUBMISSION_GATE_ENABLED,
+        "application_submission_allowed": False,
+        "application_submission_status": "blocked",
+        "application_submission_reason_codes": sorted(set(reason_codes or [])),
+        "approval_request_id": _normalize_text(approval_request_id),
+        "approval_status": _normalize_text(approval_status),
+        "scheduler_background_execution_enabled": False,
+        "live_scheduler_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+    }
+
+
+def application_submission_decision_payload(
+    *,
+    approval_request_id: str = "",
+    approval_gated_execution_output: Dict[str, Any] | None = None,
+    approval_record_provider: Any = None,
+) -> Dict[str, Any]:
+    """Return application-submission readiness without submitting applications."""
+
+    execution_gate = dict(
+        approval_gated_execution_output
+        or approval_gated_execution_payload(approval_request_id=approval_request_id)
+    )
+    reason_codes: List[str] = []
+
+    if execution_gate.get("approval_gated_execution_allowed") is not True:
+        reason_codes.append("approval_gated_execution_not_allowed")
+    if _normalize_text(execution_gate.get("approval_gated_execution_status")) != "passed":
+        reason_codes.append("approval_gated_execution_status_not_passed")
+
+    if execution_gate.get("blocked_by_queue_safety_gate") is True:
+        reason_codes.append("queue_safety_gate_blocked")
+    if execution_gate.get("queue_safety_gate_passed") is False:
+        reason_codes.append("queue_safety_gate_not_passed")
+
+    clean_approval_request_id = _normalize_text(
+        approval_request_id or execution_gate.get("approval_request_id")
+    )
+    if not clean_approval_request_id:
+        reason_codes.append("missing_approval_request_id")
+
+    approval_record = None
+    if approval_record_provider is None:
+        reason_codes.append("approval_record_provider_unavailable")
+    elif clean_approval_request_id:
+        approval_record = approval_record_provider(clean_approval_request_id)
+        if not isinstance(approval_record, dict):
+            reason_codes.append("missing_recorded_approval")
+
+    approval_status = _normalize_text(execution_gate.get("approval_status"))
+    if isinstance(approval_record, dict):
+        approval_status = _normalize_text(approval_record.get("approval_status"))
+
+    if approval_status:
+        supported_statuses = _approval_storage_status_values()
+        if approval_status not in supported_statuses:
+            reason_codes.append("unsupported_approval_status")
+        elif approval_status != "approved":
+            reason_codes.append("approval_status_not_approved")
+    elif approval_record_provider is not None:
+        reason_codes.append("missing_approval_status")
+
+    if reason_codes:
+        return _application_submission_disabled_payload(
+            approval_request_id=clean_approval_request_id,
+            approval_status=approval_status,
+            reason_codes=reason_codes,
+            approval_gated_execution_output=execution_gate,
+        )
+
+    return {
+        **execution_gate,
+        "application_submission_gate_enabled": APPLICATION_SUBMISSION_GATE_ENABLED,
+        "application_submission_allowed": True,
+        "application_submission_status": "passed",
+        "application_submission_reason_codes": [],
+        "approval_request_id": clean_approval_request_id,
+        "approval_status": approval_status,
+        "scheduler_background_execution_enabled": False,
+        "live_scheduler_enabled": False,
+        "automatic_submission_loop_enabled": False,
         "live_execution_enabled": False,
         "did_execute_count": 0,
         "did_execute_live": False,

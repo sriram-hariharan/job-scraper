@@ -183,6 +183,7 @@ APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH = Path(
 APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/approval_sql_ddl_file_implementation_safety_checkpoint.md"
 )
+APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH = Path("src/storage/agentic_approvals/schema.sql")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -11122,6 +11123,110 @@ def test_approval_sql_ddl_file_implementation_safety_checkpoint_covers_step_115a
         ]
     )
     assert "docs/approval_sql_ddl_file_implementation_safety_checkpoint.md" in linked_docs
+
+
+def test_approval_sql_ddl_static_artifact_covers_step_116a_contract():
+    assert APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH.exists()
+
+    source = APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH.read_text(encoding="utf-8")
+
+    for phrase in [
+        "Verification contract phrases",
+        "Approval SQL DDL file implementation: PASS",
+        "SQL file implementation: STATIC_ARTIFACT_ONLY",
+        "SQL execution: NOT_INCLUDED",
+        "Migration execution: NOT_INCLUDED",
+        "Runtime-facing integration scope: STATIC_SQL_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no migration file added",
+        "no DB schema file added outside approved SQL file path",
+        "no storage API added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "SQL file path: src/storage/agentic_approvals/schema.sql",
+        "SQL file creates agentic_approval_requests before agentic_approval_audit_events",
+        "SQL file includes primary key on approval_request_id",
+        "SQL file includes primary key on audit_event_id",
+        "SQL file includes unique idempotency_key",
+        "SQL file includes approval_status constraint",
+        "SQL file includes foreign key from audit events to approval requests",
+        "SQL file includes expires_at index",
+        "SQL file includes owner_id index",
+        "SQL file includes dry_run_artifact_id index",
+        "SQL file stores snapshots as JSON-compatible fields",
+        "SQL file does not store secrets",
+        "SQL file does not store raw credentials",
+        "SQL file has no automatic execution hook",
+        "SQL file has no INSERT statements",
+        "SQL file has no UPDATE statements",
+        "SQL file has no DELETE statements",
+        "storage API implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    request_table_index = source.index("CREATE TABLE IF NOT EXISTS agentic_approval_requests")
+    audit_table_index = source.index("CREATE TABLE IF NOT EXISTS agentic_approval_audit_events")
+    assert request_table_index < audit_table_index
+
+    for phrase in [
+        "approval_request_id TEXT PRIMARY KEY",
+        "audit_event_id TEXT PRIMARY KEY",
+        "idempotency_key TEXT NOT NULL",
+        "UNIQUE (idempotency_key)",
+        "approval_status TEXT NOT NULL",
+        "CHECK (approval_status IN",
+        "FOREIGN KEY (approval_request_id)",
+        "REFERENCES agentic_approval_requests (approval_request_id)",
+        "idx_agentic_approval_requests_expires_at",
+        "ON agentic_approval_requests (expires_at)",
+        "idx_agentic_approval_requests_owner_id",
+        "ON agentic_approval_requests (owner_id)",
+        "idx_agentic_approval_requests_dry_run_artifact_id",
+        "ON agentic_approval_requests (dry_run_artifact_id)",
+        "safety_gate_snapshot_json JSONB",
+        "fixture_validation_snapshot_json JSONB",
+        "app_service_safety_gate_snapshot_json JSONB",
+        "queue_safety_gate_snapshot_json JSONB",
+        "event_payload_json JSONB",
+    ]:
+        assert phrase in source
+
+    executable_sql = "\n".join(
+        line
+        for line in source.splitlines()
+        if line.strip() and not line.lstrip().startswith("--")
+    ).upper()
+    assert "INSERT INTO" not in executable_sql
+    assert "UPDATE " not in executable_sql
+    assert "DELETE FROM" not in executable_sql
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH,
+            APPROVAL_SQL_DDL_FILE_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "src/storage/agentic_approvals/schema.sql" in linked_docs
+    assert "116B approval SQL DDL file implementation final audit and merge gate" in linked_docs
+    assert (
+        "117A approval SQL DDL file implementation final release checkpoint, docs/tests only"
+        in linked_docs
+    )
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

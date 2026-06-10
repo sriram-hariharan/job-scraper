@@ -650,6 +650,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Approval SQL DDL implementation readiness review](docs/approval_sql_ddl_implementation_readiness_review.md)
 - [Approval SQL DDL file path and content proposal](docs/approval_sql_ddl_file_path_content_proposal.md)
 - [Approval SQL DDL file implementation safety checkpoint](docs/approval_sql_ddl_file_implementation_safety_checkpoint.md)
+- [Approval SQL DDL static artifact](src/storage/agentic_approvals/schema.sql)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

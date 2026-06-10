@@ -174,6 +174,8 @@ Phase 114A approval SQL DDL file path and content proposal is tracked in `docs/a
 
 Step 115A approval SQL DDL file implementation safety checkpoint is tracked in `docs/approval_sql_ddl_file_implementation_safety_checkpoint.md`. That step is safety-checkpoint only and docs/tests only; it adds no runtime behavior, SQL file, migration file, schema file, SQL DDL, storage API, DB writes, queue mutation, execution, or application submission.
 
+Step 116A approval SQL DDL file implementation is tracked in `src/storage/agentic_approvals/schema.sql`. That step adds a static SQL file only; it adds no runtime behavior, migration runner, storage API, DB writes, queue mutation, execution, mutation execution, application submission, scheduler/background execution, or UI run/approve/reject buttons.
+
 Phase 63A fixture validator implementation plan is tracked in `docs/fixture_validator_implementation_plan.md`. That implementation plan is docs/tests only and does not add fixture validator code, fixture validator modules, fixture validator CLIs, fixture validator tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.
 
 Phase 64A fixture validator implementation plan release safety checkpoint is tracked in `docs/fixture_validator_implementation_plan_release_safety_checkpoint.md`. That checkpoint is docs/tests only and confirms the fixture validator implementation plan remains design-only before any fixture validator code, modules, CLIs, tests, fixture files, fixture directories, runtime failure-mode tests, storage integration tests, DB writes, mutation execution, or live execution.

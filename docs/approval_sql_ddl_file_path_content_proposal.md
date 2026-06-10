@@ -134,6 +134,8 @@ After 114B, recommend: 115A approval SQL DDL file implementation safety checkpoi
 
 File implementation safety checkpoint: `docs/approval_sql_ddl_file_implementation_safety_checkpoint.md`.
 
+Step 116A creates the approved static SQL artifact at `src/storage/agentic_approvals/schema.sql` without execution.
+
 SQL DDL file implementation must be separate future phase.
 
 Migration execution must be separate future phase.

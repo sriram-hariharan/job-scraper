@@ -280,6 +280,7 @@ APPLICATION_ACTION_OVERLAY_FIELDS = [
 ]
 
 APP_SERVICE_SAFETY_GATE_ENABLED = True
+APPROVAL_STORAGE_APPLICATION_INTEGRATION_ENABLED = True
 
 _APP_SERVICE_WORKFLOW_RUNNER_REQUIRED_GATE_FIELDS = {
     "fixture_validation",
@@ -393,6 +394,174 @@ def app_service_agentic_workflow_safety_gate_payload(
         else dict(workflow_runner_result)
     )
     return _app_service_safety_gate_result(dry_run_result)
+
+
+def app_service_persist_agentic_approval_request(
+    connection: Any,
+    *,
+    app_service_safety_gate_output: Dict[str, Any],
+    approval_request_id: str,
+    dry_run_artifact_id: str,
+    owner_id: str,
+    idempotency_key: str,
+    expires_at: Any,
+    proposed_action_type: str = "",
+    proposed_action_summary: str = "",
+    queue_safety_gate_output: Dict[str, Any] | None = None,
+    audit_event_id: str = "",
+    event_actor_id: str = "",
+    created_at: Any = None,
+    storage_module: Any = None,
+) -> Dict[str, Any]:
+    """Persist an approval request through the approved app-service call-site.
+
+    The caller must provide an injected connection and already safety-gated
+    payloads. This helper is not wired into routes, queues, timed jobs, or
+    workflow execution.
+    """
+
+    result: Dict[str, Any] = {
+        "approval_storage_application_integration_enabled": (
+            APPROVAL_STORAGE_APPLICATION_INTEGRATION_ENABLED
+        ),
+        "approval_storage_call_site": "src/app/services.py",
+        "approval_storage_status": "passed",
+        "approval_storage_reason_codes": [],
+        "did_create_approval_request": False,
+        "did_record_approval_audit_event": False,
+        "approval_request": {},
+        "approval_audit_event": {},
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "allow_agent_execution": False,
+        "execution_enabled": False,
+    }
+    reason_codes: List[str] = []
+
+    app_gate = (
+        dict(app_service_safety_gate_output)
+        if isinstance(app_service_safety_gate_output, dict)
+        else {}
+    )
+    if not app_gate:
+        reason_codes.append("missing_app_service_safety_gate_output")
+    else:
+        result.update(
+            {
+                "app_service_safety_gate_passed": app_gate.get(
+                    "app_service_safety_gate_passed"
+                ),
+                "app_service_safety_gate_status": app_gate.get(
+                    "app_service_safety_gate_status"
+                ),
+                "blocked_by_app_service_safety_gate": app_gate.get(
+                    "blocked_by_app_service_safety_gate"
+                ),
+            }
+        )
+        if app_gate.get("blocked_by_app_service_safety_gate") is True:
+            reason_codes.append("app_service_safety_gate_blocked")
+        if app_gate.get("app_service_safety_gate_passed") is not True:
+            reason_codes.append("app_service_safety_gate_not_passed")
+        if _clean_text(app_gate.get("app_service_safety_gate_status")) != "passed":
+            reason_codes.append("app_service_safety_gate_status_not_passed")
+
+    queue_gate = dict(queue_safety_gate_output or {})
+    if queue_gate:
+        result.update(
+            {
+                "queue_safety_gate_passed": queue_gate.get("queue_safety_gate_passed"),
+                "queue_safety_gate_status": queue_gate.get("queue_safety_gate_status"),
+                "blocked_by_queue_safety_gate": queue_gate.get(
+                    "blocked_by_queue_safety_gate"
+                ),
+            }
+        )
+        if queue_gate.get("blocked_by_queue_safety_gate") is True:
+            reason_codes.append("queue_safety_gate_blocked")
+        if queue_gate.get("queue_safety_gate_passed") is not True:
+            reason_codes.append("queue_safety_gate_not_passed")
+        if _clean_text(queue_gate.get("queue_safety_gate_status")) != "passed":
+            reason_codes.append("queue_safety_gate_status_not_passed")
+
+    for field_name, field_value in [
+        ("approval_request_id", approval_request_id),
+        ("dry_run_artifact_id", dry_run_artifact_id),
+        ("owner_id", owner_id),
+        ("idempotency_key", idempotency_key),
+    ]:
+        if not _clean_text(field_value):
+            reason_codes.append(f"missing_{field_name}")
+    if expires_at is None or expires_at == "":
+        reason_codes.append("missing_expires_at")
+
+    if reason_codes:
+        result["approval_storage_status"] = "blocked"
+        result["approval_storage_reason_codes"] = sorted(set(reason_codes))
+        return result
+
+    if storage_module is None:
+        from src.storage.agentic_approvals import store as storage_module
+
+    try:
+        approval_request = storage_module.create_approval_request(
+            connection,
+            approval_request_id=_clean_text(approval_request_id),
+            dry_run_artifact_id=_clean_text(dry_run_artifact_id),
+            owner_id=_clean_text(owner_id),
+            idempotency_key=_clean_text(idempotency_key),
+            proposed_action_type=_clean_text(proposed_action_type),
+            proposed_action_summary=_clean_text(proposed_action_summary),
+            safety_gate_snapshot={
+                "app_service_safety_gate_passed": app_gate.get(
+                    "app_service_safety_gate_passed"
+                ),
+                "queue_safety_gate_passed": queue_gate.get("queue_safety_gate_passed")
+                if queue_gate
+                else None,
+                "did_execute_count": 0,
+                "did_execute_live": False,
+                "did_mutate_production": False,
+                "did_write_db": False,
+            },
+            fixture_validation_snapshot=dict(app_gate.get("fixture_validation") or {}),
+            app_service_safety_gate_snapshot=app_gate,
+            queue_safety_gate_snapshot=queue_gate,
+            expires_at=expires_at,
+            created_at=created_at,
+        )
+        result["approval_request"] = dict(approval_request or {})
+        result["did_create_approval_request"] = True
+
+        if _clean_text(audit_event_id):
+            approval_audit_event = storage_module.record_approval_audit_event(
+                connection,
+                audit_event_id=_clean_text(audit_event_id),
+                approval_request_id=_clean_text(approval_request_id),
+                event_type="approval_request_persisted",
+                event_actor_id=_clean_text(event_actor_id),
+                event_payload={
+                    "approval_request_id": _clean_text(approval_request_id),
+                    "dry_run_artifact_id": _clean_text(dry_run_artifact_id),
+                    "idempotency_key": _clean_text(idempotency_key),
+                    "storage_call_site": "src/app/services.py",
+                },
+                created_at=created_at,
+            )
+            result["approval_audit_event"] = dict(approval_audit_event or {})
+            result["did_record_approval_audit_event"] = True
+    except Exception as exc:
+        reason_code = _clean_text(getattr(exc, "reason_code", "")) or "approval_storage_unavailable"
+        result["approval_storage_status"] = "failed"
+        result["approval_storage_reason_codes"] = [reason_code]
+        result["did_create_approval_request"] = False
+        result["did_record_approval_audit_event"] = False
+        result["approval_request"] = {}
+        result["approval_audit_event"] = {}
+
+    return result
 _JOB_METADATA_OVERLAY_CACHE: Dict[Tuple[str, int, int], Dict[str, Dict[str, Any]]] = {}
 _TAILORING_WORKSPACE_BUTTON_STATE_CACHE: Dict[
     Tuple[str, int, int, int, int],

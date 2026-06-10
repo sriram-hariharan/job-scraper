@@ -126,6 +126,8 @@ After 126B, recommend: 127A: approval storage API application integration implem
 
 Implementation safety checkpoint: `docs/approval_storage_api_application_integration_implementation_safety_checkpoint.md`.
 
+Step 128A implements approved call-site wiring only at `docs/approval_storage_api_application_integration_call_site_wiring_only.md`, with no execution enablement.
+
 Application integration implementation safety checkpoint must be separate future phase.
 
 Application integration implementation must be separate future phase.

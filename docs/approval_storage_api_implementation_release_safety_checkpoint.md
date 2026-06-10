@@ -139,6 +139,8 @@ Recommended next phase: 124B: approval storage API implementation release safety
 
 After 124B, recommend: 125A: approval storage API application integration readiness review, docs/tests only first.
 
+Application integration readiness review: `docs/approval_storage_api_application_integration_readiness_review.md`.
+
 Application integration must be separate future phase.
 
 Migration execution must be separate future phase.

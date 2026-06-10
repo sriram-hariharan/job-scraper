@@ -159,3 +159,7 @@ Verification contract phrases
 - approval endpoint implementation must be separate future phase
 - UI action implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 129A release safety checkpoint
+
+See `docs/approval_storage_api_application_integration_release_safety_checkpoint.md` for the release safety checkpoint confirming that application integration remains approved call-site wiring only, with no execution enablement, queue mutation, application submission, approval endpoint, UI action, scheduler/background execution, SQL change, or migration execution.

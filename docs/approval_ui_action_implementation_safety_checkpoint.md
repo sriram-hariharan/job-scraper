@@ -1,36 +1,48 @@
-# Approval UI action readiness review
+# Approval UI action implementation safety checkpoint
 
-## A. Current readiness review scope
+## A. Current safety checkpoint scope
 
-This readiness review prepares a future UI action phase for approval review actions.
+This checkpoint prepares a future UI action implementation phase.
 
 This phase is docs/tests only. It does not modify UI JavaScript, runtime API files, storage module files, SQL files, queue behavior, execution behavior, mutation execution, application submission, scheduler/background behavior, or migration execution.
 
-## B. Readiness decision
+## B. Safety decision
 
-The project is ready for a future UI action safety checkpoint only.
+A future UI action implementation may proceed only as a separate reviewed phase.
 
-This phase does not approve UI implementation yet.
+This checkpoint does not implement UI approve/reject buttons.
 
-## C. Existing endpoint baseline
+## C. Existing readiness baseline
 
-The approval API endpoint route-only implementation exists at `POST /api/agentic-approvals/{approval_request_id}/decision`.
+The UI action readiness review exists at `docs/approval_ui_action_readiness_review.md`.
+
+The approval endpoint route-only implementation exists at `POST /api/agentic-approvals/{approval_request_id}/decision`.
 
 Runtime route file: `src/app/api.py`.
 
-The endpoint remains route-only and does not enable execution.
+Existing UI asset path: `src/app/static/agentic_review.js`.
 
-## D. Existing UI baseline
+## D. Future UI implementation boundary
 
-Existing Agentic Review UI assets remain unchanged in this phase.
+A future UI action may add review-only approve/reject controls that call the existing approval endpoint.
 
-UI action implementation must be separately reviewed before adding approve/reject controls.
+The future UI action must not directly mutate queues.
 
-## E. Future UI action boundary
+The future UI action must not directly enable execution.
 
-A future UI action may call the existing approval decision endpoint only after a separate safety checkpoint.
+The future UI action must not directly submit applications.
 
-The future UI action must not call queue mutation, execution, mutation execution, application submission, scheduler/background execution, SQL execution, or migration execution.
+The future UI action must not run scheduler/background work.
+
+## E. Endpoint boundary preservation
+
+Future UI action work must call the existing endpoint route only.
+
+Future UI action work must preserve the endpoint route-only boundary.
+
+Future UI action work must preserve `idempotency_key` behavior.
+
+Future UI action work must preserve `approval_status` constraints.
 
 ## F. Queue and execution gate preservation
 
@@ -38,19 +50,15 @@ Future UI action work must preserve existing queue safety gates.
 
 Future UI action work must preserve existing execution safety gates.
 
-Execution enablement must remain a separate future phase.
+Queue mutation remains out of scope.
 
-## G. Storage and endpoint boundary preservation
+Execution enablement remains out of scope.
 
-Future UI action work must preserve the approval API endpoint boundary.
+Mutation execution remains out of scope.
 
-Future UI action work must preserve `idempotency_key` behavior.
+Application submission remains out of scope.
 
-Future UI action work must preserve `approval_status` constraints.
-
-The storage module must not be modified in this readiness review.
-
-## H. SQL and migration isolation
+## G. SQL and migration isolation
 
 No SQL file is modified.
 
@@ -60,7 +68,7 @@ No migration runner is added.
 
 Migration execution must remain a separate future phase.
 
-## I. Observability and deterministic behavior
+## H. Observability and deterministic behavior
 
 Future UI action work must preserve stage-level observability.
 
@@ -68,7 +76,13 @@ Future UI action work must preserve deterministic behavior.
 
 Future UI action work must preserve existing logging, configuration, retry logic, caching, deduplication, ranking, metrics, queue safety gates, and execution safety gates.
 
-## J. Forbidden next-step shortcuts
+## I. Required future UI tests
+
+A future UI implementation phase must include focused tests for the UI action boundary.
+
+Those tests must prove the UI calls only the approval endpoint and does not trigger queue mutation, execution, mutation execution, application submission, scheduler/background execution, SQL execution, or migration execution.
+
+## J. Forbidden implementation shortcuts
 
 Do not combine UI action implementation with execution enablement.
 
@@ -84,20 +98,23 @@ Do not bypass execution safety gates.
 
 ## K. Recommended next phase
 
-134B: approval UI action readiness review final audit and merge gate
+135B: approval UI action implementation safety checkpoint final audit and merge gate
 
-After 134B, recommend:
+After 135B, recommend:
 
-135A: approval UI action implementation safety checkpoint, docs/tests only
+136A: approval UI action implementation, UI action only, no execution enablement
 
 ## L. Verification contract phrases
 
-- Approval UI action readiness review: PASS
-- UI action readiness: REVIEW_ONLY
+- Approval UI action implementation safety checkpoint: PASS
+- UI action implementation safety: GO_FOR_UI_ACTION_ONLY_NEXT
+- UI action readiness: REVIEWED_ONLY
 - Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY
 - Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision
 - Runtime route file: src/app/api.py
-- UI action implementation: NO_GO
+- UI asset path: src/app/static/agentic_review.js
+- Future UI action scope: UI_ACTION_ONLY
+- UI action implementation: NO_GO_IN_THIS_PHASE
 - UI run/approve/reject buttons: NO_GO
 - Queue mutation: NO_GO
 - Execution enablement: NO_GO
@@ -124,9 +141,3 @@ After 134B, recommend:
 - UI action implementation must be separate future phase
 - execution enablement must be separate future phase
 - migration execution must be separate future phase
-
-## Step 135A approval UI action implementation safety checkpoint
-
-See `docs/approval_ui_action_implementation_safety_checkpoint.md`.
-
-This checkpoint is docs/tests only. It does not modify UI files, runtime API files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, or migration execution.

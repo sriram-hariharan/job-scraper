@@ -211,6 +211,9 @@ APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_READINESS_REVIEW_DOC_PATH = Path(
 APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_PATH_CALL_SITE_PROPOSAL_DOC_PATH = Path(
     "docs/approval_storage_api_application_integration_path_call_site_proposal.md"
 )
+APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_storage_api_application_integration_implementation_safety_checkpoint.md"
+)
 APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH = Path("src/storage/agentic_approvals/schema.sql")
 APPROVAL_STORAGE_API_MODULE_PATH = Path("src/storage/agentic_approvals/store.py")
 APPROVAL_STORAGE_API_TEST_PATH = Path("tests/test_agentic_approval_storage_api.py")
@@ -12008,6 +12011,106 @@ def test_approval_storage_api_application_integration_path_call_site_proposal_co
     )
     assert (
         "docs/approval_storage_api_application_integration_path_call_site_proposal.md"
+        in linked_docs
+    )
+
+
+def test_approval_storage_api_application_integration_implementation_safety_checkpoint_covers_step_127a_contract():
+    assert APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    assert APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH.exists()
+    assert APPROVAL_STORAGE_API_MODULE_PATH.exists()
+    assert APPROVAL_STORAGE_API_TEST_PATH.exists()
+
+    source = APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for section in [
+        "## A. Current safety checkpoint scope",
+        "## B. Safety decision",
+        "## C. Existing storage module confirmation",
+        "## D. Proposed integration path confirmation",
+        "## E. Proposed call-site confirmation",
+        "## F. Runtime isolation confirmation",
+        "## G. App service integration safety gates",
+        "## H. Workflow runner integration safety gates",
+        "## I. Queue safety gate preservation",
+        "## J. Execution and mutation safety gates",
+        "## K. Approval API endpoint non-goal confirmation",
+        "## L. UI and scheduler non-goal confirmation",
+        "## M. Idempotency and approval status gates",
+        "## N. Observability and deterministic behavior gates",
+        "## O. Security and data-safety gates",
+        "## P. Forbidden implementation shortcuts",
+        "## Q. Recommended next phase",
+        "## R. Verification contract phrases",
+    ]:
+        assert section in source
+
+    for phrase in [
+        "Approval storage API application integration implementation safety checkpoint: PASS",
+        "Application integration implementation readiness: GO_FOR_REVIEW_ONLY",
+        "Application integration path proposal: REVIEWED_ONLY",
+        "Application call-site proposal: REVIEWED_ONLY",
+        "Storage API implementation: EXISTING_MODULE_ONLY",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "DB write capability: STORAGE_MODULE_ONLY_NOT_INVOKED_BY_PIPELINE",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Approval API endpoints: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no app service integration added",
+        "no workflow runner integration added",
+        "no queue integration added",
+        "no approval API endpoint added",
+        "no UI action added",
+        "no scheduler/background execution added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "no storage API file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "static SQL artifact remains inert",
+        "storage API module remains module-only",
+        "storage API module remains not invoked by pipeline",
+        "future application integration implementation must preserve existing queue safety gates",
+        "future application integration implementation must preserve existing execution safety gates",
+        "future application integration implementation must preserve idempotency_key behavior",
+        "future application integration implementation must preserve approval_status constraints",
+        "future application integration implementation must preserve stage-level observability",
+        "future application integration implementation must preserve deterministic behavior",
+        "application integration implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 127B: approval storage API application integration implementation safety checkpoint final audit and merge gate."
+        in source
+    )
+    assert (
+        "After 127B, recommend: 128A: approval storage API application integration implementation, call-site wiring only, no execution enablement."
+        in source
+    )
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_PATH_CALL_SITE_PROPOSAL_DOC_PATH,
+            APPROVAL_STORAGE_API_APPLICATION_INTEGRATION_READINESS_REVIEW_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/approval_storage_api_application_integration_implementation_safety_checkpoint.md"
         in linked_docs
     )
 

@@ -28,6 +28,7 @@ from src.pipeline.resume_selection_credibility import (
 ACTION_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["action_rank"]
 TIE_REVIEW_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["tie_review_rank"]
 QUEUE_SAFETY_GATE_ENABLED = True
+APPROVAL_GATED_EXECUTION_ENABLED = True
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -56,6 +57,109 @@ def _queue_safety_gate_int(value: Any) -> int:
         return int(value or 0)
     except (TypeError, ValueError):
         return 0
+
+
+def _approval_storage_status_values() -> set[str]:
+    from src.storage.agentic_approvals import store
+
+    return set(store.APPROVAL_STATUS_VALUES)
+
+
+def _approval_gated_execution_disabled_payload(
+    *,
+    approval_request_id: str = "",
+    approval_status: str = "",
+    reason_codes: List[str] | None = None,
+    queue_safety_gate_output: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    queue_gate = dict(queue_safety_gate_output or {})
+    return {
+        **queue_gate,
+        "approval_gated_execution_enabled": APPROVAL_GATED_EXECUTION_ENABLED,
+        "approval_gated_execution_allowed": False,
+        "approval_gated_execution_status": "blocked",
+        "approval_gated_execution_reason_codes": sorted(set(reason_codes or [])),
+        "approval_request_id": _normalize_text(approval_request_id),
+        "approval_status": _normalize_text(approval_status),
+        "application_submission_enabled": False,
+        "scheduler_background_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+    }
+
+
+def approval_gated_execution_payload(
+    *,
+    approval_request_id: str = "",
+    queue_safety_gate_output: Dict[str, Any] | None = None,
+    approval_record_provider: Any = None,
+) -> Dict[str, Any]:
+    """Return approval-gated execution readiness without executing work.
+
+    The approval record provider is intentionally injectable and optional. The
+    default path opens no database connection and blocks execution safely.
+    """
+
+    queue_gate = dict(queue_safety_gate_output or queue_safety_gate_payload())
+    reason_codes: List[str] = []
+
+    if queue_gate.get("blocked_by_queue_safety_gate") is True:
+        reason_codes.append("queue_safety_gate_blocked")
+    if queue_gate.get("queue_safety_gate_passed") is not True:
+        reason_codes.append("queue_safety_gate_not_passed")
+    if _normalize_text(queue_gate.get("queue_safety_gate_status")) != "passed":
+        reason_codes.append("queue_safety_gate_status_not_passed")
+
+    clean_approval_request_id = _normalize_text(approval_request_id)
+    if not clean_approval_request_id:
+        reason_codes.append("missing_approval_request_id")
+
+    approval_record = None
+    if approval_record_provider is None:
+        reason_codes.append("approval_record_provider_unavailable")
+    elif not reason_codes:
+        approval_record = approval_record_provider(clean_approval_request_id)
+        if not isinstance(approval_record, dict):
+            reason_codes.append("missing_recorded_approval")
+
+    approval_status = ""
+    if isinstance(approval_record, dict):
+        approval_status = _normalize_text(approval_record.get("approval_status"))
+        supported_statuses = _approval_storage_status_values()
+        if approval_status not in supported_statuses:
+            reason_codes.append("unsupported_approval_status")
+        elif approval_status != "approved":
+            reason_codes.append("approval_status_not_approved")
+
+    if reason_codes:
+        return _approval_gated_execution_disabled_payload(
+            approval_request_id=clean_approval_request_id,
+            approval_status=approval_status,
+            reason_codes=reason_codes,
+            queue_safety_gate_output=queue_gate,
+        )
+
+    return {
+        **queue_gate,
+        "approval_gated_execution_enabled": APPROVAL_GATED_EXECUTION_ENABLED,
+        "approval_gated_execution_allowed": True,
+        "approval_gated_execution_status": "passed",
+        "approval_gated_execution_reason_codes": [],
+        "approval_request_id": clean_approval_request_id,
+        "approval_status": approval_status,
+        "application_submission_enabled": False,
+        "scheduler_background_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+    }
 
 
 def queue_safety_gate_payload(

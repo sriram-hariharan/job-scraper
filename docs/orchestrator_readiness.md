@@ -383,6 +383,12 @@ See `docs/approval_ui_action_only_no_execution.md`.
 
 This phase adds only Agentic Review UI action wiring for the existing approval decision endpoint. The action remains safely blocked when reviewer identity or approval request id is unavailable, and it adds no queue mutation, execution enablement, mutation execution, application submission, scheduler/background execution, SQL changes, migrations, storage module changes, or API route changes.
 
+## Step 140A: approval gated execution only no submission
+
+See `docs/approval_gated_execution_only_no_submission.md`.
+
+This phase adds only an injectable approval-gated execution readiness boundary in `application_execution_queue.py`. It requires recorded approval before the readiness flag can pass, preserves queue and execution safety gates, and does not add application submission, scheduler/background execution, API route changes, UI changes, storage module changes, SQL changes, migrations, or live execution.
+
 ## Step 134A: approval UI action readiness review
 
 See `docs/approval_ui_action_readiness_review.md`.

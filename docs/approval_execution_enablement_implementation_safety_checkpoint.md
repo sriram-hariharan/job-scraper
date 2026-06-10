@@ -120,6 +120,12 @@ After 139B, recommend:
 
 140A: approval execution enablement implementation, approval-gated execution only, no application submission
 
+## Step 140A implementation note
+
+Step 140A is tracked in `docs/approval_gated_execution_only_no_submission.md`.
+
+Step 140A adds only an injectable approval-gated execution readiness boundary in `application_execution_queue.py`. It does not add application submission, scheduler/background execution, API route changes, UI changes, storage module changes, SQL changes, migrations, or live execution.
+
 ## K. Verification contract phrases
 
 - Approval execution enablement implementation safety checkpoint: PASS

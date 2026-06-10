@@ -137,6 +137,8 @@ After 118B, recommend: 119A: approval storage API design release safety checkpoi
 
 Release safety checkpoint: `docs/approval_storage_api_design_release_safety_checkpoint.md`.
 
+Implementation readiness review: `docs/approval_storage_api_implementation_readiness_review.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

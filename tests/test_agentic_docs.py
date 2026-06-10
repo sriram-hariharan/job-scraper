@@ -171,6 +171,9 @@ APPROVAL_MIGRATION_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/approval_migration_design_release_safety_checkpoint.md"
 )
 APPROVAL_SQL_DDL_DESIGN_DOC_PATH = Path("docs/approval_sql_ddl_design.md")
+APPROVAL_SQL_DDL_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_sql_ddl_design_release_safety_checkpoint.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -10817,6 +10820,81 @@ def test_approval_sql_ddl_design_covers_phase_111a_contract():
         ]
     )
     assert "docs/approval_sql_ddl_design.md" in linked_docs
+
+
+def test_approval_sql_ddl_design_release_checkpoint_covers_phase_112a_contract():
+    assert APPROVAL_SQL_DDL_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+
+    source = APPROVAL_SQL_DDL_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "Release checkpoint: PASS",
+        "Approval SQL DDL design: GO",
+        "SQL DDL implementation: NOT_YET",
+        "SQL file implementation: NOT_YET",
+        "Migration implementation: NOT_YET",
+        "Migration file implementation: NOT_YET",
+        "Physical DB schema implementation: NOT_YET",
+        "Storage API implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no SQL file added",
+        "no migration file added",
+        "no DB schema file added",
+        "no SQL DDL added",
+        "no storage API added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "workflow_runner.py remains dry-run only",
+        "app-service gate remains blocking-only",
+        "queue gate remains blocking-only",
+        "blocked results remain non-executing",
+        "DDL plan includes agentic_approval_requests",
+        "DDL plan includes agentic_approval_audit_events",
+        "DDL plan includes primary key on approval_request_id",
+        "DDL plan includes primary key on audit_event_id",
+        "DDL plan includes unique idempotency_key",
+        "DDL plan includes foreign key from audit events to approval requests",
+        "DDL plan includes approval_status constraint",
+        "DDL plan includes expires_at index",
+        "DDL plan includes owner_id index",
+        "DDL plan includes dry_run_artifact_id index",
+        "DDL plan stores snapshots as JSON-compatible fields",
+        "DDL plan forbids secrets",
+        "DDL plan forbids raw credentials",
+        "SQL DDL must be separate future phase",
+        "migration implementation must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 112B approval SQL DDL design release safety checkpoint final audit and merge gate."
+        in source
+    )
+    assert "113A approval SQL DDL implementation readiness review, docs/tests only first" in source
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_SQL_DDL_DESIGN_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_sql_ddl_design_release_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

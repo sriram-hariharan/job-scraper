@@ -127,6 +127,8 @@ Recommended next phase: 111B approval SQL DDL design final audit and merge gate.
 
 After 111B, recommend: 112A approval SQL DDL design release safety checkpoint, docs/tests only.
 
+Release safety checkpoint: `docs/approval_sql_ddl_design_release_safety_checkpoint.md`.
+
 SQL DDL must be separate future phase.
 
 Migration implementation must be separate future phase.

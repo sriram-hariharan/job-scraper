@@ -173,6 +173,8 @@ After 125B, recommend: 126A: approval storage API application integration path a
 
 Application integration path and call-site proposal: `docs/approval_storage_api_application_integration_path_call_site_proposal.md`.
 
+Implementation safety checkpoint: `docs/approval_storage_api_application_integration_implementation_safety_checkpoint.md`.
+
 Application integration proposal must be separate future phase.
 
 Application integration implementation must be separate future phase.

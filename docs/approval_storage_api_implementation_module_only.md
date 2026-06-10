@@ -121,6 +121,8 @@ Recommended next phase: 123B: approval storage API implementation module-only fi
 
 After 123B, recommend: 124A: approval storage API implementation release safety checkpoint, docs/tests only.
 
+Release safety checkpoint: `docs/approval_storage_api_implementation_release_safety_checkpoint.md`.
+
 Application integration must be separate future phase.
 
 Migration execution must be separate future phase.

@@ -156,6 +156,8 @@ After 122B, recommend: 123A: approval storage API implementation, storage module
 
 Storage module-only implementation: `docs/approval_storage_api_implementation_module_only.md`.
 
+Storage module-only release safety checkpoint: `docs/approval_storage_api_implementation_release_safety_checkpoint.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

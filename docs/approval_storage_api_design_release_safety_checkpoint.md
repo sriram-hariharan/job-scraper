@@ -134,6 +134,8 @@ Recommended next phase: 119B: approval storage API design release safety checkpo
 
 After 119B, recommend: 120A: approval storage API implementation readiness review, docs/tests only first.
 
+Implementation readiness review: `docs/approval_storage_api_implementation_readiness_review.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

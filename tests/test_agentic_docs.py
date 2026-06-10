@@ -196,6 +196,9 @@ APPROVAL_STORAGE_API_IMPLEMENTATION_READINESS_REVIEW_DOC_PATH = Path(
 APPROVAL_STORAGE_API_MODULE_PATH_FUNCTION_CONTRACT_PROPOSAL_DOC_PATH = Path(
     "docs/approval_storage_api_module_path_function_contract_proposal.md"
 )
+APPROVAL_STORAGE_API_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_storage_api_implementation_safety_checkpoint.md"
+)
 APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH = Path("src/storage/agentic_approvals/schema.sql")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
@@ -11597,6 +11600,80 @@ def test_approval_storage_api_module_path_function_contract_proposal_covers_step
         "docs/approval_storage_api_module_path_function_contract_proposal.md"
         in linked_docs
     )
+
+
+def test_approval_storage_api_implementation_safety_checkpoint_covers_step_122a_contract():
+    assert APPROVAL_STORAGE_API_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    assert APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH.exists()
+    assert not Path("src/storage/agentic_approvals/store.py").exists()
+
+    source = APPROVAL_STORAGE_API_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "Verification contract phrases",
+        "Approval storage API implementation safety checkpoint: PASS",
+        "Storage API implementation readiness: GO_FOR_REVIEW_ONLY",
+        "Storage API implementation: NOT_YET",
+        "Storage module implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no storage API file added",
+        "no storage module added",
+        "no function stubs added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "no SQL file modified in this phase",
+        "static SQL artifact remains inert",
+        "future storage API module path reviewed as proposal only",
+        "future storage API function contract reviewed as proposal only",
+        "future storage API implementation must remain isolated from runtime integration",
+        "future storage API must not execute SQL automatically",
+        "future storage API must preserve idempotency_key behavior",
+        "future storage API must preserve approval_status constraints",
+        "future storage API must preserve audit event foreign key behavior",
+        "future storage API must not store secrets",
+        "future storage API must not store raw credentials",
+        "future storage API must preserve stage-level observability",
+        "future storage API must preserve deterministic behavior",
+        "storage API implementation must be separate future phase",
+        "application integration must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 122B: approval storage API implementation safety checkpoint final audit and merge gate."
+        in source
+    )
+    assert (
+        "After 122B, recommend: 123A: approval storage API implementation, storage module only, no runtime integration."
+        in source
+    )
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_STORAGE_API_DESIGN_DOC_PATH,
+            APPROVAL_STORAGE_API_IMPLEMENTATION_READINESS_REVIEW_DOC_PATH,
+            APPROVAL_STORAGE_API_MODULE_PATH_FUNCTION_CONTRACT_PROPOSAL_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_storage_api_implementation_safety_checkpoint.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

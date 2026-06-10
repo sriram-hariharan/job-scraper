@@ -741,3 +741,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Approval UI action implementation safety checkpoint](docs/approval_ui_action_implementation_safety_checkpoint.md)
 
 - [Approval UI action only release safety checkpoint](docs/approval_ui_action_only_release_safety_checkpoint.md)
+
+- [Approval execution enablement readiness review](docs/approval_execution_enablement_readiness_review.md)

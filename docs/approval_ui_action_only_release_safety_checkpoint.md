@@ -112,3 +112,9 @@ After 137B, recommend:
 - UI action preserves deterministic behavior
 - execution enablement must be separate future phase
 - migration execution must be separate future phase
+
+## Step 138A approval execution enablement readiness review
+
+See `docs/approval_execution_enablement_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, migration files, or migration runners.

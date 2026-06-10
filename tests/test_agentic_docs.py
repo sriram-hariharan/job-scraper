@@ -202,7 +202,12 @@ APPROVAL_STORAGE_API_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH = Path(
 APPROVAL_STORAGE_API_IMPLEMENTATION_MODULE_ONLY_DOC_PATH = Path(
     "docs/approval_storage_api_implementation_module_only.md"
 )
+APPROVAL_STORAGE_API_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
+    "docs/approval_storage_api_implementation_release_safety_checkpoint.md"
+)
 APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH = Path("src/storage/agentic_approvals/schema.sql")
+APPROVAL_STORAGE_API_MODULE_PATH = Path("src/storage/agentic_approvals/store.py")
+APPROVAL_STORAGE_API_TEST_PATH = Path("tests/test_agentic_approval_storage_api.py")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -11742,6 +11747,85 @@ def test_approval_storage_api_implementation_module_only_covers_step_123a_contra
         ]
     )
     assert "docs/approval_storage_api_implementation_module_only.md" in linked_docs
+
+
+def test_approval_storage_api_implementation_release_checkpoint_covers_step_124a_contract():
+    assert APPROVAL_STORAGE_API_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.exists()
+    assert APPROVAL_SQL_DDL_STATIC_ARTIFACT_PATH.exists()
+    assert APPROVAL_STORAGE_API_MODULE_PATH.exists()
+    assert APPROVAL_STORAGE_API_TEST_PATH.exists()
+
+    source = APPROVAL_STORAGE_API_IMPLEMENTATION_RELEASE_SAFETY_CHECKPOINT_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "Verification contract phrases",
+        "Approval storage API implementation release safety checkpoint: PASS",
+        "Approval storage API implementation: RELEASED_STORAGE_MODULE_ONLY",
+        "Storage API implementation: STORAGE_MODULE_ONLY",
+        "Storage module implementation: ADDED",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Runtime-facing integration scope: NOT_INCLUDED",
+        "DB write capability: STORAGE_MODULE_ONLY_NOT_INVOKED_BY_PIPELINE",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no storage API file modified in this phase",
+        "no storage module modified in this phase",
+        "no function stubs added in this phase",
+        "no runtime integration added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "no SQL file modified in this phase",
+        "static SQL artifact remains inert",
+        "storage API module remains at proposed path",
+        "storage API module remains module-only",
+        "storage API module has no runtime integration",
+        "storage API module does not execute SQL at import time",
+        "storage API module does not open DB connections at import time",
+        "storage API module preserves idempotency_key behavior",
+        "storage API module preserves approval_status constraints",
+        "storage API module preserves audit event foreign key behavior",
+        "storage API module does not store secrets",
+        "storage API module does not store raw credentials",
+        "storage API module preserves stage-level observability",
+        "storage API module preserves deterministic behavior",
+        "direct storage API unit tests exist",
+        "application integration must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 124B: approval storage API implementation release safety checkpoint final audit and merge gate."
+        in source
+    )
+    assert (
+        "After 124B, recommend: 125A: approval storage API application integration readiness review, docs/tests only first."
+        in source
+    )
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_STORAGE_API_IMPLEMENTATION_SAFETY_CHECKPOINT_DOC_PATH,
+            APPROVAL_STORAGE_API_IMPLEMENTATION_MODULE_ONLY_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert (
+        "docs/approval_storage_api_implementation_release_safety_checkpoint.md"
+        in linked_docs
+    )
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

@@ -113,3 +113,9 @@ Migration execution must be separate future phase.
 - application submission must be separate future phase
 - scheduler/background execution must be separate future phase
 - migration execution must be separate future phase
+
+## Step 141A approval gated execution only release safety checkpoint
+
+See `docs/approval_gated_execution_only_release_safety_checkpoint.md`.
+
+This release checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, application submission, scheduler/background execution, migration files, or migration runners.

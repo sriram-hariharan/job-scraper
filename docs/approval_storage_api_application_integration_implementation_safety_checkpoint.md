@@ -171,6 +171,8 @@ Recommended next phase: 127B: approval storage API application integration imple
 
 After 127B, recommend: 128A: approval storage API application integration implementation, call-site wiring only, no execution enablement.
 
+Step 128A call-site wiring: `docs/approval_storage_api_application_integration_call_site_wiring_only.md`.
+
 Application integration implementation must be separate future phase.
 
 Migration execution must be separate future phase.

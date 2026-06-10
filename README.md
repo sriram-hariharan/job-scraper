@@ -660,6 +660,7 @@ For a recruiter- or hiring-manager-friendly view of the agentic system:
 - [Approval storage API implementation module only](docs/approval_storage_api_implementation_module_only.md)
 - [Approval storage API implementation release safety checkpoint](docs/approval_storage_api_implementation_release_safety_checkpoint.md)
 - [Approval storage API application integration readiness review](docs/approval_storage_api_application_integration_readiness_review.md)
+- [Approval storage API application integration path and call-site proposal](docs/approval_storage_api_application_integration_path_call_site_proposal.md)
 - [Fixture validator implementation plan](docs/fixture_validator_implementation_plan.md)
 - [Fixture validator implementation plan release safety checkpoint](docs/fixture_validator_implementation_plan_release_safety_checkpoint.md)
 - [Fixture validator implementation design refinement](docs/fixture_validator_implementation_design_refinement.md)

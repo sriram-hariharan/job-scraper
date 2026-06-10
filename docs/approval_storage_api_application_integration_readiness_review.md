@@ -171,6 +171,8 @@ Recommended next phase: 125B: approval storage API application integration readi
 
 After 125B, recommend: 126A: approval storage API application integration path and call-site proposal, docs/tests only first.
 
+Application integration path and call-site proposal: `docs/approval_storage_api_application_integration_path_call_site_proposal.md`.
+
 Application integration proposal must be separate future phase.
 
 Application integration implementation must be separate future phase.

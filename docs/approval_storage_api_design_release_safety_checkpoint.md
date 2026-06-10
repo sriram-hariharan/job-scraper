@@ -136,6 +136,8 @@ After 119B, recommend: 120A: approval storage API implementation readiness revie
 
 Implementation readiness review: `docs/approval_storage_api_implementation_readiness_review.md`.
 
+Module path and function contract proposal: `docs/approval_storage_api_module_path_function_contract_proposal.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

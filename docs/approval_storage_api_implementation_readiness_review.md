@@ -154,6 +154,8 @@ Recommended next phase: 120B: approval storage API implementation readiness revi
 
 After 120B, recommend: 121A: approval storage API module path and function contract proposal, docs/tests only first.
 
+Module path and function contract proposal: `docs/approval_storage_api_module_path_function_contract_proposal.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

@@ -177,6 +177,8 @@ Recommended next phase: 121B: approval storage API module path and function cont
 
 After 121B, recommend: 122A: approval storage API implementation safety checkpoint, docs/tests only first.
 
+Implementation safety checkpoint: `docs/approval_storage_api_implementation_safety_checkpoint.md`.
+
 Storage API implementation safety checkpoint must be separate future phase.
 
 Storage API implementation must be separate future phase.

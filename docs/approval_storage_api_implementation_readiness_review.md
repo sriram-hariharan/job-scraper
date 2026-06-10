@@ -156,6 +156,8 @@ After 120B, recommend: 121A: approval storage API module path and function contr
 
 Module path and function contract proposal: `docs/approval_storage_api_module_path_function_contract_proposal.md`.
 
+Implementation safety checkpoint: `docs/approval_storage_api_implementation_safety_checkpoint.md`.
+
 Storage API implementation must be separate future phase.
 
 Application integration must be separate future phase.

@@ -364,3 +364,9 @@ This is a readiness-review phase only and is docs/tests only. It does not modify
 See `docs/approval_api_endpoint_implementation_safety_checkpoint.md`.
 
 This is a safety-checkpoint phase only and is docs/tests only. It does not modify runtime files, the storage module, SQL, queue mutation, execution, mutation execution, application submission, approval endpoints, UI actions, or scheduler/background execution.
+
+## Step 132A: approval API endpoint route only no execution
+
+See `docs/approval_api_endpoint_route_only_no_execution.md`.
+
+This phase adds only the approval decision endpoint route in `src/app/api.py`. It does not add UI actions, queue mutation, execution enablement, mutation execution, application submission, scheduler/background execution, SQL file changes, migration execution, or storage module changes.

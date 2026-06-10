@@ -12889,3 +12889,56 @@ def test_approval_api_endpoint_implementation_safety_checkpoint_doc_contract():
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_approval_api_endpoint_route_only_no_execution_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/approval_api_endpoint_route_only_no_execution.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Approval API endpoint route only no execution: PASS",
+        "Endpoint implementation: ENDPOINT_ROUTE_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "UI run/approve/reject buttons: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "Live execution: NO_GO",
+        "no UI action added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "no SQL file modified in this phase",
+        "no storage module modified in this phase",
+        "endpoint route tests use fakes or mocks only",
+        "endpoint route tests do not require live database",
+        "endpoint implementation preserves existing queue safety gates",
+        "endpoint implementation preserves existing execution safety gates",
+        "endpoint implementation preserves idempotency_key behavior",
+        "endpoint implementation preserves approval_status constraints",
+        "UI action implementation must be separate future phase",
+        "execution enablement must be separate future phase",
+        "migration execution must be separate future phase",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/storage/agentic_approvals/store.py",
+        "tests/test_approval_api_endpoint_route_only.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

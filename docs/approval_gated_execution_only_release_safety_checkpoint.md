@@ -126,3 +126,9 @@ After 141B, recommend:
 - application submission must be separate future phase
 - scheduler/background execution must be separate future phase
 - migration execution must be separate future phase
+
+## Step 142A application submission readiness review
+
+See `docs/application_submission_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, application submission behavior, scheduler/background execution, migration files, or migration runners.

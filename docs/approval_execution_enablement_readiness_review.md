@@ -139,3 +139,9 @@ After 138B, recommend:
 - execution enablement implementation must be separate future phase
 - application submission must be separate future phase
 - migration execution must be separate future phase
+
+## Step 139A approval execution enablement implementation safety checkpoint
+
+See `docs/approval_execution_enablement_implementation_safety_checkpoint.md`.
+
+This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, migration files, or migration runners.

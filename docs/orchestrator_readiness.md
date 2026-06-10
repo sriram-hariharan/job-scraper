@@ -406,3 +406,9 @@ This release checkpoint confirms the UI action-only implementation remains isola
 See `docs/approval_execution_enablement_readiness_review.md`.
 
 This readiness review prepares a future execution enablement safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, migration files, or migration runners.
+
+## Step 139A: approval execution enablement implementation safety checkpoint
+
+See `docs/approval_execution_enablement_implementation_safety_checkpoint.md`.
+
+This safety checkpoint prepares a future approval-gated execution-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, scheduler/background execution, migration files, or migration runners.

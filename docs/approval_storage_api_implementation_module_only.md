@@ -123,6 +123,8 @@ After 123B, recommend: 124A: approval storage API implementation release safety 
 
 Release safety checkpoint: `docs/approval_storage_api_implementation_release_safety_checkpoint.md`.
 
+Application integration readiness review: `docs/approval_storage_api_application_integration_readiness_review.md`.
+
 Application integration must be separate future phase.
 
 Migration execution must be separate future phase.

@@ -1118,6 +1118,7 @@ function renderOperatorApprovalMockSection(mock = {}) {
   const blockedActions = Array.isArray(mock?.blocked_actions) ? mock.blocked_actions : [];
   const proposalTypes = Array.isArray(mock?.simulated_proposal_types) ? mock.simulated_proposal_types : [];
   const validationStatus = String(mock?.validation_status || (present ? "unknown" : "missing")).toLowerCase();
+  const approvalActionSection = renderApprovalDecisionActionSection(mock);
   if (!present) {
     return `
       <section class="operator-approval-mock-card">
@@ -1128,9 +1129,10 @@ function renderOperatorApprovalMockSection(mock = {}) {
           </div>
           <span class="agentic-workflow-verification-status agentic-workflow-verification-status--unknown">Missing</span>
         </div>
-        <div class="pipeline-runs-empty-cell">No operator approval mock available because no dry-run execution simulation artifacts are recorded for this run yet.</div>
-      </section>
-    `;
+      <div class="pipeline-runs-empty-cell">No operator approval mock available because no dry-run execution simulation artifacts are recorded for this run yet.</div>
+      ${approvalActionSection}
+    </section>
+  `;
   }
 
   return `
@@ -1167,8 +1169,121 @@ function renderOperatorApprovalMockSection(mock = {}) {
           ${renderWorkflowVerificationList(proposalTypes)}
         </div>
       </div>
+      ${approvalActionSection}
     </section>
   `;
+}
+
+function getAgenticApprovalRequestId(mock = {}) {
+  return String(
+    mock?.approval_request_id
+    || mock?.approval_request?.approval_request_id
+    || mock?.approvalRequest?.approval_request_id
+    || "",
+  ).trim();
+}
+
+function getAgenticApprovalReviewerId() {
+  const user = typeof profileState !== "undefined" && profileState?.currentUser
+    ? profileState.currentUser
+    : null;
+  return String(user?.user_id || "").trim();
+}
+
+function getApprovalActionBlockedReasons(approvalRequestId, reviewerId) {
+  const reasons = [];
+  if (!approvalRequestId) reasons.push("approval_request_id unavailable");
+  if (!reviewerId) reasons.push("reviewer identity unavailable");
+  return reasons;
+}
+
+function renderApprovalDecisionActionSection(mock = {}) {
+  const approvalRequestId = getAgenticApprovalRequestId(mock);
+  const reviewerId = getAgenticApprovalReviewerId();
+  const blockedReasons = getApprovalActionBlockedReasons(approvalRequestId, reviewerId);
+  const disabledAttr = blockedReasons.length ? "disabled" : "";
+  const statusMessage = blockedReasons.length
+    ? `Approval action blocked: ${blockedReasons.join("; ")}.`
+    : "Approval action ready.";
+  const decisions = [
+    ["approved", "Approve"],
+    ["denied", "Deny"],
+    ["revoked", "Revoke"],
+  ];
+
+  return `
+    <div class="operator-approval-action-panel" data-agentic-approval-request-id="${escapeHtml(approvalRequestId)}">
+      <div class="agentic-workflow-header">
+        <div>
+          <h3>Approval Decision</h3>
+          <p>Route-only decision recording. No queue, execution, mutation, submission, or scheduler action is triggered.</p>
+        </div>
+        <span class="agentic-workflow-badge">Route only</span>
+      </div>
+      <div class="agentic-feedback-actions">
+        ${decisions.map(([decision, label]) => `
+          <button
+            type="button"
+            class="agentic-feedback-action"
+            data-agentic-approval-decision="${escapeHtml(decision)}"
+            ${disabledAttr}
+          >
+            ${escapeHtml(label)}
+          </button>
+        `).join("")}
+        <span
+          class="agentic-feedback-status ${blockedReasons.length ? "is-error" : "is-info"}"
+          data-agentic-approval-status
+          aria-live="polite"
+        >${escapeHtml(statusMessage)}</span>
+      </div>
+    </div>
+  `;
+}
+
+function setAgenticApprovalStatus(message, tone = "info") {
+  const status = document.querySelector("[data-agentic-approval-status]");
+  if (!status) return;
+  status.textContent = message || "";
+  status.className = `agentic-feedback-status is-${tone}`;
+}
+
+async function recordAgenticApprovalDecision(reviewDecision, button) {
+  const panel = button?.closest("[data-agentic-approval-request-id]");
+  const approvalRequestId = String(panel?.dataset?.agenticApprovalRequestId || "").trim();
+  const reviewerId = getAgenticApprovalReviewerId();
+  const blockedReasons = getApprovalActionBlockedReasons(approvalRequestId, reviewerId);
+  if (blockedReasons.length) {
+    setAgenticApprovalStatus(`Approval action blocked: ${blockedReasons.join("; ")}.`, "error");
+    return;
+  }
+
+  const previousDisabled = Boolean(button?.disabled);
+  if (button) button.disabled = true;
+  setAgenticApprovalStatus("Recording approval decision...", "info");
+  try {
+    await fetchJson(`/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/decision`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        reviewer_id: reviewerId,
+        review_decision: reviewDecision,
+        review_reason: "Recorded from Agentic Review UI route-only action.",
+        decided_at: new Date().toISOString(),
+      }),
+    });
+    setAgenticApprovalStatus("Approval decision recorded. Execution remains disabled.", "success");
+  } catch (err) {
+    setAgenticApprovalStatus(err?.message || "Approval decision was not recorded.", "error");
+  } finally {
+    if (button) {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  }
 }
 
 function renderAgenticReviewData(payload, tracePayload) {
@@ -1294,6 +1409,14 @@ function bindAgenticReviewTabs() {
     const eventType = String(button.dataset.agenticFeedbackEvent || "").trim();
     if (!Object.values(AGENTIC_REVIEW_FEEDBACK_EVENTS).includes(eventType)) return;
     recordAgenticReviewFeedback(eventType, button);
+  });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agentic-approval-decision]");
+    if (!button) return;
+    const reviewDecision = String(button.dataset.agenticApprovalDecision || "").trim();
+    if (!["approved", "denied", "revoked"].includes(reviewDecision)) return;
+    recordAgenticApprovalDecision(reviewDecision, button);
   });
 }
 

@@ -377,6 +377,12 @@ See `docs/approval_api_endpoint_route_only_release_safety_checkpoint.md`.
 
 This release checkpoint confirms the endpoint route-only implementation remains isolated. It is docs/tests only and does not modify runtime files, storage module files, SQL files, queue mutation, execution, mutation execution, application submission, UI actions, scheduler/background execution, or migration execution.
 
+## Step 136A: approval UI action only no execution
+
+See `docs/approval_ui_action_only_no_execution.md`.
+
+This phase adds only Agentic Review UI action wiring for the existing approval decision endpoint. The action remains safely blocked when reviewer identity or approval request id is unavailable, and it adds no queue mutation, execution enablement, mutation execution, application submission, scheduler/background execution, SQL changes, migrations, storage module changes, or API route changes.
+
 ## Step 134A: approval UI action readiness review
 
 See `docs/approval_ui_action_readiness_review.md`.

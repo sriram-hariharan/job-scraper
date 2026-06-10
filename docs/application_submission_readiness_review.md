@@ -139,3 +139,9 @@ After 142B, recommend:
 - application submission implementation must be separate future phase
 - scheduler/background execution must be separate future phase
 - migration execution must be separate future phase
+
+## Step 143A application submission implementation safety checkpoint
+
+See `docs/application_submission_implementation_safety_checkpoint.md`.
+
+This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, application submission behavior, scheduler/background execution, migration files, or migration runners.

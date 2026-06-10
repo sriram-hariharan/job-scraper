@@ -725,3 +725,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Approval storage API application integration release safety checkpoint](docs/approval_storage_api_application_integration_release_safety_checkpoint.md)
 
 - [Approval API endpoint implementation readiness review](docs/approval_api_endpoint_implementation_readiness_review.md)
+
+- [Approval API endpoint implementation safety checkpoint](docs/approval_api_endpoint_implementation_safety_checkpoint.md)

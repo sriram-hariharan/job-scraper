@@ -131,6 +131,8 @@ Release safety checkpoint: `docs/approval_sql_ddl_design_release_safety_checkpoi
 
 Implementation readiness review: `docs/approval_sql_ddl_implementation_readiness_review.md`.
 
+File path and content proposal: `docs/approval_sql_ddl_file_path_content_proposal.md`.
+
 SQL DDL must be separate future phase.
 
 Migration implementation must be separate future phase.

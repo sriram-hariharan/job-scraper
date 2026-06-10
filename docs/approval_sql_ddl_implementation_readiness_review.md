@@ -160,6 +160,8 @@ Recommended next phase: 113B approval SQL DDL implementation readiness review fi
 
 After 113B, recommend: 114A approval SQL DDL file path and content proposal, docs/tests only first.
 
+File path and content proposal: `docs/approval_sql_ddl_file_path_content_proposal.md`.
+
 SQL DDL file implementation must be separate future phase.
 
 Migration execution must be separate future phase.

@@ -177,6 +177,9 @@ APPROVAL_SQL_DDL_DESIGN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
 APPROVAL_SQL_DDL_IMPLEMENTATION_READINESS_REVIEW_DOC_PATH = Path(
     "docs/approval_sql_ddl_implementation_readiness_review.md"
 )
+APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH = Path(
+    "docs/approval_sql_ddl_file_path_content_proposal.md"
+)
 FIXTURE_FILE_IMPLEMENTATION_PLAN_DOC_PATH = Path("docs/fixture_file_implementation_plan.md")
 FIXTURE_FILE_IMPLEMENTATION_PLAN_RELEASE_SAFETY_CHECKPOINT_DOC_PATH = Path(
     "docs/fixture_file_implementation_plan_release_safety_checkpoint.md"
@@ -10974,6 +10977,80 @@ def test_approval_sql_ddl_implementation_readiness_review_covers_phase_113a_cont
         ]
     )
     assert "docs/approval_sql_ddl_implementation_readiness_review.md" in linked_docs
+
+
+def test_approval_sql_ddl_file_path_content_proposal_covers_phase_114a_contract():
+    assert APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH.exists()
+
+    source = APPROVAL_SQL_DDL_FILE_PATH_CONTENT_PROPOSAL_DOC_PATH.read_text(
+        encoding="utf-8"
+    )
+
+    for phrase in [
+        "Approval SQL DDL file path and content proposal: PASS",
+        "SQL DDL file path proposal: GO_FOR_REVIEW_ONLY",
+        "SQL DDL content proposal: GO_FOR_REVIEW_ONLY",
+        "SQL DDL implementation: NOT_YET",
+        "SQL file implementation: NOT_YET",
+        "Migration implementation: NOT_YET",
+        "Migration file implementation: NOT_YET",
+        "Physical DB schema implementation: NOT_YET",
+        "Storage API implementation: NOT_YET",
+        "Runtime-facing integration scope: DESIGN_ONLY",
+        "DB writes: NO_GO",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Live execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no SQL file added",
+        "no migration file added",
+        "no DB schema file added",
+        "no SQL DDL added",
+        "no storage API added",
+        "no DB writes added",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "future SQL DDL file path remains proposed only",
+        "future SQL DDL content remains proposed only",
+        "proposed SQL DDL file path must follow existing repository conventions",
+        "proposed SQL DDL content outline must be documented",
+        "proposed SQL DDL must create agentic_approval_requests before agentic_approval_audit_events",
+        "proposed rollback must drop agentic_approval_audit_events before agentic_approval_requests",
+        "proposed SQL DDL must include unique idempotency_key",
+        "proposed SQL DDL must include approval_status constraint",
+        "proposed SQL DDL must include audit event foreign key behavior",
+        "proposed SQL DDL must not store secrets",
+        "proposed SQL DDL must not store raw credentials",
+        "SQL DDL file implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]:
+        assert phrase in source
+
+    assert (
+        "Recommended next phase: 114B approval SQL DDL file path and content proposal final audit and merge gate."
+        in source
+    )
+    assert (
+        "115A approval SQL DDL file implementation safety checkpoint, docs/tests only first"
+        in source
+    )
+
+    linked_docs = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in [
+            APPROVAL_SQL_DDL_DESIGN_DOC_PATH,
+            APPROVAL_SQL_DDL_IMPLEMENTATION_READINESS_REVIEW_DOC_PATH,
+            ORCHESTRATOR_READINESS_DOC_PATH,
+            Path("README.md"),
+        ]
+    )
+    assert "docs/approval_sql_ddl_file_path_content_proposal.md" in linked_docs
 
 
 def test_production_execution_contract_design_covers_phase_34a_contract():

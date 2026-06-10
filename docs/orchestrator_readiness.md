@@ -346,3 +346,9 @@ That increment should prove:
 - every adapter reports `mutates_production_decisions=false`;
 - no adapter changes scoring, ranking, filtering, resume selection, tailoring generation, packet generation, queue action, scheduler behavior, RAG retrieval, source behavior, or pipeline execution;
 - workflow_runner.py remains dry-run only until a later explicitly approved execution phase.
+
+## Step 129A: approval storage API application integration release safety checkpoint
+
+See `docs/approval_storage_api_application_integration_release_safety_checkpoint.md`.
+
+This is a release-safety-checkpoint phase only and is docs/tests only. It does not modify runtime files, the storage module, SQL, queue mutation, execution, mutation execution, application submission, approval endpoints, UI actions, or scheduler/background execution.

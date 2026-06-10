@@ -12677,3 +12677,74 @@ def test_idempotency_locking_design_covers_phase_37a_contract():
         ]
     )
     assert "docs/idempotency_locking_design.md" in linked_docs
+
+
+def test_approval_storage_api_application_integration_release_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/approval_storage_api_application_integration_release_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Approval storage API application integration release safety checkpoint: PASS",
+        "Application integration implementation: RELEASED_CALL_SITE_WIRING_ONLY",
+        "Storage API implementation: EXISTING_MODULE_USED",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Runtime call-site path: src/app/services.py",
+        "Runtime-facing integration scope: APPROVED_CALL_SITE_ONLY",
+        "DB write capability: APPROVED_CALL_SITE_STORAGE_ONLY",
+        "Queue mutation: NO_GO",
+        "Execution enablement: NO_GO",
+        "Mutation execution: NO_GO",
+        "Application submission: NO_GO",
+        "Scheduler/background execution: NO_GO",
+        "UI run/approve/reject buttons: NO_GO",
+        "Approval API endpoints: NO_GO",
+        "Live execution: NO_GO",
+        "no execution behavior changes in this phase",
+        "no call-site file modified in this phase",
+        "no storage API file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no queue mutation added",
+        "no execution enabled",
+        "no mutation execution enabled",
+        "no application submission enabled",
+        "no approval API endpoint added",
+        "no UI action added",
+        "no scheduler/background execution added",
+        "static SQL artifact remains inert",
+        "storage API module remains at proposed path",
+        "application integration remains approved call-site only",
+        "application integration preserves existing queue safety gates",
+        "application integration preserves existing execution safety gates",
+        "application integration preserves idempotency_key behavior",
+        "application integration preserves approval_status constraints",
+        "application integration preserves stage-level observability",
+        "application integration preserves deterministic behavior",
+        "direct storage API unit tests exist",
+        "direct call-site integration tests exist",
+        "execution enablement must be separate future phase",
+        "approval endpoint implementation must be separate future phase",
+        "UI action implementation must be separate future phase",
+        "migration execution must be separate future phase",
+        "129B: approval storage API application integration release safety checkpoint final audit and merge gate",
+        "130A: approval API endpoint implementation readiness review, docs/tests only first",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/storage/agentic_approvals/schema.sql",
+        "src/storage/agentic_approvals/store.py",
+        "src/app/services.py",
+        "tests/test_agentic_approval_storage_api.py",
+        "tests/test_approval_storage_api_application_integration_call_site.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

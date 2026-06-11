@@ -103,3 +103,9 @@ The endpoint remains GET only. The UI action calls the read-only endpoint only. 
 - migration execution must be separate future phase
 - 169B: production scheduler observability reporting UI/API read-only release safety checkpoint final audit and merge gate
 - 170A: production scheduler observability dashboard/export readiness review, docs/tests only first
+
+## Step 170A production scheduler observability dashboard/export readiness review
+
+See `docs/production_scheduler_observability_dashboard_export_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, dashboard code, export code, reporting jobs, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, or audit writers.

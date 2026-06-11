@@ -1,32 +1,32 @@
-# Production scheduler observability reporting UI/API readiness review
+# Production scheduler observability reporting UI/API implementation safety checkpoint
 
-## A. Current readiness review scope
+## A. Current safety checkpoint scope
 
-This readiness review prepares a future UI/API surface for the read-only production scheduler observability reporting helper.
+This checkpoint prepares a future read-only UI/API implementation for production scheduler observability reporting.
 
 This phase is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.
 
-## B. Readiness decision
+## B. Safety decision
 
-The project is ready for a future UI/API implementation safety checkpoint only.
+A future reporting UI/API implementation may proceed only as a separate reviewed phase.
 
-This phase does not enable a reporting API endpoint.
+This checkpoint does not enable a reporting API endpoint.
 
-This phase does not enable reporting UI actions.
+This checkpoint does not enable a reporting UI action.
 
-This phase does not enable dashboard code.
+This checkpoint does not enable dashboard code.
 
-This phase does not enable export code.
+This checkpoint does not enable export code.
 
-This phase does not enable reporting jobs.
+This checkpoint does not enable reporting jobs.
 
-This phase does not enable metrics emitters.
+This checkpoint does not enable metrics emitters.
 
-This phase does not enable logging emitters.
+This checkpoint does not enable logging emitters.
 
-This phase does not enable audit writers.
+This checkpoint does not enable audit writers.
 
-This phase does not enable migration execution.
+This checkpoint does not enable migration execution.
 
 ## C. Existing released baseline
 
@@ -58,15 +58,13 @@ Workflow runner path: `src/agents/workflow_runner.py`.
 
 Storage module path: `src/storage/agentic_approvals/store.py`.
 
-## D. Future UI/API boundary
+## D. Required future UI/API boundary
 
-Future reporting API must be read-only unless explicitly approved.
+Future reporting UI/API must be read-only unless explicitly approved.
 
-Future reporting UI must be read-only unless explicitly approved.
+Future reporting UI/API must be deterministic.
 
-Future reporting API must preserve the existing reporting helper boundary.
-
-Future reporting UI must preserve the existing reporting helper boundary.
+Future reporting UI/API must preserve the existing reporting helper boundary.
 
 Future reporting UI/API must require production scheduler observability allowed/read-only decision.
 
@@ -132,23 +130,21 @@ Future reporting UI/API must preserve dry-run artifact behavior.
 
 Future reporting UI/API must preserve stage-level observability.
 
-Future reporting UI/API must preserve deterministic behavior.
-
 ## E. Forbidden implementation shortcuts
 
-Do not combine UI/API readiness with UI/API runtime implementation.
+Do not combine reporting UI/API implementation safety checkpoint with reporting UI/API runtime implementation.
 
-Do not add reporting API endpoint in this readiness review.
+Do not add reporting API endpoint in this safety checkpoint.
 
-Do not add reporting UI action in this readiness review.
+Do not add reporting UI action in this safety checkpoint.
 
-Do not modify `src/app/api.py` in this readiness review.
+Do not modify `src/app/api.py` in this safety checkpoint.
 
-Do not modify `src/app/static/agentic_review.js` in this readiness review.
+Do not modify `src/app/static/agentic_review.js` in this safety checkpoint.
 
-Do not modify production scheduler observability runtime logic in this readiness review.
+Do not modify production scheduler observability runtime logic in this safety checkpoint.
 
-Do not modify reporting runtime logic in this readiness review.
+Do not modify reporting runtime logic in this safety checkpoint.
 
 Do not add dashboard code.
 
@@ -174,18 +170,47 @@ Do not bypass production scheduler observability gated decision.
 
 Do not bypass production scheduler observability reporting gated decision.
 
-## F. Recommended next phase
+## F. Required future implementation tests
 
-166B: production scheduler observability reporting UI/API readiness review final audit and merge gate
+A future reporting UI/API implementation phase must include focused tests proving the API endpoint is read-only.
 
-After 166B, recommend:
+A future reporting UI/API implementation phase must include focused tests proving the UI action is read-only.
 
-167A: production scheduler observability reporting UI/API implementation safety checkpoint, docs/tests only
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not trigger execution.
 
-## G. Verification contract phrases
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not trigger submission.
 
-- Production scheduler observability reporting UI/API readiness review: PASS
-- Production scheduler observability reporting UI/API readiness: REVIEW_ONLY
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not trigger production scheduler wiring.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not trigger scheduler/background/live scheduler work.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not trigger migration execution.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not write audit events.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not write metrics.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not emit logs.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not start background work.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not export files.
+
+A future reporting UI/API implementation phase must include focused tests proving UI/API reporting does not create dashboard or reporting jobs.
+
+## G. Recommended next phase
+
+167B: production scheduler observability reporting UI/API implementation safety checkpoint final audit and merge gate
+
+After 167B, recommend:
+
+168A: production scheduler observability reporting UI/API read-only implementation, no emitters, no export, no migration
+
+## H. Verification contract phrases
+
+- Production scheduler observability reporting UI/API implementation safety checkpoint: PASS
+- Production scheduler observability reporting UI/API implementation safety: GO_FOR_READ_ONLY_UI_API_ONLY_NEXT
+- Production scheduler observability reporting UI/API readiness: REVIEWED_ONLY
 - Production scheduler observability reporting implementation: RELEASED_READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY
 - Production scheduler observability implementation: RELEASED_READ_ONLY_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_PRODUCTION_WIRING_GATED_ONLY
 - Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY
@@ -201,6 +226,7 @@ After 166B, recommend:
 - Execution queue path: application_execution_queue.py
 - Workflow runner path: src/agents/workflow_runner.py
 - Storage module path: src/storage/agentic_approvals/store.py
+- Future UI/API scope: READ_ONLY_REPORTING_UI_API_ONLY
 - Reporting API endpoint: NO_GO_IN_THIS_PHASE
 - Reporting UI action: NO_GO_IN_THIS_PHASE
 - Dashboard implementation: NO_GO_IN_THIS_PHASE
@@ -218,8 +244,8 @@ After 166B, recommend:
 - no SQL file modified in this phase
 - no migration file added
 - no migration runner added
-- no reporting API endpoint added
-- no reporting UI action added
+- no reporting API endpoint enabled in this phase
+- no reporting UI action enabled in this phase
 - no dashboard code added
 - no export code added
 - no reporting job added
@@ -230,7 +256,7 @@ After 166B, recommend:
 - no uncontrolled scheduler loop added
 - no background worker added
 - no automatic submission loop added
-- future reporting UI/API must be read-only
+- future reporting UI/API must be read-only unless explicitly approved
 - future reporting UI/API must preserve existing reporting helper boundary
 - future reporting UI/API must require production scheduler observability allowed/read-only decision
 - future reporting UI/API must block missing production scheduler observability decision
@@ -269,9 +295,3 @@ After 166B, recommend:
 - dashboard/export/reporting job implementation must be separate future phase
 - metrics/logging/audit writer implementation must be separate future phase
 - migration execution must be separate future phase
-
-## Step 167A production scheduler observability reporting UI/API implementation safety checkpoint
-
-See `docs/production_scheduler_observability_reporting_ui_api_implementation_safety_checkpoint.md`.
-
-This safety checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

@@ -765,3 +765,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Scheduler background execution gated only no migration](docs/scheduler_background_execution_gated_only_no_migration.md)
 
 - [Scheduler background execution gated release safety checkpoint](docs/scheduler_background_execution_gated_release_safety_checkpoint.md)
+
+- [Live scheduler execution readiness review](docs/live_scheduler_execution_readiness_review.md)

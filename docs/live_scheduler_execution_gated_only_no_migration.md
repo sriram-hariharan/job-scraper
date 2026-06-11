@@ -151,3 +151,9 @@ Migration execution must be a separate future phase.
 - live scheduler decision preserves stage-level observability
 - live scheduler decision preserves deterministic behavior
 - migration execution must be separate future phase
+
+## Step 153A live scheduler execution gated release safety checkpoint
+
+See `docs/live_scheduler_execution_gated_release_safety_checkpoint.md`.
+
+This release checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, or automatic submission loops.

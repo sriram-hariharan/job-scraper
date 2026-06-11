@@ -321,6 +321,123 @@ def _agentic_production_scheduler_observability_report_payload(
         "did_create_reporting_jobs": False,
     }
 
+
+def _agentic_production_scheduler_observability_dashboard_and_export_base_payload(
+    *,
+    approval_request_id: str,
+    reporting_decision: dict[str, Any] | None = None,
+    surface: str,
+) -> dict[str, Any]:
+    report_payload = _agentic_production_scheduler_observability_report_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+    reason_codes = list(
+        report_payload.get(
+            "production_scheduler_observability_reporting_endpoint_reason_codes"
+        )
+        or []
+    )
+    if reason_codes:
+        reason_codes.append(
+            "production_scheduler_observability_reporting_gate_not_passed"
+        )
+    reason_codes = sorted(set(reason_codes))
+    blocked = bool(reason_codes)
+    status = "blocked" if blocked else "passed"
+    return {
+        **report_payload,
+        "approval_request_id": approval_request_id,
+        f"production_scheduler_observability_{surface}_endpoint_method": "GET",
+        f"production_scheduler_observability_{surface}_endpoint_read_only": True,
+        f"production_scheduler_observability_{surface}_status": status,
+        f"production_scheduler_observability_{surface}_allowed": not blocked,
+        f"production_scheduler_observability_{surface}_reason_codes": reason_codes,
+        f"blocked_by_production_scheduler_observability_{surface}_endpoint": blocked,
+        "did_trigger_execution": False,
+        "did_trigger_submission": False,
+        "did_trigger_production_scheduler_wiring": False,
+        "did_trigger_scheduler_work": False,
+        "did_trigger_migration": False,
+        "did_write_audit_events": False,
+        "did_write_metrics": False,
+        "did_emit_logs": False,
+        "did_start_background_work": False,
+        "did_create_reporting_job": False,
+        "did_export_files": False,
+        "export_file_creation_enabled": False,
+    }
+
+
+def _agentic_production_scheduler_observability_dashboard_payload(
+    *,
+    approval_request_id: str,
+    reporting_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = _agentic_production_scheduler_observability_dashboard_and_export_base_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+        surface="dashboard",
+    )
+    return {
+        **payload,
+        "production_scheduler_observability_dashboard_endpoint": (
+            "GET /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-dashboard"
+        ),
+        "production_scheduler_observability_dashboard_summary": {
+            "allowed": payload["production_scheduler_observability_dashboard_allowed"],
+            "status": payload["production_scheduler_observability_dashboard_status"],
+            "reason_codes": payload[
+                "production_scheduler_observability_dashboard_reason_codes"
+            ],
+            "read_only": True,
+            "execution_disabled": True,
+            "submission_disabled": True,
+            "production_scheduler_wiring_disabled": True,
+            "scheduler_work_disabled": True,
+            "migration_disabled": True,
+            "audit_metrics_logging_disabled": True,
+            "reporting_job_disabled": True,
+            "file_export_disabled": True,
+        },
+    }
+
+
+def _agentic_production_scheduler_observability_export_preview_payload(
+    *,
+    approval_request_id: str,
+    reporting_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    payload = _agentic_production_scheduler_observability_dashboard_and_export_base_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+        surface="export_preview",
+    )
+    return {
+        **payload,
+        "production_scheduler_observability_export_preview_endpoint": (
+            "GET /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-export-preview"
+        ),
+        "production_scheduler_observability_export_preview_manifest": {
+            "allowed": payload[
+                "production_scheduler_observability_export_preview_allowed"
+            ],
+            "status": payload[
+                "production_scheduler_observability_export_preview_status"
+            ],
+            "reason_codes": payload[
+                "production_scheduler_observability_export_preview_reason_codes"
+            ],
+            "read_only": True,
+            "format": "json_preview_only",
+            "file_creation_enabled": False,
+            "export_file_creation_disabled": True,
+            "reporting_job_disabled": True,
+            "migration_disabled": True,
+        },
+        "export_file_creation_disabled": True,
+    }
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -444,6 +561,36 @@ def get_production_scheduler_observability_report(approval_request_id: str):
         )
     )
     return _agentic_production_scheduler_observability_report_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+
+
+@app.get(
+    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-dashboard"
+)
+def get_production_scheduler_observability_dashboard(approval_request_id: str):
+    reporting_decision = (
+        _production_scheduler_observability_reporting_decision_for_approval(
+            approval_request_id
+        )
+    )
+    return _agentic_production_scheduler_observability_dashboard_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+
+
+@app.get(
+    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-export-preview"
+)
+def get_production_scheduler_observability_export_preview(approval_request_id: str):
+    reporting_decision = (
+        _production_scheduler_observability_reporting_decision_for_approval(
+            approval_request_id
+        )
+    )
+    return _agentic_production_scheduler_observability_export_preview_payload(
         approval_request_id=approval_request_id,
         reporting_decision=reporting_decision,
     )

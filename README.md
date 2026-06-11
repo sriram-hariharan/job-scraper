@@ -779,3 +779,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Production scheduler wiring implementation safety checkpoint](docs/production_scheduler_wiring_implementation_safety_checkpoint.md)
 
 - [Production scheduler wiring gated only no migration](docs/production_scheduler_wiring_gated_only_no_migration.md)
+
+- [Production scheduler wiring gated release safety checkpoint](docs/production_scheduler_wiring_gated_release_safety_checkpoint.md)

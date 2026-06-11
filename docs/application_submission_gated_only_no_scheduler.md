@@ -115,3 +115,9 @@ Migration execution must be separate future phase.
 - application submission preserves deterministic behavior
 - scheduler/background execution must be separate future phase
 - migration execution must be separate future phase
+
+## Step 145A application submission gated release safety checkpoint
+
+See `docs/application_submission_gated_release_safety_checkpoint.md`.
+
+This release checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, migration files, or migration runners.

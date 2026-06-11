@@ -240,3 +240,9 @@ Migration execution must be separate future phase.
 - metrics/logging/audit writer implementation must be separate future phase
 - dashboard/export/reporting job implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 169A production scheduler observability reporting UI/API read-only release safety checkpoint
+
+See `docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md`.
+
+This release checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

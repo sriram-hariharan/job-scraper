@@ -769,3 +769,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Live scheduler execution readiness review](docs/live_scheduler_execution_readiness_review.md)
 
 - [Live scheduler execution implementation safety checkpoint](docs/live_scheduler_execution_implementation_safety_checkpoint.md)
+
+- [Live scheduler execution gated only no migration](docs/live_scheduler_execution_gated_only_no_migration.md)

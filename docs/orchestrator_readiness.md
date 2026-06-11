@@ -448,3 +448,9 @@ This safety checkpoint prepares a future approval-and-execution-gated submission
 See `docs/application_submission_gated_release_safety_checkpoint.md`.
 
 This release checkpoint confirms application submission remains approval-and-execution gated. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, migration files, or migration runners.
+
+## Step 146A: scheduler/background execution readiness review
+
+See `docs/scheduler_background_execution_readiness_review.md`.
+
+This readiness review prepares a future scheduler/background execution safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, automatic submission loops, migration files, or migration runners.

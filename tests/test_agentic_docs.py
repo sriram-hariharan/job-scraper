@@ -16495,3 +16495,24 @@ def test_production_scheduler_observability_dashboard_export_implementation_safe
 
     for path in required_paths:
         assert Path(path).exists()
+
+def test_production_scheduler_observability_metrics_logging_audit_writer_readiness_checkpoint_doc():
+    doc = Path(
+        "docs/production_scheduler_observability_metrics_logging_audit_writer_readiness_checkpoint.md"
+    ).read_text()
+
+    required_terms = [
+        "docs/tests-only",
+        "metrics writers",
+        "logging writers",
+        "audit writers",
+        "GET-only",
+        "no scheduler",
+        "no reporting job",
+        "no migration",
+        "deterministic",
+        "human approval gates",
+    ]
+
+    for term in required_terms:
+        assert term in doc

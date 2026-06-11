@@ -478,3 +478,9 @@ This release checkpoint confirms scheduler/background execution remains a gated 
 See `docs/live_scheduler_execution_readiness_review.md`.
 
 This readiness review prepares a future live scheduler execution implementation safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, live scheduler loops, background workers, automatic submission loops, migration files, or migration runners.
+
+## Step 151A: live scheduler execution implementation safety checkpoint
+
+See `docs/live_scheduler_execution_implementation_safety_checkpoint.md`.
+
+This safety checkpoint prepares a future approval-execution-submission-scheduler-gated live scheduler-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, live scheduler loops, background workers, automatic submission loops, migration files, or migration runners.

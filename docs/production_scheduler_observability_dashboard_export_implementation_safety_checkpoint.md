@@ -107,3 +107,5 @@ A future dashboard/export implementation phase must prove dashboard/export is re
 - migration execution must be separate future phase
 - 171B: production scheduler observability dashboard/export implementation safety checkpoint final audit and merge gate
 - 172A: production scheduler observability dashboard/export read-only implementation, no emitters, no reporting job, no migration
+
+Step 172A is tracked in `docs/production_scheduler_observability_dashboard_export_read_only_no_emitters_no_reporting_job_no_migration.md`. It adds only read-only GET dashboard/export-preview endpoints and minimal Agentic Review UI actions for deterministic JSON summaries; file export writers, reporting jobs, emitters, audit writers, migrations, execution, submission, scheduler/background/live scheduler work, production scheduler wiring changes, storage modules, and SQL files remain separate future phases.

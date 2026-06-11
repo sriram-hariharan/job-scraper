@@ -526,3 +526,9 @@ This release checkpoint confirms production scheduler wiring remains approval-ex
 See `docs/production_scheduler_observability_readiness_review.md`.
 
 This readiness review prepares a future production scheduler observability implementation safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, or dashboard/export code.
+
+## Step 159A: production scheduler observability implementation safety checkpoint
+
+See `docs/production_scheduler_observability_implementation_safety_checkpoint.md`.
+
+This safety checkpoint prepares a future read-only gated observability-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

@@ -1,26 +1,26 @@
-# Production scheduler observability readiness review
+# Production scheduler observability implementation safety checkpoint
 
-## A. Current readiness review scope
+## A. Current safety checkpoint scope
 
-This readiness review prepares a future production scheduler observability implementation safety checkpoint.
+This checkpoint prepares a future production scheduler observability implementation phase.
 
-This phase is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, or dashboard/export code.
+This phase is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.
 
-## B. Readiness decision
+## B. Safety decision
 
-The project is ready for a future production scheduler observability implementation safety checkpoint only.
+A future production scheduler observability implementation may proceed only as a separate reviewed phase.
 
-This phase does not enable new production scheduler observability runtime behavior.
+This checkpoint does not enable production scheduler observability runtime behavior.
 
-This phase does not enable production scheduler wiring changes.
+This checkpoint does not enable production scheduler wiring changes.
 
-This phase does not enable uncontrolled scheduler loops.
+This checkpoint does not enable uncontrolled scheduler loops.
 
-This phase does not enable background workers.
+This checkpoint does not enable background workers.
 
-This phase does not enable automatic submission loops.
+This checkpoint does not enable automatic submission loops.
 
-This phase does not enable migration execution.
+This checkpoint does not enable migration execution.
 
 ## C. Existing approval, execution, submission, scheduler, live scheduler, and production wiring baseline
 
@@ -48,7 +48,11 @@ Workflow runner path: `src/agents/workflow_runner.py`.
 
 Storage module path: `src/storage/agentic_approvals/store.py`.
 
-## D. Future production scheduler observability boundary
+## D. Required future production scheduler observability boundary
+
+A future production scheduler observability implementation must be additive.
+
+A future production scheduler observability implementation must be read-only unless explicitly approved.
 
 A future production scheduler observability implementation must preserve recorded approval gating.
 
@@ -62,11 +66,9 @@ A future production scheduler observability implementation must preserve live sc
 
 A future production scheduler observability implementation must preserve production scheduler wiring gated decision.
 
-A future production scheduler observability implementation must be additive and read-only unless explicitly approved.
+A future production scheduler observability implementation must preserve queue safety gates.
 
-A future production scheduler observability implementation must preserve existing queue safety gates.
-
-A future production scheduler observability implementation must preserve existing execution safety gates.
+A future production scheduler observability implementation must preserve execution safety gates.
 
 A future production scheduler observability implementation must preserve submission safety gates.
 
@@ -101,6 +103,8 @@ A future production scheduler observability implementation must preserve determi
 ## E. Forbidden implementation shortcuts
 
 Do not combine production scheduler observability with migration execution.
+
+Do not combine production scheduler observability with production scheduler wiring changes.
 
 Do not add uncontrolled scheduler loops.
 
@@ -152,18 +156,35 @@ Do not bypass dry-run artifact behavior.
 
 Do not bypass stage-level observability.
 
-## F. Recommended next phase
+## F. Required future implementation tests
 
-158B: production scheduler observability readiness review final audit and merge gate
+A future production scheduler observability implementation phase must include focused tests proving observability remains read-only.
 
-After 158B, recommend:
+A future production scheduler observability implementation phase must include focused tests proving observability does not enable production scheduler wiring changes.
 
-159A: production scheduler observability implementation safety checkpoint, docs/tests only
+A future production scheduler observability implementation phase must include focused tests proving observability does not enable uncontrolled scheduler loops.
 
-## G. Verification contract phrases
+A future production scheduler observability implementation phase must include focused tests proving observability does not enable background workers.
 
-- Production scheduler observability readiness review: PASS
-- Production scheduler observability readiness: REVIEW_ONLY
+A future production scheduler observability implementation phase must include focused tests proving observability does not enable automatic submission loops.
+
+A future production scheduler observability implementation phase must include focused tests proving migration execution remains blocked.
+
+A future production scheduler observability implementation phase must include focused tests proving approval, execution, submission, scheduler, live scheduler, and production wiring gates remain enforced.
+
+## G. Recommended next phase
+
+159B: production scheduler observability implementation safety checkpoint final audit and merge gate
+
+After 159B, recommend:
+
+160A: production scheduler observability implementation, read-only and gated, no migration execution
+
+## H. Verification contract phrases
+
+- Production scheduler observability implementation safety checkpoint: PASS
+- Production scheduler observability implementation safety: GO_FOR_READ_ONLY_GATED_OBSERVABILITY_ONLY_NEXT
+- Production scheduler observability readiness: REVIEWED_ONLY
 - Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY
 - UI action implementation: RELEASED_UI_ACTION_ONLY
 - Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY
@@ -177,11 +198,12 @@ After 158B, recommend:
 - Execution queue path: application_execution_queue.py
 - Workflow runner path: src/agents/workflow_runner.py
 - Storage module path: src/storage/agentic_approvals/store.py
-- Production scheduler observability: NO_GO
-- Production scheduler wiring changes: NO_GO
-- Uncontrolled scheduler loop: NO_GO
-- Background worker execution: NO_GO
-- Automatic submission loop: NO_GO
+- Future production scheduler observability scope: READ_ONLY_GATED_OBSERVABILITY_ONLY
+- Production scheduler observability: NO_GO_IN_THIS_PHASE
+- Production scheduler wiring changes: NO_GO_IN_THIS_PHASE
+- Uncontrolled scheduler loop: NO_GO_IN_THIS_PHASE
+- Background worker execution: NO_GO_IN_THIS_PHASE
+- Automatic submission loop: NO_GO_IN_THIS_PHASE
 - Migration execution: NO_GO
 - no runtime behavior changes in this phase
 - no API route modified in this phase
@@ -191,12 +213,14 @@ After 158B, recommend:
 - no SQL file modified in this phase
 - no migration file added
 - no migration runner added
-- no production scheduler observability enabled
-- no production scheduler wiring changes enabled
-- no uncontrolled scheduler loop enabled
-- no background worker enabled
-- no automatic submission loop enabled
-- no migration execution enabled
+- no production scheduler observability enabled in this phase
+- no production scheduler wiring changes enabled in this phase
+- no uncontrolled scheduler loop enabled in this phase
+- no background worker enabled in this phase
+- no automatic submission loop enabled in this phase
+- no migration execution enabled in this phase
+- future production scheduler observability must be additive
+- future production scheduler observability must be read-only unless explicitly approved
 - future production scheduler observability must preserve recorded approval gating
 - future production scheduler observability must preserve approval-gated execution
 - future production scheduler observability must preserve gated application submission
@@ -222,9 +246,3 @@ After 158B, recommend:
 - future production scheduler observability must preserve deterministic behavior
 - production scheduler observability implementation must be separate future phase
 - migration execution must be separate future phase
-
-## Step 159A production scheduler observability implementation safety checkpoint
-
-See `docs/production_scheduler_observability_implementation_safety_checkpoint.md`.
-
-This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

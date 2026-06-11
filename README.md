@@ -799,3 +799,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Production scheduler observability reporting read-only release safety checkpoint](docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability reporting UI/API readiness review](docs/production_scheduler_observability_reporting_ui_api_readiness_review.md)
+
+- [Production scheduler observability reporting UI/API implementation safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_implementation_safety_checkpoint.md)

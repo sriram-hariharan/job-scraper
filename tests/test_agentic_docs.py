@@ -15791,3 +15791,127 @@ def test_production_scheduler_observability_reporting_ui_api_readiness_review_do
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_production_scheduler_observability_reporting_ui_api_implementation_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/production_scheduler_observability_reporting_ui_api_implementation_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Production scheduler observability reporting UI/API implementation safety checkpoint: PASS",
+        "Production scheduler observability reporting UI/API implementation safety: GO_FOR_READ_ONLY_UI_API_ONLY_NEXT",
+        "Production scheduler observability reporting UI/API readiness: REVIEWED_ONLY",
+        "Production scheduler observability reporting implementation: RELEASED_READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY",
+        "Production scheduler observability implementation: RELEASED_READ_ONLY_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_PRODUCTION_WIRING_GATED_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Submission implementation: RELEASED_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_GATED_DECISION_ONLY",
+        "Live scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_GATED_DECISION_ONLY",
+        "Production scheduler wiring implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_GATED_DECISION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Future UI/API scope: READ_ONLY_REPORTING_UI_API_ONLY",
+        "Reporting API endpoint: NO_GO_IN_THIS_PHASE",
+        "Reporting UI action: NO_GO_IN_THIS_PHASE",
+        "Dashboard implementation: NO_GO_IN_THIS_PHASE",
+        "Export implementation: NO_GO_IN_THIS_PHASE",
+        "Reporting job: NO_GO_IN_THIS_PHASE",
+        "Metrics emitter: NO_GO_IN_THIS_PHASE",
+        "Logging emitter: NO_GO_IN_THIS_PHASE",
+        "Audit writer: NO_GO_IN_THIS_PHASE",
+        "Migration execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no execution file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no migration file added",
+        "no migration runner added",
+        "no reporting API endpoint enabled in this phase",
+        "no reporting UI action enabled in this phase",
+        "no dashboard code added",
+        "no export code added",
+        "no reporting job added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no migration execution enabled",
+        "no uncontrolled scheduler loop added",
+        "no background worker added",
+        "no automatic submission loop added",
+        "future reporting UI/API must be read-only unless explicitly approved",
+        "future reporting UI/API must preserve existing reporting helper boundary",
+        "future reporting UI/API must require production scheduler observability allowed/read-only decision",
+        "future reporting UI/API must block missing production scheduler observability decision",
+        "future reporting UI/API must block unsupported production scheduler observability decision",
+        "future reporting UI/API must not trigger execution",
+        "future reporting UI/API must not trigger submission",
+        "future reporting UI/API must not trigger production scheduler wiring",
+        "future reporting UI/API must not trigger scheduler/background/live scheduler work",
+        "future reporting UI/API must not trigger migration execution",
+        "future reporting UI/API must not write audit events",
+        "future reporting UI/API must not write metrics",
+        "future reporting UI/API must not emit logs",
+        "future reporting UI/API must not start background work",
+        "future reporting UI/API must not export files",
+        "future reporting UI/API must not create dashboard or reporting jobs",
+        "future reporting UI/API must preserve queue safety gates",
+        "future reporting UI/API must preserve execution safety gates",
+        "future reporting UI/API must preserve submission safety gates",
+        "future reporting UI/API must preserve scheduler decision safety gates",
+        "future reporting UI/API must preserve live scheduler decision safety gates",
+        "future reporting UI/API must preserve production wiring safety gates",
+        "future reporting UI/API must preserve production observability safety gates",
+        "future reporting UI/API must preserve reporting safety gates",
+        "future reporting UI/API must preserve rate limiting",
+        "future reporting UI/API must preserve retry logic",
+        "future reporting UI/API must preserve caching",
+        "future reporting UI/API must preserve deduplication",
+        "future reporting UI/API must preserve ranking",
+        "future reporting UI/API must preserve metrics",
+        "future reporting UI/API must preserve ATS health checks",
+        "future reporting UI/API must preserve audit event behavior",
+        "future reporting UI/API must preserve dry-run artifact behavior",
+        "future reporting UI/API must preserve stage-level observability",
+        "future reporting UI/API must preserve deterministic behavior",
+        "reporting UI/API implementation must be separate future phase",
+        "dashboard/export/reporting job implementation must be separate future phase",
+        "metrics/logging/audit writer implementation must be separate future phase",
+        "migration execution must be separate future phase",
+        "167B: production scheduler observability reporting UI/API implementation safety checkpoint final audit and merge gate",
+        "168A: production scheduler observability reporting UI/API read-only implementation, no emitters, no export, no migration",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_production_scheduler_observability_reporting_read_only_no_emitters_no_export_no_migration.py",
+        "tests/test_production_scheduler_observability_read_only_gated_no_migration.py",
+        "tests/test_production_scheduler_wiring_gated_only_no_migration.py",
+        "tests/test_live_scheduler_execution_gated_only_no_migration.py",
+        "tests/test_scheduler_background_execution_gated_only_no_migration.py",
+        "tests/test_application_submission_gated_only_no_scheduler.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

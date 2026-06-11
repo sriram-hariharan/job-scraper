@@ -574,3 +574,9 @@ This release checkpoint confirms production scheduler observability reporting re
 See `docs/production_scheduler_observability_reporting_ui_api_readiness_review.md`.
 
 This readiness review prepares a future read-only reporting UI/API surface. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.
+
+## Step 167A: production scheduler observability reporting UI/API implementation safety checkpoint
+
+See `docs/production_scheduler_observability_reporting_ui_api_implementation_safety_checkpoint.md`.
+
+This safety checkpoint prepares a future read-only reporting UI/API implementation. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

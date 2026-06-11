@@ -454,3 +454,9 @@ This release checkpoint confirms application submission remains approval-and-exe
 See `docs/scheduler_background_execution_readiness_review.md`.
 
 This readiness review prepares a future scheduler/background execution safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, automatic submission loops, migration files, or migration runners.
+
+## Step 147A: scheduler/background execution implementation safety checkpoint
+
+See `docs/scheduler_background_execution_implementation_safety_checkpoint.md`.
+
+This safety checkpoint prepares a future approval-execution-submission-gated scheduler-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, automatic submission loops, migration files, or migration runners.

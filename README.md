@@ -759,3 +759,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Application submission gated release safety checkpoint](docs/application_submission_gated_release_safety_checkpoint.md)
 
 - [Scheduler background execution readiness review](docs/scheduler_background_execution_readiness_review.md)
+
+- [Scheduler background execution implementation safety checkpoint](docs/scheduler_background_execution_implementation_safety_checkpoint.md)

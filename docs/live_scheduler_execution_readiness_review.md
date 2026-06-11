@@ -185,3 +185,9 @@ After 150B, recommend:
 - future live scheduler execution must preserve deterministic behavior
 - live scheduler execution implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 151A live scheduler execution implementation safety checkpoint
+
+See `docs/live_scheduler_execution_implementation_safety_checkpoint.md`.
+
+This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, live scheduler loops, background workers, automatic submission loops, migration files, or migration runners.

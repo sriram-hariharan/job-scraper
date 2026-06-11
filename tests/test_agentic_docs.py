@@ -14170,3 +14170,85 @@ def test_live_scheduler_execution_readiness_review_doc_contract():
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_live_scheduler_execution_implementation_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/live_scheduler_execution_implementation_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Live scheduler execution implementation safety checkpoint: PASS",
+        "Live scheduler execution implementation safety: GO_FOR_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_GATED_LIVE_SCHEDULER_ONLY_NEXT",
+        "Live scheduler execution readiness: REVIEWED_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Submission implementation: RELEASED_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_GATED_DECISION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Future live scheduler scope: APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_GATED_LIVE_SCHEDULER_ONLY",
+        "Live scheduler execution: NO_GO_IN_THIS_PHASE",
+        "Background worker execution: NO_GO_IN_THIS_PHASE",
+        "Automatic submission loop: NO_GO_IN_THIS_PHASE",
+        "Migration execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no execution file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no live scheduler loop enabled in this phase",
+        "no background worker enabled in this phase",
+        "no automatic submission loop enabled in this phase",
+        "no migration execution enabled in this phase",
+        "future live scheduler execution must require recorded approval",
+        "future live scheduler execution must require approval-gated execution",
+        "future live scheduler execution must require gated application submission",
+        "future live scheduler execution must require scheduler/background gated decision",
+        "future live scheduler execution must preserve existing queue safety gates",
+        "future live scheduler execution must preserve existing execution safety gates",
+        "future live scheduler execution must preserve submission safety gates",
+        "future live scheduler execution must preserve scheduler decision safety gates",
+        "future live scheduler execution must preserve rate limiting",
+        "future live scheduler execution must preserve retry logic",
+        "future live scheduler execution must preserve caching",
+        "future live scheduler execution must preserve deduplication",
+        "future live scheduler execution must preserve ranking",
+        "future live scheduler execution must preserve metrics",
+        "future live scheduler execution must preserve ATS health checks",
+        "future live scheduler execution must preserve audit event behavior",
+        "future live scheduler execution must preserve dry-run artifact behavior",
+        "future live scheduler execution must preserve stage-level observability",
+        "future live scheduler execution must preserve deterministic behavior",
+        "migration execution must be separate future phase",
+        "151B: live scheduler execution implementation safety checkpoint final audit and merge gate",
+        "152A: live scheduler execution implementation, approval-execution-submission-scheduler-gated only, no migration execution",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_scheduler_background_execution_gated_only_no_migration.py",
+        "tests/test_application_submission_gated_only_no_scheduler.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

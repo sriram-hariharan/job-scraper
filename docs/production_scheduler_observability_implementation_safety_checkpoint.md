@@ -180,6 +180,8 @@ After 159B, recommend:
 
 160A: production scheduler observability implementation, read-only and gated, no migration execution
 
+Step 160A is tracked in `docs/production_scheduler_observability_read_only_gated_no_migration.md`. It adds only a deterministic read-only production scheduler observability decision boundary at `application_execution_queue.py`; production scheduler wiring changes, uncontrolled scheduler loops, background workers, automatic submission loops, metrics/logging/audit/dashboard/export/reporting work, and migration execution remain separate future phases.
+
 ## H. Verification contract phrases
 
 - Production scheduler observability implementation safety checkpoint: PASS

@@ -568,3 +568,9 @@ This phase adds only a deterministic read-only reporting helper in `application_
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.
 
 This release checkpoint confirms production scheduler observability reporting remains read-only observability-decision-gated reporting only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.
+
+## Step 166A: production scheduler observability reporting UI/API readiness review
+
+See `docs/production_scheduler_observability_reporting_ui_api_readiness_review.md`.
+
+This readiness review prepares a future read-only reporting UI/API surface. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

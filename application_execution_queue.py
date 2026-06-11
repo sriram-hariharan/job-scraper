@@ -34,6 +34,7 @@ SCHEDULER_BACKGROUND_EXECUTION_GATE_ENABLED = True
 LIVE_SCHEDULER_EXECUTION_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_WIRING_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_OBSERVABILITY_GATE_ENABLED = True
+PRODUCTION_SCHEDULER_OBSERVABILITY_REPORTING_GATE_ENABLED = True
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -874,6 +875,138 @@ def production_scheduler_observability_decision_payload(
         "did_emit_logs": False,
         "did_write_audit_events": False,
         "did_start_background_work": False,
+    }
+
+
+def _production_scheduler_observability_reporting_blocked_payload(
+    *,
+    reason_codes: List[str] | None = None,
+    production_scheduler_observability_output: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    observability_gate = dict(production_scheduler_observability_output or {})
+    clean_reason_codes = sorted(set(reason_codes or []))
+    return {
+        **observability_gate,
+        "production_scheduler_observability_reporting_gate_enabled": (
+            PRODUCTION_SCHEDULER_OBSERVABILITY_REPORTING_GATE_ENABLED
+        ),
+        "production_scheduler_observability_reporting_read_only": True,
+        "production_scheduler_observability_reporting_allowed": False,
+        "production_scheduler_observability_reporting_status": "blocked",
+        "production_scheduler_observability_reporting_reason_codes": clean_reason_codes,
+        "production_scheduler_observability_reporting_summary": {
+            "allowed": False,
+            "status": "blocked",
+            "reason_codes": clean_reason_codes,
+            "read_only": True,
+        },
+        "metrics_emitter_enabled": False,
+        "logging_emitter_enabled": False,
+        "audit_writer_enabled": False,
+        "dashboard_code_enabled": False,
+        "export_code_enabled": False,
+        "reporting_job_enabled": False,
+        "production_scheduler_wiring_enabled": False,
+        "uncontrolled_scheduler_loop_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "background_worker_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "migration_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+        "did_emit_metrics": False,
+        "did_emit_logs": False,
+        "did_write_audit_events": False,
+        "did_start_background_work": False,
+        "did_export_files": False,
+        "did_create_dashboard_jobs": False,
+        "did_create_reporting_jobs": False,
+    }
+
+
+def production_scheduler_observability_reporting_payload(
+    production_scheduler_observability_output: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Return a deterministic read-only reporting summary for observability state."""
+
+    if not isinstance(production_scheduler_observability_output, dict):
+        return _production_scheduler_observability_reporting_blocked_payload(
+            reason_codes=["missing_production_scheduler_observability_decision"]
+        )
+
+    observability_gate = dict(production_scheduler_observability_output)
+    reason_codes: List[str] = []
+
+    if observability_gate.get("production_scheduler_observability_allowed") is not True:
+        reason_codes.append("production_scheduler_observability_not_allowed")
+    if (
+        _normalize_text(
+            observability_gate.get("production_scheduler_observability_status")
+        )
+        != "passed"
+    ):
+        reason_codes.append("production_scheduler_observability_status_not_passed")
+    if observability_gate.get("production_scheduler_observability_read_only") is not True:
+        reason_codes.append("production_scheduler_observability_not_read_only")
+
+    if reason_codes:
+        return _production_scheduler_observability_reporting_blocked_payload(
+            reason_codes=reason_codes,
+            production_scheduler_observability_output=observability_gate,
+        )
+
+    summary = {
+        "allowed": True,
+        "status": "passed",
+        "reason_codes": [],
+        "read_only": True,
+        "approval_request_id": _normalize_text(
+            observability_gate.get("approval_request_id")
+        ),
+        "approval_status": _normalize_text(observability_gate.get("approval_status")),
+        "production_scheduler_observability_status": _normalize_text(
+            observability_gate.get("production_scheduler_observability_status")
+        ),
+    }
+    return {
+        **observability_gate,
+        "production_scheduler_observability_reporting_gate_enabled": (
+            PRODUCTION_SCHEDULER_OBSERVABILITY_REPORTING_GATE_ENABLED
+        ),
+        "production_scheduler_observability_reporting_read_only": True,
+        "production_scheduler_observability_reporting_allowed": True,
+        "production_scheduler_observability_reporting_status": "passed",
+        "production_scheduler_observability_reporting_reason_codes": [],
+        "production_scheduler_observability_reporting_summary": summary,
+        "metrics_emitter_enabled": False,
+        "logging_emitter_enabled": False,
+        "audit_writer_enabled": False,
+        "dashboard_code_enabled": False,
+        "export_code_enabled": False,
+        "reporting_job_enabled": False,
+        "production_scheduler_wiring_enabled": False,
+        "uncontrolled_scheduler_loop_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "background_worker_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "migration_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+        "did_emit_metrics": False,
+        "did_emit_logs": False,
+        "did_write_audit_events": False,
+        "did_start_background_work": False,
+        "did_export_files": False,
+        "did_create_dashboard_jobs": False,
+        "did_create_reporting_jobs": False,
     }
 
 

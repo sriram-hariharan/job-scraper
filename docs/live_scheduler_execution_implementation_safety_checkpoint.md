@@ -150,6 +150,8 @@ After 151B, recommend:
 
 152A: live scheduler execution implementation, approval-execution-submission-scheduler-gated only, no migration execution
 
+Step 152A is tracked in `docs/live_scheduler_execution_gated_only_no_migration.md`. It adds only a deterministic live scheduler execution decision boundary at `application_execution_queue.py`; migration execution remains a separate future phase.
+
 ## I. Verification contract phrases
 
 - Live scheduler execution implementation safety checkpoint: PASS

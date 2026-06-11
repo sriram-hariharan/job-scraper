@@ -30,6 +30,7 @@ TIE_REVIEW_RANK_POLICY = APPLICATION_EXECUTION_QUEUE_POLICY["tie_review_rank"]
 QUEUE_SAFETY_GATE_ENABLED = True
 APPROVAL_GATED_EXECUTION_ENABLED = True
 APPLICATION_SUBMISSION_GATE_ENABLED = True
+SCHEDULER_BACKGROUND_EXECUTION_GATE_ENABLED = True
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -261,6 +262,135 @@ def application_submission_decision_payload(
         "scheduler_background_execution_enabled": False,
         "live_scheduler_enabled": False,
         "automatic_submission_loop_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+    }
+
+
+def _scheduler_background_execution_disabled_payload(
+    *,
+    approval_request_id: str = "",
+    approval_status: str = "",
+    reason_codes: List[str] | None = None,
+    application_submission_output: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    submission_gate = dict(application_submission_output or {})
+    return {
+        **submission_gate,
+        "scheduler_background_execution_gate_enabled": (
+            SCHEDULER_BACKGROUND_EXECUTION_GATE_ENABLED
+        ),
+        "scheduler_background_execution_decision_enabled": True,
+        "scheduler_background_execution_allowed": False,
+        "scheduler_background_execution_status": "blocked",
+        "scheduler_background_execution_reason_codes": sorted(set(reason_codes or [])),
+        "approval_request_id": _normalize_text(approval_request_id),
+        "approval_status": _normalize_text(approval_status),
+        "scheduler_background_execution_enabled": False,
+        "live_scheduler_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "background_worker_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "migration_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+    }
+
+
+def scheduler_background_execution_decision_payload(
+    *,
+    approval_request_id: str = "",
+    application_submission_output: Dict[str, Any] | None = None,
+    approval_record_provider: Any = None,
+) -> Dict[str, Any]:
+    """Return scheduler/background execution readiness without starting workers."""
+
+    submission_gate = dict(
+        application_submission_output
+        or application_submission_decision_payload(approval_request_id=approval_request_id)
+    )
+    reason_codes: List[str] = []
+
+    if submission_gate.get("approval_gated_execution_allowed") is not True:
+        reason_codes.append("approval_gated_execution_not_allowed")
+    if _normalize_text(submission_gate.get("approval_gated_execution_status")) != "passed":
+        reason_codes.append("approval_gated_execution_status_not_passed")
+
+    if submission_gate.get("application_submission_allowed") is not True:
+        reason_codes.append("application_submission_not_allowed")
+    if _normalize_text(submission_gate.get("application_submission_status")) != "passed":
+        reason_codes.append("application_submission_status_not_passed")
+
+    if submission_gate.get("blocked_by_queue_safety_gate") is True:
+        reason_codes.append("queue_safety_gate_blocked")
+    if submission_gate.get("queue_safety_gate_passed") is False:
+        reason_codes.append("queue_safety_gate_not_passed")
+    if (
+        "queue_safety_gate_status" in submission_gate
+        and _normalize_text(submission_gate.get("queue_safety_gate_status")) != "passed"
+    ):
+        reason_codes.append("queue_safety_gate_status_not_passed")
+
+    clean_approval_request_id = _normalize_text(
+        approval_request_id or submission_gate.get("approval_request_id")
+    )
+    if not clean_approval_request_id:
+        reason_codes.append("missing_approval_request_id")
+
+    approval_record = None
+    if approval_record_provider is None:
+        reason_codes.append("approval_record_provider_unavailable")
+    elif clean_approval_request_id:
+        approval_record = approval_record_provider(clean_approval_request_id)
+        if not isinstance(approval_record, dict):
+            reason_codes.append("missing_recorded_approval")
+
+    approval_status = _normalize_text(submission_gate.get("approval_status"))
+    if isinstance(approval_record, dict):
+        approval_status = _normalize_text(approval_record.get("approval_status"))
+
+    if approval_status:
+        supported_statuses = _approval_storage_status_values()
+        if approval_status not in supported_statuses:
+            reason_codes.append("unsupported_approval_status")
+        elif approval_status != "approved":
+            reason_codes.append("approval_status_not_approved")
+    elif approval_record_provider is not None:
+        reason_codes.append("missing_approval_status")
+
+    if reason_codes:
+        return _scheduler_background_execution_disabled_payload(
+            approval_request_id=clean_approval_request_id,
+            approval_status=approval_status,
+            reason_codes=reason_codes,
+            application_submission_output=submission_gate,
+        )
+
+    return {
+        **submission_gate,
+        "scheduler_background_execution_gate_enabled": (
+            SCHEDULER_BACKGROUND_EXECUTION_GATE_ENABLED
+        ),
+        "scheduler_background_execution_decision_enabled": True,
+        "scheduler_background_execution_allowed": True,
+        "scheduler_background_execution_status": "passed",
+        "scheduler_background_execution_reason_codes": [],
+        "approval_request_id": clean_approval_request_id,
+        "approval_status": approval_status,
+        "scheduler_background_execution_enabled": False,
+        "live_scheduler_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "background_worker_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "migration_execution_enabled": False,
         "live_execution_enabled": False,
         "did_execute_count": 0,
         "did_execute_live": False,

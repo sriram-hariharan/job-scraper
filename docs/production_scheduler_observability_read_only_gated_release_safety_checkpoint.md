@@ -262,3 +262,9 @@ After 161B, recommend:
 - production scheduler observability preserves deterministic behavior
 - migration execution must be separate future phase
 - metrics/logging/dashboard/export implementation must be separate future phase
+
+## Step 162A production scheduler observability reporting readiness review
+
+See `docs/production_scheduler_observability_reporting_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

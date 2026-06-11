@@ -94,3 +94,9 @@ Dashboard/export work is review-only in this phase. No dashboard code, export co
 - migration execution must be separate future phase
 - 170B: production scheduler observability dashboard/export readiness review final audit and merge gate
 - 171A: production scheduler observability dashboard/export implementation safety checkpoint, docs/tests only
+
+## Step 171A production scheduler observability dashboard/export implementation safety checkpoint
+
+See `docs/production_scheduler_observability_dashboard_export_implementation_safety_checkpoint.md`.
+
+This safety checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, dashboard code, export code, reporting jobs, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, or audit writers.

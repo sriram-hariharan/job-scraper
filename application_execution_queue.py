@@ -33,6 +33,7 @@ APPLICATION_SUBMISSION_GATE_ENABLED = True
 SCHEDULER_BACKGROUND_EXECUTION_GATE_ENABLED = True
 LIVE_SCHEDULER_EXECUTION_GATE_ENABLED = True
 PRODUCTION_SCHEDULER_WIRING_GATE_ENABLED = True
+PRODUCTION_SCHEDULER_OBSERVABILITY_GATE_ENABLED = True
 
 _QUEUE_APP_SERVICE_PAYLOAD_NOT_PROVIDED = object()
 _QUEUE_APP_SERVICE_REQUIRED_GATE_FIELDS = {
@@ -680,6 +681,199 @@ def production_scheduler_wiring_decision_payload(
         "did_mutate_production": False,
         "did_write_db": False,
         "did_submit_application": False,
+    }
+
+
+def _production_scheduler_observability_disabled_payload(
+    *,
+    approval_request_id: str = "",
+    approval_status: str = "",
+    reason_codes: List[str] | None = None,
+    production_scheduler_wiring_output: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    production_wiring_gate = dict(production_scheduler_wiring_output or {})
+    return {
+        **production_wiring_gate,
+        "production_scheduler_observability_gate_enabled": (
+            PRODUCTION_SCHEDULER_OBSERVABILITY_GATE_ENABLED
+        ),
+        "production_scheduler_observability_decision_enabled": True,
+        "production_scheduler_observability_read_only": True,
+        "production_scheduler_observability_allowed": False,
+        "production_scheduler_observability_status": "blocked",
+        "production_scheduler_observability_reason_codes": sorted(
+            set(reason_codes or [])
+        ),
+        "approval_request_id": _normalize_text(approval_request_id),
+        "approval_status": _normalize_text(approval_status),
+        "metrics_emitter_enabled": False,
+        "logging_emitter_enabled": False,
+        "audit_writer_enabled": False,
+        "dashboard_code_enabled": False,
+        "export_code_enabled": False,
+        "reporting_job_enabled": False,
+        "production_scheduler_wiring_enabled": False,
+        "uncontrolled_scheduler_loop_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "background_worker_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "migration_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+        "did_emit_metrics": False,
+        "did_emit_logs": False,
+        "did_write_audit_events": False,
+        "did_start_background_work": False,
+    }
+
+
+def production_scheduler_observability_decision_payload(
+    *,
+    approval_request_id: str = "",
+    production_scheduler_wiring_output: Dict[str, Any] | None = None,
+    approval_record_provider: Any = None,
+) -> Dict[str, Any]:
+    """Return read-only production scheduler observability readiness."""
+
+    production_wiring_gate = dict(
+        production_scheduler_wiring_output
+        or production_scheduler_wiring_decision_payload(
+            approval_request_id=approval_request_id
+        )
+    )
+    reason_codes: List[str] = []
+
+    if production_wiring_gate.get("approval_gated_execution_allowed") is not True:
+        reason_codes.append("approval_gated_execution_not_allowed")
+    if (
+        _normalize_text(production_wiring_gate.get("approval_gated_execution_status"))
+        != "passed"
+    ):
+        reason_codes.append("approval_gated_execution_status_not_passed")
+
+    if production_wiring_gate.get("application_submission_allowed") is not True:
+        reason_codes.append("application_submission_not_allowed")
+    if (
+        _normalize_text(production_wiring_gate.get("application_submission_status"))
+        != "passed"
+    ):
+        reason_codes.append("application_submission_status_not_passed")
+
+    if (
+        production_wiring_gate.get("scheduler_background_execution_allowed")
+        is not True
+    ):
+        reason_codes.append("scheduler_background_execution_not_allowed")
+    if (
+        _normalize_text(
+            production_wiring_gate.get("scheduler_background_execution_status")
+        )
+        != "passed"
+    ):
+        reason_codes.append("scheduler_background_execution_status_not_passed")
+
+    if production_wiring_gate.get("live_scheduler_execution_allowed") is not True:
+        reason_codes.append("live_scheduler_execution_not_allowed")
+    if (
+        _normalize_text(production_wiring_gate.get("live_scheduler_execution_status"))
+        != "passed"
+    ):
+        reason_codes.append("live_scheduler_execution_status_not_passed")
+
+    if production_wiring_gate.get("production_scheduler_wiring_allowed") is not True:
+        reason_codes.append("production_scheduler_wiring_not_allowed")
+    if (
+        _normalize_text(
+            production_wiring_gate.get("production_scheduler_wiring_status")
+        )
+        != "passed"
+    ):
+        reason_codes.append("production_scheduler_wiring_status_not_passed")
+
+    if production_wiring_gate.get("blocked_by_queue_safety_gate") is True:
+        reason_codes.append("queue_safety_gate_blocked")
+    if production_wiring_gate.get("queue_safety_gate_passed") is False:
+        reason_codes.append("queue_safety_gate_not_passed")
+    if (
+        "queue_safety_gate_status" in production_wiring_gate
+        and _normalize_text(production_wiring_gate.get("queue_safety_gate_status"))
+        != "passed"
+    ):
+        reason_codes.append("queue_safety_gate_status_not_passed")
+
+    clean_approval_request_id = _normalize_text(
+        approval_request_id or production_wiring_gate.get("approval_request_id")
+    )
+    if not clean_approval_request_id:
+        reason_codes.append("missing_approval_request_id")
+
+    approval_record = None
+    if approval_record_provider is None:
+        reason_codes.append("approval_record_provider_unavailable")
+    elif clean_approval_request_id:
+        approval_record = approval_record_provider(clean_approval_request_id)
+        if not isinstance(approval_record, dict):
+            reason_codes.append("missing_recorded_approval")
+
+    approval_status = _normalize_text(production_wiring_gate.get("approval_status"))
+    if isinstance(approval_record, dict):
+        approval_status = _normalize_text(approval_record.get("approval_status"))
+
+    if approval_status:
+        supported_statuses = _approval_storage_status_values()
+        if approval_status not in supported_statuses:
+            reason_codes.append("unsupported_approval_status")
+        elif approval_status != "approved":
+            reason_codes.append("approval_status_not_approved")
+    elif approval_record_provider is not None:
+        reason_codes.append("missing_approval_status")
+
+    if reason_codes:
+        return _production_scheduler_observability_disabled_payload(
+            approval_request_id=clean_approval_request_id,
+            approval_status=approval_status,
+            reason_codes=reason_codes,
+            production_scheduler_wiring_output=production_wiring_gate,
+        )
+
+    return {
+        **production_wiring_gate,
+        "production_scheduler_observability_gate_enabled": (
+            PRODUCTION_SCHEDULER_OBSERVABILITY_GATE_ENABLED
+        ),
+        "production_scheduler_observability_decision_enabled": True,
+        "production_scheduler_observability_read_only": True,
+        "production_scheduler_observability_allowed": True,
+        "production_scheduler_observability_status": "passed",
+        "production_scheduler_observability_reason_codes": [],
+        "approval_request_id": clean_approval_request_id,
+        "approval_status": approval_status,
+        "metrics_emitter_enabled": False,
+        "logging_emitter_enabled": False,
+        "audit_writer_enabled": False,
+        "dashboard_code_enabled": False,
+        "export_code_enabled": False,
+        "reporting_job_enabled": False,
+        "production_scheduler_wiring_enabled": False,
+        "uncontrolled_scheduler_loop_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "background_worker_enabled": False,
+        "automatic_submission_loop_enabled": False,
+        "migration_execution_enabled": False,
+        "live_execution_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_submit_application": False,
+        "did_emit_metrics": False,
+        "did_emit_logs": False,
+        "did_write_audit_events": False,
+        "did_start_background_work": False,
     }
 
 

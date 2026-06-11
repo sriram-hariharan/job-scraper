@@ -1,36 +1,54 @@
-# Production scheduler observability reporting read only no emitters no export no migration
+# Production scheduler observability reporting read-only release safety checkpoint
 
-## A. Current implementation scope
+## A. Current release checkpoint scope
 
-This phase adds the smallest deterministic read-only reporting helper at the existing queue/execution boundary.
+This checkpoint releases the production scheduler observability reporting helper as read-only reporting only.
 
-The helper consumes already-computed production scheduler observability decision state only. It does not compute observability state, fetch approval records, trigger execution, trigger submission, trigger production scheduler wiring, start scheduler/background/live scheduler work, execute migrations, write audit events, write metrics, emit logs, start background work, export files, create dashboard code, or create reporting jobs.
+This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.
 
-If production scheduler observability decision state is missing, unsupported, non-allowed, non-passed, or not read-only, the reporting helper blocks by default.
+## B. Release decision
 
-## B. Existing released boundaries
+Production scheduler observability reporting is released as read-only observability-decision-gated reporting only.
 
-The approval decision endpoint remains the released endpoint route only.
+Reporting remains read-only.
 
-Endpoint route path: `/api/agentic-approvals/{approval_request_id}/decision`.
+Migration execution remains disabled.
+
+Metrics emitters remain disabled.
+
+Logging emitters remain disabled.
+
+Audit writers remain disabled.
+
+Dashboard implementation remains disabled.
+
+Export implementation remains disabled.
+
+Reporting jobs remain disabled.
+
+## C. Existing released baseline
+
+The approval decision endpoint exists at `POST /api/agentic-approvals/{approval_request_id}/decision`.
 
 Runtime route file: `src/app/api.py`.
 
-The Agentic Review UI action remains the released UI action only.
+The approval UI action exists as UI action only.
 
 UI asset path: `src/app/static/agentic_review.js`.
 
-Approval-gated execution remains released approval-gated execution only.
+Approval-gated execution exists.
 
-Gated application submission remains released approval-and-execution-gated submission only.
+Application submission exists as approval-and-execution-gated only.
 
-Scheduler/background execution remains released approval-execution-submission-gated decision only.
+Scheduler/background execution exists as gated decision only.
 
-Live scheduler execution remains released approval-execution-submission-scheduler-gated decision only.
+Live scheduler execution exists as approval-execution-submission-scheduler-gated decision only.
 
-Production scheduler wiring remains released approval-execution-submission-scheduler-live-scheduler-gated decision only.
+Production scheduler wiring exists as approval-execution-submission-scheduler-live-scheduler-gated decision only.
 
-Production scheduler observability remains released read-only approval-execution-submission-scheduler-live-scheduler-production-wiring-gated only.
+Production scheduler observability exists as read-only approval-execution-submission-scheduler-live-scheduler-production-wiring-gated decision only.
+
+Production scheduler observability reporting exists as read-only observability-decision-gated reporting only.
 
 Execution queue path: `application_execution_queue.py`.
 
@@ -38,7 +56,7 @@ Workflow runner path: `src/agents/workflow_runner.py`.
 
 Storage module path: `src/storage/agentic_approvals/store.py`.
 
-## C. Reporting decision contract
+## D. Reporting behavior
 
 Reporting is read-only.
 
@@ -70,55 +88,17 @@ Reporting does not export files.
 
 Reporting does not create dashboard or reporting jobs.
 
-## D. Preserved safety gates
+## E. Runtime isolation
 
-Reporting preserves existing queue safety gates.
+No API route is modified.
 
-Reporting preserves existing execution safety gates.
+No UI file is modified.
 
-Reporting preserves submission safety gates.
+No execution file is modified.
 
-Reporting preserves scheduler decision safety gates.
+No storage module is modified.
 
-Reporting preserves live scheduler decision safety gates.
-
-Reporting preserves production wiring safety gates.
-
-Reporting preserves production observability safety gates.
-
-## E. Preserved runtime behavior
-
-Reporting preserves rate limiting.
-
-Reporting preserves retry logic.
-
-Reporting preserves caching.
-
-Reporting preserves deduplication.
-
-Reporting preserves ranking.
-
-Reporting preserves metrics.
-
-Reporting preserves ATS health checks.
-
-Reporting preserves audit event behavior.
-
-Reporting preserves dry-run artifact behavior.
-
-Reporting preserves stage-level observability.
-
-Reporting preserves deterministic behavior.
-
-## F. Isolation confirmation
-
-No API route is modified in this phase.
-
-No UI file is modified in this phase.
-
-No storage module is modified in this phase.
-
-No SQL file is modified in this phase.
+No SQL file is modified.
 
 No migration file is added.
 
@@ -144,16 +124,56 @@ No export code is added.
 
 No reporting job is added.
 
-Metrics/logging/audit writer implementation must be separate future phase.
+## F. Gate preservation
 
-Dashboard/export/reporting job implementation must be separate future phase.
+Reporting preserves existing queue safety gates.
 
-Migration execution must be separate future phase.
+Reporting preserves existing execution safety gates.
 
-## G. Verification contract phrases
+Reporting preserves submission safety gates.
 
-- Production scheduler observability reporting read only no emitters no export no migration: PASS
-- Production scheduler observability reporting implementation: READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY
+Reporting preserves scheduler decision safety gates.
+
+Reporting preserves live scheduler decision safety gates.
+
+Reporting preserves production wiring safety gates.
+
+Reporting preserves production observability safety gates.
+
+Reporting preserves rate limiting.
+
+Reporting preserves retry logic.
+
+Reporting preserves caching.
+
+Reporting preserves deduplication.
+
+Reporting preserves ranking.
+
+Reporting preserves metrics.
+
+Reporting preserves ATS health checks.
+
+Reporting preserves audit event behavior.
+
+Reporting preserves dry-run artifact behavior.
+
+Reporting preserves stage-level observability.
+
+Reporting preserves deterministic behavior.
+
+## G. Recommended next phase
+
+165B: production scheduler observability reporting read-only release safety checkpoint final audit and merge gate
+
+After 165B, recommend:
+
+166A: production scheduler observability reporting UI/API readiness review, docs/tests only first
+
+## H. Verification contract phrases
+
+- Production scheduler observability reporting read-only release safety checkpoint: PASS
+- Production scheduler observability reporting implementation: RELEASED_READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY
 - Production scheduler observability implementation: RELEASED_READ_ONLY_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_PRODUCTION_WIRING_GATED_ONLY
 - Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY
 - UI action implementation: RELEASED_UI_ACTION_ONLY
@@ -168,20 +188,23 @@ Migration execution must be separate future phase.
 - Execution queue path: application_execution_queue.py
 - Workflow runner path: src/agents/workflow_runner.py
 - Storage module path: src/storage/agentic_approvals/store.py
-- Reporting decision: READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY
+- Reporting gate tests: EXIST
+- Reporting decision: RELEASED_READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY
 - Migration execution: NO_GO
-- Metrics emitter: NO_GO
-- Logging emitter: NO_GO
-- Audit writer: NO_GO
-- Dashboard implementation: NO_GO
-- Export implementation: NO_GO
-- Reporting job: NO_GO
-- Production scheduler wiring changes: NO_GO
-- Production scheduler observability gate bypass: NO_GO
-- no API route modified in this phase
-- no UI file modified in this phase
-- no storage module modified in this phase
-- no SQL file modified in this phase
+- Metrics emitter: NO_GO_IN_THIS_CHECKPOINT
+- Logging emitter: NO_GO_IN_THIS_CHECKPOINT
+- Audit writer: NO_GO_IN_THIS_CHECKPOINT
+- Dashboard implementation: NO_GO_IN_THIS_CHECKPOINT
+- Export implementation: NO_GO_IN_THIS_CHECKPOINT
+- Reporting job: NO_GO_IN_THIS_CHECKPOINT
+- Production scheduler wiring changes: NO_GO_IN_THIS_CHECKPOINT
+- Production scheduler observability gate bypass: NO_GO_IN_THIS_CHECKPOINT
+- no runtime behavior changes in this release checkpoint
+- no API route modified in this release checkpoint
+- no UI file modified in this release checkpoint
+- no execution file modified in this release checkpoint
+- no storage module modified in this release checkpoint
+- no SQL file modified in this release checkpoint
 - no migration file added
 - no migration runner added
 - no migration execution enabled
@@ -230,9 +253,3 @@ Migration execution must be separate future phase.
 - metrics/logging/audit writer implementation must be separate future phase
 - dashboard/export/reporting job implementation must be separate future phase
 - migration execution must be separate future phase
-
-## Step 165A production scheduler observability reporting read-only release safety checkpoint
-
-See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.
-
-This release checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

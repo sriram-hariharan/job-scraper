@@ -773,3 +773,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Live scheduler execution gated only no migration](docs/live_scheduler_execution_gated_only_no_migration.md)
 
 - [Live scheduler execution gated release safety checkpoint](docs/live_scheduler_execution_gated_release_safety_checkpoint.md)
+
+- [Production scheduler wiring readiness review](docs/production_scheduler_wiring_readiness_review.md)

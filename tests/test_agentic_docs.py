@@ -15672,6 +15672,111 @@ def test_production_scheduler_observability_reporting_ui_api_read_only_doc_contr
         assert Path(path).exists()
 
 
+def test_production_scheduler_observability_dashboard_export_read_only_doc_contract():
+    from pathlib import Path
+
+    doc = Path(
+        "docs/production_scheduler_observability_dashboard_export_read_only_no_emitters_no_reporting_job_no_migration.md"
+    )
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Production scheduler observability dashboard/export read only no emitters no reporting job no migration: PASS",
+        "Production scheduler observability dashboard/export implementation: READ_ONLY_DASHBOARD_AND_EXPORT_PREVIEW_ONLY",
+        "Production scheduler observability dashboard/export safety: RELEASED_READ_ONLY_DASHBOARD_EXPORT_ONLY",
+        "Production scheduler observability reporting UI/API implementation: RELEASED_READ_ONLY_GET_ENDPOINT_AND_UI_ACTION_ONLY",
+        "Production scheduler observability reporting implementation: RELEASED_READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY",
+        "Dashboard endpoint path: /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-dashboard",
+        "Export preview endpoint path: /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-export-preview",
+        "Dashboard endpoint method: GET_ONLY",
+        "Export preview endpoint method: GET_ONLY",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Dashboard/export decision: READ_ONLY_DASHBOARD_AND_EXPORT_PREVIEW_ONLY",
+        "Migration execution: NO_GO",
+        "Metrics emitter: NO_GO",
+        "Logging emitter: NO_GO",
+        "Audit writer: NO_GO",
+        "Export file creation: NO_GO",
+        "Reporting job: NO_GO",
+        "Production scheduler wiring changes: NO_GO",
+        "Production scheduler observability gate bypass: NO_GO",
+        "Production scheduler observability reporting gate bypass: NO_GO",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no migration file added",
+        "no migration runner added",
+        "no migration execution enabled",
+        "no uncontrolled scheduler loop added",
+        "no background worker added",
+        "no automatic submission loop added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no file export writer added",
+        "no reporting job added",
+        "dashboard/export UI/API is read-only",
+        "dashboard API endpoint is GET only",
+        "export preview API endpoint is GET only",
+        "export preview does not create files",
+        "dashboard/export UI action calls read-only endpoints only",
+        "dashboard/export requires production scheduler observability allowed/read-only decision",
+        "dashboard/export blocks missing production scheduler observability decision",
+        "dashboard/export blocks unsupported production scheduler observability decision",
+        "dashboard/export does not trigger execution",
+        "dashboard/export does not trigger submission",
+        "dashboard/export does not trigger production scheduler wiring",
+        "dashboard/export does not trigger scheduler/background/live scheduler work",
+        "dashboard/export does not trigger migration execution",
+        "dashboard/export does not write audit events",
+        "dashboard/export does not write metrics",
+        "dashboard/export does not emit logs",
+        "dashboard/export does not start background work",
+        "dashboard/export does not create reporting jobs",
+        "dashboard/export does not export files",
+        "dashboard/export preserves existing queue safety gates",
+        "dashboard/export preserves existing execution safety gates",
+        "dashboard/export preserves submission safety gates",
+        "dashboard/export preserves scheduler decision safety gates",
+        "dashboard/export preserves live scheduler decision safety gates",
+        "dashboard/export preserves production wiring safety gates",
+        "dashboard/export preserves production observability safety gates",
+        "dashboard/export preserves reporting safety gates",
+        "dashboard/export preserves rate limiting",
+        "dashboard/export preserves retry logic",
+        "dashboard/export preserves caching",
+        "dashboard/export preserves deduplication",
+        "dashboard/export preserves ranking",
+        "dashboard/export preserves metrics",
+        "dashboard/export preserves ATS health checks",
+        "dashboard/export preserves audit event behavior",
+        "dashboard/export preserves dry-run artifact behavior",
+        "dashboard/export preserves stage-level observability",
+        "dashboard/export preserves deterministic behavior",
+        "metrics/logging/audit writer implementation must be separate future phase",
+        "file export writer implementation must be separate future phase",
+        "reporting job implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "tests/test_production_scheduler_observability_dashboard_export_read_only_no_emitters_no_reporting_job_no_migration.py",
+        "tests/test_production_scheduler_observability_reporting_ui_api_read_only_no_emitters_no_export_no_migration.py",
+        "tests/test_production_scheduler_observability_reporting_read_only_no_emitters_no_export_no_migration.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+
+
 def test_production_scheduler_observability_reporting_read_only_release_safety_checkpoint_doc_contract():
     from pathlib import Path
 

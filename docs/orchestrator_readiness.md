@@ -490,3 +490,9 @@ This safety checkpoint prepares a future approval-execution-submission-scheduler
 See `docs/live_scheduler_execution_gated_only_no_migration.md`.
 
 This phase adds only a deterministic live scheduler execution decision boundary in `application_execution_queue.py`. It requires recorded approval, approval-gated execution, gated application submission, and scheduler/background gated decision, while migration execution, API routes, UI files, storage modules, SQL files, and workflow runner behavior remain unchanged.
+
+## Step 153A: live scheduler execution gated release safety checkpoint
+
+See `docs/live_scheduler_execution_gated_release_safety_checkpoint.md`.
+
+This release checkpoint confirms live scheduler execution remains approval-execution-submission-scheduler-gated decision only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, or automatic submission loops.

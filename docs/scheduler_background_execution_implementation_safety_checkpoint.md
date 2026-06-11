@@ -138,6 +138,8 @@ After 147B, recommend:
 
 148A: scheduler/background execution implementation, approval-execution-submission-gated only, no migration execution
 
+Step 148A is tracked in `docs/scheduler_background_execution_gated_only_no_migration.md`. It adds only a deterministic scheduler/background execution decision boundary at `application_execution_queue.py`; live scheduler loops, background workers, automatic submission loops, and migration execution remain separate future phases.
+
 ## I. Verification contract phrases
 
 - Scheduler background execution implementation safety checkpoint: PASS

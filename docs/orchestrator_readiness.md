@@ -460,3 +460,9 @@ This readiness review prepares a future scheduler/background execution safety ch
 See `docs/scheduler_background_execution_implementation_safety_checkpoint.md`.
 
 This safety checkpoint prepares a future approval-execution-submission-gated scheduler-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, automatic submission loops, migration files, or migration runners.
+
+## Step 148A: scheduler/background execution gated only no migration
+
+See `docs/scheduler_background_execution_gated_only_no_migration.md`.
+
+This phase adds only a deterministic scheduler/background execution decision boundary in `application_execution_queue.py`. It requires recorded approval, approval-gated execution, and gated application submission, while live scheduler loops, background workers, automatic submission loops, migration execution, API routes, UI files, storage modules, SQL files, and workflow runner behavior remain unchanged.

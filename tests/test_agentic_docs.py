@@ -15437,3 +15437,117 @@ def test_production_scheduler_observability_reporting_implementation_safety_chec
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_production_scheduler_observability_reporting_read_only_no_emitters_doc_contract():
+    from pathlib import Path
+
+    doc = Path(
+        "docs/production_scheduler_observability_reporting_read_only_no_emitters_no_export_no_migration.md"
+    )
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Production scheduler observability reporting read only no emitters no export no migration: PASS",
+        "Production scheduler observability reporting implementation: READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY",
+        "Production scheduler observability implementation: RELEASED_READ_ONLY_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_PRODUCTION_WIRING_GATED_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Submission implementation: RELEASED_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_GATED_DECISION_ONLY",
+        "Live scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_GATED_DECISION_ONLY",
+        "Production scheduler wiring implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_GATED_DECISION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Reporting decision: READ_ONLY_OBSERVABILITY_DECISION_GATED_REPORTING_ONLY",
+        "Migration execution: NO_GO",
+        "Metrics emitter: NO_GO",
+        "Logging emitter: NO_GO",
+        "Audit writer: NO_GO",
+        "Dashboard implementation: NO_GO",
+        "Export implementation: NO_GO",
+        "Reporting job: NO_GO",
+        "Production scheduler wiring changes: NO_GO",
+        "Production scheduler observability gate bypass: NO_GO",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no migration file added",
+        "no migration runner added",
+        "no migration execution enabled",
+        "no uncontrolled scheduler loop added",
+        "no background worker added",
+        "no automatic submission loop added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no dashboard code added",
+        "no export code added",
+        "no reporting job added",
+        "reporting is read-only",
+        "reporting requires production scheduler observability allowed/read-only decision",
+        "reporting blocks missing production scheduler observability decision",
+        "reporting blocks unsupported production scheduler observability decision",
+        "reporting does not trigger execution",
+        "reporting does not trigger submission",
+        "reporting does not trigger production scheduler wiring",
+        "reporting does not trigger scheduler/background/live scheduler work",
+        "reporting does not trigger migration execution",
+        "reporting does not write audit events",
+        "reporting does not write metrics",
+        "reporting does not emit logs",
+        "reporting does not start background work",
+        "reporting does not export files",
+        "reporting does not create dashboard or reporting jobs",
+        "reporting preserves existing queue safety gates",
+        "reporting preserves existing execution safety gates",
+        "reporting preserves submission safety gates",
+        "reporting preserves scheduler decision safety gates",
+        "reporting preserves live scheduler decision safety gates",
+        "reporting preserves production wiring safety gates",
+        "reporting preserves production observability safety gates",
+        "reporting preserves rate limiting",
+        "reporting preserves retry logic",
+        "reporting preserves caching",
+        "reporting preserves deduplication",
+        "reporting preserves ranking",
+        "reporting preserves metrics",
+        "reporting preserves ATS health checks",
+        "reporting preserves audit event behavior",
+        "reporting preserves dry-run artifact behavior",
+        "reporting preserves stage-level observability",
+        "reporting preserves deterministic behavior",
+        "metrics/logging/audit writer implementation must be separate future phase",
+        "dashboard/export/reporting job implementation must be separate future phase",
+        "migration execution must be separate future phase",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_production_scheduler_observability_reporting_read_only_no_emitters_no_export_no_migration.py",
+        "tests/test_production_scheduler_observability_read_only_gated_no_migration.py",
+        "tests/test_production_scheduler_wiring_gated_only_no_migration.py",
+        "tests/test_live_scheduler_execution_gated_only_no_migration.py",
+        "tests/test_scheduler_background_execution_gated_only_no_migration.py",
+        "tests/test_application_submission_gated_only_no_scheduler.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

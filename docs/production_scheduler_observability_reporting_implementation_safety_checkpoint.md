@@ -194,6 +194,8 @@ After 163B, recommend:
 
 164A: production scheduler observability reporting read-only implementation, no emitters, no export, no migration
 
+Step 164A is tracked in `docs/production_scheduler_observability_reporting_read_only_no_emitters_no_export_no_migration.md`. It adds only a deterministic read-only reporting helper at `application_execution_queue.py` that consumes already-computed production scheduler observability decision state; metrics emitters, logging emitters, audit writers, dashboard code, export code, reporting jobs, migration execution, production scheduler wiring changes, scheduler loops, background workers, automatic submission loops, API route changes, UI changes, storage changes, and SQL changes remain separate future phases.
+
 ## H. Verification contract phrases
 
 - Production scheduler observability reporting implementation safety checkpoint: PASS

@@ -132,3 +132,9 @@ After 145B, recommend:
 - application submission preserves deterministic behavior
 - scheduler/background execution must be separate future phase
 - migration execution must be separate future phase
+
+## Step 146A scheduler/background execution readiness review
+
+See `docs/scheduler_background_execution_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, automatic submission loops, migration files, or migration runners.

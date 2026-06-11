@@ -472,3 +472,9 @@ This phase adds only a deterministic scheduler/background execution decision bou
 See `docs/scheduler_background_execution_gated_release_safety_checkpoint.md`.
 
 This release checkpoint confirms scheduler/background execution remains a gated decision only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, live scheduler loops, background workers, automatic submission loops, migration files, or migration runners.
+
+## Step 150A: live scheduler execution readiness review
+
+See `docs/live_scheduler_execution_readiness_review.md`.
+
+This readiness review prepares a future live scheduler execution implementation safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, live scheduler loops, background workers, automatic submission loops, migration files, or migration runners.

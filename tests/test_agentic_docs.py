@@ -14090,3 +14090,83 @@ def test_scheduler_background_execution_gated_release_safety_checkpoint_doc_cont
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_live_scheduler_execution_readiness_review_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/live_scheduler_execution_readiness_review.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Live scheduler execution readiness review: PASS",
+        "Live scheduler execution readiness: REVIEW_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Submission implementation: RELEASED_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_GATED_DECISION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Live scheduler execution: NO_GO",
+        "Background worker execution: NO_GO",
+        "Automatic submission loop: NO_GO",
+        "Migration execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no execution file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no live scheduler loop enabled",
+        "no background worker enabled",
+        "no automatic submission loop enabled",
+        "no migration execution enabled",
+        "future live scheduler execution must require recorded approval",
+        "future live scheduler execution must require approval-gated execution",
+        "future live scheduler execution must require gated application submission",
+        "future live scheduler execution must require scheduler/background gated decision",
+        "future live scheduler execution must preserve existing queue safety gates",
+        "future live scheduler execution must preserve existing execution safety gates",
+        "future live scheduler execution must preserve submission safety gates",
+        "future live scheduler execution must preserve rate limiting",
+        "future live scheduler execution must preserve retry logic",
+        "future live scheduler execution must preserve caching",
+        "future live scheduler execution must preserve deduplication",
+        "future live scheduler execution must preserve ranking",
+        "future live scheduler execution must preserve metrics",
+        "future live scheduler execution must preserve ATS health checks",
+        "future live scheduler execution must preserve audit event behavior",
+        "future live scheduler execution must preserve dry-run artifact behavior",
+        "future live scheduler execution must preserve stage-level observability",
+        "future live scheduler execution must preserve deterministic behavior",
+        "live scheduler execution implementation must be separate future phase",
+        "migration execution must be separate future phase",
+        "150B: live scheduler execution readiness review final audit and merge gate",
+        "151A: live scheduler execution implementation safety checkpoint, docs/tests only",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_scheduler_background_execution_gated_only_no_migration.py",
+        "tests/test_application_submission_gated_only_no_scheduler.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

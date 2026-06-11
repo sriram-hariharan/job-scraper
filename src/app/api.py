@@ -224,6 +224,103 @@ def _agentic_approval_decision_safety_payload(
         "scheduler_background_execution_enabled": False,
     }
 
+
+def _production_scheduler_observability_reporting_decision_for_approval(
+    approval_request_id: str,
+) -> dict[str, Any] | None:
+    return None
+
+
+def _agentic_production_scheduler_observability_report_payload(
+    *,
+    approval_request_id: str,
+    reporting_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    report = dict(reporting_decision or {})
+    reason_codes: list[str] = []
+
+    if not isinstance(reporting_decision, dict):
+        reason_codes.append("missing_production_scheduler_observability_reporting_decision")
+    else:
+        if (
+            report.get("production_scheduler_observability_reporting_allowed")
+            is not True
+        ):
+            reason_codes.append(
+                "production_scheduler_observability_reporting_not_allowed"
+            )
+        if (
+            str(
+                report.get("production_scheduler_observability_reporting_status") or ""
+            ).strip().lower()
+            != "passed"
+        ):
+            reason_codes.append(
+                "production_scheduler_observability_reporting_status_not_passed"
+            )
+        if (
+            report.get("production_scheduler_observability_reporting_read_only")
+            is not True
+        ):
+            reason_codes.append(
+                "production_scheduler_observability_reporting_not_read_only"
+            )
+
+    merged_reason_codes = sorted(
+        set(
+            reason_codes
+            + list(
+                report.get(
+                    "production_scheduler_observability_reporting_reason_codes"
+                )
+                or []
+            )
+        )
+    )
+    blocked = bool(merged_reason_codes)
+    status = "blocked" if blocked else "passed"
+    return {
+        **report,
+        "approval_request_id": approval_request_id,
+        "production_scheduler_observability_reporting_endpoint": (
+            "GET /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-report"
+        ),
+        "production_scheduler_observability_reporting_endpoint_method": "GET",
+        "production_scheduler_observability_reporting_endpoint_read_only": True,
+        "production_scheduler_observability_reporting_endpoint_status": status,
+        "blocked_by_production_scheduler_observability_reporting_endpoint": blocked,
+        "production_scheduler_observability_reporting_endpoint_reason_codes": (
+            merged_reason_codes
+        ),
+        "production_scheduler_observability_reporting_allowed": not blocked,
+        "production_scheduler_observability_reporting_status": status,
+        "production_scheduler_observability_reporting_reason_codes": merged_reason_codes,
+        "execution_enabled": False,
+        "submission_enabled": False,
+        "production_scheduler_wiring_enabled": False,
+        "scheduler_background_execution_enabled": False,
+        "live_scheduler_loop_enabled": False,
+        "migration_execution_enabled": False,
+        "metrics_emitter_enabled": False,
+        "logging_emitter_enabled": False,
+        "audit_writer_enabled": False,
+        "dashboard_code_enabled": False,
+        "export_code_enabled": False,
+        "reporting_job_enabled": False,
+        "did_execute_count": 0,
+        "did_execute_live": False,
+        "did_submit_application": False,
+        "did_mutate_production": False,
+        "did_write_db": False,
+        "did_emit_metrics": False,
+        "did_emit_logs": False,
+        "did_write_audit_events": False,
+        "did_start_background_work": False,
+        "did_export_files": False,
+        "did_create_dashboard_jobs": False,
+        "did_create_reporting_jobs": False,
+    }
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -334,6 +431,21 @@ def record_agentic_approval_decision(
         review_decision=review_decision,
         status="passed",
         approval_request=approval_request,
+    )
+
+
+@app.get(
+    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-report"
+)
+def get_production_scheduler_observability_report(approval_request_id: str):
+    reporting_decision = (
+        _production_scheduler_observability_reporting_decision_for_approval(
+            approval_request_id
+        )
+    )
+    return _agentic_production_scheduler_observability_report_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
     )
 
 

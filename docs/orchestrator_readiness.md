@@ -563,6 +563,12 @@ See `docs/production_scheduler_observability_reporting_read_only_no_emitters_no_
 
 This phase adds only a deterministic read-only reporting helper in `application_execution_queue.py`. It consumes already-computed production scheduler observability decision state and remains blocked by default when that state is missing or unsupported, while execution, submission, production scheduler wiring, scheduler/background/live scheduler work, migration execution, metrics emitters, logging emitters, audit writers, dashboard code, export code, reporting jobs, API routes, UI files, storage modules, SQL files, and workflow runner behavior remain unchanged.
 
+## Step 168A: production scheduler observability reporting UI/API read only no emitters no export no migration
+
+See `docs/production_scheduler_observability_reporting_ui_api_read_only_no_emitters_no_export_no_migration.md`.
+
+This phase adds only a read-only GET endpoint at `/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-report` and one minimal Agentic Review UI action to fetch that endpoint. The route exposes already-computed reporting state only and remains blocked by default when reporting state is missing, while execution, submission, production scheduler wiring, scheduler/background/live scheduler work, migration execution, metrics emitters, logging emitters, audit writers, dashboard code, export code, reporting jobs, storage modules, SQL files, and workflow runner behavior remain unchanged.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

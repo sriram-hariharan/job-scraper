@@ -206,6 +206,8 @@ After 167B, recommend:
 
 168A: production scheduler observability reporting UI/API read-only implementation, no emitters, no export, no migration
 
+Step 168A is tracked in `docs/production_scheduler_observability_reporting_ui_api_read_only_no_emitters_no_export_no_migration.md`. It adds one read-only GET endpoint and one minimal Agentic Review UI action for already-computed production scheduler observability reporting state; storage modules, SQL files, migrations, emitters, audit writers, dashboard code, export code, reporting jobs, execution, submission, production scheduler wiring, scheduler loops, background workers, and automatic submission loops remain separate future phases.
+
 ## H. Verification contract phrases
 
 - Production scheduler observability reporting UI/API implementation safety checkpoint: PASS

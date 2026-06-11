@@ -1231,11 +1231,24 @@ function renderApprovalDecisionActionSection(mock = {}) {
             ${escapeHtml(label)}
           </button>
         `).join("")}
+        <button
+          type="button"
+          class="agentic-feedback-action"
+          data-agentic-production-scheduler-observability-report
+          ${approvalRequestId ? "" : "disabled"}
+        >
+          Load observability report
+        </button>
         <span
           class="agentic-feedback-status ${blockedReasons.length ? "is-error" : "is-info"}"
           data-agentic-approval-status
           aria-live="polite"
         >${escapeHtml(statusMessage)}</span>
+        <span
+          class="agentic-feedback-status is-info"
+          data-agentic-production-scheduler-observability-report-status
+          aria-live="polite"
+        >Read-only observability reporting available on demand.</span>
       </div>
     </div>
   `;
@@ -1277,6 +1290,60 @@ async function recordAgenticApprovalDecision(reviewDecision, button) {
     setAgenticApprovalStatus("Approval decision recorded. Execution remains disabled.", "success");
   } catch (err) {
     setAgenticApprovalStatus(err?.message || "Approval decision was not recorded.", "error");
+  } finally {
+    if (button) {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  }
+}
+
+function setProductionSchedulerObservabilityReportStatus(message, tone = "info") {
+  const status = document.querySelector("[data-agentic-production-scheduler-observability-report-status]");
+  if (!status) return;
+  status.textContent = message || "";
+  status.className = `agentic-feedback-status is-${tone}`;
+}
+
+function formatProductionSchedulerObservabilityReportMessage(payload = {}) {
+  const status = String(
+    payload.production_scheduler_observability_reporting_status || "blocked",
+  ).trim();
+  const reasons = Array.isArray(payload.production_scheduler_observability_reporting_reason_codes)
+    ? payload.production_scheduler_observability_reporting_reason_codes.join(", ")
+    : "none";
+  const safety = "execution disabled; submission disabled; production scheduler wiring disabled; migration disabled; emitters/export/dashboard/reporting jobs disabled";
+  return `Report ${status}. Reasons: ${reasons || "none"}. ${safety}.`;
+}
+
+async function loadProductionSchedulerObservabilityReport(button) {
+  const panel = button?.closest("[data-agentic-approval-request-id]");
+  const approvalRequestId = String(panel?.dataset?.agenticApprovalRequestId || "").trim();
+  if (!approvalRequestId) {
+    setProductionSchedulerObservabilityReportStatus(
+      "Observability report blocked: approval_request_id unavailable.",
+      "error",
+    );
+    return;
+  }
+
+  const previousDisabled = Boolean(button?.disabled);
+  if (button) button.disabled = true;
+  setProductionSchedulerObservabilityReportStatus("Loading read-only observability report...", "info");
+  try {
+    const payload = await fetchJson(
+      `/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/production-scheduler-observability-report`,
+    );
+    setProductionSchedulerObservabilityReportStatus(
+      formatProductionSchedulerObservabilityReportMessage(payload),
+      payload?.blocked_by_production_scheduler_observability_reporting_endpoint ? "error" : "success",
+    );
+  } catch (err) {
+    setProductionSchedulerObservabilityReportStatus(
+      err?.message || "Read-only observability report was not loaded.",
+      "error",
+    );
   } finally {
     if (button) {
       window.setTimeout(() => {
@@ -1417,6 +1484,12 @@ function bindAgenticReviewTabs() {
     const reviewDecision = String(button.dataset.agenticApprovalDecision || "").trim();
     if (!["approved", "denied", "revoked"].includes(reviewDecision)) return;
     recordAgenticApprovalDecision(reviewDecision, button);
+  });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agentic-production-scheduler-observability-report]");
+    if (!button) return;
+    loadProductionSchedulerObservabilityReport(button);
   });
 }
 

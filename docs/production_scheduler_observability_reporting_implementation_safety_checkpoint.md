@@ -1,30 +1,30 @@
-# Production scheduler observability reporting readiness review
+# Production scheduler observability reporting implementation safety checkpoint
 
-## A. Current readiness review scope
+## A. Current safety checkpoint scope
 
-This readiness review prepares a future reporting/export/dashboard observability implementation phase.
+This checkpoint prepares a future production scheduler observability reporting implementation phase.
 
 This phase is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.
 
-## B. Readiness decision
+## B. Safety decision
 
-The project is ready for a future reporting readiness final audit only.
+A future reporting implementation may proceed only as a separate reviewed phase.
 
-This phase does not enable reporting.
+This checkpoint does not enable reporting.
 
-This phase does not enable dashboard code.
+This checkpoint does not enable dashboard code.
 
-This phase does not enable export code.
+This checkpoint does not enable export code.
 
-This phase does not enable reporting jobs.
+This checkpoint does not enable reporting jobs.
 
-This phase does not enable metrics emitters.
+This checkpoint does not enable metrics emitters.
 
-This phase does not enable logging emitters.
+This checkpoint does not enable logging emitters.
 
-This phase does not enable audit writers.
+This checkpoint does not enable audit writers.
 
-This phase does not enable migration execution.
+This checkpoint does not enable migration execution.
 
 ## C. Existing released baseline
 
@@ -54,9 +54,11 @@ Workflow runner path: `src/agents/workflow_runner.py`.
 
 Storage module path: `src/storage/agentic_approvals/store.py`.
 
-## D. Future reporting boundary
+## D. Required future reporting boundary
 
 Future reporting must be read-only unless explicitly approved.
+
+Future reporting must be deterministic.
 
 Future reporting must preserve recorded approval gating.
 
@@ -124,27 +126,25 @@ Future reporting must preserve dry-run artifact behavior.
 
 Future reporting must preserve stage-level observability.
 
-Future reporting must preserve deterministic behavior.
-
 ## E. Forbidden implementation shortcuts
 
-Do not combine reporting readiness with reporting implementation.
+Do not combine reporting implementation safety checkpoint with reporting runtime implementation.
 
-Do not combine reporting readiness with dashboard implementation.
+Do not combine reporting implementation safety checkpoint with dashboard implementation.
 
-Do not combine reporting readiness with export implementation.
+Do not combine reporting implementation safety checkpoint with export implementation.
 
-Do not combine reporting readiness with metrics emitter implementation.
+Do not combine reporting implementation safety checkpoint with metrics emitter implementation.
 
-Do not combine reporting readiness with logging emitter implementation.
+Do not combine reporting implementation safety checkpoint with logging emitter implementation.
 
-Do not combine reporting readiness with audit writer implementation.
+Do not combine reporting implementation safety checkpoint with audit writer implementation.
 
-Do not combine reporting readiness with migration execution.
+Do not combine reporting implementation safety checkpoint with migration execution.
 
-Do not modify production scheduler observability runtime logic in this readiness review.
+Do not modify production scheduler observability runtime logic in this safety checkpoint.
 
-Do not modify production scheduler wiring in this readiness review.
+Do not modify production scheduler wiring in this safety checkpoint.
 
 Do not add uncontrolled scheduler loops.
 
@@ -166,18 +166,39 @@ Do not bypass production scheduler wiring gated decision.
 
 Do not bypass production scheduler observability gated decision.
 
-## F. Recommended next phase
+## F. Required future implementation tests
 
-162B: production scheduler observability reporting readiness review final audit and merge gate
+A future reporting implementation phase must include focused tests proving reporting remains read-only.
 
-After 162B, recommend:
+A future reporting implementation phase must include focused tests proving reporting does not trigger execution.
 
-163A: production scheduler observability reporting implementation safety checkpoint, docs/tests only
+A future reporting implementation phase must include focused tests proving reporting does not trigger submission.
 
-## G. Verification contract phrases
+A future reporting implementation phase must include focused tests proving reporting does not trigger production scheduler wiring.
 
-- Production scheduler observability reporting readiness review: PASS
-- Production scheduler observability reporting readiness: REVIEW_ONLY
+A future reporting implementation phase must include focused tests proving reporting does not trigger migration execution.
+
+A future reporting implementation phase must include focused tests proving reporting does not write audit events.
+
+A future reporting implementation phase must include focused tests proving reporting does not write metrics.
+
+A future reporting implementation phase must include focused tests proving reporting does not start background work.
+
+A future reporting implementation phase must include focused tests proving approval, execution, submission, scheduler, live scheduler, production wiring, and observability gates remain enforced.
+
+## G. Recommended next phase
+
+163B: production scheduler observability reporting implementation safety checkpoint final audit and merge gate
+
+After 163B, recommend:
+
+164A: production scheduler observability reporting read-only implementation, no emitters, no export, no migration
+
+## H. Verification contract phrases
+
+- Production scheduler observability reporting implementation safety checkpoint: PASS
+- Production scheduler observability reporting implementation safety: GO_FOR_READ_ONLY_REPORTING_ONLY_NEXT
+- Production scheduler observability reporting readiness: REVIEWED_ONLY
 - Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY
 - UI action implementation: RELEASED_UI_ACTION_ONLY
 - Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY
@@ -192,6 +213,7 @@ After 162B, recommend:
 - Execution queue path: application_execution_queue.py
 - Workflow runner path: src/agents/workflow_runner.py
 - Storage module path: src/storage/agentic_approvals/store.py
+- Future reporting scope: READ_ONLY_REPORTING_ONLY
 - Reporting implementation: NO_GO_IN_THIS_PHASE
 - Dashboard implementation: NO_GO_IN_THIS_PHASE
 - Export implementation: NO_GO_IN_THIS_PHASE
@@ -210,7 +232,7 @@ After 162B, recommend:
 - no SQL file modified in this phase
 - no migration file added
 - no migration runner added
-- no reporting implementation added
+- no reporting implementation enabled in this phase
 - no dashboard code added
 - no export code added
 - no reporting job added
@@ -221,6 +243,7 @@ After 162B, recommend:
 - no uncontrolled scheduler loop added
 - no background worker added
 - no automatic submission loop added
+- future reporting must be read-only unless explicitly approved
 - future reporting must preserve recorded approval gating
 - future reporting must preserve approval-gated execution
 - future reporting must preserve gated application submission
@@ -257,9 +280,3 @@ After 162B, recommend:
 - dashboard/export implementation must be separate future phase
 - metrics/logging/audit writer implementation must be separate future phase
 - migration execution must be separate future phase
-
-## Step 163A production scheduler observability reporting implementation safety checkpoint
-
-See `docs/production_scheduler_observability_reporting_implementation_safety_checkpoint.md`.
-
-This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

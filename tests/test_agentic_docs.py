@@ -15317,3 +15317,123 @@ def test_production_scheduler_observability_reporting_readiness_review_doc_contr
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_production_scheduler_observability_reporting_implementation_safety_checkpoint_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/production_scheduler_observability_reporting_implementation_safety_checkpoint.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Production scheduler observability reporting implementation safety checkpoint: PASS",
+        "Production scheduler observability reporting implementation safety: GO_FOR_READ_ONLY_REPORTING_ONLY_NEXT",
+        "Production scheduler observability reporting readiness: REVIEWED_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Submission implementation: RELEASED_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_GATED_DECISION_ONLY",
+        "Live scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_GATED_DECISION_ONLY",
+        "Production scheduler wiring implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_GATED_DECISION_ONLY",
+        "Production scheduler observability implementation: RELEASED_READ_ONLY_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_PRODUCTION_WIRING_GATED_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Future reporting scope: READ_ONLY_REPORTING_ONLY",
+        "Reporting implementation: NO_GO_IN_THIS_PHASE",
+        "Dashboard implementation: NO_GO_IN_THIS_PHASE",
+        "Export implementation: NO_GO_IN_THIS_PHASE",
+        "Reporting job: NO_GO_IN_THIS_PHASE",
+        "Metrics emitter: NO_GO_IN_THIS_PHASE",
+        "Logging emitter: NO_GO_IN_THIS_PHASE",
+        "Audit writer: NO_GO_IN_THIS_PHASE",
+        "Migration execution: NO_GO",
+        "Production scheduler wiring changes: NO_GO_IN_THIS_PHASE",
+        "Production scheduler observability runtime changes: NO_GO_IN_THIS_PHASE",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no execution file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no migration file added",
+        "no migration runner added",
+        "no reporting implementation enabled in this phase",
+        "no dashboard code added",
+        "no export code added",
+        "no reporting job added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no migration execution enabled",
+        "no uncontrolled scheduler loop added",
+        "no background worker added",
+        "no automatic submission loop added",
+        "future reporting must be read-only unless explicitly approved",
+        "future reporting must preserve recorded approval gating",
+        "future reporting must preserve approval-gated execution",
+        "future reporting must preserve gated application submission",
+        "future reporting must preserve scheduler/background gated decision",
+        "future reporting must preserve live scheduler gated decision",
+        "future reporting must preserve production scheduler wiring gated decision",
+        "future reporting must preserve production scheduler observability read-only gated decision",
+        "future reporting must not trigger execution",
+        "future reporting must not trigger submission",
+        "future reporting must not trigger production scheduler wiring",
+        "future reporting must not trigger migration execution",
+        "future reporting must not write audit events",
+        "future reporting must not write metrics",
+        "future reporting must not start background work",
+        "future reporting must preserve queue safety gates",
+        "future reporting must preserve execution safety gates",
+        "future reporting must preserve submission safety gates",
+        "future reporting must preserve scheduler decision safety gates",
+        "future reporting must preserve live scheduler decision safety gates",
+        "future reporting must preserve production wiring safety gates",
+        "future reporting must preserve production observability safety gates",
+        "future reporting must preserve rate limiting",
+        "future reporting must preserve retry logic",
+        "future reporting must preserve caching",
+        "future reporting must preserve deduplication",
+        "future reporting must preserve ranking",
+        "future reporting must preserve metrics",
+        "future reporting must preserve ATS health checks",
+        "future reporting must preserve audit event behavior",
+        "future reporting must preserve dry-run artifact behavior",
+        "future reporting must preserve stage-level observability",
+        "future reporting must preserve deterministic behavior",
+        "reporting implementation must be separate future phase",
+        "dashboard/export implementation must be separate future phase",
+        "metrics/logging/audit writer implementation must be separate future phase",
+        "migration execution must be separate future phase",
+        "163B: production scheduler observability reporting implementation safety checkpoint final audit and merge gate",
+        "164A: production scheduler observability reporting read-only implementation, no emitters, no export, no migration",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_production_scheduler_observability_read_only_gated_no_migration.py",
+        "tests/test_production_scheduler_wiring_gated_only_no_migration.py",
+        "tests/test_live_scheduler_execution_gated_only_no_migration.py",
+        "tests/test_scheduler_background_execution_gated_only_no_migration.py",
+        "tests/test_application_submission_gated_only_no_scheduler.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

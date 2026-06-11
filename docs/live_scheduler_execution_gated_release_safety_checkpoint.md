@@ -177,3 +177,9 @@ After 153B, recommend:
 - live scheduler decision preserves deterministic behavior
 - migration execution must be separate future phase
 - production scheduler wiring must be separate future phase
+
+## Step 154A production scheduler wiring readiness review
+
+See `docs/production_scheduler_wiring_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, live scheduler loops, background workers, or automatic submission loops.

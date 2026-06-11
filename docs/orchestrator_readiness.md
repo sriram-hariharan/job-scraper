@@ -496,3 +496,9 @@ This phase adds only a deterministic live scheduler execution decision boundary 
 See `docs/live_scheduler_execution_gated_release_safety_checkpoint.md`.
 
 This release checkpoint confirms live scheduler execution remains approval-execution-submission-scheduler-gated decision only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, or automatic submission loops.
+
+## Step 154A: production scheduler wiring readiness review
+
+See `docs/production_scheduler_wiring_readiness_review.md`.
+
+This readiness review prepares a future production scheduler wiring implementation safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, live scheduler loops, background workers, or automatic submission loops.

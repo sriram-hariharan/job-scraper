@@ -197,3 +197,9 @@ After 157B, recommend:
 - production scheduler wiring preserves deterministic behavior
 - migration execution must be separate future phase
 - uncontrolled scheduler loop must be separate future phase
+
+## Step 158A production scheduler observability readiness review
+
+See `docs/production_scheduler_observability_readiness_review.md`.
+
+This readiness review is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, or dashboard/export code.

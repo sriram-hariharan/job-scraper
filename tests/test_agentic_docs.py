@@ -14780,3 +14780,98 @@ def test_production_scheduler_wiring_gated_release_safety_checkpoint_doc_contrac
 
     for path in required_paths:
         assert Path(path).exists()
+
+
+def test_production_scheduler_observability_readiness_review_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/production_scheduler_observability_readiness_review.md")
+    assert doc.exists()
+
+    text = doc.read_text()
+
+    required_phrases = [
+        "Verification contract phrases",
+        "Production scheduler observability readiness review: PASS",
+        "Production scheduler observability readiness: REVIEW_ONLY",
+        "Endpoint implementation: RELEASED_ENDPOINT_ROUTE_ONLY",
+        "UI action implementation: RELEASED_UI_ACTION_ONLY",
+        "Execution implementation: RELEASED_APPROVAL_GATED_EXECUTION_ONLY",
+        "Submission implementation: RELEASED_APPROVAL_AND_EXECUTION_GATED_SUBMISSION_ONLY",
+        "Scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_GATED_DECISION_ONLY",
+        "Live scheduler implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_GATED_DECISION_ONLY",
+        "Production scheduler wiring implementation: RELEASED_APPROVAL_EXECUTION_SUBMISSION_SCHEDULER_LIVE_SCHEDULER_GATED_DECISION_ONLY",
+        "Endpoint route path: /api/agentic-approvals/{approval_request_id}/decision",
+        "Runtime route file: src/app/api.py",
+        "UI asset path: src/app/static/agentic_review.js",
+        "Execution queue path: application_execution_queue.py",
+        "Workflow runner path: src/agents/workflow_runner.py",
+        "Storage module path: src/storage/agentic_approvals/store.py",
+        "Production scheduler observability: NO_GO",
+        "Production scheduler wiring changes: NO_GO",
+        "Uncontrolled scheduler loop: NO_GO",
+        "Background worker execution: NO_GO",
+        "Automatic submission loop: NO_GO",
+        "Migration execution: NO_GO",
+        "no runtime behavior changes in this phase",
+        "no API route modified in this phase",
+        "no UI file modified in this phase",
+        "no execution file modified in this phase",
+        "no storage module modified in this phase",
+        "no SQL file modified in this phase",
+        "no migration file added",
+        "no migration runner added",
+        "no production scheduler observability enabled",
+        "no production scheduler wiring changes enabled",
+        "no uncontrolled scheduler loop enabled",
+        "no background worker enabled",
+        "no automatic submission loop enabled",
+        "no migration execution enabled",
+        "future production scheduler observability must preserve recorded approval gating",
+        "future production scheduler observability must preserve approval-gated execution",
+        "future production scheduler observability must preserve gated application submission",
+        "future production scheduler observability must preserve scheduler/background gated decision",
+        "future production scheduler observability must preserve live scheduler gated decision",
+        "future production scheduler observability must preserve production scheduler wiring gated decision",
+        "future production scheduler observability must preserve existing queue safety gates",
+        "future production scheduler observability must preserve existing execution safety gates",
+        "future production scheduler observability must preserve submission safety gates",
+        "future production scheduler observability must preserve scheduler decision safety gates",
+        "future production scheduler observability must preserve live scheduler decision safety gates",
+        "future production scheduler observability must preserve production wiring safety gates",
+        "future production scheduler observability must preserve rate limiting",
+        "future production scheduler observability must preserve retry logic",
+        "future production scheduler observability must preserve caching",
+        "future production scheduler observability must preserve deduplication",
+        "future production scheduler observability must preserve ranking",
+        "future production scheduler observability must preserve metrics",
+        "future production scheduler observability must preserve ATS health checks",
+        "future production scheduler observability must preserve audit event behavior",
+        "future production scheduler observability must preserve dry-run artifact behavior",
+        "future production scheduler observability must preserve stage-level observability",
+        "future production scheduler observability must preserve deterministic behavior",
+        "production scheduler observability implementation must be separate future phase",
+        "migration execution must be separate future phase",
+        "158B: production scheduler observability readiness review final audit and merge gate",
+        "159A: production scheduler observability implementation safety checkpoint, docs/tests only",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text
+
+    required_paths = [
+        "src/app/api.py",
+        "src/app/static/agentic_review.js",
+        "src/storage/agentic_approvals/store.py",
+        "src/storage/agentic_approvals/schema.sql",
+        "application_execution_queue.py",
+        "src/agents/workflow_runner.py",
+        "tests/test_production_scheduler_wiring_gated_only_no_migration.py",
+        "tests/test_live_scheduler_execution_gated_only_no_migration.py",
+        "tests/test_scheduler_background_execution_gated_only_no_migration.py",
+        "tests/test_application_submission_gated_only_no_scheduler.py",
+        "tests/test_approval_gated_execution_only_no_submission.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()

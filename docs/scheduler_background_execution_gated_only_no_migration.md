@@ -151,3 +151,9 @@ Migration execution must be a separate future phase.
 - scheduler/background decision preserves deterministic behavior
 - live scheduler implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 149A scheduler/background execution gated release safety checkpoint
+
+See `docs/scheduler_background_execution_gated_release_safety_checkpoint.md`.
+
+This release checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, live scheduler loops, background workers, automatic submission loops, migration files, or migration runners.

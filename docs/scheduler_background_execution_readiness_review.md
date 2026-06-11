@@ -173,3 +173,9 @@ After 146B, recommend:
 - future scheduler/background execution must preserve deterministic behavior
 - scheduler/background execution implementation must be separate future phase
 - migration execution must be separate future phase
+
+## Step 147A scheduler/background execution implementation safety checkpoint
+
+See `docs/scheduler_background_execution_implementation_safety_checkpoint.md`.
+
+This checkpoint is docs/tests only. It does not modify runtime API files, UI files, execution files, storage module files, SQL files, scheduler/background execution, automatic submission loops, migration files, or migration runners.

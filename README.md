@@ -791,3 +791,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Production scheduler observability read-only gated release safety checkpoint](docs/production_scheduler_observability_read_only_gated_release_safety_checkpoint.md)
 
 - [Production scheduler observability reporting readiness review](docs/production_scheduler_observability_reporting_readiness_review.md)
+
+- [Production scheduler observability reporting implementation safety checkpoint](docs/production_scheduler_observability_reporting_implementation_safety_checkpoint.md)

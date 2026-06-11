@@ -156,6 +156,8 @@ After 155B, recommend:
 
 156A: production scheduler wiring implementation, approval-execution-submission-scheduler-live-scheduler-gated only, no migration execution
 
+Step 156A is tracked in `docs/production_scheduler_wiring_gated_only_no_migration.md`. It adds only a deterministic production scheduler wiring decision boundary at `application_execution_queue.py`; uncontrolled scheduler loops, background workers, automatic submission loops, and migration execution remain separate future phases.
+
 ## H. Verification contract phrases
 
 - Production scheduler wiring implementation safety checkpoint: PASS

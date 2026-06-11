@@ -610,3 +610,8 @@ This readiness review prepares future dashboard/export work after the read-only 
 See `docs/production_scheduler_observability_dashboard_export_implementation_safety_checkpoint.md`.
 
 This safety checkpoint prepares future read-only dashboard/export implementation after the readiness review. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, production scheduler observability runtime logic, reporting runtime logic, dashboard code, export code, reporting jobs, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, or audit writers.
+\n\n## Production scheduler observability metrics/logging/audit writer readiness checkpoint
+
+Step 173A adds a docs/tests-only readiness checkpoint for future metrics, logging, and audit writer behavior.
+
+Reference: `docs/production_scheduler_observability_metrics_logging_audit_writer_readiness_checkpoint.md`\n

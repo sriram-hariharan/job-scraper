@@ -811,3 +811,4 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
 
 - [Production scheduler observability dashboard/export implementation safety checkpoint](docs/production_scheduler_observability_dashboard_export_implementation_safety_checkpoint.md)
+\n\n- Production scheduler observability metrics/logging/audit writer readiness checkpoint: `docs/production_scheduler_observability_metrics_logging_audit_writer_readiness_checkpoint.md`\n

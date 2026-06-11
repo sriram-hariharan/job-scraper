@@ -514,3 +514,9 @@ This safety checkpoint prepares a future approval-execution-submission-scheduler
 See `docs/production_scheduler_wiring_gated_only_no_migration.md`.
 
 This phase adds only a deterministic production scheduler wiring decision boundary in `application_execution_queue.py`. It requires recorded approval, approval-gated execution, gated application submission, scheduler/background gated decision, and live scheduler gated decision, while migration execution, API routes, UI files, storage modules, SQL files, uncontrolled scheduler loops, background workers, automatic submission loops, and workflow runner behavior remain unchanged.
+
+## Step 157A: production scheduler wiring gated release safety checkpoint
+
+See `docs/production_scheduler_wiring_gated_release_safety_checkpoint.md`.
+
+This release checkpoint confirms production scheduler wiring remains approval-execution-submission-scheduler-live-scheduler-gated decision only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, uncontrolled scheduler loops, background workers, or automatic submission loops.

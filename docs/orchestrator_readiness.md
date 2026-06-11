@@ -502,3 +502,9 @@ This release checkpoint confirms live scheduler execution remains approval-execu
 See `docs/production_scheduler_wiring_readiness_review.md`.
 
 This readiness review prepares a future production scheduler wiring implementation safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, live scheduler loops, background workers, or automatic submission loops.
+
+## Step 155A: production scheduler wiring implementation safety checkpoint
+
+See `docs/production_scheduler_wiring_implementation_safety_checkpoint.md`.
+
+This safety checkpoint prepares a future approval-execution-submission-scheduler-live-scheduler-gated production-wiring-only phase. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, live scheduler loops, background workers, or automatic submission loops.

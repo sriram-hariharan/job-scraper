@@ -520,3 +520,9 @@ This phase adds only a deterministic production scheduler wiring decision bounda
 See `docs/production_scheduler_wiring_gated_release_safety_checkpoint.md`.
 
 This release checkpoint confirms production scheduler wiring remains approval-execution-submission-scheduler-live-scheduler-gated decision only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, uncontrolled scheduler loops, background workers, or automatic submission loops.
+
+## Step 158A: production scheduler observability readiness review
+
+See `docs/production_scheduler_observability_readiness_review.md`.
+
+This readiness review prepares a future production scheduler observability implementation safety checkpoint only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, or dashboard/export code.

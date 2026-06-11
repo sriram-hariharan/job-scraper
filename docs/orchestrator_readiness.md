@@ -538,3 +538,9 @@ This safety checkpoint prepares a future read-only gated observability-only phas
 See `docs/production_scheduler_observability_read_only_gated_no_migration.md`.
 
 This phase adds only a deterministic read-only production scheduler observability decision helper in `application_execution_queue.py`. It requires recorded approval, approval-gated execution, gated application submission, scheduler/background gated decision, live scheduler gated decision, and production scheduler wiring gated decision, while migration execution, production scheduler wiring changes, API routes, UI files, storage modules, SQL files, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, reporting jobs, and workflow runner behavior remain unchanged.
+
+## Step 161A: production scheduler observability read-only gated release safety checkpoint
+
+See `docs/production_scheduler_observability_read_only_gated_release_safety_checkpoint.md`.
+
+This release checkpoint confirms production scheduler observability remains read-only approval-execution-submission-scheduler-live-scheduler-production-wiring-gated decision only. It is docs/tests only and does not modify runtime API files, UI files, execution files, storage module files, SQL files, migration files, migration runners, production scheduler wiring, uncontrolled scheduler loops, background workers, automatic submission loops, metrics emitters, logging emitters, audit writers, dashboard code, export code, or reporting jobs.

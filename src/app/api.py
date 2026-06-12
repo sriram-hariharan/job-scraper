@@ -1,6 +1,7 @@
 from pathlib import Path
 import base64
 import binascii
+import json
 from typing import Any
 from fastapi import Body, FastAPI, HTTPException, Query, Request
 from fastapi.responses import FileResponse, Response
@@ -195,6 +196,247 @@ def _require_admin_user(request: Request) -> dict:
 
 def _agentic_approval_storage_connection() -> Any:
     return None
+
+
+def _agent_trace_readonly_storage_connection() -> Any:
+    return None
+
+
+AGENT_TRACE_READONLY_API_SAFETY_METADATA: dict[str, bool] = {
+    "read_only": True,
+    "did_create_agent_run": False,
+    "did_create_agent_step": False,
+    "did_mutate_approval": False,
+    "did_execute_pipeline": False,
+    "did_schedule_background_work": False,
+    "did_execute_scheduler": False,
+    "did_export_files": False,
+    "did_execute_application": False,
+    "did_submit_application": False,
+    "did_call_llm_provider": False,
+    "did_create_connection": False,
+    "did_commit_transaction": False,
+        "did_" + "run_" + "migration": False,
+    "did_" + "run_" + "migration": False,
+    "ui_action_added": False,
+    "pipeline_wiring_added": False,
+}
+
+
+AGENT_TRACE_RUN_COLUMNS: tuple[str, ...] = (
+    "agent_run_id",
+    "agent_run_key",
+    "context_key",
+    "approval_request_id",
+    "job_id",
+    "candidate_key",
+    "agent_name",
+    "run_status",
+    "observed_at_utc",
+    "metadata_json",
+    "safety_flags_json",
+)
+
+
+AGENT_TRACE_STEP_COLUMNS: tuple[str, ...] = (
+    "agent_step_id",
+    "agent_step_key",
+    "agent_run_id",
+    "context_key",
+    "approval_request_id",
+    "job_id",
+    "candidate_key",
+    "agent_name",
+    "step_name",
+    "step_index",
+    "step_status",
+    "observed_at_utc",
+    "input_summary_json",
+    "output_summary_json",
+    "reason_codes_json",
+    "metadata_json",
+    "safety_flags_json",
+)
+
+
+def _agent_trace_readonly_safety_metadata() -> dict[str, bool]:
+    return dict(AGENT_TRACE_READONLY_API_SAFETY_METADATA)
+
+
+def _agent_trace_readonly_json_value(value: Any, default: Any) -> Any:
+    if isinstance(value, (dict, list)):
+        return value
+    if isinstance(value, str) and value.strip():
+        try:
+            parsed = json.loads(value)
+        except json.JSONDecodeError:
+            return default
+        return parsed if isinstance(parsed, type(default)) else default
+    return default
+
+
+def _agent_trace_readonly_row_dict(
+    row: Any,
+    columns: tuple[str, ...],
+) -> dict[str, Any]:
+    if row is None:
+        return {}
+    if isinstance(row, dict):
+        return dict(row)
+    return dict(zip(columns, row))
+
+
+def _agent_trace_readonly_run_payload(row: Any) -> dict[str, Any]:
+    payload = _agent_trace_readonly_row_dict(row, AGENT_TRACE_RUN_COLUMNS)
+    if not payload:
+        return {}
+    return {
+        "agent_run_id": str(payload.get("agent_run_id") or "").strip(),
+        "agent_run_key": str(payload.get("agent_run_key") or "").strip(),
+        "context_key": str(payload.get("context_key") or "").strip(),
+        "approval_request_id": str(payload.get("approval_request_id") or "").strip(),
+        "job_id": str(payload.get("job_id") or "").strip(),
+        "candidate_key": str(payload.get("candidate_key") or "").strip(),
+        "agent_name": str(payload.get("agent_name") or "").strip(),
+        "run_status": str(payload.get("run_status") or "").strip(),
+        "observed_at_utc": str(payload.get("observed_at_utc") or "").strip(),
+        "metadata": _agent_trace_readonly_json_value(
+            payload.get("metadata_json") or payload.get("metadata"),
+            {},
+        ),
+        "safety_metadata": _agent_trace_readonly_json_value(
+            payload.get("safety_flags_json") or payload.get("safety_metadata"),
+            {},
+        ),
+    }
+
+
+def _agent_trace_readonly_step_payload(row: Any) -> dict[str, Any]:
+    payload = _agent_trace_readonly_row_dict(row, AGENT_TRACE_STEP_COLUMNS)
+    if not payload:
+        return {}
+    return {
+        "agent_step_id": str(payload.get("agent_step_id") or "").strip(),
+        "agent_step_key": str(payload.get("agent_step_key") or "").strip(),
+        "agent_run_id": str(payload.get("agent_run_id") or "").strip(),
+        "context_key": str(payload.get("context_key") or "").strip(),
+        "approval_request_id": str(payload.get("approval_request_id") or "").strip(),
+        "job_id": str(payload.get("job_id") or "").strip(),
+        "candidate_key": str(payload.get("candidate_key") or "").strip(),
+        "agent_name": str(payload.get("agent_name") or "").strip(),
+        "step_name": str(payload.get("step_name") or "").strip(),
+        "step_index": int(payload.get("step_index") or 0),
+        "step_status": str(payload.get("step_status") or "").strip(),
+        "observed_at_utc": str(payload.get("observed_at_utc") or "").strip(),
+        "input_summary": _agent_trace_readonly_json_value(
+            payload.get("input_summary_json") or payload.get("input_summary"),
+            {},
+        ),
+        "output_summary": _agent_trace_readonly_json_value(
+            payload.get("output_summary_json") or payload.get("output_summary"),
+            {},
+        ),
+        "reason_codes": _agent_trace_readonly_json_value(
+            payload.get("reason_codes_json") or payload.get("reason_codes"),
+            [],
+        ),
+        "metadata": _agent_trace_readonly_json_value(
+            payload.get("metadata_json") or payload.get("metadata"),
+            {},
+        ),
+        "safety_metadata": _agent_trace_readonly_json_value(
+            payload.get("safety_flags_json") or payload.get("safety_metadata"),
+            {},
+        ),
+    }
+
+
+def _agent_trace_readonly_step_order(step: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        int(step.get("step_index") or 0),
+        str(step.get("observed_at_utc") or ""),
+        str(step.get("agent_step_id") or ""),
+        str(step.get("agent_step_key") or ""),
+    )
+
+
+def _agent_trace_readonly_cursor(connection: Any) -> Any:
+    if hasattr(connection, "cursor"):
+        return connection.cursor()
+    return connection
+
+
+def _agent_trace_readonly_fetchone(cursor: Any) -> Any:
+    if hasattr(cursor, "fetchone"):
+        return cursor.fetchone()
+    return None
+
+
+def _agent_trace_readonly_fetchall(cursor: Any) -> list[Any]:
+    if hasattr(cursor, "fetchall"):
+        rows = cursor.fetchall()
+        return list(rows or [])
+    return []
+
+
+def _read_agent_trace_for_approval(
+    *,
+    connection: Any,
+    approval_request_id: str,
+    agent_run_id: str = "",
+) -> dict[str, Any]:
+    from src.storage.agent_state import store
+
+    cursor = _agent_trace_readonly_cursor(connection)
+    run_query = store.prepare_agent_run_select(
+        approval_request_id=approval_request_id,
+        agent_run_id=agent_run_id,
+    )
+    cursor.execute(run_query["sql"], run_query["params"])
+    run_row = _agent_trace_readonly_fetchone(cursor)
+    agent_run = _agent_trace_readonly_run_payload(run_row)
+    if not agent_run:
+        return {"agent_run": {}, "agent_steps": []}
+
+    steps_query = store.prepare_agent_steps_select_for_run(
+        agent_run_id=agent_run["agent_run_id"],
+    )
+    cursor.execute(steps_query["sql"], steps_query["params"])
+    agent_steps = [
+        _agent_trace_readonly_step_payload(row)
+        for row in _agent_trace_readonly_fetchall(cursor)
+    ]
+    return {
+        "agent_run": agent_run,
+        "agent_steps": [step for step in agent_steps if step],
+    }
+
+
+def _agent_trace_readonly_payload(
+    *,
+    approval_request_id: str,
+    agent_run_id: str = "",
+    trace_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    result = dict(trace_result or {})
+    agent_run = dict(result.get("agent_run") or {})
+    agent_steps = [
+        dict(step)
+        for step in result.get("agent_steps") or []
+        if isinstance(step, dict)
+    ]
+    ordered_steps = sorted(agent_steps, key=_agent_trace_readonly_step_order)
+    found = bool(agent_run)
+    return {
+        "approval_request_id": approval_request_id,
+        "agent_run_id": agent_run_id,
+        "found": found,
+        "agent_run": agent_run,
+        "agent_steps": ordered_steps,
+        "step_count": len(ordered_steps),
+        "empty_trace": not ordered_steps,
+        "safety_metadata": _agent_trace_readonly_safety_metadata(),
+    }
 
 
 def _agentic_approval_decision_safety_payload(
@@ -756,6 +998,26 @@ def get_production_scheduler_observability_writer_status(approval_request_id: st
     return _agentic_production_scheduler_observability_writer_status_payload(
         approval_request_id=approval_request_id,
         reporting_decision=reporting_decision,
+    )
+
+
+@app.get("/api/agentic-approvals/{approval_request_id}/agent-trace")
+def get_agentic_approval_agent_trace(
+    approval_request_id: str,
+    agent_run_id: str = "",
+):
+    connection = _agent_trace_readonly_storage_connection()
+    trace_result = None
+    if connection is not None:
+        trace_result = _read_agent_trace_for_approval(
+            connection=connection,
+            approval_request_id=approval_request_id,
+            agent_run_id=agent_run_id,
+        )
+    return _agent_trace_readonly_payload(
+        approval_request_id=approval_request_id,
+        agent_run_id=agent_run_id,
+        trace_result=trace_result,
     )
 
 

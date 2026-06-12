@@ -280,3 +280,58 @@ RETURNING {_returning_columns(_STEP_COLUMNS)}
         "snapshot": snapshot,
         **safety_flags(),
     }
+
+
+def prepare_agent_run_select(
+    *,
+    approval_request_id: str,
+    agent_run_id: str = "",
+) -> dict[str, Any]:
+    """Prepare a read-only lookup for one agent run."""
+
+    approval_id = _clean_text(approval_request_id)
+    if not approval_id:
+        raise ValueError("approval_request_id is required.")
+    run_id = _clean_text(agent_run_id)
+    where_clause = "approval_request_id = %s"
+    params: tuple[Any, ...] = (approval_id,)
+    if run_id:
+        where_clause = f"{where_clause} AND agent_run_id = %s"
+        params = (approval_id, run_id)
+    sql = f"""
+SELECT {_returning_columns(_RUN_COLUMNS)}
+FROM agent_runs
+WHERE {where_clause}
+ORDER BY observed_at_utc DESC, agent_run_id ASC
+LIMIT 1
+""".strip()
+    return {
+        "operation": "prepare_agent_run_select",
+        "table": "agent_runs",
+        "read_only": True,
+        "sql": sql,
+        "params": params,
+        **safety_flags(),
+    }
+
+
+def prepare_agent_steps_select_for_run(*, agent_run_id: str) -> dict[str, Any]:
+    """Prepare a read-only ordered step lookup for one agent run."""
+
+    run_id = _clean_text(agent_run_id)
+    if not run_id:
+        raise ValueError("agent_run_id is required.")
+    sql = f"""
+SELECT {_returning_columns(_STEP_COLUMNS)}
+FROM agent_steps
+WHERE agent_run_id = %s
+ORDER BY step_index ASC, observed_at_utc ASC, agent_step_id ASC
+""".strip()
+    return {
+        "operation": "prepare_agent_steps_select_for_run",
+        "table": "agent_steps",
+        "read_only": True,
+        "sql": sql,
+        "params": (run_id,),
+        **safety_flags(),
+    }

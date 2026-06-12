@@ -17856,3 +17856,73 @@ def test_agent_trace_ui_readiness_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_readonly_api_endpoint_no_ui_no_writes_doc_contract():
+    doc_path = Path("docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent Trace read-only API endpoint",
+        "read-only",
+        "no UI changes",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "no live LLM call",
+        "no approval mutation",
+        "does not create agent_runs",
+        "does not create agent_steps",
+        "ordered agent steps",
+        "empty trace",
+        "not found trace",
+        "deterministic",
+        "GET /api/agentic-approvals/{approval_request_id}/agent-trace",
+        "found",
+        "agent_run",
+        "agent_steps",
+        "step_count",
+        "empty_trace",
+        "safety_metadata",
+        "prepare_agent_run_select",
+        "prepare_agent_steps_select_for_run",
+        "read_only: true",
+        "did_create_agent_run: false",
+        "did_create_agent_step: false",
+        "did_mutate_approval: false",
+        "did_execute_pipeline: false",
+        "did_schedule_background_work: false",
+        "did_execute_scheduler: false",
+        "did_export_files: false",
+        "did_execute_application: false",
+        "did_submit_application: false",
+        "did_call_llm_provider: false",
+        "did_create_connection: false",
+        "did_commit_transaction: false",
+        "did_run_migration: false",
+        "ui_action_added: false",
+        "pipeline_wiring_added: false",
+        "Rollback plan",
+        "Verification plan",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/app/api.py",
+        "src/storage/agent_state/store.py",
+        "tests/test_agent_trace_readonly_api_endpoint_no_ui_no_writes.py",
+        "docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

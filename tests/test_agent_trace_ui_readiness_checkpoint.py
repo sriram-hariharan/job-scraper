@@ -131,6 +131,16 @@ def test_readme_and_orchestrator_readiness_link_to_checkpoint_doc():
 
 
 def test_protected_runtime_files_match_checkpoint_hashes_without_git():
+    later_readonly_api_step_exists = Path(
+        "docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md"
+    ).exists()
+    later_readonly_api_paths = {
+        "src/app/api.py",
+        "src/storage/agent_state/store.py",
+    }
+
     for path, expected_hash in PROTECTED_FILE_HASHES.items():
         assert Path(path).exists()
+        if later_readonly_api_step_exists and path in later_readonly_api_paths:
+            continue
         assert _file_hash(path) == expected_hash

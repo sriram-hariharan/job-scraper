@@ -641,6 +641,12 @@ See `docs/agent_trace_ui_readiness_checkpoint.md`.
 
 This checkpoint is docs/tests only and prepares a future read-only Agent Trace UI implementation path. It maps a future read-only backend trace retrieval endpoint and read-only frontend trace panel onto the existing agent state, trace recorder, and agent wrapper foundation without adding API behavior, UI behavior, pipeline wiring, scheduler/background work, storage writes, schema migration, file export, application execution, or application submission.
 
+## Step 190A: agent trace read-only API endpoint no UI no writes
+
+See `docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md`.
+
+This phase adds a read-only `GET /api/agentic-approvals/{approval_request_id}/agent-trace` backend endpoint and read-only SELECT preparation helpers for agent-state trace retrieval. It adds no UI changes, no frontend/static file changes, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no approval mutation, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

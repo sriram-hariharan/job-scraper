@@ -830,6 +830,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Agent Trace read-only API endpoint](docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md)
 
+- [Agent Trace read-only UI panel](docs/agent_trace_readonly_ui_panel_no_api_no_writes.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -866,3 +868,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Agent Trace UI readiness checkpoint: `docs/agent_trace_ui_readiness_checkpoint.md`
 
 - Agent Trace read-only API endpoint: `docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md`
+
+- Agent Trace read-only UI panel: `docs/agent_trace_readonly_ui_panel_no_api_no_writes.md`

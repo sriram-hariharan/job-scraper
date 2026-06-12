@@ -647,6 +647,12 @@ See `docs/agent_trace_readonly_api_endpoint_no_ui_no_writes.md`.
 
 This phase adds a read-only `GET /api/agentic-approvals/{approval_request_id}/agent-trace` backend endpoint and read-only SELECT preparation helpers for agent-state trace retrieval. It adds no UI changes, no frontend/static file changes, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no approval mutation, no application execution, and no application submission.
 
+## Step 191A: agent trace read-only UI panel no API no writes
+
+See `docs/agent_trace_readonly_ui_panel_no_api_no_writes.md`.
+
+This phase adds a read-only Agent Trace frontend panel that consumes the existing `GET /api/agentic-approvals/{approval_request_id}/agent-trace` endpoint. It adds no API changes, no storage changes, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no approval mutation, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

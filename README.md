@@ -826,6 +826,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Final application scoring agent trace wrapper no behavior change](docs/final_application_scoring_agent_trace_wrapper_no_behavior_change.md)
 
+- [Agent Trace UI readiness checkpoint](docs/agent_trace_ui_readiness_checkpoint.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -858,3 +860,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - JD intelligence agent trace wrapper no behavior change: `docs/jd_intelligence_agent_trace_wrapper_no_behavior_change.md`
 
 - Final application scoring agent trace wrapper no behavior change: `docs/final_application_scoring_agent_trace_wrapper_no_behavior_change.md`
+
+- Agent Trace UI readiness checkpoint: `docs/agent_trace_ui_readiness_checkpoint.md`

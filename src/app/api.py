@@ -438,6 +438,73 @@ def _agentic_production_scheduler_observability_export_preview_payload(
         "export_file_creation_disabled": True,
     }
 
+
+def _agentic_production_scheduler_observability_writer_status_payload(
+    *,
+    approval_request_id: str,
+    reporting_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    report_payload = _agentic_production_scheduler_observability_report_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+    reason_codes = list(
+        report_payload.get(
+            "production_scheduler_observability_reporting_endpoint_reason_codes"
+        )
+        or []
+    )
+    if reason_codes:
+        reason_codes.append(
+            "production_scheduler_observability_reporting_gate_not_passed"
+        )
+    reason_codes = sorted(set(reason_codes))
+    blocked = bool(reason_codes)
+    status = "blocked" if blocked else "passed"
+    return {
+        **report_payload,
+        "approval_request_id": approval_request_id,
+        "production_scheduler_observability_writer_status_endpoint": (
+            "GET /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-writer-status"
+        ),
+        "production_scheduler_observability_writer_status_endpoint_method": "GET",
+        "production_scheduler_observability_writer_status_read_only": True,
+        "production_scheduler_observability_writer_status": status,
+        "production_scheduler_observability_writer_status_eligible": not blocked,
+        "production_scheduler_observability_writer_status_reason_codes": reason_codes,
+        "blocked_by_production_scheduler_observability_writer_status_endpoint": blocked,
+        "metrics_writer_enabled": False,
+        "logging_writer_enabled": False,
+        "audit_writer_enabled": False,
+        "persistence_enabled": False,
+        "migration_required": False,
+        "did_write_metrics": False,
+        "did_write_logs": False,
+        "did_write_audit_events": False,
+        "did_schedule_background_work": False,
+        "did_create_reporting_job": False,
+        "did_export_files": False,
+        "did_trigger_execution": False,
+        "did_trigger_submission": False,
+        "did_trigger_production_scheduler_wiring": False,
+        "did_trigger_scheduler_work": False,
+        "did_trigger_migration": False,
+        "production_scheduler_observability_writer_status_summary": {
+            "eligible": not blocked,
+            "status": status,
+            "reason_codes": reason_codes,
+            "read_only": True,
+            "metrics_writer_disabled": True,
+            "logging_writer_disabled": True,
+            "audit_writer_disabled": True,
+            "persistence_disabled": True,
+            "migration_required": False,
+            "background_work_disabled": True,
+            "reporting_job_disabled": True,
+            "file_export_disabled": True,
+        },
+    }
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -591,6 +658,21 @@ def get_production_scheduler_observability_export_preview(approval_request_id: s
         )
     )
     return _agentic_production_scheduler_observability_export_preview_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+
+
+@app.get(
+    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-writer-status"
+)
+def get_production_scheduler_observability_writer_status(approval_request_id: str):
+    reporting_decision = (
+        _production_scheduler_observability_reporting_decision_for_approval(
+            approval_request_id
+        )
+    )
+    return _agentic_production_scheduler_observability_writer_status_payload(
         approval_request_id=approval_request_id,
         reporting_decision=reporting_decision,
     )

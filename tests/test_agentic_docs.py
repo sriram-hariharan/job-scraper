@@ -16794,3 +16794,28 @@ def test_production_scheduler_observability_reporting_job_no_scheduler_no_export
 
     for path in required_paths:
         assert Path(path).exists()
+
+def test_agent_state_foundation_readiness_checkpoint_doc():
+    doc = Path("docs/agent_state_foundation_readiness_checkpoint.md").read_text()
+
+    required_terms = [
+        "docs/tests-only",
+        "JobApplicationContext",
+        "agent_runs",
+        "agent_steps",
+        "trace helpers",
+        "no migration",
+        "no state persistence",
+        "no reporting job",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "idempotency",
+        "read-only dashboard/export/writer-status endpoints",
+        "explicit reporting job action safety boundaries",
+    ]
+
+    for term in required_terms:
+        assert term in doc

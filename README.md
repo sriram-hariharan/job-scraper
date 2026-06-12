@@ -820,3 +820,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Persistent reporting storage/migration readiness checkpoint: `docs/persistent_reporting_storage_migration_readiness_checkpoint.md`
 
 - Reporting job readiness checkpoint: `docs/reporting_job_readiness_checkpoint.md`
+
+- Agent state foundation readiness checkpoint: `docs/agent_state_foundation_readiness_checkpoint.md`

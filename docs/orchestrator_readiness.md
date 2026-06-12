@@ -663,3 +663,9 @@ Reference: `docs/agent_state_foundation_readiness_checkpoint.md`
 Step 180A adds a docs/tests-only readiness checkpoint for future `agent_runs` and `agent_steps` persistence and migration work.
 
 Reference: `docs/agent_state_storage_migration_readiness_checkpoint.md`
+
+## Agent state migration runner readiness checkpoint
+
+Step 182A adds a docs/tests-only readiness checkpoint for a future isolated agent-state migration runner.
+
+Reference: `docs/agent_state_migration_runner_readiness_checkpoint.md`

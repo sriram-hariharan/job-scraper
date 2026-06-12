@@ -468,6 +468,140 @@ function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
   `;
 }
 
+function renderAgentTraceReadOnlyDetails(label, value) {
+  const hasValue = value && typeof value === "object"
+    ? Object.keys(value).length > 0
+    : Boolean(value);
+  if (!hasValue) return "";
+  const payload = typeof value === "object" ? JSON.stringify(value, null, 2) : String(value || "");
+  return `
+    <details class="agent-trace-json-detail">
+      <summary>${escapeHtml(label)}</summary>
+      <pre>${escapeHtml(payload)}</pre>
+    </details>
+  `;
+}
+
+function agentTraceReadOnlyStepStatus(step = {}) {
+  return String(step.step_status || step.status || "unknown").trim() || "unknown";
+}
+
+function renderAgentTraceReadOnlyStep(step = {}) {
+  const status = agentTraceReadOnlyStepStatus(step);
+  const tone = statusToneForValue(status);
+  const validation = step.validation_json /* read-only agent trace safety metadata */ || step.output_summary?.validation_json || {};
+  const safety = step.safety_metadata || step.metadata?.safety_metadata || {};
+  return `
+    <article class="agent-trace-step">
+      <div class="agent-trace-step-header">
+        <div>
+          <div class="agent-trace-step-name">${escapeHtml(step.agent_name || "Agent step")}</div>
+          <div class="agent-trace-step-meta">
+            ${escapeHtml(step.step_name || step.agent_step_id || "-")}
+          </div>
+        </div>
+        <span class="pipeline-run-status agent-trace-step-status is-${escapeHtml(tone)}">${escapeHtml(formatReviewLabel(status))}</span>
+      </div>
+      <div class="agent-trace-step-summary">
+        <span>Index: ${escapeHtml(step.step_index ?? "-")}</span>
+        <span>Observed: ${escapeHtml(step.observed_at_utc || step.started_at || "-")}</span>
+        ${step.completed_at ? `<span>Completed: ${escapeHtml(step.completed_at)}</span>` : ""}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Input summary", step.input_summary || step.input_json)}
+        ${renderAgentTraceReadOnlyDetails("Output summary", step.output_summary || step.output_json)}
+        ${renderAgentTraceReadOnlyDetails("validation_json", validation)}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety)}
+      </div>
+    </article>
+  `;
+}
+
+function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
+  const found = Boolean(tracePayload?.found);
+  const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
+  const stepCount = Number(tracePayload?.step_count ?? steps.length);
+  const emptyTrace = Boolean(tracePayload?.empty_trace);
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const safety = tracePayload?.safety_metadata && typeof tracePayload.safety_metadata === "object"
+    ? tracePayload.safety_metadata
+    : {};
+  const safeError = String(tracePayload?.read_only_error || "").trim();
+  const notFoundMessage = !found
+    ? "Not found trace: no agent trace exists for this approval request yet."
+    : "";
+  const emptyMessage = found && emptyTrace
+    ? "Empty trace: agent run metadata is available, but no ordered agent steps were returned."
+    : "";
+  return `
+    <section class="pipeline-run-detail-panel agent-trace-panel" data-agent-trace-read-only-panel>
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Agent Trace</h4>
+          <p>Read-only trace panel. Uses GET only and does not change approvals, queues, pipeline state, storage, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      ${safeError ? `<div class="agent-trace-error">Fetch failure: ${escapeHtml(safeError)} Read-only display preserved.</div>` : ""}
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Found", found ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Step count", stepCount)}
+        ${renderWorkflowSummaryMetric("Empty trace", emptyTrace ? "true" : "false")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "true" : "unknown")}
+      </div>
+      ${notFoundMessage ? `<div class="pipeline-runs-empty-cell">${escapeHtml(notFoundMessage)}</div>` : ""}
+      ${emptyMessage ? `<div class="pipeline-runs-empty-cell">${escapeHtml(emptyMessage)}</div>` : ""}
+      ${found ? `
+        <article class="agent-trace-run">
+          <div class="agent-trace-run-header">
+            <div>
+              <div class="agent-trace-run-id">${escapeHtml(agentRun.agent_run_id || "Agent run")}</div>
+              <div class="agent-trace-step-meta">
+                ${escapeHtml(agentRun.agent_name || "-")} · ${escapeHtml(agentRun.run_status || agentRun.status || "-")}
+              </div>
+            </div>
+            ${renderReviewPill(agentRun.run_status || agentRun.status || "unknown")}
+          </div>
+          <div class="agent-trace-step-times">
+            ${escapeHtml(agentRun.observed_at_utc || agentRun.started_at || "Timestamp unavailable")}
+            ${agentRun.completed_at ? ` -> ${escapeHtml(agentRun.completed_at)}` : ""}
+          </div>
+          <div class="agent-trace-json-grid">
+            ${renderAgentTraceReadOnlyDetails("Agent run metadata", agentRun.metadata || agentRun.summary_json)}
+            ${renderAgentTraceReadOnlyDetails("Safety metadata", safety)}
+          </div>
+          <div class="agent-trace-step-list">
+            ${steps.length
+              ? steps.map(renderAgentTraceReadOnlyStep).join("")
+              : `<div class="pipeline-runs-empty-cell">No ordered agent steps returned for this trace.</div>`}
+          </div>
+        </article>
+      ` : ""}
+    </section>
+  `;
+}
+
+function renderAgentTracePanel(tracePayload = {}) {
+  return renderAgentTraceReadOnlyPanel(tracePayload);
+}
+
+function getAgenticReviewApprovalRequestId(payload = {}) {
+  return getAgenticApprovalRequestId(payload?.operator_approval_mock || {});
+}
+
+async function fetchAgentTraceReadOnlyPayload(payload = {}, runId = getAgenticReviewRunId()) {
+  const approvalRequestId = getAgenticReviewApprovalRequestId(payload);
+  if (approvalRequestId) {
+    return fetchJson(`/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace`);
+  }
+  if (runId) {
+    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`);
+  }
+  return {};
+}
+
 async function refreshAgenticReviewFeedbackSummary(runId = getAgenticReviewRunId()) {
   const safeRunId = String(runId || "").trim();
   if (!safeRunId) return;
@@ -1613,7 +1747,7 @@ function renderAgenticReviewData(payload, tracePayload) {
 
   const traceNode = qs("agenticReviewTracePanel");
   if (traceNode) {
-    traceNode.outerHTML = renderAgentTracePanel(tracePayload || {});
+    traceNode.outerHTML = renderAgentTraceReadOnlyPanel(tracePayload || {});
   }
 }
 
@@ -1712,11 +1846,19 @@ async function initAgenticReviewPage() {
   const runId = getAgenticReviewRunId();
   if (!runId) return;
   try {
-    const [payload, tracePayload, feedbackPayload] = await Promise.all([
+    const [payload, feedbackPayload] = await Promise.all([
       fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review-data`),
-      fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`).catch(() => ({})),
       fetchJson(`/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}&limit=50`).catch(() => ({})),
     ]);
+    const tracePayload = await fetchAgentTraceReadOnlyPayload(payload, runId).catch((err) => ({
+      read_only_error: err?.message || "Agent trace could not be loaded.",
+      found: false,
+      agent_run: {},
+      agent_steps: [],
+      step_count: 0,
+      empty_trace: true,
+      safety_metadata: { read_only: true },
+    }));
     if (!payload.agent_feedback) payload.agent_feedback = feedbackPayload || {};
     renderAgenticReviewData(payload, tracePayload);
   } catch (err) {
@@ -1728,3 +1870,30 @@ async function initAgenticReviewPage() {
 }
 
 window.addEventListener("DOMContentLoaded", initAgenticReviewPage);
+
+// Read-only Agent Trace panel fetch helper.
+// Uses GET only. No approve, no apply, no submit, no run, no retry, no export.
+// Displays ordered agent steps, validation_json, and safety metadata from the backend.
+async function fetchReadOnlyAgentTrace(approvalRequestId, runId) {
+  const traceUrl = `/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace`;
+  const response = await fetch(traceUrl, {
+    method: "GET",
+    headers: {
+      "Accept": "application/json"
+    }
+  });
+
+  if (!response.ok) {
+    return {
+      found: false,
+      agent_run: null,
+      agent_steps: [],
+      step_count: 0,
+      empty_trace: true,
+      error: "Unable to load read-only agent trace."
+    };
+  }
+
+  return response.json();
+}
+

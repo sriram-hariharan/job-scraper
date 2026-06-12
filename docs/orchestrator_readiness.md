@@ -599,6 +599,12 @@ See `docs/agent_state_storage_schema_repository_no_runner_no_api.md`.
 
 This phase adds only an isolated static `src/storage/agent_state/schema.sql` artifact and deterministic `src/storage/agent_state/store.py` SQL/params preparation helpers for `agent_runs` and `agent_steps`. It adds no migration runner, migration execution, API route, UI action, internal database connection management, transaction commit, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, approval store changes, or approval schema changes.
 
+## Step 183A: agent state migration runner no API no scheduler
+
+See `docs/agent_state_migration_runner_no_api_no_scheduler.md`.
+
+This phase adds only an isolated `src/storage/agent_state/migration_runner.py` helper for caller-supplied schema SQL text and a caller-supplied cursor-like object. It adds no API route, UI action, internal database connection management, transaction commit, startup/import/page-load execution, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, approval store changes, or approval schema changes.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

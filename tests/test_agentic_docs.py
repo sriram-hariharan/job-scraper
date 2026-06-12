@@ -17107,3 +17107,96 @@ def test_agent_state_migration_runner_readiness_checkpoint_doc():
 
     for term in required_terms:
         assert term in doc
+
+
+def test_agent_state_migration_runner_no_api_no_scheduler_doc_contract():
+    doc_path = Path("docs/agent_state_migration_runner_no_api_no_scheduler.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent state migration runner no API no scheduler: PASS",
+        "Agent state migration runner implementation: EXPLICIT_CALLER_SUPPLIED_CURSOR_ONLY",
+        "Runtime-facing integration scope: ISOLATED_MIGRATION_RUNNER_ONLY",
+        "Migration runner path: src/storage/agent_state/migration_runner.py",
+        "Schema path: src/storage/agent_state/schema.sql",
+        "Repository helper path: src/storage/agent_state/store.py",
+        "build_agent_state_migration_plan helper exists",
+        "run_agent_state_migration helper exists",
+        "caller-supplied schema SQL text required",
+        "caller-supplied cursor required",
+        "runner does not read files internally",
+        "runner does not create database connections",
+        "runner does not commit transactions",
+        "runner does not call current time",
+        "runner does not generate random IDs",
+        "runner does not mutate caller-owned schema text",
+        "runner validates agent state schema scope before execution",
+        "runner requires agent_runs",
+        "runner requires agent_steps",
+        "runner rejects approval_requests",
+        "runner rejects agentic_approvals",
+        "runner rejects application_execution",
+        "runner rejects application_submissions",
+        "runner splits SQL deterministically",
+        "migration plan output is deterministic",
+        "repeated migration plan calls produce identical metadata",
+        "run helper executes only prepared statements on injected cursor",
+        "import has no side effects",
+        "did_create_connection: false",
+        "did_commit_transaction: false",
+        "did_schedule_background_work: false",
+        "did_execute_scheduler: false",
+        "did_execute_reporting_job: false",
+        "did_export_files: false",
+        "did_execute_application: false",
+        "did_submit_application: false",
+        "api_route_added: false",
+        "ui_action_added: false",
+        "no API endpoint added",
+        "no UI action added",
+        "no scheduler/background work added",
+        "no reporting job execution added",
+        "no file export creation added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no application execution added",
+        "no application submission added",
+        "no startup execution added",
+        "no import-time execution added",
+        "no page-load execution added",
+        "no approval store modification",
+        "no approval schema modification",
+        "no workflow runner modification",
+        "no application execution queue modification",
+        "no protected execution behavior modified",
+        "no scoring behavior modified",
+        "no prefilter relevance behavior modified",
+        "no LLM evaluation behavior modified",
+        "no scheduler behavior modified",
+        "no cache behavior modified",
+        "no retry behavior modified",
+        "no deduplication behavior modified",
+        "no ranking behavior modified",
+        "no metrics behavior modified",
+        "no ATS health behavior modified",
+        "API integration must be separate future phase",
+        "UI integration must be separate future phase",
+        "scheduler/background implementation must be separate future phase",
+        "reporting job execution must be separate future phase",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/storage/agent_state/migration_runner.py",
+        "tests/test_agent_state_migration_runner_no_api_no_scheduler.py",
+        "docs/agent_state_migration_runner_no_api_no_scheduler.md",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

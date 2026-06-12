@@ -16937,3 +16937,30 @@ def test_agent_state_foundation_no_storage_no_migration_doc_contract():
 
     for path in required_paths:
         assert Path(path).exists()
+
+def test_agent_state_storage_migration_readiness_checkpoint_doc():
+    doc = Path("docs/agent_state_storage_migration_readiness_checkpoint.md").read_text()
+
+    required_terms = [
+        "docs/tests-only",
+        "agent_runs",
+        "agent_steps",
+        "schema migration",
+        "no migration",
+        "no SQL execution",
+        "no storage writer",
+        "no API route",
+        "no UI action",
+        "no reporting job",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "idempotency",
+        "pure agent state helper behavior",
+        "explicit reporting job action safety boundaries",
+    ]
+
+    for term in required_terms:
+        assert term in doc

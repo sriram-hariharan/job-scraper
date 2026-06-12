@@ -826,3 +826,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Agent state foundation readiness checkpoint: `docs/agent_state_foundation_readiness_checkpoint.md`
 
 - Agent state foundation no storage no migration: `docs/agent_state_foundation_no_storage_no_migration.md`
+
+- Agent state storage/migration readiness checkpoint: `docs/agent_state_storage_migration_readiness_checkpoint.md`

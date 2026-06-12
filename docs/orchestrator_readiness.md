@@ -635,6 +635,12 @@ See `docs/final_application_scoring_agent_trace_wrapper_no_behavior_change.md`.
 
 This phase adds only a pure `src/agents/final_application_scoring.py` wrapper that describes caller-provided final application scoring summary data as deterministic agent trace output. It does not call live final application scoring, ranking, matching, prefilter relevance, deduplication, JD intelligence, model providers, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing scoring, ranking, matching, prefilter, deduplication, JD extraction, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
 
+## Step 189A: agent trace UI readiness checkpoint
+
+See `docs/agent_trace_ui_readiness_checkpoint.md`.
+
+This checkpoint is docs/tests only and prepares a future read-only Agent Trace UI implementation path. It maps a future read-only backend trace retrieval endpoint and read-only frontend trace panel onto the existing agent state, trace recorder, and agent wrapper foundation without adding API behavior, UI behavior, pipeline wiring, scheduler/background work, storage writes, schema migration, file export, application execution, or application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

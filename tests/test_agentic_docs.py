@@ -17784,3 +17784,75 @@ def test_jd_intelligence_agent_trace_wrapper_no_behavior_change_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_ui_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/agent_trace_ui_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent Trace UI readiness checkpoint",
+        "docs/tests only",
+        "JobApplicationContext",
+        "agent_runs",
+        "agent_steps",
+        "migration runner",
+        "trace recorder",
+        "Relevance Prefilter Agent wrapper",
+        "Deduplication Agent wrapper",
+        "JD Intelligence Agent wrapper",
+        "Final Application Scoring Agent wrapper",
+        "read-only backend trace retrieval endpoint",
+        "read-only frontend trace panel",
+        "no edits to workflow runner in first UI step",
+        "no live pipeline wiring in first UI step",
+        "read-only endpoint",
+        "caller-supplied run or approval identifier",
+        "returns agent run metadata and ordered agent steps",
+        "supports empty trace safely",
+        "does not create agent runs",
+        "does not create agent steps",
+        "does not mutate approvals",
+        "does not execute pipeline",
+        "read-only trace panel",
+        "shows ordered agent steps",
+        "shows agent name, status, started/completed timestamps if supplied, input/output summary, validation_json, and safety metadata",
+        "empty-state message when no trace exists",
+        "no approve/apply/submit/run/retry/export action",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no storage writes",
+        "no schema migration",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "read-only",
+        "deterministic",
+        "prefilter relevance",
+        "deduplication",
+        "JD intelligence",
+        "final application scoring",
+        "LLM evaluation",
+        "application execution",
+        "application submission",
+        "Rollback plan",
+        "Verification plan for future implementation",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/agent_trace_ui_readiness_checkpoint.md",
+        "tests/test_agent_trace_ui_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

@@ -627,3 +627,9 @@ Reference: `docs/production_scheduler_observability_metrics_logging_audit_writer
 Step 175A adds a docs/tests-only readiness checkpoint for future persistent reporting storage and explicit migration review.
 
 Reference: `docs/persistent_reporting_storage_migration_readiness_checkpoint.md`
+
+## Reporting job readiness checkpoint
+
+Step 176A adds a docs/tests-only readiness checkpoint for future reporting job behavior.
+
+Reference: `docs/reporting_job_readiness_checkpoint.md`

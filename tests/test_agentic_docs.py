@@ -16642,3 +16642,24 @@ def test_persistent_reporting_storage_migration_readiness_checkpoint_doc():
 
     for term in required_terms:
         assert term in doc
+
+def test_reporting_job_readiness_checkpoint_doc():
+    doc = Path("docs/reporting_job_readiness_checkpoint.md").read_text()
+
+    required_terms = [
+        "docs/tests-only",
+        "no reporting job",
+        "no scheduler",
+        "no background task",
+        "no migration",
+        "no persistent storage writer",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "idempotency",
+        "read-only dashboard/export/writer-status endpoints",
+        "no read-only GET endpoint triggers job execution",
+    ]
+
+    for term in required_terms:
+        assert term in doc

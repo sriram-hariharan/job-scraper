@@ -16622,3 +16622,23 @@ def test_production_scheduler_observability_metrics_logging_audit_writer_no_migr
 
     for path in required_paths:
         assert Path(path).exists()
+
+def test_persistent_reporting_storage_migration_readiness_checkpoint_doc():
+    doc = Path("docs/persistent_reporting_storage_migration_readiness_checkpoint.md").read_text()
+
+    required_terms = [
+        "docs/tests-only",
+        "persistent reporting storage",
+        "no migration",
+        "no storage writer",
+        "no reporting job",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "idempotency",
+        "approval storage schema",
+        "read-only dashboard/export/writer-status endpoints stay GET-only",
+    ]
+
+    for term in required_terms:
+        assert term in doc

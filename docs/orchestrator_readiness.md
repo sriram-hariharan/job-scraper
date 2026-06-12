@@ -629,6 +629,12 @@ See `docs/jd_intelligence_agent_trace_wrapper_no_behavior_change.md`.
 
 This phase adds only a pure `src/agents/jd_intelligence.py` wrapper that describes caller-provided JD intelligence and hiring-signal summary data as deterministic agent trace output. It does not call live JD extraction, model providers, prefilter relevance, deduplication, ranking, scoring, final application scoring, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing JD extraction, scoring, ranking, prefilter, deduplication, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
 
+## Step 188A: final application scoring agent trace wrapper no behavior change
+
+See `docs/final_application_scoring_agent_trace_wrapper_no_behavior_change.md`.
+
+This phase adds only a pure `src/agents/final_application_scoring.py` wrapper that describes caller-provided final application scoring summary data as deterministic agent trace output. It does not call live final application scoring, ranking, matching, prefilter relevance, deduplication, JD intelligence, model providers, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing scoring, ranking, matching, prefilter, deduplication, JD extraction, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

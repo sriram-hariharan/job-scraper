@@ -651,3 +651,9 @@ Reference: `docs/reporting_job_readiness_checkpoint.md`
 Step 178A adds a docs/tests-only readiness checkpoint for future `JobApplicationContext`, `agent_runs`, `agent_steps`, and trace helper behavior.
 
 Reference: `docs/agent_state_foundation_readiness_checkpoint.md`
+
+## Agent state storage/migration readiness checkpoint
+
+Step 180A adds a docs/tests-only readiness checkpoint for future `agent_runs` and `agent_steps` persistence and migration work.
+
+Reference: `docs/agent_state_storage_migration_readiness_checkpoint.md`

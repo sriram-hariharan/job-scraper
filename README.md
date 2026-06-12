@@ -822,6 +822,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Deduplication agent trace wrapper no behavior change](docs/deduplication_agent_trace_wrapper_no_behavior_change.md)
 
+- [JD intelligence agent trace wrapper no behavior change](docs/jd_intelligence_agent_trace_wrapper_no_behavior_change.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -850,3 +852,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Relevance prefilter agent trace wrapper no behavior change: `docs/relevance_prefilter_agent_trace_wrapper_no_behavior_change.md`
 
 - Deduplication agent trace wrapper no behavior change: `docs/deduplication_agent_trace_wrapper_no_behavior_change.md`
+
+- JD intelligence agent trace wrapper no behavior change: `docs/jd_intelligence_agent_trace_wrapper_no_behavior_change.md`

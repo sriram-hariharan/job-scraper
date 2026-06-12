@@ -623,6 +623,12 @@ See `docs/deduplication_agent_trace_wrapper_no_behavior_change.md`.
 
 This phase adds only a pure `src/agents/deduplication.py` wrapper that describes caller-provided deduplication summary data as deterministic agent trace output. It does not call live deduplication or seen-jobs logic, classify jobs as seen or new, filter jobs, rank jobs, score jobs, evaluate with LLMs, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing deduplication, seen-jobs, prefilter, scoring, ranking, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
 
+## Step 187A: JD intelligence agent trace wrapper no behavior change
+
+See `docs/jd_intelligence_agent_trace_wrapper_no_behavior_change.md`.
+
+This phase adds only a pure `src/agents/jd_intelligence.py` wrapper that describes caller-provided JD intelligence and hiring-signal summary data as deterministic agent trace output. It does not call live JD extraction, model providers, prefilter relevance, deduplication, ranking, scoring, final application scoring, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing JD extraction, scoring, ranking, prefilter, deduplication, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

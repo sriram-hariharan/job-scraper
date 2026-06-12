@@ -17202,6 +17202,139 @@ def test_agent_state_migration_runner_no_api_no_scheduler_doc_contract():
         assert path in doc or path in readiness or path in readme
 
 
+def test_final_application_scoring_agent_trace_wrapper_no_behavior_change_doc_contract():
+    doc_path = Path(
+        "docs/final_application_scoring_agent_trace_wrapper_no_behavior_change.md"
+    )
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Final Application Scoring Agent trace wrapper no behavior change: PASS",
+        "Final Application Scoring Agent implementation: PURE_TRACE_WRAPPER_ONLY",
+        "Runtime-facing integration scope: WRAPPER_ONLY_NO_PIPELINE_WIRING",
+        "Final application scoring wrapper path: src/agents/final_application_scoring.py",
+        "Existing final application scoring source remains unchanged: src/pipeline/application_scorer.py",
+        "agent_name: final_application_scoring_agent",
+        "agent_version included",
+        "status included",
+        "input_count included",
+        "scored_count included",
+        "qualified_count included",
+        "disqualified_count included",
+        "score_summary preserved",
+        "threshold_summary preserved",
+        "decision_counts preserved",
+        "top_score preserved if supplied",
+        "bottom_score preserved if supplied",
+        "average_score preserved if supplied",
+        "validation_json included",
+        "trace-safe output_json included",
+        "final application scoring is described only",
+        "prefilter relevance is not called",
+        "deduplication is not called",
+        "JD intelligence is not called",
+        "LLM evaluation and live extraction are not called",
+        "application execution is not called",
+        "application submission is not called",
+        "wrapper accepts already-produced final application scoring summary data",
+        "wrapper does not call live final application scoring logic",
+        "wrapper does not call live scoring logic",
+        "wrapper does not call ranking logic",
+        "wrapper does not call matching logic",
+        "wrapper does not call prefilter relevance",
+        "wrapper does not call deduplication",
+        "wrapper does not call JD intelligence",
+        "wrapper does not call LLM providers",
+        "wrapper does not infer new scores",
+        "wrapper does not drop jobs",
+        "wrapper does not keep jobs",
+        "wrapper does not deduplicate jobs",
+        "wrapper does not rank jobs",
+        "wrapper does not score jobs",
+        "wrapper does not scrape jobs",
+        "wrapper does not enrich jobs",
+        "wrapper does not submit jobs",
+        "wrapper output is deterministic",
+        "repeated wrapper calls produce identical output",
+        "wrapper does not mutate caller-owned dictionaries",
+        "wrapper does not mutate caller-owned lists",
+        "input scored qualified and disqualified counts are validated",
+        "invalid counts fail validation safely",
+        "build_final_application_scoring_step_snapshot helper exists",
+        "step snapshot uses caller-supplied IDs",
+        "step snapshot uses caller-supplied timestamp",
+        "did_call_live_final_application_scoring: false",
+        "did_call_prefilter_relevance: false",
+        "did_call_deduplication: false",
+        "did_call_jd_intelligence: false",
+        "did_call_llm_provider: false",
+        "did_execute_application: false",
+        "did_submit_application: false",
+        "did_create_connection: false",
+        "did_commit_transaction: false",
+        "did_run_migration: false",
+        "did_schedule_background_work: false",
+        "did_execute_scheduler: false",
+        "did_execute_reporting_job: false",
+        "did_export_files: false",
+        "api_route_added: false",
+        "ui_action_added: false",
+        "pipeline_wiring_added: false",
+        "no live pipeline integration added",
+        "no API endpoint added",
+        "no UI action added",
+        "no scheduler/background work added",
+        "no storage writes added",
+        "no reporting job execution added",
+        "no file export creation added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no live final application scoring added",
+        "no live LLM call added",
+        "no application execution added",
+        "no application submission added",
+        "no scoring behavior modified",
+        "no ranking behavior modified",
+        "no matching behavior modified",
+        "no prefilter logic modified",
+        "no deduplication behavior modified",
+        "no JD extraction behavior modified",
+        "no LLM evaluation behavior modified",
+        "no final application scoring behavior modified",
+        "no scheduler behavior modified",
+        "no cache behavior modified",
+        "no retry behavior modified",
+        "no metrics behavior modified",
+        "no ATS health behavior modified",
+        "no approval store modified",
+        "no approval schema modified",
+        "no schema SQL modified",
+        "no migration runner modified",
+        "no trace recorder modified",
+        "pipeline integration must be separate future phase",
+        "API integration must be separate future phase",
+        "UI integration must be separate future phase",
+        "scheduler/background implementation must be separate future phase",
+        "storage write integration must be separate future phase",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/agents/final_application_scoring.py",
+        "tests/test_final_application_scoring_agent_trace_wrapper_no_behavior_change.py",
+        "docs/final_application_scoring_agent_trace_wrapper_no_behavior_change.md",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme
+
+
 def test_agent_trace_recorder_service_no_pipeline_no_api_doc_contract():
     doc_path = Path("docs/agent_trace_recorder_service_no_pipeline_no_api.md")
     doc = doc_path.read_text()

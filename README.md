@@ -812,6 +812,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Agent state foundation no storage no migration](docs/agent_state_foundation_no_storage_no_migration.md)
 
+- [Agent state storage schema repository no runner no API](docs/agent_state_storage_schema_repository_no_runner_no_api.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -826,5 +828,7 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Agent state foundation readiness checkpoint: `docs/agent_state_foundation_readiness_checkpoint.md`
 
 - Agent state foundation no storage no migration: `docs/agent_state_foundation_no_storage_no_migration.md`
+
+- Agent state storage schema repository no runner no API: `docs/agent_state_storage_schema_repository_no_runner_no_api.md`
 
 - Agent state storage/migration readiness checkpoint: `docs/agent_state_storage_migration_readiness_checkpoint.md`

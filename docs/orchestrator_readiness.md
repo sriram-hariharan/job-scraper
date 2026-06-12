@@ -653,6 +653,12 @@ See `docs/agent_trace_readonly_ui_panel_no_api_no_writes.md`.
 
 This phase adds a read-only Agent Trace frontend panel that consumes the existing `GET /api/agentic-approvals/{approval_request_id}/agent-trace` endpoint. It adds no API changes, no storage changes, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no approval mutation, no application execution, and no application submission.
 
+## Step 192A: agentic foundation trace UI wrap checkpoint
+
+See `docs/agentic_foundation_trace_ui_wrap_checkpoint.md`.
+
+This checkpoint is docs/tests only and wraps the completed safe agentic foundation: agent state foundation, agent state storage schema/repository, migration runner, trace recorder, four trace wrappers, the read-only Agent Trace API endpoint, and the read-only Agent Trace UI panel. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no live LLM call, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

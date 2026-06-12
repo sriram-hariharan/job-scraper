@@ -605,6 +605,12 @@ See `docs/agent_state_migration_runner_no_api_no_scheduler.md`.
 
 This phase adds only an isolated `src/storage/agent_state/migration_runner.py` helper for caller-supplied schema SQL text and a caller-supplied cursor-like object. It adds no API route, UI action, internal database connection management, transaction commit, startup/import/page-load execution, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, approval store changes, or approval schema changes.
 
+## Step 184A: agent trace recorder service no pipeline no API
+
+See `docs/agent_trace_recorder_service_no_pipeline_no_api.md`.
+
+This phase adds only lightweight deterministic trace recorder helpers in `src/agents/trace.py` that prepare agent run and agent step recording payloads through isolated agent-state storage helpers and require an injected cursor or callback for explicit recording. It adds no live pipeline integration, API route, UI action, internal database connection management, transaction commit, migration execution, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, approval store changes, approval schema changes, schema SQL changes, or migration runner changes.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

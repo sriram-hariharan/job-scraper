@@ -581,6 +581,12 @@ See `docs/production_scheduler_observability_metrics_logging_audit_writer_no_mig
 
 This phase adds only a deterministic read-only GET writer-status endpoint and minimal Agentic Review UI action. The endpoint reuses already-computed production scheduler observability reporting gate state and returns structured JSON only; metrics writers, logging writers, audit writers, persistence, migrations, file export creation, reporting jobs, execution, submission, scheduler/background/live scheduler work, production scheduler wiring changes, storage modules, SQL files, and workflow runner behavior remain unchanged.
 
+## Step 177A: production scheduler observability reporting job no scheduler no export no migration
+
+See `docs/production_scheduler_observability_reporting_job_no_scheduler_no_export_no_migration.md`.
+
+This phase adds only an explicitly invoked deterministic POST reporting-job surface and minimal Agentic Review UI action. The endpoint reuses already-computed production scheduler observability reporting gate state and returns structured JSON only; persistence, reporting job records, file export creation, migrations, metrics emitters, logging emitters, audit writers, execution, submission, scheduler/background/live scheduler work, production scheduler wiring changes, storage modules, SQL files, and workflow runner behavior remain unchanged.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

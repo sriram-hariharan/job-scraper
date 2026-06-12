@@ -505,6 +505,87 @@ def _agentic_production_scheduler_observability_writer_status_payload(
         },
     }
 
+
+def _agentic_production_scheduler_observability_reporting_job_payload(
+    *,
+    approval_request_id: str,
+    reporting_decision: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    report_payload = _agentic_production_scheduler_observability_report_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+    reason_codes = list(
+        report_payload.get(
+            "production_scheduler_observability_reporting_endpoint_reason_codes"
+        )
+        or []
+    )
+    if reason_codes:
+        reason_codes.append(
+            "production_scheduler_observability_reporting_gate_not_passed"
+        )
+    reason_codes = sorted(set(reason_codes))
+    blocked = bool(reason_codes)
+    status = "blocked" if blocked else "completed"
+    reporting_job_key = (
+        f"production_scheduler_observability_reporting_job:{approval_request_id}"
+    )
+    result_summary = {
+        "approval_request_id": approval_request_id,
+        "surface": "production_scheduler_observability_reporting_job",
+        "status": status,
+        "reason_codes": reason_codes,
+        "structured_json_only": True,
+        "persistence_disabled": True,
+        "background_work_disabled": True,
+        "file_export_disabled": True,
+        "scheduler_execution_disabled": True,
+        "application_execution_disabled": True,
+        "application_submission_disabled": True,
+    }
+    return {
+        **report_payload,
+        "approval_request_id": approval_request_id,
+        "production_scheduler_observability_reporting_job_endpoint": (
+            "POST /api/agentic-approvals/{approval_request_id}/production-scheduler-observability-reporting-job"
+        ),
+        "production_scheduler_observability_reporting_job_endpoint_method": "POST",
+        "production_scheduler_observability_reporting_job_explicit_invocation_only": True,
+        "reporting_job_invoked": True,
+        "reporting_job_status": status,
+        "reporting_job_key": reporting_job_key,
+        "surface": "production_scheduler_observability_reporting_job",
+        "reason_codes": reason_codes,
+        "result_summary": result_summary,
+        "blocked_by_production_scheduler_observability_reporting_job_endpoint": blocked,
+        "reporting_job_record_enabled": False,
+        "persistence_enabled": False,
+        "migration_required": False,
+        "did_persist_reporting_result": False,
+        "did_schedule_background_work": False,
+        "did_create_reporting_job_record": False,
+        "did_export_files": False,
+        "did_execute_scheduler": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_trigger_execution": False,
+        "did_trigger_submission": False,
+        "did_trigger_production_scheduler_wiring": False,
+        "did_trigger_scheduler_work": False,
+        "did_trigger_migration": False,
+        "did_write_metrics": False,
+        "did_write_logs": False,
+        "did_write_audit_events": False,
+        "metrics_writer_enabled": False,
+        "logging_writer_enabled": False,
+        "audit_writer_enabled": False,
+        "export_file_creation_enabled": False,
+        "scheduler_execution_enabled": False,
+        "application_execution_enabled": False,
+        "application_submission_enabled": False,
+    }
+
 app.include_router(ui_router)
 app.include_router(planning_ui_router)
 app.include_router(decisions_ui_router)
@@ -673,6 +754,23 @@ def get_production_scheduler_observability_writer_status(approval_request_id: st
         )
     )
     return _agentic_production_scheduler_observability_writer_status_payload(
+        approval_request_id=approval_request_id,
+        reporting_decision=reporting_decision,
+    )
+
+
+@app.post(
+    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-reporting-job"
+)
+def invoke_production_scheduler_observability_reporting_job_endpoint(
+    approval_request_id: str,
+):
+    reporting_decision = (
+        _production_scheduler_observability_reporting_decision_for_approval(
+            approval_request_id
+        )
+    )
+    return _agentic_production_scheduler_observability_reporting_job_payload(
         approval_request_id=approval_request_id,
         reporting_decision=reporting_decision,
     )

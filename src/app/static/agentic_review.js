@@ -1263,6 +1263,14 @@ function renderApprovalDecisionActionSection(mock = {}) {
         >
           Check writer status
         </button>
+        <button
+          type="button"
+          class="agentic-feedback-action"
+          data-agentic-production-scheduler-observability-reporting-job
+          ${approvalRequestId ? "" : "disabled"}
+        >
+          Invoke reporting job
+        </button>
         <span
           class="agentic-feedback-status ${blockedReasons.length ? "is-error" : "is-info"}"
           data-agentic-approval-status
@@ -1314,6 +1322,52 @@ async function recordAgenticApprovalDecision(reviewDecision, button) {
     setAgenticApprovalStatus("Approval decision recorded. Execution remains disabled.", "success");
   } catch (err) {
     setAgenticApprovalStatus(err?.message || "Approval decision was not recorded.", "error");
+  } finally {
+    if (button) {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  }
+}
+
+function formatProductionSchedulerObservabilityReportingJobMessage(payload = {}) {
+  const endpointSuffix = "production-scheduler-observability-reporting-job";
+  const status = String(payload.reporting_job_status || "blocked").trim();
+  const reasonCodes = Array.isArray(payload.reason_codes) ? payload.reason_codes : [];
+  const reasons = reasonCodes.join(", ") || "none";
+  const safety = "explicit invocation only; persistence disabled; scheduler and background work disabled; file export disabled; metrics/logging/audit writers disabled; execution disabled; submission disabled; production scheduler wiring disabled";
+  return `Reporting job ${status}. Endpoint: ${endpointSuffix}. Reasons: ${reasons}. ${safety}.`;
+}
+
+async function invokeProductionSchedulerObservabilityReportingJob(button) {
+  const panel = button?.closest("[data-agentic-approval-request-id]");
+  const approvalRequestId = String(panel?.dataset?.agenticApprovalRequestId || "").trim();
+  if (!approvalRequestId) {
+    setProductionSchedulerObservabilityReportStatus(
+      "Reporting job blocked: approval_request_id unavailable.",
+      "error",
+    );
+    return;
+  }
+
+  const previousDisabled = Boolean(button?.disabled);
+  if (button) button.disabled = true;
+  setProductionSchedulerObservabilityReportStatus("Invoking deterministic reporting job...", "info");
+  try {
+    const payload = await fetchJson(
+      `/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/production-scheduler-observability-reporting-job`,
+      { method: "POST" },
+    );
+    setProductionSchedulerObservabilityReportStatus(
+      formatProductionSchedulerObservabilityReportingJobMessage(payload),
+      payload?.blocked_by_production_scheduler_observability_reporting_job_endpoint ? "error" : "success",
+    );
+  } catch (err) {
+    setProductionSchedulerObservabilityReportStatus(
+      err?.message || "Reporting job was not invoked.",
+      "error",
+    );
   } finally {
     if (button) {
       window.setTimeout(() => {
@@ -1644,6 +1698,12 @@ function bindAgenticReviewTabs() {
     const button = event.target.closest("[data-agentic-production-scheduler-observability-writer-status]");
     if (!button) return;
     loadProductionSchedulerObservabilityWriterStatus(button);
+  });
+
+  document.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agentic-production-scheduler-observability-reporting-job]");
+    if (!button) return;
+    invokeProductionSchedulerObservabilityReportingJob(button);
   });
 }
 

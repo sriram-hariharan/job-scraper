@@ -593,6 +593,12 @@ See `docs/agent_state_foundation_no_storage_no_migration.md`.
 
 This phase adds only a pure deterministic `src/agents/agent_state.py` helper module with `JobApplicationContext`, agent run snapshots, agent step snapshots, and immutable trace append helpers. It adds no API route, UI action, storage writes, migrations, SQL schema changes, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, or approval storage changes.
 
+## Step 181A: agent state storage schema repository no runner no API
+
+See `docs/agent_state_storage_schema_repository_no_runner_no_api.md`.
+
+This phase adds only an isolated static `src/storage/agent_state/schema.sql` artifact and deterministic `src/storage/agent_state/store.py` SQL/params preparation helpers for `agent_runs` and `agent_steps`. It adds no migration runner, migration execution, API route, UI action, internal database connection management, transaction commit, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, approval store changes, or approval schema changes.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

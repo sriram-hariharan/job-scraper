@@ -17981,3 +17981,74 @@ def test_agent_trace_readonly_ui_panel_no_api_no_writes_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agentic_foundation_trace_ui_wrap_checkpoint_doc_contract():
+    doc_path = Path("docs/agentic_foundation_trace_ui_wrap_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agentic foundation trace UI wrap checkpoint",
+        "docs/tests only",
+        "Milestone A",
+        "Milestone B",
+        "Milestone C",
+        "Agent state foundation",
+        "JobApplicationContext",
+        "agent_runs",
+        "agent_steps",
+        "migration runner",
+        "trace recorder",
+        "Relevance Prefilter Agent",
+        "Deduplication Agent",
+        "JD Intelligence Agent",
+        "Final Application Scoring Agent",
+        "read-only Agent Trace API endpoint",
+        "read-only Agent Trace UI panel",
+        "prefilter relevance",
+        "deduplication",
+        "JD intelligence",
+        "final application scoring",
+        "LLM evaluation",
+        "application execution",
+        "application submission",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no storage writes",
+        "no schema migration",
+        "no file export",
+        "no live LLM call",
+        "no application execution",
+        "no application submission",
+        "read-only",
+        "deterministic",
+        "current completed scope",
+        "remaining non-goals",
+        "next recommended milestone options",
+        "rollback plan",
+        "verification plan",
+        "1. Trace polish / UX hardening",
+        "2. Trace persistence activation and migration execution plan",
+        "3. Critic/Evaluator agent readiness",
+        "4. Feedback learning loop readiness",
+        "5. LangGraph orchestration spike",
+        "Do not implement those options in this checkpoint.",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/agentic_foundation_trace_ui_wrap_checkpoint.md",
+        "tests/test_agentic_foundation_trace_ui_wrap_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

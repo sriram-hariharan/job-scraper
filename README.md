@@ -818,6 +818,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Agent trace recorder service no pipeline no API](docs/agent_trace_recorder_service_no_pipeline_no_api.md)
 
+- [Relevance prefilter agent trace wrapper no behavior change](docs/relevance_prefilter_agent_trace_wrapper_no_behavior_change.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -842,3 +844,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Agent state migration runner no API no scheduler: `docs/agent_state_migration_runner_no_api_no_scheduler.md`
 
 - Agent trace recorder service no pipeline no API: `docs/agent_trace_recorder_service_no_pipeline_no_api.md`
+
+- Relevance prefilter agent trace wrapper no behavior change: `docs/relevance_prefilter_agent_trace_wrapper_no_behavior_change.md`

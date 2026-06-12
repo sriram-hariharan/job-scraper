@@ -17200,3 +17200,99 @@ def test_agent_state_migration_runner_no_api_no_scheduler_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_recorder_service_no_pipeline_no_api_doc_contract():
+    doc_path = Path("docs/agent_trace_recorder_service_no_pipeline_no_api.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent trace recorder service no pipeline no API: PASS",
+        "Agent trace recorder implementation: LIGHTWEIGHT_HELPERS_ONLY",
+        "Runtime-facing integration scope: TRACE_RECORDER_HELPERS_ONLY",
+        "Trace recorder helper path: src/agents/trace.py",
+        "Agent state snapshot source: src/agents/agent_state.py",
+        "Agent state storage helper source: src/storage/agent_state/store.py",
+        "build_agent_run_record_payload helper exists",
+        "build_agent_step_record_payload helper exists",
+        "build_agent_trace_recording_payload helper exists",
+        "build_fake_smoke_trace_payload helper exists",
+        "execute_agent_trace_recording helper exists",
+        "caller-supplied run snapshot required",
+        "caller-supplied step snapshots required",
+        "fake smoke trace has exactly one agent run",
+        "fake smoke trace has exactly one agent step",
+        "trace payload creation is deterministic",
+        "repeated trace payload calls produce identical output",
+        "trace recorder does not mutate caller-owned snapshots",
+        "trace recorder does not mutate caller-owned lists",
+        "trace recorder uses agent_state storage preparation helpers",
+        "execution requires injected cursor or injected execution callback",
+        "fake cursor receives expected operations only when explicitly invoked",
+        "trace recorder does not create database connections",
+        "trace recorder does not commit transactions",
+        "trace recorder does not run migrations",
+        "trace recorder does not call current time",
+        "trace recorder does not generate random IDs",
+        "import has no side effects",
+        "did_create_connection: false",
+        "did_commit_transaction: false",
+        "did_run_migration: false",
+        "did_schedule_background_work: false",
+        "did_execute_scheduler: false",
+        "did_execute_reporting_job: false",
+        "did_export_files: false",
+        "did_execute_application: false",
+        "did_submit_application: false",
+        "api_route_added: false",
+        "ui_action_added: false",
+        "pipeline_wiring_added: false",
+        "no live pipeline integration added",
+        "no API endpoint added",
+        "no UI action added",
+        "no scheduler/background work added",
+        "no reporting job execution added",
+        "no file export creation added",
+        "no metrics emitter added",
+        "no logging emitter added",
+        "no audit writer added",
+        "no application execution added",
+        "no application submission added",
+        "no schema SQL modified",
+        "no migration runner modified",
+        "no approval store modified",
+        "no approval schema modified",
+        "no workflow runner modified",
+        "no application execution queue modified",
+        "no protected execution behavior modified",
+        "no scoring behavior modified",
+        "no prefilter relevance behavior modified",
+        "no LLM evaluation behavior modified",
+        "no scheduler behavior modified",
+        "no cache behavior modified",
+        "no retry behavior modified",
+        "no deduplication behavior modified",
+        "no ranking behavior modified",
+        "no metrics behavior modified",
+        "no ATS health behavior modified",
+        "pipeline integration must be separate future phase",
+        "API integration must be separate future phase",
+        "UI integration must be separate future phase",
+        "scheduler/background implementation must be separate future phase",
+        "reporting job execution must be separate future phase",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/agents/trace.py",
+        "tests/test_agent_trace_recorder_service_no_pipeline_no_api.py",
+        "docs/agent_trace_recorder_service_no_pipeline_no_api.md",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

@@ -621,3 +621,9 @@ This safety checkpoint prepares future read-only dashboard/export implementation
 Step 173A adds a docs/tests-only readiness checkpoint for future metrics, logging, and audit writer behavior.
 
 Reference: `docs/production_scheduler_observability_metrics_logging_audit_writer_readiness_checkpoint.md`\n
+
+## Persistent reporting storage/migration readiness checkpoint
+
+Step 175A adds a docs/tests-only readiness checkpoint for future persistent reporting storage and explicit migration review.
+
+Reference: `docs/persistent_reporting_storage_migration_readiness_checkpoint.md`

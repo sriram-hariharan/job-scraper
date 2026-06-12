@@ -611,6 +611,12 @@ See `docs/agent_trace_recorder_service_no_pipeline_no_api.md`.
 
 This phase adds only lightweight deterministic trace recorder helpers in `src/agents/trace.py` that prepare agent run and agent step recording payloads through isolated agent-state storage helpers and require an injected cursor or callback for explicit recording. It adds no live pipeline integration, API route, UI action, internal database connection management, transaction commit, migration execution, scheduler/background work, reporting job execution, file export, emitters, application execution, application submission, protected workflow changes, approval store changes, approval schema changes, schema SQL changes, or migration runner changes.
 
+## Step 185A: relevance prefilter agent trace wrapper no behavior change
+
+See `docs/relevance_prefilter_agent_trace_wrapper_no_behavior_change.md`.
+
+This phase adds only a pure `src/agents/relevance_prefilter.py` wrapper that describes caller-provided prefilter summary data as deterministic agent trace output. It does not call live filter logic, rank jobs, score jobs, evaluate with LLMs, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing prefilter, scoring, ranking, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

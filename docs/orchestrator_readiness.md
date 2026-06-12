@@ -617,6 +617,12 @@ See `docs/relevance_prefilter_agent_trace_wrapper_no_behavior_change.md`.
 
 This phase adds only a pure `src/agents/relevance_prefilter.py` wrapper that describes caller-provided prefilter summary data as deterministic agent trace output. It does not call live filter logic, rank jobs, score jobs, evaluate with LLMs, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing prefilter, scoring, ranking, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
 
+## Step 186A: deduplication agent trace wrapper no behavior change
+
+See `docs/deduplication_agent_trace_wrapper_no_behavior_change.md`.
+
+This phase adds only a pure `src/agents/deduplication.py` wrapper that describes caller-provided deduplication summary data as deterministic agent trace output. It does not call live deduplication or seen-jobs logic, classify jobs as seen or new, filter jobs, rank jobs, score jobs, evaluate with LLMs, wire into the pipeline, add API/UI behavior, create storage writes, schedule background work, execute reporting jobs, export files, emit metrics/logs/audits, execute applications, submit applications, or modify existing deduplication, seen-jobs, prefilter, scoring, ranking, trace recorder, schema, migration runner, approval, scheduler, workflow, API, or UI behavior.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

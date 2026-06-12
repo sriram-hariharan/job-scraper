@@ -17926,3 +17926,58 @@ def test_agent_trace_readonly_api_endpoint_no_ui_no_writes_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_readonly_ui_panel_no_api_no_writes_doc_contract():
+    doc_path = Path("docs/agent_trace_readonly_ui_panel_no_api_no_writes.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent Trace read-only UI panel",
+        "read-only",
+        "no API changes",
+        "no storage changes",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "no live LLM call",
+        "no approval mutation",
+        "ordered agent steps",
+        "empty trace",
+        "not found trace",
+        "safety metadata",
+        "validation_json",
+        "no approve",
+        "no apply",
+        "no submit",
+        "no run",
+        "no retry",
+        "no export",
+        "deterministic",
+        "GET /api/agentic-approvals/{approval_request_id}/agent-trace",
+        "UI contract",
+        "Endpoint dependency",
+        "Safety contract",
+        "Rollback plan",
+        "Verification plan",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/app/static/agentic_review.js",
+        "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+        "docs/agent_trace_readonly_ui_panel_no_api_no_writes.md",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

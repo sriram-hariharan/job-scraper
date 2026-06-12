@@ -138,9 +138,15 @@ def test_protected_runtime_files_match_checkpoint_hashes_without_git():
         "src/app/api.py",
         "src/storage/agent_state/store.py",
     }
+    later_readonly_ui_step_exists = Path("docs/agent_trace_readonly_ui_panel_no_api_no_writes.md").exists()
+    later_readonly_ui_paths = {
+        "src/app/static/agentic_review.js",
+    }
 
     for path, expected_hash in PROTECTED_FILE_HASHES.items():
         assert Path(path).exists()
         if later_readonly_api_step_exists and path in later_readonly_api_paths:
+            continue
+        if later_readonly_ui_step_exists and path in later_readonly_ui_paths:
             continue
         assert _file_hash(path) == expected_hash

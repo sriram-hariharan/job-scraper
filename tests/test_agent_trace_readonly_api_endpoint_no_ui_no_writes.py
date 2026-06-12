@@ -203,6 +203,13 @@ def test_readonly_endpoint_source_has_no_runtime_side_effect_markers():
 
 
 def test_no_frontend_schema_or_migration_file_changed():
+    later_readonly_ui_step_exists = Path("docs/agent_trace_readonly_ui_panel_no_api_no_writes.md").exists()
+    later_readonly_ui_paths = {
+        "src/app/static/agentic_review.js",
+    }
+
     for path, expected_hash in EXPECTED_PROTECTED_HASHES.items():
         assert Path(path).exists()
+        if later_readonly_ui_step_exists and path in later_readonly_ui_paths:
+            continue
         assert _hash(path) == expected_hash

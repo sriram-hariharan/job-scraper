@@ -85,6 +85,8 @@ ALLOWED_CHANGED = {
     "tests/test_relevance_prefilter_agent_trace_wrapper_no_behavior_change.py",
     "src/agents/deduplication.py",
     "tests/test_deduplication_agent_trace_wrapper_no_behavior_change.py",
+    "src/agents/jd_intelligence.py",
+    "tests/test_jd_intelligence_agent_trace_wrapper_no_behavior_change.py",
 }
 
 def _changed_files():
@@ -120,6 +122,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/storage/agent_trace/store.py",
         "src/agents/relevance_prefilter.py",
         "src/agents/deduplication.py",
+        "src/agents/jd_intelligence.py",
     }
     runtime_paths = [
         path for path in changed

@@ -54,6 +54,8 @@ REQUIRED_TERMS = [
 ]
 
 ALLOWED_CHANGED = {
+    "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",
+    "docs/full_agentic_ai_current_state_audit_no_runtime_change.md",
     "tests/test_agentic_review_ui_compaction_polish_no_backend_change.py",
     "docs/agentic_review_ui_compaction_polish_no_backend_change.md",
     "docs/full_fledged_agentic_ai_app_roadmap.md",

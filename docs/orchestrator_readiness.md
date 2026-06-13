@@ -677,6 +677,12 @@ See `docs/agent_trace_persistence_activation_readiness_checkpoint.md`.
 
 This checkpoint is docs/tests only and prepares a future planning path for persistent Agent Trace storage and migration execution. It adds no runtime code, no API behavior change, no UI behavior change, no storage code change, no schema change, no schema migration, no migration execution, no database connection, no storage writes, no pipeline wiring, no scheduler/background work, no live LLM call, no approval mutation, no application execution, and no application submission.
 
+## Step 196A: critic/evaluator agent readiness checkpoint
+
+See `docs/critic_evaluator_agent_readiness_checkpoint.md`.
+
+This checkpoint is docs/tests only and prepares a future Critic/Evaluator agent readiness path for trace-only evaluation inputs, agent trace review, quality rubric design, and evaluator output contract design. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no application execution, no application submission, and no scoring change.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

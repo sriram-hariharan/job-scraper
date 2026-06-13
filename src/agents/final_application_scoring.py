@@ -19,6 +19,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.agents.agent_state import JobApplicationContext, build_agent_step_snapshot
+from src.storage.agent_trace.store import build_agent_trace_summary_payload
 
 
 AGENT_NAME = "final_application_scoring_agent"
@@ -117,10 +118,38 @@ def _validation(
     }
 
 
+def _build_trace_summary(description: dict[str, Any]) -> dict[str, Any]:
+    payload = _plain_dict(description)
+    step_row = {
+        "agent_step_id": "in_memory:final_application_scoring_trace_wrapper",
+        "agent_run_id": "in_memory:final_application_scoring_agent",
+        "owner_user_id": "read_only_final_application_scoring_wrapper",
+        "agent_name": AGENT_NAME,
+        "agent_version": payload.get("agent_version", DEFAULT_AGENT_VERSION),
+        "input_json": {
+            "input_count": payload.get("input_count", -1),
+            "scored_count": payload.get("scored_count", -1),
+        },
+        "output_json": _plain_dict(payload.get("output_json")),
+        "validation_json": _plain_dict(payload.get("validation_json")),
+        "status": payload.get("status", "unknown"),
+        "started_at": "in_memory",
+        "completed_at": "in_memory",
+        "latency_ms": 0,
+        "model_provider": "",
+        "model_name": "",
+        "token_usage_json": {},
+        "cost_json": {},
+        "error": "",
+    }
+    return build_agent_trace_summary_payload(agent_runs=[], agent_steps=[step_row])
+
+
 def describe_final_application_scoring_result(
     scoring_summary: dict[str, Any],
     *,
     agent_version: str = DEFAULT_AGENT_VERSION,
+    include_trace_summary: bool = False,
 ) -> dict[str, Any]:
     """Describe caller-supplied final scoring output without scoring jobs."""
 
@@ -169,7 +198,7 @@ def describe_final_application_scoring_result(
         },
     }
 
-    return {
+    payload = {
         "agent_name": AGENT_NAME,
         "agent_version": output_json["agent_version"],
         "status": status,
@@ -187,6 +216,9 @@ def describe_final_application_scoring_result(
         "output_json": output_json,
         **safety_flags(),
     }
+    if include_trace_summary:
+        payload["trace_summary"] = _build_trace_summary(payload)
+    return payload
 
 
 def build_final_application_scoring_step_snapshot(
@@ -197,11 +229,20 @@ def build_final_application_scoring_step_snapshot(
     agent_run_id: str,
     step_index: int = 1,
     agent_version: str = DEFAULT_AGENT_VERSION,
+    include_trace_summary: bool = False,
 ) -> dict[str, Any]:
     description = describe_final_application_scoring_result(
         scoring_summary,
         agent_version=agent_version,
+        include_trace_summary=include_trace_summary,
     )
+    metadata = {
+        "agent_version": description["agent_version"],
+        "wrapper_only": True,
+        "did_call_live_final_application_scoring": False,
+    }
+    if include_trace_summary:
+        metadata["trace_summary"] = _plain_dict(description.get("trace_summary"))
     return build_agent_step_snapshot(
         context=context,
         agent_name=AGENT_NAME,
@@ -216,9 +257,5 @@ def build_final_application_scoring_step_snapshot(
         },
         output_summary=description["output_json"],
         reason_codes=description["validation_json"]["errors"],
-        metadata={
-            "agent_version": description["agent_version"],
-            "wrapper_only": True,
-            "did_call_live_final_application_scoring": False,
-        },
+        metadata=metadata,
     )

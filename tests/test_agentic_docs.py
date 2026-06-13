@@ -18124,3 +18124,59 @@ def test_agent_trace_polish_ux_hardening_readiness_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes_doc_contract():
+    doc_path = Path("docs/agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent Trace polish / UX hardening UI-only implementation",
+        "UI-only",
+        "read-only",
+        "no API changes",
+        "no storage changes",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no approval mutation",
+        "no application execution",
+        "no application submission",
+        "loading state",
+        "empty trace",
+        "not found trace",
+        "fetch failure",
+        "ordered agent steps",
+        "collapsed step details",
+        "accessibility labels",
+        "safety metadata",
+        "validation_json",
+        "no approve",
+        "no apply",
+        "no submit",
+        "no run",
+        "no retry",
+        "no export",
+        "deterministic",
+        "rollback plan",
+        "verification plan",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/app/static/agentic_review.js",
+        "docs/agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.md",
+        "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

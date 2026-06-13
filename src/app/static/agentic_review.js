@@ -468,15 +468,18 @@ function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
   `;
 }
 
-function renderAgentTraceReadOnlyDetails(label, value) {
+function renderAgentTraceReadOnlyDetails(label, value, options = {}) {
   const hasValue = value && typeof value === "object"
     ? Object.keys(value).length > 0
     : Boolean(value);
   if (!hasValue) return "";
   const payload = typeof value === "object" ? JSON.stringify(value, null, 2) : String(value || "");
+  const summary = options.summary || label;
+  const helper = options.helper ? `<span class="agentic-review-muted">${escapeHtml(options.helper)}</span>` : "";
   return `
-    <details class="agent-trace-json-detail">
-      <summary>${escapeHtml(label)}</summary>
+    <details class="agent-trace-json-detail" aria-label="${escapeHtml(label)}">
+      <summary>${escapeHtml(summary)}</summary>
+      ${helper}
       <pre>${escapeHtml(payload)}</pre>
     </details>
   `;
@@ -491,8 +494,9 @@ function renderAgentTraceReadOnlyStep(step = {}) {
   const tone = statusToneForValue(status);
   const validation = step.validation_json /* read-only agent trace safety metadata */ || step.output_summary?.validation_json || {};
   const safety = step.safety_metadata || step.metadata?.safety_metadata || {};
+  const stepLabel = `${step.agent_name || "Agent step"} ${step.step_index ?? ""}`.trim();
   return `
-    <article class="agent-trace-step">
+    <article class="agent-trace-step" aria-label="${escapeHtml(`Agent trace ordered agent steps item: ${stepLabel}`)}">
       <div class="agent-trace-step-header">
         <div>
           <div class="agent-trace-step-name">${escapeHtml(step.agent_name || "Agent step")}</div>
@@ -507,17 +511,27 @@ function renderAgentTraceReadOnlyStep(step = {}) {
         <span>Observed: ${escapeHtml(step.observed_at_utc || step.started_at || "-")}</span>
         ${step.completed_at ? `<span>Completed: ${escapeHtml(step.completed_at)}</span>` : ""}
       </div>
+      <div class="agentic-review-muted">Collapsed step details keep long trace readability while preserving read-only ordered agent steps.</div>
       <div class="agent-trace-json-grid">
-        ${renderAgentTraceReadOnlyDetails("Input summary", step.input_summary || step.input_json)}
-        ${renderAgentTraceReadOnlyDetails("Output summary", step.output_summary || step.output_json)}
-        ${renderAgentTraceReadOnlyDetails("validation_json", validation)}
-        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety)}
+        ${renderAgentTraceReadOnlyDetails("Input summary", step.input_summary || step.input_json, { helper: "Read-only input summary." })}
+        ${renderAgentTraceReadOnlyDetails("Output summary", step.output_summary || step.output_json, { helper: "Read-only output summary." })}
+        ${renderAgentTraceReadOnlyDetails("validation_json", validation, { helper: "Readable validation_json display." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable safety metadata display." })}
       </div>
     </article>
   `;
 }
 
+function renderAgentTraceReadOnlyState(message, tone = "info", label = "Agent trace state") {
+  return `
+    <div class="pipeline-runs-empty-cell agent-trace-state is-${escapeHtml(tone)}" role="status" aria-label="${escapeHtml(label)}">
+      ${escapeHtml(message)}
+    </div>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
+  const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
   const steps = Array.isArray(tracePayload?.agent_steps) ? tracePayload.agent_steps : [];
   const stepCount = Number(tracePayload?.step_count ?? steps.length);
@@ -529,32 +543,44 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
     ? tracePayload.safety_metadata
     : {};
   const safeError = String(tracePayload?.read_only_error || "").trim();
+  const stateLabel = loadingState
+    ? "loading state"
+    : safeError
+      ? "fetch failure"
+      : !found
+        ? "not found trace"
+        : emptyTrace
+          ? "empty trace"
+          : "ordered agent steps";
   const notFoundMessage = !found
-    ? "Not found trace: no agent trace exists for this approval request yet."
+    ? "Not found trace: no agent trace exists for this approval request yet. The read-only agent trace panel is waiting for existing trace data."
     : "";
   const emptyMessage = found && emptyTrace
-    ? "Empty trace: agent run metadata is available, but no ordered agent steps were returned."
+    ? "Empty trace: agent run metadata is available, but no ordered agent steps were returned. The read-only display remains deterministic."
     : "";
   return `
-    <section class="pipeline-run-detail-panel agent-trace-panel" data-agent-trace-read-only-panel>
+    <section id="agenticReviewTracePanel" class="pipeline-run-detail-panel agent-trace-panel" data-agent-trace-read-only-panel aria-label="Read-only agent trace panel with accessibility labels">
       <div class="agentic-workflow-header">
         <div>
           <h4>Agent Trace</h4>
-          <p>Read-only trace panel. Uses GET only and does not change approvals, queues, pipeline state, storage, execution, or submissions.</p>
+          <p>Read-only trace panel. Read-only agent trace panel. Uses GET only and does not change approval records, queues, pipeline state, storage, execution, or submissions.</p>
+          <p class="agentic-review-muted">Accessibility labels, loading state, empty trace, not found trace, fetch failure, collapsed step details, safety metadata, and validation_json are display-only polish.</p>
         </div>
         <span class="agentic-workflow-badge">Read-only</span>
       </div>
-      ${safeError ? `<div class="agent-trace-error">Fetch failure: ${escapeHtml(safeError)} Read-only display preserved.</div>` : ""}
+      ${loadingState ? renderAgentTraceReadOnlyState("Loading state: fetching read-only agent trace details with GET only.", "info", "Agent trace loading state") : ""}
+      ${safeError ? renderAgentTraceReadOnlyState(`Fetch failure: ${safeError} Read-only display preserved.`, "error", "Agent trace fetch failure") : ""}
       <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Trace state", stateLabel)}
         ${renderWorkflowSummaryMetric("Found", found ? "true" : "false")}
         ${renderWorkflowSummaryMetric("Step count", stepCount)}
         ${renderWorkflowSummaryMetric("Empty trace", emptyTrace ? "true" : "false")}
         ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "true" : "unknown")}
       </div>
-      ${notFoundMessage ? `<div class="pipeline-runs-empty-cell">${escapeHtml(notFoundMessage)}</div>` : ""}
-      ${emptyMessage ? `<div class="pipeline-runs-empty-cell">${escapeHtml(emptyMessage)}</div>` : ""}
-      ${found ? `
-        <article class="agent-trace-run">
+      ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
+      ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
+      ${found && !loadingState ? `
+        <article class="agent-trace-run" aria-label="Read-only agent trace run metadata">
           <div class="agent-trace-run-header">
             <div>
               <div class="agent-trace-run-id">${escapeHtml(agentRun.agent_run_id || "Agent run")}</div>
@@ -568,14 +594,15 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
             ${escapeHtml(agentRun.observed_at_utc || agentRun.started_at || "Timestamp unavailable")}
             ${agentRun.completed_at ? ` -> ${escapeHtml(agentRun.completed_at)}` : ""}
           </div>
+          <div class="agentic-review-muted">Long trace readability is supported by collapsed step details and readable metadata summaries.</div>
           <div class="agent-trace-json-grid">
-            ${renderAgentTraceReadOnlyDetails("Agent run metadata", agentRun.metadata || agentRun.summary_json)}
-            ${renderAgentTraceReadOnlyDetails("Safety metadata", safety)}
+            ${renderAgentTraceReadOnlyDetails("Agent run metadata", agentRun.metadata || agentRun.summary_json, { helper: "Read-only agent run metadata." })}
+            ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable safety metadata display." })}
           </div>
-          <div class="agent-trace-step-list">
+          <div class="agent-trace-step-list" aria-label="Read-only ordered agent steps list">
             ${steps.length
               ? steps.map(renderAgentTraceReadOnlyStep).join("")
-              : `<div class="pipeline-runs-empty-cell">No ordered agent steps returned for this trace.</div>`}
+              : renderAgentTraceReadOnlyState("No ordered agent steps returned for this trace. Empty trace: no ordered agent steps returned for this trace.", "info", "Agent trace empty trace")}
           </div>
         </article>
       ` : ""}
@@ -1850,6 +1877,18 @@ async function initAgenticReviewPage() {
       fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agentic-review-data`),
       fetchJson(`/api/agent-feedback/summary?pipeline_run_id=${encodeURIComponent(runId)}&limit=50`).catch(() => ({})),
     ]);
+    const traceNode = qs("agenticReviewTracePanel");
+    if (traceNode) {
+      traceNode.outerHTML = renderAgentTraceReadOnlyPanel({
+        loading_state: true,
+        found: false,
+        agent_run: {},
+        agent_steps: [],
+        step_count: 0,
+        empty_trace: true,
+        safety_metadata: { read_only: true },
+      });
+    }
     const tracePayload = await fetchAgentTraceReadOnlyPayload(payload, runId).catch((err) => ({
       read_only_error: err?.message || "Agent trace could not be loaded.",
       found: false,
@@ -1896,4 +1935,3 @@ async function fetchReadOnlyAgentTrace(approvalRequestId, runId) {
 
   return response.json();
 }
-

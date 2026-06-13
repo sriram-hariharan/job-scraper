@@ -15,7 +15,7 @@ PROTECTED_FILE_HASHES = {
     "src/agents/trace.py": "595e4cfdde253bb42013a9b684bd7be69d0e53eaf5fcddbe0a788b13bb0f8df2",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
-    "src/agents/deduplication.py": "a338326a2a4092c2b9a3bac0d1381d5e2b5a83cc35892d92f1870ae448dbe878",
+    "src/agents/deduplication.py": "7aeb6e831197a63f66b83fff898ccef77db177e39594464e1c215cffaed432b8",
     "src/agents/jd_intelligence.py": "a8ac3f59c089326dfbeff7d70b4fcae05e22c7e67e9deb58013dffb84deaf6c5",
     "src/agents/final_application_scoring.py": "3a6d1a800bc728fa24992396ef1a30ac994deedd86a82f07d36aa0eebb28088d",
     "src/agents/workflow_runner.py": "bbdaf6d1dcc829809de6ee62a864ef5048a73ef63c288173f676a42ca1e6cd05",

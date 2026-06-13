@@ -18829,3 +18829,45 @@ def test_critic_evaluator_readonly_api_action_no_storage_no_llm_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+def test_full_fledged_agentic_ai_app_roadmap_doc_contract():
+    from pathlib import Path
+
+    doc = Path("docs/full_fledged_agentic_ai_app_roadmap.md")
+    assert doc.exists()
+    text = doc.read_text(encoding="utf-8")
+
+    required_phrases = [
+        "ApplyLens AI Full-Fledged Agentic AI App Roadmap",
+        "not a chatbot",
+        "not fake agents",
+        "Existing pipeline stage -> agent wrapper -> structured output -> validation -> trace log -> next stage",
+        "Prefilter relevance",
+        "LLM evaluation",
+        "Final application scoring",
+        "no application execution",
+        "no application submission",
+        "no approval mutation",
+        "no scoring change",
+        "no ranking change",
+        "Discovery Agent",
+        "Relevance Prefilter Agent",
+        "Deduplication Agent",
+        "JD Intelligence Agent",
+        "Resume Match Agent",
+        "Tailoring Suggestion Agent",
+        "Critic / Guardrail Agent",
+        "Strategy Agent",
+        "LLM-Backed JD Intelligence Agent",
+        "Evidence-Backed Resume Match Agent",
+        "Evaluation Benchmark",
+        "LLMOps and AI Observability",
+        "Human Feedback Loop",
+        "RAG Evaluation Dashboard",
+        "Optional Graph Orchestration",
+        "Demo Mode and Portfolio Packaging",
+        "What Not To Build",
+    ]
+
+    for phrase in required_phrases:
+        assert phrase in text

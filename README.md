@@ -844,6 +844,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Feedback learning loop readiness checkpoint](docs/feedback_learning_loop_readiness_checkpoint.md)
 
+- [LangGraph orchestration spike readiness checkpoint](docs/langgraph_orchestration_spike_readiness_checkpoint.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -894,3 +896,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Critic/Evaluator agent readiness checkpoint: `docs/critic_evaluator_agent_readiness_checkpoint.md`
 
 - Feedback learning loop readiness checkpoint: `docs/feedback_learning_loop_readiness_checkpoint.md`
+
+- LangGraph orchestration spike readiness checkpoint: `docs/langgraph_orchestration_spike_readiness_checkpoint.md`

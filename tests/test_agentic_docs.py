@@ -18408,3 +18408,88 @@ def test_feedback_learning_loop_readiness_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_langgraph_orchestration_spike_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/langgraph_orchestration_spike_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "LangGraph orchestration spike readiness checkpoint",
+        "docs/tests only",
+        "LangGraph orchestration spike readiness",
+        "future LangGraph orchestration spike",
+        "no dependency installation",
+        "no LangGraph dependency",
+        "no graph runtime code",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no model provider call",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no application execution",
+        "no application submission",
+        "deterministic",
+        "existing agents",
+        "JobApplicationContext",
+        "trace recorder",
+        "Relevance Prefilter Agent",
+        "Deduplication Agent",
+        "JD Intelligence Agent",
+        "Final Application Scoring Agent",
+        "Critic/Evaluator agent readiness",
+        "Feedback learning loop readiness",
+        "read-only Agent Trace API endpoint",
+        "read-only Agent Trace UI panel",
+        "prefilter relevance",
+        "deduplication",
+        "JD intelligence",
+        "final application scoring",
+        "LLM evaluation",
+        "application execution",
+        "application submission",
+        "state graph proposal",
+        "node inventory",
+        "edge inventory",
+        "routing constraints",
+        "side-effect boundaries",
+        "non-goals",
+        "implementation guardrails",
+        "rollback plan",
+        "verification plan",
+        "agent_state_initialization",
+        "relevance_prefilter",
+        "jd_intelligence",
+        "final_application_scoring",
+        "critic_evaluator",
+        "feedback_learning_loop",
+        (
+            "agent_state_initialization -> relevance_prefilter -> deduplication -> "
+            "jd_intelligence -> final_application_scoring -> critic_evaluator -> "
+            "feedback_learning_loop"
+        ),
+        "scheduler/background work",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/langgraph_orchestration_spike_readiness_checkpoint.md",
+        "tests/test_langgraph_orchestration_spike_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

@@ -916,3 +916,9 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Critic/Evaluator runtime skeleton wrap checkpoint: `docs/critic_evaluator_runtime_skeleton_wrap_checkpoint.md`
 
 - Critic/Evaluator explicit read-only API action readiness checkpoint: `docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md`
+
+## Portfolio demo readiness
+
+ApplyLens AI is portfolio-ready as a job scraper app with an agentic AI layer, read-only agent trace visibility, a deterministic Critic/Evaluator runtime skeleton, and an explicit read-only Critic/Evaluator API action. The demo keeps filtering/ranking unchanged and guarantees no auto-apply, no application execution, and no application submission.
+
+See [Portfolio demo readiness wrap checkpoint](docs/portfolio_demo_readiness_wrap_checkpoint.md).

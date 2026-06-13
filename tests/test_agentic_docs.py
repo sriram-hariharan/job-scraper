@@ -18623,3 +18623,73 @@ def test_critic_evaluator_runtime_skeleton_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_critic_evaluator_runtime_skeleton_wrap_checkpoint_doc_contract():
+    doc_path = Path("docs/critic_evaluator_runtime_skeleton_wrap_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Critic/Evaluator runtime skeleton wrap checkpoint",
+        "docs/tests only",
+        "completed runtime skeleton scope",
+        "isolated deterministic skeleton",
+        "trace-only evaluation inputs",
+        "CRITIC_EVALUATOR_RUBRIC_VERSION",
+        "build_empty_evaluator_result",
+        "evaluate_agent_trace",
+        "evaluator_status",
+        "evaluator_findings",
+        "evaluator_warnings",
+        "evaluator_recommendations",
+        "requires_human_review",
+        "deterministic_rubric_version",
+        "trace completeness",
+        "agent step ordering",
+        "safety metadata completeness",
+        "validation_json consistency",
+        "separation of prefilter relevance, LLM evaluation, and final application scoring",
+        "no live LLM call",
+        "no model provider call",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no application execution",
+        "no application submission",
+        "deterministic",
+        "current completed scope",
+        "remaining non-goals",
+        "next implementation options",
+        "recommended next step",
+        "rollback plan",
+        "verification plan",
+        "1. Critic/Evaluator explicit read-only API action readiness",
+        "2. Critic/Evaluator trace persistence readiness",
+        "3. Critic/Evaluator UI display readiness",
+        "4. Critic/Evaluator pipeline wiring readiness",
+        "5. Feedback capture storage readiness",
+        "Recommended next step: Critic/Evaluator explicit read-only API action readiness.",
+        "safest because it can remain read-only, deterministic, no storage writes, no LLM calls, no scoring change, and no pipeline wiring",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/critic_evaluator_runtime_skeleton_wrap_checkpoint.md",
+        "tests/test_critic_evaluator_runtime_skeleton_wrap_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

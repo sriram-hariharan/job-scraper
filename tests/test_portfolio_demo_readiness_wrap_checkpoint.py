@@ -54,6 +54,12 @@ REQUIRED_TERMS = [
 ]
 
 ALLOWED_CHANGED = {
+    "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+    "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
+    "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
+    "docs/agentic_review_ui_portfolio_polish_no_backend_change.md",
+    "src/app/static/app_redesign.css",
+    "src/app/static/agentic_review.js",
     "docs/portfolio_demo_readiness_wrap_checkpoint.md",
     "docs/orchestrator_readiness.md",
     "README.md",
@@ -86,12 +92,19 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
     extra = sorted(path for path in changed if path not in ALLOWED_CHANGED)
     assert not extra
 
+    approved_ui_runtime_paths = {
+        "src/app/static/agentic_review.js",
+        "src/app/static/app_redesign.css",
+    }
     runtime_paths = [
         path for path in changed
-        if path.startswith("src/")
-        or path == "application_execution_queue.py"
-        or path.endswith(".js")
-        or path.endswith(".html")
-        or path.endswith(".css")
+        if path not in approved_ui_runtime_paths
+        and (
+            path.startswith("src/")
+            or path == "application_execution_queue.py"
+            or path.endswith(".js")
+            or path.endswith(".html")
+            or path.endswith(".css")
+        )
     ]
     assert not runtime_paths

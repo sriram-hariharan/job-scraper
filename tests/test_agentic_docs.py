@@ -18569,3 +18569,57 @@ def test_agentic_extended_readiness_wrap_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_critic_evaluator_runtime_skeleton_doc_contract():
+    doc_path = Path("docs/critic_evaluator_runtime_skeleton_no_llm_no_pipeline.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Critic/Evaluator runtime skeleton without LLM calls",
+        "isolated deterministic skeleton",
+        "no live LLM call",
+        "no model provider call",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no application execution",
+        "no application submission",
+        "trace-only evaluation inputs",
+        "evaluator_status",
+        "evaluator_findings",
+        "evaluator_warnings",
+        "evaluator_recommendations",
+        "requires_human_review",
+        "deterministic_rubric_version",
+        "trace completeness",
+        "agent step ordering",
+        "safety metadata completeness",
+        "validation_json consistency",
+        "separation of prefilter relevance, LLM evaluation, and final application scoring",
+        "rollback plan",
+        "verification plan",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "src/agents/critic_evaluator.py",
+        "docs/critic_evaluator_runtime_skeleton_no_llm_no_pipeline.md",
+        "tests/test_critic_evaluator_runtime_skeleton_no_llm_no_pipeline.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

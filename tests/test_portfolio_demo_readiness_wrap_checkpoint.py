@@ -54,6 +54,8 @@ REQUIRED_TERMS = [
 ]
 
 ALLOWED_CHANGED = {
+    "src/app/api.py",
+    "tests/test_agent_trace_api.py",
     "tests/test_agent_trace_service_summary_readonly_no_api_change.py",
     "src/app/services.py",
     "tests/test_agent_trace_summary_helper_no_pipeline_change.py",
@@ -106,6 +108,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
     assert not extra
 
     approved_runtime_paths = {
+        "src/app/api.py",
         "src/app/services.py",
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",

@@ -2117,6 +2117,7 @@ def profile_pipeline_run_agent_trace(
     http_request: Request,
     context_id: str = "",
     agent_run_id: str = "",
+    include_trace_summary: str = "",
 ):
     try:
         return services.agent_trace_payload(
@@ -2124,6 +2125,8 @@ def profile_pipeline_run_agent_trace(
             pipeline_run_id=run_id,
             context_id=context_id,
             agent_run_id=agent_run_id,
+            include_trace_summary=str(include_trace_summary or "").strip().lower()
+            in {"1", "true", "yes", "on"},
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

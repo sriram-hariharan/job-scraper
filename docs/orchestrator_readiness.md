@@ -683,6 +683,12 @@ See `docs/critic_evaluator_agent_readiness_checkpoint.md`.
 
 This checkpoint is docs/tests only and prepares a future Critic/Evaluator agent readiness path for trace-only evaluation inputs, agent trace review, quality rubric design, and evaluator output contract design. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no application execution, no application submission, and no scoring change.
 
+## Step 197A: feedback learning loop readiness checkpoint
+
+See `docs/feedback_learning_loop_readiness_checkpoint.md`.
+
+This checkpoint is docs/tests only and prepares a future feedback learning loop around human feedback, agent trace feedback, evaluator findings, and review outcomes. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no feedback storage, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

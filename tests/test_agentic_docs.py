@@ -18322,3 +18322,89 @@ def test_critic_evaluator_agent_readiness_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_feedback_learning_loop_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/feedback_learning_loop_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Feedback learning loop readiness checkpoint",
+        "docs/tests only",
+        "Feedback learning loop readiness",
+        "future feedback learning loop",
+        "human feedback",
+        "agent trace feedback",
+        "evaluator findings",
+        "review outcomes",
+        "feedback input contract",
+        "feedback output contract",
+        "learning signal taxonomy",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no feedback storage",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no model provider call",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no application execution",
+        "no application submission",
+        "deterministic",
+        "read-only Agent Trace API endpoint",
+        "read-only Agent Trace UI panel",
+        "Critic/Evaluator agent readiness",
+        "prefilter relevance",
+        "deduplication",
+        "JD intelligence",
+        "final application scoring",
+        "LLM evaluation",
+        "application execution",
+        "application submission",
+        "non-goals",
+        "implementation guardrails",
+        "rollback plan",
+        "verification plan",
+        "trace_run_id",
+        "agent_step_id",
+        "reviewer_id_placeholder",
+        "feedback_category",
+        "feedback_signal",
+        "feedback_note",
+        "requires_human_review",
+        "accepted_signal",
+        "rejected_signal",
+        "learning_signal_type",
+        "recommended_follow_up",
+        "safe_to_use_for_training",
+        "deterministic_feedback_schema_version",
+        "1. false positive relevance",
+        "2. false negative relevance",
+        "3. duplicate detection miss",
+        "4. JD extraction issue",
+        "5. final application scoring issue",
+        "6. safety metadata issue",
+        "7. validation_json issue",
+        "8. human review required",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/feedback_learning_loop_readiness_checkpoint.md",
+        "tests/test_feedback_learning_loop_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

@@ -80,10 +80,11 @@ function renderReasonChips(value) {
   `;
 }
 
-function renderAgenticReviewStatus(payload = {}) {
+function renderAgenticReviewStatus(payload = {}, tracePayload = {}) {
   const run = payload.run || {};
   const summary = getWorkflowSummary(payload);
   const verification = getWorkflowVerification(payload);
+  const traceSummary = tracePayload && typeof tracePayload === "object" ? tracePayload : {};
   const counts = run?.counts && typeof run.counts === "object" ? run.counts : {};
   const missingArtifacts = Array.isArray(verification.missing_artifacts)
     ? verification.missing_artifacts
@@ -103,16 +104,24 @@ function renderAgenticReviewStatus(payload = {}) {
         ${renderReviewPill(formatWorkflowVerificationStatus(verificationStatus), "agentic-review-verification-pill")}
       </div>
     </div>
-    <div class="agentic-review-health-strip">
+    <div class="agentic-review-health-strip agentic-review-health-strip--primary">
+      ${renderWorkflowSummaryMetric("Run status", pipelineRunStatusLabel(run?.status))}
+      ${renderWorkflowSummaryMetric("Verification", formatWorkflowVerificationStatus(verificationStatus))}
+      ${renderWorkflowSummaryMetric("Final jobs", run?.final_job_count ?? counts.final_jobs ?? "-")}
       ${renderWorkflowSummaryMetric("Ready to apply", summary.ready_to_apply_count ?? 0)}
       ${renderWorkflowSummaryMetric("Tailor then apply", summary.tailor_then_apply_count ?? 0)}
       ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count ?? 0)}
-      ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count ?? 0)}
-      ${renderWorkflowSummaryMetric("Verification", formatWorkflowVerificationStatus(verificationStatus))}
-      ${renderWorkflowSummaryMetric("Missing artifacts", missingArtifacts.length)}
-      ${renderWorkflowSummaryMetric("Final jobs", run?.final_job_count ?? counts.final_jobs ?? "-")}
-      ${renderWorkflowSummaryMetric("Scraped / filtered", `${counts.scraped_jobs ?? counts.scraped ?? "-"} / ${counts.filtered_jobs ?? counts.filtered ?? "-"}`)}
+      ${renderWorkflowSummaryMetric("Agent trace", traceSummary.found === true ? "available" : traceSummary.found === false ? "not persisted" : "-")}
     </div>
+    <details class="agentic-review-secondary-diagnostics">
+      <summary>Secondary diagnostics</summary>
+      <div class="agentic-review-health-strip agentic-review-health-strip--secondary">
+        ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Missing artifacts", missingArtifacts.length)}
+        ${renderWorkflowSummaryMetric("Trace steps", traceSummary.step_count ?? "-")}
+      ${renderWorkflowSummaryMetric("Scraped / filtered", `${counts.scraped_jobs ?? counts.scraped ?? "-"} / ${counts.filtered_jobs ?? counts.filtered ?? "-"}`)}
+      </div>
+    </details>
   `;
 }
 
@@ -200,6 +209,16 @@ function renderAgenticReviewDiagnosticsPanel(
   const operatorApprovalMockSection = renderOperatorApprovalMockSection(operatorApprovalMock);
   const feedbackSection = renderAgenticReviewFeedbackSection(agentFeedback);
   const ragEvaluationSection = renderRagEvaluationSection(ragEvaluation);
+  const optionalDiagnosticSections = [
+    preflightSection,
+    adapterChainSection,
+    chainGeneratorSection,
+    dryRunSimulationSection,
+    proposalOnlyMutationPlanSection,
+    operatorApprovalMockSection,
+    ragEvaluationSection,
+    feedbackSection,
+  ].join("");
   const available = Boolean(workflowVerification?.available);
   const verification = workflowVerification?.verification_json && typeof workflowVerification.verification_json === "object"
     ? workflowVerification.verification_json
@@ -254,14 +273,10 @@ function renderAgenticReviewDiagnosticsPanel(
         </div>
       </div>
       <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, dry run, or verification recorded for this run.</div>
-      ${preflightSection}
-      ${adapterChainSection}
-      ${chainGeneratorSection}
-      ${dryRunSimulationSection}
-      ${proposalOnlyMutationPlanSection}
-      ${operatorApprovalMockSection}
-      ${ragEvaluationSection}
-      ${feedbackSection}
+      <details class="agentic-review-optional-diagnostics">
+        <summary>Optional diagnostics not recorded</summary>
+        ${optionalDiagnosticSections}
+      </details>
     `;
     return;
   }
@@ -314,14 +329,10 @@ function renderAgenticReviewDiagnosticsPanel(
     ${renderAgenticWorkflowManifestSection(workflowManifest)}
     ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
     ${renderAgenticWorkflowDryRunSection(workflowDryRun)}
-    ${preflightSection}
-    ${adapterChainSection}
-    ${chainGeneratorSection}
-    ${dryRunSimulationSection}
-    ${proposalOnlyMutationPlanSection}
-    ${operatorApprovalMockSection}
-    ${ragEvaluationSection}
-    ${feedbackSection}
+    <details class="agentic-review-optional-diagnostics">
+      <summary>Optional diagnostics not recorded</summary>
+      ${optionalDiagnosticSections}
+    </details>
   `;
 }
 
@@ -553,7 +564,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
           ? "empty trace"
           : "ordered agent steps";
   const notFoundMessage = !found
-    ? "Not found trace: no agent trace exists for this approval request yet. The read-only agent trace panel is waiting for existing trace data."
+    ? "No persisted trace found for this run. The trace panel is read-only and will show ordered agent steps when trace records are available."
     : "";
   const emptyMessage = found && emptyTrace
     ? "Empty trace: agent run metadata is available, but no ordered agent steps were returned. The read-only display remains deterministic."
@@ -563,7 +574,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       <div class="agentic-workflow-header">
         <div>
           <h4>Agent Trace</h4>
-          <p>Read-only trace panel. Read-only agent trace panel. Uses GET only and does not change approval records, queues, pipeline state, storage, execution, or submissions.</p>
+          <p>Read-only trace panel. Uses GET only and never changes approvals, queues, scoring, execution, or submissions.</p>
           <p class="agentic-review-muted">Accessibility labels, loading state, empty trace, not found trace, fetch failure, collapsed step details, safety metadata, and validation_json are display-only polish.</p>
         </div>
         <span class="agentic-workflow-badge">Read-only</span>
@@ -572,13 +583,19 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${safeError ? renderAgentTraceReadOnlyState(`Fetch failure: ${safeError} Read-only display preserved.`, "error", "Agent trace fetch failure") : ""}
       <div class="agent-trace-counts">
         ${renderWorkflowSummaryMetric("Trace state", stateLabel)}
-        ${renderWorkflowSummaryMetric("Found", found ? "true" : "false")}
-        ${renderWorkflowSummaryMetric("Step count", stepCount)}
-        ${renderWorkflowSummaryMetric("Empty trace", emptyTrace ? "true" : "false")}
-        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "true" : "unknown")}
+        ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
+      <details class="agent-trace-debug-details">
+        <summary>Debug details</summary>
+        <div class="agent-trace-counts">
+          ${renderWorkflowSummaryMetric("Found", found ? "true" : "false")}
+          ${renderWorkflowSummaryMetric("Step count", stepCount)}
+          ${renderWorkflowSummaryMetric("Empty trace", emptyTrace ? "true" : "false")}
+          ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "true" : "unknown")}
+        </div>
+      </details>
       ${found && !loadingState ? `
         <article class="agent-trace-run" aria-label="Read-only agent trace run metadata">
           <div class="agent-trace-run-header">
@@ -1382,56 +1399,60 @@ function renderApprovalDecisionActionSection(mock = {}) {
         <span class="agentic-workflow-badge">Route only</span>
       </div>
       <div class="agentic-feedback-actions">
-        ${decisions.map(([decision, label]) => `
+        <div class="agentic-approval-button-group agentic-approval-button-group--actions" aria-label="Approval action buttons">
+          ${decisions.map(([decision, label]) => `
+            <button
+              type="button"
+              class="agentic-feedback-action"
+              data-agentic-approval-decision="${escapeHtml(decision)}"
+              ${disabledAttr}
+            >
+              ${escapeHtml(label)}
+            </button>
+          `).join("")}
+        </div>
+        <div class="agentic-approval-button-group agentic-approval-button-group--observability" aria-label="Read-only observability buttons">
           <button
             type="button"
             class="agentic-feedback-action"
-            data-agentic-approval-decision="${escapeHtml(decision)}"
-            ${disabledAttr}
+            data-agentic-production-scheduler-observability-report
+            ${approvalRequestId ? "" : "disabled"}
           >
-            ${escapeHtml(label)}
+            Load observability report
           </button>
-        `).join("")}
-        <button
-          type="button"
-          class="agentic-feedback-action"
-          data-agentic-production-scheduler-observability-report
-          ${approvalRequestId ? "" : "disabled"}
-        >
-          Load observability report
-        </button>
-        <button
-          type="button"
-          class="agentic-feedback-action"
-          data-agentic-production-scheduler-observability-dashboard
-          ${approvalRequestId ? "" : "disabled"}
-        >
-          Load observability dashboard
-        </button>
-        <button
-          type="button"
-          class="agentic-feedback-action"
-          data-agentic-production-scheduler-observability-export-preview
-          ${approvalRequestId ? "" : "disabled"}
-        >
-          Preview observability export
-        </button>
-        <button
-          type="button"
-          class="agentic-feedback-action"
-          data-agentic-production-scheduler-observability-writer-status
-          ${approvalRequestId ? "" : "disabled"}
-        >
-          Check writer status
-        </button>
-        <button
-          type="button"
-          class="agentic-feedback-action"
-          data-agentic-production-scheduler-observability-reporting-job
-          ${approvalRequestId ? "" : "disabled"}
-        >
-          Invoke reporting job
-        </button>
+          <button
+            type="button"
+            class="agentic-feedback-action"
+            data-agentic-production-scheduler-observability-dashboard
+            ${approvalRequestId ? "" : "disabled"}
+          >
+            Load observability dashboard
+          </button>
+          <button
+            type="button"
+            class="agentic-feedback-action"
+            data-agentic-production-scheduler-observability-export-preview
+            ${approvalRequestId ? "" : "disabled"}
+          >
+            Preview observability export
+          </button>
+          <button
+            type="button"
+            class="agentic-feedback-action"
+            data-agentic-production-scheduler-observability-writer-status
+            ${approvalRequestId ? "" : "disabled"}
+          >
+            Check writer status
+          </button>
+          <button
+            type="button"
+            class="agentic-feedback-action"
+            data-agentic-production-scheduler-observability-reporting-job
+            ${approvalRequestId ? "" : "disabled"}
+          >
+            Invoke reporting job
+          </button>
+        </div>
         <span
           class="agentic-feedback-status ${blockedReasons.length ? "is-error" : "is-info"}"
           data-agentic-approval-status
@@ -1697,7 +1718,7 @@ async function loadProductionSchedulerObservabilityWriterStatus(button) {
 }
 
 function renderAgenticReviewData(payload, tracePayload) {
-  renderAgenticReviewStatus(payload || {});
+  renderAgenticReviewStatus(payload || {}, tracePayload || {});
 
   const summaryNode = qs("agenticWorkflowSummaryPanel");
   if (summaryNode) {

@@ -57,7 +57,8 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "Read-only trace panel" in snippet
     assert "GET only" in snippet
     assert "ordered agent steps" in snippet
-    assert "Not found trace: no agent trace exists for this approval request yet." in snippet
+    assert "No persisted trace found for this run" in snippet
+    assert "The trace panel is read-only and will show ordered agent steps when trace records are available." in snippet
     assert "Empty trace: agent run metadata is available" in snippet
     assert "No ordered agent steps returned for this trace." in snippet
     assert "Safety metadata" in snippet

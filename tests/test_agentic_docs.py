@@ -18249,3 +18249,76 @@ def test_agent_trace_persistence_activation_readiness_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_critic_evaluator_agent_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/critic_evaluator_agent_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Critic/Evaluator agent readiness checkpoint",
+        "docs/tests only",
+        "Critic/Evaluator agent readiness",
+        "future Critic/Evaluator agent",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no model provider call",
+        "no approval mutation",
+        "no application execution",
+        "no application submission",
+        "no scoring change",
+        "deterministic",
+        "trace-only evaluation inputs",
+        "agent trace review",
+        "quality rubric",
+        "evaluator output contract",
+        "safety metadata review",
+        "validation_json review",
+        "prefilter relevance",
+        "deduplication",
+        "JD intelligence",
+        "final application scoring",
+        "LLM evaluation",
+        "application execution",
+        "application submission",
+        "read-only Agent Trace API endpoint",
+        "read-only Agent Trace UI panel",
+        "non-goals",
+        "implementation guardrails",
+        "rollback plan",
+        "verification plan",
+        "1. trace completeness",
+        "2. agent step ordering",
+        "3. safety metadata completeness",
+        "4. validation_json consistency",
+        "5. separation of prefilter relevance, LLM evaluation, and final application scoring",
+        "6. no application execution or submission judgment",
+        "evaluator_status",
+        "evaluator_findings",
+        "evaluator_warnings",
+        "evaluator_recommendations",
+        "requires_human_review",
+        "deterministic_rubric_version",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/critic_evaluator_agent_readiness_checkpoint.md",
+        "tests/test_critic_evaluator_agent_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

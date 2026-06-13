@@ -18693,3 +18693,82 @@ def test_critic_evaluator_runtime_skeleton_wrap_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_critic_evaluator_readonly_api_action_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Critic/Evaluator explicit read-only API action readiness checkpoint",
+        "docs/tests only",
+        "Critic/Evaluator explicit read-only API action readiness",
+        "future explicit read-only API action",
+        "no API implementation",
+        "no endpoint implementation",
+        "no API route change",
+        "Critic/Evaluator runtime skeleton",
+        "src/agents/critic_evaluator.py",
+        "evaluate_agent_trace",
+        "build_empty_evaluator_result",
+        "evaluator_status",
+        "evaluator_findings",
+        "evaluator_warnings",
+        "evaluator_recommendations",
+        "requires_human_review",
+        "deterministic_rubric_version",
+        "read-only Agent Trace API endpoint",
+        "explicit user action",
+        "read-only evaluation",
+        "trace-only evaluation inputs",
+        "endpoint contract proposal",
+        "request contract",
+        "response contract",
+        "error handling contract",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no model provider call",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no application execution",
+        "no application submission",
+        "deterministic",
+        "implementation guardrails",
+        "non-goals",
+        "rollback plan",
+        "verification plan",
+        "POST /api/agentic-approvals/{approval_request_id}/critic-evaluator-readonly",
+        "approval_request_id",
+        "trace payload source",
+        "optional evaluator_rubric_version",
+        "no mutation fields",
+        "did_write_storage",
+        "did_call_llm",
+        "did_mutate_approval",
+        "did_change_score",
+        "did_execute_application",
+        "did_submit_application",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md",
+        "tests/test_critic_evaluator_readonly_api_action_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

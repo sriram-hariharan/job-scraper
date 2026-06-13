@@ -70,6 +70,7 @@ ALLOWED_CHANGED = {
     "docs/agentic_review_ui_compaction_polish_no_backend_change.md",
     "docs/full_fledged_agentic_ai_app_roadmap.md",
     "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+    "tests/test_agent_trace_ui_readiness_checkpoint.py",
     "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
     "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
     "docs/agentic_review_ui_portfolio_polish_no_backend_change.md",
@@ -80,6 +81,8 @@ ALLOWED_CHANGED = {
     "README.md",
     "tests/test_portfolio_demo_readiness_wrap_checkpoint.py",
     "tests/test_agentic_docs.py",
+    "src/agents/relevance_prefilter.py",
+    "tests/test_relevance_prefilter_agent_trace_wrapper_no_behavior_change.py",
 }
 
 def _changed_files():
@@ -113,6 +116,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
         "src/storage/agent_trace/store.py",
+        "src/agents/relevance_prefilter.py",
     }
     runtime_paths = [
         path for path in changed

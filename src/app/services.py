@@ -128,6 +128,7 @@ from src.storage.user_pipeline.store import (
     clear_user_seen_jobs_staging_postgres_payload,
 )
 from src.storage.agent_trace.store import (
+    build_agent_trace_summary_payload,
     get_agent_run_postgres_payload,
     list_agent_runs_postgres_payload,
     list_agent_steps_postgres_payload,
@@ -1249,8 +1250,13 @@ def profile_pipeline_run_agentic_review_payload(
     }
 
 
-def _agent_trace_empty_payload(owner_user_id: str, pipeline_run_id: str) -> Dict[str, Any]:
-    return {
+def _agent_trace_empty_payload(
+    owner_user_id: str,
+    pipeline_run_id: str,
+    *,
+    include_trace_summary: bool = False,
+) -> Dict[str, Any]:
+    payload = {
         "pipeline_run_id": _clean_text(pipeline_run_id),
         "owner_user_id": _clean_text(owner_user_id),
         "agent_runs": [],
@@ -1262,6 +1268,12 @@ def _agent_trace_empty_payload(owner_user_id: str, pipeline_run_id: str) -> Dict
             "succeeded_steps": 0,
         },
     }
+    if include_trace_summary:
+        payload["trace_summary"] = build_agent_trace_summary_payload(
+            agent_runs=[],
+            agent_steps=[],
+        )
+    return payload
 
 
 def _agent_trace_json(value: Any) -> Dict[str, Any]:
@@ -1347,6 +1359,7 @@ def agent_trace_payload(
     agent_run_id: str = "",
     limit_runs: int = 50,
     limit_steps: int = 500,
+    include_trace_summary: bool = False,
 ) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     safe_pipeline_run_id = _clean_text(pipeline_run_id)
@@ -1357,7 +1370,11 @@ def agent_trace_payload(
     if not safe_pipeline_run_id:
         raise ValueError("Pipeline run id is required.")
 
-    empty_payload = _agent_trace_empty_payload(owner, safe_pipeline_run_id)
+    empty_payload = _agent_trace_empty_payload(
+        owner,
+        safe_pipeline_run_id,
+        include_trace_summary=include_trace_summary,
+    )
     try:
         if safe_agent_run_id:
             run_payload = get_agent_run_postgres_payload(
@@ -1439,7 +1456,7 @@ def agent_trace_payload(
         for run in runs
     ]
     public_steps = [step for run in public_runs for step in run["steps"]]
-    return {
+    payload = {
         "pipeline_run_id": safe_pipeline_run_id,
         "owner_user_id": owner,
         "agent_runs": public_runs,
@@ -1451,6 +1468,12 @@ def agent_trace_payload(
             "succeeded_steps": sum(1 for step in public_steps if _clean_text(step.get("status")).lower() == "succeeded"),
         },
     }
+    if include_trace_summary:
+        payload["trace_summary"] = build_agent_trace_summary_payload(
+            agent_runs=runs,
+            agent_steps=steps,
+        )
+    return payload
 
 
 def record_agent_feedback_payload(

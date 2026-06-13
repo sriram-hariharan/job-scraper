@@ -944,3 +944,251 @@ SELECT json_build_object(
         "command": payload.get("command", []),
         "command_text": payload.get("command_text", ""),
     }
+
+_AGENT_TRACE_RUN_REQUIRED_FIELDS = (
+    "agent_run_id",
+    "owner_user_id",
+    "status",
+    "started_at",
+)
+
+_AGENT_TRACE_STEP_REQUIRED_FIELDS = (
+    "agent_step_id",
+    "agent_run_id",
+    "owner_user_id",
+    "agent_name",
+    "status",
+    "started_at",
+)
+
+_AGENT_TRACE_ERROR_STATUSES = {"error", "failed", "failure"}
+_AGENT_TRACE_WARNING_STATUSES = {"blocked", "warning", "warn", "skipped"}
+
+
+def _agent_trace_dict_rows(rows: Any) -> List[Dict[str, Any]]:
+    if rows is None:
+        return []
+    if not isinstance(rows, list):
+        raise ValueError("Agent trace rows must be provided as a list.")
+    normalized: List[Dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            raise ValueError("Every agent trace row must be a dictionary.")
+        normalized.append(dict(row))
+    return normalized
+
+
+def _agent_trace_status(value: Any) -> str:
+    return _clean_text(value).lower() or "unknown"
+
+
+def _agent_trace_counter_increment(counter: Dict[str, int], key: str) -> None:
+    safe_key = _clean_text(key) or "unknown"
+    counter[safe_key] = int(counter.get(safe_key, 0)) + 1
+
+
+def _agent_trace_numeric(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = _clean_text(value)
+    if not text:
+        return None
+    try:
+        return float(text)
+    except ValueError:
+        return None
+
+
+def _agent_trace_json_dict(value: Any) -> Dict[str, Any]:
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _agent_trace_missing_required_fields(
+    *,
+    rows: List[Dict[str, Any]],
+    required_fields: tuple[str, ...],
+    id_field: str,
+) -> List[Dict[str, Any]]:
+    missing_rows: List[Dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        missing_fields = [
+            field
+            for field in required_fields
+            if _clean_text(row.get(field)) == ""
+        ]
+        if missing_fields:
+            missing_rows.append(
+                {
+                    "index": index,
+                    id_field: _clean_text(row.get(id_field)),
+                    "missing_fields": missing_fields,
+                }
+            )
+    return missing_rows
+
+
+def _agent_trace_latency_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    values = [
+        int(value)
+        for value in (
+            _agent_trace_numeric(step.get("latency_ms"))
+            for step in steps
+        )
+        if value is not None
+    ]
+    if not values:
+        return {
+            "count": 0,
+            "total_ms": 0,
+            "min_ms": 0,
+            "max_ms": 0,
+            "average_ms": 0,
+        }
+    total = sum(values)
+    return {
+        "count": len(values),
+        "total_ms": total,
+        "min_ms": min(values),
+        "max_ms": max(values),
+        "average_ms": round(total / len(values), 2),
+    }
+
+
+def _agent_trace_model_usage_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    model_counts: Dict[str, int] = {}
+    provider_counts: Dict[str, int] = {}
+    for step in steps:
+        provider = _clean_text(step.get("model_provider"))
+        model = _clean_text(step.get("model_name"))
+        if provider:
+            _agent_trace_counter_increment(provider_counts, provider)
+        if model or provider:
+            model_key = f"{provider}/{model}".strip("/")
+            _agent_trace_counter_increment(model_counts, model_key)
+    return {
+        "provider_counts": dict(sorted(provider_counts.items())),
+        "model_counts": dict(sorted(model_counts.items())),
+    }
+
+
+def _agent_trace_token_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    totals: Dict[str, int] = {}
+    for step in steps:
+        token_usage = _agent_trace_json_dict(step.get("token_usage_json"))
+        for key, value in token_usage.items():
+            numeric = _agent_trace_numeric(value)
+            if numeric is not None:
+                totals[str(key)] = int(totals.get(str(key), 0)) + int(numeric)
+    return dict(sorted(totals.items()))
+
+
+def _agent_trace_cost_summary(steps: List[Dict[str, Any]]) -> Dict[str, Any]:
+    totals: Dict[str, float] = {}
+    for step in steps:
+        cost = _agent_trace_json_dict(step.get("cost_json"))
+        for key, value in cost.items():
+            numeric = _agent_trace_numeric(value)
+            if numeric is not None:
+                totals[str(key)] = float(totals.get(str(key), 0.0)) + float(numeric)
+    return {key: round(value, 6) for key, value in sorted(totals.items())}
+
+
+def build_agent_trace_summary_payload(
+    *,
+    agent_runs: List[Dict[str, Any]] | None = None,
+    agent_steps: List[Dict[str, Any]] | None = None,
+) -> Dict[str, Any]:
+    """Build a deterministic read-only summary for existing agent trace rows.
+
+    This helper is intentionally in-memory only. It does not read from or write to
+    Postgres, does not call external services, and does not mutate input rows.
+    """
+
+    runs = _agent_trace_dict_rows(agent_runs)
+    steps = _agent_trace_dict_rows(agent_steps)
+
+    run_status_counts: Dict[str, int] = {}
+    step_status_counts: Dict[str, int] = {}
+    agent_counts: Dict[str, int] = {}
+
+    error_step_count = 0
+    warning_step_count = 0
+    completed_step_count = 0
+
+    for run in runs:
+        _agent_trace_counter_increment(
+            run_status_counts,
+            _agent_trace_status(run.get("status")),
+        )
+
+    for step in steps:
+        status = _agent_trace_status(step.get("status"))
+        _agent_trace_counter_increment(step_status_counts, status)
+        _agent_trace_counter_increment(agent_counts, _clean_text(step.get("agent_name")))
+
+        has_error = bool(_clean_text(step.get("error"))) or status in _AGENT_TRACE_ERROR_STATUSES
+        has_warning = status in _AGENT_TRACE_WARNING_STATUSES
+        is_completed = bool(_clean_text(step.get("completed_at")))
+
+        if has_error:
+            error_step_count += 1
+        if has_warning:
+            warning_step_count += 1
+        if is_completed:
+            completed_step_count += 1
+
+    missing_required_fields = {
+        "agent_runs": _agent_trace_missing_required_fields(
+            rows=runs,
+            required_fields=_AGENT_TRACE_RUN_REQUIRED_FIELDS,
+            id_field="agent_run_id",
+        ),
+        "agent_steps": _agent_trace_missing_required_fields(
+            rows=steps,
+            required_fields=_AGENT_TRACE_STEP_REQUIRED_FIELDS,
+            id_field="agent_step_id",
+        ),
+    }
+
+    all_required_fields_present = not (
+        missing_required_fields["agent_runs"]
+        or missing_required_fields["agent_steps"]
+    )
+
+    return {
+        "ok": True,
+        "summary_type": "agent_trace",
+        "run_count": len(runs),
+        "step_count": len(steps),
+        "completed_step_count": completed_step_count,
+        "error_step_count": error_step_count,
+        "warning_step_count": warning_step_count,
+        "run_status_counts": dict(sorted(run_status_counts.items())),
+        "step_status_counts": dict(sorted(step_status_counts.items())),
+        "agent_counts": dict(sorted(agent_counts.items())),
+        "latency_summary": _agent_trace_latency_summary(steps),
+        "model_usage_summary": _agent_trace_model_usage_summary(steps),
+        "token_usage_summary": _agent_trace_token_summary(steps),
+        "cost_summary": _agent_trace_cost_summary(steps),
+        "missing_required_fields": missing_required_fields,
+        "all_required_fields_present": all_required_fields_present,
+        "safety_metadata": {
+            "did_read_database": False,
+            "did_write_database": False,
+            "did_create_agent_run": False,
+            "did_create_agent_step": False,
+            "did_update_agent_run": False,
+            "did_update_agent_step": False,
+            "did_call_llm": False,
+            "did_change_pipeline": False,
+            "did_change_scoring": False,
+            "did_change_approval": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+        },
+    }
+

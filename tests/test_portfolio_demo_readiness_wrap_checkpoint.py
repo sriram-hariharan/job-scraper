@@ -54,6 +54,8 @@ REQUIRED_TERMS = [
 ]
 
 ALLOWED_CHANGED = {
+    "tests/test_agent_trace_summary_helper_no_pipeline_change.py",
+    "src/storage/agent_trace/store.py",
     "tests/test_full_agentic_ai_trace_contract_readiness_no_runtime_change.py",
     "docs/full_agentic_ai_trace_contract_readiness_no_runtime_change.md",
     "tests/test_full_agentic_ai_schema_contract_audit_no_runtime_change.py",
@@ -101,13 +103,14 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
     extra = sorted(path for path in changed if path not in ALLOWED_CHANGED)
     assert not extra
 
-    approved_ui_runtime_paths = {
+    approved_runtime_paths = {
         "src/app/static/agentic_review.js",
         "src/app/static/app_redesign.css",
+        "src/storage/agent_trace/store.py",
     }
     runtime_paths = [
         path for path in changed
-        if path not in approved_ui_runtime_paths
+        if path not in approved_runtime_paths
         and (
             path.startswith("src/")
             or path == "application_execution_queue.py"

@@ -570,6 +570,57 @@ function renderAgentTraceReadOnlyState(message, tone = "info", label = "Agent tr
   `;
 }
 
+function hasAgentTraceSummaryObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
+function renderAgentTraceSummaryDetails(label, value) {
+  if (!hasAgentTraceSummaryObject(value)) return "";
+  return renderAgentTraceReadOnlyDetails(label, value, {
+    summary: label,
+    helper: "Read-only trace summary detail.",
+  });
+}
+
+function renderAgentTraceSummarySection(traceSummary = {}) {
+  if (!hasAgentTraceSummaryObject(traceSummary)) return "";
+  const safety = hasAgentTraceSummaryObject(traceSummary.safety_metadata)
+    ? traceSummary.safety_metadata
+    : {};
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only agent trace summary">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Trace Summary</h4>
+          <p>Opt-in read-only summary from existing trace rows. It does not write storage, call LLMs, execute applications, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Runs", traceSummary.run_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Steps", traceSummary.step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Completed steps", traceSummary.completed_step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Error steps", traceSummary.error_step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Warning steps", traceSummary.warning_step_count ?? 0)}
+        ${renderWorkflowSummaryMetric("Writes", safety.did_write_database ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceSummaryDetails("Agent counts", traceSummary.agent_counts)}
+        ${renderAgentTraceSummaryDetails("Step status counts", traceSummary.step_status_counts)}
+        ${renderAgentTraceSummaryDetails("Run status counts", traceSummary.run_status_counts)}
+        ${renderAgentTraceSummaryDetails("Latency summary", traceSummary.latency_summary)}
+        ${renderAgentTraceSummaryDetails("Model usage summary", traceSummary.model_usage_summary)}
+        ${renderAgentTraceSummaryDetails("Token usage summary", traceSummary.token_usage_summary)}
+        ${renderAgentTraceSummaryDetails("Cost summary", traceSummary.cost_summary)}
+        ${renderAgentTraceSummaryDetails("Safety metadata", safety)}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -614,6 +665,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${renderWorkflowSummaryMetric("Trace state", stateLabel)}
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
+      ${renderAgentTraceSummarySection(tracePayload?.trace_summary)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
       <details class="agent-trace-debug-details" data-collapsed-by-default="true">
@@ -670,7 +722,7 @@ async function fetchAgentTraceReadOnlyPayload(payload = {}, runId = getAgenticRe
     return fetchJson(`/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace`);
   }
   if (runId) {
-    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace`);
+    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1`);
   }
   return {};
 }

@@ -65,6 +65,17 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "validation_json" in snippet
     assert "Fetch failure:" in snippet
     assert "Read-only display preserved." in snippet
+    assert "function renderAgentTraceSummarySection" in snippet
+    assert "Trace Summary" in snippet
+    assert "Opt-in read-only summary from existing trace rows." in snippet
+    assert "Writes" in snippet
+    assert "LLM calls" in snippet
+    assert "Execution" in snippet
+    assert "Submission" in snippet
+    assert "Agent counts" in snippet
+    assert "Step status counts" in snippet
+    assert "Latency summary" in snippet
+    assert "Model usage summary" in snippet
     assert "<button" not in snippet
 
 
@@ -74,6 +85,7 @@ def test_agent_trace_readonly_panel_uses_get_only_existing_endpoint():
 
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace" in fetch_snippet
     assert "/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace" in fetch_snippet
+    assert "include_trace_summary=1" in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
     assert "renderAgentTraceReadOnlyPanel(tracePayload || {})" in _source()
 
@@ -90,6 +102,23 @@ def test_agent_trace_readonly_panel_uses_get_only_existing_endpoint():
     for marker in forbidden_methods:
         assert marker not in fetch_snippet
         assert marker not in init_snippet
+
+
+def test_agent_trace_summary_ui_handles_missing_summary_and_escapes_values():
+    snippet = _trace_panel_snippet()
+    summary_start = snippet.index("function renderAgentTraceSummaryDetails")
+    summary_end = snippet.index("function renderAgentTraceReadOnlyPanel")
+    summary_snippet = snippet[summary_start:summary_end]
+
+    assert 'if (!hasAgentTraceSummaryObject(traceSummary)) return "";' in summary_snippet
+    assert "tracePayload?.trace_summary" in snippet
+    assert "renderAgentTraceReadOnlyDetails" in summary_snippet
+    assert "renderWorkflowSummaryMetric" in summary_snippet
+    assert "innerHTML" not in summary_snippet
+    assert "did_write_database" in summary_snippet
+    assert "did_call_llm" in summary_snippet
+    assert "did_execute_application" in summary_snippet
+    assert "did_submit_application" in summary_snippet
 
 
 def test_agent_trace_readonly_panel_does_not_add_trace_actions():

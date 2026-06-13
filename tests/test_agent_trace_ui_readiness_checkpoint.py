@@ -9,7 +9,7 @@ PROTECTED_FILE_HASHES = {
     "src/app/static/agentic_review.js": "27cc57c9bc0c079cf148c14e9191c394ac66b0cb071fb98043e4f963e4037827",
     "src/agents/trace.py": "595e4cfdde253bb42013a9b684bd7be69d0e53eaf5fcddbe0a788b13bb0f8df2",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
-    "src/agents/relevance_prefilter.py": "36703c0c3d24b61a70f09cafd77c243ca253407fc439dc5fd4aa1851577371ea",
+    "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/deduplication.py": "a338326a2a4092c2b9a3bac0d1381d5e2b5a83cc35892d92f1870ae448dbe878",
     "src/agents/jd_intelligence.py": "a8ac3f59c089326dfbeff7d70b4fcae05e22c7e67e9deb58013dffb84deaf6c5",
     "src/agents/final_application_scoring.py": "3a6d1a800bc728fa24992396ef1a30ac994deedd86a82f07d36aa0eebb28088d",

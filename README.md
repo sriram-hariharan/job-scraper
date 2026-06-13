@@ -838,6 +838,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Agent Trace polish / UX hardening UI-only implementation](docs/agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.md)
 
+- [Agent Trace persistence activation readiness checkpoint](docs/agent_trace_persistence_activation_readiness_checkpoint.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -882,3 +884,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Agent Trace polish / UX hardening readiness checkpoint: `docs/agent_trace_polish_ux_hardening_readiness_checkpoint.md`
 
 - Agent Trace polish / UX hardening UI-only implementation: `docs/agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.md`
+
+- Agent Trace persistence activation readiness checkpoint: `docs/agent_trace_persistence_activation_readiness_checkpoint.md`

@@ -18180,3 +18180,72 @@ def test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes_doc_contract()
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_persistence_activation_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/agent_trace_persistence_activation_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent Trace persistence activation readiness checkpoint",
+        "docs/tests only",
+        "Trace persistence activation and migration execution plan",
+        "persistent Agent Trace storage",
+        "agent_runs",
+        "agent_steps",
+        "schema.sql",
+        "migration runner",
+        "read-only Agent Trace API endpoint",
+        "read-only Agent Trace UI panel",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage code change",
+        "no schema change",
+        "no schema migration",
+        "no migration execution",
+        "no database connection",
+        "no storage writes",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no approval mutation",
+        "no application execution",
+        "no application submission",
+        "deterministic",
+        "activation prerequisites",
+        "migration dry-run checklist",
+        "rollback plan",
+        "verification plan",
+        "production safety checks",
+        "database backup requirement",
+        "idempotency check",
+        "read-only API compatibility",
+        "UI empty trace compatibility",
+        "observability requirements",
+        "non-goals",
+        "1. explicit operator approval",
+        "2. database backup requirement",
+        "3. migration dry-run checklist",
+        "4. idempotency check",
+        "5. rollback plan",
+        "6. verification plan",
+        "7. production safety checks",
+        "Do not implement migration execution in this checkpoint.",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/agent_trace_persistence_activation_readiness_checkpoint.md",
+        "tests/test_agent_trace_persistence_activation_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

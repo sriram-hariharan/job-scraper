@@ -54,6 +54,8 @@ REQUIRED_TERMS = [
 ]
 
 ALLOWED_CHANGED = {
+    "tests/test_agentic_review_ui_compaction_polish_no_backend_change.py",
+    "docs/agentic_review_ui_compaction_polish_no_backend_change.md",
     "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
     "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
     "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",

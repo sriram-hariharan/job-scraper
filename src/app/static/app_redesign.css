@@ -6017,7 +6017,8 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
 }
 
 [data-agentic-review-run-id] {
-  padding-bottom: clamp(104px, 12vh, 156px);
+  padding-right: clamp(18px, 8vw, 132px);
+  padding-bottom: clamp(168px, 18vh, 240px);
 }
 
 .agentic-review-status-content,
@@ -6118,7 +6119,7 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
 .agentic-review-secondary-diagnostics,
 .agentic-review-optional-diagnostics,
 .agent-trace-debug-details {
-  padding: 10px 12px;
+  padding: 8px 12px;
 }
 
 .agentic-review-secondary-diagnostics summary,
@@ -6132,9 +6133,35 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
   font-weight: 900;
 }
 
+.agentic-review-optional-diagnostics-summary {
+  margin: 6px 0 0;
+  color: var(--app-muted);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.agentic-review-secondary-diagnostics:not([open]),
+.agentic-review-optional-diagnostics:not([open]),
+.agent-trace-debug-details:not([open]),
+.agentic-workflow-markdown:not([open]),
+.agent-trace-json-detail:not([open]) {
+  max-height: 48px;
+  overflow: hidden;
+}
+
 .agentic-review-optional-diagnostics[open] {
   display: grid;
   gap: 12px;
+}
+
+.agentic-workflow-markdown-summary {
+  margin-top: 10px;
+}
+
+.agentic-workflow-markdown pre,
+.agent-trace-json-detail pre {
+  max-height: min(46vh, 520px);
+  overflow: auto;
 }
 
 .agentic-workflow-verification-sections {
@@ -6201,7 +6228,8 @@ html[data-theme="dark"] .pipeline-runs-refresh-btn:not(:disabled):hover {
 
 @media (max-width: 720px) {
   [data-agentic-review-run-id] {
-    padding-bottom: 176px;
+    padding-right: 18px;
+    padding-bottom: 232px;
   }
 
   .agentic-review-status-content,

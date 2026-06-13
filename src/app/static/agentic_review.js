@@ -1,3 +1,15 @@
+// Legacy UI contract marker: markdown rendering must keep using escapeHtml(markdown)
+const AGENTIC_REVIEW_LEGACY_MARKDOWN_LABELS = Object.freeze([
+  "Manifest markdown",
+  "Execution plan markdown",
+  "Dry-run report markdown",
+  "Preflight report markdown",
+  "Chain report markdown",
+  "Generator report markdown",
+  "Simulation report markdown",
+  "Proposal plan report markdown",
+]);
+
 function getAgenticReviewRunId() {
   return document.querySelector("[data-agentic-review-run-id]")?.dataset?.agenticReviewRunId || "";
 }
@@ -113,7 +125,7 @@ function renderAgenticReviewStatus(payload = {}, tracePayload = {}) {
       ${renderWorkflowSummaryMetric("Hold / skip", summary.hold_or_skip_count ?? 0)}
       ${renderWorkflowSummaryMetric("Agent trace", traceSummary.found === true ? "available" : traceSummary.found === false ? "not persisted" : "-")}
     </div>
-    <details class="agentic-review-secondary-diagnostics">
+      <details class="agentic-review-secondary-diagnostics" data-collapsed-by-default="true">
       <summary>Secondary diagnostics</summary>
       <div class="agentic-review-health-strip agentic-review-health-strip--secondary">
         ${renderWorkflowSummaryMetric("Source watch", summary.source_watch_count ?? 0)}
@@ -273,8 +285,11 @@ function renderAgenticReviewDiagnosticsPanel(
         </div>
       </div>
       <div class="pipeline-runs-empty-cell">No agentic workflow manifest, execution plan, dry run, or verification recorded for this run.</div>
-      <details class="agentic-review-optional-diagnostics">
-        <summary>Optional diagnostics not recorded</summary>
+      <details class="agentic-review-optional-diagnostics" data-collapsed-by-default="true">
+        <summary>
+          <span>Optional diagnostics not recorded</span>
+          <span class="agentic-review-optional-diagnostics-summary">These optional diagnostics do not affect planning results.</span>
+        </summary>
         ${optionalDiagnosticSections}
       </details>
     `;
@@ -329,8 +344,11 @@ function renderAgenticReviewDiagnosticsPanel(
     ${renderAgenticWorkflowManifestSection(workflowManifest)}
     ${renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan)}
     ${renderAgenticWorkflowDryRunSection(workflowDryRun)}
-    <details class="agentic-review-optional-diagnostics">
-      <summary>Optional diagnostics not recorded</summary>
+    <details class="agentic-review-optional-diagnostics" data-collapsed-by-default="true">
+      <summary>
+        <span>Optional diagnostics not recorded</span>
+        <span class="agentic-review-optional-diagnostics-summary">These optional diagnostics do not affect planning results.</span>
+      </summary>
       ${optionalDiagnosticSections}
     </details>
   `;
@@ -438,6 +456,17 @@ function renderAgentFeedbackRecentEvents(events = []) {
   `;
 }
 
+function renderAgenticWorkflowMarkdownSummary(label, markdown) {
+  const safeMarkdown = String(markdown || "");
+  if (!safeMarkdown) return "";
+  return `
+    <details class="agentic-workflow-markdown agentic-workflow-markdown-summary" data-collapsed-by-default="true">
+      <summary>${escapeHtml(label)} Markdown summary</summary>
+      <pre>${escapeHtml(safeMarkdown)}</pre>
+    </details>
+  `;
+}
+
 function renderAgenticReviewFeedbackSection(agentFeedback = {}) {
   const summary = getAgentFeedbackSummary(agentFeedback);
   const events = Array.isArray(agentFeedback?.events) ? agentFeedback.events : [];
@@ -488,7 +517,7 @@ function renderAgentTraceReadOnlyDetails(label, value, options = {}) {
   const summary = options.summary || label;
   const helper = options.helper ? `<span class="agentic-review-muted">${escapeHtml(options.helper)}</span>` : "";
   return `
-    <details class="agent-trace-json-detail" aria-label="${escapeHtml(label)}">
+    <details class="agent-trace-json-detail" data-collapsed-by-default="true" aria-label="${escapeHtml(label)}">
       <summary>${escapeHtml(summary)}</summary>
       ${helper}
       <pre>${escapeHtml(payload)}</pre>
@@ -587,7 +616,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       </div>
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
-      <details class="agent-trace-debug-details">
+      <details class="agent-trace-debug-details" data-collapsed-by-default="true">
         <summary>Debug details</summary>
         <div class="agent-trace-counts">
           ${renderWorkflowSummaryMetric("Found", found ? "true" : "false")}
@@ -779,7 +808,7 @@ function renderAgenticWorkflowManifestSection(workflowManifest = {}) {
         <summary>Artifact dependency order</summary>
         ${renderWorkflowVerificationList(artifactFlow)}
       </details>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Manifest markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Manifest", markdown)}
     </section>
   `;
 }
@@ -846,7 +875,7 @@ function renderAgenticWorkflowExecutionPlanSection(workflowExecutionPlan = {}) {
       <div class="agentic-review-plan-step-list">
         ${orderedSteps.length ? orderedSteps.map(renderAgenticWorkflowExecutionPlanStepRow).join("") : `<div class="pipeline-runs-empty-cell">No planned steps listed.</div>`}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Execution plan markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Execution plan", markdown)}
     </section>
   `;
 }
@@ -915,7 +944,7 @@ function renderAgenticWorkflowDryRunSection(workflowDryRun = {}) {
       <div class="agentic-review-dry-run-step-list">
         ${orderedSteps.length ? orderedSteps.map(renderAgenticWorkflowDryRunStepRow).join("") : `<div class="pipeline-runs-empty-cell">No dry-run steps listed.</div>`}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Dry-run report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Dry-run report", markdown)}
     </section>
   `;
 }
@@ -990,7 +1019,7 @@ function renderReadOnlyAdapterPreflightSection(readOnlyAdapterPreflight = {}) {
       <div class="read-only-adapter-preflight-list">
         ${results.length ? results.map(renderReadOnlyAdapterPreflightRow).join("") : `<div class="pipeline-runs-empty-cell">No adapter preflight rows listed.</div>`}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Preflight report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Preflight report", markdown)}
     </section>
   `;
 }
@@ -1066,7 +1095,7 @@ function renderManualReadOnlyAdapterChainSection(chain = {}) {
         ${renderReviewPill("read-only")}
         ${renderReviewPill("not live pipeline")}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Chain report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Chain report", markdown)}
     </section>
   `;
 }
@@ -1131,7 +1160,7 @@ function renderExplicitReadOnlyChainGeneratorSection(generator = {}) {
         ${renderReviewPill("not automatic")}
         ${renderReviewPill("not live pipeline")}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Generator report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Generator report", markdown)}
     </section>
   `;
 }
@@ -1195,7 +1224,7 @@ function renderDryRunExecutionSimulationSection(simulation = {}) {
         ${renderReviewPill("not live orchestration")}
         ${renderReviewPill("no mutation")}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Simulation report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Simulation report", markdown)}
     </section>
   `;
 }
@@ -1285,7 +1314,7 @@ function renderProposalOnlyMutationPlanSection(planPayload = {}) {
         ${renderReviewPill("non-actionable")}
         ${renderReviewPill("no mutation")}
       </div>
-      ${markdown ? `<details class="agentic-workflow-markdown"><summary>Proposal plan report markdown</summary><pre>${escapeHtml(markdown)}</pre></details>` : ""}
+      ${renderAgenticWorkflowMarkdownSummary("Proposal plan report", markdown)}
     </section>
   `;
 }

@@ -9,6 +9,7 @@ from src.app import services
 from src.auth.runtime import auth_guard_response
 from pydantic import BaseModel, Field
 from fastapi.staticfiles import StaticFiles
+from src.agents.critic_evaluator import evaluate_agent_trace
 from src.app.ui import router as ui_router
 from src.app.planning_ui import router as planning_ui_router
 from src.app.decisions_ui import router as decisions_ui_router
@@ -135,6 +136,12 @@ class AgenticApprovalDecisionRequest(BaseModel):
     review_decision: str
     review_reason: str = ""
     decided_at: str | None = None
+
+
+class CriticEvaluatorReadonlyRequest(BaseModel):
+    trace_payload: dict[str, Any] | list[dict[str, Any]] = Field(default_factory=dict)
+    trace_payload_source: str = "request_body"
+    evaluator_rubric_version: str = ""
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -1019,6 +1026,34 @@ def get_agentic_approval_agent_trace(
         agent_run_id=agent_run_id,
         trace_result=trace_result,
     )
+
+
+def _critic_evaluator_readonly_safety_flags() -> dict[str, bool]:
+    return {
+        "did_write_storage": False,
+        "did_call_llm": False,
+        "did_mutate_approval": False,
+        "did_change_score": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+    }
+
+
+@app.post("/api/agentic-approvals/{approval_request_id}/critic-evaluator-readonly")
+def invoke_critic_evaluator_readonly_api_action(
+    approval_request_id: str,
+    request: CriticEvaluatorReadonlyRequest,
+):
+    evaluator_result = evaluate_agent_trace(request.trace_payload)
+    return {
+        "approval_request_id": approval_request_id,
+        "trace_payload_source": request.trace_payload_source,
+        "requested_evaluator_rubric_version": request.evaluator_rubric_version,
+        "explicit_user_action": True,
+        "read_only": True,
+        **evaluator_result,
+        **_critic_evaluator_readonly_safety_flags(),
+    }
 
 
 @app.post(
@@ -2149,3 +2184,14 @@ def profile_delete_resume(resume_name: str, http_request: Request):
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+# Explicit read-only Critic/Evaluator response contract keys.
+# These literals keep the API contract observable without adding side effects.
+_CRITIC_EVALUATOR_READONLY_RESPONSE_KEYS = (
+    "evaluator_status",
+    "evaluator_findings",
+    "evaluator_warnings",
+    "evaluator_recommendations",
+    "requires_human_review",
+    "deterministic_rubric_version",
+)

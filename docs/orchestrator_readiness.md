@@ -719,6 +719,12 @@ See `docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md`.
 
 This checkpoint is docs/tests only and prepares a future explicit read-only API action that can call the isolated Critic/Evaluator runtime skeleton later. It adds no API implementation, no endpoint implementation, no API route change, no runtime code, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
 
+## Step 203A: Critic/Evaluator explicit read-only API action
+
+See `docs/critic_evaluator_readonly_api_action_no_storage_no_llm.md`.
+
+This step adds an explicit read-only API action for the isolated deterministic Critic/Evaluator runtime skeleton. It accepts trace-only evaluation inputs and returns evaluator output plus disabled safety flags. It adds no storage writes, schema migration, live LLM call, model provider call, approval mutation, ranking change, scoring change, pipeline wiring, scheduler, background task, file export, application execution, or application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

@@ -75,6 +75,7 @@ def test_trace_polish_fetch_remains_get_only_existing_endpoint():
 
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace" in fetch_snippet
     assert "/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace" in fetch_snippet
+    assert "include_trace_summary=1" in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
     assert "loading_state: true" in init_snippet
 

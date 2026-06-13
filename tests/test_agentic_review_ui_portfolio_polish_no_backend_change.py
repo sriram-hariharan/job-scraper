@@ -121,7 +121,7 @@ def test_css_includes_wrapping_action_groups_and_floating_chat_safe_spacing():
     css = _css()
 
     assert "[data-agentic-review-run-id]" in css
-    assert "padding-bottom: clamp(104px, 12vh, 156px)" in css
+    assert "padding-bottom: clamp(168px, 18vh, 240px)" in css
     assert ".agentic-feedback-actions" in css
     assert ".agentic-approval-button-group" in css
     assert "flex-wrap: wrap" in css

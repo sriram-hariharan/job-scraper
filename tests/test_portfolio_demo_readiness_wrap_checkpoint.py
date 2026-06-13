@@ -89,6 +89,7 @@ ALLOWED_CHANGED = {
     "tests/test_jd_intelligence_agent_trace_wrapper_no_behavior_change.py",
     "src/agents/final_application_scoring.py",
     "tests/test_final_application_scoring_agent_trace_wrapper_no_behavior_change.py",
+    "tests/test_agent_stage_wrapper_trace_summary_consistency_no_runtime_change.py",
 }
 
 def _changed_files():

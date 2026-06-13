@@ -854,6 +854,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Critic/Evaluator explicit read-only API action readiness checkpoint](docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md)
 
+- [Critic/Evaluator explicit read-only API action](docs/critic_evaluator_readonly_api_action_no_storage_no_llm.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)

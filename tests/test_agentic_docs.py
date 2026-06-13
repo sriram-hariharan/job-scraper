@@ -18493,3 +18493,79 @@ def test_langgraph_orchestration_spike_readiness_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agentic_extended_readiness_wrap_checkpoint_doc_contract():
+    doc_path = Path("docs/agentic_extended_readiness_wrap_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agentic extended readiness wrap checkpoint",
+        "docs/tests only",
+        "completed foundation scope",
+        "completed trace UI scope",
+        "completed trace polish scope",
+        "persistence activation readiness",
+        "Critic/Evaluator agent readiness",
+        "Feedback learning loop readiness",
+        "LangGraph orchestration spike readiness",
+        "JobApplicationContext",
+        "trace recorder",
+        "Relevance Prefilter Agent",
+        "Deduplication Agent",
+        "JD Intelligence Agent",
+        "Final Application Scoring Agent",
+        "read-only Agent Trace API endpoint",
+        "read-only Agent Trace UI panel",
+        "prefilter relevance",
+        "deduplication",
+        "JD intelligence",
+        "final application scoring",
+        "LLM evaluation",
+        "application execution",
+        "application submission",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no model provider call",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no application execution",
+        "no application submission",
+        "deterministic",
+        "current completed scope",
+        "remaining non-goals",
+        "next implementation options",
+        "recommended next step",
+        "rollback plan",
+        "verification plan",
+        "1. Persisted trace activation with explicit operator approval",
+        "2. Critic/Evaluator runtime skeleton without LLM calls",
+        "3. Feedback capture storage readiness",
+        "4. LangGraph dependency decision checkpoint",
+        "5. Pipeline wiring readiness checkpoint",
+        "Recommended next step: Critic/Evaluator runtime skeleton without LLM calls.",
+        "safest because it can remain deterministic, trace-only, no provider call, no scoring change, and no pipeline wiring",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/agentic_extended_readiness_wrap_checkpoint.md",
+        "tests/test_agentic_extended_readiness_wrap_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

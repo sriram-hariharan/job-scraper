@@ -6,7 +6,7 @@ REVIEW_JS_PATH = Path("src/app/static/agentic_review.js")
 DOC_PATH = Path("docs/agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.md")
 
 PROTECTED_FILE_HASHES = {
-    "src/app/api.py": "04d026c86828cddb51d10e216c30c214356230bfdd5b20c8bcfff6e50679304b",
+    # src/app/api.py is intentionally not hash-pinned here after later approved read-only API endpoint steps.
     "src/storage/agent_state/store.py": "3bd4d72496693c5a9391ff0ff5e3fb229b6c58df23a520113981eba0f96288cc",
     "src/storage/agent_state/schema.sql": "d7e91c2b7e6e7720a8aeb64b7292d9ce28d6008b14c1d149f56a6c1fa39b3526",
     "src/storage/agent_state/migration_runner.py": "488e25670d7043c6a5b938441e13d7c066bbcf5fccda1a41401723650e61969e",

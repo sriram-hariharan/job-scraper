@@ -18772,3 +18772,60 @@ def test_critic_evaluator_readonly_api_action_readiness_checkpoint_doc_contract(
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_critic_evaluator_readonly_api_action_no_storage_no_llm_doc_contract():
+    doc_path = Path("docs/critic_evaluator_readonly_api_action_no_storage_no_llm.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Critic/Evaluator explicit read-only API action",
+        "explicit read-only API action",
+        "POST /api/agentic-approvals/{approval_request_id}/critic-evaluator-readonly",
+        "Critic/Evaluator runtime skeleton",
+        "evaluate_agent_trace",
+        "read-only evaluation",
+        "trace-only evaluation inputs",
+        "no storage writes",
+        "no schema migration",
+        "no live LLM call",
+        "no model provider call",
+        "no approval mutation",
+        "no ranking change",
+        "no scoring change",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no application execution",
+        "no application submission",
+        "did_write_storage",
+        "did_call_llm",
+        "did_mutate_approval",
+        "did_change_score",
+        "did_execute_application",
+        "did_submit_application",
+        "evaluator_status",
+        "evaluator_findings",
+        "evaluator_warnings",
+        "evaluator_recommendations",
+        "requires_human_review",
+        "deterministic_rubric_version",
+        "deterministic",
+        "rollback plan",
+        "verification plan",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/critic_evaluator_readonly_api_action_no_storage_no_llm.md",
+        "tests/test_critic_evaluator_readonly_api_action_no_storage_no_llm.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

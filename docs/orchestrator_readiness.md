@@ -795,3 +795,7 @@ Reference: `docs/agent_state_storage_migration_readiness_checkpoint.md`
 Step 182A adds a docs/tests-only readiness checkpoint for a future isolated agent-state migration runner.
 
 Reference: `docs/agent_state_migration_runner_readiness_checkpoint.md`
+
+## Portfolio demo readiness wrap checkpoint
+
+The portfolio-ready scope is summarized in [Portfolio demo readiness wrap checkpoint](docs/portfolio_demo_readiness_wrap_checkpoint.md). It documents the completed agentic AI layer, demo flow, safety guarantees, resume bullet ideas, and the stop condition to stop feature work after this checkpoint.

@@ -659,6 +659,12 @@ See `docs/agentic_foundation_trace_ui_wrap_checkpoint.md`.
 
 This checkpoint is docs/tests only and wraps the completed safe agentic foundation: agent state foundation, agent state storage schema/repository, migration runner, trace recorder, four trace wrappers, the read-only Agent Trace API endpoint, and the read-only Agent Trace UI panel. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no live LLM call, no application execution, and no application submission.
 
+## Step 193A: agent trace polish / UX hardening readiness checkpoint
+
+See `docs/agent_trace_polish_ux_hardening_readiness_checkpoint.md`.
+
+This checkpoint is docs/tests only and prepares a future UI-only polish step for the existing read-only Agent Trace UI panel. It adds no runtime code, no frontend runtime change, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no live LLM call, no application execution, no application submission, and no approval mutation.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

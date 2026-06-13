@@ -18052,3 +18052,75 @@ def test_agentic_foundation_trace_ui_wrap_checkpoint_doc_contract():
     for path in required_paths:
         assert Path(path).exists()
         assert path in doc or path in readiness or path in readme
+
+
+def test_agent_trace_polish_ux_hardening_readiness_checkpoint_doc_contract():
+    doc_path = Path("docs/agent_trace_polish_ux_hardening_readiness_checkpoint.md")
+    doc = doc_path.read_text()
+    readiness = Path("docs/orchestrator_readiness.md").read_text()
+    readme = Path("README.md").read_text()
+
+    required_terms = [
+        "Agent Trace polish / UX hardening readiness checkpoint",
+        "docs/tests only",
+        "Trace polish / UX hardening",
+        "read-only Agent Trace UI panel",
+        "read-only Agent Trace API endpoint",
+        "no behavior change",
+        "no API behavior change",
+        "no UI behavior change",
+        "no frontend runtime change",
+        "no storage writes",
+        "no schema migration",
+        "no pipeline wiring",
+        "no scheduler",
+        "no background task",
+        "no file export",
+        "no live LLM call",
+        "no application execution",
+        "no application submission",
+        "no approval mutation",
+        "deterministic",
+        "ordered agent steps",
+        "empty trace",
+        "not found trace",
+        "fetch failure",
+        "safety metadata",
+        "validation_json",
+        "no approve",
+        "no apply",
+        "no submit",
+        "no run",
+        "no retry",
+        "no export",
+        "proposed polish scope",
+        "accessibility labels",
+        "loading state",
+        "empty-state clarity",
+        "error-state clarity",
+        "long trace readability",
+        "collapsed step details",
+        "copy-safe summaries",
+        "non-goals",
+        "implementation guardrails",
+        "rollback plan",
+        "verification plan",
+        "1. clearer loading state",
+        "2. clearer empty/not-found/fetch-failure states",
+        "3. collapsed/expanded step details",
+        "4. more readable safety metadata and validation_json display",
+        "5. accessibility labels for trace sections",
+        "Do not implement those improvements in this step.",
+    ]
+
+    for term in required_terms:
+        assert term in doc
+
+    required_paths = [
+        "docs/agent_trace_polish_ux_hardening_readiness_checkpoint.md",
+        "tests/test_agent_trace_polish_ux_hardening_readiness_checkpoint.py",
+    ]
+
+    for path in required_paths:
+        assert Path(path).exists()
+        assert path in doc or path in readiness or path in readme

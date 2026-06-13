@@ -713,6 +713,12 @@ See `docs/critic_evaluator_runtime_skeleton_wrap_checkpoint.md`.
 
 This checkpoint is docs/tests only and summarizes the completed deterministic Critic/Evaluator runtime skeleton scope, including CRITIC_EVALUATOR_RUBRIC_VERSION, build_empty_evaluator_result, evaluate_agent_trace, and the evaluator output contract. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
 
+## Step 202A: Critic/Evaluator explicit read-only API action readiness checkpoint
+
+See `docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md`.
+
+This checkpoint is docs/tests only and prepares a future explicit read-only API action that can call the isolated Critic/Evaluator runtime skeleton later. It adds no API implementation, no endpoint implementation, no API route change, no runtime code, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

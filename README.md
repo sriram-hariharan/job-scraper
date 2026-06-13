@@ -852,6 +852,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Critic/Evaluator runtime skeleton wrap checkpoint](docs/critic_evaluator_runtime_skeleton_wrap_checkpoint.md)
 
+- [Critic/Evaluator explicit read-only API action readiness checkpoint](docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -910,3 +912,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - Critic/Evaluator runtime skeleton without LLM calls: `docs/critic_evaluator_runtime_skeleton_no_llm_no_pipeline.md`
 
 - Critic/Evaluator runtime skeleton wrap checkpoint: `docs/critic_evaluator_runtime_skeleton_wrap_checkpoint.md`
+
+- Critic/Evaluator explicit read-only API action readiness checkpoint: `docs/critic_evaluator_readonly_api_action_readiness_checkpoint.md`

@@ -848,6 +848,8 @@ This repository is built as an operator-first system: deterministic pipelines wh
 
 - [Agentic extended readiness wrap checkpoint](docs/agentic_extended_readiness_wrap_checkpoint.md)
 
+- [Critic/Evaluator runtime skeleton without LLM calls](docs/critic_evaluator_runtime_skeleton_no_llm_no_pipeline.md)
+
 - [Production scheduler observability reporting UI/API read-only release safety checkpoint](docs/production_scheduler_observability_reporting_ui_api_read_only_release_safety_checkpoint.md)
 
 - [Production scheduler observability dashboard/export readiness review](docs/production_scheduler_observability_dashboard_export_readiness_review.md)
@@ -902,3 +904,5 @@ This repository is built as an operator-first system: deterministic pipelines wh
 - LangGraph orchestration spike readiness checkpoint: `docs/langgraph_orchestration_spike_readiness_checkpoint.md`
 
 - Agentic extended readiness wrap checkpoint: `docs/agentic_extended_readiness_wrap_checkpoint.md`
+
+- Critic/Evaluator runtime skeleton without LLM calls: `docs/critic_evaluator_runtime_skeleton_no_llm_no_pipeline.md`

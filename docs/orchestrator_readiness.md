@@ -701,6 +701,12 @@ See `docs/agentic_extended_readiness_wrap_checkpoint.md`.
 
 This checkpoint is docs/tests only and summarizes the completed foundation scope, completed trace UI scope, completed trace polish scope, persistence activation readiness, Critic/Evaluator agent readiness, Feedback learning loop readiness, and LangGraph orchestration spike readiness. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
 
+## Step 200A: Critic/Evaluator runtime skeleton without LLM calls
+
+See `docs/critic_evaluator_runtime_skeleton_no_llm_no_pipeline.md`.
+
+This phase adds only an isolated deterministic skeleton in `src/agents/critic_evaluator.py` for reviewing already-built trace-only evaluation inputs. It adds no live LLM call, no model provider call, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

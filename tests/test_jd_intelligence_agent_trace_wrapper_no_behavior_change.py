@@ -75,6 +75,49 @@ def test_jd_intelligence_wrapper_output_is_deterministic_and_preserves_input():
     assert first["preferred_skill_count"] == 1
     assert first["workflow_count"] == 2
     assert first["business_context_count"] == 1
+    assert "trace_summary" not in first
+    assert "trace_summary" not in first["output_json"]
+    _assert_safety_flags_false(first)
+
+
+def test_jd_intelligence_wrapper_trace_summary_is_opt_in_deterministic_and_read_only():
+    summary = _summary()
+    original = deepcopy(summary)
+
+    default_payload = jd_intelligence.describe_jd_intelligence_result(summary)
+    first = jd_intelligence.describe_jd_intelligence_result(
+        summary,
+        include_trace_summary=True,
+    )
+    second = jd_intelligence.describe_jd_intelligence_result(
+        summary,
+        include_trace_summary=True,
+    )
+
+    assert "trace_summary" not in default_payload
+    assert summary == original
+    assert first == second
+    assert first["trace_summary"]["summary_type"] == "agent_trace"
+    assert first["trace_summary"]["run_count"] == 0
+    assert first["trace_summary"]["step_count"] == 1
+    assert first["trace_summary"]["agent_counts"] == {"jd_intelligence_agent": 1}
+    assert first["trace_summary"]["step_status_counts"] == {"completed": 1}
+    assert first["trace_summary"]["all_required_fields_present"] is True
+    assert first["trace_summary"]["safety_metadata"] == {
+        "did_read_database": False,
+        "did_write_database": False,
+        "did_create_agent_run": False,
+        "did_create_agent_step": False,
+        "did_update_agent_run": False,
+        "did_update_agent_step": False,
+        "did_call_llm": False,
+        "did_change_pipeline": False,
+        "did_change_scoring": False,
+        "did_change_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+    }
+    assert "trace_summary" not in first["output_json"]
     _assert_safety_flags_false(first)
 
 
@@ -122,8 +165,34 @@ def test_invalid_non_list_signal_fields_fail_validation_safely():
     assert payload["required_skills"] == []
     assert payload["did_call_live_jd_extraction"] is False
     assert payload["did_call_llm_provider"] is False
+    assert payload["did_call_prefilter_relevance"] is False
+    assert payload["did_call_deduplication"] is False
+    assert payload["did_call_final_application_scoring"] is False
     assert payload["did_execute_application"] is False
     assert payload["did_submit_application"] is False
+
+
+def test_invalid_signal_fields_preserve_validation_errors_with_opt_in_trace_summary():
+    summary = _summary()
+    summary["required_skills"] = "Python"
+    original = deepcopy(summary)
+
+    payload = jd_intelligence.describe_jd_intelligence_result(
+        summary,
+        include_trace_summary=True,
+    )
+
+    assert summary == original
+    assert payload["status"] == "invalid"
+    assert payload["validation_json"]["errors"] == ["required_skills_not_list"]
+    assert payload["trace_summary"]["step_status_counts"] == {"invalid": 1}
+    assert payload["trace_summary"]["safety_metadata"]["did_write_database"] is False
+    assert payload["trace_summary"]["safety_metadata"]["did_call_llm"] is False
+    assert payload["trace_summary"]["safety_metadata"]["did_change_pipeline"] is False
+    assert payload["trace_summary"]["safety_metadata"]["did_change_scoring"] is False
+    assert payload["trace_summary"]["safety_metadata"]["did_execute_application"] is False
+    assert payload["trace_summary"]["safety_metadata"]["did_submit_application"] is False
+    _assert_safety_flags_false(payload)
 
 
 def test_step_snapshot_uses_caller_supplied_context_ids_and_timestamp():
@@ -153,6 +222,44 @@ def test_step_snapshot_uses_caller_supplied_context_ids_and_timestamp():
         "llm_evaluation_live_extraction": "not_called",
         "final_application_scoring": "not_called",
     }
+    assert "trace_summary" not in step["metadata"]
+
+
+def test_step_snapshot_can_attach_opt_in_trace_summary_in_metadata():
+    summary = _summary()
+    original = deepcopy(summary)
+
+    step = jd_intelligence.build_jd_intelligence_step_snapshot(
+        context=_context(),
+        jd_intelligence_summary=summary,
+        observed_at_utc="2026-06-12T15:01:00Z",
+        agent_run_id="agent_run_jd",
+        include_trace_summary=True,
+    )
+
+    assert summary == original
+    assert step["metadata"]["trace_summary"]["summary_type"] == "agent_trace"
+    assert step["metadata"]["trace_summary"]["step_count"] == 1
+    assert step["metadata"]["trace_summary"]["safety_metadata"]["did_write_database"] is False
+    assert step["metadata"]["trace_summary"]["safety_metadata"]["did_call_llm"] is False
+    assert step["metadata"]["trace_summary"]["safety_metadata"]["did_change_pipeline"] is False
+    assert step["metadata"]["trace_summary"]["safety_metadata"]["did_execute_application"] is False
+    assert step["metadata"]["trace_summary"]["safety_metadata"]["did_submit_application"] is False
+    assert "trace_summary" not in step["output_summary"]
+
+
+def test_jd_intelligence_wrapper_source_does_not_call_trace_storage_execution_helpers():
+    source = Path("src/agents/jd_intelligence.py").read_text()
+
+    forbidden_tokens = [
+        "create_agent_run(",
+        "record_agent_step(",
+        "complete_agent_run(",
+        "execute_agent_trace_recording(",
+        "build_agent_trace_recording_payload(",
+    ]
+    for token in forbidden_tokens:
+        assert token not in source
 
 
 def test_wrapper_source_does_not_call_live_jd_llm_prefilter_dedup_or_scoring_paths():

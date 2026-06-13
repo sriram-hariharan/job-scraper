@@ -689,6 +689,12 @@ See `docs/feedback_learning_loop_readiness_checkpoint.md`.
 
 This checkpoint is docs/tests only and prepares a future feedback learning loop around human feedback, agent trace feedback, evaluator findings, and review outcomes. It adds no runtime code, no API behavior change, no UI behavior change, no storage writes, no feedback storage, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
 
+## Step 198A: LangGraph orchestration spike readiness checkpoint
+
+See `docs/langgraph_orchestration_spike_readiness_checkpoint.md`.
+
+This checkpoint is docs/tests only and prepares a future LangGraph orchestration spike around the existing agent state, trace recorder, and wrapped agents. It adds no dependency installation, no LangGraph dependency, no graph runtime code, no runtime code, no API behavior change, no UI behavior change, no storage writes, no schema migration, no pipeline wiring, no scheduler/background work, no file export, no live LLM call, no model provider call, no approval mutation, no ranking change, no scoring change, no application execution, and no application submission.
+
 ## Step 165A: production scheduler observability reporting read-only release safety checkpoint
 
 See `docs/production_scheduler_observability_reporting_read_only_release_safety_checkpoint.md`.

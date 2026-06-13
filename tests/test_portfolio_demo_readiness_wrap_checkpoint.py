@@ -54,6 +54,8 @@ REQUIRED_TERMS = [
 ]
 
 ALLOWED_CHANGED = {
+    "tests/test_full_agentic_ai_trace_contract_readiness_no_runtime_change.py",
+    "docs/full_agentic_ai_trace_contract_readiness_no_runtime_change.md",
     "tests/test_full_agentic_ai_schema_contract_audit_no_runtime_change.py",
     "docs/full_agentic_ai_schema_contract_audit_no_runtime_change.md",
     "tests/test_full_agentic_ai_current_state_audit_no_runtime_change.py",

@@ -295,7 +295,128 @@ def test_profile_pipeline_run_agent_trace_route_uses_authenticated_owner(monkeyp
         "pipeline_run_id": "run_route",
         "context_id": "ctx_route",
         "agent_run_id": "agent_run_route",
+        "include_trace_summary": False,
     }
+
+
+def test_profile_pipeline_run_agent_trace_route_preserves_default_shape(monkeypatch):
+    captured = {}
+
+    def fake_agent_trace_payload(**kwargs):
+        captured.update(kwargs)
+        return {
+            "pipeline_run_id": kwargs["pipeline_run_id"],
+            "owner_user_id": kwargs["owner_user_id"],
+            "agent_runs": [],
+            "counts": {
+                "agent_runs": 0,
+                "agent_steps": 0,
+                "failed_steps": 0,
+                "warning_steps": 0,
+                "succeeded_steps": 0,
+            },
+        }
+
+    monkeypatch.setattr(services, "agent_trace_payload", fake_agent_trace_payload)
+
+    payload = api.profile_pipeline_run_agent_trace("run_route", _request("user_route"))
+
+    assert "trace_summary" not in payload
+    assert captured["include_trace_summary"] is False
+
+
+def test_profile_pipeline_run_agent_trace_route_can_opt_in_trace_summary(monkeypatch):
+    captured = {}
+
+    def fake_agent_trace_payload(**kwargs):
+        captured.update(kwargs)
+        payload = {
+            "pipeline_run_id": kwargs["pipeline_run_id"],
+            "owner_user_id": kwargs["owner_user_id"],
+            "agent_runs": [],
+            "counts": {
+                "agent_runs": 0,
+                "agent_steps": 0,
+                "failed_steps": 0,
+                "warning_steps": 0,
+                "succeeded_steps": 0,
+            },
+        }
+        if kwargs["include_trace_summary"]:
+            payload["trace_summary"] = {
+                "summary_type": "agent_trace",
+                "run_count": 0,
+                "step_count": 0,
+            }
+        return payload
+
+    monkeypatch.setattr(services, "agent_trace_payload", fake_agent_trace_payload)
+
+    for value in ["1", "true", "yes", "on", " TRUE "]:
+        captured.clear()
+        payload = api.profile_pipeline_run_agent_trace(
+            "run_route",
+            _request("user_route"),
+            include_trace_summary=value,
+        )
+        assert captured["include_trace_summary"] is True
+        assert payload["trace_summary"]["summary_type"] == "agent_trace"
+
+
+def test_profile_pipeline_run_agent_trace_route_false_flags_preserve_default_shape(monkeypatch):
+    captured_values = []
+
+    def fake_agent_trace_payload(**kwargs):
+        captured_values.append(kwargs["include_trace_summary"])
+        return {
+            "pipeline_run_id": kwargs["pipeline_run_id"],
+            "owner_user_id": kwargs["owner_user_id"],
+            "agent_runs": [],
+            "counts": {
+                "agent_runs": 0,
+                "agent_steps": 0,
+                "failed_steps": 0,
+                "warning_steps": 0,
+                "succeeded_steps": 0,
+            },
+        }
+
+    monkeypatch.setattr(services, "agent_trace_payload", fake_agent_trace_payload)
+
+    for value in ["", "0", "false", "no", "off", "summary"]:
+        payload = api.profile_pipeline_run_agent_trace(
+            "run_route",
+            _request("user_route"),
+            include_trace_summary=value,
+        )
+        assert "trace_summary" not in payload
+
+    assert captured_values == [False, False, False, False, False, False]
+
+
+def test_profile_pipeline_run_agent_trace_route_does_not_invoke_summary_helper_by_default(monkeypatch):
+    called = {"summary_helper": False}
+
+    def fail_summary_helper(**kwargs):
+        called["summary_helper"] = True
+        raise AssertionError("summary helper must not run for default route response")
+
+    monkeypatch.setattr(services, "build_agent_trace_summary_payload", fail_summary_helper)
+    monkeypatch.setattr(
+        services,
+        "list_agent_runs_postgres_payload",
+        lambda **kwargs: {"ok": True, "runs": [], "count": 0},
+    )
+    monkeypatch.setattr(
+        services,
+        "list_agent_steps_postgres_payload",
+        lambda **kwargs: {"ok": True, "steps": [], "count": 0},
+    )
+
+    payload = api.profile_pipeline_run_agent_trace("run_route", _request("user_route"))
+
+    assert "trace_summary" not in payload
+    assert called["summary_helper"] is False
 
 
 def test_profile_pipeline_run_agent_trace_route_requires_auth():

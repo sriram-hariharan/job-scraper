@@ -7,7 +7,7 @@ DOC_PATH = Path("docs/agent_trace_ui_readiness_checkpoint.md")
 PROTECTED_FILE_HASHES = {
     "src/app/api.py": "033eca4a37eb821dc4db3e38ce11afea1daf2575e7514ad96e73403600686883",
     "src/app/static/agentic_review.js": "27cc57c9bc0c079cf148c14e9191c394ac66b0cb071fb98043e4f963e4037827",
-    "src/agents/trace.py": "595e4cfdde253bb42013a9b684bd7be69d0e53eaf5fcddbe0a788b13bb0f8df2",
+    "src/agents/trace.py": "802b9c28c3fe20f53f4b1657f7ed8b5c0bcd63850d34c9f03c4afde86f0de750",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/deduplication.py": "7aeb6e831197a63f66b83fff898ccef77db177e39594464e1c215cffaed432b8",

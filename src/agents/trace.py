@@ -10,6 +10,7 @@ from src.agents.agent_state import (
 )
 from src.storage.agent_state import store as agent_state_store
 from src.storage.agent_trace.store import (
+    build_agent_trace_summary_payload,
     complete_agent_run_postgres_payload,
     complete_agent_step_postgres_payload,
     create_agent_run_postgres_payload,
@@ -37,6 +38,13 @@ TRACE_RECORDER_SAFETY_FLAGS: dict[str, bool] = {
     "pipeline_wiring_added": False,
 }
 
+DEFAULT_STAGE_TRACE_ORDER: tuple[str, ...] = (
+    "relevance_prefilter_trace_wrapper",
+    "deduplication_trace_wrapper",
+    "jd_intelligence_trace_wrapper",
+    "final_application_scoring_trace_wrapper",
+)
+
 
 def trace_recorder_safety_flags() -> dict[str, bool]:
     return dict(TRACE_RECORDER_SAFETY_FLAGS)
@@ -50,6 +58,115 @@ def _snapshots(values: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> lis
     if not isinstance(values, (list, tuple)):
         raise TypeError("step_snapshots must be a list or tuple.")
     return [_snapshot(value) for value in values]
+
+
+def _clean_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _stage_name(step_snapshot: dict[str, Any]) -> str:
+    return _clean_text(step_snapshot.get("step_name")) or _clean_text(
+        step_snapshot.get("agent_name")
+    )
+
+
+def _stage_counts(stage_names: list[str]) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for stage_name in stage_names:
+        if not stage_name:
+            continue
+        counts[stage_name] = int(counts.get(stage_name, 0)) + 1
+    return dict(sorted(counts.items()))
+
+
+def _duplicate_stages(stage_names: list[str]) -> list[dict[str, Any]]:
+    return [
+        {"stage_name": stage_name, "count": count}
+        for stage_name, count in _stage_counts(stage_names).items()
+        if count > 1
+    ]
+
+
+def stage_trace_bundle_safety_metadata() -> dict[str, bool]:
+    return {
+        "did_read_database": False,
+        "did_write_database": False,
+        "did_create_agent_run": False,
+        "did_create_agent_step": False,
+        "did_update_agent_run": False,
+        "did_update_agent_step": False,
+        "did_prepare_statement": False,
+        "did_call_live_stage": False,
+        "did_call_prefilter_relevance": False,
+        "did_call_deduplication": False,
+        "did_call_jd_intelligence": False,
+        "did_call_final_application_scoring": False,
+        "did_call_llm": False,
+        "did_change_pipeline": False,
+        "did_change_scoring": False,
+        "did_change_ranking": False,
+        "did_change_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+    }
+
+
+def build_stage_trace_bundle_payload(
+    *,
+    run_snapshot: dict[str, Any],
+    step_snapshots: list[dict[str, Any]] | tuple[dict[str, Any], ...],
+    expected_stage_order: list[str] | tuple[str, ...] | None = None,
+) -> dict[str, Any]:
+    run = _snapshot(run_snapshot)
+    steps = _snapshots(step_snapshots)
+    expected_order = [
+        _clean_text(stage_name)
+        for stage_name in (expected_stage_order or DEFAULT_STAGE_TRACE_ORDER)
+        if _clean_text(stage_name)
+    ]
+    stage_names = [_stage_name(step) for step in steps]
+    agent_names = [_clean_text(step.get("agent_name")) for step in steps]
+    missing_expected_stages = [
+        stage_name for stage_name in expected_order if stage_name not in stage_names
+    ]
+    unexpected_stages = [
+        stage_name
+        for stage_name in stage_names
+        if stage_name and stage_name not in expected_order
+    ]
+    duplicate_stages = _duplicate_stages(stage_names)
+    stage_order_validation = {
+        "is_valid": (
+            stage_names == expected_order
+            and not missing_expected_stages
+            and not unexpected_stages
+            and not duplicate_stages
+        ),
+        "expected_stage_order": expected_order,
+        "observed_stage_order": stage_names,
+        "missing_expected_stages": missing_expected_stages,
+        "unexpected_stages": unexpected_stages,
+        "duplicate_stages": duplicate_stages,
+    }
+    return {
+        "operation": "build_stage_trace_bundle_payload",
+        "bundle_type": "stage_trace_bundle",
+        "run_snapshot": run,
+        "step_snapshots": steps,
+        "step_count": len(steps),
+        "agent_names": agent_names,
+        "stage_names": stage_names,
+        "stage_order_validation": stage_order_validation,
+        "missing_expected_stages": missing_expected_stages,
+        "unexpected_stages": unexpected_stages,
+        "duplicate_stages": duplicate_stages,
+        "trace_summary": build_agent_trace_summary_payload(
+            agent_runs=[run],
+            agent_steps=steps,
+        ),
+        "safety_metadata": stage_trace_bundle_safety_metadata(),
+        **trace_recorder_safety_flags(),
+    }
 
 
 def build_agent_run_record_payload(run_snapshot: dict[str, Any]) -> dict[str, Any]:

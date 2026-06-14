@@ -12,7 +12,7 @@ PROTECTED_FILE_HASHES = {
     "src/storage/agent_state/migration_runner.py": "488e25670d7043c6a5b938441e13d7c066bbcf5fccda1a41401723650e61969e",
     "src/storage/agentic_approvals/store.py": "9cd153ba1bdcac520c1ea0d3b04374671e8ace6c2635a60fce2544526201f5bf",
     "src/storage/agentic_approvals/schema.sql": "57e84094cdbd3a4e8542fd205d89bfde18179c5d07c15084354f31f77bf5d98f",
-    "src/agents/trace.py": "6af44408407fe81cd5e0be6d0081816e5cd2db4a1ccd8efcba64befffd8612d0",
+    "src/agents/trace.py": "31f59053f6be00c1e52a87a903ba6f1507f3c6d375fb8d11ae314f1dda8b1f19",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/deduplication.py": "7aeb6e831197a63f66b83fff898ccef77db177e39594464e1c215cffaed432b8",
@@ -84,6 +84,14 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "Required fields" in snippet
     assert "Findings" in snippet
     assert "Warnings" in snippet
+    assert "function renderAgentStageTraceReadinessSection" in snippet
+    assert "Stage Trace Readiness" in snippet
+    assert "Opt-in deterministic readiness decision from stage trace health." in snippet
+    assert "stage_trace_readiness" in snippet
+    assert "Readiness" in snippet
+    assert "Reason codes" in snippet
+    assert "Blocking findings" in snippet
+    assert "Warning findings" in snippet
     assert "Writes" in snippet
     assert "LLM calls" in snippet
     assert "Execution" in snippet
@@ -104,8 +112,10 @@ def test_agent_trace_readonly_panel_uses_get_only_existing_endpoint():
     assert "include_trace_summary=1" in fetch_snippet
     assert "include_stage_trace_bundle=1" in fetch_snippet
     assert "include_stage_trace_health=1" in fetch_snippet
+    assert "include_stage_trace_readiness=1" in fetch_snippet
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_bundle=1" not in fetch_snippet
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_health=1" not in fetch_snippet
+    assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_readiness=1" not in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
     assert "renderAgentTraceReadOnlyPanel(tracePayload || {})" in _source()
 
@@ -185,6 +195,26 @@ def test_agent_stage_trace_health_ui_handles_missing_health_and_escapes_values()
     assert "did_call_llm" in health_snippet
     assert "did_execute_application" in health_snippet
     assert "did_submit_application" in health_snippet
+
+
+def test_agent_stage_trace_readiness_ui_handles_missing_readiness_and_escapes_values():
+    snippet = _trace_panel_snippet()
+    readiness_start = snippet.index("function renderAgentStageTraceReadinessSection")
+    readiness_end = snippet.index("function renderAgentTraceReadOnlyPanel")
+    readiness_snippet = snippet[readiness_start:readiness_end]
+
+    assert 'if (!hasAgentTraceSummaryObject(stageTraceReadiness)) return "";' in readiness_snippet
+    assert "tracePayload?.stage_trace_readiness" in snippet
+    assert "renderAgentTraceReadOnlyDetails" in readiness_snippet
+    assert "renderWorkflowSummaryMetric" in readiness_snippet
+    assert "innerHTML" not in readiness_snippet
+    assert "stageTraceReadiness.decision_reason_codes" in readiness_snippet
+    assert "stageTraceReadiness.blocking_findings" in readiness_snippet
+    assert "stageTraceReadiness.warning_findings" in readiness_snippet
+    assert "did_write_database" in readiness_snippet
+    assert "did_call_llm" in readiness_snippet
+    assert "did_execute_application" in readiness_snippet
+    assert "did_submit_application" in readiness_snippet
 
 
 def test_agent_trace_readonly_panel_does_not_add_trace_actions():

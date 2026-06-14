@@ -169,6 +169,61 @@ def build_stage_trace_bundle_payload(
     }
 
 
+def evaluate_stage_trace_bundle_health(
+    stage_trace_bundle: dict[str, Any],
+) -> dict[str, Any]:
+    bundle = _snapshot(stage_trace_bundle)
+    validation = _snapshot(bundle.get("stage_order_validation"))
+    trace_summary = _snapshot(bundle.get("trace_summary"))
+    missing_expected_stages = [
+        _clean_text(stage_name)
+        for stage_name in bundle.get("missing_expected_stages", [])
+        if _clean_text(stage_name)
+    ] if isinstance(bundle.get("missing_expected_stages"), list) else []
+    unexpected_stages = [
+        _clean_text(stage_name)
+        for stage_name in bundle.get("unexpected_stages", [])
+        if _clean_text(stage_name)
+    ] if isinstance(bundle.get("unexpected_stages"), list) else []
+    duplicate_stages = deepcopy(bundle.get("duplicate_stages", [])) if isinstance(
+        bundle.get("duplicate_stages"), list
+    ) else []
+    stage_order_valid = validation.get("is_valid") is True
+    all_required_fields_present = trace_summary.get("all_required_fields_present") is True
+
+    findings: list[str] = []
+    warnings: list[str] = []
+    if not stage_order_valid:
+        findings.append("stage_order_invalid")
+        warnings.append("stage_order_validation_failed")
+    if missing_expected_stages:
+        findings.append("missing_expected_stages")
+        warnings.append("one_or_more_expected_stages_missing")
+    if unexpected_stages:
+        findings.append("unexpected_stages")
+        warnings.append("one_or_more_unexpected_stages_present")
+    if duplicate_stages:
+        findings.append("duplicate_stages")
+        warnings.append("one_or_more_stage_names_duplicated")
+    if not all_required_fields_present:
+        findings.append("required_trace_fields_missing")
+        warnings.append("one_or_more_trace_rows_missing_required_fields")
+
+    ok = not findings and not warnings
+    return {
+        "ok": ok,
+        "health_status": "healthy" if ok else "warning",
+        "findings": findings,
+        "warnings": warnings,
+        "stage_order_valid": stage_order_valid,
+        "missing_expected_stages": missing_expected_stages,
+        "unexpected_stages": unexpected_stages,
+        "duplicate_stages": duplicate_stages,
+        "all_required_fields_present": all_required_fields_present,
+        "safety_metadata": stage_trace_bundle_safety_metadata(),
+    }
+
+
 def build_agent_run_record_payload(run_snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = _snapshot(run_snapshot)
     prepared = agent_state_store.prepare_agent_run_upsert(snapshot)

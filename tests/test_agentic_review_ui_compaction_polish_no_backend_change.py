@@ -8,7 +8,7 @@ DOC_PATH = Path("docs/agentic_review_ui_compaction_polish_no_backend_change.md")
 ORCHESTRATOR_READINESS_DOC_PATH = Path("docs/orchestrator_readiness.md")
 
 PROTECTED_FILE_HASHES = {
-    "src/app/api.py": "f0e05838d7d87f70270ba4d0f9a209d3056e085552ae10925374708ae8fafeb3",
+    "src/app/api.py": "f180f1ec9849ceb16d6b6500ec0ea3638ec31bb33c61221b7acf002f119042bd",
     "src/storage/agent_state/store.py": "3bd4d72496693c5a9391ff0ff5e3fb229b6c58df23a520113981eba0f96288cc",
     "src/storage/agent_state/schema.sql": "d7e91c2b7e6e7720a8aeb64b7292d9ce28d6008b14c1d149f56a6c1fa39b3526",
     "src/storage/agent_state/migration_runner.py": "488e25670d7043c6a5b938441e13d7c066bbcf5fccda1a41401723650e61969e",

@@ -105,6 +105,82 @@ def test_agent_trace_payload_includes_read_only_trace_summary(monkeypatch):
     assert trace_summary["safety_metadata"]["did_submit_application"] is False
 
 
+def test_agent_trace_payload_default_does_not_include_stage_trace_bundle(monkeypatch):
+    monkeypatch.setattr(
+        services,
+        "list_agent_runs_postgres_payload",
+        lambda **kwargs: {"runs": [_run()]},
+    )
+    monkeypatch.setattr(
+        services,
+        "list_agent_steps_postgres_payload",
+        lambda **kwargs: {"steps": [_step()]},
+    )
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+    )
+
+    assert "trace_summary" not in payload
+    assert "stage_trace_bundle" not in payload
+
+
+def test_agent_trace_payload_includes_opt_in_stage_trace_bundle_without_extra_reads(monkeypatch):
+    calls = {"runs": 0, "steps": 0}
+
+    def runs_payload(**kwargs):
+        calls["runs"] += 1
+        return {"runs": [_run()]}
+
+    def steps_payload(**kwargs):
+        calls["steps"] += 1
+        return {
+            "steps": [
+                _step(
+                    agent_name="relevance_prefilter_agent",
+                    step_name="relevance_prefilter_trace_wrapper",
+                ),
+                _step(
+                    agent_step_id="agent_step_2",
+                    agent_name="deduplication_agent",
+                    step_name="deduplication_trace_wrapper",
+                ),
+            ]
+        }
+
+    monkeypatch.setattr(services, "list_agent_runs_postgres_payload", runs_payload)
+    monkeypatch.setattr(services, "list_agent_steps_postgres_payload", steps_payload)
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        include_stage_trace_bundle=True,
+    )
+
+    assert calls == {"runs": 1, "steps": 1}
+    assert "trace_summary" not in payload
+    bundle = payload["stage_trace_bundle"]
+    assert bundle["bundle_type"] == "stage_trace_bundle"
+    assert bundle["step_count"] == 2
+    assert bundle["trace_summary"]["step_count"] == 2
+    assert bundle["stage_names"] == [
+        "relevance_prefilter_trace_wrapper",
+        "deduplication_trace_wrapper",
+    ]
+    assert bundle["missing_expected_stages"] == [
+        "jd_intelligence_trace_wrapper",
+        "final_application_scoring_trace_wrapper",
+    ]
+    assert bundle["safety_metadata"]["did_write_database"] is False
+    assert bundle["safety_metadata"]["did_call_llm"] is False
+    assert bundle["safety_metadata"]["did_change_ranking"] is False
+    assert bundle["safety_metadata"]["did_change_scoring"] is False
+    assert bundle["safety_metadata"]["did_change_approval"] is False
+    assert bundle["safety_metadata"]["did_execute_application"] is False
+    assert bundle["safety_metadata"]["did_submit_application"] is False
+
+
 def test_agent_trace_payload_empty_result_includes_empty_trace_summary(monkeypatch):
     monkeypatch.setattr(
         services,
@@ -132,6 +208,36 @@ def test_agent_trace_payload_empty_result_includes_empty_trace_summary(monkeypat
     assert payload["trace_summary"]["safety_metadata"]["did_write_database"] is False
 
 
+def test_agent_trace_payload_empty_result_includes_safe_stage_trace_bundle(monkeypatch):
+    monkeypatch.setattr(
+        services,
+        "list_agent_runs_postgres_payload",
+        lambda **kwargs: {"runs": []},
+    )
+    monkeypatch.setattr(
+        services,
+        "list_agent_steps_postgres_payload",
+        lambda **kwargs: {"steps": []},
+    )
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        include_stage_trace_bundle=True,
+    )
+
+    assert payload["agent_runs"] == []
+    assert payload["stage_trace_bundle"]["step_count"] == 0
+    assert payload["stage_trace_bundle"]["stage_names"] == []
+    assert payload["stage_trace_bundle"]["missing_expected_stages"] == [
+        "relevance_prefilter_trace_wrapper",
+        "deduplication_trace_wrapper",
+        "jd_intelligence_trace_wrapper",
+        "final_application_scoring_trace_wrapper",
+    ]
+    assert payload["stage_trace_bundle"]["safety_metadata"]["did_write_database"] is False
+
+
 def test_agent_trace_payload_exception_fallback_includes_empty_trace_summary(monkeypatch):
     def fail_runs(**kwargs):
         raise SystemExit("database unavailable")
@@ -155,6 +261,23 @@ def test_agent_trace_payload_exception_fallback_includes_empty_trace_summary(mon
     assert payload["trace_summary"]["run_count"] == 0
     assert payload["trace_summary"]["step_count"] == 0
     assert payload["trace_summary"]["safety_metadata"]["did_write_database"] is False
+
+
+def test_agent_trace_payload_exception_fallback_includes_safe_stage_trace_bundle(monkeypatch):
+    def fail_runs(**kwargs):
+        raise SystemExit("database unavailable")
+
+    monkeypatch.setattr(services, "list_agent_runs_postgres_payload", fail_runs)
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        include_stage_trace_bundle=True,
+    )
+
+    assert payload["agent_runs"] == []
+    assert payload["stage_trace_bundle"]["step_count"] == 0
+    assert payload["stage_trace_bundle"]["safety_metadata"]["did_write_database"] is False
 
 
 def test_agent_trace_payload_default_shape_preserves_existing_api_contract(monkeypatch):

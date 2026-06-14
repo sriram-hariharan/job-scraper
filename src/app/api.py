@@ -1045,12 +1045,41 @@ def invoke_critic_evaluator_readonly_api_action(
     request: CriticEvaluatorReadonlyRequest,
 ):
     evaluator_result = evaluate_agent_trace(request.trace_payload)
+    trace_payload = request.trace_payload if isinstance(request.trace_payload, dict) else {}
+    evidence_pack = trace_payload.get("trace_evidence_pack")
+    evidence_pack_available = isinstance(evidence_pack, dict) and bool(evidence_pack)
+    reason_codes = []
+    warnings = list(evaluator_result.get("evaluator_warnings", []) or [])
+    blockers = list(evaluator_result.get("evaluator_findings", []) or [])
+    readiness_status = "unknown"
+    if evidence_pack_available:
+        readiness_status = str(evidence_pack.get("readiness_status") or "unknown").strip()
+        evidence_reason_codes = evidence_pack.get("decision_reason_codes", [])
+        evidence_warnings = evidence_pack.get("warning_findings", [])
+        evidence_blockers = evidence_pack.get("blocking_findings", [])
+        reason_codes = list(evidence_reason_codes) if isinstance(evidence_reason_codes, list) else []
+        warnings.extend(list(evidence_warnings) if isinstance(evidence_warnings, list) else [])
+        blockers.extend(list(evidence_blockers) if isinstance(evidence_blockers, list) else [])
+    critic_status = (
+        "blocked"
+        if blockers or readiness_status == "blocked"
+        else "warning"
+        if warnings or readiness_status == "warning"
+        else "passed"
+    )
     return {
         "approval_request_id": approval_request_id,
         "trace_payload_source": request.trace_payload_source,
         "requested_evaluator_rubric_version": request.evaluator_rubric_version,
         "explicit_user_action": True,
         "read_only": True,
+        "critic_status": critic_status,
+        "readiness_status": readiness_status,
+        "evidence_pack_available": evidence_pack_available,
+        "reason_codes": reason_codes,
+        "warnings": warnings,
+        "blockers": blockers,
+        "safety_metadata": _critic_evaluator_readonly_safety_flags(),
         **evaluator_result,
         **_critic_evaluator_readonly_safety_flags(),
     }

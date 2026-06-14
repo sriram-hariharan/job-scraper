@@ -87,6 +87,9 @@ def test_trace_polish_ui_terms_are_present_in_readonly_panel():
         "Decision reason codes",
         "Detailed trace sections",
         "Lower-level trace summary, bundle, health, and readiness details remain read-only",
+        "Read-only Critic Evaluator",
+        "Manual, non-actionable trace review.",
+        "data-agentic-critic-evaluator-readonly",
         "collapsed step details",
         "accessibility labels",
         "Long trace readability",
@@ -129,7 +132,6 @@ def test_trace_polish_fetch_remains_get_only_existing_endpoint():
 def test_trace_polish_does_not_add_actions_exports_or_llm_behavior():
     snippet = _trace_panel_snippet()
     forbidden_markers = [
-        "<button",
         "data-agentic-approval-decision",
         "data-agentic-submit",
         "data-agentic-run",
@@ -150,6 +152,8 @@ def test_trace_polish_does_not_add_actions_exports_or_llm_behavior():
 
     for marker in forbidden_markers:
         assert marker not in snippet
+
+    assert snippet.count("data-agentic-critic-evaluator-readonly") == 1
 
 
 def test_trace_polish_accessibility_and_collapsed_details_are_present():

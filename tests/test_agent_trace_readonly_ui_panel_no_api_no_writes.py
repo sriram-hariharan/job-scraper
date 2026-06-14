@@ -56,6 +56,13 @@ def _trace_panel_render_snippet() -> str:
     return source[start:end]
 
 
+def _recommendation_explainer_snippet() -> str:
+    source = _source()
+    start = source.index("function recommendationExplainerValues")
+    end = source.index("function renderAgenticReviewRows")
+    return source[start:end]
+
+
 def test_agent_trace_readonly_panel_is_present_and_display_only():
     snippet = _trace_panel_snippet()
 
@@ -333,6 +340,37 @@ def test_agent_trace_readonly_panel_does_not_add_trace_actions():
 
     for marker in forbidden_markers:
         assert marker not in snippet
+
+
+def test_recommendation_explainer_ui_is_collapsed_escaped_and_read_only():
+    source = _source()
+    snippet = _recommendation_explainer_snippet()
+
+    assert "function buildRecommendationExplainer" in snippet
+    assert "function renderRecommendationExplainer" in snippet
+    assert "Why surfaced" in snippet
+    assert "agentic-review-recommendation-explainer" in snippet
+    assert 'data-collapsed-by-default="true"' in snippet
+    assert "renderAgentTraceReadOnlyDetails" in snippet
+    assert "renderWorkflowSummaryMetric" in snippet
+    assert "Primary reasons" in snippet
+    assert "Supporting signals" in snippet
+    assert "Risk signals" in snippet
+    assert "Missing evidence" in snippet
+    assert "Score breakdown" in snippet
+    assert "Source fields used" in snippet
+    assert "Safety metadata" in snippet
+    assert "did_write_database: false" in snippet
+    assert "did_call_llm: false" in snippet
+    assert "did_change_ranking: false" in snippet
+    assert "did_change_scoring: false" in snippet
+    assert "did_mutate_approval: false" in snippet
+    assert "did_mutate_queue: false" in snippet
+    assert "did_execute_application: false" in snippet
+    assert "did_submit_application: false" in snippet
+    assert "innerHTML" not in snippet
+    assert "renderRecommendationExplainer(row)" in source
+    assert "colspan=" in source
 
 
 def test_agent_trace_readonly_ui_doc_contains_required_contract():

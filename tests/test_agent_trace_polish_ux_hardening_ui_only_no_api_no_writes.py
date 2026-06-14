@@ -12,7 +12,7 @@ PROTECTED_FILE_HASHES = {
     "src/storage/agent_state/migration_runner.py": "488e25670d7043c6a5b938441e13d7c066bbcf5fccda1a41401723650e61969e",
     "src/storage/agentic_approvals/store.py": "9cd153ba1bdcac520c1ea0d3b04374671e8ace6c2635a60fce2544526201f5bf",
     "src/storage/agentic_approvals/schema.sql": "57e84094cdbd3a4e8542fd205d89bfde18179c5d07c15084354f31f77bf5d98f",
-    "src/agents/trace.py": "31f59053f6be00c1e52a87a903ba6f1507f3c6d375fb8d11ae314f1dda8b1f19",
+    "src/agents/trace.py": "f4527c224ea0d3fc05d14883bb036311e7120a6a9abc9a54a58396e76ddada41",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/deduplication.py": "7aeb6e831197a63f66b83fff898ccef77db177e39594464e1c215cffaed432b8",
@@ -79,6 +79,12 @@ def test_trace_polish_ui_terms_are_present_in_readonly_panel():
         "Reason codes",
         "Blocking findings",
         "Warning findings",
+        "Trace Evidence Pack",
+        "trace_evidence_pack",
+        "Evidence",
+        "Available sections",
+        "Missing sections",
+        "Decision reason codes",
         "collapsed step details",
         "accessibility labels",
         "Long trace readability",
@@ -96,9 +102,11 @@ def test_trace_polish_fetch_remains_get_only_existing_endpoint():
     assert "include_stage_trace_bundle=1" in fetch_snippet
     assert "include_stage_trace_health=1" in fetch_snippet
     assert "include_stage_trace_readiness=1" in fetch_snippet
+    assert "include_trace_evidence_pack=1" in fetch_snippet
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_bundle=1" not in fetch_snippet
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_health=1" not in fetch_snippet
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_readiness=1" not in fetch_snippet
+    assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_trace_evidence_pack=1" not in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
     assert "loading_state: true" in init_snippet
 

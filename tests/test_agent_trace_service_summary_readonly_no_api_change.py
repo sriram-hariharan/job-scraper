@@ -126,6 +126,7 @@ def test_agent_trace_payload_default_does_not_include_stage_trace_bundle(monkeyp
     assert "stage_trace_bundle" not in payload
     assert "stage_trace_health" not in payload
     assert "stage_trace_readiness" not in payload
+    assert "trace_evidence_pack" not in payload
 
 
 def test_agent_trace_payload_includes_opt_in_stage_trace_bundle_without_extra_reads(monkeypatch):
@@ -278,6 +279,67 @@ def test_agent_trace_payload_includes_opt_in_stage_trace_readiness_without_extra
     assert readiness["safety_metadata"]["did_submit_application"] is False
 
 
+def test_agent_trace_payload_includes_opt_in_trace_evidence_pack_without_extra_reads(monkeypatch):
+    calls = {"runs": 0, "steps": 0}
+
+    def runs_payload(**kwargs):
+        calls["runs"] += 1
+        return {"runs": [_run()]}
+
+    def steps_payload(**kwargs):
+        calls["steps"] += 1
+        return {
+            "steps": [
+                _step(
+                    agent_name="relevance_prefilter_agent",
+                    step_name="relevance_prefilter_trace_wrapper",
+                ),
+                _step(
+                    agent_step_id="agent_step_2",
+                    agent_name="deduplication_agent",
+                    step_name="deduplication_trace_wrapper",
+                ),
+            ]
+        }
+
+    monkeypatch.setattr(services, "list_agent_runs_postgres_payload", runs_payload)
+    monkeypatch.setattr(services, "list_agent_steps_postgres_payload", steps_payload)
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        include_trace_evidence_pack=True,
+    )
+
+    assert calls == {"runs": 1, "steps": 1}
+    assert "trace_summary" not in payload
+    assert "stage_trace_bundle" not in payload
+    assert "stage_trace_health" not in payload
+    assert "stage_trace_readiness" not in payload
+    evidence_pack = payload["trace_evidence_pack"]
+    assert evidence_pack["evidence_pack_type"] == "agent_trace_evidence_pack"
+    assert evidence_pack["ok"] is False
+    assert evidence_pack["summary_status"] == "available"
+    assert evidence_pack["stage_count"] == 2
+    assert evidence_pack["health_status"] == "warning"
+    assert evidence_pack["readiness_status"] == "blocked"
+    assert evidence_pack["available_sections"] == [
+        "trace_summary",
+        "stage_trace_bundle",
+        "stage_trace_health",
+        "stage_trace_readiness",
+    ]
+    assert evidence_pack["missing_sections"] == []
+    assert "missing_expected_stages" in evidence_pack["decision_reason_codes"]
+    assert evidence_pack["safety_metadata"]["did_write_database"] is False
+    assert evidence_pack["safety_metadata"]["did_call_llm"] is False
+    assert evidence_pack["safety_metadata"]["did_change_ranking"] is False
+    assert evidence_pack["safety_metadata"]["did_change_scoring"] is False
+    assert evidence_pack["safety_metadata"]["did_change_approval"] is False
+    assert evidence_pack["safety_metadata"]["did_execute_application"] is False
+    assert evidence_pack["safety_metadata"]["did_submit_application"] is False
+
+
 def test_agent_trace_payload_empty_result_includes_empty_trace_summary(monkeypatch):
     monkeypatch.setattr(
         services,
@@ -385,6 +447,33 @@ def test_agent_trace_payload_empty_result_includes_safe_stage_trace_readiness(mo
     assert payload["stage_trace_readiness"]["safety_metadata"]["did_write_database"] is False
 
 
+def test_agent_trace_payload_empty_result_includes_safe_trace_evidence_pack(monkeypatch):
+    monkeypatch.setattr(
+        services,
+        "list_agent_runs_postgres_payload",
+        lambda **kwargs: {"runs": []},
+    )
+    monkeypatch.setattr(
+        services,
+        "list_agent_steps_postgres_payload",
+        lambda **kwargs: {"steps": []},
+    )
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        include_trace_evidence_pack=True,
+    )
+
+    assert payload["agent_runs"] == []
+    assert "trace_summary" not in payload
+    assert "stage_trace_bundle" not in payload
+    assert "stage_trace_health" not in payload
+    assert "stage_trace_readiness" not in payload
+    assert payload["trace_evidence_pack"]["readiness_status"] == "blocked"
+    assert payload["trace_evidence_pack"]["safety_metadata"]["did_write_database"] is False
+
+
 def test_agent_trace_payload_exception_fallback_includes_empty_trace_summary(monkeypatch):
     def fail_runs(**kwargs):
         raise SystemExit("database unavailable")
@@ -459,6 +548,23 @@ def test_agent_trace_payload_exception_fallback_includes_safe_stage_trace_readin
     assert payload["agent_runs"] == []
     assert payload["stage_trace_readiness"]["readiness_status"] == "blocked"
     assert payload["stage_trace_readiness"]["safety_metadata"]["did_write_database"] is False
+
+
+def test_agent_trace_payload_exception_fallback_includes_safe_trace_evidence_pack(monkeypatch):
+    def fail_runs(**kwargs):
+        raise SystemExit("database unavailable")
+
+    monkeypatch.setattr(services, "list_agent_runs_postgres_payload", fail_runs)
+
+    payload = services.agent_trace_payload(
+        owner_user_id="user_1",
+        pipeline_run_id="run_1",
+        include_trace_evidence_pack=True,
+    )
+
+    assert payload["agent_runs"] == []
+    assert payload["trace_evidence_pack"]["readiness_status"] == "blocked"
+    assert payload["trace_evidence_pack"]["safety_metadata"]["did_write_database"] is False
 
 
 def test_agent_trace_payload_default_shape_preserves_existing_api_contract(monkeypatch):

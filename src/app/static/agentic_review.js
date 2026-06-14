@@ -731,6 +731,42 @@ function renderAgentStageTraceReadinessSection(stageTraceReadiness = {}) {
   `;
 }
 
+function renderAgentTraceEvidencePackSection(traceEvidencePack = {}) {
+  if (!hasAgentTraceSummaryObject(traceEvidencePack)) return "";
+  const safety = hasAgentTraceSummaryObject(traceEvidencePack.safety_metadata)
+    ? traceEvidencePack.safety_metadata
+    : {};
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only agent trace evidence pack">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Trace Evidence Pack</h4>
+          <p>Opt-in compact read-only evidence pack from existing trace sections. It does not write storage, call LLMs, change ranking or scoring, execute applications, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Evidence", traceEvidencePack.ok === true ? "ready" : "review")}
+        ${renderWorkflowSummaryMetric("Readiness", traceEvidencePack.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Health", traceEvidencePack.health_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Stage count", Number(traceEvidencePack.stage_count ?? 0))}
+        ${renderWorkflowSummaryMetric("Writes", safety.did_write_database ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Available sections", traceEvidencePack.available_sections, { helper: "Read-only evidence pack sections available in this response." })}
+        ${renderAgentTraceReadOnlyDetails("Missing sections", traceEvidencePack.missing_sections, { helper: "Read-only evidence pack sections absent from this response." })}
+        ${renderAgentTraceReadOnlyDetails("Decision reason codes", traceEvidencePack.decision_reason_codes, { helper: "Compact readiness decision reason codes." })}
+        ${renderAgentTraceReadOnlyDetails("Blocking findings", traceEvidencePack.blocking_findings, { helper: "Compact evidence pack blocking findings." })}
+        ${renderAgentTraceReadOnlyDetails("Warning findings", traceEvidencePack.warning_findings, { helper: "Compact evidence pack warning findings." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable trace evidence pack safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -779,6 +815,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle)}
       ${renderAgentStageTraceHealthSection(tracePayload?.stage_trace_health)}
       ${renderAgentStageTraceReadinessSection(tracePayload?.stage_trace_readiness)}
+      ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
       <details class="agent-trace-debug-details" data-collapsed-by-default="true">
@@ -835,7 +872,7 @@ async function fetchAgentTraceReadOnlyPayload(payload = {}, runId = getAgenticRe
     return fetchJson(`/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace`);
   }
   if (runId) {
-    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1&include_stage_trace_health=1&include_stage_trace_readiness=1`);
+    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1&include_stage_trace_health=1&include_stage_trace_readiness=1&include_trace_evidence_pack=1`);
   }
   return {};
 }

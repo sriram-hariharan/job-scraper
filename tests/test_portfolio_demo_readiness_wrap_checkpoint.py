@@ -95,6 +95,7 @@ ALLOWED_CHANGED = {
     "tests/test_final_application_scoring_agent_trace_wrapper_no_behavior_change.py",
     "tests/test_agent_stage_wrapper_trace_summary_consistency_no_runtime_change.py",
     "tests/test_live_jd_intelligence_dry_run_contract_no_pipeline_change.py",
+    "tests/test_manual_jd_intelligence_dry_run_surface_no_pipeline_change.py",
 }
 
 def _changed_files():

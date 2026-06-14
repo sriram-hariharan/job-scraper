@@ -143,6 +143,18 @@ class CriticEvaluatorReadonlyRequest(BaseModel):
     trace_payload_source: str = "request_body"
     evaluator_rubric_version: str = ""
 
+
+class ManualJdIntelligenceDryRunRequest(BaseModel):
+    job_title: str = ""
+    company: str = ""
+    location: str = ""
+    job_description: str = ""
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+    feature_enabled: bool = False
+    config: dict[str, Any] = Field(default_factory=dict)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1082,6 +1094,28 @@ def invoke_critic_evaluator_readonly_api_action(
         "safety_metadata": _critic_evaluator_readonly_safety_flags(),
         **evaluator_result,
         **_critic_evaluator_readonly_safety_flags(),
+    }
+
+
+@app.post("/api/manual-jd-intelligence-dry-run")
+def invoke_manual_jd_intelligence_dry_run_api_action(
+    request: ManualJdIntelligenceDryRunRequest,
+):
+    payload = services.build_manual_jd_intelligence_dry_run_payload(
+        job_title=request.job_title,
+        company=request.company,
+        location=request.location,
+        job_description=request.job_description,
+        source_metadata=request.source_metadata,
+        context_id=request.context_id,
+        job_id=request.job_id,
+        feature_enabled=request.feature_enabled,
+        config=request.config,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_jd_intelligence_dry_run",
     }
 
 

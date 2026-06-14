@@ -482,6 +482,134 @@ def test_stage_trace_readiness_safety_metadata_is_read_only():
     assert readiness["safety_metadata"]["did_submit_application"] is False
 
 
+def _complete_evidence_pack_inputs() -> tuple[dict, dict, dict, dict]:
+    _, _, bundle = _bundle()
+    summary = bundle["trace_summary"]
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+    readiness = trace.build_stage_trace_readiness_decision(health)
+    return summary, bundle, health, readiness
+
+
+def test_agent_trace_evidence_pack_complete_inputs_are_ready():
+    summary, bundle, health, readiness = _complete_evidence_pack_inputs()
+
+    evidence_pack = trace.build_agent_trace_evidence_pack(
+        trace_summary=summary,
+        stage_trace_bundle=bundle,
+        stage_trace_health=health,
+        stage_trace_readiness=readiness,
+    )
+
+    assert evidence_pack["ok"] is True
+    assert evidence_pack["evidence_pack_type"] == "agent_trace_evidence_pack"
+    assert evidence_pack["summary_status"] == "available"
+    assert evidence_pack["stage_count"] == 4
+    assert evidence_pack["health_status"] == "healthy"
+    assert evidence_pack["readiness_status"] == "ready"
+    assert evidence_pack["decision_reason_codes"] == []
+    assert evidence_pack["blocking_findings"] == []
+    assert evidence_pack["warning_findings"] == []
+    assert evidence_pack["available_sections"] == [
+        "trace_summary",
+        "stage_trace_bundle",
+        "stage_trace_health",
+        "stage_trace_readiness",
+    ]
+    assert evidence_pack["missing_sections"] == []
+
+
+def test_agent_trace_evidence_pack_reports_missing_sections():
+    _, _, health, readiness = _complete_evidence_pack_inputs()
+
+    evidence_pack = trace.build_agent_trace_evidence_pack(
+        trace_summary={},
+        stage_trace_bundle={},
+        stage_trace_health=health,
+        stage_trace_readiness=readiness,
+    )
+
+    assert evidence_pack["ok"] is False
+    assert evidence_pack["summary_status"] == "missing"
+    assert evidence_pack["stage_count"] == 0
+    assert evidence_pack["available_sections"] == [
+        "stage_trace_health",
+        "stage_trace_readiness",
+    ]
+    assert evidence_pack["missing_sections"] == [
+        "trace_summary",
+        "stage_trace_bundle",
+    ]
+
+
+def test_agent_trace_evidence_pack_reflects_blocked_readiness():
+    run = _run_snapshot()
+    bundle = trace.build_stage_trace_bundle_payload(
+        run_snapshot=run,
+        step_snapshots=_stage_snapshots(run["agent_run_id"])[:-1],
+    )
+    summary = bundle["trace_summary"]
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+    readiness = trace.build_stage_trace_readiness_decision(health)
+
+    evidence_pack = trace.build_agent_trace_evidence_pack(
+        trace_summary=summary,
+        stage_trace_bundle=bundle,
+        stage_trace_health=health,
+        stage_trace_readiness=readiness,
+    )
+
+    assert evidence_pack["ok"] is False
+    assert evidence_pack["health_status"] == "warning"
+    assert evidence_pack["readiness_status"] == "blocked"
+    assert "missing_expected_stages" in evidence_pack["decision_reason_codes"]
+    assert "missing_expected_stages" in evidence_pack["blocking_findings"]
+
+
+def test_agent_trace_evidence_pack_is_deterministic_and_does_not_mutate_inputs():
+    summary, bundle, health, readiness = _complete_evidence_pack_inputs()
+    originals = (
+        deepcopy(summary),
+        deepcopy(bundle),
+        deepcopy(health),
+        deepcopy(readiness),
+    )
+
+    first = trace.build_agent_trace_evidence_pack(
+        trace_summary=summary,
+        stage_trace_bundle=bundle,
+        stage_trace_health=health,
+        stage_trace_readiness=readiness,
+    )
+    second = trace.build_agent_trace_evidence_pack(
+        trace_summary=summary,
+        stage_trace_bundle=bundle,
+        stage_trace_health=health,
+        stage_trace_readiness=readiness,
+    )
+
+    assert (summary, bundle, health, readiness) == originals
+    assert first == second
+
+
+def test_agent_trace_evidence_pack_safety_metadata_is_read_only():
+    summary, bundle, health, readiness = _complete_evidence_pack_inputs()
+
+    evidence_pack = trace.build_agent_trace_evidence_pack(
+        trace_summary=summary,
+        stage_trace_bundle=bundle,
+        stage_trace_health=health,
+        stage_trace_readiness=readiness,
+    )
+
+    assert evidence_pack["safety_metadata"]["did_write_database"] is False
+    assert evidence_pack["safety_metadata"]["did_call_llm"] is False
+    assert evidence_pack["safety_metadata"]["did_change_ranking"] is False
+    assert evidence_pack["safety_metadata"]["did_change_scoring"] is False
+    assert evidence_pack["safety_metadata"]["did_change_approval"] is False
+    assert evidence_pack["safety_metadata"]["did_execute_application"] is False
+    assert evidence_pack["safety_metadata"]["did_submit_application"] is False
+
+
 def test_stage_trace_bundle_helper_source_has_no_runtime_or_storage_execution_calls():
     source = Path("src/agents/trace.py").read_text()
     start = source.index("def stage_trace_bundle_safety_metadata")

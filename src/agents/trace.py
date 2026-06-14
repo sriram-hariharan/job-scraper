@@ -294,6 +294,55 @@ def build_stage_trace_readiness_decision(
     }
 
 
+def build_agent_trace_evidence_pack(
+    *,
+    trace_summary: dict[str, Any],
+    stage_trace_bundle: dict[str, Any],
+    stage_trace_health: dict[str, Any],
+    stage_trace_readiness: dict[str, Any],
+) -> dict[str, Any]:
+    summary = _snapshot(trace_summary)
+    bundle = _snapshot(stage_trace_bundle)
+    health = _snapshot(stage_trace_health)
+    readiness = _snapshot(stage_trace_readiness)
+    sections = {
+        "trace_summary": summary,
+        "stage_trace_bundle": bundle,
+        "stage_trace_health": health,
+        "stage_trace_readiness": readiness,
+    }
+    available_sections = [
+        section_name for section_name, section in sections.items() if bool(section)
+    ]
+    missing_sections = [
+        section_name for section_name, section in sections.items() if not bool(section)
+    ]
+    readiness_status = _clean_text(readiness.get("readiness_status")) or "unknown"
+    health_status = _clean_text(health.get("health_status")) or "unknown"
+    decision_reason_codes = _clean_text_list(readiness.get("decision_reason_codes"))
+    blocking_findings = _clean_text_list(readiness.get("blocking_findings"))
+    warning_findings = _clean_text_list(readiness.get("warning_findings"))
+
+    return {
+        "ok": (
+            readiness.get("ok") is True
+            and summary.get("ok") is not False
+            and not missing_sections
+        ),
+        "evidence_pack_type": "agent_trace_evidence_pack",
+        "summary_status": "available" if summary else "missing",
+        "stage_count": int(bundle.get("step_count") or 0) if bundle else 0,
+        "health_status": health_status,
+        "readiness_status": readiness_status,
+        "decision_reason_codes": decision_reason_codes,
+        "blocking_findings": blocking_findings,
+        "warning_findings": warning_findings,
+        "available_sections": available_sections,
+        "missing_sections": missing_sections,
+        "safety_metadata": stage_trace_bundle_safety_metadata(),
+    }
+
+
 def build_agent_run_record_payload(run_snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = _snapshot(run_snapshot)
     prepared = agent_state_store.prepare_agent_run_upsert(snapshot)

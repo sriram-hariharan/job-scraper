@@ -44,6 +44,7 @@ from src.agents import (
     read_only_chain_artifact_generator,
     workflow_runner,
 )
+from src.agents.trace import build_stage_trace_bundle_payload
 from src.matching.dimensions import get_dimension_weights
 from src.matching.job_adapter import build_job_evidence
 from src.matching.models import MatchPrefilterResult
@@ -1255,6 +1256,7 @@ def _agent_trace_empty_payload(
     pipeline_run_id: str,
     *,
     include_trace_summary: bool = False,
+    include_stage_trace_bundle: bool = False,
 ) -> Dict[str, Any]:
     payload = {
         "pipeline_run_id": _clean_text(pipeline_run_id),
@@ -1272,6 +1274,11 @@ def _agent_trace_empty_payload(
         payload["trace_summary"] = build_agent_trace_summary_payload(
             agent_runs=[],
             agent_steps=[],
+        )
+    if include_stage_trace_bundle:
+        payload["stage_trace_bundle"] = build_stage_trace_bundle_payload(
+            run_snapshot={},
+            step_snapshots=[],
         )
     return payload
 
@@ -1320,6 +1327,18 @@ def _agent_trace_public_run(run: Dict[str, Any], steps: List[Dict[str, Any]]) ->
     }
 
 
+def _agent_trace_stage_trace_bundle(
+    *,
+    runs: List[Dict[str, Any]],
+    steps: List[Dict[str, Any]],
+) -> Dict[str, Any]:
+    run_snapshot = dict(runs[0]) if runs else {}
+    return build_stage_trace_bundle_payload(
+        run_snapshot=run_snapshot,
+        step_snapshots=steps,
+    )
+
+
 def _agent_trace_step_is_warning(step: Dict[str, Any]) -> bool:
     status = _clean_text(step.get("status")).lower()
     validation = step.get("validation_json") if isinstance(step.get("validation_json"), dict) else {}
@@ -1360,6 +1379,7 @@ def agent_trace_payload(
     limit_runs: int = 50,
     limit_steps: int = 500,
     include_trace_summary: bool = False,
+    include_stage_trace_bundle: bool = False,
 ) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     safe_pipeline_run_id = _clean_text(pipeline_run_id)
@@ -1374,6 +1394,7 @@ def agent_trace_payload(
         owner,
         safe_pipeline_run_id,
         include_trace_summary=include_trace_summary,
+        include_stage_trace_bundle=include_stage_trace_bundle,
     )
     try:
         if safe_agent_run_id:
@@ -1472,6 +1493,11 @@ def agent_trace_payload(
         payload["trace_summary"] = build_agent_trace_summary_payload(
             agent_runs=runs,
             agent_steps=steps,
+        )
+    if include_stage_trace_bundle:
+        payload["stage_trace_bundle"] = _agent_trace_stage_trace_bundle(
+            runs=runs,
+            steps=steps,
         )
     return payload
 

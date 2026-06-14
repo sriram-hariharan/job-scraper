@@ -296,6 +296,7 @@ def test_profile_pipeline_run_agent_trace_route_uses_authenticated_owner(monkeyp
         "context_id": "ctx_route",
         "agent_run_id": "agent_run_route",
         "include_trace_summary": False,
+        "include_stage_trace_bundle": False,
     }
 
 
@@ -322,7 +323,9 @@ def test_profile_pipeline_run_agent_trace_route_preserves_default_shape(monkeypa
     payload = api.profile_pipeline_run_agent_trace("run_route", _request("user_route"))
 
     assert "trace_summary" not in payload
+    assert "stage_trace_bundle" not in payload
     assert captured["include_trace_summary"] is False
+    assert captured["include_stage_trace_bundle"] is False
 
 
 def test_profile_pipeline_run_agent_trace_route_can_opt_in_trace_summary(monkeypatch):
@@ -360,14 +363,58 @@ def test_profile_pipeline_run_agent_trace_route_can_opt_in_trace_summary(monkeyp
             include_trace_summary=value,
         )
         assert captured["include_trace_summary"] is True
+        assert captured["include_stage_trace_bundle"] is False
         assert payload["trace_summary"]["summary_type"] == "agent_trace"
+
+
+def test_profile_pipeline_run_agent_trace_route_can_opt_in_stage_trace_bundle(monkeypatch):
+    captured = {}
+
+    def fake_agent_trace_payload(**kwargs):
+        captured.update(kwargs)
+        payload = {
+            "pipeline_run_id": kwargs["pipeline_run_id"],
+            "owner_user_id": kwargs["owner_user_id"],
+            "agent_runs": [],
+            "counts": {
+                "agent_runs": 0,
+                "agent_steps": 0,
+                "failed_steps": 0,
+                "warning_steps": 0,
+                "succeeded_steps": 0,
+            },
+        }
+        if kwargs["include_stage_trace_bundle"]:
+            payload["stage_trace_bundle"] = {
+                "bundle_type": "stage_trace_bundle",
+                "step_count": 0,
+            }
+        return payload
+
+    monkeypatch.setattr(services, "agent_trace_payload", fake_agent_trace_payload)
+
+    for value in ["1", "true", "yes", "on", " TRUE "]:
+        captured.clear()
+        payload = api.profile_pipeline_run_agent_trace(
+            "run_route",
+            _request("user_route"),
+            include_stage_trace_bundle=value,
+        )
+        assert captured["include_stage_trace_bundle"] is True
+        assert captured["include_trace_summary"] is False
+        assert payload["stage_trace_bundle"]["bundle_type"] == "stage_trace_bundle"
 
 
 def test_profile_pipeline_run_agent_trace_route_false_flags_preserve_default_shape(monkeypatch):
     captured_values = []
 
     def fake_agent_trace_payload(**kwargs):
-        captured_values.append(kwargs["include_trace_summary"])
+        captured_values.append(
+            (
+                kwargs["include_trace_summary"],
+                kwargs["include_stage_trace_bundle"],
+            )
+        )
         return {
             "pipeline_run_id": kwargs["pipeline_run_id"],
             "owner_user_id": kwargs["owner_user_id"],
@@ -388,10 +435,19 @@ def test_profile_pipeline_run_agent_trace_route_false_flags_preserve_default_sha
             "run_route",
             _request("user_route"),
             include_trace_summary=value,
+            include_stage_trace_bundle=value,
         )
         assert "trace_summary" not in payload
+        assert "stage_trace_bundle" not in payload
 
-    assert captured_values == [False, False, False, False, False, False]
+    assert captured_values == [
+        (False, False),
+        (False, False),
+        (False, False),
+        (False, False),
+        (False, False),
+        (False, False),
+    ]
 
 
 def test_profile_pipeline_run_agent_trace_route_does_not_invoke_summary_helper_by_default(monkeypatch):
@@ -416,6 +472,7 @@ def test_profile_pipeline_run_agent_trace_route_does_not_invoke_summary_helper_b
     payload = api.profile_pipeline_run_agent_trace("run_route", _request("user_route"))
 
     assert "trace_summary" not in payload
+    assert "stage_trace_bundle" not in payload
     assert called["summary_helper"] is False
 
 

@@ -62,6 +62,12 @@ def test_trace_polish_ui_terms_are_present_in_readonly_panel():
         "loading state",
         "safety metadata",
         "validation_json",
+        "Stage Trace Bundle",
+        "stage_trace_bundle",
+        "Stage order valid",
+        "Missing expected stages",
+        "Unexpected stages",
+        "Duplicate stages",
         "collapsed step details",
         "accessibility labels",
         "Long trace readability",
@@ -76,6 +82,8 @@ def test_trace_polish_fetch_remains_get_only_existing_endpoint():
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace" in fetch_snippet
     assert "/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace" in fetch_snippet
     assert "include_trace_summary=1" in fetch_snippet
+    assert "include_stage_trace_bundle=1" in fetch_snippet
+    assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_bundle=1" not in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
     assert "loading_state: true" in init_snippet
 

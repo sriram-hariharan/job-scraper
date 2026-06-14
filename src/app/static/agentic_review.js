@@ -621,6 +621,48 @@ function renderAgentTraceSummarySection(traceSummary = {}) {
   `;
 }
 
+function renderAgentStageTraceBundleSection(stageTraceBundle = {}) {
+  if (!hasAgentTraceSummaryObject(stageTraceBundle)) return "";
+  const validation = hasAgentTraceSummaryObject(stageTraceBundle.stage_order_validation)
+    ? stageTraceBundle.stage_order_validation
+    : {};
+  const safety = hasAgentTraceSummaryObject(stageTraceBundle.safety_metadata)
+    ? stageTraceBundle.safety_metadata
+    : {};
+  const stageCount = Number(stageTraceBundle.step_count ?? 0);
+  const orderValid = validation.is_valid === true;
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only stage trace bundle">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Stage Trace Bundle</h4>
+          <p>Opt-in read-only stage order bundle from existing trace rows. It does not write storage, call LLMs, change ranking or scoring, execute applications, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Stage count", stageCount)}
+        ${renderWorkflowSummaryMetric("Stage order valid", orderValid ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Writes", safety.did_write_database ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking changes", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Scoring changes", safety.did_change_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Stage names", stageTraceBundle.stage_names, { helper: "Read-only stage names from existing trace rows." })}
+        ${renderAgentTraceReadOnlyDetails("Agent names", stageTraceBundle.agent_names, { helper: "Read-only agent names from existing trace rows." })}
+        ${renderAgentTraceReadOnlyDetails("Missing expected stages", stageTraceBundle.missing_expected_stages, { helper: "Expected stages absent from the returned trace rows." })}
+        ${renderAgentTraceReadOnlyDetails("Unexpected stages", stageTraceBundle.unexpected_stages, { helper: "Returned stages outside the expected read-only order." })}
+        ${renderAgentTraceReadOnlyDetails("Duplicate stages", stageTraceBundle.duplicate_stages, { helper: "Duplicate stage names in the returned trace rows." })}
+        ${renderAgentTraceReadOnlyDetails("Stage order validation", validation, { helper: "Deterministic stage order validation." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable stage bundle safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -666,6 +708,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
       ${renderAgentTraceSummarySection(tracePayload?.trace_summary)}
+      ${renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
       <details class="agent-trace-debug-details" data-collapsed-by-default="true">
@@ -722,7 +765,7 @@ async function fetchAgentTraceReadOnlyPayload(payload = {}, runId = getAgenticRe
     return fetchJson(`/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace`);
   }
   if (runId) {
-    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1`);
+    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1`);
   }
   return {};
 }

@@ -68,6 +68,14 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "function renderAgentTraceSummarySection" in snippet
     assert "Trace Summary" in snippet
     assert "Opt-in read-only summary from existing trace rows." in snippet
+    assert "function renderAgentStageTraceBundleSection" in snippet
+    assert "Stage Trace Bundle" in snippet
+    assert "Opt-in read-only stage order bundle from existing trace rows." in snippet
+    assert "stage_trace_bundle" in snippet
+    assert "Stage order valid" in snippet
+    assert "Missing expected stages" in snippet
+    assert "Unexpected stages" in snippet
+    assert "Duplicate stages" in snippet
     assert "Writes" in snippet
     assert "LLM calls" in snippet
     assert "Execution" in snippet
@@ -86,6 +94,8 @@ def test_agent_trace_readonly_panel_uses_get_only_existing_endpoint():
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace" in fetch_snippet
     assert "/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace" in fetch_snippet
     assert "include_trace_summary=1" in fetch_snippet
+    assert "include_stage_trace_bundle=1" in fetch_snippet
+    assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_bundle=1" not in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
     assert "renderAgentTraceReadOnlyPanel(tracePayload || {})" in _source()
 
@@ -119,6 +129,30 @@ def test_agent_trace_summary_ui_handles_missing_summary_and_escapes_values():
     assert "did_call_llm" in summary_snippet
     assert "did_execute_application" in summary_snippet
     assert "did_submit_application" in summary_snippet
+
+
+def test_agent_stage_trace_bundle_ui_handles_missing_bundle_and_escapes_values():
+    snippet = _trace_panel_snippet()
+    bundle_start = snippet.index("function renderAgentStageTraceBundleSection")
+    bundle_end = snippet.index("function renderAgentTraceReadOnlyPanel")
+    bundle_snippet = snippet[bundle_start:bundle_end]
+
+    assert 'if (!hasAgentTraceSummaryObject(stageTraceBundle)) return "";' in bundle_snippet
+    assert "tracePayload?.stage_trace_bundle" in snippet
+    assert "renderAgentTraceReadOnlyDetails" in bundle_snippet
+    assert "renderWorkflowSummaryMetric" in bundle_snippet
+    assert "innerHTML" not in bundle_snippet
+    assert "stageTraceBundle.stage_names" in bundle_snippet
+    assert "stageTraceBundle.agent_names" in bundle_snippet
+    assert "stageTraceBundle.missing_expected_stages" in bundle_snippet
+    assert "stageTraceBundle.unexpected_stages" in bundle_snippet
+    assert "stageTraceBundle.duplicate_stages" in bundle_snippet
+    assert "did_write_database" in bundle_snippet
+    assert "did_call_llm" in bundle_snippet
+    assert "did_change_ranking" in bundle_snippet
+    assert "did_change_scoring" in bundle_snippet
+    assert "did_execute_application" in bundle_snippet
+    assert "did_submit_application" in bundle_snippet
 
 
 def test_agent_trace_readonly_panel_does_not_add_trace_actions():

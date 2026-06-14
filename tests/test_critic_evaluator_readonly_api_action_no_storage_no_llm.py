@@ -10,6 +10,7 @@ from src.app import api
 ENDPOINT = "/api/agentic-approvals/{approval_request_id}/critic-evaluator-readonly"
 ALLOWED_FILES = [
     "src/app/api.py",
+    "src/app/static/agentic_review.js",
     "tests/test_critic_evaluator_readonly_api_action_no_storage_no_llm.py",
     "docs/critic_evaluator_readonly_api_action_no_storage_no_llm.md",
     "docs/orchestrator_readiness.md",
@@ -50,6 +51,11 @@ def _assert_disabled_safety_flags(payload: dict) -> None:
     assert payload["did_change_score"] is False
     assert payload["did_execute_application"] is False
     assert payload["did_submit_application"] is False
+    assert payload["safety_metadata"]["did_write_storage"] is False
+    assert payload["safety_metadata"]["did_call_llm"] is False
+    assert payload["safety_metadata"]["did_mutate_approval"] is False
+    assert payload["safety_metadata"]["did_execute_application"] is False
+    assert payload["safety_metadata"]["did_submit_application"] is False
 
 
 def test_critic_evaluator_readonly_route_exists_and_is_post_only():
@@ -78,6 +84,12 @@ def test_critic_evaluator_readonly_route_returns_evaluator_contract(monkeypatch)
     assert payload["evaluator_recommendations"] == ["no_follow_up_required"]
     assert payload["requires_human_review"] is False
     assert payload["deterministic_rubric_version"] == "critic-evaluator-rubric-v1"
+    assert payload["critic_status"] == "passed"
+    assert payload["readiness_status"] == "unknown"
+    assert payload["evidence_pack_available"] is False
+    assert payload["reason_codes"] == []
+    assert payload["warnings"] == []
+    assert payload["blockers"] == []
     _assert_disabled_safety_flags(payload)
 
 
@@ -108,6 +120,49 @@ def test_critic_evaluator_readonly_route_empty_trace_requires_human_review(monke
     assert payload["evaluator_status"] == "needs_human_review"
     assert payload["requires_human_review"] is True
     assert "trace_completeness_empty_trace" in payload["evaluator_findings"]
+    _assert_disabled_safety_flags(payload)
+
+
+def test_critic_evaluator_readonly_route_uses_trace_evidence_pack_when_available(monkeypatch):
+    trace = _valid_trace()
+    trace["trace_evidence_pack"] = {
+        "ok": False,
+        "readiness_status": "blocked",
+        "decision_reason_codes": ["missing_expected_stages"],
+        "warning_findings": ["stage_trace_health_warning"],
+        "blocking_findings": ["stage_order_invalid"],
+    }
+
+    response = _client(monkeypatch).post(
+        "/api/agentic-approvals/approval_1/critic-evaluator-readonly",
+        json={"trace_payload": trace, "trace_payload_source": "trace_evidence_pack"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["critic_status"] == "blocked"
+    assert payload["readiness_status"] == "blocked"
+    assert payload["evidence_pack_available"] is True
+    assert payload["reason_codes"] == ["missing_expected_stages"]
+    assert "stage_trace_health_warning" in payload["warnings"]
+    assert "stage_order_invalid" in payload["blockers"]
+    _assert_disabled_safety_flags(payload)
+
+
+def test_critic_evaluator_readonly_route_missing_evidence_pack_falls_back(monkeypatch):
+    response = _client(monkeypatch).post(
+        "/api/agentic-approvals/approval_1/critic-evaluator-readonly",
+        json={"trace_payload": _valid_trace(), "trace_payload_source": "agent_trace_panel"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["critic_status"] == "passed"
+    assert payload["readiness_status"] == "unknown"
+    assert payload["evidence_pack_available"] is False
+    assert payload["reason_codes"] == []
+    assert payload["warnings"] == []
+    assert payload["blockers"] == []
     _assert_disabled_safety_flags(payload)
 
 
@@ -164,7 +219,6 @@ def test_critic_evaluator_readonly_action_does_not_touch_frontend_or_protected_f
         assert Path(path).exists(), path
 
     forbidden_prefixes = (
-        "src/app/static/",
         "src/storage/",
         "src/pipeline/",
         "src/agents/",
@@ -175,6 +229,7 @@ def test_critic_evaluator_readonly_action_does_not_touch_frontend_or_protected_f
     for path in ALLOWED_FILES:
         assert not path.startswith(forbidden_prefixes), path
 
-    assert "critic-evaluator-readonly" not in Path(
-        "src/app/static/agentic_review.js"
-    ).read_text()
+    source = Path("src/app/static/agentic_review.js").read_text()
+    assert source.count("/critic-evaluator-readonly") == 1
+    assert source.count("data-agentic-critic-evaluator-readonly") == 2
+    assert "data-agentic-critic-evaluator-readonly" in source

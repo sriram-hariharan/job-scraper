@@ -76,6 +76,7 @@ ALLOWED_CHANGED = {
     "tests/test_agent_trace_ui_readiness_checkpoint.py",
     "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
     "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
+    "tests/test_critic_evaluator_readonly_api_action_no_storage_no_llm.py",
     "docs/agentic_review_ui_portfolio_polish_no_backend_change.md",
     "src/app/static/app_redesign.css",
     "src/app/static/agentic_review.js",

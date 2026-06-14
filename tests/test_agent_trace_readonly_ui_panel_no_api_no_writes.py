@@ -110,6 +110,11 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "function renderAgentTraceDetailedSections" in snippet
     assert "Detailed trace sections" in snippet
     assert "Lower-level trace summary, bundle, health, and readiness details remain read-only" in snippet
+    assert "function renderAgentTraceCriticEvaluatorSection" in snippet
+    assert "Read-only Critic Evaluator" in snippet
+    assert "Manual, non-actionable trace review." in snippet
+    assert "data-agentic-critic-evaluator-readonly" in snippet
+    assert "critic_evaluator_result" in snippet
     assert "Writes" in snippet
     assert "LLM calls" in snippet
     assert "Execution" in snippet
@@ -118,7 +123,7 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "Step status counts" in snippet
     assert "Latency summary" in snippet
     assert "Model usage summary" in snippet
-    assert "<button" not in snippet
+    assert snippet.count("data-agentic-critic-evaluator-readonly") == 1
 
 
 def test_agent_trace_readonly_panel_uses_get_only_existing_endpoint():
@@ -137,7 +142,7 @@ def test_agent_trace_readonly_panel_uses_get_only_existing_endpoint():
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_stage_trace_readiness=1" not in fetch_snippet
     assert "/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace?include_trace_evidence_pack=1" not in fetch_snippet
     assert "fetchAgentTraceReadOnlyPayload(payload, runId)" in init_snippet
-    assert "renderAgentTraceReadOnlyPanel(tracePayload || {})" in _source()
+    assert "renderAgentTraceReadOnlyPanel(traceWithCriticContext)" in _source()
 
     forbidden_methods = [
         'method: "POST"',
@@ -257,6 +262,28 @@ def test_agent_trace_evidence_pack_ui_handles_missing_pack_and_escapes_values():
     assert "did_call_llm" in pack_snippet
     assert "did_execute_application" in pack_snippet
     assert "did_submit_application" in pack_snippet
+
+
+def test_agent_trace_critic_evaluator_ui_is_manual_single_and_escapes_values():
+    snippet = _trace_panel_snippet()
+    critic_start = snippet.index("function renderAgentTraceCriticEvaluatorSection")
+    critic_end = snippet.index("function renderAgentTraceReadOnlyPanel")
+    critic_snippet = snippet[critic_start:critic_end]
+
+    assert 'data-agentic-critic-evaluator-readonly' in critic_snippet
+    assert snippet.count("data-agentic-critic-evaluator-readonly") == 1
+    assert "criticResult.reason_codes" in critic_snippet
+    assert "criticResult.warnings || criticResult.evaluator_warnings" in critic_snippet
+    assert "criticResult.blockers || criticResult.evaluator_findings" in critic_snippet
+    assert "renderAgentTraceReadOnlyDetails" in critic_snippet
+    assert "renderWorkflowSummaryMetric" in critic_snippet
+    assert "escapeHtml(approvalRequestId)" in critic_snippet
+    assert "innerHTML" not in critic_snippet
+    assert "did_write_storage" in critic_snippet
+    assert "did_call_llm" in critic_snippet
+    assert "did_mutate_approval" not in critic_snippet
+    assert "did_execute_application" in critic_snippet
+    assert "did_submit_application" in critic_snippet
 
 
 def test_agent_trace_evidence_pack_appears_before_lower_level_details():

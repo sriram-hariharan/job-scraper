@@ -11,6 +11,7 @@ storage, API, UI, scheduler, reporting, export, or emitter behavior.
 
 from __future__ import annotations
 
+import json
 from copy import deepcopy
 from typing import Any
 
@@ -218,4 +219,222 @@ def build_jd_intelligence_step_snapshot(
         output_summary=description["output_json"],
         reason_codes=description["validation_json"]["errors"],
         metadata=metadata,
+    )
+
+
+LIVE_DRY_RUN_PROMPT_VERSION = "live-jd-intelligence-dry-run-v1"
+LIVE_DRY_RUN_LIST_FIELDS: tuple[str, ...] = (
+    "required_skills",
+    "preferred_skills",
+    "required_tools",
+    "preferred_tools",
+    "workflows",
+    "methods",
+    "business_contexts",
+    "stakeholder_contexts",
+    "ownership_signals",
+    "seniority_signals",
+    "risk_flags",
+)
+
+
+def _dry_run_safety_metadata(*, did_call_llm: bool) -> dict[str, bool]:
+    return {
+        "dry_run_only": True,
+        "feature_flag_required": True,
+        "did_call_llm": bool(did_call_llm),
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+
+
+def _dry_run_enabled(config: dict[str, Any] | None, feature_enabled: bool) -> bool:
+    if isinstance(config, dict):
+        for key in ("enabled", "feature_enabled", "live_jd_intelligence_enabled"):
+            if key in config:
+                return bool(config.get(key))
+    return bool(feature_enabled)
+
+
+def _dry_run_list(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    if isinstance(value, tuple):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    text = _clean_text(value)
+    return [text] if text else []
+
+
+def _dry_run_float(value: Any) -> float:
+    try:
+        number = float(str(value or "0").strip() or "0")
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, number))
+
+
+def _dry_run_int(value: Any) -> int:
+    try:
+        return max(0, int(float(str(value or "0").strip() or "0")))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _dry_run_payload(
+    *,
+    validation_status: str,
+    validation_errors: list[str],
+    fallback_used: bool,
+    did_call_llm: bool,
+    model_provider: str = "deterministic",
+    model_name: str = "jd_intelligence_dry_run_fallback",
+    prompt_version: str = LIVE_DRY_RUN_PROMPT_VERSION,
+    token_usage: dict[str, Any] | None = None,
+    cost: dict[str, Any] | None = None,
+    latency_ms: Any = 0,
+    normalized: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    values = deepcopy(normalized) if isinstance(normalized, dict) else {}
+    payload = {
+        field_name: _dry_run_list(values.get(field_name))
+        for field_name in LIVE_DRY_RUN_LIST_FIELDS
+    }
+    payload.update(
+        {
+            "extraction_confidence": _dry_run_float(values.get("extraction_confidence")),
+            "validation_status": _clean_text(validation_status),
+            "validation_errors": list(validation_errors),
+            "fallback_used": bool(fallback_used),
+            "model_provider": _clean_text(model_provider),
+            "model_name": _clean_text(model_name),
+            "prompt_version": _clean_text(prompt_version) or LIVE_DRY_RUN_PROMPT_VERSION,
+            "token_usage": _plain_dict(token_usage),
+            "cost": _plain_dict(cost),
+            "latency_ms": _dry_run_int(latency_ms),
+            "safety_metadata": _dry_run_safety_metadata(did_call_llm=did_call_llm),
+        }
+    )
+    return payload
+
+
+def _dry_run_adapter_metadata(raw: dict[str, Any]) -> dict[str, Any]:
+    token_usage = raw.get("token_usage")
+    if not isinstance(token_usage, dict):
+        token_usage = raw.get("token_usage_json")
+    cost = raw.get("cost")
+    if not isinstance(cost, dict):
+        cost = raw.get("cost_json")
+    return {
+        "model_provider": raw.get("model_provider", raw.get("provider", "")),
+        "model_name": raw.get("model_name", raw.get("model", "")),
+        "prompt_version": raw.get("prompt_version", LIVE_DRY_RUN_PROMPT_VERSION),
+        "token_usage": token_usage if isinstance(token_usage, dict) else {},
+        "cost": cost if isinstance(cost, dict) else {},
+        "latency_ms": raw.get("latency_ms", 0),
+    }
+
+
+def _dry_run_parse_adapter_response(raw_response: Any) -> tuple[dict[str, Any] | None, str]:
+    if isinstance(raw_response, dict):
+        return deepcopy(raw_response), ""
+    if isinstance(raw_response, str):
+        try:
+            parsed = json.loads(raw_response)
+        except json.JSONDecodeError:
+            return None, "invalid_json_response"
+        if isinstance(parsed, dict):
+            return parsed, ""
+        return None, "json_response_not_object"
+    return None, "adapter_response_not_object"
+
+
+def build_live_jd_intelligence_dry_run_payload(
+    *,
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+    adapter: Any = None,
+    feature_enabled: bool = False,
+    config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a deterministic read-only live JD intelligence dry-run contract."""
+
+    adapter_input = {
+        "job_title": _clean_text(job_title),
+        "company": _clean_text(company),
+        "location": _clean_text(location),
+        "job_description": _clean_text(job_description),
+        "source_metadata": _plain_dict(source_metadata),
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "prompt_version": LIVE_DRY_RUN_PROMPT_VERSION,
+    }
+
+    if not _dry_run_enabled(config, feature_enabled):
+        return _dry_run_payload(
+            validation_status="disabled",
+            validation_errors=["feature_flag_disabled"],
+            fallback_used=True,
+            did_call_llm=False,
+        )
+
+    if not callable(adapter):
+        return _dry_run_payload(
+            validation_status="fallback",
+            validation_errors=["adapter_missing"],
+            fallback_used=True,
+            did_call_llm=False,
+        )
+
+    try:
+        raw_response = adapter(deepcopy(adapter_input))
+    except Exception as exc:
+        return _dry_run_payload(
+            validation_status="fallback",
+            validation_errors=[f"adapter_error:{exc.__class__.__name__}"],
+            fallback_used=True,
+            did_call_llm=True,
+        )
+
+    parsed, parse_error = _dry_run_parse_adapter_response(raw_response)
+    if parsed is None:
+        return _dry_run_payload(
+            validation_status="fallback",
+            validation_errors=[parse_error],
+            fallback_used=True,
+            did_call_llm=True,
+        )
+
+    normalized = {
+        field_name: _dry_run_list(parsed.get(field_name))
+        for field_name in LIVE_DRY_RUN_LIST_FIELDS
+    }
+    if not normalized["seniority_signals"]:
+        normalized["seniority_signals"] = _dry_run_list(parsed.get("seniority_indicators"))
+    normalized["extraction_confidence"] = _dry_run_float(parsed.get("extraction_confidence"))
+    validation_errors = [
+        f"{field_name}_not_list"
+        for field_name in LIVE_DRY_RUN_LIST_FIELDS
+        if field_name in parsed and not isinstance(parsed.get(field_name), (list, tuple, str))
+    ]
+    if not any(normalized[field_name] for field_name in LIVE_DRY_RUN_LIST_FIELDS):
+        validation_errors.append("no_jd_intelligence_signals")
+
+    metadata = _dry_run_adapter_metadata(parsed)
+    return _dry_run_payload(
+        validation_status="valid" if not validation_errors else "invalid",
+        validation_errors=validation_errors,
+        fallback_used=False,
+        did_call_llm=True,
+        normalized=normalized,
+        **metadata,
     )

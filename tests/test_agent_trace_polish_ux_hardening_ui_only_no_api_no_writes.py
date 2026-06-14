@@ -85,6 +85,8 @@ def test_trace_polish_ui_terms_are_present_in_readonly_panel():
         "Available sections",
         "Missing sections",
         "Decision reason codes",
+        "Detailed trace sections",
+        "Lower-level trace summary, bundle, health, and readiness details remain read-only",
         "collapsed step details",
         "accessibility labels",
         "Long trace readability",

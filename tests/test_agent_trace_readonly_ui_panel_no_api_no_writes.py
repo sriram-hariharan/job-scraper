@@ -49,6 +49,13 @@ def _init_snippet() -> str:
     return source[start:end]
 
 
+def _trace_panel_render_snippet() -> str:
+    source = _source()
+    start = source.index("function renderAgentTraceReadOnlyPanel")
+    end = source.index("function renderAgentTracePanel")
+    return source[start:end]
+
+
 def test_agent_trace_readonly_panel_is_present_and_display_only():
     snippet = _trace_panel_snippet()
 
@@ -100,6 +107,9 @@ def test_agent_trace_readonly_panel_is_present_and_display_only():
     assert "Available sections" in snippet
     assert "Missing sections" in snippet
     assert "Decision reason codes" in snippet
+    assert "function renderAgentTraceDetailedSections" in snippet
+    assert "Detailed trace sections" in snippet
+    assert "Lower-level trace summary, bundle, health, and readiness details remain read-only" in snippet
     assert "Writes" in snippet
     assert "LLM calls" in snippet
     assert "Execution" in snippet
@@ -247,6 +257,35 @@ def test_agent_trace_evidence_pack_ui_handles_missing_pack_and_escapes_values():
     assert "did_call_llm" in pack_snippet
     assert "did_execute_application" in pack_snippet
     assert "did_submit_application" in pack_snippet
+
+
+def test_agent_trace_evidence_pack_appears_before_lower_level_details():
+    panel_snippet = _trace_panel_render_snippet()
+    details_start = _trace_panel_snippet().index("function renderAgentTraceDetailedSections")
+    details_end = _trace_panel_snippet().index("function renderAgentTraceReadOnlyPanel")
+    details_snippet = _trace_panel_snippet()[details_start:details_end]
+
+    assert panel_snippet.index("renderAgentTraceEvidencePackSection") < panel_snippet.index(
+        "renderAgentTraceDetailedSections"
+    )
+    assert 'data-collapsed-by-default="true"' in details_snippet
+    assert "renderAgentTraceSummarySection(tracePayload?.trace_summary)" in details_snippet
+    assert "renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle)" in details_snippet
+    assert "renderAgentStageTraceHealthSection(tracePayload?.stage_trace_health)" in details_snippet
+    assert "renderAgentStageTraceReadinessSection(tracePayload?.stage_trace_readiness)" in details_snippet
+
+
+def test_agent_trace_missing_evidence_pack_falls_back_to_existing_sections():
+    details_start = _trace_panel_snippet().index("function renderAgentTraceDetailedSections")
+    details_end = _trace_panel_snippet().index("function renderAgentTraceReadOnlyPanel")
+    details_snippet = _trace_panel_snippet()[details_start:details_end]
+
+    assert "if (!hasAgentTraceSummaryObject(tracePayload?.trace_evidence_pack))" in details_snippet
+    assert "return detailedSections;" in details_snippet
+    assert "renderAgentTraceSummarySection(tracePayload?.trace_summary)" in details_snippet
+    assert "renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle)" in details_snippet
+    assert "renderAgentStageTraceHealthSection(tracePayload?.stage_trace_health)" in details_snippet
+    assert "renderAgentStageTraceReadinessSection(tracePayload?.stage_trace_readiness)" in details_snippet
 
 
 def test_agent_trace_readonly_panel_does_not_add_trace_actions():

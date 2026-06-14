@@ -787,6 +787,51 @@ function renderAgentTraceDetailedSections(tracePayload = {}) {
   `;
 }
 
+function renderAgentTraceCriticEvaluatorSection(tracePayload = {}) {
+  const approvalRequestId = String(tracePayload?.critic_approval_request_id || tracePayload?.approval_request_id || "").trim();
+  const criticResult = hasAgentTraceSummaryObject(tracePayload?.critic_evaluator_result)
+    ? tracePayload.critic_evaluator_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(criticResult.safety_metadata)
+    ? criticResult.safety_metadata
+    : {};
+  const canInvoke = Boolean(approvalRequestId);
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only critic evaluator">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Read-only Critic Evaluator</h4>
+          <p>Manual, non-actionable trace review. It does not mutate approvals, write storage, call LLMs, change queues, execute applications, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Manual read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Critic", criticResult.critic_status || criticResult.evaluator_status || "not run")}
+        ${renderWorkflowSummaryMetric("Readiness", criticResult.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Evidence pack", criticResult.evidence_pack_available === true ? "available" : "not available")}
+        ${renderWorkflowSummaryMetric("Writes", safety.did_write_storage ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Reason codes", criticResult.reason_codes, { helper: "Read-only critic reason codes." })}
+        ${renderAgentTraceReadOnlyDetails("Warnings", criticResult.warnings || criticResult.evaluator_warnings, { helper: "Read-only critic warnings." })}
+        ${renderAgentTraceReadOnlyDetails("Blockers", criticResult.blockers || criticResult.evaluator_findings, { helper: "Read-only critic blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable critic evaluator safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-agentic-critic-evaluator-readonly data-approval-request-id="${escapeHtml(approvalRequestId)}" ${canInvoke ? "" : "disabled"}>
+          Run read-only critic
+        </button>
+        <span class="agentic-review-muted" data-agentic-critic-evaluator-status>
+          ${escapeHtml(canInvoke ? "Manual only. No approval mutation or execution." : "Approval request unavailable. Critic evaluator is not available.")}
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -832,6 +877,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
+      ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -2043,7 +2089,12 @@ function renderAgenticReviewData(payload, tracePayload) {
 
   const traceNode = qs("agenticReviewTracePanel");
   if (traceNode) {
-    traceNode.outerHTML = renderAgentTraceReadOnlyPanel(tracePayload || {});
+    const traceWithCriticContext = {
+      ...(tracePayload || {}),
+      critic_approval_request_id: getAgenticReviewApprovalRequestId(payload || {}),
+    };
+    window.__agenticReviewTracePayload = traceWithCriticContext;
+    traceNode.outerHTML = renderAgentTraceReadOnlyPanel(traceWithCriticContext);
   }
 }
 
@@ -2134,6 +2185,53 @@ function bindAgenticReviewTabs() {
     const button = event.target.closest("[data-agentic-production-scheduler-observability-reporting-job]");
     if (!button) return;
     invokeProductionSchedulerObservabilityReportingJob(button);
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-agentic-critic-evaluator-readonly]");
+    if (!button) return;
+    const approvalRequestId = String(button.dataset.approvalRequestId || "").trim();
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-agentic-critic-evaluator-status]");
+    if (!approvalRequestId) {
+      if (status) status.textContent = "Critic evaluator blocked: approval request unavailable.";
+      return;
+    }
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Running read-only critic evaluator...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const criticResult = await fetchJson(
+        `/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/critic-evaluator-readonly`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            trace_payload: tracePayload,
+            trace_payload_source: tracePayload.trace_evidence_pack ? "trace_evidence_pack" : "agent_trace_panel",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        critic_approval_request_id: approvalRequestId,
+        critic_evaluator_result: criticResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Read-only critic evaluator failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
   });
 }
 

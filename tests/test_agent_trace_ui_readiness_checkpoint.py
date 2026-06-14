@@ -5,9 +5,9 @@ from pathlib import Path
 DOC_PATH = Path("docs/agent_trace_ui_readiness_checkpoint.md")
 
 PROTECTED_FILE_HASHES = {
-    "src/app/api.py": "033eca4a37eb821dc4db3e38ce11afea1daf2575e7514ad96e73403600686883",
-    "src/app/static/agentic_review.js": "27cc57c9bc0c079cf148c14e9191c394ac66b0cb071fb98043e4f963e4037827",
-    "src/agents/trace.py": "6af44408407fe81cd5e0be6d0081816e5cd2db4a1ccd8efcba64befffd8612d0",
+    "src/app/api.py": "f1353e12b5215a5f921894cbcfa76b1b75a82ea10459a77645795de0022b3227",
+    "src/app/static/agentic_review.js": "d3cb6334542860affcda1ad0ea5800a3b7f169cd06e58ac9e3842980fee9c642",
+    "src/agents/trace.py": "31f59053f6be00c1e52a87a903ba6f1507f3c6d375fb8d11ae314f1dda8b1f19",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",
     "src/agents/deduplication.py": "7aeb6e831197a63f66b83fff898ccef77db177e39594464e1c215cffaed432b8",

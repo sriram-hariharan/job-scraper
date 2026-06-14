@@ -224,6 +224,76 @@ def evaluate_stage_trace_bundle_health(
     }
 
 
+def _clean_text_list(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [_clean_text(item) for item in value if _clean_text(item)]
+
+
+def build_stage_trace_readiness_decision(
+    stage_trace_health: dict[str, Any],
+) -> dict[str, Any]:
+    health = _snapshot(stage_trace_health)
+    findings = _clean_text_list(health.get("findings"))
+    warnings = _clean_text_list(health.get("warnings"))
+    missing_expected_stages = _clean_text_list(health.get("missing_expected_stages"))
+    unexpected_stages = _clean_text_list(health.get("unexpected_stages"))
+    duplicate_stages = deepcopy(health.get("duplicate_stages", [])) if isinstance(
+        health.get("duplicate_stages"), list
+    ) else []
+    stage_order_valid = health.get("stage_order_valid") is True
+    all_required_fields_present = health.get("all_required_fields_present") is True
+
+    decision_reason_codes: list[str] = []
+    blocking_findings: list[str] = []
+    warning_findings: list[str] = []
+
+    if not health:
+        decision_reason_codes.append("stage_trace_health_missing")
+        blocking_findings.append("stage_trace_health_missing")
+    if not stage_order_valid:
+        decision_reason_codes.append("stage_order_invalid")
+        blocking_findings.append("stage_order_invalid")
+    if not all_required_fields_present:
+        decision_reason_codes.append("required_trace_fields_missing")
+        blocking_findings.append("required_trace_fields_missing")
+    if missing_expected_stages:
+        decision_reason_codes.append("missing_expected_stages")
+        blocking_findings.append("missing_expected_stages")
+    if unexpected_stages:
+        decision_reason_codes.append("unexpected_stages")
+        blocking_findings.append("unexpected_stages")
+    if duplicate_stages:
+        decision_reason_codes.append("duplicate_stages")
+        blocking_findings.append("duplicate_stages")
+
+    for finding in findings + warnings:
+        if finding and finding not in blocking_findings and finding not in warning_findings:
+            warning_findings.append(finding)
+
+    if blocking_findings:
+        readiness_status = "blocked"
+    elif warning_findings or health.get("ok") is not True:
+        readiness_status = "warning"
+        if not warning_findings:
+            warning_findings.append("stage_trace_health_not_ok")
+        if "stage_trace_health_warning" not in decision_reason_codes:
+            decision_reason_codes.append("stage_trace_health_warning")
+    else:
+        readiness_status = "ready"
+
+    return {
+        "ok": readiness_status == "ready",
+        "readiness_status": readiness_status,
+        "decision_reason_codes": decision_reason_codes,
+        "blocking_findings": blocking_findings,
+        "warning_findings": warning_findings,
+        "stage_order_valid": stage_order_valid,
+        "all_required_fields_present": all_required_fields_present,
+        "safety_metadata": stage_trace_bundle_safety_metadata(),
+    }
+
+
 def build_agent_run_record_payload(run_snapshot: dict[str, Any]) -> dict[str, Any]:
     snapshot = _snapshot(run_snapshot)
     prepared = agent_state_store.prepare_agent_run_upsert(snapshot)

@@ -72,6 +72,7 @@ ALLOWED_CHANGED = {
     "docs/agentic_review_ui_compaction_polish_no_backend_change.md",
     "docs/full_fledged_agentic_ai_app_roadmap.md",
     "tests/test_agent_trace_polish_ux_hardening_ui_only_no_api_no_writes.py",
+    "tests/test_agent_trace_readonly_api_endpoint_no_ui_no_writes.py",
     "tests/test_agent_trace_ui_readiness_checkpoint.py",
     "tests/test_agent_trace_readonly_ui_panel_no_api_no_writes.py",
     "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",

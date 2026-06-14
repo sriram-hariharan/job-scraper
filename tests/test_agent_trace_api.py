@@ -299,6 +299,7 @@ def test_profile_pipeline_run_agent_trace_route_uses_authenticated_owner(monkeyp
         "include_stage_trace_bundle": False,
         "include_stage_trace_health": False,
         "include_stage_trace_readiness": False,
+        "include_trace_evidence_pack": False,
     }
 
 
@@ -328,10 +329,12 @@ def test_profile_pipeline_run_agent_trace_route_preserves_default_shape(monkeypa
     assert "stage_trace_bundle" not in payload
     assert "stage_trace_health" not in payload
     assert "stage_trace_readiness" not in payload
+    assert "trace_evidence_pack" not in payload
     assert captured["include_trace_summary"] is False
     assert captured["include_stage_trace_bundle"] is False
     assert captured["include_stage_trace_health"] is False
     assert captured["include_stage_trace_readiness"] is False
+    assert captured["include_trace_evidence_pack"] is False
 
 
 def test_profile_pipeline_run_agent_trace_route_can_opt_in_trace_summary(monkeypatch):
@@ -372,6 +375,7 @@ def test_profile_pipeline_run_agent_trace_route_can_opt_in_trace_summary(monkeyp
         assert captured["include_stage_trace_bundle"] is False
         assert captured["include_stage_trace_health"] is False
         assert captured["include_stage_trace_readiness"] is False
+        assert captured["include_trace_evidence_pack"] is False
         assert payload["trace_summary"]["summary_type"] == "agent_trace"
 
 
@@ -412,6 +416,7 @@ def test_profile_pipeline_run_agent_trace_route_can_opt_in_stage_trace_bundle(mo
         assert captured["include_trace_summary"] is False
         assert captured["include_stage_trace_health"] is False
         assert captured["include_stage_trace_readiness"] is False
+        assert captured["include_trace_evidence_pack"] is False
         assert payload["stage_trace_bundle"]["bundle_type"] == "stage_trace_bundle"
 
 
@@ -452,6 +457,7 @@ def test_profile_pipeline_run_agent_trace_route_can_opt_in_stage_trace_health(mo
         assert captured["include_trace_summary"] is False
         assert captured["include_stage_trace_bundle"] is False
         assert captured["include_stage_trace_readiness"] is False
+        assert captured["include_trace_evidence_pack"] is False
         assert payload["stage_trace_health"]["health_status"] == "healthy"
 
 
@@ -492,7 +498,49 @@ def test_profile_pipeline_run_agent_trace_route_can_opt_in_stage_trace_readiness
         assert captured["include_trace_summary"] is False
         assert captured["include_stage_trace_bundle"] is False
         assert captured["include_stage_trace_health"] is False
+        assert captured["include_trace_evidence_pack"] is False
         assert payload["stage_trace_readiness"]["readiness_status"] == "ready"
+
+
+def test_profile_pipeline_run_agent_trace_route_can_opt_in_trace_evidence_pack(monkeypatch):
+    captured = {}
+
+    def fake_agent_trace_payload(**kwargs):
+        captured.update(kwargs)
+        payload = {
+            "pipeline_run_id": kwargs["pipeline_run_id"],
+            "owner_user_id": kwargs["owner_user_id"],
+            "agent_runs": [],
+            "counts": {
+                "agent_runs": 0,
+                "agent_steps": 0,
+                "failed_steps": 0,
+                "warning_steps": 0,
+                "succeeded_steps": 0,
+            },
+        }
+        if kwargs["include_trace_evidence_pack"]:
+            payload["trace_evidence_pack"] = {
+                "evidence_pack_type": "agent_trace_evidence_pack",
+                "ok": True,
+            }
+        return payload
+
+    monkeypatch.setattr(services, "agent_trace_payload", fake_agent_trace_payload)
+
+    for value in ["1", "true", "yes", "on", " TRUE "]:
+        captured.clear()
+        payload = api.profile_pipeline_run_agent_trace(
+            "run_route",
+            _request("user_route"),
+            include_trace_evidence_pack=value,
+        )
+        assert captured["include_trace_evidence_pack"] is True
+        assert captured["include_trace_summary"] is False
+        assert captured["include_stage_trace_bundle"] is False
+        assert captured["include_stage_trace_health"] is False
+        assert captured["include_stage_trace_readiness"] is False
+        assert payload["trace_evidence_pack"]["evidence_pack_type"] == "agent_trace_evidence_pack"
 
 
 def test_profile_pipeline_run_agent_trace_route_false_flags_preserve_default_shape(monkeypatch):
@@ -505,6 +553,7 @@ def test_profile_pipeline_run_agent_trace_route_false_flags_preserve_default_sha
                 kwargs["include_stage_trace_bundle"],
                 kwargs["include_stage_trace_health"],
                 kwargs["include_stage_trace_readiness"],
+                kwargs["include_trace_evidence_pack"],
             )
         )
         return {
@@ -530,19 +579,21 @@ def test_profile_pipeline_run_agent_trace_route_false_flags_preserve_default_sha
             include_stage_trace_bundle=value,
             include_stage_trace_health=value,
             include_stage_trace_readiness=value,
+            include_trace_evidence_pack=value,
         )
         assert "trace_summary" not in payload
         assert "stage_trace_bundle" not in payload
         assert "stage_trace_health" not in payload
         assert "stage_trace_readiness" not in payload
+        assert "trace_evidence_pack" not in payload
 
     assert captured_values == [
-        (False, False, False, False),
-        (False, False, False, False),
-        (False, False, False, False),
-        (False, False, False, False),
-        (False, False, False, False),
-        (False, False, False, False),
+        (False, False, False, False, False),
+        (False, False, False, False, False),
+        (False, False, False, False, False),
+        (False, False, False, False, False),
+        (False, False, False, False, False),
+        (False, False, False, False, False),
     ]
 
 
@@ -571,6 +622,7 @@ def test_profile_pipeline_run_agent_trace_route_does_not_invoke_summary_helper_b
     assert "stage_trace_bundle" not in payload
     assert "stage_trace_health" not in payload
     assert "stage_trace_readiness" not in payload
+    assert "trace_evidence_pack" not in payload
     assert called["summary_helper"] is False
 
 

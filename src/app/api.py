@@ -2119,6 +2119,7 @@ def profile_pipeline_run_agent_trace(
     agent_run_id: str = "",
     include_trace_summary: str = "",
     include_stage_trace_bundle: str = "",
+    include_stage_trace_health: str = "",
 ):
     try:
         return services.agent_trace_payload(
@@ -2129,6 +2130,8 @@ def profile_pipeline_run_agent_trace(
             include_trace_summary=str(include_trace_summary or "").strip().lower()
             in {"1", "true", "yes", "on"},
             include_stage_trace_bundle=str(include_stage_trace_bundle or "").strip().lower()
+            in {"1", "true", "yes", "on"},
+            include_stage_trace_health=str(include_stage_trace_health or "").strip().lower()
             in {"1", "true", "yes", "on"},
         )
     except (SystemExit, ValueError) as exc:

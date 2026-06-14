@@ -32,13 +32,22 @@ def _context() -> JobApplicationContext:
 
 
 def _run_snapshot() -> dict:
-    return build_agent_run_snapshot(
+    snapshot = build_agent_run_snapshot(
         context=_context(),
         agent_name="stage_trace_bundle_agent",
         observed_at_utc="2026-06-12T18:01:00Z",
         run_status="ready",
         metadata={"source": "stage_trace_bundle_test"},
     )
+    snapshot.update(
+        {
+            "owner_user_id": "user_stage_bundle",
+            "pipeline_run_id": "pipeline_stage_bundle",
+            "status": snapshot["run_status"],
+            "started_at": snapshot["observed_at_utc"],
+        }
+    )
+    return snapshot
 
 
 def _prefilter_summary() -> dict:
@@ -109,7 +118,7 @@ def _final_scoring_summary() -> dict:
 
 def _stage_snapshots(run_id: str) -> list[dict]:
     context = _context()
-    return [
+    steps = [
         relevance_prefilter.build_relevance_prefilter_step_snapshot(
             context=context,
             prefilter_summary=_prefilter_summary(),
@@ -139,6 +148,16 @@ def _stage_snapshots(run_id: str) -> list[dict]:
             step_index=4,
         ),
     ]
+    for step in steps:
+        step.update(
+            {
+                "owner_user_id": "user_stage_bundle",
+                "pipeline_run_id": "pipeline_stage_bundle",
+                "status": step["step_status"],
+                "started_at": step["observed_at_utc"],
+            }
+        )
+    return steps
 
 
 def _bundle() -> tuple[dict, list[dict], dict]:
@@ -283,6 +302,89 @@ def test_stage_trace_bundle_safety_metadata_is_read_only():
     assert bundle["trace_summary"]["safety_metadata"]["did_call_llm"] is False
     assert bundle["trace_summary"]["safety_metadata"]["did_execute_application"] is False
     assert bundle["trace_summary"]["safety_metadata"]["did_submit_application"] is False
+
+
+def test_stage_trace_health_valid_bundle_is_healthy():
+    _, _, bundle = _bundle()
+
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    assert health["ok"] is True
+    assert health["health_status"] == "healthy"
+    assert health["findings"] == []
+    assert health["warnings"] == []
+    assert health["stage_order_valid"] is True
+    assert health["missing_expected_stages"] == []
+    assert health["unexpected_stages"] == []
+    assert health["duplicate_stages"] == []
+    assert health["all_required_fields_present"] is True
+
+
+def test_stage_trace_health_missing_stage_returns_warning_and_finding():
+    run = _run_snapshot()
+    bundle = trace.build_stage_trace_bundle_payload(
+        run_snapshot=run,
+        step_snapshots=_stage_snapshots(run["agent_run_id"])[:-1],
+    )
+
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    assert health["ok"] is False
+    assert health["health_status"] == "warning"
+    assert "stage_order_invalid" in health["findings"]
+    assert "missing_expected_stages" in health["findings"]
+    assert "one_or_more_expected_stages_missing" in health["warnings"]
+    assert health["missing_expected_stages"] == [
+        "final_application_scoring_trace_wrapper",
+    ]
+
+
+def test_stage_trace_health_duplicate_and_unexpected_stage_returns_warning_and_finding():
+    run = _run_snapshot()
+    steps = _stage_snapshots(run["agent_run_id"])
+    steps.append(deepcopy(steps[0]))
+    steps[1]["step_name"] = "unexpected_trace_wrapper"
+    bundle = trace.build_stage_trace_bundle_payload(
+        run_snapshot=run,
+        step_snapshots=steps,
+    )
+
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    assert health["ok"] is False
+    assert health["health_status"] == "warning"
+    assert "duplicate_stages" in health["findings"]
+    assert "unexpected_stages" in health["findings"]
+    assert "one_or_more_stage_names_duplicated" in health["warnings"]
+    assert "one_or_more_unexpected_stages_present" in health["warnings"]
+    assert health["unexpected_stages"] == ["unexpected_trace_wrapper"]
+    assert health["duplicate_stages"] == [
+        {"stage_name": "relevance_prefilter_trace_wrapper", "count": 2},
+    ]
+
+
+def test_stage_trace_health_is_deterministic_and_does_not_mutate_input():
+    _, _, bundle = _bundle()
+    original = deepcopy(bundle)
+
+    first = trace.evaluate_stage_trace_bundle_health(bundle)
+    second = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    assert bundle == original
+    assert first == second
+
+
+def test_stage_trace_health_safety_metadata_is_read_only():
+    _, _, bundle = _bundle()
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    assert health["safety_metadata"]["did_write_database"] is False
+    assert health["safety_metadata"]["did_call_llm"] is False
+    assert health["safety_metadata"]["did_change_ranking"] is False
+    assert health["safety_metadata"]["did_change_scoring"] is False
+    assert health["safety_metadata"]["did_change_approval"] is False
+    assert health["safety_metadata"]["did_execute_application"] is False
+    assert health["safety_metadata"]["did_submit_application"] is False
 
 
 def test_stage_trace_bundle_helper_source_has_no_runtime_or_storage_execution_calls():

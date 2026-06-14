@@ -767,6 +767,26 @@ function renderAgentTraceEvidencePackSection(traceEvidencePack = {}) {
   `;
 }
 
+function renderAgentTraceDetailedSections(tracePayload = {}) {
+  const detailedSections = [
+    renderAgentTraceSummarySection(tracePayload?.trace_summary),
+    renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle),
+    renderAgentStageTraceHealthSection(tracePayload?.stage_trace_health),
+    renderAgentStageTraceReadinessSection(tracePayload?.stage_trace_readiness),
+  ].filter(Boolean).join("");
+  if (!detailedSections) return "";
+  if (!hasAgentTraceSummaryObject(tracePayload?.trace_evidence_pack)) {
+    return detailedSections;
+  }
+  return `
+    <details class="agent-trace-detail-sections" data-collapsed-by-default="true" aria-label="Read-only detailed trace sections">
+      <summary>Detailed trace sections</summary>
+      <div class="agentic-review-muted">Lower-level trace summary, bundle, health, and readiness details remain read-only and collapsed below the evidence pack.</div>
+      ${detailedSections}
+    </details>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -811,11 +831,8 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
         ${renderWorkflowSummaryMetric("Trace state", stateLabel)}
         ${stepCount > 0 ? renderWorkflowSummaryMetric("Step count", stepCount) : ""}
       </div>
-      ${renderAgentTraceSummarySection(tracePayload?.trace_summary)}
-      ${renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle)}
-      ${renderAgentStageTraceHealthSection(tracePayload?.stage_trace_health)}
-      ${renderAgentStageTraceReadinessSection(tracePayload?.stage_trace_readiness)}
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
+      ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
       <details class="agent-trace-debug-details" data-collapsed-by-default="true">

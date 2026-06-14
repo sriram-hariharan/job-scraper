@@ -928,6 +928,60 @@ function renderAgentTraceCriticEvaluatorSection(tracePayload = {}) {
   `;
 }
 
+function renderManualJdIntelligenceDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_jd_intelligence_dry_run_result)
+    ? tracePayload.manual_jd_intelligence_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const jobTitle = metadata.job_title || metadata.title || "";
+  const company = metadata.company || "";
+  const location = metadata.location || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual JD intelligence dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual JD Intelligence Dry-run</h4>
+          <p>Manual read-only dry-run. The feature flag is off by default, and this panel does not write storage, mutate queues, change scoring or ranking, execute applications, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Dry-run read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Status", result.validation_status || "not run")}
+        ${renderWorkflowSummaryMetric("Fallback", result.fallback_used === true ? "yes" : result.fallback_used === false ? "no" : "-")}
+        ${renderWorkflowSummaryMetric("Required skills", Array.isArray(result.required_skills) ? result.required_skills.length : 0)}
+        ${renderWorkflowSummaryMetric("Preferred tools", Array.isArray(result.preferred_tools) ? result.preferred_tools.length : 0)}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Required skills", result.required_skills || [], { helper: "Dry-run extracted required skills." })}
+        ${renderAgentTraceReadOnlyDetails("Preferred skills", result.preferred_skills || [], { helper: "Dry-run extracted preferred skills." })}
+        ${renderAgentTraceReadOnlyDetails("Tools", { required_tools: result.required_tools || [], preferred_tools: result.preferred_tools || [] }, { helper: "Dry-run extracted tools." })}
+        ${renderAgentTraceReadOnlyDetails("Risk flags", result.risk_flags || [], { helper: "Dry-run risk flags." })}
+        ${renderAgentTraceReadOnlyDetails("Validation errors", result.validation_errors || [], { helper: "Dry-run validation errors." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable JD intelligence dry-run safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-jd-intelligence-dry-run data-job-title="${escapeHtml(jobTitle)}" data-company="${escapeHtml(company)}" data-location="${escapeHtml(location)}" data-job-id="${escapeHtml(jobId)}" data-context-id="${escapeHtml(contextId)}">
+          Run JD dry-run
+        </button>
+        <span class="agentic-review-muted" data-manual-jd-intelligence-dry-run-status>
+          Manual only. Feature flag defaults off; normal result is a disabled fallback until provider wiring is explicitly enabled later.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -974,6 +1028,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       </div>
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
+      ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -2323,6 +2378,54 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Read-only critic evaluator failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-jd-intelligence-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-jd-intelligence-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Running manual read-only JD intelligence dry-run...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const dryRunResult = await fetchJson(
+        "/api/manual-jd-intelligence-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            job_title: button.dataset.jobTitle || "",
+            company: button.dataset.company || "",
+            location: button.dataset.location || "",
+            job_description: "",
+            source_metadata: {
+              source: "agent_trace_manual_panel",
+            },
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_jd_intelligence_dry_run_result: dryRunResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual JD intelligence dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

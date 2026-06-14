@@ -39,6 +39,7 @@ from src.config.settings import (
 from src.agents import (
     critic_agent,
     dry_run_execution_simulator,
+    jd_intelligence,
     proposal_only_mutation_planner,
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
@@ -10403,6 +10404,40 @@ def build_recommendation_explainer_payload(row: Dict[str, Any]) -> Dict[str, Any
         "score_breakdown": score_breakdown,
         "source_fields_used": source_fields_used,
         "safety_metadata": _recommendation_explainer_safety_metadata(),
+    }
+
+
+def build_manual_jd_intelligence_dry_run_payload(
+    *,
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+    adapter: Any = None,
+    feature_enabled: bool = False,
+    config: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    payload = jd_intelligence.build_live_jd_intelligence_dry_run_payload(
+        job_title=job_title,
+        company=company,
+        location=location,
+        job_description=job_description,
+        source_metadata=dict(source_metadata or {}) if isinstance(source_metadata, dict) else {},
+        context_id=context_id,
+        job_id=job_id,
+        adapter=adapter,
+        feature_enabled=feature_enabled,
+        config=dict(config or {}) if isinstance(config, dict) else None,
+    )
+    return {
+        **payload,
+        "manual_surface": True,
+        "read_only": True,
+        "default_feature_flag_enabled": False,
+        "service_surface": "manual_jd_intelligence_dry_run",
     }
 
 

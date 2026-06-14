@@ -10298,6 +10298,114 @@ def _csv_rows_from_text(text: Any) -> List[Dict[str, str]]:
     return [dict(row or {}) for row in reader]
 
 
+def _recommendation_explainer_safety_metadata() -> Dict[str, bool]:
+    return {
+        "did_read_database": False,
+        "did_write_database": False,
+        "did_call_llm": False,
+        "did_change_ranking": False,
+        "did_change_scoring": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+    }
+
+
+def _recommendation_explainer_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    return [
+        _clean_text(item)
+        for item in re.split(r"[;,]", str(value or ""))
+        if _clean_text(item)
+    ]
+
+
+def build_recommendation_explainer_payload(row: Dict[str, Any]) -> Dict[str, Any]:
+    snapshot = dict(row or {})
+    source_fields_used: List[str] = []
+
+    def field(name: str) -> str:
+        value = _clean_text(snapshot.get(name))
+        if value and name not in source_fields_used:
+            source_fields_used.append(name)
+        return value
+
+    recommendation_label = (
+        field("advisory_priority")
+        or field("tailoring_decision")
+        or field("operator_review_lane")
+        or field("existing_action")
+        or "recommendation"
+    )
+    reason_fields = [
+        "advisory_reason_codes",
+        "tailoring_reason_codes",
+        "operator_review_reason_codes",
+        "critic_reason_codes",
+    ]
+    primary_reasons: List[str] = []
+    for reason_field in reason_fields:
+        values = _recommendation_explainer_list(snapshot.get(reason_field))
+        if values and reason_field not in source_fields_used:
+            source_fields_used.append(reason_field)
+        for value in values:
+            if value not in primary_reasons:
+                primary_reasons.append(value)
+
+    supporting_signals = [
+        value
+        for value in [
+            field("company"),
+            field("title"),
+            field("existing_action"),
+            field("packet_generation_allowed"),
+            field("critic_decision"),
+        ]
+        if value
+    ]
+    score_fields = [
+        "deterministic_winner_score",
+        "winner_score",
+        "runner_up_score",
+        "score_gap",
+        "selected_score",
+        "ai_fit_score",
+    ]
+    score_breakdown = {
+        score_field: field(score_field)
+        for score_field in score_fields
+        if field(score_field)
+    }
+    risk_signals = [
+        reason
+        for reason in primary_reasons
+        if any(token in reason.lower() for token in ("block", "hold", "skip", "risk", "missing", "manual"))
+    ]
+    missing_evidence: List[str] = []
+    if not primary_reasons:
+        missing_evidence.append("reason_codes_missing")
+    if not score_breakdown:
+        missing_evidence.append("score_fields_missing")
+    if not field("company"):
+        missing_evidence.append("company_missing")
+    if not field("title"):
+        missing_evidence.append("title_missing")
+
+    return {
+        "explainer_status": "explained" if primary_reasons or supporting_signals or score_breakdown else "limited_evidence",
+        "recommendation_label": recommendation_label,
+        "primary_reasons": primary_reasons,
+        "supporting_signals": supporting_signals,
+        "risk_signals": risk_signals,
+        "missing_evidence": missing_evidence,
+        "score_breakdown": score_breakdown,
+        "source_fields_used": source_fields_used,
+        "safety_metadata": _recommendation_explainer_safety_metadata(),
+    }
+
+
 def _jsonl_row_count_from_text(text: Any) -> int:
     count = 0
     for line in str(text or "").splitlines():

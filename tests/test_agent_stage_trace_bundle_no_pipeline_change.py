@@ -387,6 +387,101 @@ def test_stage_trace_health_safety_metadata_is_read_only():
     assert health["safety_metadata"]["did_submit_application"] is False
 
 
+def test_stage_trace_readiness_valid_health_is_ready():
+    _, _, bundle = _bundle()
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    readiness = trace.build_stage_trace_readiness_decision(health)
+
+    assert readiness["ok"] is True
+    assert readiness["readiness_status"] == "ready"
+    assert readiness["decision_reason_codes"] == []
+    assert readiness["blocking_findings"] == []
+    assert readiness["warning_findings"] == []
+    assert readiness["stage_order_valid"] is True
+    assert readiness["all_required_fields_present"] is True
+
+
+def test_stage_trace_readiness_missing_health_is_blocked():
+    readiness = trace.build_stage_trace_readiness_decision({})
+
+    assert readiness["ok"] is False
+    assert readiness["readiness_status"] == "blocked"
+    assert "stage_trace_health_missing" in readiness["decision_reason_codes"]
+    assert "stage_trace_health_missing" in readiness["blocking_findings"]
+    assert "stage_order_invalid" in readiness["blocking_findings"]
+    assert "required_trace_fields_missing" in readiness["blocking_findings"]
+
+
+def test_stage_trace_readiness_invalid_stage_order_is_blocked():
+    run = _run_snapshot()
+    bundle = trace.build_stage_trace_bundle_payload(
+        run_snapshot=run,
+        step_snapshots=_stage_snapshots(run["agent_run_id"])[:-1],
+    )
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+
+    readiness = trace.build_stage_trace_readiness_decision(health)
+
+    assert readiness["ok"] is False
+    assert readiness["readiness_status"] == "blocked"
+    assert "stage_order_invalid" in readiness["decision_reason_codes"]
+    assert "missing_expected_stages" in readiness["decision_reason_codes"]
+    assert "missing_expected_stages" in readiness["blocking_findings"]
+
+
+def test_stage_trace_readiness_health_warnings_are_warning_without_blockers():
+    health = {
+        "ok": False,
+        "health_status": "warning",
+        "findings": ["manual_review_note"],
+        "warnings": ["non_blocking_warning"],
+        "stage_order_valid": True,
+        "missing_expected_stages": [],
+        "unexpected_stages": [],
+        "duplicate_stages": [],
+        "all_required_fields_present": True,
+        "safety_metadata": trace.stage_trace_bundle_safety_metadata(),
+    }
+
+    readiness = trace.build_stage_trace_readiness_decision(health)
+
+    assert readiness["ok"] is False
+    assert readiness["readiness_status"] == "warning"
+    assert readiness["blocking_findings"] == []
+    assert readiness["warning_findings"] == [
+        "manual_review_note",
+        "non_blocking_warning",
+    ]
+    assert "stage_trace_health_warning" in readiness["decision_reason_codes"]
+
+
+def test_stage_trace_readiness_is_deterministic_and_does_not_mutate_input():
+    _, _, bundle = _bundle()
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+    original = deepcopy(health)
+
+    first = trace.build_stage_trace_readiness_decision(health)
+    second = trace.build_stage_trace_readiness_decision(health)
+
+    assert health == original
+    assert first == second
+
+
+def test_stage_trace_readiness_safety_metadata_is_read_only():
+    _, _, bundle = _bundle()
+    health = trace.evaluate_stage_trace_bundle_health(bundle)
+    readiness = trace.build_stage_trace_readiness_decision(health)
+
+    assert readiness["safety_metadata"]["did_write_database"] is False
+    assert readiness["safety_metadata"]["did_call_llm"] is False
+    assert readiness["safety_metadata"]["did_change_ranking"] is False
+    assert readiness["safety_metadata"]["did_change_scoring"] is False
+    assert readiness["safety_metadata"]["did_change_approval"] is False
+    assert readiness["safety_metadata"]["did_execute_application"] is False
+    assert readiness["safety_metadata"]["did_submit_application"] is False
+
+
 def test_stage_trace_bundle_helper_source_has_no_runtime_or_storage_execution_calls():
     source = Path("src/agents/trace.py").read_text()
     start = source.index("def stage_trace_bundle_safety_metadata")

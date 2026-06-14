@@ -698,6 +698,39 @@ function renderAgentStageTraceHealthSection(stageTraceHealth = {}) {
   `;
 }
 
+function renderAgentStageTraceReadinessSection(stageTraceReadiness = {}) {
+  if (!hasAgentTraceSummaryObject(stageTraceReadiness)) return "";
+  const safety = hasAgentTraceSummaryObject(stageTraceReadiness.safety_metadata)
+    ? stageTraceReadiness.safety_metadata
+    : {};
+  return `
+    <article class="agent-trace-summary" aria-label="Read-only stage trace readiness">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Stage Trace Readiness</h4>
+          <p>Opt-in deterministic readiness decision from stage trace health. It does not write storage, call LLMs, change ranking or scoring, execute applications, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readiness", stageTraceReadiness.readiness_status || "unknown")}
+        ${renderWorkflowSummaryMetric("Stage order valid", stageTraceReadiness.stage_order_valid === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Required fields", stageTraceReadiness.all_required_fields_present === true ? "present" : "missing")}
+        ${renderWorkflowSummaryMetric("Writes", safety.did_write_database ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Reason codes", stageTraceReadiness.decision_reason_codes, { helper: "Deterministic stage trace readiness reason codes." })}
+        ${renderAgentTraceReadOnlyDetails("Blocking findings", stageTraceReadiness.blocking_findings, { helper: "Read-only readiness blockers from stage trace health." })}
+        ${renderAgentTraceReadOnlyDetails("Warning findings", stageTraceReadiness.warning_findings, { helper: "Read-only readiness warnings from stage trace health." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable stage trace readiness safety metadata." })}
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -745,6 +778,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderAgentTraceSummarySection(tracePayload?.trace_summary)}
       ${renderAgentStageTraceBundleSection(tracePayload?.stage_trace_bundle)}
       ${renderAgentStageTraceHealthSection(tracePayload?.stage_trace_health)}
+      ${renderAgentStageTraceReadinessSection(tracePayload?.stage_trace_readiness)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
       <details class="agent-trace-debug-details" data-collapsed-by-default="true">
@@ -801,7 +835,7 @@ async function fetchAgentTraceReadOnlyPayload(payload = {}, runId = getAgenticRe
     return fetchJson(`/api/agentic-approvals/${encodeURIComponent(approvalRequestId)}/agent-trace`);
   }
   if (runId) {
-    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1&include_stage_trace_health=1`);
+    return fetchJson(`/profile/pipeline-runs/${encodeURIComponent(runId)}/agent-trace?include_trace_summary=1&include_stage_trace_bundle=1&include_stage_trace_health=1&include_stage_trace_readiness=1`);
   }
   return {};
 }

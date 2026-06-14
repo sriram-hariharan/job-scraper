@@ -46,6 +46,7 @@ from src.agents import (
 )
 from src.agents.trace import (
     build_stage_trace_bundle_payload,
+    build_stage_trace_readiness_decision,
     evaluate_stage_trace_bundle_health,
 )
 from src.matching.dimensions import get_dimension_weights
@@ -1261,6 +1262,7 @@ def _agent_trace_empty_payload(
     include_trace_summary: bool = False,
     include_stage_trace_bundle: bool = False,
     include_stage_trace_health: bool = False,
+    include_stage_trace_readiness: bool = False,
 ) -> Dict[str, Any]:
     payload = {
         "pipeline_run_id": _clean_text(pipeline_run_id),
@@ -1280,16 +1282,21 @@ def _agent_trace_empty_payload(
             agent_steps=[],
         )
     stage_trace_bundle = None
-    if include_stage_trace_bundle or include_stage_trace_health:
+    stage_trace_health = None
+    if include_stage_trace_bundle or include_stage_trace_health or include_stage_trace_readiness:
         stage_trace_bundle = build_stage_trace_bundle_payload(
             run_snapshot={},
             step_snapshots=[],
         )
     if include_stage_trace_bundle:
         payload["stage_trace_bundle"] = stage_trace_bundle
+    if include_stage_trace_health or include_stage_trace_readiness:
+        stage_trace_health = evaluate_stage_trace_bundle_health(stage_trace_bundle or {})
     if include_stage_trace_health:
-        payload["stage_trace_health"] = evaluate_stage_trace_bundle_health(
-            stage_trace_bundle or {}
+        payload["stage_trace_health"] = stage_trace_health
+    if include_stage_trace_readiness:
+        payload["stage_trace_readiness"] = build_stage_trace_readiness_decision(
+            stage_trace_health or {}
         )
     return payload
 
@@ -1392,6 +1399,7 @@ def agent_trace_payload(
     include_trace_summary: bool = False,
     include_stage_trace_bundle: bool = False,
     include_stage_trace_health: bool = False,
+    include_stage_trace_readiness: bool = False,
 ) -> Dict[str, Any]:
     owner = _clean_text(owner_user_id)
     safe_pipeline_run_id = _clean_text(pipeline_run_id)
@@ -1408,6 +1416,7 @@ def agent_trace_payload(
         include_trace_summary=include_trace_summary,
         include_stage_trace_bundle=include_stage_trace_bundle,
         include_stage_trace_health=include_stage_trace_health,
+        include_stage_trace_readiness=include_stage_trace_readiness,
     )
     try:
         if safe_agent_run_id:
@@ -1508,16 +1517,21 @@ def agent_trace_payload(
             agent_steps=steps,
         )
     stage_trace_bundle = None
-    if include_stage_trace_bundle or include_stage_trace_health:
+    stage_trace_health = None
+    if include_stage_trace_bundle or include_stage_trace_health or include_stage_trace_readiness:
         stage_trace_bundle = _agent_trace_stage_trace_bundle(
             runs=runs,
             steps=steps,
         )
     if include_stage_trace_bundle:
         payload["stage_trace_bundle"] = stage_trace_bundle
+    if include_stage_trace_health or include_stage_trace_readiness:
+        stage_trace_health = evaluate_stage_trace_bundle_health(stage_trace_bundle or {})
     if include_stage_trace_health:
-        payload["stage_trace_health"] = evaluate_stage_trace_bundle_health(
-            stage_trace_bundle or {}
+        payload["stage_trace_health"] = stage_trace_health
+    if include_stage_trace_readiness:
+        payload["stage_trace_readiness"] = build_stage_trace_readiness_decision(
+            stage_trace_health or {}
         )
     return payload
 

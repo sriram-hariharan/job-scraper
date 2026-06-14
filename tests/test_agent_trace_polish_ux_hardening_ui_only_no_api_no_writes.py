@@ -156,6 +156,24 @@ def test_trace_polish_does_not_add_actions_exports_or_llm_behavior():
     assert snippet.count("data-agentic-critic-evaluator-readonly") == 1
 
 
+def test_recommendation_explainer_terms_are_present_in_advisory_ui():
+    source = _source()
+
+    for term in [
+        "function buildRecommendationExplainer",
+        "function renderRecommendationExplainer",
+        "Why surfaced",
+        "agentic-review-recommendation-explainer",
+        "Primary reasons",
+        "Supporting signals",
+        "Risk signals",
+        "Missing evidence",
+        "Score breakdown",
+        "no rescoring is performed",
+    ]:
+        assert term in source
+
+
 def test_trace_polish_accessibility_and_collapsed_details_are_present():
     snippet = _trace_panel_snippet()
 

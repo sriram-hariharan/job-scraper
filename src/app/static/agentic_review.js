@@ -153,6 +153,99 @@ function renderAgenticReviewCell(row, column) {
   return escapeHtml(value || "-");
 }
 
+function recommendationExplainerValues(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  return String(value || "")
+    .split(/[;,]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildRecommendationExplainer(row = {}) {
+  const sourceFieldsUsed = [];
+  const readField = (key) => {
+    const value = String(row?.[key] || "").trim();
+    if (value && !sourceFieldsUsed.includes(key)) sourceFieldsUsed.push(key);
+    return value;
+  };
+  const recommendationLabel = readField("advisory_priority")
+    || readField("tailoring_decision")
+    || readField("operator_review_lane")
+    || readField("existing_action")
+    || "recommendation";
+  const primaryReasons = [];
+  ["advisory_reason_codes", "tailoring_reason_codes", "operator_review_reason_codes", "critic_reason_codes"].forEach((key) => {
+    const values = recommendationExplainerValues(row?.[key]);
+    if (values.length && !sourceFieldsUsed.includes(key)) sourceFieldsUsed.push(key);
+    values.forEach((value) => {
+      if (!primaryReasons.includes(value)) primaryReasons.push(value);
+    });
+  });
+  const supportingSignals = [
+    readField("company"),
+    readField("title"),
+    readField("existing_action"),
+    readField("packet_generation_allowed"),
+    readField("critic_decision"),
+  ].filter(Boolean);
+  const scoreBreakdown = {};
+  ["deterministic_winner_score", "winner_score", "runner_up_score", "score_gap", "selected_score", "ai_fit_score"].forEach((key) => {
+    const value = readField(key);
+    if (value) scoreBreakdown[key] = value;
+  });
+  const riskSignals = primaryReasons.filter((reason) => /block|hold|skip|risk|missing|manual/i.test(reason));
+  const missingEvidence = [];
+  if (!primaryReasons.length) missingEvidence.push("reason_codes_missing");
+  if (!Object.keys(scoreBreakdown).length) missingEvidence.push("score_fields_missing");
+  if (!readField("company")) missingEvidence.push("company_missing");
+  if (!readField("title")) missingEvidence.push("title_missing");
+  return {
+    explainer_status: primaryReasons.length || supportingSignals.length || Object.keys(scoreBreakdown).length ? "explained" : "limited_evidence",
+    recommendation_label: recommendationLabel,
+    primary_reasons: primaryReasons,
+    supporting_signals: supportingSignals,
+    risk_signals: riskSignals,
+    missing_evidence: missingEvidence,
+    score_breakdown: scoreBreakdown,
+    source_fields_used: sourceFieldsUsed,
+    safety_metadata: {
+      did_write_database: false,
+      did_call_llm: false,
+      did_change_ranking: false,
+      did_change_scoring: false,
+      did_mutate_approval: false,
+      did_mutate_queue: false,
+      did_execute_application: false,
+      did_submit_application: false,
+    },
+  };
+}
+
+function renderRecommendationExplainer(row = {}) {
+  const explanation = buildRecommendationExplainer(row);
+  return `
+    <details class="agentic-review-recommendation-explainer" data-collapsed-by-default="true">
+      <summary>Why surfaced</summary>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Explainer", explanation.explainer_status)}
+        ${renderWorkflowSummaryMetric("Recommendation", explanation.recommendation_label)}
+        ${renderWorkflowSummaryMetric("Read-only", "true")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Primary reasons", explanation.primary_reasons, { helper: "Existing recommendation reason codes." })}
+        ${renderAgentTraceReadOnlyDetails("Supporting signals", explanation.supporting_signals, { helper: "Existing row fields that support the recommendation." })}
+        ${renderAgentTraceReadOnlyDetails("Risk signals", explanation.risk_signals, { helper: "Existing row fields that indicate risk or review needs." })}
+        ${renderAgentTraceReadOnlyDetails("Missing evidence", explanation.missing_evidence, { helper: "Expected explanatory fields absent from this row." })}
+        ${renderAgentTraceReadOnlyDetails("Score breakdown", explanation.score_breakdown, { helper: "Existing score fields only; no rescoring is performed." })}
+        ${renderAgentTraceReadOnlyDetails("Source fields used", explanation.source_fields_used, { helper: "Read-only row fields used by the explainer." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", explanation.safety_metadata, { helper: "Recommendation explainer safety metadata." })}
+      </div>
+    </details>
+  `;
+}
+
 function renderAgenticReviewRows(rows, columns) {
   const items = Array.isArray(rows) ? rows.slice(0, 50) : [];
   if (!items.length) {
@@ -168,6 +261,9 @@ function renderAgenticReviewRows(rows, columns) {
           ${items.map((row) => `
             <tr>
               ${columns.map((column) => `<td>${renderAgenticReviewCell(row, column)}</td>`).join("")}
+            </tr>
+            <tr class="agentic-review-explainer-row">
+              <td colspan="${escapeHtml(String(columns.length || 1))}">${renderRecommendationExplainer(row)}</td>
             </tr>
           `).join("")}
         </tbody>

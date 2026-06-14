@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from src.app import services
 
 
@@ -41,6 +43,71 @@ def _step(**overrides):
     }
     row.update(overrides)
     return row
+
+
+def test_recommendation_explainer_high_fit_is_deterministic_and_read_only():
+    row = {
+        "company": "Acme",
+        "title": "Senior ML Engineer",
+        "advisory_priority": "apply_now",
+        "advisory_reason_codes": "strong_skill_match;high_score",
+        "existing_action": "new",
+        "packet_generation_allowed": "true",
+        "deterministic_winner_score": "0.92",
+        "runner_up_score": "0.61",
+        "score_gap": "0.31",
+    }
+    original = deepcopy(row)
+
+    first = services.build_recommendation_explainer_payload(row)
+    second = services.build_recommendation_explainer_payload(row)
+
+    assert row == original
+    assert first == second
+    assert first["explainer_status"] == "explained"
+    assert first["recommendation_label"] == "apply_now"
+    assert first["primary_reasons"] == ["strong_skill_match", "high_score"]
+    assert "Acme" in first["supporting_signals"]
+    assert first["risk_signals"] == []
+    assert first["missing_evidence"] == []
+    assert first["score_breakdown"] == {
+        "deterministic_winner_score": "0.92",
+        "runner_up_score": "0.61",
+        "score_gap": "0.31",
+    }
+    assert first["safety_metadata"]["did_write_database"] is False
+    assert first["safety_metadata"]["did_call_llm"] is False
+    assert first["safety_metadata"]["did_change_ranking"] is False
+    assert first["safety_metadata"]["did_change_scoring"] is False
+    assert first["safety_metadata"]["did_mutate_approval"] is False
+    assert first["safety_metadata"]["did_mutate_queue"] is False
+    assert first["safety_metadata"]["did_execute_application"] is False
+    assert first["safety_metadata"]["did_submit_application"] is False
+
+
+def test_recommendation_explainer_missing_evidence_is_deterministic_and_read_only():
+    row = {"operator_review_lane": "manual_review"}
+
+    payload = services.build_recommendation_explainer_payload(row)
+
+    assert payload["explainer_status"] == "limited_evidence"
+    assert payload["recommendation_label"] == "manual_review"
+    assert payload["primary_reasons"] == []
+    assert "manual_review" in payload["risk_signals"] or payload["risk_signals"] == []
+    assert payload["missing_evidence"] == [
+        "reason_codes_missing",
+        "score_fields_missing",
+        "company_missing",
+        "title_missing",
+    ]
+    assert payload["safety_metadata"]["did_write_database"] is False
+    assert payload["safety_metadata"]["did_call_llm"] is False
+    assert payload["safety_metadata"]["did_change_ranking"] is False
+    assert payload["safety_metadata"]["did_change_scoring"] is False
+    assert payload["safety_metadata"]["did_mutate_approval"] is False
+    assert payload["safety_metadata"]["did_mutate_queue"] is False
+    assert payload["safety_metadata"]["did_execute_application"] is False
+    assert payload["safety_metadata"]["did_submit_application"] is False
 
 
 def test_agent_trace_payload_includes_read_only_trace_summary(monkeypatch):

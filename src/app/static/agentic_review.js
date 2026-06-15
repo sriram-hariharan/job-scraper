@@ -2023,6 +2023,71 @@ function renderManualQueueHandoffReadinessPreviewSection(tracePayload = {}) {
   `;
 }
 
+function renderManualGuardedQueueHandoffCreateSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_queue_handoff_create_result)
+    ? tracePayload.manual_guarded_queue_handoff_create_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const readiness = hasAgentTraceSummaryObject(tracePayload?.manual_queue_handoff_readiness_preview_result)
+    ? tracePayload.manual_queue_handoff_readiness_preview_result
+    : {};
+  const readback = hasAgentTraceSummaryObject(tracePayload?.manual_approval_request_readback_result)
+    ? tracePayload.manual_approval_request_readback_result
+    : {};
+  const transitionAudit = hasAgentTraceSummaryObject(tracePayload?.manual_approval_status_transition_observability_result)
+    ? tracePayload.manual_approval_status_transition_observability_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || readiness.approval_request_id || readback.approval_request_id || transitionAudit.approval_request_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual guarded queue handoff creation">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Guarded Queue Handoff Creation</h4>
+          <p>Manual-only queue handoff creation after readiness preview and explicit confirmation. It never executes or submits applications and does not mutate approval status, resume content, scoring, or ranking.</p>
+        </div>
+        <span class="agentic-workflow-badge">Queue handoff</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Creation", result.queue_handoff_creation_status || "not run")}
+        ${renderWorkflowSummaryMetric("Request id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Handoff id", result.queue_handoff_id || "-")}
+        ${renderWorkflowSummaryMetric("Queue entry", result.queue_entry_created === true ? "created" : "not created")}
+        ${renderWorkflowSummaryMetric("Approval status", result.approval_status || readiness.approval_status || "-")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue write", safety.did_write_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Source readiness status", result.source_queue_handoff_readiness_status || readiness.queue_handoff_readiness_status || "", { helper: "Source queue handoff readiness status." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Guarded queue handoff blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Guarded queue handoff rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded queue handoff safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-manual-guarded-queue-handoff-create-confirmation>
+          I explicitly confirm this guarded queue handoff.
+        </label>
+        <button type="button" class="agentic-feedback-action" data-manual-guarded-queue-handoff-create data-approval-request-id="${escapeHtml(approvalRequestId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Create Guarded Queue Handoff
+        </button>
+        <span class="agentic-review-muted" data-manual-guarded-queue-handoff-create-status>
+          Manual only. This requires explicit confirmation and will block unless an existing queue writer is configured.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2088,6 +2153,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualGuardedApprovalStatusTransitionSection(tracePayload)}
       ${renderManualApprovalStatusTransitionObservabilitySection(tracePayload)}
       ${renderManualQueueHandoffReadinessPreviewSection(tracePayload)}
+      ${renderManualGuardedQueueHandoffCreateSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -4379,6 +4445,58 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual queue handoff readiness preview failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-guarded-queue-handoff-create]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const confirmation = section?.querySelector("[data-manual-guarded-queue-handoff-create-confirmation]");
+    const status = section?.querySelector("[data-manual-guarded-queue-handoff-create-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Creating guarded queue handoff...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readiness = tracePayload.manual_queue_handoff_readiness_preview_result || {};
+      const readback = tracePayload.manual_approval_request_readback_result || {};
+      const transitionAudit = tracePayload.manual_approval_status_transition_observability_result || {};
+      const createResult = await fetchJson(
+        "/api/manual-guarded-queue-handoff-create",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approval_request_id: button.dataset.approvalRequestId || readiness.approval_request_id || readback.approval_request_id || transitionAudit.approval_request_id || "",
+            reviewer_confirmation: Boolean(confirmation?.checked),
+            queue_handoff_readiness_payload: readiness,
+            approval_request_readback_payload: readback,
+            approval_status_transition_observability_payload: transitionAudit,
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+            reviewer_note: "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_guarded_queue_handoff_create_result: createResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual guarded queue handoff creation failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

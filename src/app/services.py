@@ -13850,6 +13850,201 @@ def build_queue_handoff_readiness_preview_payload(
     }
 
 
+def _guarded_queue_handoff_creation_safety_metadata(*, did_create_queue_entry: bool) -> Dict[str, Any]:
+    return {
+        "manual_only": True,
+        "guarded_queue_handoff_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": bool(did_create_queue_entry),
+        "did_write_queue": bool(did_create_queue_entry),
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_create_queue_entry),
+    }
+
+
+def _manual_queue_handoff_id(*, approval_request_id: str, context_id: str, job_id: str) -> str:
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "approval_request_id": _clean_text(approval_request_id),
+                "context_id": _clean_text(context_id),
+                "job_id": _clean_text(job_id),
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"manual_queue_handoff_{fingerprint}"
+
+
+def build_guarded_queue_handoff_creation_payload(
+    *,
+    approval_request_id: Any = "",
+    reviewer_confirmation: Any = False,
+    queue_handoff_readiness_payload: Dict[str, Any] | None = None,
+    approval_request_readback_payload: Dict[str, Any] | None = None,
+    approval_status_transition_observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+    reviewer_note: Any = "",
+    queue_writer: Any = None,
+) -> Dict[str, Any]:
+    """Create one guarded queue handoff only when a ready preview and explicit confirmation exist."""
+
+    readiness_payload = deepcopy(queue_handoff_readiness_payload or {})
+    if not isinstance(readiness_payload, dict):
+        readiness_payload = {}
+    readback_payload = deepcopy(approval_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    transition_observability_payload = deepcopy(approval_status_transition_observability_payload or {})
+    if not isinstance(transition_observability_payload, dict):
+        transition_observability_payload = {}
+    if not readiness_payload and any([readback_payload, transition_observability_payload]):
+        readiness_payload = build_queue_handoff_readiness_preview_payload(
+            approval_request_id=approval_request_id,
+            approval_request_readback_payload=readback_payload,
+            approval_status_transition_observability_payload=transition_observability_payload,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readiness_payload.get("approval_request_id"))
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(transition_observability_payload.get("approval_request_id"))
+    )
+    source_readiness_status = _clean_text(readiness_payload.get("queue_handoff_readiness_status")) or "missing"
+    approval_status = (
+        _clean_text(readiness_payload.get("approval_status"))
+        or _clean_text((readback_payload.get("approval_request_fields") or {}).get("approval_status"))
+        or _clean_text((readback_payload.get("approval_request_summary") or {}).get("approval_status"))
+    )
+    clean_context_id = _clean_text(context_id) or _clean_text(readiness_payload.get("context_id"))
+    clean_job_id = _clean_text(job_id) or _clean_text(readiness_payload.get("job_id"))
+    blocked_actions: List[str] = []
+
+    def _blocked(status: str, next_safe_step: str, *blockers: str) -> Dict[str, Any]:
+        blocked_actions.extend(blocker for blocker in blockers if blocker)
+        return {
+            "queue_handoff_creation_status": status,
+            "approval_request_id": request_id,
+            "queue_handoff_id": "",
+            "queue_entry_created": False,
+            "source_queue_handoff_readiness_status": source_readiness_status,
+            "approval_status": approval_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_reviewer_confirmation": True,
+            "next_safe_step": next_safe_step,
+            "rationale": (
+                "Guarded queue handoff creation is manual-only and requires a ready queue "
+                "handoff preview plus explicit reviewer confirmation. It does not execute, "
+                "submit, mutate resumes, scoring, ranking, or approval status."
+            ),
+            "reviewer_note": _clean_text(reviewer_note),
+            "context_id": clean_context_id,
+            "job_id": clean_job_id,
+            "safety_metadata": _guarded_queue_handoff_creation_safety_metadata(
+                did_create_queue_entry=False
+            ),
+            "manual_surface": True,
+            "service_surface": "guarded_queue_handoff_creation",
+        }
+
+    if not request_id:
+        return _blocked(
+            "blocked_missing_approval_request_id",
+            "provide_approval_request_id",
+            "approval_request_id_missing",
+        )
+    if reviewer_confirmation is not True:
+        return _blocked(
+            "blocked_by_missing_confirmation",
+            "collect_explicit_queue_handoff_confirmation",
+            "reviewer_confirmation_missing",
+        )
+    if source_readiness_status != "ready_for_future_queue_handoff":
+        return _blocked(
+            "blocked_by_readiness_preview",
+            "run_queue_handoff_readiness_preview_before_creation",
+            "queue_handoff_readiness_preview_not_ready",
+        )
+    if approval_status != "approved":
+        return _blocked(
+            "blocked_not_approved",
+            "complete_guarded_approval_status_transition_before_queue_handoff",
+            "approval_request_not_approved",
+        )
+    if not callable(queue_writer):
+        return _blocked(
+            "blocked_by_missing_queue_writer",
+            "configure_existing_queue_writer_before_manual_handoff",
+            "queue_writer_unavailable",
+        )
+
+    queue_handoff_id = _manual_queue_handoff_id(
+        approval_request_id=request_id,
+        context_id=clean_context_id,
+        job_id=clean_job_id,
+    )
+    queue_entry = {
+        "queue_handoff_id": queue_handoff_id,
+        "approval_request_id": request_id,
+        "approval_status": approval_status,
+        "source_queue_handoff_readiness_status": source_readiness_status,
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "reviewer_note": _clean_text(reviewer_note),
+        "manual_guarded_queue_handoff": True,
+        "execute_application": False,
+        "submit_application": False,
+    }
+    try:
+        writer_result = queue_writer(deepcopy(queue_entry))
+    except Exception:
+        return _blocked(
+            "blocked_by_storage_error",
+            "retry_guarded_queue_handoff_creation",
+            "queue_writer_error",
+        )
+
+    return {
+        "queue_handoff_creation_status": "created",
+        "approval_request_id": request_id,
+        "queue_handoff_id": _clean_text(
+            writer_result.get("queue_handoff_id") if isinstance(writer_result, dict) else ""
+        ) or queue_handoff_id,
+        "queue_entry_created": True,
+        "source_queue_handoff_readiness_status": source_readiness_status,
+        "approval_status": approval_status,
+        "blocked_actions": [],
+        "required_reviewer_confirmation": True,
+        "next_safe_step": "review_created_queue_handoff_before_any_execution",
+        "rationale": (
+            "Created exactly one guarded queue handoff through the injected existing queue writer; "
+            "no approval status, resume, scoring, ranking, execution, or submission state was changed."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "safety_metadata": _guarded_queue_handoff_creation_safety_metadata(
+            did_create_queue_entry=True
+        ),
+        "manual_surface": True,
+        "service_surface": "guarded_queue_handoff_creation",
+        "queue_writer_result": deepcopy(writer_result) if isinstance(writer_result, dict) else {},
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

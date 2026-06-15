@@ -12258,6 +12258,160 @@ def build_review_packet_preview_dry_run_payload(
     }
 
 
+APPROVAL_REQUEST_PREVIEW_BY_ACTION = {
+    "prepare_review_packet": {
+        "status": "ready_for_approval_preview",
+        "type": "review_packet_approval_preview",
+        "title": "Review packet approval preview",
+        "summary": "Preview a human approval request for the prepared shadow recommendation review packet.",
+        "decision": "request_human_review",
+        "next_step": "human_reviewer_confirms_review_packet",
+    },
+    "request_tailoring_revision": {
+        "status": "tailoring_revision_approval_preview",
+        "type": "tailoring_revision_approval_preview",
+        "title": "Tailoring revision approval preview",
+        "summary": "Preview a human approval request to review an evidence-backed tailoring revision request.",
+        "decision": "request_tailoring_revision_review",
+        "next_step": "human_reviewer_reviews_tailoring_revision_request",
+    },
+    "save_for_later": {
+        "status": "save_for_later_approval_preview",
+        "type": "save_for_later_review_preview",
+        "title": "Save-for-later review preview",
+        "summary": "Preview a human review card for keeping the shadow recommendation as advisory context.",
+        "decision": "save_for_later_review",
+        "next_step": "human_reviewer_confirms_save_for_later",
+    },
+    "dismiss_recommendation": {
+        "status": "dismissal_approval_preview",
+        "type": "dismissal_review_preview",
+        "title": "Dismissal review preview",
+        "summary": "Preview a human review card for dismissing the shadow recommendation without mutating production state.",
+        "decision": "dismiss_shadow_recommendation_review",
+        "next_step": "human_reviewer_confirms_dismissal",
+    },
+}
+
+
+def _approval_request_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "approval_preview_only": True,
+        "review_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def build_approval_request_preview_dry_run_payload(
+    *,
+    review_packet_payload: Dict[str, Any] | None = None,
+    action_plan_payload: Dict[str, Any] | None = None,
+    decision_capture_payload: Dict[str, Any] | None = None,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    reviewer_decision: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview the approval request fields without creating or mutating approvals."""
+
+    packet_payload = deepcopy(review_packet_payload or {})
+    if not isinstance(packet_payload, dict):
+        packet_payload = {}
+    if not packet_payload:
+        packet_payload = build_review_packet_preview_dry_run_payload(
+            action_plan_payload=deepcopy(action_plan_payload or {}),
+            decision_capture_payload=deepcopy(decision_capture_payload or {}),
+            handoff_payload=deepcopy(handoff_payload or {}),
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            reviewer_decision=reviewer_decision,
+            reviewer_note=reviewer_note,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    source_review_packet_status = _clean_text(packet_payload.get("review_packet_status")) or "missing"
+    source_planned_action = _clean_text(packet_payload.get("source_planned_action"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(packet_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+    preview_config = APPROVAL_REQUEST_PREVIEW_BY_ACTION.get(source_planned_action)
+
+    if not source_planned_action:
+        approval_preview_status = "insufficient_information"
+        approval_preview_type = "approval_preview_unavailable"
+        approval_title = "Approval preview unavailable"
+        approval_summary = "A source planned action is required before previewing an approval request."
+        proposed_decision = "no_approval_preview"
+        proposed_next_step = "collect_valid_review_packet_preview"
+        blocked_actions.append("review_packet_preview_missing")
+    elif preview_config is None:
+        approval_preview_status = "invalid_source_action"
+        approval_preview_type = "approval_preview_unavailable"
+        approval_title = "Approval preview unavailable"
+        approval_summary = "The source planned action is not eligible for approval request preview."
+        proposed_decision = "no_approval_preview"
+        proposed_next_step = "select_valid_review_packet_preview"
+        blocked_actions.append("invalid_source_planned_action")
+    else:
+        approval_preview_status = str(preview_config["status"])
+        approval_preview_type = str(preview_config["type"])
+        approval_title = str(preview_config["title"])
+        approval_summary = str(preview_config["summary"])
+        proposed_decision = str(preview_config["decision"])
+        proposed_next_step = str(preview_config["next_step"])
+
+    approval_fields_preview = {
+        "title": approval_title,
+        "summary": approval_summary,
+        "proposed_decision": proposed_decision,
+        "source_planned_action": source_planned_action,
+        "source_review_packet_status": source_review_packet_status,
+        "packet_title": _clean_text(packet_payload.get("packet_title")),
+        "reviewer_checklist": list(packet_payload.get("reviewer_checklist") or []),
+        "included_stage_summaries": deepcopy(packet_payload.get("included_stage_summaries") or {}),
+        "context_id": _clean_text(context_id) or _clean_text(packet_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(packet_payload.get("job_id")),
+    }
+
+    return {
+        "approval_preview_status": approval_preview_status,
+        "approval_preview_type": approval_preview_type,
+        "approval_title": approval_title,
+        "approval_summary": approval_summary,
+        "proposed_decision": proposed_decision,
+        "proposed_next_step": proposed_next_step,
+        "required_reviewer_confirmation": True,
+        "approval_fields_preview": approval_fields_preview,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "source_review_packet_status": source_review_packet_status,
+        "rationale": (
+            "Approval request preview shows what could be reviewed by a human; it does not "
+            "create approvals, mutate approval or queue state, change resumes, execute, or submit."
+        ),
+        "context_id": approval_fields_preview["context_id"],
+        "job_id": approval_fields_preview["job_id"],
+        "safety_metadata": _approval_request_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "approval_request_preview_dry_run",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

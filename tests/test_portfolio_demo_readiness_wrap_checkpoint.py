@@ -121,6 +121,10 @@ ALLOWED_CHANGED = {
     "tests/test_approval_request_readback_detail_surface_no_writes.py",
     "tests/test_approval_status_transition_preview_dry_run_no_writes.py",
     "tests/test_guarded_approval_status_transition_manual_only.py",
+    "tests/test_approval_status_transition_observability_no_writes.py",
+    "tests/test_queue_handoff_readiness_preview_dry_run_no_writes.py",
+    "tests/test_guarded_queue_handoff_creation_manual_only.py",
+    "tests/test_queue_handoff_creation_observability_no_writes.py",
 }
 
 def _changed_files():

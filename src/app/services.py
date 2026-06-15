@@ -14567,6 +14567,213 @@ def build_execution_launch_gate_observability_payload(
     }
 
 
+def _execution_request_packet_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "execution_request_packet_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "human_review_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_request_packet_preview_payload(
+    *,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    execution_launch_gate_payload: Dict[str, Any] | None = None,
+    execution_launch_gate_observability_payload: Dict[str, Any] | None = None,
+    execution_readiness_payload: Dict[str, Any] | None = None,
+    queue_handoff_observability_payload: Dict[str, Any] | None = None,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Build a dry-run execution request packet preview for human review only."""
+
+    launch_gate = deepcopy(execution_launch_gate_payload or {})
+    if not isinstance(launch_gate, dict):
+        launch_gate = {}
+    launch_audit = deepcopy(execution_launch_gate_observability_payload or {})
+    if not isinstance(launch_audit, dict):
+        launch_audit = {}
+    execution_readiness = deepcopy(execution_readiness_payload or {})
+    if not isinstance(execution_readiness, dict):
+        execution_readiness = {}
+    queue_audit = deepcopy(queue_handoff_observability_payload or {})
+    if not isinstance(queue_audit, dict):
+        queue_audit = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(launch_gate.get("approval_request_id"))
+        or _clean_text(launch_audit.get("approval_request_id"))
+        or _clean_text(execution_readiness.get("approval_request_id"))
+        or _clean_text(queue_audit.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(launch_gate.get("queue_handoff_id"))
+        or _clean_text(launch_audit.get("queue_handoff_id"))
+        or _clean_text(execution_readiness.get("queue_handoff_id"))
+        or _clean_text(queue_audit.get("queue_handoff_id"))
+    )
+    source_gate_status = _clean_text(launch_gate.get("execution_launch_gate_status")) or "missing"
+    source_audit_status = (
+        _clean_text(launch_audit.get("execution_launch_gate_observability_status"))
+        or "missing"
+    )
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not request_id:
+        packet_status = "blocked_missing_approval_request_id"
+        packet_ready = False
+        missing_requirements.append("approval_request_id")
+        blocked_actions.append("approval_request_id_missing")
+        next_safe_step = "provide_approval_request_id"
+    elif not handoff_id:
+        packet_status = "blocked_missing_queue_handoff_id"
+        packet_ready = False
+        missing_requirements.append("queue_handoff_id")
+        blocked_actions.append("queue_handoff_id_missing")
+        next_safe_step = "provide_queue_handoff_id"
+    elif not launch_gate or source_gate_status == "missing":
+        packet_status = "blocked_missing_execution_launch_gate"
+        packet_ready = False
+        missing_requirements.append("execution_launch_gate_payload")
+        blocked_actions.append("execution_launch_gate_missing")
+        next_safe_step = "preview_execution_launch_gate_before_packet"
+    elif source_gate_status != "ready_for_future_manual_execution":
+        packet_status = "blocked_execution_launch_not_ready"
+        packet_ready = False
+        missing_requirements.append("ready_execution_launch_gate")
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(launch_gate.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.append("execution_launch_gate_not_ready")
+        next_safe_step = _clean_text(launch_gate.get("next_safe_step")) or "resolve_execution_launch_gate_blockers"
+    elif not launch_audit or source_audit_status == "missing":
+        packet_status = "blocked_missing_execution_launch_observability"
+        packet_ready = False
+        missing_requirements.append("execution_launch_gate_observability_payload")
+        blocked_actions.append("execution_launch_gate_observability_missing")
+        next_safe_step = "view_execution_launch_gate_audit_before_packet"
+    elif source_audit_status != "observed_ready":
+        packet_status = "blocked_missing_execution_launch_observability"
+        packet_ready = False
+        missing_requirements.append("observed_ready_execution_launch_gate")
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(launch_audit.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.append("execution_launch_gate_observability_not_ready")
+        next_safe_step = _clean_text(launch_audit.get("next_safe_step")) or "resolve_execution_launch_gate_audit_blockers"
+    else:
+        packet_status = "packet_ready_for_human_review"
+        packet_ready = True
+        next_safe_step = "human_review_execution_request_packet_before_future_guarded_execution"
+
+    blocked_actions = list(dict.fromkeys([item for item in blocked_actions if item]))
+    missing_requirements = list(dict.fromkeys([item for item in missing_requirements if item]))
+    request_summary = {
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "source_execution_launch_gate_status": source_gate_status,
+        "source_execution_launch_gate_observability_status": source_audit_status,
+        "packet_ready_for_human_review": packet_ready,
+        "reviewer_note_present": bool(_clean_text(reviewer_note)),
+    }
+    packet_sections = [
+        {
+            "section_id": "source_ids",
+            "title": "Source identifiers",
+            "summary": f"Approval request {request_id or 'missing'} and queue handoff {handoff_id or 'missing'}.",
+        },
+        {
+            "section_id": "launch_gate",
+            "title": "Execution launch gate",
+            "summary": f"Launch gate status: {source_gate_status}.",
+        },
+        {
+            "section_id": "launch_gate_audit",
+            "title": "Execution launch gate audit",
+            "summary": f"Launch gate audit status: {source_audit_status}.",
+        },
+        {
+            "section_id": "human_review",
+            "title": "Human review requirement",
+            "summary": "Future guarded execution still requires explicit human confirmation.",
+        },
+    ]
+    if _clean_text(reviewer_note):
+        packet_sections.append(
+            {
+                "section_id": "reviewer_note",
+                "title": "Reviewer note",
+                "summary": _clean_text(reviewer_note),
+            }
+        )
+
+    return {
+        "execution_request_packet_status": packet_status,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "packet_ready_for_human_review": packet_ready,
+        "packet_sections": packet_sections,
+        "execution_request_summary": request_summary,
+        "missing_requirements": missing_requirements,
+        "blocked_actions": blocked_actions,
+        "required_human_confirmation": True,
+        "source_execution_launch_gate_status": source_gate_status,
+        "source_execution_launch_gate_observability_status": source_audit_status,
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Execution request packet preview is dry-run only for human review before any "
+            "future guarded execution action. It does not execute, submit, mutate queues "
+            "or approvals, write queue files, change resumes, scoring, ranking, or add "
+            "pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": (
+            _clean_text(context_id)
+            or _clean_text(launch_gate.get("context_id"))
+            or _clean_text(launch_audit.get("context_id"))
+            or _clean_text(execution_readiness.get("context_id"))
+        ),
+        "job_id": (
+            _clean_text(job_id)
+            or _clean_text(launch_gate.get("job_id"))
+            or _clean_text(launch_audit.get("job_id"))
+            or _clean_text(execution_readiness.get("job_id"))
+        ),
+        "safety_metadata": _execution_request_packet_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_request_packet_preview_dry_run",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

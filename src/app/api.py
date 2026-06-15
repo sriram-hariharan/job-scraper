@@ -377,6 +377,17 @@ class ManualQueueHandoffReadinessPreviewRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualGuardedQueueHandoffCreateRequest(BaseModel):
+    approval_request_id: str = ""
+    reviewer_confirmation: bool = False
+    queue_handoff_readiness_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_status_transition_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+    reviewer_note: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1799,6 +1810,27 @@ def invoke_manual_queue_handoff_readiness_preview_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_queue_handoff_readiness_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-guarded-queue-handoff-create")
+def invoke_manual_guarded_queue_handoff_create_api_action(
+    request: ManualGuardedQueueHandoffCreateRequest,
+):
+    payload = services.build_guarded_queue_handoff_creation_payload(
+        approval_request_id=request.approval_request_id,
+        reviewer_confirmation=request.reviewer_confirmation,
+        queue_handoff_readiness_payload=request.queue_handoff_readiness_payload,
+        approval_request_readback_payload=request.approval_request_readback_payload,
+        approval_status_transition_observability_payload=request.approval_status_transition_observability_payload,
+        context_id=request.context_id,
+        job_id=request.job_id,
+        reviewer_note=request.reviewer_note,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_queue_handoff_create",
     }
 
 

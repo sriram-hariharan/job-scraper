@@ -298,6 +298,36 @@ class ManualApprovalCreationGateDryRunRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualGuardedApprovalRequestCreateRequest(BaseModel):
+    approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    review_packet_payload: dict[str, Any] = Field(default_factory=dict)
+    action_plan_payload: dict[str, Any] = Field(default_factory=dict)
+    decision_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    handoff_payload: dict[str, Any] = Field(default_factory=dict)
+    shadow_chain_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_confirmation: bool = False
+    reviewer_decision: str = ""
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
+    guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    review_packet_payload: dict[str, Any] = Field(default_factory=dict)
+    action_plan_payload: dict[str, Any] = Field(default_factory=dict)
+    decision_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    handoff_payload: dict[str, Any] = Field(default_factory=dict)
+    shadow_chain_payload: dict[str, Any] = Field(default_factory=dict)
+    created_approval_request_id: str = ""
+    reviewer_confirmation: bool = False
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1529,6 +1559,56 @@ def invoke_production_scheduler_observability_reporting_job_endpoint(
         approval_request_id=approval_request_id,
         reporting_decision=reporting_decision,
     )
+
+@app.post("/api/manual-guarded-approval-request-create")
+def invoke_manual_guarded_approval_request_create_api_action(
+    request: ManualGuardedApprovalRequestCreateRequest,
+):
+    payload = services.build_guarded_approval_request_creation_payload(
+        approval_creation_gate_payload=request.approval_creation_gate_payload,
+        approval_preview_payload=request.approval_preview_payload,
+        review_packet_payload=request.review_packet_payload,
+        action_plan_payload=request.action_plan_payload,
+        decision_capture_payload=request.decision_capture_payload,
+        handoff_payload=request.handoff_payload,
+        shadow_chain_payload=request.shadow_chain_payload,
+        reviewer_confirmation=request.reviewer_confirmation,
+        reviewer_decision=request.reviewer_decision,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+        connection_provider=_agentic_approval_storage_connection,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_approval_request_create",
+    }
+
+
+@app.post("/api/manual-guarded-approval-creation-observability")
+def invoke_manual_guarded_approval_creation_observability_api_action(
+    request: ManualGuardedApprovalCreationObservabilityRequest,
+):
+    payload = services.build_guarded_approval_creation_observability_payload(
+        guarded_creation_payload=request.guarded_creation_payload,
+        approval_creation_gate_payload=request.approval_creation_gate_payload,
+        approval_preview_payload=request.approval_preview_payload,
+        review_packet_payload=request.review_packet_payload,
+        action_plan_payload=request.action_plan_payload,
+        decision_capture_payload=request.decision_capture_payload,
+        handoff_payload=request.handoff_payload,
+        shadow_chain_payload=request.shadow_chain_payload,
+        created_approval_request_id=request.created_approval_request_id,
+        reviewer_confirmation=request.reviewer_confirmation,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_approval_creation_observability",
+    }
 
 
 @app.get("/api/agent-feedback/summary")

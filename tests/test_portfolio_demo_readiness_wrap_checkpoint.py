@@ -116,6 +116,8 @@ ALLOWED_CHANGED = {
     "tests/test_review_packet_preview_dry_run_no_pipeline_change.py",
     "tests/test_approval_request_preview_dry_run_no_pipeline_change.py",
     "tests/test_approval_creation_gate_dry_run_no_pipeline_change.py",
+    "tests/test_guarded_approval_request_creation_manual_only.py",
+    "tests/test_guarded_approval_creation_observability_no_writes.py",
 }
 
 def _changed_files():

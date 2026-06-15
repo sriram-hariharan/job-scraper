@@ -2323,6 +2323,67 @@ function renderManualExecutionLaunchGateObservabilitySection(tracePayload = {}) 
   `;
 }
 
+function renderManualExecutionRequestPacketPreviewSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_execution_request_packet_preview_result)
+    ? tracePayload.manual_execution_request_packet_preview_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const launchGate = hasAgentTraceSummaryObject(tracePayload?.manual_execution_launch_gate_preview_result)
+    ? tracePayload.manual_execution_launch_gate_preview_result
+    : {};
+  const launchAudit = hasAgentTraceSummaryObject(tracePayload?.manual_execution_launch_gate_observability_result)
+    ? tracePayload.manual_execution_launch_gate_observability_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || launchAudit.approval_request_id || launchGate.approval_request_id || "";
+  const queueHandoffId = result.queue_handoff_id || launchAudit.queue_handoff_id || launchGate.queue_handoff_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual execution request packet preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Execution Request Packet Preview</h4>
+          <p>Dry-run packet preview for human review before any future guarded execution action. It does not execute, submit, mutate queues or approvals, write queue files, or change resume, scoring, or ranking state.</p>
+        </div>
+        <span class="agentic-workflow-badge">Execution packet</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Packet", result.execution_request_packet_status || "not run")}
+        ${renderWorkflowSummaryMetric("Request id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Handoff id", queueHandoffId || "-")}
+        ${renderWorkflowSummaryMetric("Ready", result.packet_ready_for_human_review === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Gate", result.source_execution_launch_gate_status || "-")}
+        ${renderWorkflowSummaryMetric("Audit", result.source_execution_launch_gate_observability_status || "-")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Execution request summary", result.execution_request_summary || {}, { helper: "Read-only execution request packet summary." })}
+        ${renderAgentTraceReadOnlyDetails("Packet sections", result.packet_sections || [], { helper: "Deterministic human-review packet sections." })}
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Execution request packet missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Execution request packet blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Execution request packet preview rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable execution request packet safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-execution-request-packet-preview data-approval-request-id="${escapeHtml(approvalRequestId)}" data-queue-handoff-id="${escapeHtml(queueHandoffId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Preview Execution Request Packet
+        </button>
+        <span class="agentic-review-muted" data-manual-execution-request-packet-preview-status>
+          Manual only. This builds a human-review packet preview and performs no execution, submission, queue, approval, resume, scoring, or ranking mutation.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2393,6 +2454,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualExecutionReadinessPreviewSection(tracePayload)}
       ${renderManualExecutionLaunchGatePreviewSection(tracePayload)}
       ${renderManualExecutionLaunchGateObservabilitySection(tracePayload)}
+      ${renderManualExecutionRequestPacketPreviewSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -4925,6 +4987,59 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual execution launch gate audit failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-execution-request-packet-preview]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-execution-request-packet-preview-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Previewing execution request packet...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const launchGate = tracePayload.manual_execution_launch_gate_preview_result || {};
+      const launchAudit = tracePayload.manual_execution_launch_gate_observability_result || {};
+      const executionReadiness = tracePayload.manual_execution_readiness_preview_result || {};
+      const queueAudit = tracePayload.manual_queue_handoff_creation_observability_result || {};
+      const packetResult = await fetchJson(
+        "/api/manual-execution-request-packet-preview-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approval_request_id: button.dataset.approvalRequestId || launchAudit.approval_request_id || launchGate.approval_request_id || "",
+            queue_handoff_id: button.dataset.queueHandoffId || launchAudit.queue_handoff_id || launchGate.queue_handoff_id || "",
+            execution_launch_gate_payload: launchGate,
+            execution_launch_gate_observability_payload: launchAudit,
+            execution_readiness_payload: executionReadiness,
+            queue_handoff_observability_payload: queueAudit,
+            reviewer_note: "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_execution_request_packet_preview_result: packetResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual execution request packet preview failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

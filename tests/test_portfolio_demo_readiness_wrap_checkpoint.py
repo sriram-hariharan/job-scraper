@@ -104,6 +104,7 @@ ALLOWED_CHANGED = {
     "tests/test_manual_tailoring_suggestion_dry_run_surface_no_pipeline_change.py",
     "src/agents/critic_agent.py",
     "tests/test_critic_guardrail_dry_run_contract_no_pipeline_change.py",
+    "tests/test_manual_critic_guardrail_dry_run_surface_no_pipeline_change.py",
 }
 
 def _changed_files():

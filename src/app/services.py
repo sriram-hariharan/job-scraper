@@ -11927,6 +11927,131 @@ def build_human_decision_capture_dry_run_payload(
     }
 
 
+HUMAN_APPROVED_ACTION_PLAN_BY_DECISION = {
+    "accept_recommendation_for_review": (
+        "prepare_review_packet",
+        "Prepare review packet",
+        ["Collect shadow recommendation, handoff, reviewer note, and safety metadata for manual review."],
+        "prepare_review_packet_for_human_confirmation",
+    ),
+    "request_more_tailoring": (
+        "request_tailoring_revision",
+        "Request tailoring revision",
+        ["Review tailoring gaps and request additional evidence-backed revision candidates."],
+        "review_tailoring_revision_request",
+    ),
+    "save_for_later": (
+        "save_for_later",
+        "Save for later",
+        ["Keep the shadow recommendation as advisory context for later manual review."],
+        "revisit_shadow_recommendation_later",
+    ),
+    "dismiss_shadow_recommendation": (
+        "dismiss_recommendation",
+        "Dismiss recommendation",
+        ["Record no persistent dismissal; leave production approval, queue, and submission state unchanged."],
+        "no_further_shadow_action",
+    ),
+}
+
+
+def _human_approved_action_plan_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "action_plan_only": True,
+        "review_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def build_human_approved_action_plan_dry_run_payload(
+    *,
+    decision_capture_payload: Dict[str, Any] | None = None,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    reviewer_decision: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview a non-mutating action plan from a simulated human decision."""
+
+    decision_payload = deepcopy(decision_capture_payload or {})
+    if not isinstance(decision_payload, dict):
+        decision_payload = {}
+    if not decision_payload:
+        decision_payload = build_human_decision_capture_dry_run_payload(
+            handoff_payload=deepcopy(handoff_payload or {}),
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            reviewer_decision=reviewer_decision,
+            reviewer_note=reviewer_note,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    source_decision = _clean_text(decision_payload.get("reviewer_decision"))
+    accepted = bool(decision_payload.get("accepted_decision"))
+    source_recommendation_action = (
+        _clean_text(decision_payload.get("source_recommendation_action"))
+        or "insufficient_information"
+    )
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(decision_payload.get("blocking_risks") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_decision:
+        action_plan_status = "insufficient_information"
+        planned_action = "insufficient_information"
+        planned_action_label = "Insufficient information"
+        action_steps: List[str] = []
+        next_safe_step = "collect_valid_reviewer_decision"
+        blocked_actions.append("reviewer_decision_missing")
+    elif not accepted or source_decision not in HUMAN_APPROVED_ACTION_PLAN_BY_DECISION:
+        action_plan_status = "invalid_reviewer_decision"
+        planned_action = "no_action_invalid_decision"
+        planned_action_label = "No action: invalid decision"
+        action_steps = []
+        next_safe_step = "select_valid_reviewer_decision"
+        blocked_actions.append("invalid_reviewer_decision")
+    else:
+        planned_action, planned_action_label, action_steps, next_safe_step = HUMAN_APPROVED_ACTION_PLAN_BY_DECISION[source_decision]
+        action_plan_status = "ready_for_human_confirmation"
+
+    return {
+        "action_plan_status": action_plan_status,
+        "source_reviewer_decision": source_decision,
+        "source_recommendation_action": source_recommendation_action,
+        "planned_action": planned_action,
+        "planned_action_label": planned_action_label,
+        "action_steps": list(action_steps),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_human_confirmation": True,
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Human-approved action plan dry-run previews a safe next step only; it does not "
+            "create approvals, mutate queues or resumes, change scoring or ranking, execute, or submit."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(decision_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(decision_payload.get("job_id")),
+        "safety_metadata": _human_approved_action_plan_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "human_approved_action_plan_dry_run",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

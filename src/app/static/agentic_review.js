@@ -1380,6 +1380,57 @@ function renderManualHumanDecisionCaptureDryRunSection(tracePayload = {}) {
   `;
 }
 
+function renderManualHumanApprovedActionPlanDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_human_approved_action_plan_dry_run_result)
+    ? tracePayload.manual_human_approved_action_plan_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual human-approved action plan dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Human-approved Action Plan Dry-run</h4>
+          <p>Preview-only action plan. It creates no approval request, mutates no queue or resume content, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Action plan preview</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Plan", result.action_plan_status || "not run")}
+        ${renderWorkflowSummaryMetric("Action", result.planned_action || "-")}
+        ${renderWorkflowSummaryMetric("Confirmation", result.required_human_confirmation === true ? "required" : "-")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Planned action label", result.planned_action_label || "", { helper: "Preview-only planned action label." })}
+        ${renderAgentTraceReadOnlyDetails("Action steps", result.action_steps || [], { helper: "Preview-only action steps." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Preview-only blocked actions." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Preview-only next safe step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Action plan dry-run rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable human-approved action plan safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-human-approved-action-plan-dry-run data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Build Action Plan Dry-run
+        </button>
+        <span class="agentic-review-muted" data-manual-human-approved-action-plan-dry-run-status>
+          Manual only. This previews a safe action plan and does not mutate approval, queue, resume, execution, or submission state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1434,6 +1485,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)}
       ${renderManualShadowRecommendationHandoffDryRunSection(tracePayload)}
       ${renderManualHumanDecisionCaptureDryRunSection(tracePayload)}
+      ${renderManualHumanApprovedActionPlanDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -3178,6 +3230,52 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual human decision capture dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-human-approved-action-plan-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-human-approved-action-plan-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Building preview-only human-approved action plan...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const actionPlanResult = await fetchJson(
+        "/api/manual-human-approved-action-plan-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            decision_capture_payload: tracePayload.manual_human_decision_capture_dry_run_result || {},
+            handoff_payload: tracePayload.manual_shadow_recommendation_handoff_dry_run_result || {},
+            shadow_chain_payload: tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result || {},
+            reviewer_decision: tracePayload.manual_human_decision_capture_dry_run_result?.reviewer_decision || "",
+            reviewer_note: tracePayload.manual_human_decision_capture_dry_run_result?.reviewer_note || "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_human_approved_action_plan_dry_run_result: actionPlanResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual action plan dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

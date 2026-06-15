@@ -7,7 +7,7 @@ from src.storage.agent_state import store
 
 
 EXPECTED_PROTECTED_HASHES = {
-    "src/app/static/agentic_review.js": "0ef528020d22ce5e53b6410217e79d62ebb3646717af5f6e0d898212d34ec1ac",
+    "src/app/static/agentic_review.js": "84031c14149f0fd64434e3d365543e5c57f9aa7d3f19fbe2f17c216746710a55",
     "src/storage/agent_state/schema.sql": "d7e91c2b7e6e7720a8aeb64b7292d9ce28d6008b14c1d149f56a6c1fa39b3526",
     "src/storage/agent_state/migration_runner.py": "488e25670d7043c6a5b938441e13d7c066bbcf5fccda1a41401723650e61969e",
 }

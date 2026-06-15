@@ -10407,6 +10407,143 @@ def build_recommendation_explainer_payload(row: Dict[str, Any]) -> Dict[str, Any
     }
 
 
+LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "required_skills": {"type": "array", "items": {"type": "string"}},
+        "preferred_skills": {"type": "array", "items": {"type": "string"}},
+        "required_tools": {"type": "array", "items": {"type": "string"}},
+        "preferred_tools": {"type": "array", "items": {"type": "string"}},
+        "workflows": {"type": "array", "items": {"type": "string"}},
+        "methods": {"type": "array", "items": {"type": "string"}},
+        "business_contexts": {"type": "array", "items": {"type": "string"}},
+        "stakeholder_contexts": {"type": "array", "items": {"type": "string"}},
+        "ownership_signals": {"type": "array", "items": {"type": "string"}},
+        "seniority_signals": {"type": "array", "items": {"type": "string"}},
+        "risk_flags": {"type": "array", "items": {"type": "string"}},
+        "extraction_confidence": {"type": "number"},
+    },
+    "required": [
+        "required_skills",
+        "preferred_skills",
+        "required_tools",
+        "preferred_tools",
+        "workflows",
+        "methods",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+        "risk_flags",
+        "extraction_confidence",
+    ],
+}
+LIVE_JD_INTELLIGENCE_DRY_RUN_SCHEMA_NAME = "live_jd_intelligence_dry_run_v1"
+LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", "false").strip().lower()
+    == "true"
+)
+LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER = os.getenv(
+    "APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER",
+    os.getenv("LLM_PROVIDER", "groq"),
+).strip().lower()
+LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL = os.getenv(
+    "APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL",
+    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+).strip()
+LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
+
+
+def _live_jd_intelligence_structured_output_contract() -> Dict[str, Any]:
+    return {
+        "name": LIVE_JD_INTELLIGENCE_DRY_RUN_SCHEMA_NAME,
+        "strict": True,
+        "schema": LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA,
+    }
+
+
+def _live_jd_intelligence_prompt(
+    *,
+    job_title: str,
+    company: str,
+    location: str,
+    job_description: str,
+    source_metadata: Dict[str, Any],
+) -> str:
+    return "\n".join([
+        "Extract conservative job-description intelligence for a manual read-only dry-run.",
+        "Return only JSON matching the provided schema.",
+        "Do not infer unsupported skills, tools, seniority, ownership, or business context.",
+        "",
+        f"Job title: {job_title or '-'}",
+        f"Company: {company or '-'}",
+        f"Location: {location or '-'}",
+        f"Source metadata: {json.dumps(source_metadata or {}, sort_keys=True)}",
+        "",
+        "Job description:",
+        job_description or "-",
+    ])
+
+
+def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
+    from src.ai.llm_client import run_chat_completion_with_metadata
+
+    provider = LIVE_JD_INTELLIGENCE_DRY_RUN_PROVIDER
+    model = LIVE_JD_INTELLIGENCE_DRY_RUN_MODEL
+    result = run_chat_completion_with_metadata(
+        provider=provider,
+        model=model,
+        temperature=0,
+        max_tokens=700,
+        response_mime_type="application/json",
+        response_schema=_live_jd_intelligence_structured_output_contract()["schema"],
+        return_parsed=True,
+        thinking_budget=0,
+        fallback_enabled=LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You extract structured job-description intelligence for a manual dry-run. "
+                    "Return only JSON and never recommend application actions."
+                ),
+            },
+            {
+                "role": "user",
+                "content": _live_jd_intelligence_prompt(
+                    job_title=_clean_text(adapter_input.get("job_title")),
+                    company=_clean_text(adapter_input.get("company")),
+                    location=_clean_text(adapter_input.get("location")),
+                    job_description=_clean_text(adapter_input.get("job_description")),
+                    source_metadata=dict(adapter_input.get("source_metadata") or {}),
+                ),
+            },
+        ],
+    )
+    content = result.get("content")
+    payload = dict(content or {}) if isinstance(content, dict) else {"raw_response": content}
+    payload.update(
+        {
+            "model_provider": _clean_text(result.get("provider")),
+            "model_name": _clean_text(result.get("model")),
+            "prompt_version": LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION,
+            "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
+            "cost": dict(result.get("cost") or result.get("cost_json") or {}),
+            "latency_ms": result.get("latency_ms", 0),
+            "provider_fallback_used": bool(result.get("fallback_used", False)),
+            "structured_output_schema": _live_jd_intelligence_structured_output_contract(),
+        }
+    )
+    return payload
+
+
 def build_manual_jd_intelligence_dry_run_payload(
     *,
     job_title: Any = "",
@@ -10417,9 +10554,17 @@ def build_manual_jd_intelligence_dry_run_payload(
     context_id: Any = "",
     job_id: Any = "",
     adapter: Any = None,
-    feature_enabled: bool = False,
+    feature_enabled: bool | None = None,
     config: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
+    effective_feature_enabled = (
+        LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED
+        if feature_enabled is None
+        else bool(feature_enabled)
+    )
+    effective_adapter = adapter
+    if effective_feature_enabled and effective_adapter is None:
+        effective_adapter = _live_jd_intelligence_provider_adapter
     payload = jd_intelligence.build_live_jd_intelligence_dry_run_payload(
         job_title=job_title,
         company=company,
@@ -10428,8 +10573,8 @@ def build_manual_jd_intelligence_dry_run_payload(
         source_metadata=dict(source_metadata or {}) if isinstance(source_metadata, dict) else {},
         context_id=context_id,
         job_id=job_id,
-        adapter=adapter,
-        feature_enabled=feature_enabled,
+        adapter=effective_adapter,
+        feature_enabled=effective_feature_enabled,
         config=dict(config or {}) if isinstance(config, dict) else None,
     )
     return {
@@ -10437,6 +10582,7 @@ def build_manual_jd_intelligence_dry_run_payload(
         "manual_surface": True,
         "read_only": True,
         "default_feature_flag_enabled": False,
+        "env_feature_flag_enabled": LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED,
         "service_surface": "manual_jd_intelligence_dry_run",
     }
 

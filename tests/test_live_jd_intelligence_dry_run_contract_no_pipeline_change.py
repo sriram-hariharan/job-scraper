@@ -173,6 +173,66 @@ def test_fake_adapter_invalid_json_returns_fallback_with_validation_error():
     _assert_no_runtime_mutation(payload, did_call_llm=True)
 
 
+def test_fake_provider_adapter_raw_json_preserves_metadata():
+    payload = build_live_jd_intelligence_dry_run_payload(
+        **_job_input(),
+        adapter=lambda _payload: {
+            "raw_response": """
+            {
+              "required_skills": ["Python"],
+              "preferred_skills": [],
+              "required_tools": ["Airflow"],
+              "preferred_tools": [],
+              "workflows": ["workflow orchestration"],
+              "methods": [],
+              "business_contexts": [],
+              "stakeholder_contexts": [],
+              "ownership_signals": [],
+              "seniority_signals": [],
+              "risk_flags": [],
+              "extraction_confidence": 0.66
+            }
+            """,
+            "model_provider": "fake-provider",
+            "model_name": "fake-provider-model",
+            "prompt_version": "provider-prompt-v1",
+            "token_usage": {"total_token_count": 33},
+            "cost": {"estimated_cost": 0.01, "cost_currency": "USD"},
+            "latency_ms": 88,
+        },
+        feature_enabled=True,
+    )
+
+    assert payload["validation_status"] == "valid"
+    assert payload["required_skills"] == ["Python"]
+    assert payload["required_tools"] == ["Airflow"]
+    assert payload["model_provider"] == "fake-provider"
+    assert payload["model_name"] == "fake-provider-model"
+    assert payload["prompt_version"] == "provider-prompt-v1"
+    assert payload["token_usage"] == {"total_token_count": 33}
+    assert payload["cost"] == {"estimated_cost": 0.01, "cost_currency": "USD"}
+    assert payload["latency_ms"] == 88
+    _assert_no_runtime_mutation(payload, did_call_llm=True)
+
+
+def test_fake_provider_adapter_invalid_raw_json_returns_fallback():
+    payload = build_live_jd_intelligence_dry_run_payload(
+        **_job_input(),
+        adapter=lambda _payload: {
+            "raw_response": "{invalid",
+            "model_provider": "fake-provider",
+            "model_name": "fake-provider-model",
+        },
+        feature_enabled=True,
+    )
+
+    assert payload["validation_status"] == "fallback"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["invalid_json_response"]
+    assert payload["model_provider"] == "deterministic"
+    _assert_no_runtime_mutation(payload, did_call_llm=True)
+
+
 def test_fake_adapter_exception_returns_fallback_with_adapter_error():
     def adapter(_payload):
         raise RuntimeError("provider offline")

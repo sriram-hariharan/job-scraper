@@ -341,6 +341,19 @@ def _dry_run_adapter_metadata(raw: dict[str, Any]) -> dict[str, Any]:
 
 def _dry_run_parse_adapter_response(raw_response: Any) -> tuple[dict[str, Any] | None, str]:
     if isinstance(raw_response, dict):
+        raw_content = raw_response.get("raw_response", raw_response.get("content"))
+        if isinstance(raw_content, str):
+            try:
+                parsed_content = json.loads(raw_content)
+            except json.JSONDecodeError:
+                return None, "invalid_json_response"
+            if not isinstance(parsed_content, dict):
+                return None, "json_response_not_object"
+            merged = deepcopy(parsed_content)
+            for key, value in raw_response.items():
+                if key not in {"raw_response", "content"}:
+                    merged[key] = deepcopy(value)
+            return merged, ""
         return deepcopy(raw_response), ""
     if isinstance(raw_response, str):
         try:

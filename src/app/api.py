@@ -186,6 +186,17 @@ class ManualCriticGuardrailDryRunRequest(BaseModel):
     context_id: str = ""
     job_id: str = ""
 
+
+class ManualStrategyRecommendationDryRunRequest(BaseModel):
+    jd_intelligence: dict[str, Any] = Field(default_factory=dict)
+    jd_signals: dict[str, Any] = Field(default_factory=dict)
+    resume_match_payload: dict[str, Any] = Field(default_factory=dict)
+    tailoring_suggestion_payload: dict[str, Any] = Field(default_factory=dict)
+    critic_guardrail_payload: dict[str, Any] = Field(default_factory=dict)
+    user_preferences: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1208,6 +1219,27 @@ def invoke_manual_critic_guardrail_dry_run_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_critic_guardrail_dry_run",
+    }
+
+
+@app.post("/api/manual-strategy-recommendation-dry-run")
+def invoke_manual_strategy_recommendation_dry_run_api_action(
+    request: ManualStrategyRecommendationDryRunRequest,
+):
+    payload = services.build_manual_strategy_recommendation_dry_run_payload(
+        jd_intelligence=request.jd_intelligence,
+        jd_signals=request.jd_signals,
+        resume_match_payload=request.resume_match_payload,
+        tailoring_suggestion_payload=request.tailoring_suggestion_payload,
+        critic_guardrail_payload=request.critic_guardrail_payload,
+        user_preferences=request.user_preferences,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_strategy_recommendation_dry_run",
     }
 
 

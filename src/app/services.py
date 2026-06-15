@@ -40,6 +40,7 @@ from src.agents import (
     critic_agent,
     dry_run_execution_simulator,
     jd_intelligence,
+    job_prioritization_agent,
     proposal_only_mutation_planner,
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
@@ -10701,6 +10702,35 @@ def build_manual_critic_guardrail_dry_run_payload(
         "manual_surface": True,
         "read_only": True,
         "service_surface": "manual_critic_guardrail_dry_run",
+    }
+
+
+def build_manual_strategy_recommendation_dry_run_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_match_payload: Dict[str, Any] | None = None,
+    tailoring_suggestion_payload: Dict[str, Any] | None = None,
+    critic_guardrail_payload: Dict[str, Any] | None = None,
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    payload = job_prioritization_agent.build_strategy_recommendation_dry_run_payload(
+        jd_intelligence=dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None,
+        jd_signals=dict(jd_signals or {}) if isinstance(jd_signals, dict) else None,
+        resume_match_payload=dict(resume_match_payload or {}) if isinstance(resume_match_payload, dict) else None,
+        tailoring_suggestion_payload=dict(tailoring_suggestion_payload or {}) if isinstance(tailoring_suggestion_payload, dict) else None,
+        critic_guardrail_payload=dict(critic_guardrail_payload or {}) if isinstance(critic_guardrail_payload, dict) else None,
+        user_preferences=dict(user_preferences or {}) if isinstance(user_preferences, dict) else None,
+        context_id=_clean_text(context_id),
+        job_id=_clean_text(job_id),
+    )
+    return {
+        **payload,
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "manual_strategy_recommendation_dry_run",
     }
 
 

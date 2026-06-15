@@ -15121,6 +15121,192 @@ def build_guarded_execution_request_creation_observability_payload(
     }
 
 
+def _execution_request_readback_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "execution_request_readback_only": True,
+        "manual_only": True,
+        "did_create_execution_request": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_request_readback_payload(
+    *,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    guarded_execution_request_creation_payload: Dict[str, Any] | None = None,
+    execution_request_creation_observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Build a read-only execution request detail view from supplied source evidence."""
+
+    creation_payload = deepcopy(guarded_execution_request_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(execution_request_creation_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(creation_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+    )
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(creation_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+    )
+    source_creation_status = _clean_text(
+        creation_payload.get("execution_request_creation_status")
+    ) or _clean_text(observability_payload.get("source_execution_request_creation_status"))
+    source_observability_status = _clean_text(
+        observability_payload.get("execution_request_observability_status")
+    )
+    source_created = bool(creation_payload.get("execution_request_created")) or bool(
+        observability_payload.get("execution_request_was_created")
+    )
+    source_blocked = bool(observability_payload.get("execution_request_was_blocked"))
+    id_mismatch = False
+    if execution_id and _clean_text(creation_payload.get("execution_request_id")):
+        id_mismatch = execution_id != _clean_text(creation_payload.get("execution_request_id"))
+    if execution_id and _clean_text(observability_payload.get("execution_request_id")):
+        id_mismatch = id_mismatch or execution_id != _clean_text(
+            observability_payload.get("execution_request_id")
+        )
+
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not execution_id:
+        readback_status = "blocked_missing_execution_request_id"
+        found = False
+        execution_status = "missing"
+        missing_requirements.append("execution_request_id")
+        blocked_actions.append("execution_request_id_missing")
+        next_safe_step = "provide_execution_request_id"
+    elif not creation_payload and not observability_payload:
+        readback_status = "blocked_missing_source"
+        found = False
+        execution_status = "unknown"
+        missing_requirements.append("guarded_execution_request_source_evidence")
+        blocked_actions.append("execution_request_source_evidence_missing")
+        next_safe_step = "provide_execution_request_creation_or_audit_payload"
+    elif id_mismatch:
+        readback_status = "not_found"
+        found = False
+        execution_status = "id_mismatch"
+        blocked_actions.append("execution_request_id_not_matched_in_source")
+        next_safe_step = "verify_execution_request_id"
+    elif source_creation_status == "created" and source_created:
+        readback_status = "found"
+        found = True
+        execution_status = "created_control_artifact"
+        next_safe_step = "review_execution_request_details_before_future_execution_action"
+    elif source_blocked or source_creation_status.startswith("blocked") or source_observability_status == "observed_blocked":
+        readback_status = "not_found"
+        found = False
+        execution_status = "not_created"
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(creation_payload.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(observability_payload.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.append("execution_request_not_created")
+        next_safe_step = _clean_text(creation_payload.get("next_safe_step")) or _clean_text(
+            observability_payload.get("next_safe_step")
+        ) or "resolve_guarded_execution_request_blockers"
+    else:
+        readback_status = "insufficient_information"
+        found = False
+        execution_status = "unknown"
+        blocked_actions.append("execution_request_source_status_unclear")
+        next_safe_step = "provide_created_execution_request_source_evidence"
+
+    readback_summary = {
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_status": execution_status,
+        "execution_request_found": found,
+        "source_execution_request_creation_status": source_creation_status or "missing",
+        "source_execution_request_observability_status": source_observability_status or "missing",
+    }
+    detail_sections = [
+        {
+            "section_id": "source_ids",
+            "title": "Source identifiers",
+            "summary": f"Execution request {execution_id or 'missing'} for approval {request_id or 'missing'} and queue handoff {handoff_id or 'missing'}.",
+        },
+        {
+            "section_id": "creation_source",
+            "title": "Creation source",
+            "summary": f"Creation status: {source_creation_status or 'missing'}.",
+        },
+        {
+            "section_id": "observability_source",
+            "title": "Observability source",
+            "summary": f"Audit status: {source_observability_status or 'missing'}.",
+        },
+        {
+            "section_id": "safety",
+            "title": "Safety",
+            "summary": "Readback only; no execution request creation, queue write, execution, or submission occurs.",
+        },
+    ]
+
+    return {
+        "execution_request_readback_status": readback_status,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_found": found,
+        "execution_request_status": execution_status,
+        "source_execution_request_creation_status": source_creation_status or "missing",
+        "source_execution_request_observability_status": source_observability_status or "missing",
+        "readback_summary": readback_summary,
+        "detail_sections": detail_sections,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys([item for item in blocked_actions if item])),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(creation_payload.get("context_id")) or _clean_text(observability_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(creation_payload.get("job_id")) or _clean_text(observability_payload.get("job_id")),
+        "safety_metadata": _execution_request_readback_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_request_readback",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

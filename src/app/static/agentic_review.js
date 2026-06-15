@@ -1094,6 +1094,61 @@ function renderManualTailoringSuggestionDryRunSection(tracePayload = {}) {
   `;
 }
 
+function renderManualCriticGuardrailDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_critic_guardrail_dry_run_result)
+    ? tracePayload.manual_critic_guardrail_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual critic guardrail dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Critic Guardrail Dry-run</h4>
+          <p>Manual read-only dry-run. It validates tailoring suggestions in memory only and does not mutate resume content, scoring, ranking, queues, approvals, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Dry-run read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Critic", result.critic_status || "not run")}
+        ${renderWorkflowSummaryMetric("Approved", Array.isArray(result.approved_suggestions) ? result.approved_suggestions.length : 0)}
+        ${renderWorkflowSummaryMetric("Downgraded", Array.isArray(result.downgraded_suggestions) ? result.downgraded_suggestions.length : 0)}
+        ${renderWorkflowSummaryMetric("Rejected", Array.isArray(result.rejected_suggestions) ? result.rejected_suggestions.length : 0)}
+        ${renderWorkflowSummaryMetric("Confidence", result.confidence ?? "-")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Approved suggestions", result.approved_suggestions || [], { helper: "Dry-run approved low-risk suggestions." })}
+        ${renderAgentTraceReadOnlyDetails("Downgraded suggestions", result.downgraded_suggestions || [], { helper: "Dry-run suggestions downgraded to guidance." })}
+        ${renderAgentTraceReadOnlyDetails("Rejected suggestions", result.rejected_suggestions || [], { helper: "Dry-run rejected guardrail findings." })}
+        ${renderAgentTraceReadOnlyDetails("Reason codes", result.reason_codes || [], { helper: "Dry-run critic reason codes." })}
+        ${renderAgentTraceReadOnlyDetails("Unsupported claim risks", result.unsupported_claim_risks || [], { helper: "Dry-run unsupported claim risks." })}
+        ${renderAgentTraceReadOnlyDetails("ATS risks", result.ats_risks || [], { helper: "Dry-run ATS risks." })}
+        ${renderAgentTraceReadOnlyDetails("Readability risks", result.readability_risks || [], { helper: "Dry-run readability risks." })}
+        ${renderAgentTraceReadOnlyDetails("Evidence gaps", result.evidence_gaps || [], { helper: "Dry-run evidence gaps." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Dry-run rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable critic guardrail dry-run safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-critic-guardrail-dry-run data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Run critic dry-run
+        </button>
+        <span class="agentic-review-muted" data-manual-critic-guardrail-dry-run-status>
+          Manual only. Suggestions are validated for review context; no approval, resume, or queue state changes.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1143,6 +1198,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
       ${renderManualTailoringSuggestionDryRunSection(tracePayload)}
+      ${renderManualCriticGuardrailDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -2630,6 +2686,51 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual tailoring suggestion dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-critic-guardrail-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-critic-guardrail-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Running manual read-only critic guardrail dry-run...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const criticGuardrailResult = await fetchJson(
+        "/api/manual-critic-guardrail-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tailoring_suggestion_payload: tracePayload.manual_tailoring_suggestion_dry_run_result || {},
+            jd_intelligence: tracePayload.manual_jd_intelligence_dry_run_result || {},
+            resume_variants: [],
+            resume_evidence_rows: [],
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_critic_guardrail_dry_run_result: criticGuardrailResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual critic guardrail dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

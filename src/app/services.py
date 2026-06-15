@@ -10667,6 +10667,43 @@ def build_manual_tailoring_suggestion_dry_run_payload(
     }
 
 
+def build_manual_critic_guardrail_dry_run_payload(
+    *,
+    tailoring_suggestion_payload: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    normalized_resume_variants = (
+        [dict(row or {}) for row in list(resume_variants or []) if isinstance(row, dict)]
+        if resume_variants is not None
+        else None
+    )
+    normalized_resume_evidence_rows = (
+        [dict(row or {}) for row in list(resume_evidence_rows or []) if isinstance(row, dict)]
+        if resume_evidence_rows is not None
+        else None
+    )
+    payload = critic_agent.build_critic_guardrail_dry_run_payload(
+        tailoring_suggestion_payload=dict(tailoring_suggestion_payload or {}) if isinstance(tailoring_suggestion_payload, dict) else None,
+        jd_intelligence=dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None,
+        jd_signals=dict(jd_signals or {}) if isinstance(jd_signals, dict) else None,
+        resume_variants=normalized_resume_variants,
+        resume_evidence_rows=normalized_resume_evidence_rows,
+        context_id=_clean_text(context_id),
+        job_id=_clean_text(job_id),
+    )
+    return {
+        **payload,
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "manual_critic_guardrail_dry_run",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

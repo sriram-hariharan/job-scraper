@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import csv
 import json
+import re
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -570,3 +572,309 @@ def record_tailoring_decision_agent_trace(
         if agent_trace_strict(env_map):
             raise
         return {"attempted": True, "recorded": False, "warning": str(exc)}
+
+
+TAILORING_SUGGESTION_DRY_RUN_SIGNAL_FIELDS = (
+    "required_skills",
+    "preferred_skills",
+    "required_tools",
+    "preferred_tools",
+    "workflows",
+    "methods",
+    "business_contexts",
+    "stakeholder_contexts",
+    "ownership_signals",
+    "seniority_signals",
+)
+
+
+def _tailoring_suggestion_safety_metadata() -> Dict[str, bool]:
+    return {
+        "dry_run_only": True,
+        "deterministic_only": True,
+        "did_call_llm": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+
+
+def _tailoring_suggestion_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    if isinstance(value, tuple):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    text = _clean_text(value)
+    if not text:
+        return []
+    return [_clean_text(item) for item in re.split(r"[;,|]", text) if _clean_text(item)]
+
+
+def _tailoring_suggestion_norm(value: Any) -> str:
+    return re.sub(r"[^a-z0-9+#.$%]+", " ", _clean_text(value).lower()).strip()
+
+
+def _tailoring_suggestion_contains(text: str, signal: str) -> bool:
+    signal_norm = _tailoring_suggestion_norm(signal)
+    return bool(signal_norm and signal_norm in _tailoring_suggestion_norm(text))
+
+
+def _tailoring_suggestion_resume_id(row: Dict[str, Any], index: int) -> str:
+    return (
+        _clean_text(row.get("resume_id"))
+        or _clean_text(row.get("resume_name"))
+        or _clean_text(row.get("name"))
+        or _clean_text(row.get("id"))
+        or f"resume_{index + 1}"
+    )
+
+
+def _tailoring_suggestion_evidence_items(row: Dict[str, Any]) -> List[Dict[str, str]]:
+    items: List[Dict[str, str]] = []
+
+    def add_item(text: Any, source_field: str, source_id: str = "") -> None:
+        clean = _clean_text(text)
+        if clean:
+            items.append(
+                {
+                    "source_field": source_field,
+                    "source_bullet_id": source_id,
+                    "text": clean,
+                }
+            )
+
+    bullets = row.get("bullets")
+    bullet_ids = row.get("bullet_ids")
+    if isinstance(bullets, list):
+        ids = bullet_ids if isinstance(bullet_ids, list) else []
+        for index, bullet in enumerate(bullets):
+            add_item(bullet, "bullets", _clean_text(ids[index]) if index < len(ids) else f"bullet_{index + 1}")
+    else:
+        add_item(bullets, "bullets", _clean_text(row.get("source_bullet_id")) or _clean_text(row.get("bullet_id")))
+
+    for field_name in (
+        "raw_text",
+        "normalized_text",
+        "evidence_text",
+        "summary",
+        "quantified_bullets",
+        "skills",
+        "tools",
+        "methods",
+        "workflows",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+        "analytics_ml_signals",
+        "domain_signals",
+        "tooling_signals",
+    ):
+        value = row.get(field_name)
+        if isinstance(value, list):
+            for index, item in enumerate(value):
+                add_item(item, field_name, f"{field_name}_{index + 1}")
+        elif isinstance(value, dict):
+            for key, item in sorted(value.items()):
+                add_item(item, field_name, _clean_text(key))
+        else:
+            add_item(value, field_name, _clean_text(row.get(f"{field_name}_id")))
+    return items
+
+
+def _tailoring_suggestion_unsupported_risk(signal: str, field_name: str) -> str:
+    signal_norm = _tailoring_suggestion_norm(signal)
+    if field_name in {"required_tools", "preferred_tools"}:
+        return "unsupported_tool"
+    if field_name in {"business_contexts", "stakeholder_contexts"}:
+        return "unsupported_domain_or_context"
+    if re.search(r"(\$|%|\b\d+(?:\.\d+)?x\b|\b\d+(?:\.\d+)?\s*(?:million|m|k|users|requests|latency|revenue)\b)", signal_norm):
+        return "unsupported_metric"
+    return "unsupported_claim"
+
+
+def _tailoring_suggestion_empty_payload(
+    *,
+    selected_resume_id: str,
+    missing_evidence: List[str],
+    source_fields_used: List[str],
+    context_id: str,
+    job_id: str,
+) -> Dict[str, Any]:
+    return {
+        "suggestion_status": "insufficient_evidence",
+        "selected_resume_id": _clean_text(selected_resume_id),
+        "patch_ready_suggestions": [],
+        "guidance_only_suggestions": [],
+        "rejected_suggestions": [],
+        "missing_evidence": list(dict.fromkeys(missing_evidence)),
+        "unsupported_claim_risks": [],
+        "projected_score_delta": 0.0,
+        "rationale": "Tailoring suggestion dry-run has limited evidence; no resume content, score, ranking, queue, approval, execution, or submission was changed.",
+        "source_fields_used": source_fields_used,
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "safety_metadata": _tailoring_suggestion_safety_metadata(),
+    }
+
+
+def build_tailoring_suggestion_dry_run_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_match_payload: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: str = "",
+    context_id: str = "",
+    job_id: str = "",
+) -> Dict[str, Any]:
+    """Build deterministic tailoring suggestions from JD signals and resume evidence only."""
+
+    jd_source = deepcopy(jd_intelligence if jd_intelligence is not None else jd_signals or {})
+    match_payload = deepcopy(resume_match_payload or {})
+    variants = deepcopy(resume_variants if resume_variants is not None else resume_evidence_rows or [])
+    if not isinstance(jd_source, dict):
+        jd_source = {}
+    if not isinstance(match_payload, dict):
+        match_payload = {}
+    if not isinstance(variants, list):
+        variants = []
+
+    normalized_signals = {
+        field_name: _tailoring_suggestion_list(jd_source.get(field_name))
+        for field_name in TAILORING_SUGGESTION_DRY_RUN_SIGNAL_FIELDS
+    }
+    source_fields_used = [field for field, values in normalized_signals.items() if values]
+    selected_id = (
+        _clean_text(selected_resume_id)
+        or _clean_text(match_payload.get("selected_resume_id"))
+    )
+    resume_rows = [row for row in variants if isinstance(row, dict)]
+    selected_row: Dict[str, Any] = {}
+    for index, row in enumerate(resume_rows):
+        row_id = _tailoring_suggestion_resume_id(row, index)
+        if selected_id and row_id == selected_id:
+            selected_row = row
+            break
+    if not selected_row and resume_rows:
+        selected_row = resume_rows[0]
+        selected_id = _tailoring_suggestion_resume_id(selected_row, 0)
+
+    missing_evidence: List[str] = []
+    if not source_fields_used:
+        missing_evidence.append("jd_signals_missing")
+    if not match_payload:
+        missing_evidence.append("resume_match_payload_missing")
+    if not resume_rows:
+        missing_evidence.append("resume_evidence_missing")
+    if missing_evidence:
+        return _tailoring_suggestion_empty_payload(
+            selected_resume_id=selected_id,
+            missing_evidence=missing_evidence,
+            source_fields_used=source_fields_used,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    evidence_items = _tailoring_suggestion_evidence_items(selected_row)
+    if not evidence_items:
+        missing_evidence.append("selected_resume_evidence_missing")
+
+    patch_ready: List[Dict[str, Any]] = []
+    guidance_only: List[Dict[str, Any]] = []
+    rejected: List[Dict[str, Any]] = []
+    unsupported_claim_risks: List[Dict[str, str]] = []
+    suggestion_index = 1
+
+    for field_name in TAILORING_SUGGESTION_DRY_RUN_SIGNAL_FIELDS:
+        for signal in normalized_signals[field_name]:
+            matched_items = [
+                item for item in evidence_items
+                if _tailoring_suggestion_contains(item.get("text"), signal)
+            ]
+            if matched_items and not patch_ready:
+                item = matched_items[0]
+                source_bullet_id = _clean_text(item.get("source_bullet_id")) or _clean_text(item.get("source_field"))
+                original_text = _clean_text(item.get("text"))
+                patch_ready.append(
+                    {
+                        "suggestion_id": f"tailoring_dry_run_{suggestion_index:03d}",
+                        "source_bullet_id": source_bullet_id,
+                        "original_text": original_text,
+                        "suggested_text": original_text,
+                        "reason": f"Existing resume evidence directly supports JD signal: {signal}.",
+                        "evidence_spans": [original_text],
+                        "jd_signal_links": [{"field": field_name, "signal": signal}],
+                        "patch_ready": True,
+                        "projected_score_delta": 0.03,
+                        "risk_flags": [],
+                    }
+                )
+                suggestion_index += 1
+                continue
+
+            risk = _tailoring_suggestion_unsupported_risk(signal, field_name)
+            missing_key = f"{field_name}:{signal}:resume_evidence_missing"
+            missing_evidence.append(missing_key)
+            unsupported_claim_risks.append(
+                {
+                    "field": field_name,
+                    "signal": signal,
+                    "risk": risk,
+                }
+            )
+            suggestion = {
+                "suggestion_id": f"tailoring_dry_run_{suggestion_index:03d}",
+                "source_bullet_id": "",
+                "original_text": "",
+                "suggested_text": f"Gather direct resume evidence before claiming {signal}.",
+                "reason": f"No direct resume evidence was found for JD signal: {signal}.",
+                "evidence_spans": [],
+                "jd_signal_links": [{"field": field_name, "signal": signal}],
+                "patch_ready": False,
+                "projected_score_delta": 0.0,
+                "risk_flags": [risk],
+            }
+            suggestion_index += 1
+            if risk in {"unsupported_tool", "unsupported_metric", "unsupported_domain_or_context"}:
+                rejected.append(suggestion)
+            elif not guidance_only:
+                guidance_only.append(suggestion)
+
+    match_missing = [
+        _clean_text(item)
+        for item in list(match_payload.get("missing_evidence") or [])
+        if _clean_text(item)
+    ]
+    missing_evidence = list(dict.fromkeys(missing_evidence + match_missing))
+    projected_delta = round(sum(float(item.get("projected_score_delta", 0.0) or 0.0) for item in patch_ready), 4)
+    if patch_ready:
+        suggestion_status = "patch_ready_available"
+    elif guidance_only:
+        suggestion_status = "guidance_only"
+    elif rejected:
+        suggestion_status = "rejected_unsupported_claims"
+    else:
+        suggestion_status = "insufficient_evidence"
+
+    return {
+        "suggestion_status": suggestion_status,
+        "selected_resume_id": selected_id,
+        "patch_ready_suggestions": patch_ready,
+        "guidance_only_suggestions": guidance_only,
+        "rejected_suggestions": rejected,
+        "missing_evidence": missing_evidence,
+        "unsupported_claim_risks": unsupported_claim_risks,
+        "projected_score_delta": projected_delta,
+        "rationale": "Tailoring suggestion dry-run only promotes patch-ready edits when JD signals are directly supported by resume evidence.",
+        "source_fields_used": source_fields_used,
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "safety_metadata": _tailoring_suggestion_safety_metadata(),
+    }

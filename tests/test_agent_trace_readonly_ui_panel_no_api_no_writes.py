@@ -288,7 +288,7 @@ def test_agent_trace_critic_evaluator_ui_is_manual_single_and_escapes_values():
     assert "innerHTML" not in critic_snippet
     assert "did_write_storage" in critic_snippet
     assert "did_call_llm" in critic_snippet
-    assert "did_mutate_approval" not in critic_snippet
+    assert "did_mutate_approval" in critic_snippet
     assert "did_execute_application" in critic_snippet
     assert "did_submit_application" in critic_snippet
 

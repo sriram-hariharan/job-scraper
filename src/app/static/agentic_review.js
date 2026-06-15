@@ -1149,6 +1149,58 @@ function renderManualCriticGuardrailDryRunSection(tracePayload = {}) {
   `;
 }
 
+function renderManualStrategyRecommendationDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_strategy_recommendation_dry_run_result)
+    ? tracePayload.manual_strategy_recommendation_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual strategy recommendation dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Strategy Recommendation Dry-run</h4>
+          <p>Manual read-only dry-run. It combines prior dry-run outputs into an advisory next action and does not mutate resume content, scoring, ranking, queues, approvals, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Dry-run read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Strategy", result.strategy_status || "not run")}
+        ${renderWorkflowSummaryMetric("Action", result.recommendation_action || "-")}
+        ${renderWorkflowSummaryMetric("Priority", result.priority_hint || "-")}
+        ${renderWorkflowSummaryMetric("Readiness", result.readiness_level || "-")}
+        ${renderWorkflowSummaryMetric("Human review", result.required_human_review === true ? "yes" : result.required_human_review === false ? "no" : "-")}
+        ${renderWorkflowSummaryMetric("Confidence", result.confidence ?? "-")}
+        ${renderWorkflowSummaryMetric("Advisory", safety.advisory_only ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Recommendation label", result.recommendation_label || "", { helper: "Dry-run recommendation label." })}
+        ${renderAgentTraceReadOnlyDetails("Decision reasons", result.decision_reasons || [], { helper: "Dry-run strategy decision reasons." })}
+        ${renderAgentTraceReadOnlyDetails("Blocking risks", result.blocking_risks || [], { helper: "Dry-run blocking risks." })}
+        ${renderAgentTraceReadOnlyDetails("Improvement actions", result.improvement_actions || [], { helper: "Dry-run suggested evidence or review improvements." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Dry-run rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable strategy recommendation dry-run safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-strategy-recommendation-dry-run data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Run strategy dry-run
+        </button>
+        <span class="agentic-review-muted" data-manual-strategy-recommendation-dry-run-status>
+          Manual only. Recommendation is advisory and does not change queue, approval, scoring, execution, or submission state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1199,6 +1251,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualResumeMatchDryRunSection(tracePayload)}
       ${renderManualTailoringSuggestionDryRunSection(tracePayload)}
       ${renderManualCriticGuardrailDryRunSection(tracePayload)}
+      ${renderManualStrategyRecommendationDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -2731,6 +2784,52 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual critic guardrail dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-strategy-recommendation-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-strategy-recommendation-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Running manual read-only strategy recommendation dry-run...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const strategyRecommendationResult = await fetchJson(
+        "/api/manual-strategy-recommendation-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            jd_intelligence: tracePayload.manual_jd_intelligence_dry_run_result || {},
+            resume_match_payload: tracePayload.manual_resume_match_dry_run_result || {},
+            tailoring_suggestion_payload: tracePayload.manual_tailoring_suggestion_dry_run_result || {},
+            critic_guardrail_payload: tracePayload.manual_critic_guardrail_dry_run_result || {},
+            user_preferences: {},
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_strategy_recommendation_dry_run_result: strategyRecommendationResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual strategy recommendation dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

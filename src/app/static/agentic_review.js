@@ -1960,6 +1960,69 @@ function renderManualApprovalStatusTransitionObservabilitySection(tracePayload =
   `;
 }
 
+function renderManualQueueHandoffReadinessPreviewSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_queue_handoff_readiness_preview_result)
+    ? tracePayload.manual_queue_handoff_readiness_preview_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const readback = hasAgentTraceSummaryObject(tracePayload?.manual_approval_request_readback_result)
+    ? tracePayload.manual_approval_request_readback_result
+    : {};
+  const transitionAudit = hasAgentTraceSummaryObject(tracePayload?.manual_approval_status_transition_observability_result)
+    ? tracePayload.manual_approval_status_transition_observability_result
+    : {};
+  const transition = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_approval_status_transition_result)
+    ? tracePayload.manual_guarded_approval_status_transition_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || readback.approval_request_id || transitionAudit.approval_request_id || transition.approval_request_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual queue handoff readiness preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Queue Handoff Readiness Preview</h4>
+          <p>Dry-run readiness preview only. It does not create queue rows, write queue files, mutate approval or resume state, execute, or submit applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Queue preview</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readiness", result.queue_handoff_readiness_status || "not run")}
+        ${renderWorkflowSummaryMetric("Request id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Approval status", result.approval_status || "-")}
+        ${renderWorkflowSummaryMetric("Ready later", result.ready_for_future_queue_handoff === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Allowed later", result.queue_handoff_allowed_later === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue write", safety.did_write_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Queue handoff readiness missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Queue handoff readiness blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Source readback status", result.source_readback_status || "", { helper: "Source approval request readback status." })}
+        ${renderAgentTraceReadOnlyDetails("Source transition observability status", result.source_transition_observability_status || "", { helper: "Source transition audit status." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Queue handoff preview rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable queue handoff preview safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-queue-handoff-readiness-preview data-approval-request-id="${escapeHtml(approvalRequestId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Preview Queue Handoff Readiness
+        </button>
+        <span class="agentic-review-muted" data-manual-queue-handoff-readiness-preview-status>
+          Manual only. This previews queue handoff readiness and does not create or mutate queue, approval, resume, execution, or submission state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2024,6 +2087,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualApprovalStatusTransitionPreviewSection(tracePayload)}
       ${renderManualGuardedApprovalStatusTransitionSection(tracePayload)}
       ${renderManualApprovalStatusTransitionObservabilitySection(tracePayload)}
+      ${renderManualQueueHandoffReadinessPreviewSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -4266,6 +4330,55 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual approval status transition audit failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-queue-handoff-readiness-preview]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-queue-handoff-readiness-preview-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Previewing queue handoff readiness...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readback = tracePayload.manual_approval_request_readback_result || {};
+      const transitionAudit = tracePayload.manual_approval_status_transition_observability_result || {};
+      const transition = tracePayload.manual_guarded_approval_status_transition_result || {};
+      const readinessResult = await fetchJson(
+        "/api/manual-queue-handoff-readiness-preview-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approval_request_id: button.dataset.approvalRequestId || readback.approval_request_id || transitionAudit.approval_request_id || transition.approval_request_id || "",
+            approval_request_readback_payload: readback,
+            approval_status_transition_observability_payload: transitionAudit,
+            approval_status_transition_payload: transition,
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_queue_handoff_readiness_preview_result: readinessResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual queue handoff readiness preview failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

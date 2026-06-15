@@ -13701,6 +13701,155 @@ def build_guarded_approval_status_transition_observability_payload(
     }
 
 
+def _queue_handoff_readiness_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "queue_handoff_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_queue_handoff_readiness_preview_payload(
+    *,
+    approval_request_id: Any = "",
+    approval_request_readback_payload: Dict[str, Any] | None = None,
+    approval_status_transition_observability_payload: Dict[str, Any] | None = None,
+    approval_status_transition_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview whether an approved request is ready for a future queue handoff."""
+
+    readback_payload = deepcopy(approval_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    transition_observability_payload = deepcopy(approval_status_transition_observability_payload or {})
+    if not isinstance(transition_observability_payload, dict):
+        transition_observability_payload = {}
+    transition_payload = deepcopy(approval_status_transition_payload or {})
+    if not isinstance(transition_payload, dict):
+        transition_payload = {}
+    if not transition_observability_payload and transition_payload:
+        transition_observability_payload = build_guarded_approval_status_transition_observability_payload(
+            guarded_status_transition_payload=transition_payload,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(transition_observability_payload.get("approval_request_id"))
+        or _clean_text(transition_payload.get("approval_request_id"))
+    )
+    readback_status = _clean_text(readback_payload.get("readback_status")) or "missing"
+    transition_observability_status = (
+        _clean_text(transition_observability_payload.get("transition_observability_status"))
+        or "missing"
+    )
+    approval_fields = readback_payload.get("approval_request_fields")
+    approval_summary = readback_payload.get("approval_request_summary")
+    approval_status = (
+        _clean_text((approval_fields if isinstance(approval_fields, dict) else {}).get("approval_status"))
+        or _clean_text((approval_summary if isinstance(approval_summary, dict) else {}).get("approval_status"))
+    )
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not request_id:
+        readiness_status = "blocked_missing_approval_request_id"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        missing_requirements.append("approval_request_id")
+        blocked_actions.append("approval_request_id_missing")
+        next_safe_step = "provide_approval_request_id"
+    elif not readback_payload or readback_status == "missing":
+        readiness_status = "blocked_missing_readback"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        missing_requirements.append("approval_request_readback_payload")
+        blocked_actions.append("approval_request_readback_missing")
+        next_safe_step = "read_approval_request_before_queue_handoff_preview"
+    elif readback_status == "not_found":
+        readiness_status = "blocked_not_found"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        blocked_actions.append("approval_request_not_found")
+        next_safe_step = "verify_approval_request_id"
+    elif readback_status != "found":
+        readiness_status = "blocked_missing_readback"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        missing_requirements.append("found_approval_request_readback")
+        blocked_actions.append("approval_request_readback_invalid")
+        next_safe_step = "read_approval_request_before_queue_handoff_preview"
+    elif approval_status != "approved":
+        readiness_status = "blocked_not_approved"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        missing_requirements.append("approved_approval_status")
+        blocked_actions.append("approval_request_not_approved")
+        next_safe_step = "complete_guarded_approval_status_transition_before_queue_handoff_preview"
+    elif not transition_observability_payload or transition_observability_status == "missing":
+        readiness_status = "blocked_missing_transition_observability"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        missing_requirements.append("approval_status_transition_observability_payload")
+        blocked_actions.append("approval_status_transition_observability_missing")
+        next_safe_step = "view_status_transition_audit_before_queue_handoff_preview"
+    elif transition_observability_status != "observed_updated":
+        readiness_status = "blocked_missing_transition_observability"
+        ready_for_future_queue_handoff = False
+        queue_handoff_allowed_later = False
+        missing_requirements.append("observed_updated_transition")
+        blocked_actions.append("approval_status_transition_not_observed_updated")
+        next_safe_step = "resolve_status_transition_audit_before_queue_handoff_preview"
+    else:
+        readiness_status = "ready_for_future_queue_handoff"
+        ready_for_future_queue_handoff = True
+        queue_handoff_allowed_later = True
+        next_safe_step = "collect_future_explicit_queue_handoff_confirmation"
+
+    return {
+        "queue_handoff_readiness_status": readiness_status,
+        "approval_request_id": request_id,
+        "approval_status": approval_status,
+        "ready_for_future_queue_handoff": ready_for_future_queue_handoff,
+        "queue_handoff_allowed_later": queue_handoff_allowed_later,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_human_confirmation": True,
+        "source_readback_status": readback_status,
+        "source_transition_observability_status": transition_observability_status,
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Queue handoff readiness preview is dry-run only; it does not create queue rows, "
+            "write queue files, mutate approval or resume state, change scoring or ranking, "
+            "execute, submit, or add pipeline wiring."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(readback_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(readback_payload.get("job_id")),
+        "safety_metadata": _queue_handoff_readiness_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "queue_handoff_readiness_preview_dry_run",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

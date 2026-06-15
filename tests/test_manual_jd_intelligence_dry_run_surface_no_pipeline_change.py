@@ -102,6 +102,126 @@ def test_service_enabled_fake_adapter_returns_validated_jd_intelligence():
     _assert_readonly_safety(payload, did_call_llm=True)
 
 
+def test_service_env_flag_off_does_not_call_live_provider(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", False)
+    monkeypatch.setattr(
+        services,
+        "_live_jd_intelligence_provider_adapter",
+        lambda payload: calls.append(payload) or _valid_adapter_payload(),
+    )
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert calls == []
+    assert payload["validation_status"] == "disabled"
+    assert payload["fallback_used"] is True
+    assert payload["env_feature_flag_enabled"] is False
+    _assert_readonly_safety(payload, did_call_llm=False)
+
+
+def test_service_env_flag_enabled_uses_fake_live_provider(monkeypatch):
+    calls = []
+
+    def fake_provider(payload):
+        calls.append(payload)
+        return {
+            **_valid_adapter_payload(),
+            "model_provider": "env-provider",
+            "model_name": "env-model",
+            "token_usage": {"total_token_count": 44},
+            "cost": {"estimated_cost": 0.02, "cost_currency": "USD"},
+            "latency_ms": 77,
+        }
+
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", True)
+    monkeypatch.setattr(services, "_live_jd_intelligence_provider_adapter", fake_provider)
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert calls
+    assert calls[0]["job_title"] == "Senior Analytics Engineer"
+    assert payload["validation_status"] == "valid"
+    assert payload["model_provider"] == "env-provider"
+    assert payload["model_name"] == "env-model"
+    assert payload["token_usage"] == {"total_token_count": 44}
+    assert payload["cost"] == {"estimated_cost": 0.02, "cost_currency": "USD"}
+    assert payload["latency_ms"] == 77
+    assert payload["env_feature_flag_enabled"] is True
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_service_enabled_live_provider_invalid_json_falls_back(monkeypatch):
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", True)
+    monkeypatch.setattr(
+        services,
+        "_live_jd_intelligence_provider_adapter",
+        lambda _payload: {"raw_response": "{bad json", "model_provider": "fake"},
+    )
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert payload["validation_status"] == "fallback"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["invalid_json_response"]
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_service_enabled_live_provider_exception_falls_back(monkeypatch):
+    def fake_provider(_payload):
+        raise RuntimeError("provider unavailable")
+
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", True)
+    monkeypatch.setattr(services, "_live_jd_intelligence_provider_adapter", fake_provider)
+
+    payload = services.build_manual_jd_intelligence_dry_run_payload(**_request_payload())
+
+    assert payload["validation_status"] == "fallback"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["adapter_error:RuntimeError"]
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_live_provider_adapter_uses_existing_llm_client_with_schema(monkeypatch):
+    captured = {}
+
+    def fake_run_chat_completion_with_metadata(**kwargs):
+        captured.update(kwargs)
+        return {
+            "content": _valid_adapter_payload(),
+            "provider": "fake-provider",
+            "model": "fake-model",
+            "fallback_used": False,
+            "token_usage": {"total_token_count": 55},
+            "cost": {"estimated_cost": 0.03, "cost_currency": "USD"},
+            "latency_ms": 99,
+        }
+
+    import src.ai.llm_client as llm_client
+
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        fake_run_chat_completion_with_metadata,
+    )
+
+    result = services._live_jd_intelligence_provider_adapter(_request_payload())
+
+    assert captured["response_mime_type"] == "application/json"
+    assert captured["response_schema"] == services.LIVE_JD_INTELLIGENCE_DRY_RUN_RESPONSE_SCHEMA
+    assert captured["return_parsed"] is True
+    assert captured["temperature"] == 0
+    assert "manual dry-run" in captured["messages"][0]["content"]
+    assert result["required_skills"] == ["SQL", "Python"]
+    assert result["model_provider"] == "fake-provider"
+    assert result["model_name"] == "fake-model"
+    assert result["prompt_version"] == services.LIVE_JD_INTELLIGENCE_DRY_RUN_PROMPT_VERSION
+    assert result["token_usage"] == {"total_token_count": 55}
+    assert result["cost"] == {"estimated_cost": 0.03, "cost_currency": "USD"}
+    assert result["latency_ms"] == 99
+
+
 def test_api_route_exists_as_post_only():
     routes = {getattr(route, "path", ""): route for route in api.app.routes}
 
@@ -119,6 +239,29 @@ def test_api_route_returns_default_disabled_dry_run_payload(monkeypatch):
     assert payload["fallback_used"] is True
     assert payload["validation_errors"] == ["feature_flag_disabled"]
     _assert_readonly_safety(payload, did_call_llm=False)
+
+
+def test_api_route_explicit_enabled_can_use_injected_fake_provider(monkeypatch):
+    calls = []
+
+    def fake_provider(payload):
+        calls.append(payload)
+        return _valid_adapter_payload()
+
+    monkeypatch.setattr(services, "LIVE_JD_INTELLIGENCE_DRY_RUN_ENABLED", False)
+    monkeypatch.setattr(services, "_live_jd_intelligence_provider_adapter", fake_provider)
+
+    response = _client(monkeypatch).post(
+        ENDPOINT,
+        json={**_request_payload(), "feature_enabled": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert calls
+    assert payload["validation_status"] == "valid"
+    assert payload["fallback_used"] is False
+    _assert_readonly_safety(payload, did_call_llm=True)
 
 
 def test_api_route_preserves_service_payload_without_storage_or_provider(monkeypatch):
@@ -223,6 +366,33 @@ def test_service_helper_slice_has_no_runtime_storage_or_network_calls():
         "requests.",
         "httpx.",
         "run_chat_completion",
+        "score_resume_job_match",
+        "ranking",
+        "execute_application",
+        "submit_application",
+        "workflow_runner",
+    ]
+    for marker in forbidden_markers:
+        assert marker not in snippet
+
+
+def test_live_provider_adapter_slice_reuses_existing_llm_client_without_storage_or_pipeline():
+    source = Path("src/app/services.py").read_text()
+    start = source.index("def _live_jd_intelligence_provider_adapter")
+    end = source.index("def build_manual_jd_intelligence_dry_run_payload")
+    snippet = source[start:end]
+
+    assert "from src.ai.llm_client import run_chat_completion_with_metadata" in snippet
+    assert "response_mime_type=\"application/json\"" in snippet
+    assert "response_schema=_live_jd_intelligence_structured_output_contract()[\"schema\"]" in snippet
+
+    forbidden_markers = [
+        "insert_",
+        "cursor.execute",
+        ".commit(",
+        "subprocess",
+        "requests.",
+        "httpx.",
         "score_resume_job_match",
         "ranking",
         "execute_application",

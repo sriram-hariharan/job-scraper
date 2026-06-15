@@ -1484,6 +1484,61 @@ function renderManualReviewPacketPreviewDryRunSection(tracePayload = {}) {
   `;
 }
 
+function renderManualApprovalRequestPreviewDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_approval_request_preview_dry_run_result)
+    ? tracePayload.manual_approval_request_preview_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual approval request preview dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Approval Request Preview Dry-run</h4>
+          <p>Approval request preview only. It creates no approval request, mutates no approval or queue state, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Approval preview</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Preview", result.approval_preview_status || "not run")}
+        ${renderWorkflowSummaryMetric("Type", result.approval_preview_type || "-")}
+        ${renderWorkflowSummaryMetric("Confirmation", result.required_reviewer_confirmation === true ? "required" : "-")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Approval title", result.approval_title || "", { helper: "Preview-only approval title." })}
+        ${renderAgentTraceReadOnlyDetails("Approval summary", result.approval_summary || "", { helper: "Preview-only approval summary." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed decision", result.proposed_decision || "", { helper: "Preview-only proposed decision." })}
+        ${renderAgentTraceReadOnlyDetails("Proposed next step", result.proposed_next_step || "", { helper: "Preview-only proposed next step." })}
+        ${renderAgentTraceReadOnlyDetails("Approval fields preview", result.approval_fields_preview || {}, { helper: "Preview-only approval fields." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Preview-only blocked actions." })}
+        ${renderAgentTraceReadOnlyDetails("Source review packet status", result.source_review_packet_status || "", { helper: "Source review packet preview status." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Approval request preview rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable approval request preview safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-approval-request-preview-dry-run data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Preview Approval Request
+        </button>
+        <span class="agentic-review-muted" data-manual-approval-request-preview-dry-run-status>
+          Manual only. This previews approval fields and does not create or mutate approval, queue, resume, execution, or submission state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1540,6 +1595,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualHumanDecisionCaptureDryRunSection(tracePayload)}
       ${renderManualHumanApprovedActionPlanDryRunSection(tracePayload)}
       ${renderManualReviewPacketPreviewDryRunSection(tracePayload)}
+      ${renderManualApprovalRequestPreviewDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -3377,6 +3433,54 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual review packet preview dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-approval-request-preview-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-approval-request-preview-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Building preview-only approval request...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const approvalPreviewResult = await fetchJson(
+        "/api/manual-approval-request-preview-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            review_packet_payload: tracePayload.manual_review_packet_preview_dry_run_result || {},
+            action_plan_payload: tracePayload.manual_human_approved_action_plan_dry_run_result || {},
+            decision_capture_payload: tracePayload.manual_human_decision_capture_dry_run_result || {},
+            handoff_payload: tracePayload.manual_shadow_recommendation_handoff_dry_run_result || {},
+            shadow_chain_payload: tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result || {},
+            reviewer_decision: tracePayload.manual_human_decision_capture_dry_run_result?.reviewer_decision || "",
+            reviewer_note: tracePayload.manual_human_decision_capture_dry_run_result?.reviewer_note || "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_approval_request_preview_dry_run_result: approvalPreviewResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual approval request preview dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

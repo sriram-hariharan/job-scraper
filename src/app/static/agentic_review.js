@@ -1539,6 +1539,62 @@ function renderManualApprovalRequestPreviewDryRunSection(tracePayload = {}) {
   `;
 }
 
+function renderManualApprovalCreationGateDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_approval_creation_gate_dry_run_result)
+    ? tracePayload.manual_approval_creation_gate_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual approval creation gate dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Approval Creation Gate Dry-run</h4>
+          <p>Readiness check only. It creates no approval request, mutates no approval or queue state, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Creation gate</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Gate", result.approval_creation_gate_status || "not run")}
+        ${renderWorkflowSummaryMetric("Decision", result.gate_decision || "-")}
+        ${renderWorkflowSummaryMetric("Can create later", result.can_create_approval_request_later === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Preview-only missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Preview-only blocked actions." })}
+        ${renderAgentTraceReadOnlyDetails("Source approval preview status", result.source_approval_preview_status || "", { helper: "Source approval preview status." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Preview-only next safe step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Approval creation gate rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable approval creation gate safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-manual-approval-creation-gate-confirmation>
+          Reviewer confirmation
+        </label>
+        <button type="button" class="agentic-feedback-action" data-manual-approval-creation-gate-dry-run data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Check Approval Creation Gate
+        </button>
+        <span class="agentic-review-muted" data-manual-approval-creation-gate-dry-run-status>
+          Manual only. This checks future readiness and does not create or mutate approval, queue, resume, execution, or submission state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1596,6 +1652,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualHumanApprovedActionPlanDryRunSection(tracePayload)}
       ${renderManualReviewPacketPreviewDryRunSection(tracePayload)}
       ${renderManualApprovalRequestPreviewDryRunSection(tracePayload)}
+      ${renderManualApprovalCreationGateDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -3481,6 +3538,58 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual approval request preview dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-approval-creation-gate-dry-run]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-approval-creation-gate-dry-run-status]");
+    const confirmation = section?.querySelector("[data-manual-approval-creation-gate-confirmation]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Checking preview-only approval creation gate...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const gateResult = await fetchJson(
+        "/api/manual-approval-creation-gate-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approval_preview_payload: tracePayload.manual_approval_request_preview_dry_run_result || {},
+            review_packet_payload: tracePayload.manual_review_packet_preview_dry_run_result || {},
+            action_plan_payload: tracePayload.manual_human_approved_action_plan_dry_run_result || {},
+            decision_capture_payload: tracePayload.manual_human_decision_capture_dry_run_result || {},
+            handoff_payload: tracePayload.manual_shadow_recommendation_handoff_dry_run_result || {},
+            shadow_chain_payload: tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result || {},
+            reviewer_confirmation: Boolean(confirmation?.checked),
+            reviewer_decision: tracePayload.manual_human_decision_capture_dry_run_result?.reviewer_decision || "",
+            reviewer_note: tracePayload.manual_human_decision_capture_dry_run_result?.reviewer_note || "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_approval_creation_gate_dry_run_result: gateResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual approval creation gate dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

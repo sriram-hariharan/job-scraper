@@ -456,6 +456,16 @@ class ManualGuardedExecutionRequestObservabilityRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualExecutionRequestReadbackRequest(BaseModel):
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    guarded_execution_request_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_creation_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -2037,6 +2047,26 @@ def invoke_manual_guarded_execution_request_observability_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_guarded_execution_request_observability",
+    }
+
+
+@app.post("/api/manual-execution-request-readback")
+def invoke_manual_execution_request_readback_api_action(
+    request: ManualExecutionRequestReadbackRequest,
+):
+    payload = services.build_execution_request_readback_payload(
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        guarded_execution_request_creation_payload=request.guarded_execution_request_creation_payload,
+        execution_request_creation_observability_payload=request.execution_request_creation_observability_payload,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_execution_request_readback",
     }
 
 

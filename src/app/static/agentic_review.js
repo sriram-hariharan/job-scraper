@@ -2508,6 +2508,67 @@ function renderManualGuardedExecutionRequestObservabilitySection(tracePayload = 
   `;
 }
 
+function renderManualExecutionRequestReadbackSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_execution_request_readback_result)
+    ? tracePayload.manual_execution_request_readback_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const creation = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_execution_request_create_result)
+    ? tracePayload.manual_guarded_execution_request_create_result
+    : {};
+  const audit = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_execution_request_observability_result)
+    ? tracePayload.manual_guarded_execution_request_observability_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || audit.approval_request_id || creation.approval_request_id || "";
+  const queueHandoffId = result.queue_handoff_id || audit.queue_handoff_id || creation.queue_handoff_id || "";
+  const executionRequestId = result.execution_request_id || audit.execution_request_id || creation.execution_request_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual execution request readback">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Execution Request Readback</h4>
+          <p>Read-only execution request detail. It creates no execution requests, writes no queue files, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Execution readback</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Readback", result.execution_request_readback_status || "not run")}
+        ${renderWorkflowSummaryMetric("Execution request found", result.execution_request_found === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution request id", executionRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Request id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Handoff id", queueHandoffId || "-")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue write", safety.did_write_queue ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Readback summary", result.readback_summary || {}, { helper: "Read-only execution request summary." })}
+        ${renderAgentTraceReadOnlyDetails("Detail sections", result.detail_sections || [], { helper: "Read-only execution request detail sections." })}
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Execution request readback missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Execution request readback blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable execution request readback safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-execution-request-readback data-approval-request-id="${escapeHtml(approvalRequestId)}" data-queue-handoff-id="${escapeHtml(queueHandoffId)}" data-execution-request-id="${escapeHtml(executionRequestId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Read Execution Request
+        </button>
+        <span class="agentic-review-muted" data-manual-execution-request-readback-status>
+          Manual only. This reads execution request details from supplied evidence and does not create requests, mutate queue or approval state, execute, or submit.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2581,6 +2642,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualExecutionRequestPacketPreviewSection(tracePayload)}
       ${renderManualGuardedExecutionRequestCreateSection(tracePayload)}
       ${renderManualGuardedExecutionRequestObservabilitySection(tracePayload)}
+      ${renderManualExecutionRequestReadbackSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -5266,6 +5328,55 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual execution request audit failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-execution-request-readback]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-execution-request-readback-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Reading execution request details...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const creation = tracePayload.manual_guarded_execution_request_create_result || {};
+      const audit = tracePayload.manual_guarded_execution_request_observability_result || {};
+      const readbackResult = await fetchJson(
+        "/api/manual-execution-request-readback",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            execution_request_id: button.dataset.executionRequestId || audit.execution_request_id || creation.execution_request_id || "",
+            approval_request_id: button.dataset.approvalRequestId || audit.approval_request_id || creation.approval_request_id || "",
+            queue_handoff_id: button.dataset.queueHandoffId || audit.queue_handoff_id || creation.queue_handoff_id || "",
+            guarded_execution_request_creation_payload: creation,
+            execution_request_creation_observability_payload: audit,
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_execution_request_readback_result: readbackResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual execution request readback failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

@@ -131,6 +131,7 @@ ALLOWED_CHANGED = {
     "tests/test_execution_request_packet_preview_dry_run_no_writes.py",
     "tests/test_guarded_execution_request_creation_manual_only.py",
     "tests/test_execution_request_creation_observability_no_writes.py",
+    "tests/test_execution_request_readback_detail_surface_no_writes.py",
 }
 
 def _changed_files():

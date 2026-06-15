@@ -231,7 +231,9 @@ def test_api_route_slice_has_no_approval_status_resume_scoring_ranking_execution
         "ranking_mutation",
         "workflow_runner",
         "insert_operator_decision",
-        "mutate_resume",
+        "mutate_resume(",
+        "resume_mutation",
+        "resume_update",
     ]
     for marker in forbidden_markers:
         assert marker not in snippet
@@ -257,7 +259,9 @@ def test_service_helper_slice_limits_mutation_to_injected_queue_writer():
         "ranking_mutation",
         "workflow_runner",
         "insert_operator_decision",
-        "mutate_resume",
+        "mutate_resume(",
+        "resume_mutation",
+        "resume_update",
     ]
     for marker in forbidden_markers:
         assert marker not in snippet

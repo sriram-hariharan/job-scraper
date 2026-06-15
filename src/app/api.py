@@ -155,6 +155,16 @@ class ManualJdIntelligenceDryRunRequest(BaseModel):
     feature_enabled: bool = False
     config: dict[str, Any] = Field(default_factory=dict)
 
+
+class ManualResumeMatchDryRunRequest(BaseModel):
+    jd_intelligence: dict[str, Any] = Field(default_factory=dict)
+    jd_signals: dict[str, Any] = Field(default_factory=dict)
+    resume_variants: list[dict[str, Any]] = Field(default_factory=list)
+    resume_evidence_rows: list[dict[str, Any]] = Field(default_factory=list)
+    selected_resume_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1116,6 +1126,26 @@ def invoke_manual_jd_intelligence_dry_run_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_jd_intelligence_dry_run",
+    }
+
+
+@app.post("/api/manual-resume-match-dry-run")
+def invoke_manual_resume_match_dry_run_api_action(
+    request: ManualResumeMatchDryRunRequest,
+):
+    payload = services.build_manual_resume_match_dry_run_payload(
+        jd_intelligence=request.jd_intelligence,
+        jd_signals=request.jd_signals,
+        resume_variants=request.resume_variants,
+        resume_evidence_rows=request.resume_evidence_rows,
+        selected_resume_id=request.selected_resume_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_resume_match_dry_run",
     }
 
 

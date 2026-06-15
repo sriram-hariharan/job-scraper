@@ -43,6 +43,7 @@ from src.agents import (
     proposal_only_mutation_planner,
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
+    resume_match_agent,
     workflow_runner,
 )
 from src.agents.trace import (
@@ -10593,6 +10594,37 @@ def _jsonl_row_count_from_text(text: Any) -> int:
         if line.strip():
             count += 1
     return count
+
+
+def build_manual_resume_match_dry_run_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    payload = resume_match_agent.build_resume_match_dry_run_payload(
+        jd_intelligence=dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None,
+        jd_signals=dict(jd_signals or {}) if isinstance(jd_signals, dict) else None,
+        resume_variants=[
+            dict(row or {}) for row in list(resume_variants or []) if isinstance(row, dict)
+        ],
+        resume_evidence_rows=[
+            dict(row or {}) for row in list(resume_evidence_rows or []) if isinstance(row, dict)
+        ],
+        selected_resume_id=_clean_text(selected_resume_id),
+        context_id=_clean_text(context_id),
+        job_id=_clean_text(job_id),
+    )
+    return {
+        **payload,
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "manual_resume_match_dry_run",
+    }
 
 
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:

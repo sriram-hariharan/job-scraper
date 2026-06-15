@@ -98,6 +98,7 @@ ALLOWED_CHANGED = {
     "tests/test_manual_jd_intelligence_dry_run_surface_no_pipeline_change.py",
     "src/agents/resume_match_agent.py",
     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
+    "tests/test_manual_resume_match_dry_run_surface_no_pipeline_change.py",
 }
 
 def _changed_files():

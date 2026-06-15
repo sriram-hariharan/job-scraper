@@ -112,6 +112,7 @@ ALLOWED_CHANGED = {
     "tests/test_manual_shadow_agentic_workflow_chain_surface_no_pipeline_change.py",
     "tests/test_shadow_recommendation_handoff_dry_run_no_pipeline_change.py",
     "tests/test_human_decision_capture_dry_run_no_pipeline_change.py",
+    "tests/test_human_approved_action_plan_dry_run_no_pipeline_change.py",
 }
 
 def _changed_files():

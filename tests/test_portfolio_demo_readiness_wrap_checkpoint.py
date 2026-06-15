@@ -96,6 +96,8 @@ ALLOWED_CHANGED = {
     "tests/test_agent_stage_wrapper_trace_summary_consistency_no_runtime_change.py",
     "tests/test_live_jd_intelligence_dry_run_contract_no_pipeline_change.py",
     "tests/test_manual_jd_intelligence_dry_run_surface_no_pipeline_change.py",
+    "src/agents/resume_match_agent.py",
+    "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
 }
 
 def _changed_files():
@@ -134,6 +136,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/deduplication.py",
         "src/agents/jd_intelligence.py",
         "src/agents/final_application_scoring.py",
+        "src/agents/resume_match_agent.py",
     }
     runtime_paths = [
         path for path in changed

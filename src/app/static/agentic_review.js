@@ -1651,6 +1651,60 @@ function renderManualGuardedApprovalRequestCreateSection(tracePayload = {}) {
   `;
 }
 
+function renderManualGuardedApprovalCreationObservabilitySection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_approval_creation_observability_result)
+    ? tracePayload.manual_guarded_approval_creation_observability_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual guarded approval creation observability">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Guarded Approval Creation Audit</h4>
+          <p>Read-only audit trace for the guarded approval creation result. It creates no approval request, mutates no queue or approval state, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Audit trace</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Audit", result.observability_status || "not run")}
+        ${renderWorkflowSummaryMetric("Source", result.source_approval_creation_status || "-")}
+        ${renderWorkflowSummaryMetric("Created id", result.created_approval_request_id || "-")}
+        ${renderWorkflowSummaryMetric("Blocked", result.creation_was_blocked === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Successful", result.creation_was_successful === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Gate decision", result.gate_decision || "", { helper: "Source guarded creation gate decision." })}
+        ${renderAgentTraceReadOnlyDetails("Audit summary", result.audit_summary || {}, { helper: "Read-only creation audit summary." })}
+        ${renderAgentTraceReadOnlyDetails("Audit events", result.audit_events || [], { helper: "Read-only audit events surfaced from the source payload when present." })}
+        ${renderAgentTraceReadOnlyDetails("Safety findings", result.safety_findings || {}, { helper: "Read-only observability safety findings." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Observed blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Operator review notes", result.operator_review_notes || "", { helper: "Read-only operator review notes." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded approval creation observability safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-guarded-approval-creation-observability data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          View Approval Creation Audit
+        </button>
+        <span class="agentic-review-muted" data-manual-guarded-approval-creation-observability-status>
+          Manual only. This summarizes the guarded creation result and performs no approval, queue, resume, execution, or submission mutation.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1710,6 +1764,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualApprovalRequestPreviewDryRunSection(tracePayload)}
       ${renderManualApprovalCreationGateDryRunSection(tracePayload)}
       ${renderManualGuardedApprovalRequestCreateSection(tracePayload)}
+      ${renderManualGuardedApprovalCreationObservabilitySection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -3700,6 +3755,58 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual guarded approval request creation failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-guarded-approval-creation-observability]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-guarded-approval-creation-observability-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Loading guarded approval creation audit...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const auditResult = await fetchJson(
+        "/api/manual-guarded-approval-creation-observability",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            guarded_creation_payload: tracePayload.manual_guarded_approval_request_create_result || {},
+            approval_creation_gate_payload: tracePayload.manual_approval_creation_gate_dry_run_result || {},
+            approval_preview_payload: tracePayload.manual_approval_request_preview_dry_run_result || {},
+            review_packet_payload: tracePayload.manual_review_packet_preview_dry_run_result || {},
+            action_plan_payload: tracePayload.manual_human_approved_action_plan_dry_run_result || {},
+            decision_capture_payload: tracePayload.manual_human_decision_capture_dry_run_result || {},
+            handoff_payload: tracePayload.manual_shadow_recommendation_handoff_dry_run_result || {},
+            shadow_chain_payload: tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result || {},
+            created_approval_request_id: tracePayload.manual_guarded_approval_request_create_result?.created_approval_request_id || "",
+            reviewer_confirmation: false,
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_guarded_approval_creation_observability_result: auditResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual guarded approval creation audit failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

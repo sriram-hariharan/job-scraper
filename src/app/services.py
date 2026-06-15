@@ -12828,6 +12828,165 @@ def build_guarded_approval_request_creation_payload(
     }
 
 
+def _guarded_approval_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "audit_trace_only": True,
+        "manual_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_guarded_approval_creation_observability_payload(
+    *,
+    guarded_creation_payload: Dict[str, Any] | None = None,
+    approval_creation_gate_payload: Dict[str, Any] | None = None,
+    approval_preview_payload: Dict[str, Any] | None = None,
+    review_packet_payload: Dict[str, Any] | None = None,
+    action_plan_payload: Dict[str, Any] | None = None,
+    decision_capture_payload: Dict[str, Any] | None = None,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    created_approval_request_id: Any = "",
+    reviewer_confirmation: Any = False,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize a guarded approval creation result without creating anything."""
+
+    creation_payload = deepcopy(guarded_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    if not creation_payload and any(
+        isinstance(value, dict) and value
+        for value in [
+            approval_creation_gate_payload,
+            approval_preview_payload,
+            review_packet_payload,
+            action_plan_payload,
+            decision_capture_payload,
+            handoff_payload,
+            shadow_chain_payload,
+        ]
+    ):
+        creation_payload = build_guarded_approval_request_creation_payload(
+            approval_creation_gate_payload=deepcopy(approval_creation_gate_payload or {}),
+            approval_preview_payload=deepcopy(approval_preview_payload or {}),
+            review_packet_payload=deepcopy(review_packet_payload or {}),
+            action_plan_payload=deepcopy(action_plan_payload or {}),
+            decision_capture_payload=deepcopy(decision_capture_payload or {}),
+            handoff_payload=deepcopy(handoff_payload or {}),
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            reviewer_confirmation=False,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    source_status = _clean_text(creation_payload.get("approval_creation_status"))
+    created_id = (
+        _clean_text(created_approval_request_id)
+        or _clean_text(creation_payload.get("created_approval_request_id"))
+    )
+    gate_decision = _clean_text(creation_payload.get("gate_decision")) or "insufficient_information"
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(creation_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not creation_payload:
+        observability_status = "observed_missing_source"
+        creation_was_successful = False
+        creation_was_blocked = True
+        blocked_actions.append("guarded_creation_payload_missing")
+        next_safe_step = "run_guarded_approval_creation_manual_action"
+    elif source_status == "created":
+        observability_status = "observed_created"
+        creation_was_successful = True
+        creation_was_blocked = False
+        next_safe_step = "review_created_approval_request"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        creation_was_successful = False
+        creation_was_blocked = True
+        next_safe_step = _clean_text(creation_payload.get("next_safe_step")) or "resolve_guarded_creation_blockers"
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        creation_was_successful = False
+        creation_was_blocked = True
+        blocked_actions.append("guarded_creation_status_unrecognized")
+        next_safe_step = "rebuild_guarded_creation_payload"
+    else:
+        observability_status = "insufficient_information"
+        creation_was_successful = False
+        creation_was_blocked = True
+        blocked_actions.append("guarded_creation_status_missing")
+        next_safe_step = "run_guarded_approval_creation_manual_action"
+
+    storage_result = creation_payload.get("approval_storage_result")
+    storage_payload = storage_result if isinstance(storage_result, dict) else {}
+    audit_events: List[Dict[str, Any]] = []
+    audit_event = storage_payload.get("approval_audit_event")
+    if isinstance(audit_event, dict) and audit_event:
+        audit_events.append(deepcopy(audit_event))
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "gate_decision": gate_decision,
+        "created_approval_request_id": created_id,
+        "creation_was_successful": creation_was_successful,
+        "creation_was_blocked": creation_was_blocked,
+        "storage_status": _clean_text(storage_payload.get("approval_storage_status")),
+        "storage_reason_codes": list(storage_payload.get("approval_storage_reason_codes") or []),
+    }
+    safety_findings = {
+        "did_create_approval_in_source": bool(
+            (creation_payload.get("safety_metadata") or {}).get("did_create_approval")
+        )
+        if isinstance(creation_payload.get("safety_metadata"), dict)
+        else False,
+        "observability_created_approval": False,
+        "observability_mutated_queue": False,
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+        "reviewer_confirmation_supplied": bool(reviewer_confirmation),
+    }
+
+    return {
+        "observability_status": observability_status,
+        "source_approval_creation_status": source_status or "missing",
+        "created_approval_request_id": created_id,
+        "creation_was_blocked": creation_was_blocked,
+        "creation_was_successful": creation_was_successful,
+        "gate_decision": gate_decision,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "operator_review_notes": (
+            "Read-only audit trace for manual guarded approval creation. This view summarizes "
+            "the provided creation payload and does not create or mutate approval records."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(creation_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(creation_payload.get("job_id")),
+        "safety_metadata": _guarded_approval_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "guarded_approval_creation_observability",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

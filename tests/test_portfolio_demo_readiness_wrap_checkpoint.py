@@ -129,6 +129,7 @@ ALLOWED_CHANGED = {
     "tests/test_execution_launch_gate_preview_dry_run_no_writes.py",
     "tests/test_execution_launch_gate_observability_no_writes.py",
     "tests/test_execution_request_packet_preview_dry_run_no_writes.py",
+    "tests/test_guarded_execution_request_creation_manual_only.py",
 }
 
 def _changed_files():

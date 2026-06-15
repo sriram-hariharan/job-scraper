@@ -260,6 +260,18 @@ class ManualHumanApprovedActionPlanDryRunRequest(BaseModel):
     context_id: str = ""
     job_id: str = ""
 
+
+class ManualReviewPacketPreviewDryRunRequest(BaseModel):
+    action_plan_payload: dict[str, Any] = Field(default_factory=dict)
+    decision_capture_payload: dict[str, Any] = Field(default_factory=dict)
+    handoff_payload: dict[str, Any] = Field(default_factory=dict)
+    shadow_chain_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_decision: str = ""
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1406,6 +1418,27 @@ def invoke_manual_human_approved_action_plan_dry_run_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_human_approved_action_plan_dry_run",
+    }
+
+
+@app.post("/api/manual-review-packet-preview-dry-run")
+def invoke_manual_review_packet_preview_dry_run_api_action(
+    request: ManualReviewPacketPreviewDryRunRequest,
+):
+    payload = services.build_review_packet_preview_dry_run_payload(
+        action_plan_payload=request.action_plan_payload,
+        decision_capture_payload=request.decision_capture_payload,
+        handoff_payload=request.handoff_payload,
+        shadow_chain_payload=request.shadow_chain_payload,
+        reviewer_decision=request.reviewer_decision,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_review_packet_preview_dry_run",
     }
 
 

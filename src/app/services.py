@@ -1,6 +1,6 @@
 from collections import Counter
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List, Tuple
@@ -12550,6 +12550,281 @@ def build_approval_creation_gate_dry_run_payload(
         "manual_surface": True,
         "read_only": True,
         "service_surface": "approval_creation_gate_dry_run",
+    }
+
+
+def _guarded_approval_creation_safety_metadata(*, did_create_approval: bool) -> Dict[str, Any]:
+    # Creating a new approval request is tracked separately from mutating an
+    # existing approval decision/state. This guarded path does not approve,
+    # deny, revoke, queue, execute, or submit anything.
+    return {
+        "manual_only": True,
+        "guarded_approval_creation_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": bool(did_create_approval),
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_create_approval),
+    }
+
+
+def _manual_guarded_approval_creation_identity(
+    approval_preview_payload: Dict[str, Any],
+    gate_payload: Dict[str, Any],
+    *,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, str]:
+    fields_preview = approval_preview_payload.get("approval_fields_preview")
+    fields = fields_preview if isinstance(fields_preview, dict) else {}
+    identity_payload = {
+        "approval_preview_status": _clean_text(approval_preview_payload.get("approval_preview_status")),
+        "approval_preview_type": _clean_text(approval_preview_payload.get("approval_preview_type")),
+        "proposed_decision": _clean_text(approval_preview_payload.get("proposed_decision")),
+        "proposed_next_step": _clean_text(approval_preview_payload.get("proposed_next_step")),
+        "context_id": _clean_text(context_id) or _clean_text(fields.get("context_id")) or _clean_text(approval_preview_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(fields.get("job_id")) or _clean_text(approval_preview_payload.get("job_id")),
+        "gate_decision": _clean_text(gate_payload.get("gate_decision")),
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(identity_payload, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:24]
+    return {
+        "approval_request_id": f"manual_guarded_approval_{fingerprint}",
+        "dry_run_artifact_id": f"approval_preview_{fingerprint}",
+        "idempotency_key": f"manual_guarded_approval:{fingerprint}",
+        "owner_id": identity_payload["context_id"] or identity_payload["job_id"] or "manual_operator",
+    }
+
+
+def build_guarded_approval_request_creation_payload(
+    *,
+    approval_creation_gate_payload: Dict[str, Any] | None = None,
+    approval_preview_payload: Dict[str, Any] | None = None,
+    review_packet_payload: Dict[str, Any] | None = None,
+    action_plan_payload: Dict[str, Any] | None = None,
+    decision_capture_payload: Dict[str, Any] | None = None,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    reviewer_confirmation: Any = False,
+    reviewer_decision: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+    connection: Any = None,
+    connection_provider: Any = None,
+    storage_module: Any = None,
+    created_at: Any = None,
+    expires_at: Any = None,
+) -> Dict[str, Any]:
+    """Create one approval request only after the manual gate is ready."""
+
+    preview_payload = deepcopy(approval_preview_payload or {})
+    if not isinstance(preview_payload, dict):
+        preview_payload = {}
+    gate_payload = deepcopy(approval_creation_gate_payload or {})
+    if not isinstance(gate_payload, dict):
+        gate_payload = {}
+    if not gate_payload:
+        gate_payload = build_approval_creation_gate_dry_run_payload(
+            approval_preview_payload=deepcopy(preview_payload),
+            review_packet_payload=deepcopy(review_packet_payload or {}),
+            action_plan_payload=deepcopy(action_plan_payload or {}),
+            decision_capture_payload=deepcopy(decision_capture_payload or {}),
+            handoff_payload=deepcopy(handoff_payload or {}),
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            reviewer_confirmation=reviewer_confirmation,
+            reviewer_decision=reviewer_decision,
+            reviewer_note=reviewer_note,
+            context_id=context_id,
+            job_id=job_id,
+        )
+    if not preview_payload:
+        preview_payload = build_approval_request_preview_dry_run_payload(
+            review_packet_payload=deepcopy(review_packet_payload or {}),
+            action_plan_payload=deepcopy(action_plan_payload or {}),
+            decision_capture_payload=deepcopy(decision_capture_payload or {}),
+            handoff_payload=deepcopy(handoff_payload or {}),
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            reviewer_decision=reviewer_decision,
+            reviewer_note=reviewer_note,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    gate_decision = _clean_text(gate_payload.get("gate_decision")) or "insufficient_information"
+    source_status = _clean_text(gate_payload.get("source_approval_preview_status")) or _clean_text(
+        preview_payload.get("approval_preview_status")
+    ) or "missing"
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(gate_payload.get("blocked_actions") or preview_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+    confirmation_present = bool(reviewer_confirmation)
+    preview_valid_for_creation = (
+        source_status in VALID_APPROVAL_PREVIEW_STATUSES
+        and _clean_text(preview_payload.get("proposed_decision")) != "no_approval_preview"
+    )
+
+    if gate_decision != "ready_for_future_approval_creation":
+        if gate_decision == "blocked_by_invalid_preview":
+            approval_creation_status = "blocked_by_invalid_preview"
+        elif gate_decision in {"blocked_by_missing_preview", "insufficient_information"}:
+            approval_creation_status = "insufficient_information"
+        else:
+            approval_creation_status = "blocked_by_gate"
+        if "approval_creation_gate_not_ready" not in blocked_actions:
+            blocked_actions.append("approval_creation_gate_not_ready")
+        return {
+            "approval_creation_status": approval_creation_status,
+            "gate_decision": gate_decision,
+            "created_approval_request_id": "",
+            "approval_request_preview": preview_payload,
+            "source_approval_preview_status": source_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_reviewer_confirmation": True,
+            "next_safe_step": "resolve_approval_creation_gate",
+            "rationale": "Guarded approval creation blocked because the readiness gate is not ready.",
+            "context_id": _clean_text(context_id) or _clean_text(gate_payload.get("context_id")),
+            "job_id": _clean_text(job_id) or _clean_text(gate_payload.get("job_id")),
+            "safety_metadata": _guarded_approval_creation_safety_metadata(did_create_approval=False),
+            "manual_surface": True,
+        }
+
+    if not preview_valid_for_creation:
+        return {
+            "approval_creation_status": "blocked_by_invalid_preview",
+            "gate_decision": gate_decision,
+            "created_approval_request_id": "",
+            "approval_request_preview": preview_payload,
+            "source_approval_preview_status": source_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions + ["approval_preview_invalid"])),
+            "required_reviewer_confirmation": True,
+            "next_safe_step": "rebuild_valid_approval_request_preview",
+            "rationale": "Guarded approval creation blocked because the approval preview is invalid or missing.",
+            "context_id": _clean_text(context_id) or _clean_text(gate_payload.get("context_id")),
+            "job_id": _clean_text(job_id) or _clean_text(gate_payload.get("job_id")),
+            "safety_metadata": _guarded_approval_creation_safety_metadata(did_create_approval=False),
+            "manual_surface": True,
+        }
+
+    if not confirmation_present:
+        return {
+            "approval_creation_status": "blocked_by_missing_confirmation",
+            "gate_decision": gate_decision,
+            "created_approval_request_id": "",
+            "approval_request_preview": preview_payload,
+            "source_approval_preview_status": source_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions + ["reviewer_confirmation_missing"])),
+            "required_reviewer_confirmation": True,
+            "next_safe_step": "collect_explicit_reviewer_confirmation",
+            "rationale": "Guarded approval creation requires explicit reviewer confirmation.",
+            "context_id": _clean_text(context_id) or _clean_text(gate_payload.get("context_id")),
+            "job_id": _clean_text(job_id) or _clean_text(gate_payload.get("job_id")),
+            "safety_metadata": _guarded_approval_creation_safety_metadata(did_create_approval=False),
+            "manual_surface": True,
+        }
+
+    resolved_connection = connection
+    if resolved_connection is None and callable(connection_provider):
+        resolved_connection = connection_provider()
+    if resolved_connection is None:
+        return {
+            "approval_creation_status": "blocked_by_storage_error",
+            "gate_decision": gate_decision,
+            "created_approval_request_id": "",
+            "approval_request_preview": preview_payload,
+            "source_approval_preview_status": source_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions + ["approval_storage_connection_unavailable"])),
+            "required_reviewer_confirmation": True,
+            "next_safe_step": "configure_approval_storage_connection",
+            "rationale": "Guarded approval creation could not access the existing approval storage connection.",
+            "context_id": _clean_text(context_id) or _clean_text(gate_payload.get("context_id")),
+            "job_id": _clean_text(job_id) or _clean_text(gate_payload.get("job_id")),
+            "safety_metadata": _guarded_approval_creation_safety_metadata(did_create_approval=False),
+            "manual_surface": True,
+        }
+
+    identity = _manual_guarded_approval_creation_identity(
+        preview_payload,
+        gate_payload,
+        context_id=context_id,
+        job_id=job_id,
+    )
+    now = created_at or datetime.now(timezone.utc)
+    expiry = expires_at or (now + timedelta(days=7))
+    storage_result = app_service_persist_agentic_approval_request(
+        resolved_connection,
+        app_service_safety_gate_output={
+            "app_service_safety_gate_passed": True,
+            "app_service_safety_gate_status": "passed",
+            "blocked_by_app_service_safety_gate": False,
+            "fixture_validation": {
+                "manual_guarded_approval_creation": True,
+                "gate_decision": gate_decision,
+                "source_approval_preview_status": source_status,
+            },
+        },
+        approval_request_id=identity["approval_request_id"],
+        dry_run_artifact_id=identity["dry_run_artifact_id"],
+        owner_id=identity["owner_id"],
+        idempotency_key=identity["idempotency_key"],
+        expires_at=expiry,
+        proposed_action_type=_clean_text(preview_payload.get("approval_preview_type")),
+        proposed_action_summary=_clean_text(preview_payload.get("approval_summary")),
+        queue_safety_gate_output={},
+        created_at=now,
+        storage_module=storage_module,
+    )
+    created = bool(storage_result.get("did_create_approval_request"))
+    approval_request = dict(storage_result.get("approval_request") or {})
+    if not created:
+        return {
+            "approval_creation_status": "blocked_by_storage_error",
+            "gate_decision": gate_decision,
+            "created_approval_request_id": "",
+            "approval_request_preview": preview_payload,
+            "source_approval_preview_status": source_status,
+            "blocked_actions": list(
+                dict.fromkeys(blocked_actions + list(storage_result.get("approval_storage_reason_codes") or ["approval_storage_unavailable"]))
+            ),
+            "required_reviewer_confirmation": True,
+            "next_safe_step": "review_approval_storage_error",
+            "rationale": "Guarded approval creation was blocked by the existing approval storage path.",
+            "context_id": identity["owner_id"],
+            "job_id": _clean_text(job_id) or _clean_text(gate_payload.get("job_id")),
+            "safety_metadata": _guarded_approval_creation_safety_metadata(did_create_approval=False),
+            "manual_surface": True,
+            "approval_storage_result": storage_result,
+        }
+
+    created_id = _clean_text(approval_request.get("approval_request_id")) or identity["approval_request_id"]
+    return {
+        "approval_creation_status": "created",
+        "gate_decision": gate_decision,
+        "created_approval_request_id": created_id,
+        "approval_request_preview": preview_payload,
+        "source_approval_preview_status": source_status,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_reviewer_confirmation": True,
+        "next_safe_step": "review_created_approval_request",
+        "rationale": (
+            "Created exactly one guarded approval request record through the existing storage path; "
+            "no queue, resume, scoring, ranking, execution, or submission state was changed."
+        ),
+        "context_id": identity["owner_id"],
+        "job_id": _clean_text(job_id) or _clean_text(gate_payload.get("job_id")),
+        "safety_metadata": _guarded_approval_creation_safety_metadata(did_create_approval=True),
+        "manual_surface": True,
+        "approval_storage_result": storage_result,
     }
 
 

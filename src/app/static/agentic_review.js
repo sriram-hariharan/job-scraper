@@ -1256,6 +1256,62 @@ function renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload = {}) 
   `;
 }
 
+function renderManualShadowRecommendationHandoffDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_shadow_recommendation_handoff_dry_run_result)
+    ? tracePayload.manual_shadow_recommendation_handoff_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobTitle = metadata.job_title || metadata.title || "";
+  const company = metadata.company || "";
+  const location = metadata.location || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual shadow recommendation handoff dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Shadow Recommendation Handoff</h4>
+          <p>Review-only handoff. It creates no approval request, changes no queue or approval state, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Human-gated</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Handoff", result.handoff_status || "not run")}
+        ${renderWorkflowSummaryMetric("Action", result.recommendation_action || "-")}
+        ${renderWorkflowSummaryMetric("Human gate", safety.human_gate_required ? "required" : "unknown")}
+        ${renderWorkflowSummaryMetric("Review", result.required_human_review === true ? "required" : "-")}
+        ${renderWorkflowSummaryMetric("Confidence", result.confidence ?? "-")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Recommendation label", result.recommendation_label || "", { helper: "Review-only handoff recommendation label." })}
+        ${renderAgentTraceReadOnlyDetails("Reviewer decision options", result.reviewer_decision_options || [], { helper: "Human-only review choices. These do not mutate approval state." })}
+        ${renderAgentTraceReadOnlyDetails("Blocking risks", result.blocking_risks || [], { helper: "Review-only handoff blocking risks." })}
+        ${renderAgentTraceReadOnlyDetails("Improvement actions", result.improvement_actions || [], { helper: "Review-only handoff improvement actions." })}
+        ${renderAgentTraceReadOnlyDetails("Stage statuses", result.stage_statuses || {}, { helper: "Source shadow-chain stage statuses." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Review-only handoff rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable shadow recommendation handoff safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-shadow-recommendation-handoff-dry-run data-job-title="${escapeHtml(jobTitle)}" data-company="${escapeHtml(company)}" data-location="${escapeHtml(location)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Build Shadow Recommendation Handoff
+        </button>
+        <span class="agentic-review-muted" data-manual-shadow-recommendation-handoff-dry-run-status>
+          Manual only. This builds a review card and does not create or update approvals.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1308,6 +1364,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualCriticGuardrailDryRunSection(tracePayload)}
       ${renderManualStrategyRecommendationDryRunSection(tracePayload)}
       ${renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)}
+      ${renderManualShadowRecommendationHandoffDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -2939,6 +2996,60 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual shadow chain dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-shadow-recommendation-handoff-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-shadow-recommendation-handoff-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Building manual review-only shadow recommendation handoff...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const handoffResult = await fetchJson(
+        "/api/manual-shadow-recommendation-handoff-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            shadow_chain_payload: tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result || {},
+            job_title: button.dataset.jobTitle || "",
+            company: button.dataset.company || "",
+            location: button.dataset.location || "",
+            job_description: "",
+            source_metadata: {
+              source: "agent_trace_manual_panel",
+            },
+            jd_intelligence: tracePayload.manual_jd_intelligence_dry_run_result || {},
+            resume_variants: [],
+            resume_evidence_rows: [],
+            selected_resume_id: tracePayload.manual_resume_match_dry_run_result?.selected_resume_id || "",
+            user_preferences: {},
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_shadow_recommendation_handoff_dry_run_result: handoffResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual shadow recommendation handoff failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

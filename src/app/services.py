@@ -11695,6 +11695,119 @@ def build_shadow_agentic_workflow_chain_dry_run_payload(
     }
 
 
+SHADOW_RECOMMENDATION_HANDOFF_DECISION_OPTIONS = [
+    "accept_recommendation_for_review",
+    "request_more_tailoring",
+    "save_for_later",
+    "dismiss_shadow_recommendation",
+]
+
+
+def _shadow_recommendation_handoff_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "review_only": True,
+        "human_gate_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def build_shadow_recommendation_handoff_payload(
+    *,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Convert a shadow-chain result into a review-only human handoff payload."""
+
+    shadow_chain = deepcopy(shadow_chain_payload or {})
+    if not isinstance(shadow_chain, dict):
+        shadow_chain = {}
+    if not shadow_chain:
+        shadow_chain = build_shadow_agentic_workflow_chain_dry_run_payload(
+            job_title=job_title,
+            company=company,
+            location=location,
+            job_description=job_description,
+            source_metadata=deepcopy(source_metadata or {}),
+            jd_intelligence=deepcopy(jd_intelligence or {}),
+            jd_signals=deepcopy(jd_signals or {}),
+            resume_variants=deepcopy(resume_variants or []),
+            resume_evidence_rows=deepcopy(resume_evidence_rows or []),
+            selected_resume_id=selected_resume_id,
+            user_preferences=deepcopy(user_preferences or {}),
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    stages = shadow_chain.get("stages") if isinstance(shadow_chain.get("stages"), dict) else {}
+    strategy_stage = stages.get("strategy_recommendation") if isinstance(stages, dict) else {}
+    if not isinstance(strategy_stage, dict):
+        strategy_stage = {}
+    recommendation_action = _clean_text(shadow_chain.get("recommendation_action"))
+    recommendation_label = (
+        _clean_text(strategy_stage.get("recommendation_label"))
+        or recommendation_action
+        or "insufficient_information"
+    )
+    blocking_risks = [
+        _clean_text(item)
+        for item in list(shadow_chain.get("blocking_risks") or [])
+        if _clean_text(item)
+    ]
+    source_status = _clean_text(shadow_chain.get("shadow_chain_status")) or "missing"
+    if source_status == "completed" and recommendation_action:
+        handoff_status = "ready_for_human_review"
+    elif source_status == "missing":
+        handoff_status = "insufficient_information"
+        blocking_risks.append("shadow_chain_payload_missing")
+    else:
+        handoff_status = "blocked_pending_human_review"
+
+    return {
+        "handoff_status": handoff_status,
+        "recommendation_action": recommendation_action or "insufficient_information",
+        "recommendation_label": recommendation_label,
+        "required_human_review": True,
+        "reviewer_decision_options": list(SHADOW_RECOMMENDATION_HANDOFF_DECISION_OPTIONS),
+        "blocking_risks": list(dict.fromkeys(blocking_risks)),
+        "improvement_actions": list(shadow_chain.get("improvement_actions") or []),
+        "stage_statuses": dict(shadow_chain.get("stage_statuses") or {}),
+        "confidence": shadow_chain.get("confidence", 0.0),
+        "rationale": (
+            "Review-only handoff from the shadow agentic workflow chain; no approval, queue, "
+            "resume, scoring, ranking, execution, or submission state was changed."
+        ),
+        "source_shadow_chain_status": source_status,
+        "context_id": _clean_text(context_id) or _clean_text(shadow_chain.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(shadow_chain.get("job_id")),
+        "safety_metadata": _shadow_recommendation_handoff_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "shadow_recommendation_handoff_dry_run",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

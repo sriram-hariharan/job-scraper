@@ -213,6 +213,23 @@ class ManualShadowAgenticWorkflowChainDryRunRequest(BaseModel):
     context_id: str = ""
     job_id: str = ""
 
+
+class ManualShadowRecommendationHandoffDryRunRequest(BaseModel):
+    shadow_chain_payload: dict[str, Any] = Field(default_factory=dict)
+    job_title: str = ""
+    company: str = ""
+    location: str = ""
+    job_description: str = ""
+    source_metadata: dict[str, Any] = Field(default_factory=dict)
+    jd_intelligence: dict[str, Any] = Field(default_factory=dict)
+    jd_signals: dict[str, Any] = Field(default_factory=dict)
+    resume_variants: list[dict[str, Any]] = Field(default_factory=list)
+    resume_evidence_rows: list[dict[str, Any]] = Field(default_factory=list)
+    selected_resume_id: str = ""
+    user_preferences: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1282,6 +1299,33 @@ def invoke_manual_shadow_agentic_workflow_chain_dry_run_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_shadow_agentic_workflow_chain_dry_run",
+    }
+
+
+@app.post("/api/manual-shadow-recommendation-handoff-dry-run")
+def invoke_manual_shadow_recommendation_handoff_dry_run_api_action(
+    request: ManualShadowRecommendationHandoffDryRunRequest,
+):
+    payload = services.build_shadow_recommendation_handoff_payload(
+        shadow_chain_payload=request.shadow_chain_payload,
+        job_title=request.job_title,
+        company=request.company,
+        location=request.location,
+        job_description=request.job_description,
+        source_metadata=request.source_metadata,
+        jd_intelligence=request.jd_intelligence,
+        jd_signals=request.jd_signals,
+        resume_variants=request.resume_variants or None,
+        resume_evidence_rows=request.resume_evidence_rows,
+        selected_resume_id=request.selected_resume_id,
+        user_preferences=request.user_preferences,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_shadow_recommendation_handoff_dry_run",
     }
 
 

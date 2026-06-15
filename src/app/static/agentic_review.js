@@ -2205,6 +2205,67 @@ function renderManualExecutionReadinessPreviewSection(tracePayload = {}) {
   `;
 }
 
+function renderManualExecutionLaunchGatePreviewSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_execution_launch_gate_preview_result)
+    ? tracePayload.manual_execution_launch_gate_preview_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const executionReadiness = hasAgentTraceSummaryObject(tracePayload?.manual_execution_readiness_preview_result)
+    ? tracePayload.manual_execution_readiness_preview_result
+    : {};
+  const queueAudit = hasAgentTraceSummaryObject(tracePayload?.manual_queue_handoff_creation_observability_result)
+    ? tracePayload.manual_queue_handoff_creation_observability_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || executionReadiness.approval_request_id || queueAudit.approval_request_id || "";
+  const queueHandoffId = result.queue_handoff_id || executionReadiness.queue_handoff_id || queueAudit.queue_handoff_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual execution launch gate preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Execution Launch Gate Preview</h4>
+          <p>Dry-run gate preview only. It does not execute, submit, mutate queues or approvals, write queue files, or change resume, scoring, or ranking state.</p>
+        </div>
+        <span class="agentic-workflow-badge">Launch gate</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Gate", result.execution_launch_gate_status || "not run")}
+        ${renderWorkflowSummaryMetric("Request id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Handoff id", queueHandoffId || "-")}
+        ${renderWorkflowSummaryMetric("Allowed later", result.execution_launch_allowed_later === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ready later", result.ready_for_future_manual_execution === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Execution launch gate missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Execution launch gate blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Source execution readiness status", result.source_execution_readiness_status || "", { helper: "Source execution readiness status." })}
+        ${renderAgentTraceReadOnlyDetails("Source queue handoff observability status", result.source_queue_handoff_observability_status || "", { helper: "Source queue handoff audit status." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Execution launch gate preview rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable execution launch gate safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-execution-launch-gate-preview data-approval-request-id="${escapeHtml(approvalRequestId)}" data-queue-handoff-id="${escapeHtml(queueHandoffId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Preview Execution Launch Gate
+        </button>
+        <span class="agentic-review-muted" data-manual-execution-launch-gate-preview-status>
+          Manual only. This previews a future launch gate and does not execute, submit, or mutate queue state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2273,6 +2334,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualGuardedQueueHandoffCreateSection(tracePayload)}
       ${renderManualQueueHandoffCreationObservabilitySection(tracePayload)}
       ${renderManualExecutionReadinessPreviewSection(tracePayload)}
+      ${renderManualExecutionLaunchGatePreviewSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -4710,6 +4772,55 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual execution readiness preview failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-execution-launch-gate-preview]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-execution-launch-gate-preview-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Previewing execution launch gate...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const executionReadiness = tracePayload.manual_execution_readiness_preview_result || {};
+      const queueAudit = tracePayload.manual_queue_handoff_creation_observability_result || {};
+      const gateResult = await fetchJson(
+        "/api/manual-execution-launch-gate-preview-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approval_request_id: button.dataset.approvalRequestId || executionReadiness.approval_request_id || queueAudit.approval_request_id || "",
+            queue_handoff_id: button.dataset.queueHandoffId || executionReadiness.queue_handoff_id || queueAudit.queue_handoff_id || "",
+            execution_readiness_payload: executionReadiness,
+            queue_handoff_observability_payload: queueAudit,
+            reviewer_confirmation_preview: false,
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_execution_launch_gate_preview_result: gateResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual execution launch gate preview failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

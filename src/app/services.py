@@ -12412,6 +12412,147 @@ def build_approval_request_preview_dry_run_payload(
     }
 
 
+VALID_APPROVAL_PREVIEW_STATUSES = {
+    "ready_for_approval_preview",
+    "tailoring_revision_approval_preview",
+    "save_for_later_approval_preview",
+    "dismissal_approval_preview",
+}
+
+
+def _approval_creation_gate_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "approval_creation_gate_only": True,
+        "approval_preview_only": False,
+        "review_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def _approval_gate_has_safety_risk(preview_payload: Dict[str, Any]) -> bool:
+    safety = preview_payload.get("safety_metadata")
+    if not isinstance(safety, dict):
+        return False
+    risky_flags = [
+        "did_create_approval",
+        "did_mutate_approval",
+        "did_mutate_queue",
+        "did_mutate_resume",
+        "did_mutate_scoring",
+        "did_change_ranking",
+        "did_execute_application",
+        "did_submit_application",
+        "pipeline_wiring_added",
+    ]
+    return any(bool(safety.get(flag)) for flag in risky_flags)
+
+
+def build_approval_creation_gate_dry_run_payload(
+    *,
+    approval_preview_payload: Dict[str, Any] | None = None,
+    review_packet_payload: Dict[str, Any] | None = None,
+    action_plan_payload: Dict[str, Any] | None = None,
+    decision_capture_payload: Dict[str, Any] | None = None,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    reviewer_confirmation: Any = False,
+    reviewer_decision: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Evaluate whether an approval preview is ready for possible future creation."""
+
+    preview_payload = deepcopy(approval_preview_payload or {})
+    if not isinstance(preview_payload, dict):
+        preview_payload = {}
+    if not preview_payload:
+        preview_payload = build_approval_request_preview_dry_run_payload(
+            review_packet_payload=deepcopy(review_packet_payload or {}),
+            action_plan_payload=deepcopy(action_plan_payload or {}),
+            decision_capture_payload=deepcopy(decision_capture_payload or {}),
+            handoff_payload=deepcopy(handoff_payload or {}),
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            reviewer_decision=reviewer_decision,
+            reviewer_note=reviewer_note,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    source_status = _clean_text(preview_payload.get("approval_preview_status")) or "missing"
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(preview_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+    missing_requirements: List[str] = []
+    confirmation_present = bool(reviewer_confirmation)
+    safety_risk = _approval_gate_has_safety_risk(preview_payload)
+    valid_preview = (
+        source_status in VALID_APPROVAL_PREVIEW_STATUSES
+        and _clean_text(preview_payload.get("proposed_decision")) != "no_approval_preview"
+    )
+
+    if source_status in {"", "missing"}:
+        gate_decision = "blocked_by_missing_preview"
+        approval_creation_gate_status = "blocked"
+        missing_requirements.append("approval_preview_payload")
+        blocked_actions.append("approval_preview_payload_missing")
+        next_safe_step = "build_approval_request_preview"
+    elif not valid_preview:
+        gate_decision = "blocked_by_invalid_preview"
+        approval_creation_gate_status = "blocked"
+        missing_requirements.append("valid_approval_request_preview")
+        blocked_actions.append("approval_preview_invalid")
+        next_safe_step = "fix_or_rebuild_approval_request_preview"
+    elif safety_risk:
+        gate_decision = "blocked_by_safety_risk"
+        approval_creation_gate_status = "blocked"
+        blocked_actions.append("approval_preview_safety_risk")
+        next_safe_step = "review_safety_metadata_before_any_future_creation"
+    elif not confirmation_present:
+        gate_decision = "needs_reviewer_confirmation"
+        approval_creation_gate_status = "waiting_for_confirmation"
+        missing_requirements.append("reviewer_confirmation")
+        next_safe_step = "collect_explicit_reviewer_confirmation"
+    else:
+        gate_decision = "ready_for_future_approval_creation"
+        approval_creation_gate_status = "ready"
+        next_safe_step = "future_explicit_approval_creation_step_required"
+
+    return {
+        "approval_creation_gate_status": approval_creation_gate_status,
+        "gate_decision": gate_decision,
+        "can_create_approval_request_later": gate_decision == "ready_for_future_approval_creation",
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_reviewer_confirmation": True,
+        "source_approval_preview_status": source_status,
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Approval creation gate dry-run evaluates readiness only; it does not create approvals, "
+            "mutate approval or queue state, change resumes, execute, submit, or add pipeline wiring."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(preview_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(preview_payload.get("job_id")),
+        "safety_metadata": _approval_creation_gate_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "approval_creation_gate_dry_run",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

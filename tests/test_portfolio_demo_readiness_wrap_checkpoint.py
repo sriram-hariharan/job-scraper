@@ -99,6 +99,8 @@ ALLOWED_CHANGED = {
     "src/agents/resume_match_agent.py",
     "tests/test_resume_match_dry_run_contract_no_pipeline_change.py",
     "tests/test_manual_resume_match_dry_run_surface_no_pipeline_change.py",
+    "src/agents/tailoring_decision_agent.py",
+    "tests/test_tailoring_suggestion_dry_run_contract_no_pipeline_change.py",
 }
 
 def _changed_files():
@@ -138,6 +140,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/jd_intelligence.py",
         "src/agents/final_application_scoring.py",
         "src/agents/resume_match_agent.py",
+        "src/agents/tailoring_decision_agent.py",
     }
     runtime_paths = [
         path for path in changed

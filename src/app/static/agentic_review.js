@@ -1764,6 +1764,73 @@ function renderManualApprovalRequestReadbackSection(tracePayload = {}) {
   `;
 }
 
+function renderManualApprovalStatusTransitionPreviewSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_approval_status_transition_preview_result)
+    ? tracePayload.manual_approval_status_transition_preview_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const readback = hasAgentTraceSummaryObject(tracePayload?.manual_approval_request_readback_result)
+    ? tracePayload.manual_approval_request_readback_result
+    : {};
+  const creation = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_approval_request_create_result)
+    ? tracePayload.manual_guarded_approval_request_create_result
+    : {};
+  const observability = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_approval_creation_observability_result)
+    ? tracePayload.manual_guarded_approval_creation_observability_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || readback.approval_request_id || creation.created_approval_request_id || observability.created_approval_request_id || "";
+  const options = ["approve", "reject", "needs_changes"];
+  return `
+    <article class="agent-trace-summary" aria-label="Manual approval status transition preview">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Approval Status Transition Preview</h4>
+          <p>Dry-run transition preview only. It does not approve, reject, update approval status, queue, execute, submit, or edit anything.</p>
+        </div>
+        <span class="agentic-workflow-badge">Transition preview</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Preview", result.transition_preview_status || "not run")}
+        ${renderWorkflowSummaryMetric("Transition", result.proposed_transition || "-")}
+        ${renderWorkflowSummaryMetric("Would change to", result.would_change_status_to || "-")}
+        ${renderWorkflowSummaryMetric("Allowed later", result.transition_allowed_later === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Status updated", safety.did_update_approval_status ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Transition label", result.transition_label || "", { helper: "Preview-only transition label." })}
+        ${renderAgentTraceReadOnlyDetails("Transition summary", result.transition_summary || "", { helper: "Preview-only transition summary." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Transition preview blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Transition preview missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Source readback status", result.source_readback_status || "", { helper: "Source approval request readback status." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Transition preview rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable approval transition preview safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <select class="agentic-feedback-action" data-manual-approval-status-transition-preview-select aria-label="Approval status transition preview">
+          ${options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}
+        </select>
+        <button type="button" class="agentic-feedback-action" data-manual-approval-status-transition-preview data-approval-request-id="${escapeHtml(approvalRequestId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Preview Approval Status Transition
+        </button>
+        <span class="agentic-review-muted" data-manual-approval-status-transition-preview-status>
+          Manual only. This previews a future transition and does not update approval state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1825,6 +1892,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualGuardedApprovalRequestCreateSection(tracePayload)}
       ${renderManualGuardedApprovalCreationObservabilitySection(tracePayload)}
       ${renderManualApprovalRequestReadbackSection(tracePayload)}
+      ${renderManualApprovalStatusTransitionPreviewSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -3914,6 +3982,58 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual approval request readback failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-approval-status-transition-preview]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const select = section?.querySelector("[data-manual-approval-status-transition-preview-select]");
+    const status = section?.querySelector("[data-manual-approval-status-transition-preview-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Previewing approval status transition...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const readback = tracePayload.manual_approval_request_readback_result || {};
+      const creation = tracePayload.manual_guarded_approval_request_create_result || {};
+      const observability = tracePayload.manual_guarded_approval_creation_observability_result || {};
+      const transitionPreviewResult = await fetchJson(
+        "/api/manual-approval-status-transition-preview-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            approval_request_id: button.dataset.approvalRequestId || readback.approval_request_id || creation.created_approval_request_id || observability.created_approval_request_id || "",
+            proposed_transition: select?.value || "approve",
+            reviewer_note: "",
+            approval_request_readback_payload: readback,
+            guarded_creation_payload: creation,
+            observability_payload: observability,
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_approval_status_transition_preview_result: transitionPreviewResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual approval status transition preview failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

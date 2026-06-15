@@ -13191,6 +13191,143 @@ def build_approval_request_readback_payload(
     }
 
 
+APPROVAL_STATUS_TRANSITION_PREVIEW_OPTIONS = {
+    "approve": {
+        "label": "Approve",
+        "summary": "Preview approving the request for a future explicit status transition.",
+        "would_change_status_to": "approved",
+    },
+    "reject": {
+        "label": "Reject",
+        "summary": "Preview rejecting the request for a future explicit status transition.",
+        "would_change_status_to": "denied",
+    },
+    "needs_changes": {
+        "label": "Needs changes",
+        "summary": "Preview sending the request back for more evidence or tailoring changes.",
+        "would_change_status_to": "pending",
+    },
+}
+
+
+def _approval_status_transition_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "transition_preview_only": True,
+        "approval_request_readback_only": False,
+        "manual_only": True,
+        "read_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_approval_status_transition_preview_payload(
+    *,
+    approval_request_id: Any = "",
+    proposed_transition: Any = "",
+    reviewer_note: Any = "",
+    approval_request_readback_payload: Dict[str, Any] | None = None,
+    guarded_creation_payload: Dict[str, Any] | None = None,
+    observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview an approval status transition without applying it."""
+
+    readback_payload = deepcopy(approval_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    creation_payload = deepcopy(guarded_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observed_payload = deepcopy(observability_payload or {})
+    if not isinstance(observed_payload, dict):
+        observed_payload = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("created_approval_request_id"))
+        or _clean_text(observed_payload.get("created_approval_request_id"))
+    )
+    transition = _clean_text(proposed_transition)
+    source_readback_status = _clean_text(readback_payload.get("readback_status"))
+    blocked_actions: List[str] = []
+    missing_requirements: List[str] = []
+
+    if not request_id:
+        transition_preview_status = "blocked_missing_approval_request_id"
+        transition_allowed_later = False
+        blocked_actions.append("approval_request_id_missing")
+        missing_requirements.append("approval_request_id")
+        next_safe_step = "provide_approval_request_id"
+    elif transition not in APPROVAL_STATUS_TRANSITION_PREVIEW_OPTIONS:
+        transition_preview_status = "blocked_invalid_transition"
+        transition_allowed_later = False
+        blocked_actions.append("proposed_transition_invalid")
+        missing_requirements.append("valid_proposed_transition")
+        next_safe_step = "select_supported_transition"
+    elif source_readback_status == "not_found":
+        transition_preview_status = "blocked_not_found"
+        transition_allowed_later = False
+        blocked_actions.append("approval_request_not_found")
+        next_safe_step = "verify_approval_request_id"
+    elif source_readback_status and source_readback_status != "found":
+        transition_preview_status = "blocked_missing_readback"
+        transition_allowed_later = False
+        blocked_actions.append("approval_request_readback_not_found")
+        missing_requirements.append("found_approval_request_readback")
+        next_safe_step = "read_approval_request_before_transition_preview"
+    elif not source_readback_status:
+        transition_preview_status = "blocked_missing_readback"
+        transition_allowed_later = False
+        blocked_actions.append("approval_request_readback_missing")
+        missing_requirements.append("approval_request_readback_payload")
+        next_safe_step = "read_approval_request_before_transition_preview"
+    else:
+        transition_preview_status = "preview_ready"
+        transition_allowed_later = True
+        next_safe_step = "collect_explicit_future_status_transition_confirmation"
+
+    option = APPROVAL_STATUS_TRANSITION_PREVIEW_OPTIONS.get(transition, {})
+    return {
+        "transition_preview_status": transition_preview_status,
+        "approval_request_id": request_id,
+        "proposed_transition": transition,
+        "transition_allowed_later": transition_allowed_later,
+        "transition_label": _clean_text(option.get("label")),
+        "transition_summary": _clean_text(option.get("summary")),
+        "required_reviewer_confirmation": True,
+        "would_change_status_to": _clean_text(option.get("would_change_status_to")),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "source_readback_status": source_readback_status or "missing",
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Approval status transition preview is dry-run only; it does not update approval "
+            "status, mutate queues or resumes, execute, submit, or add pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": _clean_text(context_id) or _clean_text(readback_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(readback_payload.get("job_id")),
+        "safety_metadata": _approval_status_transition_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "approval_status_transition_preview",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

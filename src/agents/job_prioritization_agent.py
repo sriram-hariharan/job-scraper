@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import csv
 import json
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -566,3 +567,274 @@ def record_job_prioritization_agent_trace(
         if agent_trace_strict(env_map):
             raise
         return {"attempted": True, "recorded": False, "warning": str(exc)}
+
+
+STRATEGY_RECOMMENDATION_ACTIONS = {
+    "apply_now",
+    "tailor_first",
+    "save_for_later",
+    "skip",
+    "improve_resume_evidence",
+    "insufficient_information",
+}
+
+
+def _strategy_dry_run_safety_metadata() -> Dict[str, bool]:
+    return {
+        "dry_run_only": True,
+        "deterministic_only": True,
+        "did_call_llm": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def _strategy_list(value: Any) -> List[Any]:
+    if isinstance(value, list):
+        return list(value)
+    if isinstance(value, tuple):
+        return list(value)
+    if value:
+        return [value]
+    return []
+
+
+def _strategy_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _strategy_match_score(resume_match_payload: Dict[str, Any]) -> float:
+    confidence = resume_match_payload.get("confidence")
+    if confidence is not None:
+        return _strategy_float(confidence)
+    candidate_scores = _strategy_list(resume_match_payload.get("candidate_resume_scores"))
+    if candidate_scores and isinstance(candidate_scores[0], dict):
+        return _strategy_float(candidate_scores[0].get("score"))
+    return 0.0
+
+
+def _strategy_has_strong_match(resume_match_payload: Dict[str, Any]) -> bool:
+    label = _clean_text(
+        resume_match_payload.get("recommendation_label")
+        or resume_match_payload.get("match_status")
+    ).lower()
+    return label == "strong_match" or _strategy_match_score(resume_match_payload) >= 0.70
+
+
+def _strategy_has_weak_match(resume_match_payload: Dict[str, Any]) -> bool:
+    label = _clean_text(
+        resume_match_payload.get("recommendation_label")
+        or resume_match_payload.get("match_status")
+    ).lower()
+    score = _strategy_match_score(resume_match_payload)
+    return label in {"weak_match", "insufficient_evidence", "insufficient_jd_signals"} or score < 0.40
+
+
+def _strategy_missing_evidence(
+    *,
+    resume_match_payload: Dict[str, Any],
+    tailoring_suggestion_payload: Dict[str, Any],
+    critic_guardrail_payload: Dict[str, Any],
+) -> List[str]:
+    values: List[str] = []
+    for payload, key in (
+        (resume_match_payload, "missing_evidence"),
+        (tailoring_suggestion_payload, "missing_evidence"),
+        (critic_guardrail_payload, "evidence_gaps"),
+    ):
+        for item in _strategy_list(payload.get(key)):
+            text = _clean_text(item)
+            if text:
+                values.append(text)
+    return list(dict.fromkeys(values))
+
+
+def _strategy_rejected_critic(critic_guardrail_payload: Dict[str, Any]) -> bool:
+    status = _clean_text(critic_guardrail_payload.get("critic_status")).lower()
+    return status == "rejected" or bool(_strategy_list(critic_guardrail_payload.get("rejected_suggestions")))
+
+
+def _strategy_approved_critic(critic_guardrail_payload: Dict[str, Any]) -> bool:
+    status = _clean_text(critic_guardrail_payload.get("critic_status")).lower()
+    return status == "approved" or bool(_strategy_list(critic_guardrail_payload.get("approved_suggestions")))
+
+
+def _strategy_tailoring_available(tailoring_suggestion_payload: Dict[str, Any]) -> bool:
+    status = _clean_text(tailoring_suggestion_payload.get("suggestion_status")).lower()
+    return status == "patch_ready_available" or bool(_strategy_list(tailoring_suggestion_payload.get("patch_ready_suggestions")))
+
+
+def build_strategy_recommendation_dry_run_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_match_payload: Dict[str, Any] | None = None,
+    tailoring_suggestion_payload: Dict[str, Any] | None = None,
+    critic_guardrail_payload: Dict[str, Any] | None = None,
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: str = "",
+    job_id: str = "",
+) -> Dict[str, Any]:
+    """Combine dry-run evidence into an advisory next action without side effects."""
+
+    jd_source = deepcopy(jd_intelligence if jd_intelligence is not None else jd_signals or {})
+    resume_match = deepcopy(resume_match_payload or {})
+    tailoring = deepcopy(tailoring_suggestion_payload or {})
+    critic = deepcopy(critic_guardrail_payload or {})
+    preferences = deepcopy(user_preferences or {})
+    if not isinstance(jd_source, dict):
+        jd_source = {}
+    if not isinstance(resume_match, dict):
+        resume_match = {}
+    if not isinstance(tailoring, dict):
+        tailoring = {}
+    if not isinstance(critic, dict):
+        critic = {}
+    if not isinstance(preferences, dict):
+        preferences = {}
+
+    source_fields_used = []
+    if jd_source:
+        source_fields_used.append("jd_intelligence")
+    if resume_match:
+        source_fields_used.append("resume_match_payload")
+    if tailoring:
+        source_fields_used.append("tailoring_suggestion_payload")
+    if critic:
+        source_fields_used.append("critic_guardrail_payload")
+    if preferences:
+        source_fields_used.append("user_preferences")
+
+    decision_reasons: List[str] = []
+    blocking_risks: List[str] = []
+    improvement_actions: List[str] = []
+    missing_evidence = _strategy_missing_evidence(
+        resume_match_payload=resume_match,
+        tailoring_suggestion_payload=tailoring,
+        critic_guardrail_payload=critic,
+    )
+    match_score = _strategy_match_score(resume_match)
+    strong_match = _strategy_has_strong_match(resume_match)
+    weak_match = _strategy_has_weak_match(resume_match)
+    critic_rejected = _strategy_rejected_critic(critic)
+    critic_approved = _strategy_approved_critic(critic)
+    tailoring_available = _strategy_tailoring_available(tailoring)
+
+    if not resume_match or not critic:
+        recommendation_action = "insufficient_information"
+        recommendation_label = "insufficient_information"
+        priority_hint = "manual_review"
+        readiness_level = "insufficient_information"
+        required_human_review = True
+        confidence = 0.0
+        decision_reasons.append("missing_required_dry_run_inputs")
+        if not resume_match:
+            blocking_risks.append("resume_match_payload_missing")
+        if not critic:
+            blocking_risks.append("critic_guardrail_payload_missing")
+    elif critic_rejected:
+        recommendation_action = "improve_resume_evidence"
+        recommendation_label = "blocked_by_guardrail"
+        priority_hint = "hold"
+        readiness_level = "blocked"
+        required_human_review = True
+        confidence = round(max(match_score, _strategy_float(critic.get("confidence"))) * 0.7, 4)
+        decision_reasons.append("critic_guardrail_rejected_suggestions")
+        blocking_risks.extend(_strategy_list(critic.get("reason_codes")) or ["critic_rejection"])
+        improvement_actions.append("Resolve rejected tailoring claims before considering apply_now.")
+    elif weak_match:
+        recommendation_action = "skip" if match_score < 0.20 else "save_for_later"
+        recommendation_label = "weak_resume_match"
+        priority_hint = "low"
+        readiness_level = "not_ready"
+        required_human_review = True
+        confidence = round(max(match_score, 0.2), 4)
+        decision_reasons.append("weak_resume_match")
+        if missing_evidence:
+            improvement_actions.append("Improve resume evidence for missing JD signals.")
+    elif missing_evidence and not strong_match:
+        recommendation_action = "improve_resume_evidence"
+        recommendation_label = "missing_evidence"
+        priority_hint = "medium"
+        readiness_level = "needs_evidence"
+        required_human_review = True
+        confidence = round(max(match_score, 0.4), 4)
+        decision_reasons.append("missing_evidence_before_apply")
+        improvement_actions.append("Add or verify evidence before applying.")
+    elif strong_match and critic_approved and tailoring_available:
+        recommendation_action = "tailor_first"
+        recommendation_label = "strong_match_with_approved_tailoring"
+        priority_hint = "high"
+        readiness_level = "ready_after_tailoring"
+        required_human_review = True
+        confidence = round(min(0.95, max(match_score, _strategy_float(critic.get("confidence")), 0.75)), 4)
+        decision_reasons.extend(["strong_resume_match", "critic_guardrail_approved", "tailoring_available"])
+        improvement_actions.append("Review approved tailoring suggestions before applying.")
+    elif strong_match and critic_approved:
+        recommendation_action = "apply_now"
+        recommendation_label = "strong_match_ready"
+        priority_hint = "high"
+        readiness_level = "ready"
+        required_human_review = False
+        confidence = round(min(0.95, max(match_score, _strategy_float(critic.get("confidence")), 0.75)), 4)
+        decision_reasons.extend(["strong_resume_match", "critic_guardrail_approved"])
+    elif missing_evidence:
+        recommendation_action = "improve_resume_evidence"
+        recommendation_label = "evidence_gap_review"
+        priority_hint = "medium"
+        readiness_level = "needs_evidence"
+        required_human_review = True
+        confidence = round(max(match_score, 0.35), 4)
+        decision_reasons.append("missing_evidence")
+        improvement_actions.append("Close evidence gaps before applying.")
+    else:
+        recommendation_action = "save_for_later"
+        recommendation_label = "review_later"
+        priority_hint = "medium"
+        readiness_level = "needs_review"
+        required_human_review = True
+        confidence = round(max(match_score, _strategy_float(critic.get("confidence")), 0.35), 4)
+        decision_reasons.append("manual_review_recommended")
+
+    if missing_evidence and recommendation_action == "apply_now":
+        recommendation_action = "improve_resume_evidence"
+        recommendation_label = "missing_evidence_blocks_apply_now"
+        priority_hint = "medium"
+        readiness_level = "needs_evidence"
+        required_human_review = True
+        decision_reasons.append("apply_now_blocked_by_missing_evidence")
+        improvement_actions.append("Close evidence gaps before applying.")
+    if critic_rejected and recommendation_action == "apply_now":
+        recommendation_action = "improve_resume_evidence"
+        recommendation_label = "critic_rejection_blocks_apply_now"
+        priority_hint = "hold"
+        readiness_level = "blocked"
+        required_human_review = True
+
+    return {
+        "strategy_status": "ready" if recommendation_action in STRATEGY_RECOMMENDATION_ACTIONS else "invalid",
+        "recommendation_action": recommendation_action,
+        "recommendation_label": recommendation_label,
+        "priority_hint": priority_hint,
+        "readiness_level": readiness_level,
+        "required_human_review": required_human_review,
+        "decision_reasons": list(dict.fromkeys(_clean_text(item) for item in decision_reasons if _clean_text(item))),
+        "blocking_risks": list(dict.fromkeys(_clean_text(item) for item in blocking_risks if _clean_text(item))),
+        "improvement_actions": list(dict.fromkeys(_clean_text(item) for item in improvement_actions if _clean_text(item))),
+        "source_fields_used": source_fields_used,
+        "confidence": confidence,
+        "rationale": "Strategy recommendation dry-run combines prior dry-run outputs into an advisory next action only.",
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "safety_metadata": _strategy_dry_run_safety_metadata(),
+    }

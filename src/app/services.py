@@ -44,6 +44,7 @@ from src.agents import (
     read_only_adapter_chain,
     read_only_chain_artifact_generator,
     resume_match_agent,
+    tailoring_decision_agent,
     workflow_runner,
 )
 from src.agents.trace import (
@@ -10624,6 +10625,45 @@ def build_manual_resume_match_dry_run_payload(
         "manual_surface": True,
         "read_only": True,
         "service_surface": "manual_resume_match_dry_run",
+    }
+
+
+def build_manual_tailoring_suggestion_dry_run_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_match_payload: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    normalized_resume_variants = (
+        [dict(row or {}) for row in list(resume_variants or []) if isinstance(row, dict)]
+        if resume_variants is not None
+        else None
+    )
+    normalized_resume_evidence_rows = (
+        [dict(row or {}) for row in list(resume_evidence_rows or []) if isinstance(row, dict)]
+        if resume_evidence_rows is not None
+        else None
+    )
+    payload = tailoring_decision_agent.build_tailoring_suggestion_dry_run_payload(
+        jd_intelligence=dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None,
+        jd_signals=dict(jd_signals or {}) if isinstance(jd_signals, dict) else None,
+        resume_match_payload=dict(resume_match_payload or {}) if isinstance(resume_match_payload, dict) else None,
+        resume_variants=normalized_resume_variants,
+        resume_evidence_rows=normalized_resume_evidence_rows,
+        selected_resume_id=_clean_text(selected_resume_id),
+        context_id=_clean_text(context_id),
+        job_id=_clean_text(job_id),
+    )
+    return {
+        **payload,
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "manual_tailoring_suggestion_dry_run",
     }
 
 

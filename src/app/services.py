@@ -10524,6 +10524,58 @@ LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "critic_status": {"type": "string"},
+        "approved_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "downgraded_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "rejected_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "reason_codes": {"type": "array", "items": {"type": "string"}},
+        "unsupported_claim_risks": {"type": "array", "items": {"type": "string"}},
+        "ats_risks": {"type": "array", "items": {"type": "string"}},
+        "readability_risks": {"type": "array", "items": {"type": "string"}},
+        "evidence_gaps": {"type": "array", "items": {"type": "string"}},
+        "confidence": {"type": "number"},
+        "rationale": {"type": "string"},
+    },
+    "required": [
+        "critic_status",
+        "approved_suggestions",
+        "downgraded_suggestions",
+        "rejected_suggestions",
+        "reason_codes",
+        "unsupported_claim_risks",
+        "ats_risks",
+        "readability_risks",
+        "evidence_gaps",
+        "confidence",
+        "rationale",
+    ],
+}
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_SCHEMA_NAME = "live_critic_guardrail_dry_run_v1"
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER = os.getenv(
+    "APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER",
+    os.getenv("LLM_PROVIDER", "groq"),
+).strip().lower()
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL = os.getenv(
+    "APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL",
+    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+).strip()
+LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
 
 
 def _live_jd_intelligence_structured_output_contract() -> Dict[str, Any]:
@@ -10780,6 +10832,171 @@ def _normalise_live_tailoring_provider_payload(
     }, []
 
 
+def _live_critic_guardrail_structured_output_contract() -> Dict[str, Any]:
+    return {
+        "name": LIVE_CRITIC_GUARDRAIL_DRY_RUN_SCHEMA_NAME,
+        "strict": True,
+        "schema": LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA,
+    }
+
+
+def _live_critic_guardrail_prompt(adapter_input: Dict[str, Any]) -> str:
+    return "\n".join([
+        "Validate tailoring suggestions for a manual read-only critic guardrail dry-run.",
+        "Return only JSON matching the provided schema.",
+        "Reject unsupported tools, fake metrics, fake domains, inflated ownership, and missing evidence.",
+        "Downgrade weak but useful suggestions to guidance-only.",
+        "Do not mutate resume content, scores, rankings, queues, approvals, execution, or submissions.",
+        "",
+        "Tailoring suggestion payload:",
+        json.dumps(dict(adapter_input.get("tailoring_suggestion_payload") or {}), sort_keys=True),
+        "",
+        "JD intelligence:",
+        json.dumps(dict(adapter_input.get("jd_intelligence") or {}), sort_keys=True),
+        "",
+        "Resume evidence rows:",
+        json.dumps(list(adapter_input.get("resume_evidence_rows") or []), sort_keys=True),
+    ])
+
+
+def _live_critic_guardrail_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
+    from src.ai.llm_client import run_chat_completion_with_metadata
+
+    result = run_chat_completion_with_metadata(
+        provider=LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROVIDER,
+        model=LIVE_CRITIC_GUARDRAIL_DRY_RUN_MODEL,
+        temperature=0,
+        max_tokens=900,
+        response_mime_type="application/json",
+        response_schema=_live_critic_guardrail_structured_output_contract()["schema"],
+        return_parsed=True,
+        thinking_budget=0,
+        fallback_enabled=LIVE_CRITIC_GUARDRAIL_DRY_RUN_FALLBACK_ENABLED,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You are a conservative critic guardrail for a manual dry-run. "
+                    "Return only JSON and never apply changes."
+                ),
+            },
+            {"role": "user", "content": _live_critic_guardrail_prompt(adapter_input)},
+        ],
+    )
+    content = result.get("content")
+    payload = dict(content or {}) if isinstance(content, dict) else {"raw_response": content}
+    payload.update(
+        {
+            "model_provider": _clean_text(result.get("provider")),
+            "model_name": _clean_text(result.get("model")),
+            "prompt_version": LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION,
+            "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
+            "cost": dict(result.get("cost") or result.get("cost_json") or {}),
+            "latency_ms": result.get("latency_ms", 0),
+            "provider_fallback_used": bool(result.get("fallback_used", False)),
+            "structured_output_schema": _live_critic_guardrail_structured_output_contract(),
+        }
+    )
+    return payload
+
+
+def _critic_live_decision_list(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item or {}) for item in value if isinstance(item, dict)]
+
+
+def _normalise_live_critic_decision(
+    decision: Dict[str, Any],
+    *,
+    fallback_id: str,
+    force_decision: str,
+) -> Dict[str, Any]:
+    reason_codes = [
+        _clean_text(item)
+        for item in list(decision.get("reason_codes") or [])
+        if _clean_text(item)
+    ]
+    evidence_spans = [
+        _clean_text(item)
+        for item in list(decision.get("evidence_spans") or [])
+        if _clean_text(item)
+    ]
+    return {
+        "suggestion_id": _clean_text(decision.get("suggestion_id")) or fallback_id,
+        "decision": _clean_text(decision.get("decision")) or force_decision,
+        "confidence": _tailoring_live_float(decision.get("confidence")),
+        "reason_codes": reason_codes,
+        "evidence_spans": evidence_spans,
+        "notes": _clean_text(decision.get("notes")),
+        "original_patch_ready": bool(decision.get("original_patch_ready")),
+        "final_patch_ready": bool(decision.get("final_patch_ready")),
+    }
+
+
+def _normalise_live_critic_provider_payload(
+    provider_payload: Dict[str, Any],
+) -> tuple[Dict[str, Any] | None, List[str]]:
+    parsed = provider_payload
+    raw_response = provider_payload.get("raw_response")
+    if raw_response is not None:
+        if isinstance(raw_response, dict):
+            parsed = dict(raw_response)
+        else:
+            try:
+                decoded = json.loads(str(raw_response))
+            except Exception:
+                return None, ["invalid_json_response"]
+            if not isinstance(decoded, dict):
+                return None, ["invalid_json_response"]
+            parsed = decoded
+
+    approved = [
+        _normalise_live_critic_decision(item, fallback_id=f"live_critic_approved_{index + 1:03d}", force_decision="approve")
+        for index, item in enumerate(_critic_live_decision_list(parsed.get("approved_suggestions")))
+    ]
+    downgraded = [
+        _normalise_live_critic_decision(item, fallback_id=f"live_critic_downgraded_{index + 1:03d}", force_decision="downgrade_to_guidance")
+        for index, item in enumerate(_critic_live_decision_list(parsed.get("downgraded_suggestions")))
+    ]
+    rejected = [
+        _normalise_live_critic_decision(item, fallback_id=f"live_critic_rejected_{index + 1:03d}", force_decision="reject")
+        for index, item in enumerate(_critic_live_decision_list(parsed.get("rejected_suggestions")))
+    ]
+    if not approved and not downgraded and not rejected:
+        return None, ["provider_critic_decisions_missing"]
+
+    list_fields = {
+        "reason_codes": parsed.get("reason_codes"),
+        "unsupported_claim_risks": parsed.get("unsupported_claim_risks"),
+        "ats_risks": parsed.get("ats_risks"),
+        "readability_risks": parsed.get("readability_risks"),
+        "evidence_gaps": parsed.get("evidence_gaps"),
+    }
+    normalized_lists = {
+        key: [_clean_text(item) for item in list(value or []) if _clean_text(item)]
+        if isinstance(value, list)
+        else []
+        for key, value in list_fields.items()
+    }
+    critic_status = _clean_text(parsed.get("critic_status"))
+    if not critic_status:
+        critic_status = "rejected" if rejected else "needs_guidance" if downgraded else "approved"
+    return {
+        "critic_status": critic_status,
+        "approved_suggestions": approved,
+        "downgraded_suggestions": downgraded,
+        "rejected_suggestions": rejected,
+        "reason_codes": normalized_lists["reason_codes"],
+        "unsupported_claim_risks": normalized_lists["unsupported_claim_risks"],
+        "ats_risks": normalized_lists["ats_risks"],
+        "readability_risks": normalized_lists["readability_risks"],
+        "evidence_gaps": normalized_lists["evidence_gaps"],
+        "confidence": _tailoring_live_float(parsed.get("confidence")),
+        "rationale": _clean_text(parsed.get("rationale")) or "Live critic guardrail dry-run returned provider decisions.",
+    }, []
+
+
 def build_manual_jd_intelligence_dry_run_payload(
     *,
     job_title: Any = "",
@@ -11013,6 +11230,9 @@ def build_manual_critic_guardrail_dry_run_payload(
     resume_evidence_rows: List[Dict[str, Any]] | None = None,
     context_id: Any = "",
     job_id: Any = "",
+    adapter: Any = None,
+    feature_enabled: bool | None = None,
+    config: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     normalized_resume_variants = (
         [dict(row or {}) for row in list(resume_variants or []) if isinstance(row, dict)]
@@ -11024,19 +11244,107 @@ def build_manual_critic_guardrail_dry_run_payload(
         if resume_evidence_rows is not None
         else None
     )
+    normalized_tailoring = dict(tailoring_suggestion_payload or {}) if isinstance(tailoring_suggestion_payload, dict) else None
+    normalized_jd = dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None
+    normalized_jd_signals = dict(jd_signals or {}) if isinstance(jd_signals, dict) else None
     payload = critic_agent.build_critic_guardrail_dry_run_payload(
-        tailoring_suggestion_payload=dict(tailoring_suggestion_payload or {}) if isinstance(tailoring_suggestion_payload, dict) else None,
-        jd_intelligence=dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None,
-        jd_signals=dict(jd_signals or {}) if isinstance(jd_signals, dict) else None,
+        tailoring_suggestion_payload=normalized_tailoring,
+        jd_intelligence=normalized_jd,
+        jd_signals=normalized_jd_signals,
         resume_variants=normalized_resume_variants,
         resume_evidence_rows=normalized_resume_evidence_rows,
         context_id=_clean_text(context_id),
         job_id=_clean_text(job_id),
     )
+    effective_feature_enabled = (
+        LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED
+        if feature_enabled is None
+        else bool(feature_enabled)
+    )
+    effective_adapter = adapter
+    if effective_feature_enabled and effective_adapter is None:
+        effective_adapter = _live_critic_guardrail_provider_adapter
+    did_call_llm = False
+    if effective_feature_enabled and effective_adapter is not None:
+        did_call_llm = True
+        try:
+            provider_payload = effective_adapter(
+                {
+                    "tailoring_suggestion_payload": normalized_tailoring or {},
+                    "jd_intelligence": normalized_jd or normalized_jd_signals or {},
+                    "resume_variants": normalized_resume_variants or [],
+                    "resume_evidence_rows": normalized_resume_evidence_rows or [],
+                    "context_id": _clean_text(context_id),
+                    "job_id": _clean_text(job_id),
+                    "config": dict(config or {}) if isinstance(config, dict) else {},
+                }
+            )
+            provider_payload = dict(provider_payload or {}) if isinstance(provider_payload, dict) else {"raw_response": provider_payload}
+            provider_metadata = {
+                "model_provider": _clean_text(provider_payload.get("model_provider")),
+                "model_name": _clean_text(provider_payload.get("model_name")),
+                "prompt_version": _clean_text(provider_payload.get("prompt_version")) or LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION,
+                "token_usage": dict(provider_payload.get("token_usage") or {}),
+                "cost": dict(provider_payload.get("cost") or {}),
+                "latency_ms": provider_payload.get("latency_ms", 0),
+                "provider_fallback_used": bool(provider_payload.get("provider_fallback_used", False)),
+                "structured_output_schema": provider_payload.get("structured_output_schema") or _live_critic_guardrail_structured_output_contract(),
+            }
+            provider_critic, provider_validation_errors = _normalise_live_critic_provider_payload(provider_payload)
+            if provider_critic is not None:
+                payload = {
+                    **payload,
+                    **provider_critic,
+                    "fallback_used": False,
+                    "validation_status": "valid",
+                    "validation_errors": [],
+                    **provider_metadata,
+                }
+            else:
+                payload = {
+                    **payload,
+                    "fallback_used": True,
+                    "validation_status": "fallback",
+                    "validation_errors": provider_validation_errors,
+                    **provider_metadata,
+                }
+        except Exception as exc:
+            payload = {
+                **payload,
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [f"adapter_error:{exc.__class__.__name__}"],
+            }
+    else:
+        payload = {
+            **payload,
+            "fallback_used": True,
+            "validation_status": "disabled",
+            "validation_errors": ["feature_flag_disabled"],
+        }
+    safety = dict(payload.get("safety_metadata") or {})
+    safety.update(
+        {
+            "feature_flag_required": True,
+            "did_call_llm": did_call_llm,
+            "did_mutate_resume": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_mutate_approval": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "pipeline_wiring_added": False,
+            "advisory_only": True,
+        }
+    )
     return {
         **payload,
+        "safety_metadata": safety,
         "manual_surface": True,
         "read_only": True,
+        "default_feature_flag_enabled": False,
+        "env_feature_flag_enabled": LIVE_CRITIC_GUARDRAIL_DRY_RUN_ENABLED,
         "service_surface": "manual_critic_guardrail_dry_run",
     }
 

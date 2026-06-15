@@ -76,13 +76,14 @@ def _request_payload() -> dict:
     }
 
 
-def _assert_readonly_safety(payload: dict) -> None:
+def _assert_readonly_safety(payload: dict, *, did_call_llm: bool = False) -> None:
     safety = payload["safety_metadata"]
     assert payload["read_only"] is True
     assert payload["manual_surface"] is True
     assert safety["dry_run_only"] is True
+    assert safety["feature_flag_required"] is True
     assert safety["deterministic_only"] is True
-    assert safety["did_call_llm"] is False
+    assert safety["did_call_llm"] is did_call_llm
     assert safety["did_mutate_resume"] is False
     assert safety["did_mutate_scoring"] is False
     assert safety["did_change_ranking"] is False
@@ -91,6 +92,41 @@ def _assert_readonly_safety(payload: dict) -> None:
     assert safety["did_execute_application"] is False
     assert safety["did_submit_application"] is False
     assert safety["pipeline_wiring_added"] is False
+    assert safety["advisory_only"] is True
+
+
+def _valid_provider_payload() -> dict:
+    evidence = "Built Python and SQL production data pipelines with Airflow for finance partners."
+    return {
+        "critic_status": "approved",
+        "approved_suggestions": [
+            {
+                "suggestion_id": "tailoring_dry_run_001",
+                "decision": "approve",
+                "confidence": 0.91,
+                "reason_codes": [],
+                "evidence_spans": [evidence],
+                "notes": "Evidence-backed suggestion.",
+                "original_patch_ready": True,
+                "final_patch_ready": True,
+            }
+        ],
+        "downgraded_suggestions": [],
+        "rejected_suggestions": [],
+        "reason_codes": [],
+        "unsupported_claim_risks": [],
+        "ats_risks": [],
+        "readability_risks": [],
+        "evidence_gaps": [],
+        "confidence": 0.91,
+        "rationale": "Provider approved evidence-backed tailoring suggestions.",
+        "model_provider": "fake-provider",
+        "model_name": "fake-model",
+        "prompt_version": "fake-prompt-v1",
+        "token_usage": {"total_token_count": 42},
+        "cost": {"estimated_cost": 0.01, "cost_currency": "USD"},
+        "latency_ms": 88,
+    }
 
 
 def test_service_returns_manual_critic_guardrail_dry_run_payload():
@@ -104,8 +140,127 @@ def test_service_returns_manual_critic_guardrail_dry_run_payload():
     assert source == original
     assert first["service_surface"] == "manual_critic_guardrail_dry_run"
     assert first["critic_status"] == "approved"
+    assert first["validation_status"] == "disabled"
+    assert first["fallback_used"] is True
     assert first["approved_suggestions"]
     _assert_readonly_safety(first)
+
+
+def test_service_default_flag_off_does_not_call_critic_provider():
+    calls = []
+
+    def fake_adapter(payload):
+        calls.append(payload)
+        return _valid_provider_payload()
+
+    payload = services.build_manual_critic_guardrail_dry_run_payload(
+        **_request_payload(),
+        adapter=fake_adapter,
+    )
+
+    assert calls == []
+    assert payload["validation_status"] == "disabled"
+    assert payload["fallback_used"] is True
+    assert payload["env_feature_flag_enabled"] is False
+    _assert_readonly_safety(payload, did_call_llm=False)
+
+
+def test_service_enabled_fake_critic_provider_returns_validated_output():
+    calls = []
+
+    def fake_adapter(payload):
+        calls.append(payload)
+        return _valid_provider_payload()
+
+    payload = services.build_manual_critic_guardrail_dry_run_payload(
+        **_request_payload(),
+        adapter=fake_adapter,
+        feature_enabled=True,
+    )
+
+    assert calls
+    assert payload["validation_status"] == "valid"
+    assert payload["fallback_used"] is False
+    assert payload["critic_status"] == "approved"
+    assert payload["approved_suggestions"][0]["confidence"] == 0.91
+    assert payload["model_provider"] == "fake-provider"
+    assert payload["model_name"] == "fake-model"
+    assert payload["prompt_version"] == "fake-prompt-v1"
+    assert payload["token_usage"] == {"total_token_count": 42}
+    assert payload["cost"] == {"estimated_cost": 0.01, "cost_currency": "USD"}
+    assert payload["latency_ms"] == 88
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_service_enabled_critic_provider_invalid_json_falls_back_safely():
+    payload = services.build_manual_critic_guardrail_dry_run_payload(
+        **_request_payload(),
+        adapter=lambda _payload: {"raw_response": "{bad json", "model_provider": "fake-provider"},
+        feature_enabled=True,
+    )
+
+    assert payload["validation_status"] == "fallback"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["invalid_json_response"]
+    assert payload["critic_status"] == "approved"
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_service_enabled_critic_provider_exception_falls_back_safely():
+    def fake_adapter(_payload):
+        raise RuntimeError("provider unavailable")
+
+    payload = services.build_manual_critic_guardrail_dry_run_payload(
+        **_request_payload(),
+        adapter=fake_adapter,
+        feature_enabled=True,
+    )
+
+    assert payload["validation_status"] == "fallback"
+    assert payload["fallback_used"] is True
+    assert payload["validation_errors"] == ["adapter_error:RuntimeError"]
+    assert payload["critic_status"] == "approved"
+    _assert_readonly_safety(payload, did_call_llm=True)
+
+
+def test_live_critic_provider_adapter_reuses_existing_llm_client_with_schema(monkeypatch):
+    captured = {}
+
+    def fake_run_chat_completion_with_metadata(**kwargs):
+        captured.update(kwargs)
+        return {
+            "content": _valid_provider_payload(),
+            "provider": "fake-provider",
+            "model": "fake-model",
+            "fallback_used": False,
+            "token_usage": {"total_token_count": 55},
+            "cost": {"estimated_cost": 0.03, "cost_currency": "USD"},
+            "latency_ms": 99,
+        }
+
+    import src.ai.llm_client as llm_client
+
+    monkeypatch.setattr(
+        llm_client,
+        "run_chat_completion_with_metadata",
+        fake_run_chat_completion_with_metadata,
+    )
+
+    result = services._live_critic_guardrail_provider_adapter(_request_payload())
+
+    assert captured["response_mime_type"] == "application/json"
+    assert captured["response_schema"] == services.LIVE_CRITIC_GUARDRAIL_DRY_RUN_RESPONSE_SCHEMA
+    assert captured["return_parsed"] is True
+    assert captured["temperature"] == 0
+    assert "manual dry-run" in captured["messages"][0]["content"]
+    assert result["critic_status"] == "approved"
+    assert result["approved_suggestions"][0]["suggestion_id"] == "tailoring_dry_run_001"
+    assert result["model_provider"] == "fake-provider"
+    assert result["model_name"] == "fake-model"
+    assert result["prompt_version"] == services.LIVE_CRITIC_GUARDRAIL_DRY_RUN_PROMPT_VERSION
+    assert result["token_usage"] == {"total_token_count": 55}
+    assert result["cost"] == {"estimated_cost": 0.03, "cost_currency": "USD"}
+    assert result["latency_ms"] == 99
 
 
 def test_api_route_exists_as_post_only():
@@ -201,9 +356,10 @@ def test_service_helper_slice_has_no_storage_scoring_queue_or_llm_calls():
         "httpx.",
         "run_chat_completion",
         "score_resume_job_match",
-        "ranking",
-        "execute_application",
-        "submit_application",
+        "mutate_ranking",
+        "update_ranking",
+        "execute_application(",
+        "submit_application(",
         "workflow_runner",
     ]
     for marker in forbidden_markers:

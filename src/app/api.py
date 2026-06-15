@@ -347,6 +347,19 @@ class ManualApprovalStatusTransitionPreviewRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualGuardedApprovalStatusTransitionRequest(BaseModel):
+    approval_request_id: str = ""
+    proposed_transition: str = ""
+    reviewer_confirmation: bool = False
+    reviewer_note: str = ""
+    transition_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    observability_payload: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1709,6 +1722,30 @@ def agent_feedback_export(
         )
     except (SystemExit, ValueError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/manual-guarded-approval-status-transition")
+def invoke_manual_guarded_approval_status_transition_api_action(
+    request: ManualGuardedApprovalStatusTransitionRequest,
+):
+    payload = services.build_guarded_approval_status_transition_payload(
+        approval_request_id=request.approval_request_id,
+        proposed_transition=request.proposed_transition,
+        reviewer_confirmation=request.reviewer_confirmation,
+        reviewer_note=request.reviewer_note,
+        transition_preview_payload=request.transition_preview_payload,
+        approval_request_readback_payload=request.approval_request_readback_payload,
+        guarded_creation_payload=request.guarded_creation_payload,
+        observability_payload=request.observability_payload,
+        context_id=request.context_id,
+        job_id=request.job_id,
+        connection_provider=_agentic_approval_storage_connection,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_approval_status_transition",
+    }
 
 
 @app.get("/api/agent-feedback")

@@ -14172,6 +14172,136 @@ def build_guarded_queue_handoff_creation_observability_payload(
     }
 
 
+def _execution_readiness_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "execution_readiness_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_readiness_preview_payload(
+    *,
+    queue_handoff_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_creation_payload: Dict[str, Any] | None = None,
+    queue_handoff_observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview whether a queue handoff is ready for future execution without executing anything."""
+
+    creation_payload = deepcopy(queue_handoff_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(queue_handoff_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+    if not observability_payload and creation_payload:
+        observability_payload = build_guarded_queue_handoff_creation_observability_payload(
+            guarded_queue_handoff_creation_payload=creation_payload,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(observability_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("approval_request_id"))
+    )
+    source_observability_status = (
+        _clean_text(observability_payload.get("queue_handoff_observability_status"))
+        or "missing"
+    )
+    handoff_was_created = bool(observability_payload.get("queue_handoff_was_created"))
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not handoff_id:
+        readiness_status = "blocked_missing_queue_handoff_id"
+        ready_for_future_execution = False
+        execution_allowed_later = False
+        missing_requirements.append("queue_handoff_id")
+        blocked_actions.append("queue_handoff_id_missing")
+        next_safe_step = "provide_queue_handoff_id"
+    elif not request_id:
+        readiness_status = "blocked_missing_approval_request_id"
+        ready_for_future_execution = False
+        execution_allowed_later = False
+        missing_requirements.append("approval_request_id")
+        blocked_actions.append("approval_request_id_missing")
+        next_safe_step = "provide_approval_request_id"
+    elif not observability_payload or source_observability_status == "missing":
+        readiness_status = "blocked_missing_queue_handoff_observability"
+        ready_for_future_execution = False
+        execution_allowed_later = False
+        missing_requirements.append("queue_handoff_observability_payload")
+        blocked_actions.append("queue_handoff_observability_missing")
+        next_safe_step = "view_queue_handoff_audit_before_execution_readiness_preview"
+    elif source_observability_status != "observed_created":
+        readiness_status = "blocked_queue_handoff_not_created"
+        ready_for_future_execution = False
+        execution_allowed_later = False
+        missing_requirements.append("observed_created_queue_handoff")
+        blocked_actions.append("queue_handoff_not_observed_created")
+        next_safe_step = "resolve_queue_handoff_audit_before_execution_readiness_preview"
+    elif handoff_was_created is not True:
+        readiness_status = "blocked_queue_handoff_not_created"
+        ready_for_future_execution = False
+        execution_allowed_later = False
+        missing_requirements.append("created_queue_handoff")
+        blocked_actions.append("queue_handoff_not_created")
+        next_safe_step = "complete_guarded_queue_handoff_before_execution_readiness_preview"
+    else:
+        readiness_status = "ready_for_future_execution"
+        ready_for_future_execution = True
+        execution_allowed_later = True
+        next_safe_step = "collect_future_explicit_execution_confirmation"
+
+    return {
+        "execution_readiness_status": readiness_status,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "ready_for_future_execution": ready_for_future_execution,
+        "execution_allowed_later": execution_allowed_later,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_human_confirmation": True,
+        "source_queue_handoff_observability_status": source_observability_status,
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Execution readiness preview is dry-run only; it does not execute, submit, "
+            "mutate queues or approvals, write queue files, change resumes, scoring, ranking, "
+            "or add pipeline wiring."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(observability_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(observability_payload.get("job_id")),
+        "safety_metadata": _execution_readiness_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_readiness_preview_dry_run",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

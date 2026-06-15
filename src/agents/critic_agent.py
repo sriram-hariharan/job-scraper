@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List
 
@@ -487,3 +488,338 @@ def record_critic_agent_trace(
         if agent_trace_strict(env_map):
             raise
         return {"attempted": True, "recorded": False, "warning": str(exc)}
+
+
+def _critic_guardrail_safety_metadata() -> Dict[str, bool]:
+    return {
+        "dry_run_only": True,
+        "deterministic_only": True,
+        "did_call_llm": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+
+
+def _critic_guardrail_suggestion_list(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item or {}) for item in value if isinstance(item, dict)]
+
+
+def _critic_guardrail_text_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    if isinstance(value, tuple):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    if isinstance(value, dict):
+        return [_clean_text(item) for item in value.values() if _clean_text(item)]
+    return [_clean_text(value)] if _clean_text(value) else []
+
+
+def _critic_guardrail_resume_evidence_text(rows: List[Dict[str, Any]]) -> str:
+    pieces: List[str] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        for field_name in (
+            "raw_text",
+            "normalized_text",
+            "evidence_text",
+            "summary",
+            "bullets",
+            "quantified_bullets",
+            "skills",
+            "tools",
+            "methods",
+            "workflows",
+            "business_contexts",
+            "stakeholder_contexts",
+            "ownership_signals",
+            "seniority_signals",
+            "analytics_ml_signals",
+            "domain_signals",
+            "tooling_signals",
+        ):
+            pieces.extend(_critic_guardrail_text_list(row.get(field_name)))
+    return _normalize_text(" ".join(pieces))
+
+
+def _critic_guardrail_jd_terms(jd_source: Dict[str, Any]) -> List[str]:
+    terms: List[str] = []
+    for field_name in (
+        "required_skills",
+        "preferred_skills",
+        "required_tools",
+        "preferred_tools",
+        "workflows",
+        "methods",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+    ):
+        terms.extend(_critic_guardrail_text_list(jd_source.get(field_name)))
+    return list(dict.fromkeys(term for term in terms if term))
+
+
+def _critic_guardrail_unsupported_risks(
+    suggestion: Dict[str, Any],
+    tailoring_payload: Dict[str, Any],
+) -> List[str]:
+    risks = [
+        _clean_text(item)
+        for item in list(suggestion.get("risk_flags") or [])
+        if _clean_text(item)
+    ]
+    suggestion_links = {
+        (
+            _clean_text(link.get("field")),
+            _clean_text(link.get("signal")),
+        )
+        for link in list(suggestion.get("jd_signal_links") or [])
+        if isinstance(link, dict)
+    }
+    for risk in list(tailoring_payload.get("unsupported_claim_risks") or []):
+        if not isinstance(risk, dict):
+            continue
+        risk_key = (_clean_text(risk.get("field")), _clean_text(risk.get("signal")))
+        if suggestion_links and risk_key not in suggestion_links:
+            continue
+        risk_value = _clean_text(risk.get("risk")) or "unsupported_claim"
+        risks.append(risk_value)
+    return list(dict.fromkeys(risks))
+
+
+def _critic_guardrail_ats_risks(suggestion: Dict[str, Any]) -> List[str]:
+    text = _clean_text(suggestion.get("suggested_text"))
+    risks: List[str] = []
+    if len(text.split()) > 45:
+        risks.append("long_bullet")
+    if re.search(r"[^\w\s.,;:()/%$+#&-]", text):
+        risks.append("special_character_noise")
+    return risks
+
+
+def _critic_guardrail_readability_risks(suggestion: Dict[str, Any]) -> List[str]:
+    text = _clean_text(suggestion.get("suggested_text"))
+    risks: List[str] = []
+    if text and len(text.split()) < 4:
+        risks.append("too_short")
+    if text and not re.search(r"[aeiou]", text, re.I):
+        risks.append("low_readability")
+    return risks
+
+
+def _critic_guardrail_decision(
+    *,
+    suggestion: Dict[str, Any],
+    tailoring_payload: Dict[str, Any],
+    evidence_text: str,
+) -> Dict[str, Any]:
+    suggestion_id = _clean_text(suggestion.get("suggestion_id"))
+    patch_ready = bool(suggestion.get("patch_ready"))
+    projected_delta = parse_float(suggestion.get("projected_score_delta"))
+    evidence_spans = [
+        _clean_text(item)
+        for item in list(suggestion.get("evidence_spans") or [])
+        if _clean_text(item)
+    ]
+    suggested_text = _clean_text(suggestion.get("suggested_text"))
+    original_text = _clean_text(suggestion.get("original_text"))
+    reason_codes: List[str] = []
+    notes: List[str] = []
+
+    unsupported_risks = _critic_guardrail_unsupported_risks(suggestion, tailoring_payload)
+    ats_risks = _critic_guardrail_ats_risks(suggestion)
+    readability_risks = _critic_guardrail_readability_risks(suggestion)
+    span_supported = any(_normalize_text(span) and _normalize_text(span) in evidence_text for span in evidence_spans)
+    text_supported = bool(
+        suggested_text
+        and (
+            _normalize_text(suggested_text) in evidence_text
+            or _normalize_text(original_text) in evidence_text
+            or span_supported
+        )
+    )
+
+    if not suggested_text:
+        reason_codes.append("not_actionable")
+    if not evidence_spans or not text_supported:
+        reason_codes.append("missing_evidence")
+    if projected_delta <= 0 and patch_ready:
+        reason_codes.append("weak_score_lift")
+    if any(risk in unsupported_risks for risk in {"unsupported_tool", "unsupported_metric", "unsupported_domain_or_context", "unsupported_claim"}):
+        reason_codes.append("unsupported_claim")
+        notes.append("Unsupported claim risk detected in dry-run suggestion.")
+    if "inflated_ownership" in unsupported_risks or any(pattern.search(suggested_text) for pattern in _SCOPE_PATTERNS):
+        reason_codes.append("exaggerated_scope")
+    if ats_risks:
+        reason_codes.append("ats_risk")
+    if readability_risks:
+        reason_codes.append("low_readability")
+
+    reason_codes = list(dict.fromkeys(reason_codes))
+    hard_reject = {
+        "unsupported_claim",
+        "exaggerated_scope",
+        "not_actionable",
+    }
+    if any(reason in hard_reject for reason in reason_codes):
+        decision = "reject"
+        final_patch_ready = False
+        confidence = 0.9
+    elif "missing_evidence" in reason_codes or "weak_score_lift" in reason_codes or "low_readability" in reason_codes or not patch_ready:
+        decision = "downgrade_to_guidance"
+        final_patch_ready = False
+        confidence = 0.78
+        if not reason_codes:
+            reason_codes.append("safe_guidance_only")
+    else:
+        decision = "approve"
+        final_patch_ready = True
+        confidence = 0.86
+
+    return {
+        "suggestion_id": suggestion_id,
+        "decision": decision,
+        "confidence": confidence,
+        "reason_codes": reason_codes,
+        "evidence_spans": evidence_spans[:5],
+        "notes": "; ".join(notes),
+        "original_patch_ready": patch_ready,
+        "final_patch_ready": final_patch_ready,
+    }
+
+
+def build_critic_guardrail_dry_run_payload(
+    *,
+    tailoring_suggestion_payload: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    context_id: str = "",
+    job_id: str = "",
+) -> Dict[str, Any]:
+    """Validate tailoring suggestions in memory without applying or storing decisions."""
+
+    tailoring_payload = deepcopy(tailoring_suggestion_payload or {})
+    jd_source = deepcopy(jd_intelligence if jd_intelligence is not None else jd_signals or {})
+    resume_rows = deepcopy(resume_variants if resume_variants is not None else resume_evidence_rows or [])
+    if not isinstance(tailoring_payload, dict):
+        tailoring_payload = {}
+    if not isinstance(jd_source, dict):
+        jd_source = {}
+    if not isinstance(resume_rows, list):
+        resume_rows = []
+
+    source_fields_used = []
+    if tailoring_payload:
+        source_fields_used.append("tailoring_suggestion_payload")
+    if jd_source:
+        source_fields_used.append("jd_intelligence")
+    if resume_rows:
+        source_fields_used.append("resume_evidence_rows")
+
+    suggestion_groups = [
+        _critic_guardrail_suggestion_list(tailoring_payload.get("patch_ready_suggestions")),
+        _critic_guardrail_suggestion_list(tailoring_payload.get("guidance_only_suggestions")),
+        _critic_guardrail_suggestion_list(tailoring_payload.get("rejected_suggestions")),
+    ]
+    suggestions = [item for group in suggestion_groups for item in group]
+    evidence_text = _critic_guardrail_resume_evidence_text(resume_rows)
+    evidence_gaps = [
+        _clean_text(item)
+        for item in list(tailoring_payload.get("missing_evidence") or [])
+        if _clean_text(item)
+    ]
+
+    if not tailoring_payload or not suggestions:
+        missing = ["tailoring_suggestions_missing"]
+        if not tailoring_payload:
+            missing.append("tailoring_payload_missing")
+        return {
+            "critic_status": "insufficient_evidence",
+            "approved_suggestions": [],
+            "downgraded_suggestions": [],
+            "rejected_suggestions": [],
+            "reason_codes": missing,
+            "unsupported_claim_risks": [],
+            "ats_risks": [],
+            "readability_risks": [],
+            "evidence_gaps": list(dict.fromkeys(evidence_gaps + missing)),
+            "confidence": 0.0,
+            "rationale": "Critic guardrail dry-run has no tailoring suggestions to validate.",
+            "source_fields_used": source_fields_used,
+            "context_id": _clean_text(context_id),
+            "job_id": _clean_text(job_id),
+            "safety_metadata": _critic_guardrail_safety_metadata(),
+        }
+
+    if not evidence_text:
+        evidence_gaps.append("resume_evidence_missing")
+    if not _critic_guardrail_jd_terms(jd_source):
+        evidence_gaps.append("jd_signals_missing")
+
+    approved: List[Dict[str, Any]] = []
+    downgraded: List[Dict[str, Any]] = []
+    rejected: List[Dict[str, Any]] = []
+    reason_codes: List[str] = []
+    unsupported_claim_risks: List[str] = []
+    ats_risks: List[str] = []
+    readability_risks: List[str] = []
+
+    for suggestion in suggestions:
+        decision = _critic_guardrail_decision(
+            suggestion=suggestion,
+            tailoring_payload=tailoring_payload,
+            evidence_text=evidence_text,
+        )
+        reason_codes.extend(decision.get("reason_codes") or [])
+        unsupported_claim_risks.extend(_critic_guardrail_unsupported_risks(suggestion, tailoring_payload))
+        ats_risks.extend(_critic_guardrail_ats_risks(suggestion))
+        readability_risks.extend(_critic_guardrail_readability_risks(suggestion))
+        if decision["decision"] == "approve":
+            approved.append(decision)
+        elif decision["decision"] == "reject":
+            rejected.append(decision)
+        else:
+            downgraded.append(decision)
+
+    if rejected:
+        critic_status = "rejected"
+    elif downgraded:
+        critic_status = "needs_guidance"
+    elif approved:
+        critic_status = "approved"
+    else:
+        critic_status = "insufficient_evidence"
+
+    confidence_values = [
+        float(item.get("confidence", 0.0) or 0.0)
+        for item in approved + downgraded + rejected
+    ]
+    confidence = round(sum(confidence_values) / len(confidence_values), 4) if confidence_values else 0.0
+    return {
+        "critic_status": critic_status,
+        "approved_suggestions": approved,
+        "downgraded_suggestions": downgraded,
+        "rejected_suggestions": rejected,
+        "reason_codes": list(dict.fromkeys(reason_codes)),
+        "unsupported_claim_risks": list(dict.fromkeys(unsupported_claim_risks)),
+        "ats_risks": list(dict.fromkeys(ats_risks)),
+        "readability_risks": list(dict.fromkeys(readability_risks)),
+        "evidence_gaps": list(dict.fromkeys(evidence_gaps)),
+        "confidence": confidence,
+        "rationale": "Critic guardrail dry-run approves only low-risk, evidence-backed patch-ready suggestions.",
+        "source_fields_used": source_fields_used,
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "safety_metadata": _critic_guardrail_safety_metadata(),
+    }

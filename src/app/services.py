@@ -10462,6 +10462,68 @@ LIVE_JD_INTELLIGENCE_DRY_RUN_FALLBACK_ENABLED = (
     .lower()
     == "true"
 )
+LIVE_TAILORING_SUGGESTION_DRY_RUN_RESPONSE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "properties": {
+        "patch_ready_suggestions": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": True,
+                "properties": {
+                    "suggestion_id": {"type": "string"},
+                    "source_bullet_id": {"type": "string"},
+                    "original_text": {"type": "string"},
+                    "suggested_text": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "evidence_spans": {"type": "array", "items": {"type": "string"}},
+                    "jd_signal_links": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+                    "patch_ready": {"type": "boolean"},
+                    "projected_score_delta": {"type": "number"},
+                    "risk_flags": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        },
+        "guidance_only_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "rejected_suggestions": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "missing_evidence": {"type": "array", "items": {"type": "string"}},
+        "unsupported_claim_risks": {"type": "array", "items": {"type": "object", "additionalProperties": True}},
+        "projected_score_delta": {"type": "number"},
+        "rationale": {"type": "string"},
+    },
+    "required": [
+        "patch_ready_suggestions",
+        "guidance_only_suggestions",
+        "rejected_suggestions",
+        "missing_evidence",
+        "unsupported_claim_risks",
+        "projected_score_delta",
+        "rationale",
+    ],
+}
+LIVE_TAILORING_SUGGESTION_DRY_RUN_SCHEMA_NAME = "live_tailoring_suggestion_dry_run_v1"
+LIVE_TAILORING_SUGGESTION_DRY_RUN_PROMPT_VERSION = "v1"
+LIVE_TAILORING_SUGGESTION_DRY_RUN_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
+LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER = os.getenv(
+    "APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER",
+    os.getenv("LLM_PROVIDER", "groq"),
+).strip().lower()
+LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL = os.getenv(
+    "APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL",
+    os.getenv("LLM_MODEL", "llama-3.1-8b-instant"),
+).strip()
+LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED = (
+    os.getenv("APPLYLENS_LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED", "false")
+    .strip()
+    .lower()
+    == "true"
+)
 
 
 def _live_jd_intelligence_structured_output_contract() -> Dict[str, Any]:
@@ -10545,6 +10607,177 @@ def _live_jd_intelligence_provider_adapter(adapter_input: Dict[str, Any]) -> Dic
         }
     )
     return payload
+
+
+def _live_tailoring_suggestion_structured_output_contract() -> Dict[str, Any]:
+    return {
+        "name": LIVE_TAILORING_SUGGESTION_DRY_RUN_SCHEMA_NAME,
+        "strict": True,
+        "schema": LIVE_TAILORING_SUGGESTION_DRY_RUN_RESPONSE_SCHEMA,
+    }
+
+
+def _live_tailoring_suggestion_prompt(adapter_input: Dict[str, Any]) -> str:
+    return "\n".join([
+        "Create conservative tailoring suggestions for a manual read-only dry-run.",
+        "Return only JSON matching the provided schema.",
+        "Patch-ready suggestions must be directly supported by resume evidence.",
+        "Do not invent tools, metrics, domains, ownership, seniority, or resume content.",
+        "",
+        "JD intelligence:",
+        json.dumps(dict(adapter_input.get("jd_intelligence") or {}), sort_keys=True),
+        "",
+        "Resume match dry-run:",
+        json.dumps(dict(adapter_input.get("resume_match_payload") or {}), sort_keys=True),
+        "",
+        "Resume evidence rows:",
+        json.dumps(list(adapter_input.get("resume_evidence_rows") or []), sort_keys=True),
+    ])
+
+
+def _live_tailoring_suggestion_provider_adapter(adapter_input: Dict[str, Any]) -> Dict[str, Any]:
+    from src.ai.llm_client import run_chat_completion_with_metadata
+
+    result = run_chat_completion_with_metadata(
+        provider=LIVE_TAILORING_SUGGESTION_DRY_RUN_PROVIDER,
+        model=LIVE_TAILORING_SUGGESTION_DRY_RUN_MODEL,
+        temperature=0,
+        max_tokens=900,
+        response_mime_type="application/json",
+        response_schema=_live_tailoring_suggestion_structured_output_contract()["schema"],
+        return_parsed=True,
+        thinking_budget=0,
+        fallback_enabled=LIVE_TAILORING_SUGGESTION_DRY_RUN_FALLBACK_ENABLED,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "You propose evidence-backed resume tailoring suggestions for a manual dry-run. "
+                    "Return only JSON and never apply changes."
+                ),
+            },
+            {"role": "user", "content": _live_tailoring_suggestion_prompt(adapter_input)},
+        ],
+    )
+    content = result.get("content")
+    payload = dict(content or {}) if isinstance(content, dict) else {"raw_response": content}
+    payload.update(
+        {
+            "model_provider": _clean_text(result.get("provider")),
+            "model_name": _clean_text(result.get("model")),
+            "prompt_version": LIVE_TAILORING_SUGGESTION_DRY_RUN_PROMPT_VERSION,
+            "token_usage": dict(result.get("token_usage") or result.get("token_usage_json") or {}),
+            "cost": dict(result.get("cost") or result.get("cost_json") or {}),
+            "latency_ms": result.get("latency_ms", 0),
+            "provider_fallback_used": bool(result.get("fallback_used", False)),
+            "structured_output_schema": _live_tailoring_suggestion_structured_output_contract(),
+        }
+    )
+    return payload
+
+
+def _tailoring_live_suggestion_list(value: Any) -> List[Dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    return [dict(item or {}) for item in value if isinstance(item, dict)]
+
+
+def _tailoring_live_float(value: Any) -> float:
+    try:
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalise_live_tailoring_suggestion(
+    suggestion: Dict[str, Any],
+    *,
+    fallback_id: str,
+    force_patch_ready: bool | None = None,
+) -> Dict[str, Any]:
+    evidence_spans = [
+        _clean_text(item)
+        for item in list(suggestion.get("evidence_spans") or [])
+        if _clean_text(item)
+    ]
+    risk_flags = [
+        _clean_text(item)
+        for item in list(suggestion.get("risk_flags") or [])
+        if _clean_text(item)
+    ]
+    jd_signal_links = [
+        dict(item or {})
+        for item in list(suggestion.get("jd_signal_links") or [])
+        if isinstance(item, dict)
+    ]
+    patch_ready = bool(suggestion.get("patch_ready"))
+    if force_patch_ready is not None:
+        patch_ready = force_patch_ready
+    return {
+        "suggestion_id": _clean_text(suggestion.get("suggestion_id")) or fallback_id,
+        "source_bullet_id": _clean_text(suggestion.get("source_bullet_id")),
+        "original_text": _clean_text(suggestion.get("original_text")),
+        "suggested_text": _clean_text(suggestion.get("suggested_text")),
+        "reason": _clean_text(suggestion.get("reason")),
+        "evidence_spans": evidence_spans,
+        "jd_signal_links": jd_signal_links,
+        "patch_ready": patch_ready,
+        "projected_score_delta": _tailoring_live_float(suggestion.get("projected_score_delta")),
+        "risk_flags": risk_flags,
+    }
+
+
+def _normalise_live_tailoring_provider_payload(
+    provider_payload: Dict[str, Any],
+) -> tuple[Dict[str, Any] | None, List[str]]:
+    parsed = provider_payload
+    raw_response = provider_payload.get("raw_response")
+    if raw_response is not None:
+        if isinstance(raw_response, dict):
+            parsed = dict(raw_response)
+        else:
+            try:
+                decoded = json.loads(str(raw_response))
+            except Exception:
+                return None, ["invalid_json_response"]
+            if not isinstance(decoded, dict):
+                return None, ["invalid_json_response"]
+            parsed = decoded
+
+    patch_ready = [
+        _normalise_live_tailoring_suggestion(item, fallback_id=f"live_tailoring_patch_{index + 1:03d}", force_patch_ready=True)
+        for index, item in enumerate(_tailoring_live_suggestion_list(parsed.get("patch_ready_suggestions")))
+    ]
+    guidance = [
+        _normalise_live_tailoring_suggestion(item, fallback_id=f"live_tailoring_guidance_{index + 1:03d}", force_patch_ready=False)
+        for index, item in enumerate(_tailoring_live_suggestion_list(parsed.get("guidance_only_suggestions")))
+    ]
+    rejected = [
+        _normalise_live_tailoring_suggestion(item, fallback_id=f"live_tailoring_rejected_{index + 1:03d}", force_patch_ready=False)
+        for index, item in enumerate(_tailoring_live_suggestion_list(parsed.get("rejected_suggestions")))
+    ]
+    if not patch_ready and not guidance and not rejected:
+        return None, ["provider_suggestions_missing"]
+
+    missing_evidence = [
+        _clean_text(item)
+        for item in list(parsed.get("missing_evidence") or [])
+        if _clean_text(item)
+    ]
+    unsupported_claim_risks = [
+        dict(item or {})
+        for item in list(parsed.get("unsupported_claim_risks") or [])
+        if isinstance(item, dict)
+    ]
+    return {
+        "patch_ready_suggestions": patch_ready,
+        "guidance_only_suggestions": guidance,
+        "rejected_suggestions": rejected,
+        "missing_evidence": missing_evidence,
+        "unsupported_claim_risks": unsupported_claim_risks,
+        "projected_score_delta": _tailoring_live_float(parsed.get("projected_score_delta")),
+        "rationale": _clean_text(parsed.get("rationale")) or "Live tailoring suggestion dry-run returned provider suggestions.",
+    }, []
 
 
 def build_manual_jd_intelligence_dry_run_payload(
@@ -10639,6 +10872,9 @@ def build_manual_tailoring_suggestion_dry_run_payload(
     selected_resume_id: Any = "",
     context_id: Any = "",
     job_id: Any = "",
+    adapter: Any = None,
+    feature_enabled: bool | None = None,
+    config: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     normalized_resume_variants = (
         [dict(row or {}) for row in list(resume_variants or []) if isinstance(row, dict)]
@@ -10650,20 +10886,120 @@ def build_manual_tailoring_suggestion_dry_run_payload(
         if resume_evidence_rows is not None
         else None
     )
+    normalized_jd = dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None
+    normalized_jd_signals = dict(jd_signals or {}) if isinstance(jd_signals, dict) else None
+    normalized_resume_match = dict(resume_match_payload or {}) if isinstance(resume_match_payload, dict) else None
     payload = tailoring_decision_agent.build_tailoring_suggestion_dry_run_payload(
-        jd_intelligence=dict(jd_intelligence or {}) if isinstance(jd_intelligence, dict) else None,
-        jd_signals=dict(jd_signals or {}) if isinstance(jd_signals, dict) else None,
-        resume_match_payload=dict(resume_match_payload or {}) if isinstance(resume_match_payload, dict) else None,
+        jd_intelligence=normalized_jd,
+        jd_signals=normalized_jd_signals,
+        resume_match_payload=normalized_resume_match,
         resume_variants=normalized_resume_variants,
         resume_evidence_rows=normalized_resume_evidence_rows,
         selected_resume_id=_clean_text(selected_resume_id),
         context_id=_clean_text(context_id),
         job_id=_clean_text(job_id),
     )
+    provider_metadata: Dict[str, Any] = {}
+    provider_validation_errors: List[str] = []
+    effective_feature_enabled = (
+        LIVE_TAILORING_SUGGESTION_DRY_RUN_ENABLED
+        if feature_enabled is None
+        else bool(feature_enabled)
+    )
+    effective_adapter = adapter
+    if effective_feature_enabled and effective_adapter is None:
+        effective_adapter = _live_tailoring_suggestion_provider_adapter
+    did_call_llm = False
+    if effective_feature_enabled and effective_adapter is not None:
+        did_call_llm = True
+        try:
+            provider_payload = effective_adapter(
+                {
+                    "jd_intelligence": normalized_jd or normalized_jd_signals or {},
+                    "resume_match_payload": normalized_resume_match or {},
+                    "resume_variants": normalized_resume_variants or [],
+                    "resume_evidence_rows": normalized_resume_evidence_rows or [],
+                    "selected_resume_id": _clean_text(selected_resume_id),
+                    "context_id": _clean_text(context_id),
+                    "job_id": _clean_text(job_id),
+                    "config": dict(config or {}) if isinstance(config, dict) else {},
+                }
+            )
+            provider_payload = dict(provider_payload or {}) if isinstance(provider_payload, dict) else {"raw_response": provider_payload}
+            provider_metadata = {
+                "model_provider": _clean_text(provider_payload.get("model_provider")),
+                "model_name": _clean_text(provider_payload.get("model_name")),
+                "prompt_version": _clean_text(provider_payload.get("prompt_version")) or LIVE_TAILORING_SUGGESTION_DRY_RUN_PROMPT_VERSION,
+                "token_usage": dict(provider_payload.get("token_usage") or {}),
+                "cost": dict(provider_payload.get("cost") or {}),
+                "latency_ms": provider_payload.get("latency_ms", 0),
+                "provider_fallback_used": bool(provider_payload.get("provider_fallback_used", False)),
+                "structured_output_schema": provider_payload.get("structured_output_schema") or _live_tailoring_suggestion_structured_output_contract(),
+            }
+            provider_suggestions, provider_validation_errors = _normalise_live_tailoring_provider_payload(provider_payload)
+            if provider_suggestions is not None:
+                payload = {
+                    **payload,
+                    **provider_suggestions,
+                    "suggestion_status": (
+                        "patch_ready_available"
+                        if provider_suggestions["patch_ready_suggestions"]
+                        else "guidance_only"
+                        if provider_suggestions["guidance_only_suggestions"]
+                        else "rejected_unsupported_claims"
+                        if provider_suggestions["rejected_suggestions"]
+                        else "insufficient_evidence"
+                    ),
+                    "rationale": provider_suggestions.get("rationale") or payload.get("rationale", ""),
+                    "fallback_used": False,
+                    "validation_status": "valid",
+                    "validation_errors": [],
+                    **provider_metadata,
+                }
+            else:
+                payload = {
+                    **payload,
+                    "fallback_used": True,
+                    "validation_status": "fallback",
+                    "validation_errors": provider_validation_errors,
+                    **provider_metadata,
+                }
+        except Exception as exc:
+            payload = {
+                **payload,
+                "fallback_used": True,
+                "validation_status": "fallback",
+                "validation_errors": [f"adapter_error:{exc.__class__.__name__}"],
+            }
+    else:
+        payload = {
+            **payload,
+            "fallback_used": True,
+            "validation_status": "disabled",
+            "validation_errors": ["feature_flag_disabled"],
+        }
+    safety = dict(payload.get("safety_metadata") or {})
+    safety.update(
+        {
+            "feature_flag_required": True,
+            "did_call_llm": did_call_llm,
+            "did_mutate_resume": False,
+            "did_mutate_scoring": False,
+            "did_change_ranking": False,
+            "did_mutate_queue": False,
+            "did_mutate_approval": False,
+            "did_execute_application": False,
+            "did_submit_application": False,
+            "pipeline_wiring_added": False,
+        }
+    )
     return {
         **payload,
+        "safety_metadata": safety,
         "manual_surface": True,
         "read_only": True,
+        "default_feature_flag_enabled": False,
+        "env_feature_flag_enabled": LIVE_TAILORING_SUGGESTION_DRY_RUN_ENABLED,
         "service_surface": "manual_tailoring_suggestion_dry_run",
     }
 

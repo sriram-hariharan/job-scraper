@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+import re
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List
@@ -346,3 +348,319 @@ def record_resume_match_agent_trace(
         if agent_trace_strict(env_map):
             raise
         return {"attempted": True, "recorded": False, "warning": str(exc)}
+
+
+RESUME_MATCH_DRY_RUN_DIMENSIONS = (
+    "hard_skills",
+    "tools",
+    "domain_workflow",
+    "seniority",
+    "ownership",
+    "business_context",
+    "stakeholder_communication",
+    "production_engineering",
+    "ai_ml_rag_llmops",
+)
+
+
+def _dry_run_safety_metadata() -> Dict[str, bool]:
+    return {
+        "dry_run_only": True,
+        "deterministic_only": True,
+        "did_call_llm": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+
+
+def _dry_run_list(value: Any) -> List[str]:
+    if isinstance(value, list):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    if isinstance(value, tuple):
+        return [_clean_text(item) for item in value if _clean_text(item)]
+    text = _clean_text(value)
+    if not text:
+        return []
+    return [_clean_text(item) for item in re.split(r"[;,]", text) if _clean_text(item)]
+
+
+def _dry_run_norm(value: Any) -> str:
+    return re.sub(r"[^a-z0-9+#.]+", " ", _clean_text(value).lower()).strip()
+
+
+def _dry_run_contains(text_norm: str, signal: str) -> bool:
+    signal_norm = _dry_run_norm(signal)
+    if not signal_norm:
+        return False
+    return signal_norm in text_norm
+
+
+def _resume_variant_id(row: Dict[str, Any], index: int) -> str:
+    return (
+        _clean_text(row.get("resume_id"))
+        or _clean_text(row.get("resume_name"))
+        or _clean_text(row.get("name"))
+        or _clean_text(row.get("id"))
+        or f"resume_{index + 1}"
+    )
+
+
+def _resume_evidence_values(row: Dict[str, Any], fields: Iterable[str]) -> List[str]:
+    values: List[str] = []
+    for field_name in fields:
+        value = row.get(field_name)
+        if isinstance(value, list):
+            values.extend(_clean_text(item) for item in value if _clean_text(item))
+        elif isinstance(value, dict):
+            values.extend(_clean_text(item) for item in value.values() if _clean_text(item))
+        elif _clean_text(value):
+            values.append(_clean_text(value))
+    return values
+
+
+def _resume_search_text(row: Dict[str, Any]) -> str:
+    fields = [
+        "resume_id",
+        "resume_name",
+        "title",
+        "summary",
+        "raw_text",
+        "normalized_text",
+        "evidence_text",
+        "skills",
+        "tools",
+        "methods",
+        "workflows",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+        "analytics_ml_signals",
+        "domain_signals",
+        "tooling_signals",
+        "quantified_bullets",
+        "bullets",
+    ]
+    return _dry_run_norm(" ".join(_resume_evidence_values(row, fields)))
+
+
+def _dimension_signal_map(jd_signals: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    return {
+        "hard_skills": jd_signals["required_skills"] + jd_signals["preferred_skills"],
+        "tools": jd_signals["required_tools"] + jd_signals["preferred_tools"],
+        "domain_workflow": (
+            jd_signals["workflows"]
+            + jd_signals["methods"]
+            + jd_signals["business_contexts"]
+        ),
+        "seniority": jd_signals["seniority_signals"],
+        "ownership": jd_signals["ownership_signals"],
+        "business_context": jd_signals["business_contexts"],
+        "stakeholder_communication": jd_signals["stakeholder_contexts"],
+        "production_engineering": [
+            signal
+            for signal in (
+                jd_signals["workflows"]
+                + jd_signals["methods"]
+                + jd_signals["required_tools"]
+                + jd_signals["preferred_tools"]
+            )
+            if any(token in _dry_run_norm(signal) for token in ("production", "pipeline", "deploy", "airflow", "dbt", "engineering"))
+        ],
+        "ai_ml_rag_llmops": [
+            signal
+            for signal in (
+                jd_signals["required_skills"]
+                + jd_signals["preferred_skills"]
+                + jd_signals["required_tools"]
+                + jd_signals["preferred_tools"]
+                + jd_signals["workflows"]
+                + jd_signals["methods"]
+            )
+            if any(token in _dry_run_norm(signal) for token in ("ai", "ml", "machine learning", "rag", "llm", "llmops", "embedding"))
+        ],
+    }
+
+
+def _score_resume_variant(
+    *,
+    resume_id: str,
+    resume_row: Dict[str, Any],
+    dimension_signals: Dict[str, List[str]],
+) -> Dict[str, Any]:
+    text_norm = _resume_search_text(resume_row)
+    dimension_scores: Dict[str, float] = {}
+    matched_evidence: List[Dict[str, str]] = []
+    weak_evidence: List[str] = []
+    missing_evidence: List[str] = []
+
+    if not text_norm:
+        missing_evidence.append("resume_evidence_missing")
+
+    for dimension in RESUME_MATCH_DRY_RUN_DIMENSIONS:
+        signals = list(dict.fromkeys(dimension_signals.get(dimension, [])))
+        if not signals:
+            dimension_scores[dimension] = 0.0
+            missing_evidence.append(f"{dimension}:jd_signals_missing")
+            continue
+
+        matched = [signal for signal in signals if _dry_run_contains(text_norm, signal)]
+        score = round(len(matched) / len(signals), 4) if signals else 0.0
+        dimension_scores[dimension] = score
+        for signal in matched:
+            matched_evidence.append(
+                {
+                    "resume_id": resume_id,
+                    "dimension": dimension,
+                    "signal": signal,
+                    "evidence": signal,
+                }
+            )
+        if 0 < score < 0.5:
+            weak_evidence.append(f"{dimension}:partial_coverage")
+        if score == 0:
+            missing_evidence.append(f"{dimension}:no_matching_resume_evidence")
+
+    overall_score = round(
+        sum(dimension_scores.values()) / len(RESUME_MATCH_DRY_RUN_DIMENSIONS),
+        4,
+    )
+    if overall_score >= 0.70:
+        recommendation_label = "strong_match"
+        match_status = "strong_match"
+    elif overall_score >= 0.40:
+        recommendation_label = "partial_match"
+        match_status = "partial_match"
+    else:
+        recommendation_label = "weak_match"
+        match_status = "weak_match"
+
+    return {
+        "resume_id": resume_id,
+        "score": overall_score,
+        "match_status": match_status,
+        "recommendation_label": recommendation_label,
+        "dimension_scores": dimension_scores,
+        "matched_evidence": matched_evidence,
+        "weak_evidence": weak_evidence,
+        "missing_evidence": missing_evidence,
+    }
+
+
+def build_resume_match_dry_run_payload(
+    *,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: str = "",
+    context_id: str = "",
+    job_id: str = "",
+) -> Dict[str, Any]:
+    """Compare JD intelligence signals to resume evidence without side effects."""
+
+    jd_source = deepcopy(jd_intelligence if jd_intelligence is not None else jd_signals or {})
+    variants = deepcopy(resume_variants if resume_variants is not None else resume_evidence_rows or [])
+    if not isinstance(jd_source, dict):
+        jd_source = {}
+    if not isinstance(variants, list):
+        variants = []
+
+    signal_fields = [
+        "required_skills",
+        "preferred_skills",
+        "required_tools",
+        "preferred_tools",
+        "workflows",
+        "methods",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+    ]
+    normalized_jd_signals = {
+        field_name: _dry_run_list(jd_source.get(field_name))
+        for field_name in signal_fields
+    }
+    source_fields_used = [
+        field_name for field_name, values in normalized_jd_signals.items() if values
+    ]
+    dimension_signals = _dimension_signal_map(normalized_jd_signals)
+    missing_evidence: List[str] = []
+    risk_flags: List[str] = []
+    if not source_fields_used:
+        missing_evidence.append("jd_signals_missing")
+        risk_flags.append("low_information_jd")
+    if not variants:
+        missing_evidence.append("resume_evidence_missing")
+        risk_flags.append("resume_evidence_unavailable")
+
+    candidate_scores = [
+        _score_resume_variant(
+            resume_id=_resume_variant_id(row if isinstance(row, dict) else {}, index),
+            resume_row=row if isinstance(row, dict) else {},
+            dimension_signals=dimension_signals,
+        )
+        for index, row in enumerate(variants)
+    ]
+    candidate_scores = sorted(
+        candidate_scores,
+        key=lambda row: (-float(row.get("score", 0.0)), _clean_text(row.get("resume_id"))),
+    )
+    selected = (
+        next(
+            (row for row in candidate_scores if row["resume_id"] == _clean_text(selected_resume_id)),
+            None,
+        )
+        if _clean_text(selected_resume_id)
+        else None
+    )
+    selected = selected or (candidate_scores[0] if candidate_scores else {})
+    selected_id = _clean_text(selected.get("resume_id"))
+
+    dimension_scores = dict(selected.get("dimension_scores") or {
+        dimension: 0.0 for dimension in RESUME_MATCH_DRY_RUN_DIMENSIONS
+    })
+    matched_evidence = list(selected.get("matched_evidence") or [])
+    weak_evidence = list(selected.get("weak_evidence") or [])
+    missing_evidence = list(dict.fromkeys(missing_evidence + list(selected.get("missing_evidence") or [])))
+    score = float(selected.get("score", 0.0) or 0.0)
+    if not candidate_scores:
+        match_status = "insufficient_evidence"
+        recommendation_label = "manual_review"
+    elif not source_fields_used:
+        match_status = "insufficient_jd_signals"
+        recommendation_label = "manual_review"
+    else:
+        match_status = _clean_text(selected.get("match_status")) or "weak_match"
+        recommendation_label = _clean_text(selected.get("recommendation_label")) or "manual_review"
+    confidence = round(score, 4)
+    rationale = (
+        "Dry-run resume match compared JD intelligence signals against in-memory resume evidence only."
+        if candidate_scores and source_fields_used
+        else "Dry-run resume match has limited information; no production score, ranking, queue, or approval was changed."
+    )
+
+    return {
+        "match_status": match_status,
+        "selected_resume_id": selected_id,
+        "candidate_resume_scores": candidate_scores,
+        "dimension_scores": dimension_scores,
+        "matched_evidence": matched_evidence,
+        "weak_evidence": weak_evidence,
+        "missing_evidence": missing_evidence,
+        "risk_flags": list(dict.fromkeys(risk_flags)),
+        "recommendation_label": recommendation_label,
+        "confidence": confidence,
+        "rationale": rationale,
+        "source_fields_used": source_fields_used,
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "safety_metadata": _dry_run_safety_metadata(),
+    }

@@ -415,6 +415,14 @@ class ManualExecutionLaunchGatePreviewRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualExecutionLaunchGateObservabilityRequest(BaseModel):
+    execution_launch_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1915,6 +1923,24 @@ def invoke_manual_execution_launch_gate_preview_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_execution_launch_gate_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-execution-launch-gate-observability")
+def invoke_manual_execution_launch_gate_observability_api_action(
+    request: ManualExecutionLaunchGateObservabilityRequest,
+):
+    payload = services.build_execution_launch_gate_observability_payload(
+        execution_launch_gate_payload=request.execution_launch_gate_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_execution_launch_gate_observability",
     }
 
 

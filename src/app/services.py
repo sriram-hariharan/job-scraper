@@ -14436,6 +14436,137 @@ def build_execution_launch_gate_preview_payload(
     }
 
 
+def _execution_launch_gate_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "execution_launch_gate_audit_only": True,
+        "manual_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_launch_gate_observability_payload(
+    *,
+    execution_launch_gate_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize an execution launch gate preview without launching anything."""
+
+    source_payload = deepcopy(execution_launch_gate_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("execution_launch_gate_status"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        blocked_actions.append("execution_launch_gate_payload_missing")
+        next_safe_step = "preview_execution_launch_gate_before_audit"
+    elif source_status == "ready_for_future_manual_execution":
+        observability_status = "observed_ready"
+        future_allowed = True
+        launch_blocked = False
+        launch_allowed_later = True
+        next_safe_step = "collect_explicit_future_manual_execution_confirmation"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        next_safe_step = _clean_text(source_payload.get("next_safe_step")) or "resolve_execution_launch_gate_blockers"
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        blocked_actions.append("execution_launch_gate_status_unrecognized")
+        next_safe_step = "rebuild_execution_launch_gate_payload"
+    else:
+        observability_status = "insufficient_information"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        blocked_actions.append("execution_launch_gate_status_missing")
+        next_safe_step = "preview_execution_launch_gate_before_audit"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "future_manual_execution_allowed": future_allowed,
+        "execution_launch_was_blocked": launch_blocked,
+        "execution_launch_was_allowed_later": launch_allowed_later,
+        "source_executed_application": bool(source_safety_payload.get("did_execute_application")),
+        "source_submitted_application": bool(source_safety_payload.get("did_submit_application")),
+    }
+    audit_events = [
+        {
+            "event_type": "execution_launch_gate_observed",
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "source_execution_launch_gate_status": source_status or "missing",
+            "future_manual_execution_allowed": future_allowed,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_execute_application": bool(source_safety_payload.get("did_execute_application")),
+        "source_did_submit_application": bool(source_safety_payload.get("did_submit_application")),
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+    }
+
+    return {
+        "execution_launch_gate_observability_status": observability_status,
+        "source_execution_launch_gate_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "future_manual_execution_allowed": future_allowed,
+        "execution_launch_was_blocked": launch_blocked,
+        "execution_launch_was_allowed_later": launch_allowed_later,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _execution_launch_gate_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_launch_gate_observability",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

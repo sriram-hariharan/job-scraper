@@ -13357,6 +13357,220 @@ def _artifact_json_by_name(rows: List[Dict[str, Any]], artifact_name: str) -> Di
     return dict(parsed) if isinstance(parsed, dict) else {}
 
 
+GUARDED_APPROVAL_STATUS_TRANSITION_STORAGE_STATUS = {
+    "approve": "approved",
+    "reject": "denied",
+}
+
+
+def _guarded_approval_status_transition_safety_metadata(
+    *,
+    did_update_approval_status: bool,
+) -> Dict[str, Any]:
+    return {
+        "manual_only": True,
+        "guarded_status_transition_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": bool(did_update_approval_status),
+        "did_update_approval_status": bool(did_update_approval_status),
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_update_approval_status),
+    }
+
+
+def build_guarded_approval_status_transition_payload(
+    *,
+    approval_request_id: Any = "",
+    proposed_transition: Any = "",
+    reviewer_confirmation: Any = False,
+    reviewer_note: Any = "",
+    transition_preview_payload: Dict[str, Any] | None = None,
+    approval_request_readback_payload: Dict[str, Any] | None = None,
+    guarded_creation_payload: Dict[str, Any] | None = None,
+    observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+    connection: Any = None,
+    connection_provider: Any = None,
+    storage_module: Any = None,
+    decided_at: Any = None,
+) -> Dict[str, Any]:
+    """Apply an explicitly confirmed approval status transition through the guarded manual path."""
+
+    preview_payload = deepcopy(transition_preview_payload or {})
+    if not isinstance(preview_payload, dict):
+        preview_payload = {}
+    readback_payload = deepcopy(approval_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    creation_payload = deepcopy(guarded_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observed_payload = deepcopy(observability_payload or {})
+    if not isinstance(observed_payload, dict):
+        observed_payload = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(preview_payload.get("approval_request_id"))
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("created_approval_request_id"))
+        or _clean_text(observed_payload.get("created_approval_request_id"))
+    )
+    transition = _clean_text(proposed_transition) or _clean_text(preview_payload.get("proposed_transition"))
+    source_preview_status = _clean_text(preview_payload.get("transition_preview_status")) or "missing"
+    previous_status = (
+        _clean_text((readback_payload.get("approval_request_fields") or {}).get("approval_status"))
+        or _clean_text((readback_payload.get("approval_request_summary") or {}).get("approval_status"))
+    )
+    blocked_actions: List[str] = []
+
+    def _blocked(status: str, next_safe_step: str, *blockers: str) -> Dict[str, Any]:
+        blocked_actions.extend(blocker for blocker in blockers if blocker)
+        return {
+            "approval_status_transition_status": status,
+            "approval_request_id": request_id,
+            "proposed_transition": transition,
+            "applied_transition": "",
+            "previous_status": previous_status,
+            "new_status": previous_status,
+            "transition_applied": False,
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_reviewer_confirmation": True,
+            "source_transition_preview_status": source_preview_status,
+            "next_safe_step": next_safe_step,
+            "rationale": (
+                "Guarded approval status transition is manual-only and requires a ready "
+                "transition preview plus explicit reviewer confirmation before any approval "
+                "status update can be attempted."
+            ),
+            "reviewer_note": _clean_text(reviewer_note),
+            "context_id": _clean_text(context_id) or _clean_text(preview_payload.get("context_id")),
+            "job_id": _clean_text(job_id) or _clean_text(preview_payload.get("job_id")),
+            "safety_metadata": _guarded_approval_status_transition_safety_metadata(
+                did_update_approval_status=False
+            ),
+            "manual_surface": True,
+            "service_surface": "guarded_approval_status_transition",
+        }
+
+    if not request_id:
+        return _blocked(
+            "blocked_missing_approval_request_id",
+            "provide_approval_request_id",
+            "approval_request_id_missing",
+        )
+    if transition not in APPROVAL_STATUS_TRANSITION_PREVIEW_OPTIONS:
+        return _blocked(
+            "blocked_invalid_transition",
+            "select_supported_transition",
+            "proposed_transition_invalid",
+        )
+    if source_preview_status != "preview_ready":
+        return _blocked(
+            "blocked_by_preview",
+            "run_approval_status_transition_preview_before_apply",
+            "transition_preview_not_ready",
+        )
+    if _clean_text(readback_payload.get("readback_status")) == "not_found":
+        return _blocked(
+            "blocked_not_found",
+            "verify_approval_request_id",
+            "approval_request_not_found",
+        )
+    if reviewer_confirmation is not True:
+        return _blocked(
+            "blocked_by_missing_confirmation",
+            "collect_explicit_reviewer_confirmation",
+            "reviewer_confirmation_missing",
+        )
+
+    storage_status = GUARDED_APPROVAL_STATUS_TRANSITION_STORAGE_STATUS.get(transition)
+    if not storage_status:
+        return _blocked(
+            "blocked_invalid_transition",
+            "use_existing_supported_approval_storage_transition",
+            "transition_not_supported_by_existing_storage_status_values",
+        )
+
+    resolved_connection = connection
+    if resolved_connection is None and callable(connection_provider):
+        resolved_connection = connection_provider()
+    if resolved_connection is None:
+        return _blocked(
+            "blocked_by_storage_error",
+            "configure_approval_storage_connection",
+            "approval_storage_connection_unavailable",
+        )
+
+    if storage_module is None:
+        from src.storage.agentic_approvals import store as storage_module
+
+    try:
+        updated_row = storage_module.record_approval_decision(
+            resolved_connection,
+            approval_request_id=request_id,
+            approval_status=storage_status,
+            reviewer_id="manual_operator",
+            review_reason=_clean_text(reviewer_note),
+            event_payload={
+                "manual_guarded_status_transition": True,
+                "proposed_transition": transition,
+                "approval_request_id": request_id,
+            },
+            decided_at=decided_at,
+        )
+    except Exception:
+        return _blocked(
+            "blocked_by_storage_error",
+            "retry_guarded_approval_status_transition",
+            "approval_status_transition_storage_error",
+        )
+
+    updated_payload = _approval_request_readback_row(updated_row)
+    if not updated_payload:
+        return _blocked(
+            "blocked_not_found",
+            "verify_approval_request_id",
+            "approval_request_not_found",
+        )
+
+    new_status = _clean_text(updated_payload.get("approval_status")) or storage_status
+    return {
+        "approval_status_transition_status": "updated",
+        "approval_request_id": request_id,
+        "proposed_transition": transition,
+        "applied_transition": transition,
+        "previous_status": previous_status,
+        "new_status": new_status,
+        "transition_applied": True,
+        "blocked_actions": [],
+        "required_reviewer_confirmation": True,
+        "source_transition_preview_status": source_preview_status,
+        "next_safe_step": "review_updated_approval_request_status",
+        "rationale": (
+            "Explicit reviewer confirmation was present and the transition preview was ready; "
+            "only the approval request status was updated through the existing guarded manual path."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": _clean_text(context_id) or _clean_text(preview_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(preview_payload.get("job_id")),
+        "safety_metadata": _guarded_approval_status_transition_safety_metadata(
+            did_update_approval_status=True
+        ),
+        "manual_surface": True,
+        "service_surface": "guarded_approval_status_transition",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

@@ -8,7 +8,13 @@ from fastapi.testclient import TestClient
 from src.app import api, services
 
 
-ENDPOINT = "/api/manual-shadow-recommendation-handoff-dry-run"
+ENDPOINT = "/api/manual-human-decision-capture-dry-run"
+VALID_DECISIONS = [
+    "accept_recommendation_for_review",
+    "request_more_tailoring",
+    "save_for_later",
+    "dismiss_shadow_recommendation",
+]
 
 
 def _client(monkeypatch):
@@ -16,37 +22,34 @@ def _client(monkeypatch):
     return TestClient(api.app)
 
 
-def _shadow_chain_payload() -> dict:
+def _handoff_payload() -> dict:
     return {
-        "shadow_chain_status": "completed",
+        "handoff_status": "ready_for_human_review",
         "recommendation_action": "tailor_first",
+        "recommendation_label": "strong_match_with_approved_tailoring",
+        "required_human_review": True,
+        "reviewer_decision_options": list(VALID_DECISIONS),
         "blocking_risks": [],
         "improvement_actions": ["Review approved tailoring suggestions before applying."],
         "stage_statuses": {
-            "jd_intelligence": "disabled",
             "resume_match": "strong_match",
-            "tailoring_suggestion": "patch_ready_available",
             "critic_guardrail": "approved",
             "strategy_recommendation": "ready",
         },
         "confidence": 0.91,
+        "source_shadow_chain_status": "completed",
         "context_id": "ctx-1",
         "job_id": "job-1",
-        "stages": {
-            "strategy_recommendation": {
-                "recommendation_label": "strong_match_with_approved_tailoring",
-                "strategy_status": "ready",
-            }
-        },
         "safety_metadata": {
             "dry_run_only": True,
-            "shadow_mode": True,
-            "did_call_llm": False,
+            "review_only": True,
+            "human_gate_required": True,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_mutate_queue": False,
             "did_mutate_resume": False,
             "did_mutate_scoring": False,
             "did_change_ranking": False,
-            "did_mutate_queue": False,
-            "did_mutate_approval": False,
             "did_execute_application": False,
             "did_submit_application": False,
             "pipeline_wiring_added": False,
@@ -55,11 +58,12 @@ def _shadow_chain_payload() -> dict:
     }
 
 
-def _assert_handoff_safety(payload: dict) -> None:
+def _assert_decision_safety(payload: dict) -> None:
     safety = payload["safety_metadata"]
     assert payload["read_only"] is True
     assert payload["manual_surface"] is True
     assert safety["dry_run_only"] is True
+    assert safety["decision_capture_only"] is True
     assert safety["review_only"] is True
     assert safety["human_gate_required"] is True
     assert safety["did_create_approval"] is False
@@ -74,44 +78,53 @@ def _assert_handoff_safety(payload: dict) -> None:
     assert safety["advisory_only"] is True
 
 
-def test_helper_builds_review_only_handoff_from_shadow_chain_payload():
-    source = _shadow_chain_payload()
-    original = deepcopy(source)
+def test_helper_accepts_each_valid_reviewer_decision():
+    for decision in VALID_DECISIONS:
+        handoff = _handoff_payload()
+        original = deepcopy(handoff)
 
-    first = services.build_shadow_recommendation_handoff_payload(
-        shadow_chain_payload=source,
-    )
-    second = services.build_shadow_recommendation_handoff_payload(
-        shadow_chain_payload=source,
-    )
+        payload = services.build_human_decision_capture_dry_run_payload(
+            handoff_payload=handoff,
+            reviewer_decision=decision,
+            reviewer_note="Looks reasonable <review>",
+        )
 
-    assert first == second
-    assert source == original
-    assert first["service_surface"] == "shadow_recommendation_handoff_dry_run"
-    assert first["handoff_status"] == "ready_for_human_review"
-    assert first["recommendation_action"] == "tailor_first"
-    assert first["recommendation_label"] == "strong_match_with_approved_tailoring"
-    assert first["required_human_review"] is True
-    assert first["reviewer_decision_options"] == [
-        "accept_recommendation_for_review",
-        "request_more_tailoring",
-        "save_for_later",
-        "dismiss_shadow_recommendation",
-    ]
-    assert first["source_shadow_chain_status"] == "completed"
-    _assert_handoff_safety(first)
+        assert handoff == original
+        assert payload["decision_capture_status"] == "captured_for_review"
+        assert payload["reviewer_decision"] == decision
+        assert payload["reviewer_note"] == "Looks reasonable <review>"
+        assert payload["accepted_decision"] is True
+        assert payload["required_human_review"] is True
+        assert payload["source_recommendation_action"] == "tailor_first"
+        assert payload["source_handoff_status"] == "ready_for_human_review"
+        _assert_decision_safety(payload)
 
 
-def test_helper_missing_shadow_chain_returns_safe_fallback():
-    payload = services.build_shadow_recommendation_handoff_payload(
-        shadow_chain_payload={},
+def test_helper_invalid_reviewer_decision_returns_safe_invalid_status():
+    payload = services.build_human_decision_capture_dry_run_payload(
+        handoff_payload=_handoff_payload(),
+        reviewer_decision="approve_and_submit",
     )
 
-    assert payload["handoff_status"] == "blocked_pending_human_review"
-    assert payload["recommendation_action"] == "insufficient_information"
+    assert payload["decision_capture_status"] == "invalid_reviewer_decision"
+    assert payload["accepted_decision"] is False
+    assert payload["next_review_action"] == "no_action_invalid_decision"
+    assert "invalid_reviewer_decision" in payload["blocking_risks"]
+    _assert_decision_safety(payload)
+
+
+def test_helper_missing_handoff_output_returns_safe_fallback():
+    payload = services.build_human_decision_capture_dry_run_payload(
+        handoff_payload={},
+        reviewer_decision="save_for_later",
+    )
+
+    assert payload["decision_capture_status"] == "captured_with_blockers"
+    assert payload["accepted_decision"] is True
+    assert payload["source_recommendation_action"] == "insufficient_information"
     assert "resume_match_payload_missing" in payload["blocking_risks"]
     assert "critic_guardrail_payload_missing" in payload["blocking_risks"]
-    _assert_handoff_safety(payload)
+    _assert_decision_safety(payload)
 
 
 def test_api_route_exists_as_post_only():
@@ -120,37 +133,30 @@ def test_api_route_exists_as_post_only():
     assert routes[ENDPOINT].methods == {"POST"}
 
 
-def test_api_route_returns_readonly_handoff_payload(monkeypatch):
+def test_api_route_returns_readonly_decision_capture_payload(monkeypatch):
     response = _client(monkeypatch).post(
         ENDPOINT,
-        json={"shadow_chain_payload": _shadow_chain_payload()},
+        json={
+            "handoff_payload": _handoff_payload(),
+            "reviewer_decision": "request_more_tailoring",
+            "reviewer_note": "Need stronger tailoring evidence.",
+        },
     )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["api_surface"] == "manual_shadow_recommendation_handoff_dry_run"
+    assert payload["api_surface"] == "manual_human_decision_capture_dry_run"
     assert payload["explicit_user_action"] is True
-    assert payload["handoff_status"] == "ready_for_human_review"
-    assert payload["recommendation_action"] == "tailor_first"
-    _assert_handoff_safety(payload)
-
-
-def test_api_route_handles_missing_output_normally(monkeypatch):
-    response = _client(monkeypatch).post(ENDPOINT, json={})
-
-    assert response.status_code == 200
-    payload = response.json()
-    assert payload["recommendation_action"] == "insufficient_information"
-    assert payload["required_human_review"] is True
-    assert "resume_match_payload_missing" in payload["blocking_risks"]
-    _assert_handoff_safety(payload)
+    assert payload["decision_capture_status"] == "captured_for_review"
+    assert payload["reviewer_decision"] == "request_more_tailoring"
+    _assert_decision_safety(payload)
 
 
 def test_api_route_slice_has_no_storage_scoring_queue_approval_execution_or_llm_calls():
     source = Path("src/app/api.py").read_text()
-    start = source.index("class ManualShadowRecommendationHandoffDryRunRequest")
+    start = source.index("class ManualHumanDecisionCaptureDryRunRequest")
     class_end = source.index("@asynccontextmanager")
-    route_start = source.index('@app.post("/api/manual-shadow-recommendation-handoff-dry-run")')
+    route_start = source.index('@app.post("/api/manual-human-decision-capture-dry-run")')
     route_end = source.index(
         '@app.post(\n    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-reporting-job"'
     )
@@ -194,7 +200,7 @@ def test_api_route_slice_has_no_storage_scoring_queue_approval_execution_or_llm_
 
 def test_service_helper_slice_has_no_storage_scoring_queue_approval_or_pipeline_wiring_calls():
     source = Path("src/app/services.py").read_text()
-    start = source.index("def build_shadow_recommendation_handoff_payload")
+    start = source.index("def build_human_decision_capture_dry_run_payload")
     end = source.index("def _artifact_row_by_name")
     snippet = source[start:end]
 
@@ -223,34 +229,33 @@ def test_service_helper_slice_has_no_storage_scoring_queue_approval_or_pipeline_
         assert marker not in snippet
 
 
-def test_ui_renders_and_escapes_handoff_output():
+def test_ui_renders_and_escapes_decision_capture_output():
     source = Path("src/app/static/agentic_review.js").read_text()
-    start = source.index("function renderManualShadowRecommendationHandoffDryRunSection")
+    start = source.index("function renderManualHumanDecisionCaptureDryRunSection")
     end = source.index("function renderAgentTraceReadOnlyPanel")
     snippet = source[start:end]
 
-    assert "Manual Shadow Recommendation Handoff" in snippet
-    assert "Build Shadow Recommendation Handoff" in snippet
-    assert "data-manual-shadow-recommendation-handoff-dry-run" in snippet
+    assert "Manual Human Decision Capture Dry-run" in snippet
+    assert "Capture Decision Dry-run" in snippet
+    assert "data-manual-human-decision-capture-dry-run" in snippet
+    assert "data-manual-human-decision-capture-dry-run-select" in snippet
+    assert "escapeHtml(option)" in snippet
     assert "escapeHtml(jobTitle)" in snippet
     assert "escapeHtml(company)" in snippet
     assert "escapeHtml(location)" in snippet
     assert "escapeHtml(contextId)" in snippet
     assert "escapeHtml(jobId)" in snippet
-    assert "renderAgentTraceReadOnlyDetails(\"Reviewer decision options\"" in snippet
+    assert "renderAgentTraceReadOnlyDetails(\"Reviewer note\"" in snippet
     assert "renderAgentTraceReadOnlyDetails(\"Blocking risks\"" in snippet
-    assert "renderAgentTraceReadOnlyDetails(\"Improvement actions\"" in snippet
-    assert "renderAgentTraceReadOnlyDetails(\"Stage statuses\"" in snippet
     assert "renderAgentTraceReadOnlyDetails(\"Safety metadata\"" in snippet
-    assert "result.stages" not in snippet
 
 
-def test_ui_click_posts_endpoint_and_existing_shadow_chain_surface_still_exists():
+def test_ui_click_posts_endpoint_and_existing_shadow_handoff_surface_still_exists():
     source = Path("src/app/static/agentic_review.js").read_text()
 
+    assert source.count("/api/manual-human-decision-capture-dry-run") == 1
+    assert source.count("data-manual-human-decision-capture-dry-run") == 6
+    assert "manual_human_decision_capture_dry_run_result" in source
+    assert "renderManualHumanDecisionCaptureDryRunSection(tracePayload)" in source
     assert source.count("/api/manual-shadow-recommendation-handoff-dry-run") == 1
-    assert source.count("data-manual-shadow-recommendation-handoff-dry-run") == 4
-    assert "manual_shadow_recommendation_handoff_dry_run_result" in source
     assert "renderManualShadowRecommendationHandoffDryRunSection(tracePayload)" in source
-    assert source.count("/api/manual-shadow-agentic-workflow-chain-dry-run") == 1
-    assert "renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)" in source

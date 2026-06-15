@@ -1312,6 +1312,74 @@ function renderManualShadowRecommendationHandoffDryRunSection(tracePayload = {})
   `;
 }
 
+function renderManualHumanDecisionCaptureDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_human_decision_capture_dry_run_result)
+    ? tracePayload.manual_human_decision_capture_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const handoff = hasAgentTraceSummaryObject(tracePayload?.manual_shadow_recommendation_handoff_dry_run_result)
+    ? tracePayload.manual_shadow_recommendation_handoff_dry_run_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobTitle = metadata.job_title || metadata.title || "";
+  const company = metadata.company || "";
+  const location = metadata.location || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const options = Array.isArray(handoff.reviewer_decision_options) && handoff.reviewer_decision_options.length
+    ? handoff.reviewer_decision_options
+    : [
+      "accept_recommendation_for_review",
+      "request_more_tailoring",
+      "save_for_later",
+      "dismiss_shadow_recommendation",
+    ];
+  return `
+    <article class="agent-trace-summary" aria-label="Manual human decision capture dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Human Decision Capture Dry-run</h4>
+          <p>Simulated reviewer decision capture. It creates no approval request, changes no queue or approval state, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Decision dry-run</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Capture", result.decision_capture_status || "not run")}
+        ${renderWorkflowSummaryMetric("Decision", result.reviewer_decision || "-")}
+        ${renderWorkflowSummaryMetric("Accepted", result.accepted_decision === true ? "yes" : result.accepted_decision === false ? "no" : "-")}
+        ${renderWorkflowSummaryMetric("Next action", result.next_review_action || "-")}
+        ${renderWorkflowSummaryMetric("Approval created", safety.did_create_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Reviewer note", result.reviewer_note || "", { helper: "Simulated reviewer note." })}
+        ${renderAgentTraceReadOnlyDetails("Source recommendation action", result.source_recommendation_action || "", { helper: "Source handoff recommendation action." })}
+        ${renderAgentTraceReadOnlyDetails("Blocking risks", result.blocking_risks || [], { helper: "Decision capture dry-run blocking risks." })}
+        ${renderAgentTraceReadOnlyDetails("Improvement actions", result.improvement_actions || [], { helper: "Decision capture dry-run improvement actions." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Decision capture dry-run rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable human decision capture safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <select class="agentic-feedback-action" data-manual-human-decision-capture-dry-run-select aria-label="Shadow recommendation reviewer decision">
+          ${options.map((option) => `<option value="${escapeHtml(option)}">${escapeHtml(option)}</option>`).join("")}
+        </select>
+        <button type="button" class="agentic-feedback-action" data-manual-human-decision-capture-dry-run data-job-title="${escapeHtml(jobTitle)}" data-company="${escapeHtml(company)}" data-location="${escapeHtml(location)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Capture Decision Dry-run
+        </button>
+        <span class="agentic-review-muted" data-manual-human-decision-capture-dry-run-status>
+          Manual only. This records a simulated decision and does not mutate approval state.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1365,6 +1433,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualStrategyRecommendationDryRunSection(tracePayload)}
       ${renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)}
       ${renderManualShadowRecommendationHandoffDryRunSection(tracePayload)}
+      ${renderManualHumanDecisionCaptureDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -3050,6 +3119,65 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual shadow recommendation handoff failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-human-decision-capture-dry-run]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const select = section?.querySelector("[data-manual-human-decision-capture-dry-run-select]");
+    const status = section?.querySelector("[data-manual-human-decision-capture-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Capturing simulated review-only human decision...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const decisionCaptureResult = await fetchJson(
+        "/api/manual-human-decision-capture-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            handoff_payload: tracePayload.manual_shadow_recommendation_handoff_dry_run_result || {},
+            shadow_chain_payload: tracePayload.manual_shadow_agentic_workflow_chain_dry_run_result || {},
+            reviewer_decision: select?.value || "accept_recommendation_for_review",
+            reviewer_note: "",
+            job_title: button.dataset.jobTitle || "",
+            company: button.dataset.company || "",
+            location: button.dataset.location || "",
+            job_description: "",
+            source_metadata: {
+              source: "agent_trace_manual_panel",
+            },
+            jd_intelligence: tracePayload.manual_jd_intelligence_dry_run_result || {},
+            resume_variants: [],
+            resume_evidence_rows: [],
+            selected_resume_id: tracePayload.manual_resume_match_dry_run_result?.selected_resume_id || "",
+            user_preferences: {},
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_human_decision_capture_dry_run_result: decisionCaptureResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual human decision capture dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

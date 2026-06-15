@@ -11808,6 +11808,125 @@ def build_shadow_recommendation_handoff_payload(
     }
 
 
+def _human_decision_capture_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "decision_capture_only": True,
+        "review_only": True,
+        "human_gate_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def _human_decision_next_review_action(reviewer_decision: str) -> str:
+    if reviewer_decision == "accept_recommendation_for_review":
+        return "review_shadow_recommendation"
+    if reviewer_decision == "request_more_tailoring":
+        return "review_tailoring_or_evidence_gaps"
+    if reviewer_decision == "save_for_later":
+        return "save_shadow_recommendation_for_later"
+    if reviewer_decision == "dismiss_shadow_recommendation":
+        return "dismiss_shadow_recommendation"
+    return "no_action_invalid_decision"
+
+
+def build_human_decision_capture_dry_run_payload(
+    *,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    reviewer_decision: Any = "",
+    reviewer_note: Any = "",
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Simulate capture of a reviewer decision without mutating approval state."""
+
+    handoff = deepcopy(handoff_payload or {})
+    if not isinstance(handoff, dict):
+        handoff = {}
+    if not handoff:
+        handoff = build_shadow_recommendation_handoff_payload(
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            job_title=job_title,
+            company=company,
+            location=location,
+            job_description=job_description,
+            source_metadata=deepcopy(source_metadata or {}),
+            jd_intelligence=deepcopy(jd_intelligence or {}),
+            jd_signals=deepcopy(jd_signals or {}),
+            resume_variants=deepcopy(resume_variants or []),
+            resume_evidence_rows=deepcopy(resume_evidence_rows or []),
+            selected_resume_id=selected_resume_id,
+            user_preferences=deepcopy(user_preferences or {}),
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    decision = _clean_text(reviewer_decision)
+    valid_options = set(SHADOW_RECOMMENDATION_HANDOFF_DECISION_OPTIONS)
+    accepted_decision = decision in valid_options
+    source_handoff_status = _clean_text(handoff.get("handoff_status")) or "missing"
+    if not accepted_decision:
+        decision_capture_status = "invalid_reviewer_decision"
+    elif source_handoff_status == "ready_for_human_review":
+        decision_capture_status = "captured_for_review"
+    else:
+        decision_capture_status = "captured_with_blockers"
+
+    blocking_risks = [
+        _clean_text(item)
+        for item in list(handoff.get("blocking_risks") or [])
+        if _clean_text(item)
+    ]
+    if not accepted_decision:
+        blocking_risks.append("invalid_reviewer_decision")
+    if source_handoff_status in {"", "missing"}:
+        blocking_risks.append("handoff_payload_missing")
+
+    return {
+        "decision_capture_status": decision_capture_status,
+        "reviewer_decision": decision,
+        "reviewer_note": _clean_text(reviewer_note),
+        "accepted_decision": accepted_decision,
+        "next_review_action": _human_decision_next_review_action(decision),
+        "source_recommendation_action": _clean_text(handoff.get("recommendation_action")) or "insufficient_information",
+        "source_handoff_status": source_handoff_status,
+        "required_human_review": True,
+        "blocking_risks": list(dict.fromkeys(blocking_risks)),
+        "improvement_actions": list(handoff.get("improvement_actions") or []),
+        "rationale": (
+            "Human decision capture dry-run records only a simulated reviewer choice; it "
+            "does not create approvals, mutate queues, change ranking, execute, or submit."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(handoff.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(handoff.get("job_id")),
+        "safety_metadata": _human_decision_capture_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "human_decision_capture_dry_run",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

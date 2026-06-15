@@ -447,6 +447,15 @@ class ManualGuardedExecutionRequestCreateRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualGuardedExecutionRequestObservabilityRequest(BaseModel):
+    guarded_execution_request_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    execution_request_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -2009,6 +2018,25 @@ def invoke_manual_guarded_execution_request_create_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_guarded_execution_request_create",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-observability")
+def invoke_manual_guarded_execution_request_observability_api_action(
+    request: ManualGuardedExecutionRequestObservabilityRequest,
+):
+    payload = services.build_guarded_execution_request_creation_observability_payload(
+        guarded_execution_request_creation_payload=request.guarded_execution_request_creation_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        execution_request_id=request.execution_request_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_observability",
     }
 
 

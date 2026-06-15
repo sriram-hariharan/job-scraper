@@ -1037,6 +1037,63 @@ function renderManualResumeMatchDryRunSection(tracePayload = {}) {
   `;
 }
 
+function renderManualTailoringSuggestionDryRunSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_tailoring_suggestion_dry_run_result)
+    ? tracePayload.manual_tailoring_suggestion_dry_run_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const resumeResult = hasAgentTraceSummaryObject(tracePayload?.manual_resume_match_dry_run_result)
+    ? tracePayload.manual_resume_match_dry_run_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const selectedResumeId = result.selected_resume_id || resumeResult.selected_resume_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual tailoring suggestion dry-run">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Tailoring Suggestion Dry-run</h4>
+          <p>Manual read-only dry-run. It proposes tailoring candidates from submitted JD signals, resume match gaps, and resume evidence in memory only and does not mutate resume content, scoring, ranking, queues, approvals, execution, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Dry-run read-only</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Status", result.suggestion_status || "not run")}
+        ${renderWorkflowSummaryMetric("Selected resume", result.selected_resume_id || "-")}
+        ${renderWorkflowSummaryMetric("Patch-ready", Array.isArray(result.patch_ready_suggestions) ? result.patch_ready_suggestions.length : 0)}
+        ${renderWorkflowSummaryMetric("Guidance", Array.isArray(result.guidance_only_suggestions) ? result.guidance_only_suggestions.length : 0)}
+        ${renderWorkflowSummaryMetric("Rejected", Array.isArray(result.rejected_suggestions) ? result.rejected_suggestions.length : 0)}
+        ${renderWorkflowSummaryMetric("Projected delta", result.projected_score_delta ?? "-")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("LLM calls", safety.did_call_llm ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Patch-ready suggestions", result.patch_ready_suggestions || [], { helper: "Dry-run patch-ready suggestions with direct resume evidence." })}
+        ${renderAgentTraceReadOnlyDetails("Guidance-only suggestions", result.guidance_only_suggestions || [], { helper: "Dry-run guidance when direct evidence is incomplete." })}
+        ${renderAgentTraceReadOnlyDetails("Rejected suggestions", result.rejected_suggestions || [], { helper: "Dry-run rejected unsupported tailoring claims." })}
+        ${renderAgentTraceReadOnlyDetails("Missing evidence", result.missing_evidence || [], { helper: "Dry-run missing evidence." })}
+        ${renderAgentTraceReadOnlyDetails("Unsupported claim risks", result.unsupported_claim_risks || [], { helper: "Dry-run unsupported claim risks." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Dry-run rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable tailoring suggestion dry-run safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-tailoring-suggestion-dry-run data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}" data-selected-resume-id="${escapeHtml(selectedResumeId)}">
+          Run tailoring dry-run
+        </button>
+        <span class="agentic-review-muted" data-manual-tailoring-suggestion-dry-run-status>
+          Manual only. Submitted resume evidence is optional; unsupported claims remain guidance-only or rejected.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -1085,6 +1142,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
+      ${renderManualTailoringSuggestionDryRunSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -2526,6 +2584,52 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual resume match dry-run failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-tailoring-suggestion-dry-run]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-manual-tailoring-suggestion-dry-run-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Running manual read-only tailoring suggestion dry-run...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const tailoringSuggestionResult = await fetchJson(
+        "/api/manual-tailoring-suggestion-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            jd_intelligence: tracePayload.manual_jd_intelligence_dry_run_result || {},
+            resume_match_payload: tracePayload.manual_resume_match_dry_run_result || {},
+            resume_variants: [],
+            resume_evidence_rows: [],
+            selected_resume_id: button.dataset.selectedResumeId || "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_tailoring_suggestion_dry_run_result: tailoringSuggestionResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual tailoring suggestion dry-run failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

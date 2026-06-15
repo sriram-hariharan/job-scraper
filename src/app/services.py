@@ -12987,6 +12987,210 @@ def build_guarded_approval_creation_observability_payload(
     }
 
 
+def _approval_request_readback_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "approval_request_readback_only": True,
+        "manual_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def _approval_request_readback_row(row: Any) -> Dict[str, Any]:
+    return dict(row or {}) if isinstance(row, dict) else {}
+
+
+def _approval_request_readback_summary(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "approval_request_id": _clean_text(row.get("approval_request_id")),
+        "approval_status": _clean_text(row.get("approval_status")),
+        "proposed_action_type": _clean_text(row.get("proposed_action_type")),
+        "proposed_action_summary": _clean_text(row.get("proposed_action_summary")),
+        "owner_id": _clean_text(row.get("owner_id")),
+        "created_at": _clean_text(row.get("created_at")),
+        "expires_at": _clean_text(row.get("expires_at")),
+    }
+
+
+def _approval_request_readback_fields(row: Dict[str, Any]) -> Dict[str, Any]:
+    allowed_fields = [
+        "approval_request_id",
+        "dry_run_artifact_id",
+        "owner_id",
+        "approval_status",
+        "proposed_action_type",
+        "proposed_action_summary",
+        "reviewer_id",
+        "review_decision",
+        "review_reason",
+        "created_at",
+        "updated_at",
+        "expires_at",
+        "approved_at",
+        "denied_at",
+        "revoked_at",
+    ]
+    return {
+        field_name: _clean_text(row.get(field_name))
+        for field_name in allowed_fields
+        if field_name in row
+    }
+
+
+def build_approval_request_readback_payload(
+    *,
+    approval_request_id: Any = "",
+    guarded_creation_payload: Dict[str, Any] | None = None,
+    observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+    connection: Any = None,
+    connection_provider: Any = None,
+    storage_module: Any = None,
+) -> Dict[str, Any]:
+    """Read back an approval request without mutating approval state."""
+
+    creation_payload = deepcopy(guarded_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observed_payload = deepcopy(observability_payload or {})
+    if not isinstance(observed_payload, dict):
+        observed_payload = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(creation_payload.get("created_approval_request_id"))
+        or _clean_text(observed_payload.get("created_approval_request_id"))
+    )
+    source_creation_status = _clean_text(creation_payload.get("approval_creation_status"))
+    source_observability_status = _clean_text(observed_payload.get("observability_status"))
+
+    if not request_id:
+        return {
+            "readback_status": "missing_approval_request_id",
+            "approval_request_id": "",
+            "approval_request_found": False,
+            "approval_request_summary": {},
+            "approval_request_fields": {},
+            "source_creation_status": source_creation_status,
+            "source_observability_status": source_observability_status,
+            "blocked_actions": ["approval_request_id_missing"],
+            "next_safe_step": "provide_approval_request_id",
+            "safety_metadata": _approval_request_readback_safety_metadata(),
+            "manual_surface": True,
+            "read_only": True,
+            "service_surface": "approval_request_readback",
+        }
+
+    if len(request_id) > 200 or any(char.isspace() for char in request_id):
+        return {
+            "readback_status": "invalid_approval_request_id",
+            "approval_request_id": request_id,
+            "approval_request_found": False,
+            "approval_request_summary": {},
+            "approval_request_fields": {},
+            "source_creation_status": source_creation_status,
+            "source_observability_status": source_observability_status,
+            "blocked_actions": ["approval_request_id_invalid"],
+            "next_safe_step": "provide_valid_approval_request_id",
+            "safety_metadata": _approval_request_readback_safety_metadata(),
+            "manual_surface": True,
+            "read_only": True,
+            "service_surface": "approval_request_readback",
+        }
+
+    resolved_connection = connection
+    if resolved_connection is None and callable(connection_provider):
+        resolved_connection = connection_provider()
+    if resolved_connection is None:
+        return {
+            "readback_status": "storage_read_error",
+            "approval_request_id": request_id,
+            "approval_request_found": False,
+            "approval_request_summary": {},
+            "approval_request_fields": {},
+            "source_creation_status": source_creation_status,
+            "source_observability_status": source_observability_status,
+            "blocked_actions": ["approval_storage_connection_unavailable"],
+            "next_safe_step": "configure_approval_storage_connection",
+            "safety_metadata": _approval_request_readback_safety_metadata(),
+            "manual_surface": True,
+            "read_only": True,
+            "service_surface": "approval_request_readback",
+        }
+
+    if storage_module is None:
+        from src.storage.agentic_approvals import store as storage_module
+
+    try:
+        row = storage_module.get_approval_request(
+            resolved_connection,
+            approval_request_id=request_id,
+        )
+    except Exception:
+        return {
+            "readback_status": "storage_read_error",
+            "approval_request_id": request_id,
+            "approval_request_found": False,
+            "approval_request_summary": {},
+            "approval_request_fields": {},
+            "source_creation_status": source_creation_status,
+            "source_observability_status": source_observability_status,
+            "blocked_actions": ["approval_storage_read_error"],
+            "next_safe_step": "retry_approval_request_readback",
+            "safety_metadata": _approval_request_readback_safety_metadata(),
+            "manual_surface": True,
+            "read_only": True,
+            "service_surface": "approval_request_readback",
+        }
+
+    row_payload = _approval_request_readback_row(row)
+    if not row_payload:
+        return {
+            "readback_status": "not_found",
+            "approval_request_id": request_id,
+            "approval_request_found": False,
+            "approval_request_summary": {},
+            "approval_request_fields": {},
+            "source_creation_status": source_creation_status,
+            "source_observability_status": source_observability_status,
+            "blocked_actions": ["approval_request_not_found"],
+            "next_safe_step": "verify_approval_request_id",
+            "safety_metadata": _approval_request_readback_safety_metadata(),
+            "manual_surface": True,
+            "read_only": True,
+            "service_surface": "approval_request_readback",
+        }
+
+    return {
+        "readback_status": "found",
+        "approval_request_id": request_id,
+        "approval_request_found": True,
+        "approval_request_summary": _approval_request_readback_summary(row_payload),
+        "approval_request_fields": _approval_request_readback_fields(row_payload),
+        "source_creation_status": source_creation_status,
+        "source_observability_status": source_observability_status,
+        "blocked_actions": [],
+        "next_safe_step": "review_approval_request_details",
+        "context_id": _clean_text(context_id) or _clean_text(creation_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(creation_payload.get("job_id")),
+        "safety_metadata": _approval_request_readback_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "approval_request_readback",
+    }
+
+
 def _artifact_row_by_name(rows: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
     return {
         _clean_text(row.get("artifact_name")): dict(row or {})

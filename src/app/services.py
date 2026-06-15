@@ -1,4 +1,5 @@
 from collections import Counter
+from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -11375,6 +11376,554 @@ def build_manual_strategy_recommendation_dry_run_payload(
         "manual_surface": True,
         "read_only": True,
         "service_surface": "manual_strategy_recommendation_dry_run",
+    }
+
+
+SHADOW_AGENTIC_WORKFLOW_STAGE_ORDER = [
+    "jd_intelligence",
+    "resume_match",
+    "tailoring_suggestion",
+    "critic_guardrail",
+    "strategy_recommendation",
+]
+
+
+def _shadow_chain_has_jd_signals(payload: Dict[str, Any]) -> bool:
+    signal_fields = [
+        "required_skills",
+        "preferred_skills",
+        "required_tools",
+        "preferred_tools",
+        "workflows",
+        "methods",
+        "business_contexts",
+        "stakeholder_contexts",
+        "ownership_signals",
+        "seniority_signals",
+    ]
+    return any(payload.get(field_name) for field_name in signal_fields)
+
+
+def _shadow_chain_stage_statuses(stages: Dict[str, Dict[str, Any]]) -> Dict[str, str]:
+    return {
+        "jd_intelligence": _clean_text(
+            stages["jd_intelligence"].get("validation_status")
+            or stages["jd_intelligence"].get("fallback_used")
+            or "unknown"
+        ),
+        "resume_match": _clean_text(stages["resume_match"].get("match_status")) or "unknown",
+        "tailoring_suggestion": _clean_text(stages["tailoring_suggestion"].get("suggestion_status")) or "unknown",
+        "critic_guardrail": _clean_text(stages["critic_guardrail"].get("critic_status")) or "unknown",
+        "strategy_recommendation": _clean_text(stages["strategy_recommendation"].get("strategy_status")) or "unknown",
+    }
+
+
+def _shadow_chain_stage_called_llm(stages: Dict[str, Dict[str, Any]]) -> bool:
+    return any(
+        bool((stage.get("safety_metadata") or {}).get("did_call_llm"))
+        for stage in stages.values()
+        if isinstance(stage, dict)
+    )
+
+
+def _shadow_chain_safety_metadata(stages: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "shadow_mode": True,
+        "manual_or_service_only": True,
+        "did_call_llm": _shadow_chain_stage_called_llm(stages),
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_approval": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def _shadow_chain_blocking_risks(
+    stages: Dict[str, Dict[str, Any]],
+    *,
+    effective_jd: Dict[str, Any],
+) -> List[str]:
+    risks: List[str] = []
+    strategy = stages.get("strategy_recommendation") or {}
+    risks.extend(list(strategy.get("blocking_risks") or []))
+
+    if not _shadow_chain_has_jd_signals(effective_jd):
+        risks.append("jd_intelligence_missing")
+
+    resume_match = stages.get("resume_match") or {}
+    resume_status = _clean_text(resume_match.get("match_status"))
+    if resume_status == "insufficient_evidence":
+        risks.append("resume_match_payload_missing")
+    elif resume_status == "insufficient_jd_signals":
+        risks.append("jd_signals_missing")
+
+    tailoring = stages.get("tailoring_suggestion") or {}
+    if _clean_text(tailoring.get("suggestion_status")) == "insufficient_evidence":
+        risks.append("tailoring_suggestion_payload_missing")
+
+    critic = stages.get("critic_guardrail") or {}
+    if _clean_text(critic.get("critic_status")) == "insufficient_evidence":
+        risks.append("critic_guardrail_payload_missing")
+
+    return list(dict.fromkeys(_clean_text(item) for item in risks if _clean_text(item)))
+
+
+def _shadow_chain_resume_matched_signals(resume_match_stage: Dict[str, Any]) -> set[str]:
+    matched: set[str] = set()
+    for row in list(resume_match_stage.get("matched_evidence") or []):
+        if not isinstance(row, dict):
+            continue
+        signal = _clean_text(row.get("signal")).lower()
+        if signal:
+            matched.add(signal)
+    return matched
+
+
+def _shadow_chain_suggestion_matches_resume_evidence(
+    suggestion: Dict[str, Any],
+    matched_signals: set[str],
+) -> bool:
+    links = [
+        item
+        for item in list(suggestion.get("jd_signal_links") or [])
+        if isinstance(item, dict)
+    ]
+    return any(_clean_text(link.get("signal")).lower() in matched_signals for link in links)
+
+
+def _shadow_chain_reconcile_tailoring_with_resume_match(
+    tailoring_stage: Dict[str, Any],
+    resume_match_stage: Dict[str, Any],
+) -> Dict[str, Any]:
+    matched_signals = _shadow_chain_resume_matched_signals(resume_match_stage)
+    if not matched_signals:
+        return tailoring_stage
+
+    reconciled = deepcopy(tailoring_stage)
+    for field_name in ("guidance_only_suggestions", "rejected_suggestions"):
+        reconciled[field_name] = [
+            dict(item or {})
+            for item in list(reconciled.get(field_name) or [])
+            if not (
+                isinstance(item, dict)
+                and _shadow_chain_suggestion_matches_resume_evidence(item, matched_signals)
+            )
+        ]
+
+    reconciled["unsupported_claim_risks"] = [
+        dict(item or {})
+        for item in list(reconciled.get("unsupported_claim_risks") or [])
+        if not (
+            isinstance(item, dict)
+            and _clean_text(item.get("signal")).lower() in matched_signals
+        )
+    ]
+    reconciled["missing_evidence"] = [
+        _clean_text(item)
+        for item in list(reconciled.get("missing_evidence") or [])
+        if not any(f":{signal}:resume_evidence_missing" in _clean_text(item).lower() for signal in matched_signals)
+    ]
+
+    if reconciled.get("patch_ready_suggestions"):
+        reconciled["suggestion_status"] = "patch_ready_available"
+    elif reconciled.get("guidance_only_suggestions"):
+        reconciled["suggestion_status"] = "guidance_only"
+    elif reconciled.get("rejected_suggestions"):
+        reconciled["suggestion_status"] = "rejected_unsupported_claims"
+    else:
+        reconciled["suggestion_status"] = "insufficient_evidence"
+    return reconciled
+
+
+def build_shadow_agentic_workflow_chain_dry_run_payload(
+    *,
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+    jd_adapter: Any = None,
+    jd_feature_enabled: bool | None = None,
+    tailoring_adapter: Any = None,
+    tailoring_feature_enabled: bool | None = None,
+    critic_adapter: Any = None,
+    critic_feature_enabled: bool | None = None,
+    config: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    """Run the manual dry-run stages in shadow mode without mutating runtime state."""
+
+    source_metadata_copy = deepcopy(source_metadata or {})
+    provided_jd = deepcopy(jd_intelligence if jd_intelligence is not None else jd_signals or {})
+    resume_variants_copy = deepcopy(resume_variants or [])
+    resume_evidence_rows_copy = deepcopy(resume_evidence_rows or [])
+    preferences_copy = deepcopy(user_preferences or {})
+    config_copy = deepcopy(config or {})
+    if not isinstance(source_metadata_copy, dict):
+        source_metadata_copy = {}
+    if not isinstance(provided_jd, dict):
+        provided_jd = {}
+    if not isinstance(resume_variants_copy, list):
+        resume_variants_copy = []
+    if not isinstance(resume_evidence_rows_copy, list):
+        resume_evidence_rows_copy = []
+    if not isinstance(preferences_copy, dict):
+        preferences_copy = {}
+    if not isinstance(config_copy, dict):
+        config_copy = {}
+    effective_resume_variants = (
+        resume_variants_copy
+        if resume_variants_copy
+        else [dict(row or {}) for row in resume_evidence_rows_copy if isinstance(row, dict)]
+    )
+
+    jd_stage = build_manual_jd_intelligence_dry_run_payload(
+        job_title=job_title,
+        company=company,
+        location=location,
+        job_description=job_description,
+        source_metadata=source_metadata_copy,
+        context_id=context_id,
+        job_id=job_id,
+        adapter=jd_adapter,
+        feature_enabled=jd_feature_enabled,
+        config=config_copy,
+    )
+    effective_jd = jd_stage if _shadow_chain_has_jd_signals(jd_stage) else provided_jd
+
+    resume_match_stage = build_manual_resume_match_dry_run_payload(
+        jd_intelligence=effective_jd,
+        resume_variants=effective_resume_variants,
+        resume_evidence_rows=resume_evidence_rows_copy,
+        selected_resume_id=selected_resume_id,
+        context_id=context_id,
+        job_id=job_id,
+    )
+    effective_resume_id = (
+        _clean_text(resume_match_stage.get("selected_resume_id"))
+        or _clean_text(selected_resume_id)
+    )
+
+    tailoring_stage = build_manual_tailoring_suggestion_dry_run_payload(
+        jd_intelligence=effective_jd,
+        resume_match_payload=resume_match_stage,
+        resume_variants=effective_resume_variants,
+        resume_evidence_rows=resume_evidence_rows_copy,
+        selected_resume_id=effective_resume_id,
+        context_id=context_id,
+        job_id=job_id,
+        adapter=tailoring_adapter,
+        feature_enabled=tailoring_feature_enabled,
+        config=config_copy,
+    )
+    tailoring_stage = _shadow_chain_reconcile_tailoring_with_resume_match(
+        tailoring_stage,
+        resume_match_stage,
+    )
+
+    critic_stage = build_manual_critic_guardrail_dry_run_payload(
+        tailoring_suggestion_payload=tailoring_stage,
+        jd_intelligence=effective_jd,
+        resume_variants=effective_resume_variants,
+        resume_evidence_rows=resume_evidence_rows_copy,
+        context_id=context_id,
+        job_id=job_id,
+        adapter=critic_adapter,
+        feature_enabled=critic_feature_enabled,
+        config=config_copy,
+    )
+
+    strategy_stage = build_manual_strategy_recommendation_dry_run_payload(
+        jd_intelligence=effective_jd,
+        resume_match_payload=resume_match_stage,
+        tailoring_suggestion_payload=tailoring_stage,
+        critic_guardrail_payload=critic_stage,
+        user_preferences=preferences_copy,
+        context_id=context_id,
+        job_id=job_id,
+    )
+
+    stages = {
+        "jd_intelligence": jd_stage,
+        "resume_match": resume_match_stage,
+        "tailoring_suggestion": tailoring_stage,
+        "critic_guardrail": critic_stage,
+        "strategy_recommendation": strategy_stage,
+    }
+    stage_statuses = _shadow_chain_stage_statuses(stages)
+    safety_metadata = _shadow_chain_safety_metadata(stages)
+    blocking_risks = _shadow_chain_blocking_risks(stages, effective_jd=effective_jd)
+    recommendation_action = _clean_text(strategy_stage.get("recommendation_action"))
+    if blocking_risks and recommendation_action in {"skip", "save_for_later", ""}:
+        recommendation_action = "insufficient_information"
+    shadow_chain_status = (
+        "completed_with_blockers"
+        if blocking_risks or recommendation_action == "insufficient_information"
+        else "completed"
+    )
+    return {
+        "shadow_chain_status": shadow_chain_status,
+        "dry_run_only": True,
+        "stages": stages,
+        "stage_order": list(SHADOW_AGENTIC_WORKFLOW_STAGE_ORDER),
+        "stage_statuses": stage_statuses,
+        "recommendation_action": recommendation_action,
+        "blocking_risks": blocking_risks,
+        "improvement_actions": list(strategy_stage.get("improvement_actions") or []),
+        "required_human_review": bool(strategy_stage.get("required_human_review", True)),
+        "confidence": strategy_stage.get("confidence", 0.0),
+        "rationale": "Shadow agentic workflow chain composes manual dry-run stage outputs for advisory review only.",
+        "context_id": _clean_text(context_id),
+        "job_id": _clean_text(job_id),
+        "safety_metadata": safety_metadata,
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "shadow_agentic_workflow_chain_dry_run",
+    }
+
+
+SHADOW_RECOMMENDATION_HANDOFF_DECISION_OPTIONS = [
+    "accept_recommendation_for_review",
+    "request_more_tailoring",
+    "save_for_later",
+    "dismiss_shadow_recommendation",
+]
+
+
+def _shadow_recommendation_handoff_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "review_only": True,
+        "human_gate_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def build_shadow_recommendation_handoff_payload(
+    *,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Convert a shadow-chain result into a review-only human handoff payload."""
+
+    shadow_chain = deepcopy(shadow_chain_payload or {})
+    if not isinstance(shadow_chain, dict):
+        shadow_chain = {}
+    if not shadow_chain:
+        shadow_chain = build_shadow_agentic_workflow_chain_dry_run_payload(
+            job_title=job_title,
+            company=company,
+            location=location,
+            job_description=job_description,
+            source_metadata=deepcopy(source_metadata or {}),
+            jd_intelligence=deepcopy(jd_intelligence or {}),
+            jd_signals=deepcopy(jd_signals or {}),
+            resume_variants=deepcopy(resume_variants or []),
+            resume_evidence_rows=deepcopy(resume_evidence_rows or []),
+            selected_resume_id=selected_resume_id,
+            user_preferences=deepcopy(user_preferences or {}),
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    stages = shadow_chain.get("stages") if isinstance(shadow_chain.get("stages"), dict) else {}
+    strategy_stage = stages.get("strategy_recommendation") if isinstance(stages, dict) else {}
+    if not isinstance(strategy_stage, dict):
+        strategy_stage = {}
+    recommendation_action = _clean_text(shadow_chain.get("recommendation_action"))
+    recommendation_label = (
+        _clean_text(strategy_stage.get("recommendation_label"))
+        or recommendation_action
+        or "insufficient_information"
+    )
+    blocking_risks = [
+        _clean_text(item)
+        for item in list(shadow_chain.get("blocking_risks") or [])
+        if _clean_text(item)
+    ]
+    source_status = _clean_text(shadow_chain.get("shadow_chain_status")) or "missing"
+    if source_status == "completed" and recommendation_action:
+        handoff_status = "ready_for_human_review"
+    elif source_status == "missing":
+        handoff_status = "insufficient_information"
+        blocking_risks.append("shadow_chain_payload_missing")
+    else:
+        handoff_status = "blocked_pending_human_review"
+
+    return {
+        "handoff_status": handoff_status,
+        "recommendation_action": recommendation_action or "insufficient_information",
+        "recommendation_label": recommendation_label,
+        "required_human_review": True,
+        "reviewer_decision_options": list(SHADOW_RECOMMENDATION_HANDOFF_DECISION_OPTIONS),
+        "blocking_risks": list(dict.fromkeys(blocking_risks)),
+        "improvement_actions": list(shadow_chain.get("improvement_actions") or []),
+        "stage_statuses": dict(shadow_chain.get("stage_statuses") or {}),
+        "confidence": shadow_chain.get("confidence", 0.0),
+        "rationale": (
+            "Review-only handoff from the shadow agentic workflow chain; no approval, queue, "
+            "resume, scoring, ranking, execution, or submission state was changed."
+        ),
+        "source_shadow_chain_status": source_status,
+        "context_id": _clean_text(context_id) or _clean_text(shadow_chain.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(shadow_chain.get("job_id")),
+        "safety_metadata": _shadow_recommendation_handoff_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "shadow_recommendation_handoff_dry_run",
+    }
+
+
+def _human_decision_capture_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "decision_capture_only": True,
+        "review_only": True,
+        "human_gate_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "advisory_only": True,
+    }
+
+
+def _human_decision_next_review_action(reviewer_decision: str) -> str:
+    if reviewer_decision == "accept_recommendation_for_review":
+        return "review_shadow_recommendation"
+    if reviewer_decision == "request_more_tailoring":
+        return "review_tailoring_or_evidence_gaps"
+    if reviewer_decision == "save_for_later":
+        return "save_shadow_recommendation_for_later"
+    if reviewer_decision == "dismiss_shadow_recommendation":
+        return "dismiss_shadow_recommendation"
+    return "no_action_invalid_decision"
+
+
+def build_human_decision_capture_dry_run_payload(
+    *,
+    handoff_payload: Dict[str, Any] | None = None,
+    shadow_chain_payload: Dict[str, Any] | None = None,
+    reviewer_decision: Any = "",
+    reviewer_note: Any = "",
+    job_title: Any = "",
+    company: Any = "",
+    location: Any = "",
+    job_description: Any = "",
+    source_metadata: Dict[str, Any] | None = None,
+    jd_intelligence: Dict[str, Any] | None = None,
+    jd_signals: Dict[str, Any] | None = None,
+    resume_variants: List[Dict[str, Any]] | None = None,
+    resume_evidence_rows: List[Dict[str, Any]] | None = None,
+    selected_resume_id: Any = "",
+    user_preferences: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Simulate capture of a reviewer decision without mutating approval state."""
+
+    handoff = deepcopy(handoff_payload or {})
+    if not isinstance(handoff, dict):
+        handoff = {}
+    if not handoff:
+        handoff = build_shadow_recommendation_handoff_payload(
+            shadow_chain_payload=deepcopy(shadow_chain_payload or {}),
+            job_title=job_title,
+            company=company,
+            location=location,
+            job_description=job_description,
+            source_metadata=deepcopy(source_metadata or {}),
+            jd_intelligence=deepcopy(jd_intelligence or {}),
+            jd_signals=deepcopy(jd_signals or {}),
+            resume_variants=deepcopy(resume_variants or []),
+            resume_evidence_rows=deepcopy(resume_evidence_rows or []),
+            selected_resume_id=selected_resume_id,
+            user_preferences=deepcopy(user_preferences or {}),
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    decision = _clean_text(reviewer_decision)
+    valid_options = set(SHADOW_RECOMMENDATION_HANDOFF_DECISION_OPTIONS)
+    accepted_decision = decision in valid_options
+    source_handoff_status = _clean_text(handoff.get("handoff_status")) or "missing"
+    if not accepted_decision:
+        decision_capture_status = "invalid_reviewer_decision"
+    elif source_handoff_status == "ready_for_human_review":
+        decision_capture_status = "captured_for_review"
+    else:
+        decision_capture_status = "captured_with_blockers"
+
+    blocking_risks = [
+        _clean_text(item)
+        for item in list(handoff.get("blocking_risks") or [])
+        if _clean_text(item)
+    ]
+    if not accepted_decision:
+        blocking_risks.append("invalid_reviewer_decision")
+    if source_handoff_status in {"", "missing"}:
+        blocking_risks.append("handoff_payload_missing")
+
+    return {
+        "decision_capture_status": decision_capture_status,
+        "reviewer_decision": decision,
+        "reviewer_note": _clean_text(reviewer_note),
+        "accepted_decision": accepted_decision,
+        "next_review_action": _human_decision_next_review_action(decision),
+        "source_recommendation_action": _clean_text(handoff.get("recommendation_action")) or "insufficient_information",
+        "source_handoff_status": source_handoff_status,
+        "required_human_review": True,
+        "blocking_risks": list(dict.fromkeys(blocking_risks)),
+        "improvement_actions": list(handoff.get("improvement_actions") or []),
+        "rationale": (
+            "Human decision capture dry-run records only a simulated reviewer choice; it "
+            "does not create approvals, mutate queues, change ranking, execute, or submit."
+        ),
+        "context_id": _clean_text(context_id) or _clean_text(handoff.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(handoff.get("job_id")),
+        "safety_metadata": _human_decision_capture_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "human_decision_capture_dry_run",
     }
 
 

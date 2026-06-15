@@ -108,6 +108,10 @@ ALLOWED_CHANGED = {
     "src/agents/job_prioritization_agent.py",
     "tests/test_strategy_recommendation_dry_run_contract_no_pipeline_change.py",
     "tests/test_manual_strategy_recommendation_dry_run_surface_no_pipeline_change.py",
+    "tests/test_shadow_agentic_workflow_chain_dry_run_no_pipeline_change.py",
+    "tests/test_manual_shadow_agentic_workflow_chain_surface_no_pipeline_change.py",
+    "tests/test_shadow_recommendation_handoff_dry_run_no_pipeline_change.py",
+    "tests/test_human_decision_capture_dry_run_no_pipeline_change.py",
 }
 
 def _changed_files():

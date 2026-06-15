@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from src.app import api, services
 
 
-ENDPOINT = "/api/manual-strategy-recommendation-dry-run"
+ENDPOINT = "/api/manual-shadow-agentic-workflow-chain-dry-run"
 
 
 def _client(monkeypatch):
@@ -21,62 +21,59 @@ def _jd() -> dict:
         "required_skills": ["Python", "SQL"],
         "required_tools": ["Airflow"],
         "workflows": ["production data pipelines"],
+        "methods": ["LLMOps evaluation"],
         "business_contexts": ["finance partners"],
+        "stakeholder_contexts": ["finance stakeholders"],
+        "ownership_signals": ["owned production workflows"],
+        "seniority_signals": ["senior IC scope"],
     }
 
 
-def _resume_match() -> dict:
+def _resume() -> dict:
     return {
-        "match_status": "strong_match",
-        "recommendation_label": "strong_match",
-        "selected_resume_id": "resume-a",
-        "confidence": 0.86,
-        "missing_evidence": [],
-    }
-
-
-def _tailoring() -> dict:
-    return {
-        "suggestion_status": "patch_ready_available",
-        "selected_resume_id": "resume-a",
-        "patch_ready_suggestions": [{"suggestion_id": "tailoring_dry_run_001"}],
-        "guidance_only_suggestions": [],
-        "rejected_suggestions": [],
-        "missing_evidence": [],
-        "projected_score_delta": 0.03,
-    }
-
-
-def _critic() -> dict:
-    return {
-        "critic_status": "approved",
-        "approved_suggestions": [{"suggestion_id": "tailoring_dry_run_001"}],
-        "downgraded_suggestions": [],
-        "rejected_suggestions": [],
-        "reason_codes": [],
-        "evidence_gaps": [],
-        "confidence": 0.88,
+        "resume_id": "resume-a",
+        "bullet_ids": ["bullet-1"],
+        "bullets": [
+            "Senior IC scope owned production workflows for Python and SQL production data pipelines with Airflow, LLMOps evaluation, and finance stakeholders."
+        ],
+        "skills": ["Python", "SQL"],
+        "tools": ["Airflow"],
+        "methods": ["LLMOps evaluation"],
+        "workflows": ["production data pipelines"],
+        "business_contexts": ["finance partners"],
+        "stakeholder_contexts": ["finance stakeholders"],
+        "ownership_signals": ["owned production workflows"],
+        "seniority_signals": ["senior IC scope"],
+        "raw_text": (
+            "Senior IC scope owned production workflows for Python and SQL production data "
+            "pipelines with Airflow, LLMOps evaluation, finance partners, and finance stakeholders."
+        ),
     }
 
 
 def _request_payload() -> dict:
     return {
+        "job_title": "Data Platform Engineer",
+        "company": "ExampleCo",
+        "location": "Remote",
+        "job_description": "Python SQL Airflow production data pipelines for finance partners.",
         "jd_intelligence": _jd(),
-        "resume_match_payload": _resume_match(),
-        "tailoring_suggestion_payload": _tailoring(),
-        "critic_guardrail_payload": _critic(),
+        "resume_evidence_rows": [_resume()],
+        "selected_resume_id": "resume-a",
         "user_preferences": {"risk_tolerance": "conservative"},
         "context_id": "ctx-1",
         "job_id": "job-1",
     }
 
 
-def _assert_readonly_safety(payload: dict) -> None:
+def _assert_shadow_safety(payload: dict) -> None:
     safety = payload["safety_metadata"]
     assert payload["read_only"] is True
     assert payload["manual_surface"] is True
+    assert payload["dry_run_only"] is True
     assert safety["dry_run_only"] is True
-    assert safety["deterministic_only"] is True
+    assert safety["shadow_mode"] is True
+    assert safety["manual_or_service_only"] is True
     assert safety["did_call_llm"] is False
     assert safety["did_mutate_resume"] is False
     assert safety["did_mutate_scoring"] is False
@@ -89,19 +86,26 @@ def _assert_readonly_safety(payload: dict) -> None:
     assert safety["advisory_only"] is True
 
 
-def test_service_returns_manual_strategy_recommendation_dry_run_payload():
+def test_service_returns_manual_shadow_chain_dry_run_payload():
     source = _request_payload()
     original = deepcopy(source)
 
-    first = services.build_manual_strategy_recommendation_dry_run_payload(**source)
-    second = services.build_manual_strategy_recommendation_dry_run_payload(**source)
+    first = services.build_shadow_agentic_workflow_chain_dry_run_payload(**source)
+    second = services.build_shadow_agentic_workflow_chain_dry_run_payload(**source)
 
     assert first == second
     assert source == original
-    assert first["service_surface"] == "manual_strategy_recommendation_dry_run"
-    assert first["recommendation_action"] in {"apply_now", "tailor_first"}
-    assert first["strategy_status"] == "ready"
-    _assert_readonly_safety(first)
+    assert first["service_surface"] == "shadow_agentic_workflow_chain_dry_run"
+    assert first["shadow_chain_status"] == "completed"
+    assert first["stage_order"] == [
+        "jd_intelligence",
+        "resume_match",
+        "tailoring_suggestion",
+        "critic_guardrail",
+        "strategy_recommendation",
+    ]
+    assert first["stages"]["resume_match"]["match_status"] == "strong_match"
+    _assert_shadow_safety(first)
 
 
 def test_api_route_exists_as_post_only():
@@ -110,43 +114,35 @@ def test_api_route_exists_as_post_only():
     assert routes[ENDPOINT].methods == {"POST"}
 
 
-def test_api_route_returns_readonly_strategy_recommendation_payload(monkeypatch):
+def test_api_route_returns_readonly_shadow_chain_payload(monkeypatch):
     response = _client(monkeypatch).post(ENDPOINT, json=_request_payload())
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["api_surface"] == "manual_strategy_recommendation_dry_run"
+    assert payload["api_surface"] == "manual_shadow_agentic_workflow_chain_dry_run"
     assert payload["explicit_user_action"] is True
-    assert payload["strategy_status"] == "ready"
-    assert payload["recommendation_action"] in {"apply_now", "tailor_first"}
-    _assert_readonly_safety(payload)
+    assert payload["shadow_chain_status"] == "completed"
+    assert payload["stages"]["strategy_recommendation"]["strategy_status"] == "ready"
+    _assert_shadow_safety(payload)
 
 
 def test_api_route_handles_missing_output_normally(monkeypatch):
-    response = _client(monkeypatch).post(
-        ENDPOINT,
-        json={
-            "jd_intelligence": {},
-            "resume_match_payload": {},
-            "tailoring_suggestion_payload": {},
-            "critic_guardrail_payload": {},
-        },
-    )
+    response = _client(monkeypatch).post(ENDPOINT, json={})
 
     assert response.status_code == 200
     payload = response.json()
+    assert payload["shadow_chain_status"] == "completed_with_blockers"
     assert payload["recommendation_action"] == "insufficient_information"
-    assert "missing_required_dry_run_inputs" in payload["decision_reasons"]
     assert "resume_match_payload_missing" in payload["blocking_risks"]
     assert "critic_guardrail_payload_missing" in payload["blocking_risks"]
-    _assert_readonly_safety(payload)
+    _assert_shadow_safety(payload)
 
 
 def test_api_route_slice_has_no_storage_scoring_queue_approval_execution_or_llm_calls():
     source = Path("src/app/api.py").read_text()
-    start = source.index("class ManualStrategyRecommendationDryRunRequest")
+    start = source.index("class ManualShadowAgenticWorkflowChainDryRunRequest")
     class_end = source.index("@asynccontextmanager")
-    route_start = source.index('@app.post("/api/manual-strategy-recommendation-dry-run")')
+    route_start = source.index('@app.post("/api/manual-shadow-agentic-workflow-chain-dry-run")')
     route_end = source.index(
         '@app.post(\n    "/api/agentic-approvals/{approval_request_id}/production-scheduler-observability-reporting-job"'
     )
@@ -187,9 +183,9 @@ def test_api_route_slice_has_no_storage_scoring_queue_approval_execution_or_llm_
         assert marker not in snippet
 
 
-def test_service_helper_slice_has_no_storage_scoring_queue_or_llm_calls():
+def test_service_helper_slice_has_no_storage_scoring_queue_or_pipeline_wiring_calls():
     source = Path("src/app/services.py").read_text()
-    start = source.index("def build_manual_strategy_recommendation_dry_run_payload")
+    start = source.index("def build_shadow_agentic_workflow_chain_dry_run_payload")
     end = source.index("def _artifact_row_by_name")
     snippet = source[start:end]
 
@@ -206,6 +202,7 @@ def test_service_helper_slice_has_no_storage_scoring_queue_or_llm_calls():
         "ranking_state",
         "ranking_update",
         "ranking_mutation",
+        "application_execution_queue",
         "execute_application(",
         "submit_application(",
         "workflow_runner",
@@ -214,36 +211,42 @@ def test_service_helper_slice_has_no_storage_scoring_queue_or_llm_calls():
         assert marker not in snippet
 
 
-def test_ui_manual_strategy_section_uses_existing_escaped_rendering():
+def test_ui_manual_shadow_chain_section_uses_existing_escaped_rendering():
     source = Path("src/app/static/agentic_review.js").read_text()
-    start = source.index("function renderManualStrategyRecommendationDryRunSection")
+    start = source.index("function renderManualShadowAgenticWorkflowChainDryRunSection")
     end = source.index("function renderAgentTraceReadOnlyPanel")
     snippet = source[start:end]
 
-    assert "Manual Strategy Recommendation Dry-run" in snippet
-    assert "data-manual-strategy-recommendation-dry-run" in snippet
+    assert "Manual Shadow Chain Dry-run" in snippet
+    assert "Run Shadow Chain Dry-run" in snippet
+    assert "data-manual-shadow-agentic-workflow-chain-dry-run" in snippet
+    assert "escapeHtml(jobTitle)" in snippet
+    assert "escapeHtml(company)" in snippet
+    assert "escapeHtml(location)" in snippet
     assert "escapeHtml(contextId)" in snippet
     assert "escapeHtml(jobId)" in snippet
-    assert "renderAgentTraceReadOnlyDetails(\"Recommendation label\"" in snippet
-    assert "renderAgentTraceReadOnlyDetails(\"Decision reasons\"" in snippet
+    assert "renderAgentTraceReadOnlyDetails(\"Stage order\"" in snippet
+    assert "renderAgentTraceReadOnlyDetails(\"Stage statuses\"" in snippet
     assert "renderAgentTraceReadOnlyDetails(\"Blocking risks\"" in snippet
     assert "renderAgentTraceReadOnlyDetails(\"Improvement actions\"" in snippet
     assert "renderAgentTraceReadOnlyDetails(\"Safety metadata\"" in snippet
-    assert "does not mutate resume content" in snippet
+    assert "result.stages" not in snippet
 
 
-def test_ui_manual_strategy_click_posts_endpoint_and_existing_dry_runs_still_exist():
+def test_ui_manual_shadow_chain_click_posts_endpoint_and_existing_dry_runs_still_exist():
     source = Path("src/app/static/agentic_review.js").read_text()
 
-    assert source.count("/api/manual-strategy-recommendation-dry-run") == 1
-    assert source.count("data-manual-strategy-recommendation-dry-run") == 4
-    assert "manual_strategy_recommendation_dry_run_result" in source
-    assert "renderManualStrategyRecommendationDryRunSection(tracePayload)" in source
+    assert source.count("/api/manual-shadow-agentic-workflow-chain-dry-run") == 1
+    assert source.count("data-manual-shadow-agentic-workflow-chain-dry-run") == 4
+    assert "manual_shadow_agentic_workflow_chain_dry_run_result" in source
+    assert "renderManualShadowAgenticWorkflowChainDryRunSection(tracePayload)" in source
     assert source.count("/api/manual-jd-intelligence-dry-run") == 1
     assert source.count("/api/manual-resume-match-dry-run") == 1
     assert source.count("/api/manual-tailoring-suggestion-dry-run") == 1
     assert source.count("/api/manual-critic-guardrail-dry-run") == 1
+    assert source.count("/api/manual-strategy-recommendation-dry-run") == 1
     assert "renderManualJdIntelligenceDryRunSection(tracePayload)" in source
     assert "renderManualResumeMatchDryRunSection(tracePayload)" in source
     assert "renderManualTailoringSuggestionDryRunSection(tracePayload)" in source
     assert "renderManualCriticGuardrailDryRunSection(tracePayload)" in source
+    assert "renderManualStrategyRecommendationDryRunSection(tracePayload)" in source

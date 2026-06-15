@@ -360,6 +360,14 @@ class ManualGuardedApprovalStatusTransitionRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualApprovalStatusTransitionObservabilityRequest(BaseModel):
+    guarded_status_transition_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    proposed_transition: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1745,6 +1753,24 @@ def invoke_manual_guarded_approval_status_transition_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_guarded_approval_status_transition",
+    }
+
+
+@app.post("/api/manual-approval-status-transition-observability")
+def invoke_manual_approval_status_transition_observability_api_action(
+    request: ManualApprovalStatusTransitionObservabilityRequest,
+):
+    payload = services.build_guarded_approval_status_transition_observability_payload(
+        guarded_status_transition_payload=request.guarded_status_transition_payload,
+        approval_request_id=request.approval_request_id,
+        proposed_transition=request.proposed_transition,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_approval_status_transition_observability",
     }
 
 

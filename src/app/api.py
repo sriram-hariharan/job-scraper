@@ -435,6 +435,18 @@ class ManualExecutionRequestPacketPreviewRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualGuardedExecutionRequestCreateRequest(BaseModel):
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    reviewer_confirmation: bool = False
+    execution_request_packet_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_launch_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_launch_gate_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1975,6 +1987,28 @@ def invoke_manual_execution_request_packet_preview_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_execution_request_packet_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-create")
+def invoke_manual_guarded_execution_request_create_api_action(
+    request: ManualGuardedExecutionRequestCreateRequest,
+):
+    payload = services.build_guarded_execution_request_creation_payload(
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        reviewer_confirmation=request.reviewer_confirmation,
+        execution_request_packet_payload=request.execution_request_packet_payload,
+        execution_launch_gate_payload=request.execution_launch_gate_payload,
+        execution_launch_gate_observability_payload=request.execution_launch_gate_observability_payload,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_create",
     }
 
 

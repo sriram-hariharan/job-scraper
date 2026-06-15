@@ -14045,6 +14045,133 @@ def build_guarded_queue_handoff_creation_payload(
     }
 
 
+def _guarded_queue_handoff_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "queue_handoff_audit_only": True,
+        "manual_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_guarded_queue_handoff_creation_observability_payload(
+    *,
+    guarded_queue_handoff_creation_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize a guarded queue handoff creation result without mutating queue state."""
+
+    source_payload = deepcopy(guarded_queue_handoff_creation_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("queue_handoff_creation_status"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    queue_entry_created = bool(source_payload.get("queue_entry_created"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        handoff_was_created = False
+        handoff_was_blocked = True
+        blocked_actions.append("guarded_queue_handoff_creation_payload_missing")
+        next_safe_step = "run_guarded_queue_handoff_creation_manual_action"
+    elif source_status == "created":
+        observability_status = "observed_created"
+        handoff_was_created = True
+        handoff_was_blocked = False
+        next_safe_step = "review_created_queue_handoff_before_any_execution"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        handoff_was_created = False
+        handoff_was_blocked = True
+        next_safe_step = _clean_text(source_payload.get("next_safe_step")) or "resolve_guarded_queue_handoff_blockers"
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        handoff_was_created = False
+        handoff_was_blocked = True
+        blocked_actions.append("guarded_queue_handoff_creation_status_unrecognized")
+        next_safe_step = "rebuild_guarded_queue_handoff_creation_payload"
+    else:
+        observability_status = "insufficient_information"
+        handoff_was_created = False
+        handoff_was_blocked = True
+        blocked_actions.append("guarded_queue_handoff_creation_status_missing")
+        next_safe_step = "run_guarded_queue_handoff_creation_manual_action"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "queue_entry_created": queue_entry_created,
+        "queue_handoff_was_created": handoff_was_created,
+        "queue_handoff_was_blocked": handoff_was_blocked,
+        "source_mutated_queue": bool(source_safety_payload.get("did_mutate_queue")),
+        "source_wrote_queue": bool(source_safety_payload.get("did_write_queue")),
+    }
+    audit_events = [
+        {
+            "event_type": "guarded_queue_handoff_observed",
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "source_queue_handoff_creation_status": source_status or "missing",
+            "queue_handoff_was_created": handoff_was_created,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_mutate_queue": bool(source_safety_payload.get("did_mutate_queue")),
+        "source_did_write_queue": bool(source_safety_payload.get("did_write_queue")),
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+    }
+
+    return {
+        "queue_handoff_observability_status": observability_status,
+        "source_queue_handoff_creation_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "queue_entry_created": queue_entry_created,
+        "queue_handoff_was_blocked": handoff_was_blocked,
+        "queue_handoff_was_created": handoff_was_created,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _guarded_queue_handoff_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "guarded_queue_handoff_creation_observability",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

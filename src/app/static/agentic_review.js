@@ -2088,6 +2088,63 @@ function renderManualGuardedQueueHandoffCreateSection(tracePayload = {}) {
   `;
 }
 
+function renderManualQueueHandoffCreationObservabilitySection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_queue_handoff_creation_observability_result)
+    ? tracePayload.manual_queue_handoff_creation_observability_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const creation = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_queue_handoff_create_result)
+    ? tracePayload.manual_guarded_queue_handoff_create_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || creation.approval_request_id || "";
+  const queueHandoffId = result.queue_handoff_id || creation.queue_handoff_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual queue handoff creation observability">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Queue Handoff Audit</h4>
+          <p>Read-only audit trace for the guarded queue handoff result. It creates no queue entries, writes no queue files, and never executes or submits applications.</p>
+        </div>
+        <span class="agentic-workflow-badge">Queue audit</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Audit", result.queue_handoff_observability_status || "not run")}
+        ${renderWorkflowSummaryMetric("Source", result.source_queue_handoff_creation_status || "-")}
+        ${renderWorkflowSummaryMetric("Request id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Handoff id", queueHandoffId || "-")}
+        ${renderWorkflowSummaryMetric("Created", result.queue_handoff_was_created === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Blocked", result.queue_handoff_was_blocked === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue write", safety.did_write_queue ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Audit summary", result.audit_summary || {}, { helper: "Read-only queue handoff audit summary." })}
+        ${renderAgentTraceReadOnlyDetails("Audit events", result.audit_events || [], { helper: "Read-only queue handoff audit events synthesized from the provided source payload." })}
+        ${renderAgentTraceReadOnlyDetails("Safety findings", result.safety_findings || {}, { helper: "Read-only queue handoff safety findings." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Observed queue handoff blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable queue handoff audit safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-queue-handoff-creation-observability data-approval-request-id="${escapeHtml(approvalRequestId)}" data-queue-handoff-id="${escapeHtml(queueHandoffId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          View Queue Handoff Audit
+        </button>
+        <span class="agentic-review-muted" data-manual-queue-handoff-creation-observability-status>
+          Manual only. This summarizes the guarded queue handoff result and performs no queue, approval, resume, execution, or submission mutation.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2154,6 +2211,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualApprovalStatusTransitionObservabilitySection(tracePayload)}
       ${renderManualQueueHandoffReadinessPreviewSection(tracePayload)}
       ${renderManualGuardedQueueHandoffCreateSection(tracePayload)}
+      ${renderManualQueueHandoffCreationObservabilitySection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -4497,6 +4555,52 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual guarded queue handoff creation failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-queue-handoff-creation-observability]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-queue-handoff-creation-observability-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Loading queue handoff audit...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const creation = tracePayload.manual_guarded_queue_handoff_create_result || {};
+      const auditResult = await fetchJson(
+        "/api/manual-queue-handoff-creation-observability",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            guarded_queue_handoff_creation_payload: creation,
+            approval_request_id: button.dataset.approvalRequestId || creation.approval_request_id || "",
+            queue_handoff_id: button.dataset.queueHandoffId || creation.queue_handoff_id || "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_queue_handoff_creation_observability_result: auditResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual queue handoff audit failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

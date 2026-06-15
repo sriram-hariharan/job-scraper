@@ -388,6 +388,14 @@ class ManualGuardedQueueHandoffCreateRequest(BaseModel):
     reviewer_note: str = ""
 
 
+class ManualQueueHandoffCreationObservabilityRequest(BaseModel):
+    guarded_queue_handoff_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1831,6 +1839,24 @@ def invoke_manual_guarded_queue_handoff_create_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_guarded_queue_handoff_create",
+    }
+
+
+@app.post("/api/manual-queue-handoff-creation-observability")
+def invoke_manual_queue_handoff_creation_observability_api_action(
+    request: ManualQueueHandoffCreationObservabilityRequest,
+):
+    payload = services.build_guarded_queue_handoff_creation_observability_payload(
+        guarded_queue_handoff_creation_payload=request.guarded_queue_handoff_creation_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_queue_handoff_creation_observability",
     }
 
 

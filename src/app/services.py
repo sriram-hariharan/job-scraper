@@ -16814,6 +16814,179 @@ def build_guarded_application_execution_launch_request_payload(
     }
 
 
+def _guarded_application_execution_launch_request_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "application_execution_launch_request_audit_only": True,
+        "manual_only": True,
+        "did_create_execution_launch_request": False,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_guarded_application_execution_launch_request_observability_payload(
+    *,
+    guarded_application_execution_launch_request_payload: Dict[str, Any] | None = None,
+    execution_launch_request_id: Any = "",
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize a guarded execution launch request result without creating anything."""
+
+    source_payload = deepcopy(guarded_application_execution_launch_request_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("application_execution_launch_request_status"))
+    launch_request_id = _clean_text(execution_launch_request_id) or _clean_text(
+        source_payload.get("execution_launch_request_id")
+    )
+    execution_id = _clean_text(execution_request_id) or _clean_text(
+        source_payload.get("execution_request_id")
+    )
+    request_id = _clean_text(approval_request_id) or _clean_text(
+        source_payload.get("approval_request_id")
+    )
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    clean_context_id = _clean_text(context_id) or _clean_text(source_payload.get("context_id"))
+    clean_job_id = _clean_text(job_id) or _clean_text(source_payload.get("job_id"))
+    source_safety = source_payload.get("safety_metadata")
+    if not isinstance(source_safety, dict):
+        source_safety = {}
+    source_blocked_actions = source_payload.get("blocked_actions")
+    blocked_actions = (
+        [str(action) for action in source_blocked_actions if str(action).strip()]
+        if isinstance(source_blocked_actions, list)
+        else []
+    )
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        blocked_actions.append("guarded_application_execution_launch_request_payload_missing")
+        next_safe_step = "run_guarded_application_execution_launch_request_manual_action_first"
+    elif not source_status:
+        observability_status = "insufficient_information"
+        blocked_actions.append("application_execution_launch_request_status_missing")
+        next_safe_step = "provide_guarded_application_execution_launch_request_payload"
+    elif source_status == "created":
+        observability_status = "observed_created"
+        next_safe_step = (
+            _clean_text(source_payload.get("next_safe_step"))
+            or "review_created_execution_launch_request_before_any_execution"
+        )
+    elif source_status.startswith("blocked"):
+        observability_status = "observed_blocked"
+        next_safe_step = (
+            _clean_text(source_payload.get("next_safe_step"))
+            or "resolve_guarded_execution_launch_request_blockers"
+        )
+    else:
+        observability_status = "observed_invalid_source"
+        blocked_actions.append("application_execution_launch_request_status_unrecognized")
+        next_safe_step = "rebuild_guarded_application_execution_launch_request_payload"
+
+    launch_request_created = bool(source_payload.get("execution_launch_request_created")) and (
+        source_status == "created"
+    )
+    launch_request_blocked = observability_status in {
+        "observed_blocked",
+        "observed_missing_source",
+        "observed_invalid_source",
+        "insufficient_information",
+    }
+    audit_summary = {
+        "source_application_execution_launch_request_status": source_status or "missing",
+        "execution_launch_request_id": launch_request_id,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "source_created_execution_launch_request": bool(
+            source_safety.get("did_create_execution_launch_request")
+        ),
+        "source_created_execution_request": bool(source_safety.get("did_create_execution_request")),
+        "source_updated_execution_request_status": bool(
+            source_safety.get("did_update_execution_request_status")
+        ),
+        "source_mutated_queue": bool(source_safety.get("did_mutate_queue")),
+        "source_wrote_queue": bool(source_safety.get("did_write_queue")),
+        "source_executed_application": bool(source_safety.get("did_execute_application")),
+        "source_submitted_application": bool(source_safety.get("did_submit_application")),
+    }
+    audit_events = []
+    if source_payload:
+        audit_events.append(
+            {
+                "event_type": "guarded_application_execution_launch_request_observed",
+                "source_application_execution_launch_request_status": source_status or "missing",
+                "execution_launch_request_id": launch_request_id,
+                "execution_request_id": execution_id,
+                "approval_request_id": request_id,
+                "queue_handoff_id": handoff_id,
+                "execution_launch_request_created": launch_request_created,
+                "execution_launch_request_was_blocked": launch_request_blocked,
+            }
+        )
+    safety_findings = {
+        "observability_created_execution_launch_request": False,
+        "observability_created_execution_request": False,
+        "observability_updated_execution_request_status": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+        "observability_created_approval": False,
+        "observability_updated_approval_status": False,
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+        "source_created_execution_launch_request": bool(
+            source_safety.get("did_create_execution_launch_request")
+        ),
+        "source_executed_application": bool(source_safety.get("did_execute_application")),
+        "source_submitted_application": bool(source_safety.get("did_submit_application")),
+    }
+
+    return {
+        "application_execution_launch_request_observability_status": observability_status,
+        "source_application_execution_launch_request_status": source_status or "missing",
+        "execution_launch_request_id": launch_request_id,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_launch_request_created": launch_request_created,
+        "execution_launch_request_was_blocked": launch_request_blocked,
+        "execution_launch_request_was_created": launch_request_created,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "safety_metadata": (
+            _guarded_application_execution_launch_request_observability_safety_metadata()
+        ),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "guarded_application_execution_launch_request_observability",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

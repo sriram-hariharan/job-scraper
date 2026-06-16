@@ -16050,6 +16050,146 @@ def build_application_execution_simulation_preview_payload(
     }
 
 
+def _application_execution_simulation_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "application_execution_simulation_audit_only": True,
+        "manual_only": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_application_execution_simulation_observability_payload(
+    *,
+    application_execution_simulation_payload: Dict[str, Any] | None = None,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize an application execution simulation preview without launching anything."""
+
+    source_payload = deepcopy(application_execution_simulation_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("application_execution_simulation_status"))
+    execution_id = _clean_text(execution_request_id) or _clean_text(source_payload.get("execution_request_id"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    simulated_allowed = bool(source_payload.get("simulated_execution_allowed_later"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        simulation_was_ready = False
+        simulation_was_blocked = True
+        blocked_actions.append("application_execution_simulation_payload_missing")
+        next_safe_step = "run_application_execution_simulation_preview"
+    elif source_status == "simulation_ready":
+        observability_status = "observed_ready"
+        simulation_was_ready = True
+        simulation_was_blocked = False
+        next_safe_step = "require_future_guarded_execution_confirmation_before_any_launch"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        simulation_was_ready = False
+        simulation_was_blocked = True
+        next_safe_step = _clean_text(source_payload.get("next_safe_step")) or "resolve_execution_simulation_blockers"
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        simulation_was_ready = False
+        simulation_was_blocked = True
+        blocked_actions.append("application_execution_simulation_status_unrecognized")
+        next_safe_step = "rebuild_application_execution_simulation_payload"
+    else:
+        observability_status = "insufficient_information"
+        simulation_was_ready = False
+        simulation_was_blocked = True
+        blocked_actions.append("application_execution_simulation_status_missing")
+        next_safe_step = "run_application_execution_simulation_preview"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "simulation_was_ready": simulation_was_ready,
+        "simulation_was_blocked": simulation_was_blocked,
+        "simulated_execution_allowed_later": simulated_allowed,
+        "source_executed_application": bool(source_safety_payload.get("did_execute_application")),
+        "source_submitted_application": bool(source_safety_payload.get("did_submit_application")),
+    }
+    audit_events = [
+        {
+            "event_type": "application_execution_simulation_observed",
+            "execution_request_id": execution_id,
+            "source_simulation_status": source_status or "missing",
+            "simulation_was_ready": simulation_was_ready,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_execute_application": bool(source_safety_payload.get("did_execute_application")),
+        "source_did_submit_application": bool(source_safety_payload.get("did_submit_application")),
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+        "observability_launched_pipeline": False,
+        "observability_created_execution_request": False,
+        "observability_updated_execution_request_status": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+        "observability_mutated_approval": False,
+        "observability_updated_approval_status": False,
+        "observability_mutated_resume": False,
+        "observability_mutated_scoring": False,
+        "observability_changed_ranking": False,
+    }
+
+    return {
+        "application_execution_simulation_observability_status": observability_status,
+        "source_application_execution_simulation_status": source_status or "missing",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "simulation_was_ready": simulation_was_ready,
+        "simulation_was_blocked": simulation_was_blocked,
+        "simulated_execution_allowed_later": simulated_allowed,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _application_execution_simulation_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "application_execution_simulation_observability",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

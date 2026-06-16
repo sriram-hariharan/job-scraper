@@ -14,12 +14,14 @@ def _snapshot(value: Any) -> Any:
     return deepcopy(value)
 
 
-def evaluate_shadow_sidecar_pipeline_hook_safety() -> dict[str, bool]:
+def evaluate_shadow_sidecar_pipeline_hook_safety(
+    *, called_by_pipeline: bool = False
+) -> dict[str, bool]:
     return {
         "read_only": True,
         "shadow_only": True,
         "pipeline_hook_available": True,
-        "pipeline_hook_called_by_pipeline": False,
+        "pipeline_hook_called_by_pipeline": bool(called_by_pipeline),
         "manual_review_required": True,
         "did_mutate_scoring": False,
         "did_change_ranking": False,
@@ -52,6 +54,7 @@ def _base_hook_payload(
     preview_payload: dict[str, Any],
     hook_status: str,
     chain_attempted: bool,
+    called_by_pipeline: bool = False,
     chain_payload: dict[str, Any] | None = None,
     observability_payload: dict[str, Any] | None = None,
     next_safe_step: str = "",
@@ -94,7 +97,10 @@ def _base_hook_payload(
         "next_safe_step": _clean_text(next_safe_step)
         or _clean_text(preview.get("next_safe_step")),
         "provider_calls_disabled_in_tests": True,
-        "safety_metadata": evaluate_shadow_sidecar_pipeline_hook_safety(),
+        "safety_metadata": evaluate_shadow_sidecar_pipeline_hook_safety(
+            called_by_pipeline=called_by_pipeline
+        ),
+        "default_off_pipeline_hook_call_sites": 1 if called_by_pipeline else 0,
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
@@ -115,6 +121,7 @@ def run_shadow_sidecar_pipeline_hook(
     job_payload: dict[str, Any] | None = None,
     resume_profile_payload: dict[str, Any] | None = None,
     existing_trace_context: dict[str, Any] | None = None,
+    called_by_pipeline: bool = False,
 ) -> dict[str, Any]:
     preview = shadow_sidecar.build_shadow_sidecar_pipeline_hook_preview_payload(
         run_id=run_id,
@@ -136,6 +143,7 @@ def run_shadow_sidecar_pipeline_hook(
             preview_payload=preview,
             hook_status=_clean_text(preview.get("hook_preview_status")),
             chain_attempted=False,
+            called_by_pipeline=called_by_pipeline,
             next_safe_step=_clean_text(preview.get("next_safe_step")),
         )
 
@@ -166,6 +174,7 @@ def run_shadow_sidecar_pipeline_hook(
             preview_payload=preview,
             hook_status=_hook_status_from_chain(chain_payload),
             chain_attempted=True,
+            called_by_pipeline=called_by_pipeline,
             chain_payload=chain_payload,
             observability_payload=observability,
             next_safe_step="inspect_shadow_sidecar_observability",
@@ -175,6 +184,7 @@ def run_shadow_sidecar_pipeline_hook(
             preview_payload=preview,
             hook_status="hook_failed_non_blocking",
             chain_attempted=True,
+            called_by_pipeline=called_by_pipeline,
             observability_payload={
                 "observability_status": "observed_failed_non_blocking",
                 "readiness_decision": {

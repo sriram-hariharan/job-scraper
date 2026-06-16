@@ -18,6 +18,7 @@ STATUS_COMPLETED_SHADOW = "completed_shadow"
 STATUS_COMPLETED_WITH_FALLBACK = "completed_with_fallback"
 STATUS_BLOCKED_BY_KILL_SWITCH = "blocked_by_kill_switch"
 STATUS_FAILED_NON_BLOCKING = "failed_non_blocking"
+CHAIN_STATUS_COMPLETED_SHADOW_CHAIN = "completed_shadow_chain"
 
 SIDECAR_STATUS_ENUM = (
     STATUS_NOT_ENABLED,
@@ -26,6 +27,12 @@ SIDECAR_STATUS_ENUM = (
     STATUS_COMPLETED_WITH_FALLBACK,
     STATUS_BLOCKED_BY_KILL_SWITCH,
     STATUS_FAILED_NON_BLOCKING,
+)
+
+CHAIN_AGENT_ORDER = (
+    "jd_intelligence",
+    "tailoring_suggestion",
+    "critic_guardrail",
 )
 
 AGENT_FLAG_NAMES = {
@@ -415,6 +422,10 @@ def evaluate_shadow_sidecar_safety() -> dict[str, bool]:
     }
 
 
+def evaluate_shadow_sidecar_chain_safety() -> dict[str, bool]:
+    return evaluate_shadow_sidecar_safety()
+
+
 def build_shadow_sidecar_input_payload(
     *,
     run_id: str = "",
@@ -712,4 +723,234 @@ def run_shadow_sidecar_agent(
         agent_risk_flags=_text_list(result.get("agent_risk_flags")),
         agent_blocking_findings=_text_list(result.get("agent_blocking_findings")),
         fallback_used=False,
+    )
+
+
+def _shadow_chain_agent_input(
+    source: dict[str, Any],
+    *,
+    agent_name: str,
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    base_stage = _clean_text(source.get("stage_name")) or "shadow_sidecar_chain"
+    return build_shadow_sidecar_input_payload(
+        run_id=_clean_text(source.get("run_id")),
+        batch_id=_clean_text(source.get("batch_id")),
+        job_id=_clean_text(source.get("job_id")),
+        stage_name=f"{base_stage}.{agent_name}",
+        source_deterministic_stage=_clean_text(
+            source.get("source_deterministic_stage")
+        ),
+        source_deterministic_status=_clean_text(
+            source.get("source_deterministic_status")
+        ),
+        source_deterministic_score=source.get("source_deterministic_score"),
+        source_deterministic_decision=_clean_text(
+            source.get("source_deterministic_decision")
+        ),
+        source_deterministic_reason_codes=_text_list(
+            source.get("source_deterministic_reason_codes")
+        ),
+        job_payload=_plain_dict(source.get("job_payload")),
+        resume_profile_payload=_plain_dict(source.get("resume_profile_payload")),
+        existing_trace_context=_plain_dict(source.get("existing_trace_context")),
+        sidecar_config=config,
+        agent_name=agent_name,
+        started_at_utc=_clean_text(source.get("started_at_utc")),
+        completed_at_utc=_clean_text(source.get("completed_at_utc")),
+        duration_ms=int(source.get("duration_ms") or 0),
+    )
+
+
+def _shadow_chain_status(agent_results: list[dict[str, Any]]) -> str:
+    statuses = [_clean_text(result.get("sidecar_stage_status")) for result in agent_results]
+    if not statuses:
+        return STATUS_SKIPPED_BY_CONFIG
+    if any(status == STATUS_FAILED_NON_BLOCKING for status in statuses):
+        return STATUS_FAILED_NON_BLOCKING
+    if any(status == STATUS_COMPLETED_WITH_FALLBACK for status in statuses):
+        return STATUS_COMPLETED_WITH_FALLBACK
+    if all(status == STATUS_COMPLETED_SHADOW for status in statuses):
+        return CHAIN_STATUS_COMPLETED_SHADOW_CHAIN
+    return STATUS_COMPLETED_WITH_FALLBACK
+
+
+def build_shadow_sidecar_chain_payload(
+    *,
+    sidecar_input: dict[str, Any],
+    chain_status: str,
+    agent_results: list[dict[str, Any]] | tuple[dict[str, Any], ...] | None = None,
+    reason_codes: list[str] | tuple[str, ...] | None = None,
+    error_type: str = "",
+    error_message: str = "",
+) -> dict[str, Any]:
+    source = deepcopy(sidecar_input or {})
+    config = _sidecar_config(source.get("sidecar_config"))
+    results = [deepcopy(result) for result in (agent_results or [])]
+    status = _clean_text(chain_status) or STATUS_NOT_ENABLED
+    if status not in set(SIDECAR_STATUS_ENUM) | {CHAIN_STATUS_COMPLETED_SHADOW_CHAIN}:
+        status = STATUS_FAILED_NON_BLOCKING
+        error_type = _clean_text(error_type) or "invalid_shadow_chain_status"
+    ordered_names = [_clean_text(result.get("agent_name")) for result in results]
+    stage_statuses = {
+        _clean_text(result.get("agent_name")): _clean_text(
+            result.get("sidecar_stage_status")
+        )
+        for result in results
+    }
+    all_reason_codes = _merged_text_list(
+        reason_codes,
+        *(result.get("agent_reason_codes") for result in results),
+    )
+    all_evidence_refs = _merged_text_list(
+        *(result.get("agent_evidence_refs") for result in results),
+    )
+    all_risk_flags = _merged_text_list(
+        *(result.get("agent_risk_flags") for result in results),
+    )
+    all_blocking_findings = _merged_text_list(
+        *(result.get("agent_blocking_findings") for result in results),
+    )
+    fallback_used = bool(status != CHAIN_STATUS_COMPLETED_SHADOW_CHAIN) or any(
+        bool(result.get("fallback_used")) for result in results
+    )
+    readiness_status = (
+        "ready" if status == CHAIN_STATUS_COMPLETED_SHADOW_CHAIN else "blocked"
+    )
+    trace_bundle = {
+        "bundle_type": "shadow_sidecar_chain_trace_bundle",
+        "schema_version": SCHEMA_VERSION,
+        "chain_status": status,
+        "stage_order": ordered_names,
+        "stage_statuses": stage_statuses,
+        "source_deterministic_decision": _clean_text(
+            source.get("source_deterministic_decision")
+        ),
+        "fallback_used": fallback_used,
+    }
+    evidence_pack = {
+        "evidence_pack_type": "shadow_sidecar_chain_evidence_pack",
+        "schema_version": SCHEMA_VERSION,
+        "chain_status": status,
+        "agent_evidence_refs": all_evidence_refs,
+        "agent_risk_flags": all_risk_flags,
+        "fallback_used": fallback_used,
+    }
+    readiness_decision = {
+        "readiness_status": readiness_status,
+        "decision_reason_codes": all_reason_codes,
+        "blocking_findings": all_blocking_findings,
+        "warning_findings": [] if readiness_status == "ready" else all_reason_codes,
+    }
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "run_id": _clean_text(source.get("run_id")),
+        "batch_id": _clean_text(source.get("batch_id")),
+        "job_id": _clean_text(source.get("job_id")),
+        "stage_name": _clean_text(source.get("stage_name")),
+        "chain_status": status,
+        "sidecar_chain_status": status,
+        "chain_enabled": status
+        in {CHAIN_STATUS_COMPLETED_SHADOW_CHAIN, STATUS_COMPLETED_WITH_FALLBACK},
+        "provider_mode": "disabled",
+        "stage_order": ordered_names,
+        "stage_statuses": stage_statuses,
+        "ordered_agent_results": results,
+        "agent_results": results,
+        "source_deterministic_stage": _clean_text(
+            source.get("source_deterministic_stage")
+        ),
+        "source_deterministic_status": _clean_text(
+            source.get("source_deterministic_status")
+        ),
+        "source_deterministic_score": source.get("source_deterministic_score"),
+        "source_deterministic_decision": _clean_text(
+            source.get("source_deterministic_decision")
+        ),
+        "source_deterministic_reason_codes": _text_list(
+            source.get("source_deterministic_reason_codes")
+        ),
+        "trace_bundle": trace_bundle,
+        "evidence_pack": evidence_pack,
+        "readiness_decision": readiness_decision,
+        "health_status": "healthy"
+        if status == CHAIN_STATUS_COMPLETED_SHADOW_CHAIN
+        else "warning",
+        "fallback_used": fallback_used,
+        "error_type": _clean_text(error_type),
+        "error_message": _clean_text(error_message),
+        "sidecar_config": config,
+        "safety_metadata": evaluate_shadow_sidecar_chain_safety(),
+        "live_production_pipeline_connected_agents": 0,
+        "live_agents_allowed_to_automate_mutations": 0,
+    }
+
+
+def run_shadow_sidecar_chain(
+    *,
+    sidecar_input: dict[str, Any],
+) -> dict[str, Any]:
+    source = deepcopy(sidecar_input or {})
+    config = _sidecar_config(source.get("sidecar_config"))
+    kill_switch_enabled = _config_bool(
+        config,
+        KILL_SWITCH_FLAG,
+        "kill_switch_enabled",
+        default=False,
+    )
+    if kill_switch_enabled:
+        return build_shadow_sidecar_chain_payload(
+            sidecar_input=source,
+            chain_status=STATUS_BLOCKED_BY_KILL_SWITCH,
+            reason_codes=["blocked_by_kill_switch"],
+        )
+
+    global_enabled = _config_bool(
+        config,
+        GLOBAL_SIDECAR_FLAG,
+        "sidecar_enabled",
+        "global_enabled",
+        default=False,
+    )
+    if not global_enabled:
+        return build_shadow_sidecar_chain_payload(
+            sidecar_input=source,
+            chain_status=STATUS_NOT_ENABLED,
+            reason_codes=["global_sidecar_flag_disabled"],
+        )
+
+    enabled_agents = [
+        agent_name for agent_name in CHAIN_AGENT_ORDER if _agent_enabled(config, agent_name)
+    ]
+    if not enabled_agents:
+        return build_shadow_sidecar_chain_payload(
+            sidecar_input=source,
+            chain_status=STATUS_SKIPPED_BY_CONFIG,
+            reason_codes=["per_agent_sidecar_flags_disabled"],
+        )
+
+    agent_results: list[dict[str, Any]] = []
+    for agent_name in enabled_agents:
+        agent_input = _shadow_chain_agent_input(
+            source,
+            agent_name=agent_name,
+            config=config,
+        )
+        try:
+            agent_results.append(run_shadow_sidecar_agent(sidecar_input=agent_input))
+        except Exception as exc:
+            agent_results.append(
+                build_shadow_sidecar_fallback_payload(
+                    sidecar_input=agent_input,
+                    sidecar_stage_status=STATUS_FAILED_NON_BLOCKING,
+                    reason_codes=["shadow_chain_stage_error"],
+                    error_type=exc.__class__.__name__,
+                    error_message=str(exc),
+                )
+            )
+
+    return build_shadow_sidecar_chain_payload(
+        sidecar_input=source,
+        chain_status=_shadow_chain_status(agent_results),
+        agent_results=agent_results,
     )

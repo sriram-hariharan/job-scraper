@@ -4,6 +4,7 @@ from copy import deepcopy
 from typing import Any
 
 from src.agents import shadow_sidecar
+from src.storage.agent_trace.store import build_agent_trace_summary_payload
 
 
 def _clean_text(value: Any) -> str:
@@ -38,6 +39,22 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
     }
 
 
+def evaluate_shadow_sidecar_hook_trace_capture_safety(
+    *, called_by_pipeline: bool = False
+) -> dict[str, bool]:
+    safety = evaluate_shadow_sidecar_pipeline_hook_safety(
+        called_by_pipeline=called_by_pipeline
+    )
+    safety["trace_capture_only"] = True
+    safety["did_read_database"] = False
+    safety["did_write_database"] = False
+    safety["did_write_agent_trace_run"] = False
+    safety["did_write_agent_trace_step"] = False
+    safety["did_update_agent_trace_run"] = False
+    safety["did_update_agent_trace_step"] = False
+    return safety
+
+
 def _hook_status_from_chain(chain_payload: dict[str, Any]) -> str:
     chain_status = _clean_text(
         chain_payload.get("chain_status") or chain_payload.get("sidecar_chain_status")
@@ -47,6 +64,175 @@ def _hook_status_from_chain(chain_payload: dict[str, Any]) -> str:
     if chain_status == shadow_sidecar.STATUS_FAILED_NON_BLOCKING:
         return "hook_failed_non_blocking"
     return "hook_completed_with_fallback"
+
+
+def _trace_capture_status(hook_status: str) -> str:
+    status = _clean_text(hook_status)
+    if status == "hook_not_enabled":
+        return "trace_capture_not_enabled"
+    if status in {
+        "hook_blocked_by_kill_switch",
+        "hook_blocked_missing_context",
+        "hook_blocked_unsupported_stage",
+        "hook_skipped_no_enabled_agents",
+    }:
+        return "trace_capture_skipped"
+    if status == "hook_failed_non_blocking":
+        return "trace_capture_failed_non_blocking"
+    return "trace_capture_captured"
+
+
+def build_shadow_sidecar_hook_trace_capture_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Build a deterministic in-memory trace capture for a sidecar hook payload."""
+
+    hook = deepcopy(hook_payload or {})
+    chain = deepcopy(hook.get("chain_payload")) if isinstance(hook.get("chain_payload"), dict) else {}
+    observability = (
+        deepcopy(hook.get("observability_payload"))
+        if isinstance(hook.get("observability_payload"), dict)
+        else {}
+    )
+    safety = hook.get("safety_metadata") if isinstance(hook.get("safety_metadata"), dict) else {}
+    called_by_pipeline = bool(safety.get("pipeline_hook_called_by_pipeline"))
+    hook_status = _clean_text(hook.get("hook_status"))
+    trace_status = _trace_capture_status(hook_status)
+    chain_summary = {
+        "chain_status": _clean_text(
+            chain.get("chain_status") or chain.get("sidecar_chain_status")
+        ),
+        "stage_order": list(chain.get("stage_order") or []),
+        "stage_statuses": deepcopy(chain.get("stage_statuses") or {}),
+        "fallback_used": bool(chain.get("fallback_used")),
+        "readiness_status": _clean_text(
+            (chain.get("readiness_decision") or {}).get("readiness_status")
+            if isinstance(chain.get("readiness_decision"), dict)
+            else ""
+        )
+        or _clean_text(
+            (observability.get("readiness_decision") or {}).get("readiness_status")
+            if isinstance(observability.get("readiness_decision"), dict)
+            else ""
+        ),
+    }
+    step_status = "completed"
+    if trace_status in {"trace_capture_not_enabled", "trace_capture_skipped"}:
+        step_status = "skipped"
+    elif trace_status == "trace_capture_failed_non_blocking":
+        step_status = "warning"
+
+    trace_summary = build_agent_trace_summary_payload(
+        agent_runs=[],
+        agent_steps=[
+            {
+                "agent_step_id": "shadow_sidecar_hook_trace_capture",
+                "agent_run_id": "shadow_sidecar_hook_trace_capture",
+                "owner_user_id": "shadow_sidecar",
+                "agent_name": "Shadow Sidecar Hook Trace Capture",
+                "status": step_status,
+                "started_at": "in_memory",
+                "completed_at": "in_memory",
+                "metadata_json": {
+                    "trace_capture_status": trace_status,
+                    "hook_status": hook_status,
+                    "chain_attempted": bool(hook.get("chain_attempted")),
+                },
+                "safety_metadata_json": evaluate_shadow_sidecar_hook_trace_capture_safety(
+                    called_by_pipeline=called_by_pipeline
+                ),
+            }
+        ],
+    )
+    trace_bundle = deepcopy(chain.get("trace_bundle") or {})
+    if not trace_bundle:
+        trace_bundle = {
+            "bundle_type": "shadow_sidecar_hook_trace_capture_bundle",
+            "schema_version": shadow_sidecar.SCHEMA_VERSION,
+            "hook_status": hook_status,
+            "stage_name": _clean_text(hook.get("stage_name")),
+            "source_deterministic_decision": _clean_text(
+                hook.get("source_deterministic_decision")
+            ),
+        }
+    evidence_pack = deepcopy(chain.get("evidence_pack") or {})
+    if not evidence_pack:
+        evidence_pack = {
+            "evidence_pack_type": "shadow_sidecar_hook_trace_capture_evidence_pack",
+            "schema_version": shadow_sidecar.SCHEMA_VERSION,
+            "hook_status": hook_status,
+            "source_deterministic_reason_codes": list(
+                hook.get("source_deterministic_reason_codes") or []
+            ),
+            "fallback_used": trace_status != "trace_capture_captured",
+        }
+
+    return {
+        "schema_version": shadow_sidecar.SCHEMA_VERSION,
+        "trace_capture_status": trace_status,
+        "trace_capture_only": True,
+        "persistence_deferred": True,
+        "persistence_deferred_reason": (
+            "no_existing_safe_persistent_shadow_sidecar_trace_sink"
+        ),
+        "hook_status": hook_status,
+        "hook_preview_status": _clean_text(hook.get("hook_preview_status")),
+        "chain_attempted": bool(hook.get("chain_attempted")),
+        "chain_summary": chain_summary,
+        "source_deterministic_stage": _clean_text(
+            hook.get("source_deterministic_stage")
+        ),
+        "source_deterministic_status": _clean_text(
+            hook.get("source_deterministic_status")
+        ),
+        "source_deterministic_score": hook.get("source_deterministic_score"),
+        "source_deterministic_decision": _clean_text(
+            hook.get("source_deterministic_decision")
+        ),
+        "source_deterministic_reason_codes": list(
+            hook.get("source_deterministic_reason_codes") or []
+        ),
+        "trace_bundle": trace_bundle,
+        "evidence_pack": evidence_pack,
+        "trace_summary": trace_summary,
+        "provider_calls_disabled_in_tests": True,
+        "safety_metadata": evaluate_shadow_sidecar_hook_trace_capture_safety(
+            called_by_pipeline=called_by_pipeline
+        ),
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+    }
+
+
+def _safe_shadow_sidecar_hook_trace_capture_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    try:
+        return build_shadow_sidecar_hook_trace_capture_payload(hook_payload)
+    except Exception as exc:
+        safety = hook_payload.get("safety_metadata") if isinstance(hook_payload, dict) else {}
+        return {
+            "schema_version": shadow_sidecar.SCHEMA_VERSION,
+            "trace_capture_status": "trace_capture_failed_non_blocking",
+            "trace_capture_only": True,
+            "persistence_deferred": True,
+            "persistence_deferred_reason": (
+                "no_existing_safe_persistent_shadow_sidecar_trace_sink"
+            ),
+            "hook_status": _clean_text(
+                hook_payload.get("hook_status") if isinstance(hook_payload, dict) else ""
+            ),
+            "chain_attempted": bool(
+                hook_payload.get("chain_attempted") if isinstance(hook_payload, dict) else False
+            ),
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "safety_metadata": evaluate_shadow_sidecar_hook_trace_capture_safety(
+                called_by_pipeline=bool(safety.get("pipeline_hook_called_by_pipeline"))
+            ),
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+        }
 
 
 def _base_hook_payload(
@@ -64,7 +250,7 @@ def _base_hook_payload(
     observability = (
         deepcopy(observability_payload) if isinstance(observability_payload, dict) else {}
     )
-    return {
+    payload = {
         "schema_version": shadow_sidecar.SCHEMA_VERSION,
         "hook_status": _clean_text(hook_status) or "hook_failed_non_blocking",
         "hook_preview_status": _clean_text(preview.get("hook_preview_status")),
@@ -104,6 +290,8 @@ def _base_hook_payload(
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }
+    payload["trace_capture"] = _safe_shadow_sidecar_hook_trace_capture_payload(payload)
+    return payload
 
 
 def run_shadow_sidecar_pipeline_hook(

@@ -167,6 +167,7 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_sidecar_pipeline_hook_default_off_not_called.py",
     "src/pipeline/collector.py",
     "tests/test_shadow_sidecar_first_pipeline_callsite_default_off.py",
+    "tests/test_shadow_sidecar_hook_trace_capture_default_off.py",
 }
 
 def _changed_files():

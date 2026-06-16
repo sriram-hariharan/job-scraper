@@ -183,13 +183,16 @@ def test_output_preserves_deterministic_source_decision_fields():
     assert payload["live_agents_allowed_to_automate_mutations"] == 0
 
 
-def test_no_production_pipeline_call_site_is_added():
+def test_exactly_one_default_off_production_pipeline_call_site_is_added():
     pipeline_files = sorted(Path("src/pipeline").glob("*.py"))
     assert pipeline_files
+    call_sites = []
     for path in pipeline_files:
         text = path.read_text(encoding="utf-8")
-        assert "shadow_sidecar_hook" not in text
-        assert "run_shadow_sidecar_pipeline_hook" not in text
+        if "run_shadow_sidecar_pipeline_hook(" in text:
+            call_sites.append(path.as_posix())
+
+    assert call_sites == ["src/pipeline/collector.py"]
 
 
 def test_shadow_sidecar_hook_has_no_api_ui_service_or_storage_wiring():

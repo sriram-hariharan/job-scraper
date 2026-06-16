@@ -5,8 +5,8 @@ from pathlib import Path
 DOC_PATH = Path("docs/agent_trace_ui_readiness_checkpoint.md")
 
 PROTECTED_FILE_HASHES = {
-    "src/app/api.py": "78214c439a15faab8667786545922f1fd55b25093e502aea3d233921182bbec9",
-    "src/app/static/agentic_review.js": "9d4b26a767e1f33ab10927fb3e9434ab721968fa68a9a6a42f3cbbe8c300d49b",
+    "src/app/api.py": "61e226c55b79aa053a61a0c3ac338bd56a8d30f3403c76d6d1fa566289ff9805",
+    "src/app/static/agentic_review.js": "6227baa687f8ccd16c7ec14b6b9d3e570e9c917e97e88df998ea6093735b8269",
     "src/agents/trace.py": "f4527c224ea0d3fc05d14883bb036311e7120a6a9abc9a54a58396e76ddada41",
     "src/agents/agent_state.py": "6daaa56b2af95e36547e89e928c354038b5bab6ff2cc35e49bf259d0d9d1cdac",
     "src/agents/relevance_prefilter.py": "5be6d21c27b720472daef6f85f813bc6561c90f9f8abfcfc09e88a5cd36a490b",

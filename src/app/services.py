@@ -17368,6 +17368,270 @@ def build_execution_launch_request_status_transition_preview_payload(
     }
 
 
+def _guarded_execution_launch_request_status_transition_safety_metadata(
+    *, did_update_execution_launch_request_status: bool
+) -> Dict[str, Any]:
+    return {
+        "manual_only": True,
+        "guarded_execution_launch_request_status_transition_only": True,
+        "human_confirmation_required": True,
+        "did_create_execution_launch_request": False,
+        "did_update_execution_launch_request_status": bool(did_update_execution_launch_request_status),
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_update_execution_launch_request_status),
+    }
+
+
+def build_guarded_execution_launch_request_status_transition_payload(
+    *,
+    execution_launch_request_id: Any = "",
+    requested_transition: Any = "",
+    reviewer_confirmation: Any = False,
+    execution_launch_request_status_transition_preview_payload: Dict[str, Any] | None = None,
+    application_execution_launch_request_readback_payload: Dict[str, Any] | None = None,
+    guarded_application_execution_launch_request_payload: Dict[str, Any] | None = None,
+    application_execution_launch_request_observability_payload: Dict[str, Any] | None = None,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+    execution_launch_request_status_writer: Any = None,
+) -> Dict[str, Any]:
+    """Apply a guarded launch request status transition without executing anything."""
+
+    preview_payload = deepcopy(execution_launch_request_status_transition_preview_payload or {})
+    if not isinstance(preview_payload, dict):
+        preview_payload = {}
+    readback_payload = deepcopy(application_execution_launch_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    creation_payload = deepcopy(guarded_application_execution_launch_request_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(application_execution_launch_request_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+
+    launch_request_id = (
+        _clean_text(execution_launch_request_id)
+        or _clean_text(preview_payload.get("execution_launch_request_id"))
+        or _clean_text(readback_payload.get("execution_launch_request_id"))
+        or _clean_text(creation_payload.get("execution_launch_request_id"))
+        or _clean_text(observability_payload.get("execution_launch_request_id"))
+    )
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(preview_payload.get("execution_request_id"))
+        or _clean_text(readback_payload.get("execution_request_id"))
+        or _clean_text(creation_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(preview_payload.get("approval_request_id"))
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(preview_payload.get("queue_handoff_id"))
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+    )
+    clean_context_id = (
+        _clean_text(context_id)
+        or _clean_text(preview_payload.get("context_id"))
+        or _clean_text(readback_payload.get("context_id"))
+        or _clean_text(creation_payload.get("context_id"))
+        or _clean_text(observability_payload.get("context_id"))
+    )
+    clean_job_id = (
+        _clean_text(job_id)
+        or _clean_text(preview_payload.get("job_id"))
+        or _clean_text(readback_payload.get("job_id"))
+        or _clean_text(creation_payload.get("job_id"))
+        or _clean_text(observability_payload.get("job_id"))
+    )
+    transition = _clean_text(requested_transition) or _clean_text(
+        preview_payload.get("requested_transition")
+    )
+    status_map = {
+        "ready_for_manual_execution": "ready_for_manual_execution",
+        "needs_changes": "needs_changes",
+        "cancelled": "cancelled",
+        "keep_pending_review": "pending_review",
+    }
+    source_preview_status = (
+        _clean_text(
+            preview_payload.get("execution_launch_request_status_transition_preview_status")
+        )
+        or "missing"
+    )
+    previous_status = (
+        _clean_text(preview_payload.get("current_execution_launch_request_status"))
+        or _clean_text(readback_payload.get("execution_launch_request_status"))
+    )
+    proposed_status = _clean_text(preview_payload.get("proposed_execution_launch_request_status"))
+    if not proposed_status:
+        proposed_status = status_map.get(transition, "")
+    blocked_actions: List[str] = []
+
+    def _blocked(status: str, next_safe_step: str, *blockers: str) -> Dict[str, Any]:
+        blocked_actions.extend(blocker for blocker in blockers if blocker)
+        return {
+            "execution_launch_request_status_transition_status": status,
+            "execution_launch_request_id": launch_request_id,
+            "execution_request_id": execution_id,
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "requested_transition": transition,
+            "previous_execution_launch_request_status": previous_status,
+            "new_execution_launch_request_status": previous_status,
+            "execution_launch_request_status_updated": False,
+            "source_transition_preview_status": source_preview_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_human_confirmation": True,
+            "next_safe_step": next_safe_step,
+            "rationale": (
+                "Guarded execution launch request status transition is manual-only and requires "
+                "a ready transition preview plus explicit reviewer confirmation. It does not "
+                "execute, submit, update execution request status, mutate approvals, resumes, "
+                "scoring, ranking, or pipeline wiring."
+            ),
+            "reviewer_note": _clean_text(reviewer_note),
+            "context_id": clean_context_id,
+            "job_id": clean_job_id,
+            "safety_metadata": _guarded_execution_launch_request_status_transition_safety_metadata(
+                did_update_execution_launch_request_status=False
+            ),
+            "manual_surface": True,
+            "service_surface": "guarded_execution_launch_request_status_transition",
+        }
+
+    if reviewer_confirmation is not True:
+        return _blocked(
+            "blocked_by_missing_confirmation",
+            "collect_explicit_execution_launch_request_status_transition_confirmation",
+            "reviewer_confirmation_missing",
+        )
+    if not launch_request_id:
+        return _blocked(
+            "blocked_missing_execution_launch_request_id",
+            "provide_execution_launch_request_id",
+            "execution_launch_request_id_missing",
+        )
+    if not transition:
+        return _blocked(
+            "blocked_missing_requested_transition",
+            "select_supported_execution_launch_request_transition",
+            "requested_transition_missing",
+        )
+    if transition not in status_map:
+        return _blocked(
+            "blocked_invalid_requested_transition",
+            "select_supported_execution_launch_request_transition",
+            "requested_transition_invalid",
+        )
+    if source_preview_status != "ready_for_future_status_transition":
+        return _blocked(
+            "blocked_by_transition_preview",
+            "run_execution_launch_request_status_transition_preview_before_apply",
+            "execution_launch_request_status_transition_preview_not_ready",
+        )
+    expected_status = status_map[transition]
+    if proposed_status != expected_status:
+        return _blocked(
+            "blocked_by_transition_preview",
+            "rebuild_execution_launch_request_status_transition_preview",
+            "proposed_execution_launch_request_status_mismatch",
+        )
+    if not callable(execution_launch_request_status_writer):
+        return _blocked(
+            "blocked_missing_execution_launch_request_status_writer",
+            "configure_existing_execution_launch_request_status_writer_before_manual_transition",
+            "execution_launch_request_status_writer_unavailable",
+        )
+
+    update_payload = {
+        "execution_launch_request_id": launch_request_id,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_launch_request_status": previous_status,
+        "new_execution_launch_request_status": expected_status,
+        "reviewer_note": _clean_text(reviewer_note),
+        "manual_guarded_execution_launch_request_status_transition": True,
+        "execute_application": False,
+        "submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+    try:
+        writer_result = execution_launch_request_status_writer(deepcopy(update_payload))
+    except Exception:
+        return _blocked(
+            "blocked_by_storage_error",
+            "retry_guarded_execution_launch_request_status_transition",
+            "execution_launch_request_status_writer_error",
+        )
+
+    new_status = (
+        _clean_text(writer_result.get("new_execution_launch_request_status") if isinstance(writer_result, dict) else "")
+        or _clean_text(writer_result.get("execution_launch_request_status") if isinstance(writer_result, dict) else "")
+        or expected_status
+    )
+    return {
+        "execution_launch_request_status_transition_status": "updated",
+        "execution_launch_request_id": _clean_text(
+            writer_result.get("execution_launch_request_id") if isinstance(writer_result, dict) else ""
+        ) or launch_request_id,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_launch_request_status": previous_status,
+        "new_execution_launch_request_status": new_status,
+        "execution_launch_request_status_updated": True,
+        "source_transition_preview_status": source_preview_status,
+        "blocked_actions": [],
+        "required_human_confirmation": True,
+        "next_safe_step": "review_updated_execution_launch_request_status_before_any_execution",
+        "rationale": (
+            "Explicit reviewer confirmation was present and the launch request transition preview "
+            "was ready; only the execution launch request/control artifact status was updated "
+            "through the injected writer."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "safety_metadata": _guarded_execution_launch_request_status_transition_safety_metadata(
+            did_update_execution_launch_request_status=True
+        ),
+        "manual_surface": True,
+        "service_surface": "guarded_execution_launch_request_status_transition",
+        "execution_launch_request_status_writer_result": (
+            deepcopy(writer_result) if isinstance(writer_result, dict) else {}
+        ),
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

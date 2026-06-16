@@ -145,6 +145,8 @@ ALLOWED_CHANGED = {
     "tests/test_execution_launch_request_status_transition_preview_dry_run_no_writes.py",
     "tests/test_guarded_execution_launch_request_status_transition_manual_only.py",
     "tests/test_execution_launch_request_status_transition_observability_no_writes.py",
+    "docs/phase5_shadow_agentic_pipeline_sidecar_readiness_audit.md",
+    "tests/test_phase5_shadow_agentic_pipeline_sidecar_readiness_audit.py",
 }
 
 def _changed_files():

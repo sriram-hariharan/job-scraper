@@ -14436,6 +14436,1412 @@ def build_execution_launch_gate_preview_payload(
     }
 
 
+def _execution_launch_gate_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "execution_launch_gate_audit_only": True,
+        "manual_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_launch_gate_observability_payload(
+    *,
+    execution_launch_gate_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize an execution launch gate preview without launching anything."""
+
+    source_payload = deepcopy(execution_launch_gate_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("execution_launch_gate_status"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        blocked_actions.append("execution_launch_gate_payload_missing")
+        next_safe_step = "preview_execution_launch_gate_before_audit"
+    elif source_status == "ready_for_future_manual_execution":
+        observability_status = "observed_ready"
+        future_allowed = True
+        launch_blocked = False
+        launch_allowed_later = True
+        next_safe_step = "collect_explicit_future_manual_execution_confirmation"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        next_safe_step = _clean_text(source_payload.get("next_safe_step")) or "resolve_execution_launch_gate_blockers"
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        blocked_actions.append("execution_launch_gate_status_unrecognized")
+        next_safe_step = "rebuild_execution_launch_gate_payload"
+    else:
+        observability_status = "insufficient_information"
+        future_allowed = False
+        launch_blocked = True
+        launch_allowed_later = False
+        blocked_actions.append("execution_launch_gate_status_missing")
+        next_safe_step = "preview_execution_launch_gate_before_audit"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "future_manual_execution_allowed": future_allowed,
+        "execution_launch_was_blocked": launch_blocked,
+        "execution_launch_was_allowed_later": launch_allowed_later,
+        "source_executed_application": bool(source_safety_payload.get("did_execute_application")),
+        "source_submitted_application": bool(source_safety_payload.get("did_submit_application")),
+    }
+    audit_events = [
+        {
+            "event_type": "execution_launch_gate_observed",
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "source_execution_launch_gate_status": source_status or "missing",
+            "future_manual_execution_allowed": future_allowed,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_execute_application": bool(source_safety_payload.get("did_execute_application")),
+        "source_did_submit_application": bool(source_safety_payload.get("did_submit_application")),
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+    }
+
+    return {
+        "execution_launch_gate_observability_status": observability_status,
+        "source_execution_launch_gate_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "future_manual_execution_allowed": future_allowed,
+        "execution_launch_was_blocked": launch_blocked,
+        "execution_launch_was_allowed_later": launch_allowed_later,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _execution_launch_gate_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_launch_gate_observability",
+    }
+
+
+def _execution_request_packet_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "execution_request_packet_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "human_review_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_request_packet_preview_payload(
+    *,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    execution_launch_gate_payload: Dict[str, Any] | None = None,
+    execution_launch_gate_observability_payload: Dict[str, Any] | None = None,
+    execution_readiness_payload: Dict[str, Any] | None = None,
+    queue_handoff_observability_payload: Dict[str, Any] | None = None,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Build a dry-run execution request packet preview for human review only."""
+
+    launch_gate = deepcopy(execution_launch_gate_payload or {})
+    if not isinstance(launch_gate, dict):
+        launch_gate = {}
+    launch_audit = deepcopy(execution_launch_gate_observability_payload or {})
+    if not isinstance(launch_audit, dict):
+        launch_audit = {}
+    execution_readiness = deepcopy(execution_readiness_payload or {})
+    if not isinstance(execution_readiness, dict):
+        execution_readiness = {}
+    queue_audit = deepcopy(queue_handoff_observability_payload or {})
+    if not isinstance(queue_audit, dict):
+        queue_audit = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(launch_gate.get("approval_request_id"))
+        or _clean_text(launch_audit.get("approval_request_id"))
+        or _clean_text(execution_readiness.get("approval_request_id"))
+        or _clean_text(queue_audit.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(launch_gate.get("queue_handoff_id"))
+        or _clean_text(launch_audit.get("queue_handoff_id"))
+        or _clean_text(execution_readiness.get("queue_handoff_id"))
+        or _clean_text(queue_audit.get("queue_handoff_id"))
+    )
+    source_gate_status = _clean_text(launch_gate.get("execution_launch_gate_status")) or "missing"
+    source_audit_status = (
+        _clean_text(launch_audit.get("execution_launch_gate_observability_status"))
+        or "missing"
+    )
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not request_id:
+        packet_status = "blocked_missing_approval_request_id"
+        packet_ready = False
+        missing_requirements.append("approval_request_id")
+        blocked_actions.append("approval_request_id_missing")
+        next_safe_step = "provide_approval_request_id"
+    elif not handoff_id:
+        packet_status = "blocked_missing_queue_handoff_id"
+        packet_ready = False
+        missing_requirements.append("queue_handoff_id")
+        blocked_actions.append("queue_handoff_id_missing")
+        next_safe_step = "provide_queue_handoff_id"
+    elif not launch_gate or source_gate_status == "missing":
+        packet_status = "blocked_missing_execution_launch_gate"
+        packet_ready = False
+        missing_requirements.append("execution_launch_gate_payload")
+        blocked_actions.append("execution_launch_gate_missing")
+        next_safe_step = "preview_execution_launch_gate_before_packet"
+    elif source_gate_status != "ready_for_future_manual_execution":
+        packet_status = "blocked_execution_launch_not_ready"
+        packet_ready = False
+        missing_requirements.append("ready_execution_launch_gate")
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(launch_gate.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.append("execution_launch_gate_not_ready")
+        next_safe_step = _clean_text(launch_gate.get("next_safe_step")) or "resolve_execution_launch_gate_blockers"
+    elif not launch_audit or source_audit_status == "missing":
+        packet_status = "blocked_missing_execution_launch_observability"
+        packet_ready = False
+        missing_requirements.append("execution_launch_gate_observability_payload")
+        blocked_actions.append("execution_launch_gate_observability_missing")
+        next_safe_step = "view_execution_launch_gate_audit_before_packet"
+    elif source_audit_status != "observed_ready":
+        packet_status = "blocked_missing_execution_launch_observability"
+        packet_ready = False
+        missing_requirements.append("observed_ready_execution_launch_gate")
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(launch_audit.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.append("execution_launch_gate_observability_not_ready")
+        next_safe_step = _clean_text(launch_audit.get("next_safe_step")) or "resolve_execution_launch_gate_audit_blockers"
+    else:
+        packet_status = "packet_ready_for_human_review"
+        packet_ready = True
+        next_safe_step = "human_review_execution_request_packet_before_future_guarded_execution"
+
+    blocked_actions = list(dict.fromkeys([item for item in blocked_actions if item]))
+    missing_requirements = list(dict.fromkeys([item for item in missing_requirements if item]))
+    request_summary = {
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "source_execution_launch_gate_status": source_gate_status,
+        "source_execution_launch_gate_observability_status": source_audit_status,
+        "packet_ready_for_human_review": packet_ready,
+        "reviewer_note_present": bool(_clean_text(reviewer_note)),
+    }
+    packet_sections = [
+        {
+            "section_id": "source_ids",
+            "title": "Source identifiers",
+            "summary": f"Approval request {request_id or 'missing'} and queue handoff {handoff_id or 'missing'}.",
+        },
+        {
+            "section_id": "launch_gate",
+            "title": "Execution launch gate",
+            "summary": f"Launch gate status: {source_gate_status}.",
+        },
+        {
+            "section_id": "launch_gate_audit",
+            "title": "Execution launch gate audit",
+            "summary": f"Launch gate audit status: {source_audit_status}.",
+        },
+        {
+            "section_id": "human_review",
+            "title": "Human review requirement",
+            "summary": "Future guarded execution still requires explicit human confirmation.",
+        },
+    ]
+    if _clean_text(reviewer_note):
+        packet_sections.append(
+            {
+                "section_id": "reviewer_note",
+                "title": "Reviewer note",
+                "summary": _clean_text(reviewer_note),
+            }
+        )
+
+    return {
+        "execution_request_packet_status": packet_status,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "packet_ready_for_human_review": packet_ready,
+        "packet_sections": packet_sections,
+        "execution_request_summary": request_summary,
+        "missing_requirements": missing_requirements,
+        "blocked_actions": blocked_actions,
+        "required_human_confirmation": True,
+        "source_execution_launch_gate_status": source_gate_status,
+        "source_execution_launch_gate_observability_status": source_audit_status,
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Execution request packet preview is dry-run only for human review before any "
+            "future guarded execution action. It does not execute, submit, mutate queues "
+            "or approvals, write queue files, change resumes, scoring, ranking, or add "
+            "pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": (
+            _clean_text(context_id)
+            or _clean_text(launch_gate.get("context_id"))
+            or _clean_text(launch_audit.get("context_id"))
+            or _clean_text(execution_readiness.get("context_id"))
+        ),
+        "job_id": (
+            _clean_text(job_id)
+            or _clean_text(launch_gate.get("job_id"))
+            or _clean_text(launch_audit.get("job_id"))
+            or _clean_text(execution_readiness.get("job_id"))
+        ),
+        "safety_metadata": _execution_request_packet_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_request_packet_preview_dry_run",
+    }
+
+
+def _guarded_execution_request_creation_safety_metadata(
+    *, did_create_execution_request: bool
+) -> Dict[str, Any]:
+    return {
+        "manual_only": True,
+        "guarded_execution_request_only": True,
+        "human_confirmation_required": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": bool(did_create_execution_request),
+        "did_write_queue": bool(did_create_execution_request),
+        "did_create_execution_request": bool(did_create_execution_request),
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_create_execution_request),
+    }
+
+
+def _manual_execution_request_id(
+    *, approval_request_id: str, queue_handoff_id: str, context_id: str, job_id: str
+) -> str:
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "approval_request_id": _clean_text(approval_request_id),
+                "queue_handoff_id": _clean_text(queue_handoff_id),
+                "context_id": _clean_text(context_id),
+                "job_id": _clean_text(job_id),
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"manual_execution_request_{fingerprint}"
+
+
+def build_guarded_execution_request_creation_payload(
+    *,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_confirmation: Any = False,
+    execution_request_packet_payload: Dict[str, Any] | None = None,
+    execution_launch_gate_payload: Dict[str, Any] | None = None,
+    execution_launch_gate_observability_payload: Dict[str, Any] | None = None,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+    execution_request_writer: Any = None,
+) -> Dict[str, Any]:
+    """Create one guarded future execution request artifact without executing anything."""
+
+    packet_payload = deepcopy(execution_request_packet_payload or {})
+    if not isinstance(packet_payload, dict):
+        packet_payload = {}
+    launch_gate = deepcopy(execution_launch_gate_payload or {})
+    if not isinstance(launch_gate, dict):
+        launch_gate = {}
+    launch_audit = deepcopy(execution_launch_gate_observability_payload or {})
+    if not isinstance(launch_audit, dict):
+        launch_audit = {}
+    if not packet_payload and any([launch_gate, launch_audit]):
+        packet_payload = build_execution_request_packet_preview_payload(
+            approval_request_id=approval_request_id,
+            queue_handoff_id=queue_handoff_id,
+            execution_launch_gate_payload=launch_gate,
+            execution_launch_gate_observability_payload=launch_audit,
+            reviewer_note=reviewer_note,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(packet_payload.get("approval_request_id"))
+        or _clean_text(launch_gate.get("approval_request_id"))
+        or _clean_text(launch_audit.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(packet_payload.get("queue_handoff_id"))
+        or _clean_text(launch_gate.get("queue_handoff_id"))
+        or _clean_text(launch_audit.get("queue_handoff_id"))
+    )
+    source_packet_status = _clean_text(packet_payload.get("execution_request_packet_status")) or "missing"
+    clean_context_id = _clean_text(context_id) or _clean_text(packet_payload.get("context_id"))
+    clean_job_id = _clean_text(job_id) or _clean_text(packet_payload.get("job_id"))
+    blocked_actions: List[str] = []
+
+    def _blocked(status: str, next_safe_step: str, *blockers: str) -> Dict[str, Any]:
+        blocked_actions.extend(blocker for blocker in blockers if blocker)
+        return {
+            "execution_request_creation_status": status,
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "execution_request_id": "",
+            "execution_request_created": False,
+            "source_execution_request_packet_status": source_packet_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_human_confirmation": True,
+            "next_safe_step": next_safe_step,
+            "rationale": (
+                "Guarded execution request creation is manual-only and requires a ready "
+                "execution request packet plus explicit reviewer confirmation. It creates "
+                "no approval records, mutates no approval status, and never executes or submits applications."
+            ),
+            "reviewer_note": _clean_text(reviewer_note),
+            "context_id": clean_context_id,
+            "job_id": clean_job_id,
+            "safety_metadata": _guarded_execution_request_creation_safety_metadata(
+                did_create_execution_request=False
+            ),
+            "manual_surface": True,
+            "service_surface": "guarded_execution_request_creation",
+        }
+
+    if reviewer_confirmation is not True:
+        return _blocked(
+            "blocked_by_missing_confirmation",
+            "collect_explicit_execution_request_confirmation",
+            "reviewer_confirmation_missing",
+        )
+    if not request_id:
+        return _blocked(
+            "blocked_missing_approval_request_id",
+            "provide_approval_request_id",
+            "approval_request_id_missing",
+        )
+    if not handoff_id:
+        return _blocked(
+            "blocked_missing_queue_handoff_id",
+            "provide_queue_handoff_id",
+            "queue_handoff_id_missing",
+        )
+    if source_packet_status != "packet_ready_for_human_review":
+        return _blocked(
+            "blocked_by_packet_preview",
+            "preview_ready_execution_request_packet_before_creation",
+            "execution_request_packet_not_ready",
+        )
+    if not callable(execution_request_writer):
+        return _blocked(
+            "blocked_missing_execution_request_writer",
+            "configure_existing_execution_request_writer_before_manual_creation",
+            "execution_request_writer_unavailable",
+        )
+
+    execution_request_id = _manual_execution_request_id(
+        approval_request_id=request_id,
+        queue_handoff_id=handoff_id,
+        context_id=clean_context_id,
+        job_id=clean_job_id,
+    )
+    execution_request_entry = {
+        "execution_request_id": execution_request_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "source_execution_request_packet_status": source_packet_status,
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "reviewer_note": _clean_text(reviewer_note),
+        "manual_guarded_execution_request": True,
+        "execute_application": False,
+        "submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+    try:
+        writer_result = execution_request_writer(deepcopy(execution_request_entry))
+    except Exception:
+        return _blocked(
+            "blocked_by_storage_error",
+            "retry_guarded_execution_request_creation",
+            "execution_request_writer_error",
+        )
+
+    return {
+        "execution_request_creation_status": "created",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_id": _clean_text(
+            writer_result.get("execution_request_id") if isinstance(writer_result, dict) else ""
+        ) or execution_request_id,
+        "execution_request_created": True,
+        "source_execution_request_packet_status": source_packet_status,
+        "blocked_actions": [],
+        "required_human_confirmation": True,
+        "next_safe_step": "review_created_execution_request_before_any_future_execution",
+        "rationale": (
+            "Created exactly one guarded execution request/control artifact through the "
+            "injected existing writer; no application execution, submission, approval status, "
+            "resume, scoring, ranking, or pipeline state was changed."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "safety_metadata": _guarded_execution_request_creation_safety_metadata(
+            did_create_execution_request=True
+        ),
+        "manual_surface": True,
+        "service_surface": "guarded_execution_request_creation",
+        "execution_request_writer_result": deepcopy(writer_result) if isinstance(writer_result, dict) else {},
+    }
+
+
+def _guarded_execution_request_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "execution_request_audit_only": True,
+        "manual_only": True,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_create_execution_request": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_guarded_execution_request_creation_observability_payload(
+    *,
+    guarded_execution_request_creation_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    execution_request_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize a guarded execution request creation result without creating anything."""
+
+    source_payload = deepcopy(guarded_execution_request_creation_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("execution_request_creation_status"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(source_payload.get("execution_request_id"))
+    )
+    execution_request_created = bool(source_payload.get("execution_request_created"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        request_was_created = False
+        request_was_blocked = True
+        blocked_actions.append("guarded_execution_request_creation_payload_missing")
+        next_safe_step = "run_guarded_execution_request_creation_manual_action"
+    elif source_status == "created":
+        observability_status = "observed_created"
+        request_was_created = True
+        request_was_blocked = False
+        next_safe_step = "review_created_execution_request_before_any_future_execution"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        request_was_created = False
+        request_was_blocked = True
+        next_safe_step = _clean_text(source_payload.get("next_safe_step")) or "resolve_guarded_execution_request_blockers"
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        request_was_created = False
+        request_was_blocked = True
+        blocked_actions.append("guarded_execution_request_creation_status_unrecognized")
+        next_safe_step = "rebuild_guarded_execution_request_creation_payload"
+    else:
+        observability_status = "insufficient_information"
+        request_was_created = False
+        request_was_blocked = True
+        blocked_actions.append("guarded_execution_request_creation_status_missing")
+        next_safe_step = "run_guarded_execution_request_creation_manual_action"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_id": execution_id,
+        "execution_request_created": execution_request_created,
+        "execution_request_was_created": request_was_created,
+        "execution_request_was_blocked": request_was_blocked,
+        "source_created_execution_request": bool(source_safety_payload.get("did_create_execution_request")),
+        "source_mutated_queue": bool(source_safety_payload.get("did_mutate_queue")),
+        "source_wrote_queue": bool(source_safety_payload.get("did_write_queue")),
+    }
+    audit_events = [
+        {
+            "event_type": "guarded_execution_request_observed",
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "execution_request_id": execution_id,
+            "source_execution_request_creation_status": source_status or "missing",
+            "execution_request_was_created": request_was_created,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_create_execution_request": bool(source_safety_payload.get("did_create_execution_request")),
+        "source_did_mutate_queue": bool(source_safety_payload.get("did_mutate_queue")),
+        "source_did_write_queue": bool(source_safety_payload.get("did_write_queue")),
+        "observability_created_execution_request": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+    }
+
+    return {
+        "execution_request_observability_status": observability_status,
+        "source_execution_request_creation_status": source_status or "missing",
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_id": execution_id,
+        "execution_request_created": execution_request_created,
+        "execution_request_was_blocked": request_was_blocked,
+        "execution_request_was_created": request_was_created,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _guarded_execution_request_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "guarded_execution_request_creation_observability",
+    }
+
+
+def _execution_request_readback_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "execution_request_readback_only": True,
+        "manual_only": True,
+        "did_create_execution_request": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_request_readback_payload(
+    *,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    guarded_execution_request_creation_payload: Dict[str, Any] | None = None,
+    execution_request_creation_observability_payload: Dict[str, Any] | None = None,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Build a read-only execution request detail view from supplied source evidence."""
+
+    creation_payload = deepcopy(guarded_execution_request_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(execution_request_creation_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(creation_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+    )
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(creation_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+    )
+    source_creation_status = _clean_text(
+        creation_payload.get("execution_request_creation_status")
+    ) or _clean_text(observability_payload.get("source_execution_request_creation_status"))
+    source_observability_status = _clean_text(
+        observability_payload.get("execution_request_observability_status")
+    )
+    source_created = bool(creation_payload.get("execution_request_created")) or bool(
+        observability_payload.get("execution_request_was_created")
+    )
+    source_blocked = bool(observability_payload.get("execution_request_was_blocked"))
+    id_mismatch = False
+    if execution_id and _clean_text(creation_payload.get("execution_request_id")):
+        id_mismatch = execution_id != _clean_text(creation_payload.get("execution_request_id"))
+    if execution_id and _clean_text(observability_payload.get("execution_request_id")):
+        id_mismatch = id_mismatch or execution_id != _clean_text(
+            observability_payload.get("execution_request_id")
+        )
+
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not execution_id:
+        readback_status = "blocked_missing_execution_request_id"
+        found = False
+        execution_status = "missing"
+        missing_requirements.append("execution_request_id")
+        blocked_actions.append("execution_request_id_missing")
+        next_safe_step = "provide_execution_request_id"
+    elif not creation_payload and not observability_payload:
+        readback_status = "blocked_missing_source"
+        found = False
+        execution_status = "unknown"
+        missing_requirements.append("guarded_execution_request_source_evidence")
+        blocked_actions.append("execution_request_source_evidence_missing")
+        next_safe_step = "provide_execution_request_creation_or_audit_payload"
+    elif id_mismatch:
+        readback_status = "not_found"
+        found = False
+        execution_status = "id_mismatch"
+        blocked_actions.append("execution_request_id_not_matched_in_source")
+        next_safe_step = "verify_execution_request_id"
+    elif source_creation_status == "created" and source_created:
+        readback_status = "found"
+        found = True
+        execution_status = "created_control_artifact"
+        next_safe_step = "review_execution_request_details_before_future_execution_action"
+    elif source_blocked or source_creation_status.startswith("blocked") or source_observability_status == "observed_blocked":
+        readback_status = "not_found"
+        found = False
+        execution_status = "not_created"
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(creation_payload.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.extend(
+            [
+                _clean_text(item)
+                for item in list(observability_payload.get("blocked_actions") or [])
+                if _clean_text(item)
+            ]
+        )
+        blocked_actions.append("execution_request_not_created")
+        next_safe_step = _clean_text(creation_payload.get("next_safe_step")) or _clean_text(
+            observability_payload.get("next_safe_step")
+        ) or "resolve_guarded_execution_request_blockers"
+    else:
+        readback_status = "insufficient_information"
+        found = False
+        execution_status = "unknown"
+        blocked_actions.append("execution_request_source_status_unclear")
+        next_safe_step = "provide_created_execution_request_source_evidence"
+
+    readback_summary = {
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_status": execution_status,
+        "execution_request_found": found,
+        "source_execution_request_creation_status": source_creation_status or "missing",
+        "source_execution_request_observability_status": source_observability_status or "missing",
+    }
+    detail_sections = [
+        {
+            "section_id": "source_ids",
+            "title": "Source identifiers",
+            "summary": f"Execution request {execution_id or 'missing'} for approval {request_id or 'missing'} and queue handoff {handoff_id or 'missing'}.",
+        },
+        {
+            "section_id": "creation_source",
+            "title": "Creation source",
+            "summary": f"Creation status: {source_creation_status or 'missing'}.",
+        },
+        {
+            "section_id": "observability_source",
+            "title": "Observability source",
+            "summary": f"Audit status: {source_observability_status or 'missing'}.",
+        },
+        {
+            "section_id": "safety",
+            "title": "Safety",
+            "summary": "Readback only; no execution request creation, queue write, execution, or submission occurs.",
+        },
+    ]
+
+    return {
+        "execution_request_readback_status": readback_status,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_request_found": found,
+        "execution_request_status": execution_status,
+        "source_execution_request_creation_status": source_creation_status or "missing",
+        "source_execution_request_observability_status": source_observability_status or "missing",
+        "readback_summary": readback_summary,
+        "detail_sections": detail_sections,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys([item for item in blocked_actions if item])),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(creation_payload.get("context_id")) or _clean_text(observability_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(creation_payload.get("job_id")) or _clean_text(observability_payload.get("job_id")),
+        "safety_metadata": _execution_request_readback_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_request_readback",
+    }
+
+
+EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS = {
+    "ready_for_manual_execution": {
+        "label": "Ready for manual execution",
+        "summary": "Preview marking the execution request ready for a future manual execution gate.",
+        "would_change_status_to": "ready_for_manual_execution",
+    },
+    "needs_changes": {
+        "label": "Needs changes",
+        "summary": "Preview sending the execution request back for more review or correction.",
+        "would_change_status_to": "needs_changes",
+    },
+    "cancelled": {
+        "label": "Cancelled",
+        "summary": "Preview cancelling the execution request before any execution action.",
+        "would_change_status_to": "cancelled",
+    },
+    "keep_pending_review": {
+        "label": "Keep pending review",
+        "summary": "Preview keeping the execution request in pending review.",
+        "would_change_status_to": "pending_review",
+    },
+}
+
+
+def _execution_request_status_transition_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "execution_request_status_transition_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "human_confirmation_required": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_request_status_transition_preview_payload(
+    *,
+    execution_request_id: Any = "",
+    requested_transition: Any = "",
+    execution_request_readback_payload: Dict[str, Any] | None = None,
+    execution_request_creation_payload: Dict[str, Any] | None = None,
+    execution_request_creation_observability_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview an execution request status transition without applying it."""
+
+    readback_payload = deepcopy(execution_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    creation_payload = deepcopy(execution_request_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(execution_request_creation_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(readback_payload.get("execution_request_id"))
+        or _clean_text(creation_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+    )
+    transition = _clean_text(requested_transition)
+    source_readback_status = _clean_text(readback_payload.get("execution_request_readback_status"))
+    previous_status = _clean_text(readback_payload.get("execution_request_status"))
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not execution_id:
+        preview_status = "blocked_missing_execution_request_id"
+        transition_allowed_later = False
+        missing_requirements.append("execution_request_id")
+        blocked_actions.append("execution_request_id_missing")
+        next_safe_step = "provide_execution_request_id"
+    elif not transition:
+        preview_status = "blocked_missing_requested_transition"
+        transition_allowed_later = False
+        missing_requirements.append("requested_transition")
+        blocked_actions.append("requested_transition_missing")
+        next_safe_step = "select_supported_execution_request_transition"
+    elif transition not in EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS:
+        preview_status = "blocked_invalid_requested_transition"
+        transition_allowed_later = False
+        missing_requirements.append("valid_requested_transition")
+        blocked_actions.append("requested_transition_invalid")
+        next_safe_step = "select_supported_execution_request_transition"
+    elif not source_readback_status:
+        preview_status = "blocked_missing_readback"
+        transition_allowed_later = False
+        missing_requirements.append("execution_request_readback_payload")
+        blocked_actions.append("execution_request_readback_missing")
+        next_safe_step = "read_execution_request_before_transition_preview"
+    elif source_readback_status != "found":
+        preview_status = "blocked_execution_request_not_found"
+        transition_allowed_later = False
+        missing_requirements.append("found_execution_request_readback")
+        blocked_actions.append("execution_request_not_found")
+        next_safe_step = "read_existing_execution_request_before_transition_preview"
+    elif previous_status in {"", "missing", "unknown", "not_created", "id_mismatch"}:
+        preview_status = "blocked_invalid_current_status"
+        transition_allowed_later = False
+        missing_requirements.append("valid_previous_execution_request_status")
+        blocked_actions.append("previous_execution_request_status_invalid")
+        next_safe_step = "refresh_execution_request_readback_before_transition_preview"
+    else:
+        preview_status = "ready_for_future_status_transition"
+        transition_allowed_later = True
+        next_safe_step = "collect_explicit_future_execution_request_status_transition_confirmation"
+
+    option = EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS.get(transition, {})
+    proposed_status = _clean_text(option.get("would_change_status_to"))
+    return {
+        "execution_request_status_transition_preview_status": preview_status,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "proposed_execution_request_status": proposed_status,
+        "transition_allowed_later": transition_allowed_later,
+        "transition_preview_only": True,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_human_confirmation": True,
+        "source_execution_request_readback_status": source_readback_status or "missing",
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Execution request status transition preview is dry-run only; it does not update "
+            "execution request status, execute, submit, create requests, mutate queues or "
+            "approvals, write queue files, change resumes, scoring, ranking, or add pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": _clean_text(context_id) or _clean_text(readback_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(readback_payload.get("job_id")),
+        "safety_metadata": _execution_request_status_transition_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_request_status_transition_preview",
+    }
+
+
+def _guarded_execution_request_status_transition_safety_metadata(
+    *, did_update_execution_request_status: bool
+) -> Dict[str, Any]:
+    return {
+        "manual_only": True,
+        "guarded_execution_request_status_transition_only": True,
+        "human_confirmation_required": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": bool(did_update_execution_request_status),
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": bool(did_update_execution_request_status),
+        "did_write_queue": bool(did_update_execution_request_status),
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_update_execution_request_status),
+    }
+
+
+def build_guarded_execution_request_status_transition_payload(
+    *,
+    execution_request_id: Any = "",
+    requested_transition: Any = "",
+    reviewer_confirmation: Any = False,
+    execution_request_status_transition_preview_payload: Dict[str, Any] | None = None,
+    execution_request_readback_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+    execution_request_status_writer: Any = None,
+) -> Dict[str, Any]:
+    """Apply a guarded execution request status transition without executing anything."""
+
+    preview_payload = deepcopy(execution_request_status_transition_preview_payload or {})
+    if not isinstance(preview_payload, dict):
+        preview_payload = {}
+    readback_payload = deepcopy(execution_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(preview_payload.get("execution_request_id"))
+        or _clean_text(readback_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(preview_payload.get("approval_request_id"))
+        or _clean_text(readback_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(preview_payload.get("queue_handoff_id"))
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+    )
+    transition = _clean_text(requested_transition) or _clean_text(preview_payload.get("requested_transition"))
+    source_preview_status = (
+        _clean_text(preview_payload.get("execution_request_status_transition_preview_status"))
+        or "missing"
+    )
+    previous_status = (
+        _clean_text(preview_payload.get("previous_execution_request_status"))
+        or _clean_text(readback_payload.get("execution_request_status"))
+    )
+    proposed_status = _clean_text(preview_payload.get("proposed_execution_request_status"))
+    if not proposed_status:
+        proposed_status = _clean_text(
+            EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS.get(transition, {}).get("would_change_status_to")
+        )
+    blocked_actions: List[str] = []
+
+    def _blocked(status: str, next_safe_step: str, *blockers: str) -> Dict[str, Any]:
+        blocked_actions.extend(blocker for blocker in blockers if blocker)
+        return {
+            "execution_request_status_transition_status": status,
+            "execution_request_id": execution_id,
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "requested_transition": transition,
+            "previous_execution_request_status": previous_status,
+            "new_execution_request_status": previous_status,
+            "execution_request_status_updated": False,
+            "source_transition_preview_status": source_preview_status,
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_human_confirmation": True,
+            "next_safe_step": next_safe_step,
+            "rationale": (
+                "Guarded execution request status transition is manual-only and requires a "
+                "ready transition preview plus explicit reviewer confirmation. It does not "
+                "execute, submit, mutate approvals, resumes, scoring, ranking, or pipeline wiring."
+            ),
+            "reviewer_note": _clean_text(reviewer_note),
+            "context_id": _clean_text(context_id) or _clean_text(preview_payload.get("context_id")),
+            "job_id": _clean_text(job_id) or _clean_text(preview_payload.get("job_id")),
+            "safety_metadata": _guarded_execution_request_status_transition_safety_metadata(
+                did_update_execution_request_status=False
+            ),
+            "manual_surface": True,
+            "service_surface": "guarded_execution_request_status_transition",
+        }
+
+    if reviewer_confirmation is not True:
+        return _blocked(
+            "blocked_by_missing_confirmation",
+            "collect_explicit_execution_request_status_transition_confirmation",
+            "reviewer_confirmation_missing",
+        )
+    if not execution_id:
+        return _blocked(
+            "blocked_missing_execution_request_id",
+            "provide_execution_request_id",
+            "execution_request_id_missing",
+        )
+    if not transition:
+        return _blocked(
+            "blocked_missing_requested_transition",
+            "select_supported_execution_request_transition",
+            "requested_transition_missing",
+        )
+    if transition not in EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS:
+        return _blocked(
+            "blocked_invalid_requested_transition",
+            "select_supported_execution_request_transition",
+            "requested_transition_invalid",
+        )
+    if source_preview_status != "ready_for_future_status_transition":
+        return _blocked(
+            "blocked_by_transition_preview",
+            "run_execution_request_status_transition_preview_before_apply",
+            "execution_request_status_transition_preview_not_ready",
+        )
+    expected_status = _clean_text(
+        EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS[transition]["would_change_status_to"]
+    )
+    if proposed_status != expected_status:
+        return _blocked(
+            "blocked_by_transition_preview",
+            "rebuild_execution_request_status_transition_preview",
+            "proposed_execution_request_status_mismatch",
+        )
+    if not callable(execution_request_status_writer):
+        return _blocked(
+            "blocked_missing_execution_request_status_writer",
+            "configure_existing_execution_request_status_writer_before_manual_transition",
+            "execution_request_status_writer_unavailable",
+        )
+
+    update_payload = {
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "new_execution_request_status": expected_status,
+        "reviewer_note": _clean_text(reviewer_note),
+        "manual_guarded_execution_request_status_transition": True,
+        "pipeline_wiring_added": False,
+    }
+    try:
+        writer_result = execution_request_status_writer(deepcopy(update_payload))
+    except Exception:
+        return _blocked(
+            "blocked_by_storage_error",
+            "retry_guarded_execution_request_status_transition",
+            "execution_request_status_writer_error",
+        )
+
+    new_status = (
+        _clean_text(writer_result.get("new_execution_request_status") if isinstance(writer_result, dict) else "")
+        or _clean_text(writer_result.get("execution_request_status") if isinstance(writer_result, dict) else "")
+        or expected_status
+    )
+    return {
+        "execution_request_status_transition_status": "updated",
+        "execution_request_id": _clean_text(
+            writer_result.get("execution_request_id") if isinstance(writer_result, dict) else ""
+        ) or execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "new_execution_request_status": new_status,
+        "execution_request_status_updated": True,
+        "source_transition_preview_status": source_preview_status,
+        "blocked_actions": [],
+        "required_human_confirmation": True,
+        "next_safe_step": "review_updated_execution_request_status_before_any_execution",
+        "rationale": (
+            "Explicit reviewer confirmation was present and the transition preview was ready; "
+            "only the execution request/control artifact status was updated through the injected writer."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": _clean_text(context_id) or _clean_text(preview_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(preview_payload.get("job_id")),
+        "safety_metadata": _guarded_execution_request_status_transition_safety_metadata(
+            did_update_execution_request_status=True
+        ),
+        "manual_surface": True,
+        "service_surface": "guarded_execution_request_status_transition",
+        "execution_request_status_writer_result": deepcopy(writer_result) if isinstance(writer_result, dict) else {},
+    }
+
+
+def _guarded_execution_request_status_transition_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "execution_request_status_transition_audit_only": True,
+        "manual_only": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_guarded_execution_request_status_transition_observability_payload(
+    *,
+    guarded_execution_request_status_transition_payload: Dict[str, Any] | None = None,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize a guarded execution request status transition result without mutating anything."""
+
+    source_payload = deepcopy(guarded_execution_request_status_transition_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("execution_request_status_transition_status"))
+    execution_id = _clean_text(execution_request_id) or _clean_text(source_payload.get("execution_request_id"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    transition = _clean_text(source_payload.get("requested_transition"))
+    previous_status = _clean_text(source_payload.get("previous_execution_request_status"))
+    new_status = _clean_text(source_payload.get("new_execution_request_status"))
+    status_updated = bool(source_payload.get("execution_request_status_updated"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        transition_was_applied = False
+        transition_was_blocked = True
+        blocked_actions.append("guarded_execution_request_status_transition_payload_missing")
+        next_safe_step = "run_guarded_execution_request_status_transition_manual_action"
+    elif source_status == "updated":
+        observability_status = "observed_updated"
+        transition_was_applied = True
+        transition_was_blocked = False
+        next_safe_step = "read_execution_request_status_before_any_future_execution"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        transition_was_applied = False
+        transition_was_blocked = True
+        next_safe_step = (
+            _clean_text(source_payload.get("next_safe_step"))
+            or "resolve_guarded_execution_request_status_transition_blockers"
+        )
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        transition_was_applied = False
+        transition_was_blocked = True
+        blocked_actions.append("guarded_execution_request_status_transition_status_unrecognized")
+        next_safe_step = "rebuild_guarded_execution_request_status_transition_payload"
+    else:
+        observability_status = "insufficient_information"
+        transition_was_applied = False
+        transition_was_blocked = True
+        blocked_actions.append("guarded_execution_request_status_transition_status_missing")
+        next_safe_step = "run_guarded_execution_request_status_transition_manual_action"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "new_execution_request_status": new_status,
+        "execution_request_status_updated": status_updated,
+        "transition_was_applied": transition_was_applied,
+        "transition_was_blocked": transition_was_blocked,
+        "source_updated_execution_request_status": bool(
+            source_safety_payload.get("did_update_execution_request_status")
+        ),
+    }
+    audit_events = [
+        {
+            "event_type": "guarded_execution_request_status_transition_observed",
+            "execution_request_id": execution_id,
+            "source_transition_status": source_status or "missing",
+            "transition_was_applied": transition_was_applied,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_update_execution_request_status": bool(
+            source_safety_payload.get("did_update_execution_request_status")
+        ),
+        "observability_updated_execution_request_status": False,
+        "observability_created_execution_request": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+        "observability_mutated_approval": False,
+        "observability_updated_approval_status": False,
+        "observability_mutated_resume": False,
+        "observability_mutated_scoring": False,
+        "observability_changed_ranking": False,
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+    }
+
+    return {
+        "execution_request_status_transition_observability_status": observability_status,
+        "source_execution_request_status_transition_status": source_status or "missing",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "new_execution_request_status": new_status,
+        "execution_request_status_updated": status_updated,
+        "execution_request_status_transition_was_blocked": transition_was_blocked,
+        "execution_request_status_transition_was_applied": transition_was_applied,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _guarded_execution_request_status_transition_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "guarded_execution_request_status_transition_observability",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

@@ -415,6 +415,92 @@ class ManualExecutionLaunchGatePreviewRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualExecutionLaunchGateObservabilityRequest(BaseModel):
+    execution_launch_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualExecutionRequestPacketPreviewRequest(BaseModel):
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    execution_launch_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_launch_gate_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_readiness_payload: dict[str, Any] = Field(default_factory=dict)
+    queue_handoff_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualGuardedExecutionRequestCreateRequest(BaseModel):
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    reviewer_confirmation: bool = False
+    execution_request_packet_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_launch_gate_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_launch_gate_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualGuardedExecutionRequestObservabilityRequest(BaseModel):
+    guarded_execution_request_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    execution_request_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualExecutionRequestReadbackRequest(BaseModel):
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    guarded_execution_request_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_creation_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualExecutionRequestStatusTransitionPreviewRequest(BaseModel):
+    execution_request_id: str = ""
+    requested_transition: str = ""
+    execution_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_creation_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_creation_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualGuardedExecutionRequestStatusTransitionRequest(BaseModel):
+    execution_request_id: str = ""
+    requested_transition: str = ""
+    reviewer_confirmation: bool = False
+    execution_request_status_transition_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualGuardedExecutionRequestStatusTransitionObservabilityRequest(BaseModel):
+    guarded_execution_request_status_transition_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -1915,6 +2001,174 @@ def invoke_manual_execution_launch_gate_preview_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_execution_launch_gate_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-execution-launch-gate-observability")
+def invoke_manual_execution_launch_gate_observability_api_action(
+    request: ManualExecutionLaunchGateObservabilityRequest,
+):
+    payload = services.build_execution_launch_gate_observability_payload(
+        execution_launch_gate_payload=request.execution_launch_gate_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_execution_launch_gate_observability",
+    }
+
+
+@app.post("/api/manual-execution-request-packet-preview-dry-run")
+def invoke_manual_execution_request_packet_preview_api_action(
+    request: ManualExecutionRequestPacketPreviewRequest,
+):
+    payload = services.build_execution_request_packet_preview_payload(
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        execution_launch_gate_payload=request.execution_launch_gate_payload,
+        execution_launch_gate_observability_payload=request.execution_launch_gate_observability_payload,
+        execution_readiness_payload=request.execution_readiness_payload,
+        queue_handoff_observability_payload=request.queue_handoff_observability_payload,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_execution_request_packet_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-create")
+def invoke_manual_guarded_execution_request_create_api_action(
+    request: ManualGuardedExecutionRequestCreateRequest,
+):
+    payload = services.build_guarded_execution_request_creation_payload(
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        reviewer_confirmation=request.reviewer_confirmation,
+        execution_request_packet_payload=request.execution_request_packet_payload,
+        execution_launch_gate_payload=request.execution_launch_gate_payload,
+        execution_launch_gate_observability_payload=request.execution_launch_gate_observability_payload,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_create",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-observability")
+def invoke_manual_guarded_execution_request_observability_api_action(
+    request: ManualGuardedExecutionRequestObservabilityRequest,
+):
+    payload = services.build_guarded_execution_request_creation_observability_payload(
+        guarded_execution_request_creation_payload=request.guarded_execution_request_creation_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        execution_request_id=request.execution_request_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_observability",
+    }
+
+
+@app.post("/api/manual-execution-request-readback")
+def invoke_manual_execution_request_readback_api_action(
+    request: ManualExecutionRequestReadbackRequest,
+):
+    payload = services.build_execution_request_readback_payload(
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        guarded_execution_request_creation_payload=request.guarded_execution_request_creation_payload,
+        execution_request_creation_observability_payload=request.execution_request_creation_observability_payload,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_execution_request_readback",
+    }
+
+
+@app.post("/api/manual-execution-request-status-transition-preview-dry-run")
+def invoke_manual_execution_request_status_transition_preview_api_action(
+    request: ManualExecutionRequestStatusTransitionPreviewRequest,
+):
+    payload = services.build_execution_request_status_transition_preview_payload(
+        execution_request_id=request.execution_request_id,
+        requested_transition=request.requested_transition,
+        execution_request_readback_payload=request.execution_request_readback_payload,
+        execution_request_creation_payload=request.execution_request_creation_payload,
+        execution_request_creation_observability_payload=request.execution_request_creation_observability_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_execution_request_status_transition_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-status-transition")
+def invoke_manual_guarded_execution_request_status_transition_api_action(
+    request: ManualGuardedExecutionRequestStatusTransitionRequest,
+):
+    payload = services.build_guarded_execution_request_status_transition_payload(
+        execution_request_id=request.execution_request_id,
+        requested_transition=request.requested_transition,
+        reviewer_confirmation=request.reviewer_confirmation,
+        execution_request_status_transition_preview_payload=request.execution_request_status_transition_preview_payload,
+        execution_request_readback_payload=request.execution_request_readback_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_status_transition",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-status-transition-observability")
+def invoke_manual_guarded_execution_request_status_transition_observability_api_action(
+    request: ManualGuardedExecutionRequestStatusTransitionObservabilityRequest,
+):
+    payload = services.build_guarded_execution_request_status_transition_observability_payload(
+        guarded_execution_request_status_transition_payload=(
+            request.guarded_execution_request_status_transition_payload
+        ),
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_status_transition_observability",
     }
 
 

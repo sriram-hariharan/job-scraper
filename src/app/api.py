@@ -479,6 +479,19 @@ class ManualExecutionRequestStatusTransitionPreviewRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualGuardedExecutionRequestStatusTransitionRequest(BaseModel):
+    execution_request_id: str = ""
+    requested_transition: str = ""
+    reviewer_confirmation: bool = False
+    execution_request_status_transition_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -2103,6 +2116,29 @@ def invoke_manual_execution_request_status_transition_preview_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_execution_request_status_transition_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-guarded-execution-request-status-transition")
+def invoke_manual_guarded_execution_request_status_transition_api_action(
+    request: ManualGuardedExecutionRequestStatusTransitionRequest,
+):
+    payload = services.build_guarded_execution_request_status_transition_payload(
+        execution_request_id=request.execution_request_id,
+        requested_transition=request.requested_transition,
+        reviewer_confirmation=request.reviewer_confirmation,
+        execution_request_status_transition_preview_payload=request.execution_request_status_transition_preview_payload,
+        execution_request_readback_payload=request.execution_request_readback_payload,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_guarded_execution_request_status_transition",
     }
 
 

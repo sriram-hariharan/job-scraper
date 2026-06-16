@@ -46,6 +46,12 @@ JD_AGENT_NAMES = {
     "JD Intelligence Agent",
 }
 
+TAILORING_AGENT_NAMES = {
+    "tailoring_suggestion",
+    "tailoring_suggestion_agent",
+    "Tailoring Suggestion Agent",
+}
+
 JD_SIGNAL_FIELDS = (
     "required_skills",
     "preferred_skills",
@@ -58,6 +64,16 @@ JD_SIGNAL_FIELDS = (
     "ownership_signals",
     "seniority_signals",
     "seniority_indicators",
+    "risk_flags",
+)
+
+TAILORING_SIGNAL_FIELDS = (
+    "patch_ready_suggestions",
+    "guidance_only_suggestions",
+    "rejected_suggestions",
+    "missing_evidence",
+    "unsupported_claim_risks",
+    "source_fields_used",
     "risk_flags",
 )
 
@@ -117,6 +133,11 @@ def _agent_flag_name(agent_name: str) -> str:
 def _is_jd_intelligence_agent(agent_name: str) -> bool:
     cleaned = _clean_text(agent_name)
     return cleaned in JD_AGENT_NAMES or cleaned.lower() in JD_AGENT_NAMES
+
+
+def _is_tailoring_suggestion_agent(agent_name: str) -> bool:
+    cleaned = _clean_text(agent_name)
+    return cleaned in TAILORING_AGENT_NAMES or cleaned.lower() in TAILORING_AGENT_NAMES
 
 
 def _agent_enabled(config: dict[str, Any], agent_name: str) -> bool:
@@ -198,6 +219,71 @@ def _jd_risk_flags(source: dict[str, Any]) -> list[str]:
         job_payload.get("jd_risk_flags"),
         job_payload.get("risk_flags"),
         trace_context.get("jd_risk_flags"),
+        trace_context.get("risk_flags"),
+    )
+
+
+def _tailoring_signal_refs(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    explicit_refs = _merged_text_list(
+        job_payload.get("tailoring_evidence_refs"),
+        resume_profile.get("tailoring_evidence_refs"),
+        trace_context.get("tailoring_evidence_refs"),
+        job_payload.get("evidence_refs"),
+        resume_profile.get("evidence_refs"),
+        trace_context.get("evidence_refs"),
+    )
+    if explicit_refs:
+        return explicit_refs
+
+    refs: list[str] = []
+    for field_name in TAILORING_SIGNAL_FIELDS:
+        if (
+            _text_list(job_payload.get(field_name))
+            or _text_list(resume_profile.get(field_name))
+            or _text_list(trace_context.get(field_name))
+        ):
+            refs.append(f"existing_trace_context.{field_name}")
+    if _clean_text(resume_profile.get("resume_id")):
+        refs.append("resume_profile_payload.resume_id")
+    return refs
+
+
+def _tailoring_reason_codes(
+    source: dict[str, Any],
+    fallback_reason_codes: Any,
+) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    reason_codes = _merged_text_list(
+        fallback_reason_codes,
+        job_payload.get("tailoring_reason_codes"),
+        resume_profile.get("tailoring_reason_codes"),
+        trace_context.get("tailoring_reason_codes"),
+        job_payload.get("reason_codes"),
+        trace_context.get("reason_codes"),
+    )
+    if _tailoring_signal_refs(source):
+        reason_codes.append("tailoring_shadow_signals_observed")
+    if not reason_codes:
+        reason_codes.append("tailoring_shadow_deterministic_fallback")
+    return _merged_text_list(reason_codes)
+
+
+def _tailoring_risk_flags(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    return _merged_text_list(
+        job_payload.get("tailoring_risk_flags"),
+        resume_profile.get("tailoring_risk_flags"),
+        trace_context.get("tailoring_risk_flags"),
+        job_payload.get("unsupported_claim_risks"),
+        trace_context.get("unsupported_claim_risks"),
+        job_payload.get("risk_flags"),
         trace_context.get("risk_flags"),
     )
 
@@ -388,6 +474,21 @@ def build_shadow_sidecar_fallback_payload(
             agent_reason_codes=_jd_reason_codes(source, reason_codes),
             agent_evidence_refs=_jd_signal_refs(source),
             agent_risk_flags=_jd_risk_flags(source),
+            agent_blocking_findings=[],
+            fallback_used=True,
+            error_type=error_type,
+            error_message=error_message,
+        )
+    if _is_tailoring_suggestion_agent(agent_name):
+        return build_shadow_sidecar_trace_payload(
+            sidecar_input=source,
+            sidecar_stage_status=sidecar_stage_status,
+            agent_output_status="fallback",
+            agent_recommendation="preserve_source_deterministic_decision",
+            agent_confidence=0.0,
+            agent_reason_codes=_tailoring_reason_codes(source, reason_codes),
+            agent_evidence_refs=_tailoring_signal_refs(source),
+            agent_risk_flags=_tailoring_risk_flags(source),
             agent_blocking_findings=[],
             fallback_used=True,
             error_type=error_type,

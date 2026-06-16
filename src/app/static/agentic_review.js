@@ -3300,6 +3300,73 @@ function renderManualExecutionLaunchRequestStatusTransitionPreviewSection(traceP
   `;
 }
 
+function renderManualGuardedExecutionLaunchRequestStatusTransitionSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_guarded_execution_launch_request_status_transition_result)
+    ? tracePayload.manual_guarded_execution_launch_request_status_transition_result
+    : {};
+  const preview = hasAgentTraceSummaryObject(tracePayload?.manual_execution_launch_request_status_transition_preview_result)
+    ? tracePayload.manual_execution_launch_request_status_transition_preview_result
+    : {};
+  const readback = hasAgentTraceSummaryObject(tracePayload?.manual_application_execution_launch_request_readback_result)
+    ? tracePayload.manual_application_execution_launch_request_readback_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const executionLaunchRequestId = result.execution_launch_request_id || preview.execution_launch_request_id || readback.execution_launch_request_id || "";
+  const executionRequestId = result.execution_request_id || preview.execution_request_id || readback.execution_request_id || "";
+  const approvalRequestId = result.approval_request_id || preview.approval_request_id || readback.approval_request_id || "";
+  const queueHandoffId = result.queue_handoff_id || preview.queue_handoff_id || readback.queue_handoff_id || "";
+  const requestedTransition = result.requested_transition || preview.requested_transition || "ready_for_manual_execution";
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || result.context_id || preview.context_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || result.job_id || preview.job_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual guarded execution launch request status transition">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Guarded Execution Launch Request Status Transition</h4>
+          <p>Manual guarded launch request status update only. It requires a ready preview and explicit confirmation, and never executes, submits, updates execution request status, approval status, resume content, scoring, or ranking.</p>
+        </div>
+        <span class="agentic-workflow-badge">Guarded launch status</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Transition status", result.execution_launch_request_status_transition_status || "not run")}
+        ${renderWorkflowSummaryMetric("Launch request id", executionLaunchRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Requested", requestedTransition || "-")}
+        ${renderWorkflowSummaryMetric("Updated", result.execution_launch_request_status_updated === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Previous", result.previous_execution_launch_request_status || "-")}
+        ${renderWorkflowSummaryMetric("New", result.new_execution_launch_request_status || "-")}
+        ${renderWorkflowSummaryMetric("Status updated", safety.did_update_execution_launch_request_status ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Guarded execution launch request status blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Source transition preview status", result.source_transition_preview_status || "", { helper: "Source launch request transition preview status." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Guarded execution launch request status transition rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable guarded execution launch request status transition safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <label class="agentic-review-muted">
+          <input type="checkbox" data-manual-guarded-execution-launch-request-status-transition-confirmation>
+          I explicitly confirm this guarded execution launch request status transition.
+        </label>
+        <button type="button" class="agentic-feedback-action" data-manual-guarded-execution-launch-request-status-transition data-execution-launch-request-id="${escapeHtml(executionLaunchRequestId)}" data-approval-request-id="${escapeHtml(approvalRequestId)}" data-queue-handoff-id="${escapeHtml(queueHandoffId)}" data-execution-request-id="${escapeHtml(executionRequestId)}" data-requested-transition="${escapeHtml(requestedTransition)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Apply Guarded Execution Launch Request Status
+        </button>
+        <span class="agentic-review-muted" data-manual-guarded-execution-launch-request-status-transition-status>
+          Manual only. This requires explicit confirmation and will block unless an existing launch-request status writer is configured.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -3385,6 +3452,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualGuardedApplicationExecutionLaunchRequestObservabilitySection(tracePayload)}
       ${renderManualApplicationExecutionLaunchRequestReadbackSection(tracePayload)}
       ${renderManualExecutionLaunchRequestStatusTransitionPreviewSection(tracePayload)}
+      ${renderManualGuardedExecutionLaunchRequestStatusTransitionSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -6687,6 +6755,64 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual execution launch request status transition preview failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-guarded-execution-launch-request-status-transition]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const confirmation = section?.querySelector("[data-manual-guarded-execution-launch-request-status-transition-confirmation]");
+    const status = section?.querySelector("[data-manual-guarded-execution-launch-request-status-transition-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Applying guarded execution launch request status...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const preview = tracePayload.manual_execution_launch_request_status_transition_preview_result || {};
+      const readback = tracePayload.manual_application_execution_launch_request_readback_result || {};
+      const launchResult = tracePayload.manual_guarded_application_execution_launch_request_create_result || {};
+      const auditResult = tracePayload.manual_guarded_application_execution_launch_request_observability_result || {};
+      const transitionResult = await fetchJson(
+        "/api/manual-guarded-execution-launch-request-status-transition",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            execution_launch_request_id: button.dataset.executionLaunchRequestId || preview.execution_launch_request_id || readback.execution_launch_request_id || "",
+            requested_transition: button.dataset.requestedTransition || preview.requested_transition || "ready_for_manual_execution",
+            reviewer_confirmation: Boolean(confirmation?.checked),
+            execution_launch_request_status_transition_preview_payload: preview,
+            application_execution_launch_request_readback_payload: readback,
+            guarded_application_execution_launch_request_payload: launchResult,
+            application_execution_launch_request_observability_payload: auditResult,
+            execution_request_id: button.dataset.executionRequestId || preview.execution_request_id || readback.execution_request_id || "",
+            approval_request_id: button.dataset.approvalRequestId || preview.approval_request_id || readback.approval_request_id || "",
+            queue_handoff_id: button.dataset.queueHandoffId || preview.queue_handoff_id || readback.queue_handoff_id || "",
+            reviewer_note: "",
+            context_id: button.dataset.contextId || preview.context_id || readback.context_id || "",
+            job_id: button.dataset.jobId || preview.job_id || readback.job_id || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_guarded_execution_launch_request_status_transition_result: transitionResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual guarded execution launch request status transition failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

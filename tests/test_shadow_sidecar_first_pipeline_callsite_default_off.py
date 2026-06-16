@@ -117,6 +117,8 @@ def test_enabled_call_site_uses_isolated_hook_fallback_without_mutation(monkeypa
         "application_priority_completed"
     ]
     assert payload["provider_calls_disabled_in_tests"] is True
+    assert payload["trace_capture"]["trace_capture_status"] == "trace_capture_captured"
+    assert payload["trace_capture"]["persistence_deferred"] is True
     assert payload["live_production_pipeline_connected_agents"] == 0
     assert payload["live_agents_allowed_to_automate_mutations"] == 0
     _assert_pipeline_hook_safety(payload)

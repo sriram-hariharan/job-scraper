@@ -145,6 +145,19 @@ ALLOWED_CHANGED = {
     "tests/test_execution_launch_request_status_transition_preview_dry_run_no_writes.py",
     "tests/test_guarded_execution_launch_request_status_transition_manual_only.py",
     "tests/test_execution_launch_request_status_transition_observability_no_writes.py",
+    "docs/phase5_shadow_agentic_pipeline_sidecar_readiness_audit.md",
+    "tests/test_phase5_shadow_agentic_pipeline_sidecar_readiness_audit.py",
+    "docs/phase5_shadow_sidecar_config_contract_no_runtime_change.md",
+    "tests/test_phase5_shadow_sidecar_config_contract_no_runtime_change.py",
+    "docs/phase5_shadow_sidecar_trace_schema_contract_no_runtime_change.md",
+    "tests/test_phase5_shadow_sidecar_trace_schema_contract_no_runtime_change.py",
+    "docs/phase5_shadow_sidecar_adapter_interface_contract_no_runtime_change.md",
+    "tests/test_phase5_shadow_sidecar_adapter_interface_contract_no_runtime_change.py",
+    "src/agents/shadow_sidecar.py",
+    "tests/test_shadow_sidecar_adapter_default_off_no_pipeline_wiring.py",
+    "tests/test_shadow_sidecar_jd_intelligence_mapping_no_pipeline_wiring.py",
+    "tests/test_shadow_sidecar_tailoring_suggestion_mapping_no_pipeline_wiring.py",
+    "tests/test_shadow_sidecar_critic_guardrail_mapping_no_pipeline_wiring.py",
 }
 
 def _changed_files():
@@ -187,6 +200,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/tailoring_decision_agent.py",
         "src/agents/critic_agent.py",
         "src/agents/job_prioritization_agent.py",
+        "src/agents/shadow_sidecar.py",
     }
     runtime_paths = [
         path for path in changed

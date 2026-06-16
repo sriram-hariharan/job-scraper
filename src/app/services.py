@@ -16190,6 +16190,224 @@ def build_application_execution_simulation_observability_payload(
     }
 
 
+def _application_execution_preflight_checklist_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "application_execution_preflight_checklist_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "human_review_required": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_application_execution_preflight_checklist_payload(
+    *,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    application_execution_simulation_payload: Dict[str, Any] | None = None,
+    application_execution_simulation_observability_payload: Dict[str, Any] | None = None,
+    execution_request_readback_payload: Dict[str, Any] | None = None,
+    execution_request_status_transition_observability_payload: Dict[str, Any] | None = None,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Build a dry-run preflight checklist before any future guarded execution."""
+
+    simulation_payload = deepcopy(application_execution_simulation_payload or {})
+    if not isinstance(simulation_payload, dict):
+        simulation_payload = {}
+    simulation_observability_payload = deepcopy(application_execution_simulation_observability_payload or {})
+    if not isinstance(simulation_observability_payload, dict):
+        simulation_observability_payload = {}
+    readback_payload = deepcopy(execution_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    transition_observability_payload = deepcopy(execution_request_status_transition_observability_payload or {})
+    if not isinstance(transition_observability_payload, dict):
+        transition_observability_payload = {}
+
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(simulation_payload.get("execution_request_id"))
+        or _clean_text(simulation_observability_payload.get("execution_request_id"))
+        or _clean_text(readback_payload.get("execution_request_id"))
+        or _clean_text(transition_observability_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(simulation_payload.get("approval_request_id"))
+        or _clean_text(simulation_observability_payload.get("approval_request_id"))
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(transition_observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(simulation_payload.get("queue_handoff_id"))
+        or _clean_text(simulation_observability_payload.get("queue_handoff_id"))
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+        or _clean_text(transition_observability_payload.get("queue_handoff_id"))
+    )
+    simulation_status = _clean_text(simulation_payload.get("application_execution_simulation_status"))
+    simulation_observability_status = _clean_text(
+        simulation_observability_payload.get("application_execution_simulation_observability_status")
+    )
+    simulation_safety = simulation_payload.get("safety_metadata")
+    simulation_safety_payload = simulation_safety if isinstance(simulation_safety, dict) else {}
+    observability_safety = simulation_observability_payload.get("safety_metadata")
+    observability_safety_payload = observability_safety if isinstance(observability_safety, dict) else {}
+
+    check_specs = [
+        ("execution_request_id_present", bool(execution_id), "Execution request id is present."),
+        ("approval_request_id_present", bool(request_id), "Approval request id is present."),
+        ("queue_handoff_id_present", bool(handoff_id), "Queue handoff id is present."),
+        ("simulation_ready", simulation_status == "simulation_ready", "Application execution simulation is ready."),
+        (
+            "simulation_observed_ready",
+            simulation_observability_status == "observed_ready",
+            "Application execution simulation audit observed readiness.",
+        ),
+        (
+            "no_execution_performed",
+            not bool(simulation_safety_payload.get("did_execute_application"))
+            and not bool(observability_safety_payload.get("did_execute_application")),
+            "Source evidence indicates no application execution was performed.",
+        ),
+        (
+            "no_submission_performed",
+            not bool(simulation_safety_payload.get("did_submit_application"))
+            and not bool(observability_safety_payload.get("did_submit_application")),
+            "Source evidence indicates no application submission was performed.",
+        ),
+        (
+            "no_automatic_pipeline_wiring",
+            not bool(simulation_safety_payload.get("pipeline_wiring_added"))
+            and not bool(observability_safety_payload.get("pipeline_wiring_added")),
+            "Source evidence indicates no automatic pipeline wiring was added.",
+        ),
+    ]
+    preflight_checks = [
+        {
+            "check_id": check_id,
+            "passed": passed,
+            "description": description,
+        }
+        for check_id, passed, description in check_specs
+    ]
+    passed_checks = [check["check_id"] for check in preflight_checks if check["passed"]]
+    failed_checks = [check["check_id"] for check in preflight_checks if not check["passed"]]
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not execution_id:
+        preflight_status = "blocked_missing_execution_request_id"
+        missing_requirements.append("execution_request_id")
+        blocked_actions.append("execution_request_id_missing")
+        ready_for_review = False
+        next_safe_step = "provide_execution_request_id"
+    elif not request_id:
+        preflight_status = "blocked_missing_approval_request_id"
+        missing_requirements.append("approval_request_id")
+        blocked_actions.append("approval_request_id_missing")
+        ready_for_review = False
+        next_safe_step = "provide_approval_request_id"
+    elif not handoff_id:
+        preflight_status = "blocked_missing_queue_handoff_id"
+        missing_requirements.append("queue_handoff_id")
+        blocked_actions.append("queue_handoff_id_missing")
+        ready_for_review = False
+        next_safe_step = "provide_queue_handoff_id"
+    elif not simulation_payload or not simulation_status:
+        preflight_status = "blocked_missing_simulation"
+        missing_requirements.append("application_execution_simulation_payload")
+        blocked_actions.append("application_execution_simulation_missing")
+        ready_for_review = False
+        next_safe_step = "run_application_execution_simulation_preview"
+    elif simulation_status != "simulation_ready":
+        preflight_status = "blocked_simulation_not_ready"
+        missing_requirements.append("simulation_ready")
+        blocked_actions.append("application_execution_simulation_not_ready")
+        ready_for_review = False
+        next_safe_step = "resolve_application_execution_simulation_blockers"
+    elif not simulation_observability_payload or not simulation_observability_status:
+        preflight_status = "blocked_missing_simulation_observability"
+        missing_requirements.append("application_execution_simulation_observability_payload")
+        blocked_actions.append("application_execution_simulation_observability_missing")
+        ready_for_review = False
+        next_safe_step = "run_application_execution_simulation_observability"
+    elif simulation_observability_status != "observed_ready":
+        preflight_status = "blocked_simulation_not_observed_ready"
+        missing_requirements.append("observed_ready_simulation")
+        blocked_actions.append("application_execution_simulation_not_observed_ready")
+        ready_for_review = False
+        next_safe_step = "resolve_application_execution_simulation_observability_blockers"
+    elif failed_checks:
+        preflight_status = "insufficient_information"
+        missing_requirements.extend(failed_checks)
+        blocked_actions.extend(f"{check_id}_failed" for check_id in failed_checks)
+        ready_for_review = False
+        next_safe_step = "resolve_application_execution_preflight_check_failures"
+    else:
+        preflight_status = "preflight_ready_for_human_review"
+        ready_for_review = True
+        next_safe_step = "perform_human_review_before_any_future_guarded_execution_action"
+
+    return {
+        "application_execution_preflight_status": preflight_status,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "preflight_ready_for_human_review": ready_for_review,
+        "preflight_checks": preflight_checks,
+        "passed_checks": passed_checks,
+        "failed_checks": failed_checks,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "source_application_execution_simulation_status": simulation_status or "missing",
+        "source_application_execution_simulation_observability_status": (
+            simulation_observability_status or "missing"
+        ),
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Application execution preflight checklist is dry-run/read-only and human-review oriented. "
+            "It validates source simulation evidence without creating requests, updating statuses, "
+            "mutating queues or approvals, writing files, executing, submitting, changing resumes, "
+            "scoring, ranking, or pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": (
+            _clean_text(context_id)
+            or _clean_text(simulation_payload.get("context_id"))
+            or _clean_text(simulation_observability_payload.get("context_id"))
+        ),
+        "job_id": (
+            _clean_text(job_id)
+            or _clean_text(simulation_payload.get("job_id"))
+            or _clean_text(simulation_observability_payload.get("job_id"))
+        ),
+        "safety_metadata": _application_execution_preflight_checklist_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "application_execution_preflight_checklist",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

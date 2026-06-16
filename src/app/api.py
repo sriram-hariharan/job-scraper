@@ -522,6 +522,19 @@ class ManualApplicationExecutionSimulationObservabilityRequest(BaseModel):
     job_id: str = ""
 
 
+class ManualApplicationExecutionPreflightChecklistRequest(BaseModel):
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    application_execution_simulation_payload: dict[str, Any] = Field(default_factory=dict)
+    application_execution_simulation_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_status_transition_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -2233,6 +2246,33 @@ def invoke_manual_application_execution_simulation_observability_api_action(
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_application_execution_simulation_observability",
+    }
+
+
+@app.post("/api/manual-application-execution-preflight-checklist-dry-run")
+def invoke_manual_application_execution_preflight_checklist_api_action(
+    request: ManualApplicationExecutionPreflightChecklistRequest,
+):
+    payload = services.build_application_execution_preflight_checklist_payload(
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        application_execution_simulation_payload=request.application_execution_simulation_payload,
+        application_execution_simulation_observability_payload=(
+            request.application_execution_simulation_observability_payload
+        ),
+        execution_request_readback_payload=request.execution_request_readback_payload,
+        execution_request_status_transition_observability_payload=(
+            request.execution_request_status_transition_observability_payload
+        ),
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_application_execution_preflight_checklist_dry_run",
     }
 
 

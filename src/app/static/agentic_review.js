@@ -2895,6 +2895,73 @@ function renderManualApplicationExecutionSimulationObservabilitySection(tracePay
   `;
 }
 
+function renderManualApplicationExecutionPreflightChecklistSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.manual_application_execution_preflight_checklist_result)
+    ? tracePayload.manual_application_execution_preflight_checklist_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const simulation = hasAgentTraceSummaryObject(tracePayload?.manual_application_execution_simulation_preview_result)
+    ? tracePayload.manual_application_execution_simulation_preview_result
+    : {};
+  const simulationAudit = hasAgentTraceSummaryObject(tracePayload?.manual_application_execution_simulation_observability_result)
+    ? tracePayload.manual_application_execution_simulation_observability_result
+    : {};
+  const readback = hasAgentTraceSummaryObject(tracePayload?.manual_execution_request_readback_result)
+    ? tracePayload.manual_execution_request_readback_result
+    : {};
+  const agentRun = tracePayload?.agent_run && typeof tracePayload.agent_run === "object"
+    ? tracePayload.agent_run
+    : {};
+  const metadata = agentRun?.metadata && typeof agentRun.metadata === "object" ? agentRun.metadata : {};
+  const contextId = tracePayload?.agent_run_id || agentRun.agent_run_id || "";
+  const jobId = metadata.job_id || metadata.merge_key || "";
+  const approvalRequestId = result.approval_request_id || simulationAudit.approval_request_id || simulation.approval_request_id || readback.approval_request_id || "";
+  const queueHandoffId = result.queue_handoff_id || simulationAudit.queue_handoff_id || simulation.queue_handoff_id || readback.queue_handoff_id || "";
+  const executionRequestId = result.execution_request_id || simulationAudit.execution_request_id || simulation.execution_request_id || readback.execution_request_id || "";
+  return `
+    <article class="agent-trace-summary" aria-label="Manual application execution preflight checklist">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Manual Application Execution Preflight Checklist</h4>
+          <p>Dry-run checklist only. It verifies simulation evidence before any future human-reviewed guarded execution action and performs no execution, submission, queue write, or pipeline launch.</p>
+        </div>
+        <span class="agentic-workflow-badge">Execution preflight</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Preflight", result.application_execution_preflight_status || "not run")}
+        ${renderWorkflowSummaryMetric("Execution request id", executionRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Approval id", approvalRequestId || "-")}
+        ${renderWorkflowSummaryMetric("Queue handoff id", queueHandoffId || "-")}
+        ${renderWorkflowSummaryMetric("Ready for review", result.preflight_ready_for_human_review === true ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Passed checks", Array.isArray(result.passed_checks) ? String(result.passed_checks.length) : "0")}
+        ${renderWorkflowSummaryMetric("Failed checks", Array.isArray(result.failed_checks) ? String(result.failed_checks.length) : "0")}
+        ${renderWorkflowSummaryMetric("Executed", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submitted", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Preflight checks", result.preflight_checks || [], { helper: "Deterministic final dry-run checks before any future guarded execution action." })}
+        ${renderAgentTraceReadOnlyDetails("Passed checks", result.passed_checks || [], { helper: "Checks that passed." })}
+        ${renderAgentTraceReadOnlyDetails("Failed checks", result.failed_checks || [], { helper: "Checks that failed." })}
+        ${renderAgentTraceReadOnlyDetails("Missing requirements", result.missing_requirements || [], { helper: "Preflight missing requirements." })}
+        ${renderAgentTraceReadOnlyDetails("Blocked actions", result.blocked_actions || [], { helper: "Preflight blockers." })}
+        ${renderAgentTraceReadOnlyDetails("Next safe step", result.next_safe_step || "", { helper: "Next safe manual step." })}
+        ${renderAgentTraceReadOnlyDetails("Rationale", result.rationale || "", { helper: "Application execution preflight checklist rationale." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "Readable application execution preflight checklist safety metadata." })}
+      </div>
+      <div class="agentic-review-actions">
+        <button type="button" class="agentic-feedback-action" data-manual-application-execution-preflight-checklist data-approval-request-id="${escapeHtml(approvalRequestId)}" data-queue-handoff-id="${escapeHtml(queueHandoffId)}" data-execution-request-id="${escapeHtml(executionRequestId)}" data-context-id="${escapeHtml(contextId)}" data-job-id="${escapeHtml(jobId)}">
+          Preview Application Execution Preflight
+        </button>
+        <span class="agentic-review-muted" data-manual-application-execution-preflight-checklist-status>
+          Manual only. This checklist is dry-run/read-only and performs no execution, submission, queue write, status update, approval mutation, or pipeline launch.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
   const loadingState = Boolean(tracePayload?.loading_state);
   const found = Boolean(tracePayload?.found);
@@ -2974,6 +3041,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       ${renderManualGuardedExecutionRequestStatusTransitionObservabilitySection(tracePayload)}
       ${renderManualApplicationExecutionSimulationPreviewSection(tracePayload)}
       ${renderManualApplicationExecutionSimulationObservabilitySection(tracePayload)}
+      ${renderManualApplicationExecutionPreflightChecklistSection(tracePayload)}
       ${renderAgentTraceDetailedSections(tracePayload)}
       ${notFoundMessage && !loadingState ? renderAgentTraceReadOnlyState(notFoundMessage, "info", "Agent trace not found trace") : ""}
       ${emptyMessage && !loadingState ? renderAgentTraceReadOnlyState(emptyMessage, "info", "Agent trace empty trace") : ""}
@@ -5964,6 +6032,60 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Manual application execution simulation audit failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-manual-application-execution-preflight-checklist]");
+    if (!button) return;
+    const section = button.closest(".agent-trace-summary");
+    const status = section?.querySelector("[data-manual-application-execution-preflight-checklist-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Building application execution preflight checklist...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const simulation = tracePayload.manual_application_execution_simulation_preview_result || {};
+      const simulationAudit = tracePayload.manual_application_execution_simulation_observability_result || {};
+      const readback = tracePayload.manual_execution_request_readback_result || {};
+      const transitionAudit = tracePayload.manual_guarded_execution_request_status_transition_observability_result || {};
+      const checklistResult = await fetchJson(
+        "/api/manual-application-execution-preflight-checklist-dry-run",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            execution_request_id: button.dataset.executionRequestId || simulationAudit.execution_request_id || simulation.execution_request_id || readback.execution_request_id || "",
+            approval_request_id: button.dataset.approvalRequestId || simulationAudit.approval_request_id || simulation.approval_request_id || readback.approval_request_id || "",
+            queue_handoff_id: button.dataset.queueHandoffId || simulationAudit.queue_handoff_id || simulation.queue_handoff_id || readback.queue_handoff_id || "",
+            application_execution_simulation_payload: simulation,
+            application_execution_simulation_observability_payload: simulationAudit,
+            execution_request_readback_payload: readback,
+            execution_request_status_transition_observability_payload: transitionAudit,
+            reviewer_note: "",
+            context_id: button.dataset.contextId || "",
+            job_id: button.dataset.jobId || "",
+          }),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        manual_application_execution_preflight_checklist_result: checklistResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Manual application execution preflight checklist failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

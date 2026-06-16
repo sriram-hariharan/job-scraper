@@ -160,6 +160,7 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_sidecar_critic_guardrail_mapping_no_pipeline_wiring.py",
     "tests/test_shadow_sidecar_chain_runner_default_off_no_pipeline_wiring.py",
     "tests/test_shadow_sidecar_chain_observability_no_pipeline_wiring.py",
+    "tests/test_shadow_sidecar_pipeline_hook_preview_no_pipeline_wiring.py",
 }
 
 def _changed_files():

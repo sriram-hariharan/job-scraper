@@ -29,6 +29,14 @@ OBSERVED_STATUS_FAILED_NON_BLOCKING = "observed_failed_non_blocking"
 OBSERVED_STATUS_MISSING_SOURCE = "observed_missing_source"
 OBSERVED_STATUS_INVALID_SOURCE = "observed_invalid_source"
 
+HOOK_STATUS_NOT_ENABLED = "hook_not_enabled"
+HOOK_STATUS_BLOCKED_BY_KILL_SWITCH = "hook_blocked_by_kill_switch"
+HOOK_STATUS_BLOCKED_MISSING_CONTEXT = "hook_blocked_missing_context"
+HOOK_STATUS_BLOCKED_UNSUPPORTED_STAGE = "hook_blocked_unsupported_stage"
+HOOK_STATUS_SKIPPED_NO_ENABLED_AGENTS = "hook_skipped_no_enabled_agents"
+HOOK_STATUS_READY_FOR_SHADOW_SIDECAR = "hook_ready_for_shadow_sidecar"
+HOOK_STATUS_FAILED_NON_BLOCKING = "hook_failed_non_blocking"
+
 SIDECAR_STATUS_ENUM = (
     STATUS_NOT_ENABLED,
     STATUS_SKIPPED_BY_CONFIG,
@@ -42,6 +50,12 @@ CHAIN_AGENT_ORDER = (
     "jd_intelligence",
     "tailoring_suggestion",
     "critic_guardrail",
+)
+
+SUPPORTED_PIPELINE_HOOK_STAGES = (
+    "post_filter_evaluation",
+    "post_final_scoring",
+    "pre_human_review",
 )
 
 OBSERVABILITY_STATUS_BY_CHAIN_STATUS = {
@@ -447,6 +461,12 @@ def evaluate_shadow_sidecar_chain_safety() -> dict[str, bool]:
 def evaluate_shadow_sidecar_chain_observability_safety() -> dict[str, bool]:
     safety = evaluate_shadow_sidecar_safety()
     safety["observability_only"] = True
+    return safety
+
+
+def evaluate_shadow_sidecar_pipeline_hook_safety() -> dict[str, bool]:
+    safety = evaluate_shadow_sidecar_safety()
+    safety["hook_preview_only"] = True
     return safety
 
 
@@ -1114,6 +1134,154 @@ def build_shadow_sidecar_chain_observability_payload(
             source.get("source_deterministic_decision")
         ),
         "safety_metadata": evaluate_shadow_sidecar_chain_observability_safety(),
+        "live_production_pipeline_connected_agents": 0,
+        "live_agents_allowed_to_automate_mutations": 0,
+    }
+
+
+def _missing_pipeline_context_fields(context: dict[str, Any]) -> list[str]:
+    required_fields = (
+        "run_id",
+        "batch_id",
+        "job_id",
+        "stage_name",
+        "source_deterministic_stage",
+        "source_deterministic_status",
+        "source_deterministic_decision",
+    )
+    return [field for field in required_fields if not _clean_text(context.get(field))]
+
+
+def evaluate_shadow_sidecar_pipeline_hook_eligibility(
+    *,
+    stage_name: str = "",
+    sidecar_config: dict[str, Any] | None = None,
+    pipeline_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    context = deepcopy(pipeline_context) if isinstance(pipeline_context, dict) else {}
+    if stage_name:
+        context["stage_name"] = stage_name
+    config = _sidecar_config(sidecar_config)
+    normalized_stage = _clean_text(context.get("stage_name"))
+    missing_fields = _missing_pipeline_context_fields(context)
+    enabled_agent_names = [
+        agent_name for agent_name in CHAIN_AGENT_ORDER if _agent_enabled(config, agent_name)
+    ]
+    disabled_agent_names = [
+        agent_name for agent_name in CHAIN_AGENT_ORDER if agent_name not in enabled_agent_names
+    ]
+
+    if missing_fields:
+        status = HOOK_STATUS_BLOCKED_MISSING_CONTEXT
+        next_safe_step = "provide_required_pipeline_context"
+    elif _config_bool(config, KILL_SWITCH_FLAG, "kill_switch_enabled", default=False):
+        status = HOOK_STATUS_BLOCKED_BY_KILL_SWITCH
+        next_safe_step = "keep_shadow_sidecar_disabled"
+    elif not _config_bool(
+        config,
+        GLOBAL_SIDECAR_FLAG,
+        "sidecar_enabled",
+        "global_enabled",
+        default=False,
+    ):
+        status = HOOK_STATUS_NOT_ENABLED
+        next_safe_step = "enable_global_shadow_sidecar_flag_for_preview_only"
+    elif normalized_stage not in SUPPORTED_PIPELINE_HOOK_STAGES:
+        status = HOOK_STATUS_BLOCKED_UNSUPPORTED_STAGE
+        next_safe_step = "choose_supported_shadow_sidecar_hook_stage"
+    elif not enabled_agent_names:
+        status = HOOK_STATUS_SKIPPED_NO_ENABLED_AGENTS
+        next_safe_step = "enable_at_least_one_shadow_sidecar_agent_flag"
+    else:
+        status = HOOK_STATUS_READY_FOR_SHADOW_SIDECAR
+        next_safe_step = "future_hook_may_run_shadow_sidecar_chain_when_wired"
+
+    return {
+        "hook_preview_status": status,
+        "stage_name": normalized_stage,
+        "supported_stage": normalized_stage in SUPPORTED_PIPELINE_HOOK_STAGES,
+        "supported_stages": list(SUPPORTED_PIPELINE_HOOK_STAGES),
+        "enabled_agent_names": enabled_agent_names,
+        "disabled_agent_names": disabled_agent_names,
+        "missing_context_fields": missing_fields,
+        "next_safe_step": next_safe_step,
+    }
+
+
+def build_shadow_sidecar_pipeline_hook_preview_payload(
+    *,
+    run_id: str = "",
+    batch_id: str = "",
+    job_id: str = "",
+    stage_name: str = "",
+    source_deterministic_stage: str = "",
+    source_deterministic_status: str = "",
+    source_deterministic_score: Any = None,
+    source_deterministic_decision: str = "",
+    source_deterministic_reason_codes: list[str] | tuple[str, ...] | None = None,
+    sidecar_config: dict[str, Any] | None = None,
+    job_payload: dict[str, Any] | None = None,
+    resume_profile_payload: dict[str, Any] | None = None,
+    existing_trace_context: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    context = {
+        "run_id": _clean_text(run_id),
+        "batch_id": _clean_text(batch_id),
+        "job_id": _clean_text(job_id),
+        "stage_name": _clean_text(stage_name),
+        "source_deterministic_stage": _clean_text(source_deterministic_stage),
+        "source_deterministic_status": _clean_text(source_deterministic_status),
+        "source_deterministic_score": source_deterministic_score,
+        "source_deterministic_decision": _clean_text(source_deterministic_decision),
+        "source_deterministic_reason_codes": _text_list(
+            source_deterministic_reason_codes
+        ),
+        "job_payload": _snapshot(job_payload or {}),
+        "resume_profile_payload": _snapshot(resume_profile_payload or {}),
+        "existing_trace_context": _snapshot(existing_trace_context or {}),
+    }
+    config = _sidecar_config(sidecar_config)
+    eligibility = evaluate_shadow_sidecar_pipeline_hook_eligibility(
+        stage_name=stage_name,
+        sidecar_config=config,
+        pipeline_context=context,
+    )
+    return {
+        "schema_version": SCHEMA_VERSION,
+        **eligibility,
+        "run_id": context["run_id"],
+        "batch_id": context["batch_id"],
+        "job_id": context["job_id"],
+        "source_deterministic_stage": context["source_deterministic_stage"],
+        "source_deterministic_status": context["source_deterministic_status"],
+        "source_deterministic_score": context["source_deterministic_score"],
+        "source_deterministic_decision": context["source_deterministic_decision"],
+        "source_deterministic_reason_codes": context[
+            "source_deterministic_reason_codes"
+        ],
+        "sidecar_config": config,
+        "provider_calls_disabled_in_tests": True,
+        "trace_bundle": {
+            "bundle_type": "shadow_sidecar_pipeline_hook_preview_trace_bundle",
+            "schema_version": SCHEMA_VERSION,
+            "hook_preview_status": eligibility["hook_preview_status"],
+            "stage_name": eligibility["stage_name"],
+            "enabled_agent_names": eligibility["enabled_agent_names"],
+            "source_deterministic_decision": context[
+                "source_deterministic_decision"
+            ],
+        },
+        "readiness_decision": {
+            "readiness_status": "ready"
+            if eligibility["hook_preview_status"] == HOOK_STATUS_READY_FOR_SHADOW_SIDECAR
+            else "blocked",
+            "decision_reason_codes": [eligibility["hook_preview_status"]],
+            "blocking_findings": []
+            if eligibility["hook_preview_status"] == HOOK_STATUS_READY_FOR_SHADOW_SIDECAR
+            else [eligibility["next_safe_step"]],
+            "warning_findings": [],
+        },
+        "safety_metadata": evaluate_shadow_sidecar_pipeline_hook_safety(),
         "live_production_pipeline_connected_agents": 0,
         "live_agents_allowed_to_automate_mutations": 0,
     }

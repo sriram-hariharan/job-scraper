@@ -52,6 +52,12 @@ TAILORING_AGENT_NAMES = {
     "Tailoring Suggestion Agent",
 }
 
+CRITIC_AGENT_NAMES = {
+    "critic_guardrail",
+    "critic_guardrail_agent",
+    "Critic / Guardrail Agent",
+}
+
 JD_SIGNAL_FIELDS = (
     "required_skills",
     "preferred_skills",
@@ -74,6 +80,18 @@ TAILORING_SIGNAL_FIELDS = (
     "missing_evidence",
     "unsupported_claim_risks",
     "source_fields_used",
+    "risk_flags",
+)
+
+CRITIC_SIGNAL_FIELDS = (
+    "approved_suggestions",
+    "downgraded_suggestions",
+    "rejected_suggestions",
+    "reason_codes",
+    "unsupported_claim_risks",
+    "ats_risks",
+    "readability_risks",
+    "evidence_gaps",
     "risk_flags",
 )
 
@@ -138,6 +156,11 @@ def _is_jd_intelligence_agent(agent_name: str) -> bool:
 def _is_tailoring_suggestion_agent(agent_name: str) -> bool:
     cleaned = _clean_text(agent_name)
     return cleaned in TAILORING_AGENT_NAMES or cleaned.lower() in TAILORING_AGENT_NAMES
+
+
+def _is_critic_guardrail_agent(agent_name: str) -> bool:
+    cleaned = _clean_text(agent_name)
+    return cleaned in CRITIC_AGENT_NAMES or cleaned.lower() in CRITIC_AGENT_NAMES
 
 
 def _agent_enabled(config: dict[str, Any], agent_name: str) -> bool:
@@ -285,6 +308,90 @@ def _tailoring_risk_flags(source: dict[str, Any]) -> list[str]:
         trace_context.get("unsupported_claim_risks"),
         job_payload.get("risk_flags"),
         trace_context.get("risk_flags"),
+    )
+
+
+def _critic_signal_refs(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    explicit_refs = _merged_text_list(
+        job_payload.get("critic_evidence_refs"),
+        resume_profile.get("critic_evidence_refs"),
+        trace_context.get("critic_evidence_refs"),
+        job_payload.get("evidence_refs"),
+        resume_profile.get("evidence_refs"),
+        trace_context.get("evidence_refs"),
+    )
+    if explicit_refs:
+        return explicit_refs
+
+    refs: list[str] = []
+    for field_name in CRITIC_SIGNAL_FIELDS:
+        if (
+            _text_list(job_payload.get(field_name))
+            or _text_list(resume_profile.get(field_name))
+            or _text_list(trace_context.get(field_name))
+        ):
+            refs.append(f"existing_trace_context.{field_name}")
+    if _clean_text(resume_profile.get("resume_id")):
+        refs.append("resume_profile_payload.resume_id")
+    return refs
+
+
+def _critic_reason_codes(
+    source: dict[str, Any],
+    fallback_reason_codes: Any,
+) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    reason_codes = _merged_text_list(
+        fallback_reason_codes,
+        job_payload.get("critic_reason_codes"),
+        resume_profile.get("critic_reason_codes"),
+        trace_context.get("critic_reason_codes"),
+        job_payload.get("reason_codes"),
+        trace_context.get("reason_codes"),
+    )
+    if _critic_signal_refs(source):
+        reason_codes.append("critic_shadow_signals_observed")
+    if not reason_codes:
+        reason_codes.append("critic_shadow_deterministic_fallback")
+    return _merged_text_list(reason_codes)
+
+
+def _critic_risk_flags(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    return _merged_text_list(
+        job_payload.get("critic_risk_flags"),
+        resume_profile.get("critic_risk_flags"),
+        trace_context.get("critic_risk_flags"),
+        job_payload.get("unsupported_claim_risks"),
+        trace_context.get("unsupported_claim_risks"),
+        job_payload.get("ats_risks"),
+        trace_context.get("ats_risks"),
+        job_payload.get("readability_risks"),
+        trace_context.get("readability_risks"),
+        job_payload.get("risk_flags"),
+        trace_context.get("risk_flags"),
+    )
+
+
+def _critic_blocking_findings(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    resume_profile = _plain_dict(source.get("resume_profile_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    return _merged_text_list(
+        job_payload.get("critic_blocking_findings"),
+        resume_profile.get("critic_blocking_findings"),
+        trace_context.get("critic_blocking_findings"),
+        job_payload.get("evidence_gaps"),
+        trace_context.get("evidence_gaps"),
+        job_payload.get("blocking_findings"),
+        trace_context.get("blocking_findings"),
     )
 
 
@@ -490,6 +597,21 @@ def build_shadow_sidecar_fallback_payload(
             agent_evidence_refs=_tailoring_signal_refs(source),
             agent_risk_flags=_tailoring_risk_flags(source),
             agent_blocking_findings=[],
+            fallback_used=True,
+            error_type=error_type,
+            error_message=error_message,
+        )
+    if _is_critic_guardrail_agent(agent_name):
+        return build_shadow_sidecar_trace_payload(
+            sidecar_input=source,
+            sidecar_stage_status=sidecar_stage_status,
+            agent_output_status="fallback",
+            agent_recommendation="preserve_source_deterministic_decision",
+            agent_confidence=0.0,
+            agent_reason_codes=_critic_reason_codes(source, reason_codes),
+            agent_evidence_refs=_critic_signal_refs(source),
+            agent_risk_flags=_critic_risk_flags(source),
+            agent_blocking_findings=_critic_blocking_findings(source),
             fallback_used=True,
             error_type=error_type,
             error_message=error_message,

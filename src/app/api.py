@@ -501,6 +501,49 @@ class ManualGuardedExecutionRequestStatusTransitionObservabilityRequest(BaseMode
     job_id: str = ""
 
 
+class ManualApplicationExecutionSimulationPreviewRequest(BaseModel):
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    execution_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_status_transition_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_status_transition_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualApplicationExecutionSimulationObservabilityRequest(BaseModel):
+    application_execution_simulation_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualApplicationExecutionPreflightChecklistRequest(BaseModel):
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    application_execution_simulation_payload: dict[str, Any] = Field(default_factory=dict)
+    application_execution_simulation_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_readback_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_status_transition_observability_payload: dict[str, Any] = Field(default_factory=dict)
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class ManualApplicationExecutionPreflightObservabilityRequest(BaseModel):
+    application_execution_preflight_payload: dict[str, Any] = Field(default_factory=dict)
+    execution_request_id: str = ""
+    approval_request_id: str = ""
+    queue_handoff_id: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     try:
@@ -2169,6 +2212,95 @@ def invoke_manual_guarded_execution_request_status_transition_observability_api_
         **payload,
         "explicit_user_action": True,
         "api_surface": "manual_guarded_execution_request_status_transition_observability",
+    }
+
+
+@app.post("/api/manual-application-execution-simulation-preview-dry-run")
+def invoke_manual_application_execution_simulation_preview_api_action(
+    request: ManualApplicationExecutionSimulationPreviewRequest,
+):
+    payload = services.build_application_execution_simulation_preview_payload(
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        execution_request_readback_payload=request.execution_request_readback_payload,
+        execution_request_status_transition_payload=request.execution_request_status_transition_payload,
+        execution_request_status_transition_observability_payload=(
+            request.execution_request_status_transition_observability_payload
+        ),
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_application_execution_simulation_preview_dry_run",
+    }
+
+
+@app.post("/api/manual-application-execution-simulation-observability")
+def invoke_manual_application_execution_simulation_observability_api_action(
+    request: ManualApplicationExecutionSimulationObservabilityRequest,
+):
+    payload = services.build_application_execution_simulation_observability_payload(
+        application_execution_simulation_payload=request.application_execution_simulation_payload,
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_application_execution_simulation_observability",
+    }
+
+
+@app.post("/api/manual-application-execution-preflight-checklist-dry-run")
+def invoke_manual_application_execution_preflight_checklist_api_action(
+    request: ManualApplicationExecutionPreflightChecklistRequest,
+):
+    payload = services.build_application_execution_preflight_checklist_payload(
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        application_execution_simulation_payload=request.application_execution_simulation_payload,
+        application_execution_simulation_observability_payload=(
+            request.application_execution_simulation_observability_payload
+        ),
+        execution_request_readback_payload=request.execution_request_readback_payload,
+        execution_request_status_transition_observability_payload=(
+            request.execution_request_status_transition_observability_payload
+        ),
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_application_execution_preflight_checklist_dry_run",
+    }
+
+
+@app.post("/api/manual-application-execution-preflight-observability")
+def invoke_manual_application_execution_preflight_observability_api_action(
+    request: ManualApplicationExecutionPreflightObservabilityRequest,
+):
+    payload = services.build_application_execution_preflight_observability_payload(
+        application_execution_preflight_payload=request.application_execution_preflight_payload,
+        execution_request_id=request.execution_request_id,
+        approval_request_id=request.approval_request_id,
+        queue_handoff_id=request.queue_handoff_id,
+        context_id=request.context_id,
+        job_id=request.job_id,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "manual_application_execution_preflight_observability",
     }
 
 

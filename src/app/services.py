@@ -15307,6 +15307,177 @@ def build_execution_request_readback_payload(
     }
 
 
+EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS = {
+    "ready_for_manual_execution": {
+        "label": "Ready for manual execution",
+        "summary": "Preview marking the execution request ready for a future manual execution gate.",
+        "would_change_status_to": "ready_for_manual_execution",
+    },
+    "needs_changes": {
+        "label": "Needs changes",
+        "summary": "Preview sending the execution request back for more review or correction.",
+        "would_change_status_to": "needs_changes",
+    },
+    "cancelled": {
+        "label": "Cancelled",
+        "summary": "Preview cancelling the execution request before any execution action.",
+        "would_change_status_to": "cancelled",
+    },
+    "keep_pending_review": {
+        "label": "Keep pending review",
+        "summary": "Preview keeping the execution request in pending review.",
+        "would_change_status_to": "pending_review",
+    },
+}
+
+
+def _execution_request_status_transition_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "execution_request_status_transition_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "human_confirmation_required": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_request_status_transition_preview_payload(
+    *,
+    execution_request_id: Any = "",
+    requested_transition: Any = "",
+    execution_request_readback_payload: Dict[str, Any] | None = None,
+    execution_request_creation_payload: Dict[str, Any] | None = None,
+    execution_request_creation_observability_payload: Dict[str, Any] | None = None,
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview an execution request status transition without applying it."""
+
+    readback_payload = deepcopy(execution_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    creation_payload = deepcopy(execution_request_creation_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(execution_request_creation_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(readback_payload.get("execution_request_id"))
+        or _clean_text(creation_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+    )
+    transition = _clean_text(requested_transition)
+    source_readback_status = _clean_text(readback_payload.get("execution_request_readback_status"))
+    previous_status = _clean_text(readback_payload.get("execution_request_status"))
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not execution_id:
+        preview_status = "blocked_missing_execution_request_id"
+        transition_allowed_later = False
+        missing_requirements.append("execution_request_id")
+        blocked_actions.append("execution_request_id_missing")
+        next_safe_step = "provide_execution_request_id"
+    elif not transition:
+        preview_status = "blocked_missing_requested_transition"
+        transition_allowed_later = False
+        missing_requirements.append("requested_transition")
+        blocked_actions.append("requested_transition_missing")
+        next_safe_step = "select_supported_execution_request_transition"
+    elif transition not in EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS:
+        preview_status = "blocked_invalid_requested_transition"
+        transition_allowed_later = False
+        missing_requirements.append("valid_requested_transition")
+        blocked_actions.append("requested_transition_invalid")
+        next_safe_step = "select_supported_execution_request_transition"
+    elif not source_readback_status:
+        preview_status = "blocked_missing_readback"
+        transition_allowed_later = False
+        missing_requirements.append("execution_request_readback_payload")
+        blocked_actions.append("execution_request_readback_missing")
+        next_safe_step = "read_execution_request_before_transition_preview"
+    elif source_readback_status != "found":
+        preview_status = "blocked_execution_request_not_found"
+        transition_allowed_later = False
+        missing_requirements.append("found_execution_request_readback")
+        blocked_actions.append("execution_request_not_found")
+        next_safe_step = "read_existing_execution_request_before_transition_preview"
+    elif previous_status in {"", "missing", "unknown", "not_created", "id_mismatch"}:
+        preview_status = "blocked_invalid_current_status"
+        transition_allowed_later = False
+        missing_requirements.append("valid_previous_execution_request_status")
+        blocked_actions.append("previous_execution_request_status_invalid")
+        next_safe_step = "refresh_execution_request_readback_before_transition_preview"
+    else:
+        preview_status = "ready_for_future_status_transition"
+        transition_allowed_later = True
+        next_safe_step = "collect_explicit_future_execution_request_status_transition_confirmation"
+
+    option = EXECUTION_REQUEST_STATUS_TRANSITION_PREVIEW_OPTIONS.get(transition, {})
+    proposed_status = _clean_text(option.get("would_change_status_to"))
+    return {
+        "execution_request_status_transition_preview_status": preview_status,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "proposed_execution_request_status": proposed_status,
+        "transition_allowed_later": transition_allowed_later,
+        "transition_preview_only": True,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "required_human_confirmation": True,
+        "source_execution_request_readback_status": source_readback_status or "missing",
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Execution request status transition preview is dry-run only; it does not update "
+            "execution request status, execute, submit, create requests, mutate queues or "
+            "approvals, write queue files, change resumes, scoring, ranking, or add pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": _clean_text(context_id) or _clean_text(readback_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(readback_payload.get("job_id")),
+        "safety_metadata": _execution_request_status_transition_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "execution_request_status_transition_preview",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

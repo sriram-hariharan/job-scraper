@@ -17196,6 +17196,178 @@ def build_application_execution_launch_request_readback_payload(
     }
 
 
+def _execution_launch_request_status_transition_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "execution_launch_request_status_transition_preview_only": True,
+        "read_only": True,
+        "manual_only": True,
+        "did_create_execution_launch_request": False,
+        "did_update_execution_launch_request_status": False,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_execution_launch_request_status_transition_preview_payload(
+    *,
+    execution_launch_request_id: Any = "",
+    requested_transition: Any = "",
+    application_execution_launch_request_readback_payload: Dict[str, Any] | None = None,
+    guarded_application_execution_launch_request_payload: Dict[str, Any] | None = None,
+    application_execution_launch_request_observability_payload: Dict[str, Any] | None = None,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Preview a future execution launch request status transition without changing status."""
+
+    readback_payload = deepcopy(application_execution_launch_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    creation_payload = deepcopy(guarded_application_execution_launch_request_payload or {})
+    if not isinstance(creation_payload, dict):
+        creation_payload = {}
+    observability_payload = deepcopy(application_execution_launch_request_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+
+    launch_request_id = (
+        _clean_text(execution_launch_request_id)
+        or _clean_text(readback_payload.get("execution_launch_request_id"))
+        or _clean_text(creation_payload.get("execution_launch_request_id"))
+        or _clean_text(observability_payload.get("execution_launch_request_id"))
+    )
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(readback_payload.get("execution_request_id"))
+        or _clean_text(creation_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(creation_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+        or _clean_text(creation_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+    )
+    clean_context_id = (
+        _clean_text(context_id)
+        or _clean_text(readback_payload.get("context_id"))
+        or _clean_text(creation_payload.get("context_id"))
+        or _clean_text(observability_payload.get("context_id"))
+    )
+    clean_job_id = (
+        _clean_text(job_id)
+        or _clean_text(readback_payload.get("job_id"))
+        or _clean_text(creation_payload.get("job_id"))
+        or _clean_text(observability_payload.get("job_id"))
+    )
+    transition = _clean_text(requested_transition)
+    allowed_transitions = {
+        "ready_for_manual_execution": "ready_for_manual_execution",
+        "needs_changes": "needs_changes",
+        "cancelled": "cancelled",
+        "keep_pending_review": "pending_review",
+    }
+    current_status = _clean_text(readback_payload.get("execution_launch_request_status"))
+    readback_status = _clean_text(
+        readback_payload.get("application_execution_launch_request_readback_status")
+    )
+    readback_found = bool(readback_payload.get("execution_launch_request_found"))
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+    proposed_status = allowed_transitions.get(transition, "")
+    transition_allowed = False
+
+    if not launch_request_id:
+        preview_status = "blocked_missing_execution_launch_request_id"
+        transition_reason = "Execution launch request id is required before previewing a status transition."
+        missing_requirements.append("execution_launch_request_id")
+        blocked_actions.append("execution_launch_request_id_missing")
+        next_safe_step = "provide_execution_launch_request_id"
+    elif not transition:
+        preview_status = "blocked_missing_requested_transition"
+        transition_reason = "A requested transition is required for the dry-run preview."
+        missing_requirements.append("requested_transition")
+        blocked_actions.append("requested_transition_missing")
+        next_safe_step = "select_execution_launch_request_transition"
+    elif transition not in allowed_transitions:
+        preview_status = "blocked_invalid_requested_transition"
+        transition_reason = "Requested transition is not one of the supported manual preview options."
+        blocked_actions.append("requested_transition_invalid")
+        next_safe_step = "select_supported_execution_launch_request_transition"
+    elif not readback_payload or readback_status not in {"found", "not_found"}:
+        preview_status = "blocked_missing_readback"
+        transition_reason = "A valid execution launch request readback payload is required."
+        missing_requirements.append("application_execution_launch_request_readback_payload")
+        blocked_actions.append("application_execution_launch_request_readback_missing_or_invalid")
+        next_safe_step = "read_execution_launch_request_before_transition_preview"
+    elif readback_status == "not_found" or not readback_found:
+        preview_status = "blocked_execution_launch_request_not_found"
+        transition_reason = "Readback did not find a created execution launch request/control artifact."
+        blocked_actions.append("execution_launch_request_not_found")
+        next_safe_step = "resolve_execution_launch_request_readback_blockers"
+    elif current_status not in {"created", "pending_review"}:
+        preview_status = "blocked_invalid_current_status"
+        transition_reason = "Current execution launch request status is not eligible for transition preview."
+        blocked_actions.append("execution_launch_request_current_status_invalid")
+        next_safe_step = "review_execution_launch_request_status_before_transition"
+    else:
+        preview_status = "ready_for_future_status_transition"
+        transition_allowed = True
+        transition_reason = (
+            "Execution launch request readback found a created control artifact; this dry-run "
+            "previews the future status transition only and does not update anything."
+        )
+        next_safe_step = "require_future_guarded_status_transition_confirmation"
+
+    return {
+        "execution_launch_request_status_transition_preview_status": preview_status,
+        "execution_launch_request_id": launch_request_id,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "current_execution_launch_request_status": current_status or "missing",
+        "proposed_execution_launch_request_status": proposed_status,
+        "transition_allowed": transition_allowed,
+        "transition_reason": transition_reason,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "safety_metadata": _execution_launch_request_status_transition_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "dry_run": True,
+        "service_surface": "execution_launch_request_status_transition_preview",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

@@ -40,6 +40,27 @@ AGENT_FLAG_NAMES = {
     "Critic / Guardrail Agent": CRITIC_GUARDRAIL_FLAG,
 }
 
+JD_AGENT_NAMES = {
+    "jd_intelligence",
+    "jd_intelligence_agent",
+    "JD Intelligence Agent",
+}
+
+JD_SIGNAL_FIELDS = (
+    "required_skills",
+    "preferred_skills",
+    "required_tools",
+    "preferred_tools",
+    "workflows",
+    "methods",
+    "business_contexts",
+    "stakeholder_contexts",
+    "ownership_signals",
+    "seniority_signals",
+    "seniority_indicators",
+    "risk_flags",
+)
+
 
 def _clean_text(value: Any) -> str:
     return str(value or "").strip()
@@ -53,6 +74,17 @@ def _text_list(value: Any) -> list[str]:
     if not isinstance(value, (list, tuple)):
         return []
     return [_clean_text(item) for item in value if _clean_text(item)]
+
+
+def _merged_text_list(*values: Any) -> list[str]:
+    merged: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        for item in _text_list(value):
+            if item not in seen:
+                merged.append(item)
+                seen.add(item)
+    return merged
 
 
 def _bool_value(value: Any, *, default: bool = False) -> bool:
@@ -82,6 +114,11 @@ def _agent_flag_name(agent_name: str) -> str:
     return AGENT_FLAG_NAMES.get(cleaned) or AGENT_FLAG_NAMES.get(cleaned.lower(), "")
 
 
+def _is_jd_intelligence_agent(agent_name: str) -> bool:
+    cleaned = _clean_text(agent_name)
+    return cleaned in JD_AGENT_NAMES or cleaned.lower() in JD_AGENT_NAMES
+
+
 def _agent_enabled(config: dict[str, Any], agent_name: str) -> bool:
     agent_flag_name = _agent_flag_name(agent_name)
     explicit = config.get("per_agent_enabled")
@@ -106,6 +143,63 @@ def _sidecar_config(config: dict[str, Any] | None) -> dict[str, Any]:
         "provider_calls_disabled_in_tests": True,
         "pipeline_wiring_added": False,
     }
+
+
+def _plain_dict(value: Any) -> dict[str, Any]:
+    return deepcopy(value) if isinstance(value, dict) else {}
+
+
+def _jd_signal_refs(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    explicit_refs = _merged_text_list(
+        job_payload.get("jd_evidence_refs"),
+        job_payload.get("evidence_refs"),
+        trace_context.get("jd_evidence_refs"),
+        trace_context.get("evidence_refs"),
+    )
+    if explicit_refs:
+        return explicit_refs
+
+    refs: list[str] = []
+    for field_name in JD_SIGNAL_FIELDS:
+        if _text_list(job_payload.get(field_name)) or _text_list(
+            trace_context.get(field_name)
+        ):
+            refs.append(f"job_payload.{field_name}")
+    if _clean_text(job_payload.get("description")) or _clean_text(
+        job_payload.get("job_description")
+    ):
+        refs.append("job_payload.job_description")
+    return refs
+
+
+def _jd_reason_codes(source: dict[str, Any], fallback_reason_codes: Any) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    reason_codes = _merged_text_list(
+        fallback_reason_codes,
+        job_payload.get("jd_reason_codes"),
+        job_payload.get("reason_codes"),
+        trace_context.get("jd_reason_codes"),
+        trace_context.get("reason_codes"),
+    )
+    if _jd_signal_refs(source):
+        reason_codes.append("jd_shadow_signals_observed")
+    if not reason_codes:
+        reason_codes.append("jd_shadow_deterministic_fallback")
+    return _merged_text_list(reason_codes)
+
+
+def _jd_risk_flags(source: dict[str, Any]) -> list[str]:
+    job_payload = _plain_dict(source.get("job_payload"))
+    trace_context = _plain_dict(source.get("existing_trace_context"))
+    return _merged_text_list(
+        job_payload.get("jd_risk_flags"),
+        job_payload.get("risk_flags"),
+        trace_context.get("jd_risk_flags"),
+        trace_context.get("risk_flags"),
+    )
 
 
 def evaluate_shadow_sidecar_safety() -> dict[str, bool]:
@@ -282,8 +376,25 @@ def build_shadow_sidecar_fallback_payload(
     error_type: str = "",
     error_message: str = "",
 ) -> dict[str, Any]:
+    source = deepcopy(sidecar_input or {})
+    agent_name = _clean_text(source.get("agent_name"))
+    if _is_jd_intelligence_agent(agent_name):
+        return build_shadow_sidecar_trace_payload(
+            sidecar_input=source,
+            sidecar_stage_status=sidecar_stage_status,
+            agent_output_status="fallback",
+            agent_recommendation="preserve_source_deterministic_decision",
+            agent_confidence=0.0,
+            agent_reason_codes=_jd_reason_codes(source, reason_codes),
+            agent_evidence_refs=_jd_signal_refs(source),
+            agent_risk_flags=_jd_risk_flags(source),
+            agent_blocking_findings=[],
+            fallback_used=True,
+            error_type=error_type,
+            error_message=error_message,
+        )
     return build_shadow_sidecar_trace_payload(
-        sidecar_input=sidecar_input,
+        sidecar_input=source,
         sidecar_stage_status=sidecar_stage_status,
         agent_output_status="fallback",
         agent_recommendation="preserve_source_deterministic_decision",

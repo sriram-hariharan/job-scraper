@@ -138,6 +138,7 @@ ALLOWED_CHANGED = {
     "tests/test_application_execution_simulation_preview_dry_run_no_writes.py",
     "tests/test_application_execution_simulation_observability_no_writes.py",
     "tests/test_application_execution_preflight_checklist_dry_run_no_writes.py",
+    "tests/test_application_execution_preflight_observability_no_writes.py",
 }
 
 def _changed_files():

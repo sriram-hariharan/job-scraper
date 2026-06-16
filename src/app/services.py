@@ -16550,6 +16550,270 @@ def build_application_execution_preflight_observability_payload(
     }
 
 
+def _guarded_application_execution_launch_request_safety_metadata(
+    *, did_create_execution_launch_request: bool
+) -> Dict[str, Any]:
+    return {
+        "manual_only": True,
+        "guarded_application_execution_launch_request_only": True,
+        "human_confirmation_required": True,
+        "did_create_execution_launch_request": bool(did_create_execution_launch_request),
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": bool(did_create_execution_launch_request),
+        "did_write_queue": bool(did_create_execution_launch_request),
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": not bool(did_create_execution_launch_request),
+    }
+
+
+def _manual_execution_launch_request_id(
+    *,
+    execution_request_id: str,
+    approval_request_id: str,
+    queue_handoff_id: str,
+    context_id: str,
+    job_id: str,
+) -> str:
+    fingerprint = hashlib.sha256(
+        json.dumps(
+            {
+                "execution_request_id": _clean_text(execution_request_id),
+                "approval_request_id": _clean_text(approval_request_id),
+                "queue_handoff_id": _clean_text(queue_handoff_id),
+                "context_id": _clean_text(context_id),
+                "job_id": _clean_text(job_id),
+            },
+            sort_keys=True,
+        ).encode("utf-8")
+    ).hexdigest()[:16]
+    return f"manual_execution_launch_request_{fingerprint}"
+
+
+def build_guarded_application_execution_launch_request_payload(
+    *,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    reviewer_confirmation: Any = False,
+    application_execution_preflight_payload: Dict[str, Any] | None = None,
+    application_execution_preflight_observability_payload: Dict[str, Any] | None = None,
+    application_execution_simulation_payload: Dict[str, Any] | None = None,
+    application_execution_simulation_observability_payload: Dict[str, Any] | None = None,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+    execution_launch_request_writer: Any = None,
+) -> Dict[str, Any]:
+    """Create one guarded future execution launch request artifact without executing anything."""
+
+    preflight_payload = deepcopy(application_execution_preflight_payload or {})
+    if not isinstance(preflight_payload, dict):
+        preflight_payload = {}
+    preflight_observability_payload = deepcopy(application_execution_preflight_observability_payload or {})
+    if not isinstance(preflight_observability_payload, dict):
+        preflight_observability_payload = {}
+    simulation_payload = deepcopy(application_execution_simulation_payload or {})
+    if not isinstance(simulation_payload, dict):
+        simulation_payload = {}
+    simulation_observability_payload = deepcopy(application_execution_simulation_observability_payload or {})
+    if not isinstance(simulation_observability_payload, dict):
+        simulation_observability_payload = {}
+
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(preflight_payload.get("execution_request_id"))
+        or _clean_text(preflight_observability_payload.get("execution_request_id"))
+        or _clean_text(simulation_payload.get("execution_request_id"))
+        or _clean_text(simulation_observability_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(preflight_payload.get("approval_request_id"))
+        or _clean_text(preflight_observability_payload.get("approval_request_id"))
+        or _clean_text(simulation_payload.get("approval_request_id"))
+        or _clean_text(simulation_observability_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(preflight_payload.get("queue_handoff_id"))
+        or _clean_text(preflight_observability_payload.get("queue_handoff_id"))
+        or _clean_text(simulation_payload.get("queue_handoff_id"))
+        or _clean_text(simulation_observability_payload.get("queue_handoff_id"))
+    )
+    source_preflight_status = (
+        _clean_text(preflight_payload.get("application_execution_preflight_status"))
+        or "missing"
+    )
+    source_preflight_observability_status = (
+        _clean_text(
+            preflight_observability_payload.get("application_execution_preflight_observability_status")
+        )
+        or "missing"
+    )
+    clean_context_id = (
+        _clean_text(context_id)
+        or _clean_text(preflight_payload.get("context_id"))
+        or _clean_text(preflight_observability_payload.get("context_id"))
+    )
+    clean_job_id = (
+        _clean_text(job_id)
+        or _clean_text(preflight_payload.get("job_id"))
+        or _clean_text(preflight_observability_payload.get("job_id"))
+    )
+    blocked_actions: List[str] = []
+
+    def _blocked(status: str, next_safe_step: str, *blockers: str) -> Dict[str, Any]:
+        blocked_actions.extend(blocker for blocker in blockers if blocker)
+        return {
+            "application_execution_launch_request_status": status,
+            "execution_request_id": execution_id,
+            "approval_request_id": request_id,
+            "queue_handoff_id": handoff_id,
+            "execution_launch_request_id": "",
+            "execution_launch_request_created": False,
+            "source_application_execution_preflight_status": source_preflight_status,
+            "source_application_execution_preflight_observability_status": (
+                source_preflight_observability_status
+            ),
+            "blocked_actions": list(dict.fromkeys(blocked_actions)),
+            "required_human_confirmation": True,
+            "next_safe_step": next_safe_step,
+            "rationale": (
+                "Guarded application execution launch request creation is manual-only and requires "
+                "ready preflight evidence plus explicit reviewer confirmation. It creates no execution "
+                "request, updates no execution status, mutates no approvals, and never executes or submits."
+            ),
+            "reviewer_note": _clean_text(reviewer_note),
+            "context_id": clean_context_id,
+            "job_id": clean_job_id,
+            "safety_metadata": _guarded_application_execution_launch_request_safety_metadata(
+                did_create_execution_launch_request=False
+            ),
+            "manual_surface": True,
+            "service_surface": "guarded_application_execution_launch_request",
+        }
+
+    if reviewer_confirmation is not True:
+        return _blocked(
+            "blocked_by_missing_confirmation",
+            "collect_explicit_execution_launch_request_confirmation",
+            "reviewer_confirmation_missing",
+        )
+    if not execution_id:
+        return _blocked(
+            "blocked_missing_execution_request_id",
+            "provide_execution_request_id",
+            "execution_request_id_missing",
+        )
+    if not request_id:
+        return _blocked(
+            "blocked_missing_approval_request_id",
+            "provide_approval_request_id",
+            "approval_request_id_missing",
+        )
+    if not handoff_id:
+        return _blocked(
+            "blocked_missing_queue_handoff_id",
+            "provide_queue_handoff_id",
+            "queue_handoff_id_missing",
+        )
+    if source_preflight_status != "preflight_ready_for_human_review":
+        return _blocked(
+            "blocked_by_preflight",
+            "run_ready_application_execution_preflight_checklist_before_launch_request",
+            "application_execution_preflight_not_ready",
+        )
+    if source_preflight_observability_status != "observed_ready":
+        return _blocked(
+            "blocked_missing_preflight_observability",
+            "run_application_execution_preflight_observability_before_launch_request",
+            "application_execution_preflight_observability_not_ready",
+        )
+    if not callable(execution_launch_request_writer):
+        return _blocked(
+            "blocked_missing_execution_launch_request_writer",
+            "configure_existing_execution_launch_request_writer_before_manual_creation",
+            "execution_launch_request_writer_unavailable",
+        )
+
+    launch_request_id = _manual_execution_launch_request_id(
+        execution_request_id=execution_id,
+        approval_request_id=request_id,
+        queue_handoff_id=handoff_id,
+        context_id=clean_context_id,
+        job_id=clean_job_id,
+    )
+    launch_request_entry = {
+        "execution_launch_request_id": launch_request_id,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "source_application_execution_preflight_status": source_preflight_status,
+        "source_application_execution_preflight_observability_status": (
+            source_preflight_observability_status
+        ),
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "reviewer_note": _clean_text(reviewer_note),
+        "manual_guarded_application_execution_launch_request": True,
+        "execute_application": False,
+        "submit_application": False,
+        "pipeline_wiring_added": False,
+    }
+    try:
+        writer_result = execution_launch_request_writer(deepcopy(launch_request_entry))
+    except Exception:
+        return _blocked(
+            "blocked_by_storage_error",
+            "retry_guarded_execution_launch_request_creation",
+            "execution_launch_request_writer_error",
+        )
+
+    return {
+        "application_execution_launch_request_status": "created",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "execution_launch_request_id": _clean_text(
+            writer_result.get("execution_launch_request_id") if isinstance(writer_result, dict) else ""
+        ) or launch_request_id,
+        "execution_launch_request_created": True,
+        "source_application_execution_preflight_status": source_preflight_status,
+        "source_application_execution_preflight_observability_status": (
+            source_preflight_observability_status
+        ),
+        "blocked_actions": [],
+        "required_human_confirmation": True,
+        "next_safe_step": "review_created_execution_launch_request_before_any_execution",
+        "rationale": (
+            "Created exactly one guarded application execution launch request/control artifact "
+            "through the injected existing writer; no application execution, submission, execution "
+            "request status, approval status, resume, scoring, ranking, or pipeline state was changed."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": clean_context_id,
+        "job_id": clean_job_id,
+        "safety_metadata": _guarded_application_execution_launch_request_safety_metadata(
+            did_create_execution_launch_request=True
+        ),
+        "manual_surface": True,
+        "service_surface": "guarded_application_execution_launch_request",
+        "execution_launch_request_writer_result": (
+            deepcopy(writer_result) if isinstance(writer_result, dict) else {}
+        ),
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

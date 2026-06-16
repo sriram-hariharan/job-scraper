@@ -99,6 +99,66 @@ def _agent_trace_status_counts(trace_result: Dict[str, Any]) -> Dict[str, int]:
     }
 
 
+def _shadow_sidecar_pipeline_config_from_env() -> Dict[str, Any]:
+    flag_names = (
+        "APPLYLENS_AGENTIC_PIPELINE_SHADOW_SIDECAR_ENABLED",
+        "APPLYLENS_AGENTIC_PIPELINE_SHADOW_JD_INTELLIGENCE_ENABLED",
+        "APPLYLENS_AGENTIC_PIPELINE_SHADOW_TAILORING_SUGGESTION_ENABLED",
+        "APPLYLENS_AGENTIC_PIPELINE_SHADOW_CRITIC_GUARDRAIL_ENABLED",
+        "APPLYLENS_AGENTIC_PIPELINE_SHADOW_KILL_SWITCH",
+    )
+    return {flag_name: os.environ.get(flag_name, "") for flag_name in flag_names}
+
+
+def _maybe_run_shadow_sidecar_after_application_priority(
+    scored_jobs: List[Dict[str, Any]],
+) -> Dict[str, Any] | None:
+    sidecar_config = _shadow_sidecar_pipeline_config_from_env()
+    if not _truthy_env_value(
+        sidecar_config["APPLYLENS_AGENTIC_PIPELINE_SHADOW_SIDECAR_ENABLED"]
+    ):
+        return None
+
+    try:
+        from src.agents.shadow_sidecar_hook import run_shadow_sidecar_pipeline_hook
+
+        payload = run_shadow_sidecar_pipeline_hook(
+            run_id=str(os.environ.get("JOB_STACK_PIPELINE_RUN_ID", "") or "collector"),
+            batch_id=str(
+                os.environ.get("JOB_STACK_PIPELINE_BATCH_ID", "")
+                or "application_priority"
+            ),
+            job_id="application_priority_scored_jobs",
+            stage_name="post_final_scoring",
+            source_deterministic_stage="application_priority",
+            source_deterministic_status="completed",
+            source_deterministic_score=len(scored_jobs),
+            source_deterministic_decision=(
+                "scored_jobs_available" if scored_jobs else "no_scored_jobs"
+            ),
+            source_deterministic_reason_codes=["application_priority_completed"],
+            sidecar_config=sidecar_config,
+            job_payload=dict(scored_jobs[0]) if scored_jobs else {},
+            resume_profile_payload={},
+            existing_trace_context={
+                "shadow_sidecar_call_site": "collector.application_priority",
+                "scored_job_count": len(scored_jobs),
+            },
+            called_by_pipeline=True,
+        )
+        logger.info(
+            "Shadow sidecar hook evaluated after application_priority: %s",
+            payload.get("hook_status", "unknown"),
+        )
+        return payload
+    except Exception as exc:
+        logger.warning(
+            "Shadow sidecar hook failed non-blocking after application_priority: %s",
+            exc,
+        )
+        return None
+
+
 def log_market_insights(jobs: List[Dict[str, Any]]) -> None:
     from src.intelligence.market_insights import (
         detect_ai_hiring_surges,
@@ -570,6 +630,7 @@ async def collect_all_jobs_async() -> List[Dict[str, Any]]:
     scored_jobs = score_jobs(ai_jobs)
     logger.info(f"Priority scoring completed for {len(scored_jobs)} jobs")
     complete_stage("application_priority", counts={"scored_jobs": len(scored_jobs)})
+    _maybe_run_shadow_sidecar_after_application_priority(scored_jobs)
 
     if role_title_audit_rows is not None:
         source_health_path = Path(corpus_path).expanduser().with_name("source_health_report.csv")

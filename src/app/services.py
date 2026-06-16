@@ -15842,6 +15842,214 @@ def build_guarded_execution_request_status_transition_observability_payload(
     }
 
 
+def _application_execution_simulation_preview_safety_metadata() -> Dict[str, Any]:
+    return {
+        "dry_run_only": True,
+        "application_execution_simulation_preview_only": True,
+        "manual_only": True,
+        "read_only": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_application_execution_simulation_preview_payload(
+    *,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    execution_request_readback_payload: Dict[str, Any] | None = None,
+    execution_request_status_transition_payload: Dict[str, Any] | None = None,
+    execution_request_status_transition_observability_payload: Dict[str, Any] | None = None,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Simulate a future guarded application execution path without launching anything."""
+
+    readback_payload = deepcopy(execution_request_readback_payload or {})
+    if not isinstance(readback_payload, dict):
+        readback_payload = {}
+    transition_payload = deepcopy(execution_request_status_transition_payload or {})
+    if not isinstance(transition_payload, dict):
+        transition_payload = {}
+    observability_payload = deepcopy(execution_request_status_transition_observability_payload or {})
+    if not isinstance(observability_payload, dict):
+        observability_payload = {}
+    if not observability_payload and transition_payload:
+        observability_payload = build_guarded_execution_request_status_transition_observability_payload(
+            guarded_execution_request_status_transition_payload=transition_payload,
+            execution_request_id=execution_request_id,
+            approval_request_id=approval_request_id,
+            queue_handoff_id=queue_handoff_id,
+            context_id=context_id,
+            job_id=job_id,
+        )
+
+    execution_id = (
+        _clean_text(execution_request_id)
+        or _clean_text(readback_payload.get("execution_request_id"))
+        or _clean_text(observability_payload.get("execution_request_id"))
+        or _clean_text(transition_payload.get("execution_request_id"))
+    )
+    request_id = (
+        _clean_text(approval_request_id)
+        or _clean_text(readback_payload.get("approval_request_id"))
+        or _clean_text(observability_payload.get("approval_request_id"))
+        or _clean_text(transition_payload.get("approval_request_id"))
+    )
+    handoff_id = (
+        _clean_text(queue_handoff_id)
+        or _clean_text(readback_payload.get("queue_handoff_id"))
+        or _clean_text(observability_payload.get("queue_handoff_id"))
+        or _clean_text(transition_payload.get("queue_handoff_id"))
+    )
+    readback_status = _clean_text(readback_payload.get("execution_request_readback_status"))
+    transition_status = _clean_text(transition_payload.get("execution_request_status_transition_status"))
+    observability_status = _clean_text(
+        observability_payload.get("execution_request_status_transition_observability_status")
+    )
+    readback_execution_status = _clean_text(readback_payload.get("execution_request_status"))
+    observed_execution_status = _clean_text(observability_payload.get("new_execution_request_status"))
+    effective_execution_status = readback_execution_status or observed_execution_status
+    missing_requirements: List[str] = []
+    blocked_actions: List[str] = []
+
+    if not execution_id:
+        simulation_status = "blocked_missing_execution_request_id"
+        missing_requirements.append("execution_request_id")
+        blocked_actions.append("execution_request_id_missing")
+        simulation_allowed_later = False
+        next_safe_step = "provide_execution_request_id"
+    elif not request_id:
+        simulation_status = "blocked_missing_approval_request_id"
+        missing_requirements.append("approval_request_id")
+        blocked_actions.append("approval_request_id_missing")
+        simulation_allowed_later = False
+        next_safe_step = "provide_approval_request_id"
+    elif not handoff_id:
+        simulation_status = "blocked_missing_queue_handoff_id"
+        missing_requirements.append("queue_handoff_id")
+        blocked_actions.append("queue_handoff_id_missing")
+        simulation_allowed_later = False
+        next_safe_step = "provide_queue_handoff_id"
+    elif not readback_payload or not readback_status:
+        simulation_status = "blocked_missing_execution_request_readback"
+        missing_requirements.append("execution_request_readback_payload")
+        blocked_actions.append("execution_request_readback_missing")
+        simulation_allowed_later = False
+        next_safe_step = "read_execution_request_before_execution_simulation"
+    elif readback_status != "found":
+        simulation_status = "blocked_execution_request_not_found"
+        missing_requirements.append("found_execution_request_readback")
+        blocked_actions.append("execution_request_not_found")
+        simulation_allowed_later = False
+        next_safe_step = "read_existing_execution_request_before_execution_simulation"
+    elif not observability_payload or not observability_status:
+        simulation_status = "blocked_missing_status_transition_observability"
+        missing_requirements.append("execution_request_status_transition_observability_payload")
+        blocked_actions.append("execution_request_status_transition_observability_missing")
+        simulation_allowed_later = False
+        next_safe_step = "run_execution_request_status_transition_observability_before_simulation"
+    elif observability_status not in {"observed_updated", "observed_blocked"}:
+        simulation_status = "blocked_missing_status_transition_observability"
+        missing_requirements.append("valid_execution_request_status_transition_observability_payload")
+        blocked_actions.append("execution_request_status_transition_observability_invalid")
+        simulation_allowed_later = False
+        next_safe_step = "rebuild_execution_request_status_transition_observability"
+    elif effective_execution_status != "ready_for_manual_execution":
+        simulation_status = "blocked_execution_request_not_ready"
+        missing_requirements.append("ready_execution_request_status")
+        blocked_actions.append("execution_request_status_not_ready")
+        simulation_allowed_later = False
+        next_safe_step = "transition_execution_request_to_ready_before_execution_simulation"
+    elif observability_status != "observed_updated":
+        simulation_status = "blocked_execution_request_not_ready"
+        missing_requirements.append("observed_ready_status_transition")
+        blocked_actions.append("execution_request_status_transition_not_applied")
+        simulation_allowed_later = False
+        next_safe_step = "resolve_execution_request_status_transition_blockers"
+    else:
+        simulation_status = "simulation_ready"
+        simulation_allowed_later = True
+        next_safe_step = "require_future_guarded_execution_confirmation_before_any_launch"
+
+    execution_preconditions = {
+        "execution_request_found": readback_status == "found",
+        "execution_request_status": effective_execution_status,
+        "execution_request_ready_for_manual_execution": effective_execution_status == "ready_for_manual_execution",
+        "status_transition_observed": observability_status == "observed_updated",
+        "approval_request_id_present": bool(request_id),
+        "queue_handoff_id_present": bool(handoff_id),
+    }
+    simulated_steps = [
+        {
+            "step_id": "load_execution_request_context",
+            "description": "Would load the already-created execution request and related approval/queue handoff identifiers.",
+            "would_mutate": False,
+        },
+        {
+            "step_id": "validate_manual_execution_gate",
+            "description": "Would verify ready-for-manual-execution status and require explicit future human confirmation.",
+            "would_mutate": False,
+        },
+        {
+            "step_id": "prepare_execution_runtime_inputs",
+            "description": "Would assemble runtime inputs for a future guarded launch without executing or submitting.",
+            "would_mutate": False,
+        },
+    ] if simulation_status == "simulation_ready" else []
+
+    return {
+        "application_execution_simulation_status": simulation_status,
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "simulated_execution_allowed_later": simulation_allowed_later,
+        "simulated_steps": simulated_steps,
+        "execution_preconditions": execution_preconditions,
+        "missing_requirements": list(dict.fromkeys(missing_requirements)),
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "source_execution_request_readback_status": readback_status or "missing",
+        "source_execution_request_status_transition_status": transition_status or "missing",
+        "source_execution_request_status_transition_observability_status": observability_status or "missing",
+        "next_safe_step": next_safe_step,
+        "rationale": (
+            "Application execution simulation preview is dry-run only; it describes future guarded "
+            "execution phases without creating requests, updating statuses, mutating queues or approvals, "
+            "writing files, executing, submitting, changing resumes, scoring, ranking, or pipeline wiring."
+        ),
+        "reviewer_note": _clean_text(reviewer_note),
+        "context_id": (
+            _clean_text(context_id)
+            or _clean_text(readback_payload.get("context_id"))
+            or _clean_text(observability_payload.get("context_id"))
+        ),
+        "job_id": (
+            _clean_text(job_id)
+            or _clean_text(readback_payload.get("job_id"))
+            or _clean_text(observability_payload.get("job_id"))
+        ),
+        "safety_metadata": _application_execution_simulation_preview_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "application_execution_simulation_preview",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

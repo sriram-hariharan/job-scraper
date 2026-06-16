@@ -20,6 +20,15 @@ STATUS_BLOCKED_BY_KILL_SWITCH = "blocked_by_kill_switch"
 STATUS_FAILED_NON_BLOCKING = "failed_non_blocking"
 CHAIN_STATUS_COMPLETED_SHADOW_CHAIN = "completed_shadow_chain"
 
+OBSERVED_STATUS_NOT_ENABLED = "observed_not_enabled"
+OBSERVED_STATUS_SKIPPED_BY_CONFIG = "observed_skipped_by_config"
+OBSERVED_STATUS_BLOCKED_BY_KILL_SWITCH = "observed_blocked_by_kill_switch"
+OBSERVED_STATUS_COMPLETED_SHADOW_CHAIN = "observed_completed_shadow_chain"
+OBSERVED_STATUS_COMPLETED_WITH_FALLBACK = "observed_completed_with_fallback"
+OBSERVED_STATUS_FAILED_NON_BLOCKING = "observed_failed_non_blocking"
+OBSERVED_STATUS_MISSING_SOURCE = "observed_missing_source"
+OBSERVED_STATUS_INVALID_SOURCE = "observed_invalid_source"
+
 SIDECAR_STATUS_ENUM = (
     STATUS_NOT_ENABLED,
     STATUS_SKIPPED_BY_CONFIG,
@@ -34,6 +43,15 @@ CHAIN_AGENT_ORDER = (
     "tailoring_suggestion",
     "critic_guardrail",
 )
+
+OBSERVABILITY_STATUS_BY_CHAIN_STATUS = {
+    STATUS_NOT_ENABLED: OBSERVED_STATUS_NOT_ENABLED,
+    STATUS_SKIPPED_BY_CONFIG: OBSERVED_STATUS_SKIPPED_BY_CONFIG,
+    STATUS_BLOCKED_BY_KILL_SWITCH: OBSERVED_STATUS_BLOCKED_BY_KILL_SWITCH,
+    CHAIN_STATUS_COMPLETED_SHADOW_CHAIN: OBSERVED_STATUS_COMPLETED_SHADOW_CHAIN,
+    STATUS_COMPLETED_WITH_FALLBACK: OBSERVED_STATUS_COMPLETED_WITH_FALLBACK,
+    STATUS_FAILED_NON_BLOCKING: OBSERVED_STATUS_FAILED_NON_BLOCKING,
+}
 
 AGENT_FLAG_NAMES = {
     "jd_intelligence": JD_INTELLIGENCE_FLAG,
@@ -424,6 +442,12 @@ def evaluate_shadow_sidecar_safety() -> dict[str, bool]:
 
 def evaluate_shadow_sidecar_chain_safety() -> dict[str, bool]:
     return evaluate_shadow_sidecar_safety()
+
+
+def evaluate_shadow_sidecar_chain_observability_safety() -> dict[str, bool]:
+    safety = evaluate_shadow_sidecar_safety()
+    safety["observability_only"] = True
+    return safety
 
 
 def build_shadow_sidecar_input_payload(
@@ -954,3 +978,142 @@ def run_shadow_sidecar_chain(
         chain_status=_shadow_chain_status(agent_results),
         agent_results=agent_results,
     )
+
+
+def build_shadow_sidecar_chain_evidence_summary(
+    chain_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    source = deepcopy(chain_payload) if isinstance(chain_payload, dict) else {}
+    evidence_pack = _plain_dict(source.get("evidence_pack"))
+    agent_results = [
+        deepcopy(result)
+        for result in source.get("ordered_agent_results", source.get("agent_results", []))
+        if isinstance(result, dict)
+    ]
+    evidence_refs = _merged_text_list(
+        evidence_pack.get("agent_evidence_refs"),
+        *(result.get("agent_evidence_refs") for result in agent_results),
+    )
+    risk_flags = _merged_text_list(
+        evidence_pack.get("agent_risk_flags"),
+        *(result.get("agent_risk_flags") for result in agent_results),
+    )
+    blocking_findings = _merged_text_list(
+        _plain_dict(source.get("readiness_decision")).get("blocking_findings"),
+        *(result.get("agent_blocking_findings") for result in agent_results),
+    )
+    return {
+        "evidence_summary_type": "shadow_sidecar_chain_evidence_summary",
+        "source_chain_status": _clean_text(
+            source.get("chain_status") or source.get("sidecar_chain_status")
+        ),
+        "evidence_ref_count": len(evidence_refs),
+        "risk_flag_count": len(risk_flags),
+        "blocking_finding_count": len(blocking_findings),
+        "agent_evidence_refs": evidence_refs,
+        "agent_risk_flags": risk_flags,
+        "blocking_findings": blocking_findings,
+    }
+
+
+def evaluate_shadow_sidecar_chain_readiness(
+    chain_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    source = deepcopy(chain_payload) if isinstance(chain_payload, dict) else {}
+    source_status = _clean_text(
+        source.get("chain_status") or source.get("sidecar_chain_status")
+    )
+    readiness = _plain_dict(source.get("readiness_decision"))
+    evidence_summary = build_shadow_sidecar_chain_evidence_summary(source)
+    if not source:
+        readiness_status = "blocked"
+        reason_codes = ["missing_chain_payload"]
+    elif source_status not in set(SIDECAR_STATUS_ENUM) | {
+        CHAIN_STATUS_COMPLETED_SHADOW_CHAIN,
+    }:
+        readiness_status = "blocked"
+        reason_codes = ["invalid_chain_payload"]
+    else:
+        readiness_status = _clean_text(readiness.get("readiness_status")) or (
+            "ready" if source_status == CHAIN_STATUS_COMPLETED_SHADOW_CHAIN else "blocked"
+        )
+        reason_codes = _merged_text_list(
+            readiness.get("decision_reason_codes"),
+            ["fallback_observed"] if bool(source.get("fallback_used")) else [],
+        )
+    blocking_findings = _merged_text_list(
+        readiness.get("blocking_findings"),
+        evidence_summary.get("blocking_findings"),
+    )
+    return {
+        "readiness_status": readiness_status,
+        "decision_reason_codes": reason_codes,
+        "blocking_findings": blocking_findings,
+        "warning_findings": []
+        if readiness_status == "ready"
+        else _merged_text_list(readiness.get("warning_findings"), reason_codes),
+    }
+
+
+def build_shadow_sidecar_chain_observability_payload(
+    chain_payload: dict[str, Any] | None,
+) -> dict[str, Any]:
+    source = deepcopy(chain_payload) if isinstance(chain_payload, dict) else {}
+    source_status = _clean_text(
+        source.get("chain_status") or source.get("sidecar_chain_status")
+    )
+    if not source:
+        observability_status = OBSERVED_STATUS_MISSING_SOURCE
+    elif source_status not in set(SIDECAR_STATUS_ENUM) | {
+        CHAIN_STATUS_COMPLETED_SHADOW_CHAIN,
+    }:
+        observability_status = OBSERVED_STATUS_INVALID_SOURCE
+    else:
+        observability_status = OBSERVABILITY_STATUS_BY_CHAIN_STATUS.get(
+            source_status,
+            OBSERVED_STATUS_INVALID_SOURCE,
+        )
+
+    agent_results = [
+        deepcopy(result)
+        for result in source.get("ordered_agent_results", source.get("agent_results", []))
+        if isinstance(result, dict)
+    ]
+    ordered_agent_names = _text_list(source.get("stage_order")) or [
+        _clean_text(result.get("agent_name")) for result in agent_results
+    ]
+    fallback_count = sum(1 for result in agent_results if bool(result.get("fallback_used")))
+    risk_flag_count = sum(len(_text_list(result.get("agent_risk_flags"))) for result in agent_results)
+    blocking_finding_count = sum(
+        len(_text_list(result.get("agent_blocking_findings")))
+        for result in agent_results
+    )
+    evidence_summary = build_shadow_sidecar_chain_evidence_summary(source)
+    readiness_decision = evaluate_shadow_sidecar_chain_readiness(source)
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "observability_status": observability_status,
+        "source_chain_status": source_status,
+        "enabled_agent_count": len(agent_results),
+        "ordered_agent_names": ordered_agent_names,
+        "fallback_count": fallback_count,
+        "risk_flag_count": risk_flag_count,
+        "blocking_finding_count": blocking_finding_count,
+        "readiness_decision": readiness_decision,
+        "health_status": _clean_text(source.get("health_status")) or "warning",
+        "evidence_summary": evidence_summary,
+        "trace_bundle": {
+            "bundle_type": "shadow_sidecar_chain_observability_trace_bundle",
+            "schema_version": SCHEMA_VERSION,
+            "observability_status": observability_status,
+            "source_chain_status": source_status,
+            "ordered_agent_names": ordered_agent_names,
+            "fallback_count": fallback_count,
+        },
+        "source_deterministic_decision": _clean_text(
+            source.get("source_deterministic_decision")
+        ),
+        "safety_metadata": evaluate_shadow_sidecar_chain_observability_safety(),
+        "live_production_pipeline_connected_agents": 0,
+        "live_agents_allowed_to_automate_mutations": 0,
+    }

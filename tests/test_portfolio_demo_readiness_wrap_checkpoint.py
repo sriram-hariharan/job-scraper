@@ -151,6 +151,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase5_shadow_sidecar_config_contract_no_runtime_change.py",
     "docs/phase5_shadow_sidecar_trace_schema_contract_no_runtime_change.md",
     "tests/test_phase5_shadow_sidecar_trace_schema_contract_no_runtime_change.py",
+    "docs/phase5_shadow_sidecar_adapter_interface_contract_no_runtime_change.md",
+    "tests/test_phase5_shadow_sidecar_adapter_interface_contract_no_runtime_change.py",
 }
 
 def _changed_files():

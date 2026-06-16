@@ -163,6 +163,8 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_sidecar_pipeline_hook_preview_no_pipeline_wiring.py",
     "docs/phase5_shadow_sidecar_pipeline_integration_point_audit.md",
     "tests/test_phase5_shadow_sidecar_pipeline_integration_point_audit.py",
+    "src/agents/shadow_sidecar_hook.py",
+    "tests/test_shadow_sidecar_pipeline_hook_default_off_not_called.py",
 }
 
 def _changed_files():
@@ -206,6 +208,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/critic_agent.py",
         "src/agents/job_prioritization_agent.py",
         "src/agents/shadow_sidecar.py",
+        "src/agents/shadow_sidecar_hook.py",
     }
     runtime_paths = [
         path for path in changed

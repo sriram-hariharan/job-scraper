@@ -153,6 +153,8 @@ ALLOWED_CHANGED = {
     "tests/test_phase5_shadow_sidecar_trace_schema_contract_no_runtime_change.py",
     "docs/phase5_shadow_sidecar_adapter_interface_contract_no_runtime_change.md",
     "tests/test_phase5_shadow_sidecar_adapter_interface_contract_no_runtime_change.py",
+    "src/agents/shadow_sidecar.py",
+    "tests/test_shadow_sidecar_adapter_default_off_no_pipeline_wiring.py",
 }
 
 def _changed_files():
@@ -195,6 +197,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/tailoring_decision_agent.py",
         "src/agents/critic_agent.py",
         "src/agents/job_prioritization_agent.py",
+            "src/agents/shadow_sidecar.py",
     }
     runtime_paths = [
         path for path in changed

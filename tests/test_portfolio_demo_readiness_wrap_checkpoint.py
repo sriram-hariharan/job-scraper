@@ -156,6 +156,7 @@ ALLOWED_CHANGED = {
     "src/agents/shadow_sidecar.py",
     "tests/test_shadow_sidecar_adapter_default_off_no_pipeline_wiring.py",
     "tests/test_shadow_sidecar_jd_intelligence_mapping_no_pipeline_wiring.py",
+    "tests/test_shadow_sidecar_tailoring_suggestion_mapping_no_pipeline_wiring.py",
 }
 
 def _changed_files():

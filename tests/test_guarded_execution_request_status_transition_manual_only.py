@@ -332,7 +332,7 @@ def test_ui_renders_confirmation_control_and_escapes_output():
 def test_ui_click_posts_endpoint_and_existing_transition_preview_surface_still_works():
     source = Path("src/app/static/agentic_review.js").read_text()
 
-    assert source.count("/api/manual-guarded-execution-request-status-transition") == 1
+    assert source.count('"/api/manual-guarded-execution-request-status-transition"') == 1
     assert "manual_guarded_execution_request_status_transition_result" in source
     assert "renderManualGuardedExecutionRequestStatusTransitionSection(tracePayload)" in source
     assert source.count("/api/manual-execution-request-status-transition-preview-dry-run") == 1

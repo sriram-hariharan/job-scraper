@@ -15689,6 +15689,159 @@ def build_guarded_execution_request_status_transition_payload(
     }
 
 
+def _guarded_execution_request_status_transition_observability_safety_metadata() -> Dict[str, Any]:
+    return {
+        "read_only": True,
+        "observability_only": True,
+        "execution_request_status_transition_audit_only": True,
+        "manual_only": True,
+        "did_create_execution_request": False,
+        "did_update_execution_request_status": False,
+        "did_create_approval": False,
+        "did_mutate_approval": False,
+        "did_update_approval_status": False,
+        "did_mutate_queue": False,
+        "did_write_queue": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "did_mutate_resume": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "advisory_only": True,
+    }
+
+
+def build_guarded_execution_request_status_transition_observability_payload(
+    *,
+    guarded_execution_request_status_transition_payload: Dict[str, Any] | None = None,
+    execution_request_id: Any = "",
+    approval_request_id: Any = "",
+    queue_handoff_id: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, Any]:
+    """Summarize a guarded execution request status transition result without mutating anything."""
+
+    source_payload = deepcopy(guarded_execution_request_status_transition_payload or {})
+    if not isinstance(source_payload, dict):
+        source_payload = {}
+
+    source_status = _clean_text(source_payload.get("execution_request_status_transition_status"))
+    execution_id = _clean_text(execution_request_id) or _clean_text(source_payload.get("execution_request_id"))
+    request_id = _clean_text(approval_request_id) or _clean_text(source_payload.get("approval_request_id"))
+    handoff_id = _clean_text(queue_handoff_id) or _clean_text(source_payload.get("queue_handoff_id"))
+    transition = _clean_text(source_payload.get("requested_transition"))
+    previous_status = _clean_text(source_payload.get("previous_execution_request_status"))
+    new_status = _clean_text(source_payload.get("new_execution_request_status"))
+    status_updated = bool(source_payload.get("execution_request_status_updated"))
+    blocked_actions = [
+        _clean_text(item)
+        for item in list(source_payload.get("blocked_actions") or [])
+        if _clean_text(item)
+    ]
+
+    if not source_payload:
+        observability_status = "observed_missing_source"
+        transition_was_applied = False
+        transition_was_blocked = True
+        blocked_actions.append("guarded_execution_request_status_transition_payload_missing")
+        next_safe_step = "run_guarded_execution_request_status_transition_manual_action"
+    elif source_status == "updated":
+        observability_status = "observed_updated"
+        transition_was_applied = True
+        transition_was_blocked = False
+        next_safe_step = "read_execution_request_status_before_any_future_execution"
+    elif source_status.startswith("blocked") or source_status == "insufficient_information":
+        observability_status = "observed_blocked"
+        transition_was_applied = False
+        transition_was_blocked = True
+        next_safe_step = (
+            _clean_text(source_payload.get("next_safe_step"))
+            or "resolve_guarded_execution_request_status_transition_blockers"
+        )
+    elif source_status:
+        observability_status = "observed_invalid_source"
+        transition_was_applied = False
+        transition_was_blocked = True
+        blocked_actions.append("guarded_execution_request_status_transition_status_unrecognized")
+        next_safe_step = "rebuild_guarded_execution_request_status_transition_payload"
+    else:
+        observability_status = "insufficient_information"
+        transition_was_applied = False
+        transition_was_blocked = True
+        blocked_actions.append("guarded_execution_request_status_transition_status_missing")
+        next_safe_step = "run_guarded_execution_request_status_transition_manual_action"
+
+    source_safety = source_payload.get("safety_metadata")
+    source_safety_payload = source_safety if isinstance(source_safety, dict) else {}
+    audit_summary = {
+        "source_status": source_status or "missing",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "new_execution_request_status": new_status,
+        "execution_request_status_updated": status_updated,
+        "transition_was_applied": transition_was_applied,
+        "transition_was_blocked": transition_was_blocked,
+        "source_updated_execution_request_status": bool(
+            source_safety_payload.get("did_update_execution_request_status")
+        ),
+    }
+    audit_events = [
+        {
+            "event_type": "guarded_execution_request_status_transition_observed",
+            "execution_request_id": execution_id,
+            "source_transition_status": source_status or "missing",
+            "transition_was_applied": transition_was_applied,
+        }
+    ] if source_payload else []
+    safety_findings = {
+        "source_did_update_execution_request_status": bool(
+            source_safety_payload.get("did_update_execution_request_status")
+        ),
+        "observability_updated_execution_request_status": False,
+        "observability_created_execution_request": False,
+        "observability_mutated_queue": False,
+        "observability_wrote_queue": False,
+        "observability_mutated_approval": False,
+        "observability_updated_approval_status": False,
+        "observability_mutated_resume": False,
+        "observability_mutated_scoring": False,
+        "observability_changed_ranking": False,
+        "observability_executed_application": False,
+        "observability_submitted_application": False,
+    }
+
+    return {
+        "execution_request_status_transition_observability_status": observability_status,
+        "source_execution_request_status_transition_status": source_status or "missing",
+        "execution_request_id": execution_id,
+        "approval_request_id": request_id,
+        "queue_handoff_id": handoff_id,
+        "requested_transition": transition,
+        "previous_execution_request_status": previous_status,
+        "new_execution_request_status": new_status,
+        "execution_request_status_updated": status_updated,
+        "execution_request_status_transition_was_blocked": transition_was_blocked,
+        "execution_request_status_transition_was_applied": transition_was_applied,
+        "audit_summary": audit_summary,
+        "audit_events": audit_events,
+        "safety_findings": safety_findings,
+        "blocked_actions": list(dict.fromkeys(blocked_actions)),
+        "next_safe_step": next_safe_step,
+        "context_id": _clean_text(context_id) or _clean_text(source_payload.get("context_id")),
+        "job_id": _clean_text(job_id) or _clean_text(source_payload.get("job_id")),
+        "safety_metadata": _guarded_execution_request_status_transition_observability_safety_metadata(),
+        "manual_surface": True,
+        "read_only": True,
+        "service_surface": "guarded_execution_request_status_transition_observability",
+    }
+
+
 def _agentic_workflow_summary_from_artifacts(rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     summary_json = _artifact_json_by_name(rows, "agentic_workflow_summary.json")
     summary_markdown = _artifact_text_by_name(rows, "agentic_workflow_summary.md")

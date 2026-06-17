@@ -40,6 +40,7 @@ from src.config.settings import (
 from src.agents import (
     critic_agent,
     dry_run_execution_simulator,
+    human_reviewed_influence_preview,
     jd_intelligence,
     job_prioritization_agent,
     proposal_only_mutation_planner,
@@ -1637,6 +1638,39 @@ def shadow_sidecar_score_comparison_service_payload(
     return {
         **payload,
         "service_surface": "shadow_sidecar_score_comparison_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
+
+
+def human_reviewed_influence_preview_service_payload(
+    *,
+    deterministic_score_context: Dict[str, Any] | None = None,
+    shadow_score_comparison_context: Dict[str, Any] | None = None,
+    preview_config: Dict[str, Any] | None = None,
+    preview_builder: Any = None,
+) -> Dict[str, Any]:
+    payload = (
+        human_reviewed_influence_preview.build_human_reviewed_influence_preview_payload(
+            deterministic_score_context=deepcopy(deterministic_score_context or {})
+            if isinstance(deterministic_score_context, dict)
+            else None,
+            shadow_score_comparison_context=deepcopy(
+                shadow_score_comparison_context or {}
+            )
+            if isinstance(shadow_score_comparison_context, dict)
+            else None,
+            preview_config=deepcopy(preview_config or {}),
+            preview_builder=preview_builder,
+        )
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "human_reviewed_influence_preview_service",
         "service_helper_only": True,
         "api_route_added": False,
         "ui_action_added": False,

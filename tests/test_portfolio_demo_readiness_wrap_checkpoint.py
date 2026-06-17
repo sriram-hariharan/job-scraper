@@ -188,6 +188,7 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_sidecar_evidence_snapshot_default_off_readonly.py",
     "src/agents/shadow_sidecar_score_comparison.py",
     "tests/test_shadow_sidecar_score_comparison_readonly.py",
+    "tests/test_shadow_sidecar_score_comparison_service_helper_no_api_ui.py",
 }
 
 def _changed_files():

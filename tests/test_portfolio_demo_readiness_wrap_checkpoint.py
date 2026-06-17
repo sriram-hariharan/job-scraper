@@ -199,6 +199,7 @@ ALLOWED_CHANGED = {
     "src/agents/human_reviewed_influence_preview.py",
     "tests/test_human_reviewed_influence_preview_readonly.py",
     "tests/test_human_reviewed_influence_preview_service_helper_no_api_ui.py",
+    "tests/test_human_reviewed_influence_preview_api_default_off_no_ui.py",
 }
 
 def _changed_files():

@@ -3,11 +3,17 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from src.agents import agent_recommendation_overlay
 from src.agents import shadow_sidecar
 from src.agents.shadow_sidecar_trace_persistence import (
     build_shadow_sidecar_trace_persistence_payload,
 )
 from src.storage.agent_trace.store import build_agent_trace_summary_payload
+
+
+AGENT_RECOMMENDATION_OVERLAY_AUTO_GENERATE_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_AGENT_RECOMMENDATION_OVERLAY_AUTO_GENERATE_ENABLED"
+)
 
 
 def _clean_text(value: Any) -> str:
@@ -16,6 +22,32 @@ def _clean_text(value: Any) -> str:
 
 def _snapshot(value: Any) -> Any:
     return deepcopy(value)
+
+
+def _plain_dict(value: Any) -> dict[str, Any]:
+    return deepcopy(value) if isinstance(value, dict) else {}
+
+
+def _bool_value(value: Any, *, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    normalized = _clean_text(value).lower()
+    if normalized in {"1", "true", "yes", "on", "enabled"}:
+        return True
+    if normalized in {"0", "false", "no", "off", "disabled"}:
+        return False
+    return default
+
+
+def _config_bool(config: dict[str, Any], *keys: str, default: bool = False) -> bool:
+    for key in keys:
+        if key in config:
+            return _bool_value(config.get(key), default=default)
+    return default
 
 
 def evaluate_shadow_sidecar_pipeline_hook_safety(
@@ -40,6 +72,27 @@ def evaluate_shadow_sidecar_pipeline_hook_safety(
         "pipeline_wiring_added": False,
         "auto_apply_enabled": False,
     }
+
+
+def evaluate_agent_recommendation_overlay_auto_generation_safety(
+    *, automatic_generation: bool
+) -> dict[str, bool]:
+    safety = agent_recommendation_overlay.evaluate_agent_recommendation_overlay_safety()
+    safety.update(
+        {
+            "automatic_generation": bool(automatic_generation),
+            "pipeline_shadow_only": True,
+            "manual_review_required": True,
+            "approval_gate_required_for_influence": True,
+            "did_create_approval": False,
+            "did_mutate_approval": False,
+            "did_create_execution_request": False,
+            "did_create_execution_launch_request": False,
+            "auto_apply_enabled": False,
+            "mutation_authorized": False,
+        }
+    )
+    return safety
 
 
 def evaluate_shadow_sidecar_hook_trace_capture_safety(
@@ -289,6 +342,205 @@ def _safe_shadow_sidecar_trace_persistence_payload(
         }
 
 
+def _overlay_not_generated_payload(
+    *,
+    status: str,
+    reason: str,
+    automatic_generation: bool,
+) -> dict[str, Any]:
+    return {
+        "schema_version": shadow_sidecar.SCHEMA_VERSION,
+        "auto_generation_status": _clean_text(status),
+        "overlay_generated": False,
+        "blocked_reason": _clean_text(reason),
+        "agent_recommendation_overlay": {},
+        "provider_calls_disabled_in_tests": True,
+        "requires_live_database": False,
+        "live_provider_backed_automated_agents": 0,
+        "mutation_authorized_agents": 0,
+        "safety_metadata": evaluate_agent_recommendation_overlay_auto_generation_safety(
+            automatic_generation=automatic_generation
+        ),
+    }
+
+
+def _deterministic_context_from_hook_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "deterministic_score": hook_payload.get("source_deterministic_score"),
+        "deterministic_decision": _clean_text(
+            hook_payload.get("source_deterministic_decision")
+        ),
+        "status": _clean_text(hook_payload.get("source_deterministic_status")),
+        "source_deterministic_stage": _clean_text(
+            hook_payload.get("source_deterministic_stage")
+        ),
+        "reason_codes": list(hook_payload.get("source_deterministic_reason_codes") or []),
+    }
+
+
+def _shadow_comparison_context_from_hook_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    trace_context = _plain_dict(hook_payload.get("existing_trace_context"))
+    explicit = _plain_dict(
+        trace_context.get("shadow_sidecar_score_comparison_result")
+        or trace_context.get("shadow_score_comparison_context")
+    )
+    if explicit:
+        return explicit
+
+    chain = _plain_dict(hook_payload.get("chain_payload"))
+    observability = _plain_dict(hook_payload.get("observability_payload"))
+    readiness = _plain_dict(
+        observability.get("readiness_decision") or hook_payload.get("readiness_decision")
+    )
+    chain_status = _clean_text(chain.get("chain_status") or chain.get("sidecar_chain_status"))
+    if not chain_status:
+        return {}
+
+    blocking_findings = list(readiness.get("blocking_findings") or [])
+    warning_findings = list(readiness.get("warning_findings") or [])
+    stage_order = list(chain.get("stage_order") or [])
+    if blocking_findings:
+        agreement = "blocked_by_shadow_findings"
+    elif warning_findings or bool(chain.get("fallback_used")):
+        agreement = "needs_operator_review"
+    else:
+        agreement = "aligned"
+    comparison_status = (
+        "comparison_ready_with_fallback"
+        if bool(chain.get("fallback_used")) or chain_status == shadow_sidecar.STATUS_COMPLETED_WITH_FALLBACK
+        else "comparison_ready"
+    )
+    return {
+        "comparison_status": comparison_status,
+        "comparison_type": "shadow_sidecar_vs_deterministic_score",
+        "agreement_level": agreement,
+        "shadow_snapshot_status": chain_status,
+        "shadow_agent_names": stage_order,
+        "shadow_risk_flag_count": len(warning_findings),
+        "shadow_blocking_finding_count": len(blocking_findings),
+        "operator_review_summary": {
+            "summary_type": "shadow_sidecar_hook_auto_overlay_source",
+            "operator_review_only": True,
+            "recommended_review_focus": list(
+                readiness.get("decision_reason_codes") or []
+            ),
+        },
+    }
+
+
+def _influence_preview_context_from_hook_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    trace_context = _plain_dict(hook_payload.get("existing_trace_context"))
+    return _plain_dict(
+        trace_context.get("human_reviewed_influence_preview_result")
+        or trace_context.get("human_reviewed_influence_preview_payload")
+    )
+
+
+def _approval_request_context_from_hook_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    trace_context = _plain_dict(hook_payload.get("existing_trace_context"))
+    return _plain_dict(
+        trace_context.get("human_reviewed_influence_approval_request_result")
+        or trace_context.get("influence_approval_request_payload")
+    )
+
+
+def _safe_agent_recommendation_overlay_auto_generation_payload(
+    hook_payload: dict[str, Any],
+) -> dict[str, Any]:
+    config = _plain_dict(hook_payload.get("sidecar_config"))
+    if not _config_bool(config, shadow_sidecar.GLOBAL_SIDECAR_FLAG, default=False):
+        return _overlay_not_generated_payload(
+            status="overlay_auto_generation_not_enabled",
+            reason="global_shadow_sidecar_not_enabled",
+            automatic_generation=False,
+        )
+    if not _config_bool(
+        config,
+        AGENT_RECOMMENDATION_OVERLAY_AUTO_GENERATE_FLAG,
+        "agent_recommendation_overlay_auto_generate_enabled",
+        default=False,
+    ):
+        return _overlay_not_generated_payload(
+            status="overlay_auto_generation_not_enabled",
+            reason="agent_recommendation_overlay_auto_generation_flag_disabled",
+            automatic_generation=False,
+        )
+    if _config_bool(config, shadow_sidecar.KILL_SWITCH_FLAG, "kill_switch_enabled", default=False):
+        return _overlay_not_generated_payload(
+            status="overlay_auto_generation_blocked_by_kill_switch",
+            reason="shadow_sidecar_kill_switch_enabled",
+            automatic_generation=True,
+        )
+
+    try:
+        overlay_config = {
+            **config,
+            agent_recommendation_overlay.AGENT_RECOMMENDATION_OVERLAY_FLAG: True,
+        }
+        overlay = agent_recommendation_overlay.build_agent_recommendation_overlay_payload(
+            deterministic_score_context=_deterministic_context_from_hook_payload(
+                hook_payload
+            ),
+            shadow_score_comparison_context=_shadow_comparison_context_from_hook_payload(
+                hook_payload
+            ),
+            human_reviewed_influence_preview_payload=_influence_preview_context_from_hook_payload(
+                hook_payload
+            ),
+            influence_approval_request_payload=_approval_request_context_from_hook_payload(
+                hook_payload
+            ),
+            overlay_config=overlay_config,
+        )
+        safety = dict(overlay.get("safety_metadata") or {})
+        safety.update(
+            evaluate_agent_recommendation_overlay_auto_generation_safety(
+                automatic_generation=True
+            )
+        )
+        overlay["safety_metadata"] = safety
+        return {
+            "schema_version": shadow_sidecar.SCHEMA_VERSION,
+            "auto_generation_status": (
+                "overlay_auto_generated_partial"
+                if overlay.get("overlay_status") == "overlay_partial_insufficient_context"
+                else "overlay_auto_generated"
+            ),
+            "overlay_generated": True,
+            "blocked_reason": "",
+            "agent_recommendation_overlay": overlay,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "safety_metadata": safety,
+        }
+    except Exception as exc:
+        return {
+            "schema_version": shadow_sidecar.SCHEMA_VERSION,
+            "auto_generation_status": "overlay_auto_generation_failed_non_blocking",
+            "overlay_generated": False,
+            "blocked_reason": "overlay_generation_failed_non_blocking",
+            "agent_recommendation_overlay": {},
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "safety_metadata": evaluate_agent_recommendation_overlay_auto_generation_safety(
+                automatic_generation=True
+            ),
+        }
+
+
 def _base_hook_payload(
     *,
     preview_payload: dict[str, Any],
@@ -328,6 +580,7 @@ def _base_hook_payload(
         "source_deterministic_reason_codes": list(
             preview.get("source_deterministic_reason_codes") or []
         ),
+        "existing_trace_context": deepcopy(preview.get("existing_trace_context") or {}),
         "chain_payload": chain,
         "observability_payload": observability,
         "sidecar_config": deepcopy(preview.get("sidecar_config") or {}),
@@ -350,6 +603,9 @@ def _base_hook_payload(
     payload["trace_persistence"] = _safe_shadow_sidecar_trace_persistence_payload(
         payload,
         persistence_writer=trace_persistence_writer,
+    )
+    payload["agent_recommendation_overlay_auto_generation"] = (
+        _safe_agent_recommendation_overlay_auto_generation_payload(payload)
     )
     return payload
 

@@ -38,8 +38,10 @@ from src.config.settings import (
     SCHEDULER_RUN_HISTORY_PATH,
 )
 from src.agents import (
+    agent_recommendation_overlay,
     critic_agent,
     dry_run_execution_simulator,
+    human_reviewed_influence_preview,
     jd_intelligence,
     job_prioritization_agent,
     proposal_only_mutation_planner,
@@ -1640,6 +1642,408 @@ def shadow_sidecar_score_comparison_service_payload(
         "service_helper_only": True,
         "api_route_added": False,
         "ui_action_added": False,
+    }
+
+
+def human_reviewed_influence_preview_service_payload(
+    *,
+    deterministic_score_context: Dict[str, Any] | None = None,
+    shadow_score_comparison_context: Dict[str, Any] | None = None,
+    preview_config: Dict[str, Any] | None = None,
+    preview_builder: Any = None,
+) -> Dict[str, Any]:
+    payload = (
+        human_reviewed_influence_preview.build_human_reviewed_influence_preview_payload(
+            deterministic_score_context=deepcopy(deterministic_score_context or {})
+            if isinstance(deterministic_score_context, dict)
+            else None,
+            shadow_score_comparison_context=deepcopy(
+                shadow_score_comparison_context or {}
+            )
+            if isinstance(shadow_score_comparison_context, dict)
+            else None,
+            preview_config=deepcopy(preview_config or {}),
+            preview_builder=preview_builder,
+        )
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "human_reviewed_influence_preview_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
+
+
+def agent_recommendation_overlay_service_payload(
+    *,
+    deterministic_score_context: Dict[str, Any] | None = None,
+    shadow_score_comparison_context: Dict[str, Any] | None = None,
+    human_reviewed_influence_preview_payload: Dict[str, Any] | None = None,
+    influence_approval_request_payload: Dict[str, Any] | None = None,
+    overlay_config: Dict[str, Any] | None = None,
+) -> Dict[str, Any]:
+    payload = agent_recommendation_overlay.build_agent_recommendation_overlay_payload(
+        deterministic_score_context=deepcopy(deterministic_score_context or {})
+        if isinstance(deterministic_score_context, dict)
+        else None,
+        shadow_score_comparison_context=deepcopy(
+            shadow_score_comparison_context or {}
+        )
+        if isinstance(shadow_score_comparison_context, dict)
+        else None,
+        human_reviewed_influence_preview_payload=deepcopy(
+            human_reviewed_influence_preview_payload or {}
+        )
+        if isinstance(human_reviewed_influence_preview_payload, dict)
+        else None,
+        influence_approval_request_payload=deepcopy(
+            influence_approval_request_payload or {}
+        )
+        if isinstance(influence_approval_request_payload, dict)
+        else None,
+        overlay_config=deepcopy(overlay_config or {}),
+    )
+    safety = dict(payload.get("safety_metadata", {}) or {})
+    safety["service_helper_only"] = True
+    payload["safety_metadata"] = safety
+    return {
+        **payload,
+        "service_surface": "agent_recommendation_overlay_service",
+        "service_helper_only": True,
+        "api_route_added": False,
+        "ui_action_added": False,
+    }
+
+
+HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG = (
+    "APPLYLENS_AGENTIC_PIPELINE_HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_ENABLED"
+)
+
+
+def _human_reviewed_influence_approval_request_safety_metadata(
+    *, did_create_approval: bool
+) -> Dict[str, Any]:
+    return {
+        "read_only": not bool(did_create_approval),
+        "manual_only": True,
+        "approval_request_only": True,
+        "influence_not_applied": True,
+        "human_review_required": True,
+        "approval_gate_required": True,
+        "did_create_approval": bool(did_create_approval),
+        "did_mutate_approval": False,
+        "did_mutate_scoring": False,
+        "did_change_ranking": False,
+        "did_mutate_queue": False,
+        "did_mutate_resume": False,
+        "did_create_execution_request": False,
+        "did_create_execution_launch_request": False,
+        "did_execute_application": False,
+        "did_submit_application": False,
+        "pipeline_wiring_added": False,
+        "auto_apply_enabled": False,
+        "mutation_authorized": False,
+    }
+
+
+def _human_reviewed_influence_approval_config_enabled(
+    config: Dict[str, Any],
+    *keys: str,
+    default: bool = False,
+) -> bool:
+    for key in keys:
+        if key in config:
+            value = config.get(key)
+            if isinstance(value, bool):
+                return value
+            normalized = str(value or "").strip().lower()
+            if normalized in {"1", "true", "yes", "on", "enabled"}:
+                return True
+            if normalized in {"0", "false", "no", "off", "disabled"}:
+                return False
+    return default
+
+
+def _human_reviewed_influence_approval_identity(
+    influence_preview_payload: Dict[str, Any],
+    *,
+    context_id: Any = "",
+    job_id: Any = "",
+) -> Dict[str, str]:
+    deterministic = (
+        influence_preview_payload.get("deterministic_score_context")
+        if isinstance(influence_preview_payload.get("deterministic_score_context"), dict)
+        else {}
+    )
+    shadow = (
+        influence_preview_payload.get("shadow_comparison_context")
+        if isinstance(influence_preview_payload.get("shadow_comparison_context"), dict)
+        else {}
+    )
+    identity_payload = {
+        "request_type": "approval_gated_influence_request",
+        "preview_status": str(influence_preview_payload.get("preview_status") or "").strip(),
+        "preview_type": str(influence_preview_payload.get("preview_type") or "").strip(),
+        "deterministic_score": deterministic.get("deterministic_score"),
+        "deterministic_decision": str(
+            deterministic.get("deterministic_decision") or ""
+        ).strip(),
+        "comparison_status": str(shadow.get("comparison_status") or "").strip(),
+        "context_id": str(
+            context_id
+            or influence_preview_payload.get("context_id")
+            or deterministic.get("context_id")
+            or shadow.get("context_id")
+            or ""
+        ).strip(),
+        "job_id": str(
+            job_id
+            or influence_preview_payload.get("job_id")
+            or deterministic.get("job_id")
+            or shadow.get("job_id")
+            or ""
+        ).strip(),
+    }
+    fingerprint = hashlib.sha256(
+        json.dumps(identity_payload, sort_keys=True, default=str).encode("utf-8")
+    ).hexdigest()[:24]
+    return {
+        "approval_request_id": f"manual_influence_approval_{fingerprint}",
+        "dry_run_artifact_id": f"human_reviewed_influence_preview_{fingerprint}",
+        "idempotency_key": f"manual_human_reviewed_influence_approval:{fingerprint}",
+        "owner_id": identity_payload["context_id"]
+        or identity_payload["job_id"]
+        or "manual_operator",
+    }
+
+
+def build_human_reviewed_influence_approval_request_payload(
+    *,
+    human_reviewed_influence_preview_payload: Dict[str, Any] | None = None,
+    deterministic_score_context: Dict[str, Any] | None = None,
+    shadow_score_comparison_context: Dict[str, Any] | None = None,
+    preview_config: Dict[str, Any] | None = None,
+    reviewer_confirmation: Any = False,
+    reviewer_note: Any = "",
+    context_id: Any = "",
+    job_id: Any = "",
+    connection: Any = None,
+    connection_provider: Any = None,
+    storage_module: Any = None,
+    created_at: Any = None,
+    expires_at: Any = None,
+) -> Dict[str, Any]:
+    """Create a manual approval request for influence review without applying influence."""
+
+    config = deepcopy(preview_config or {}) if isinstance(preview_config, dict) else {}
+    preview_payload = (
+        deepcopy(human_reviewed_influence_preview_payload or {})
+        if isinstance(human_reviewed_influence_preview_payload, dict)
+        else {}
+    )
+    if not preview_payload:
+        preview_payload = human_reviewed_influence_preview_service_payload(
+            deterministic_score_context=deepcopy(deterministic_score_context or {})
+            if isinstance(deterministic_score_context, dict)
+            else None,
+            shadow_score_comparison_context=deepcopy(shadow_score_comparison_context or {})
+            if isinstance(shadow_score_comparison_context, dict)
+            else None,
+            preview_config=deepcopy(config),
+        )
+
+    base_payload = {
+        "request_status": "blocked",
+        "approval_request_type": "approval_gated_influence_request",
+        "created_approval_request_id": "",
+        "approval_request_created": False,
+        "influence_preview_payload": preview_payload,
+        "deterministic_score_context": deepcopy(
+            preview_payload.get("deterministic_score_context") or {}
+        ),
+        "shadow_comparison_context": deepcopy(
+            preview_payload.get("shadow_comparison_context") or {}
+        ),
+        "proposed_influence_summary": deepcopy(
+            preview_payload.get("proposed_influence_summary") or {}
+        ),
+        "proposed_score_adjustment_preview": deepcopy(
+            preview_payload.get("proposed_score_adjustment_preview") or {}
+        ),
+        "proposed_ranking_effect_preview": deepcopy(
+            preview_payload.get("proposed_ranking_effect_preview") or {}
+        ),
+        "human_review_required": True,
+        "approval_gate_required": True,
+        "blocked_actions": [],
+        "next_safe_step": "enable_manual_influence_approval_request",
+        "rationale": (
+            "Manual approval-gated influence request is disabled by default and never applies "
+            "score, ranking, queue, resume, execution, launch, application, or submission changes."
+        ),
+        "context_id": str(context_id or preview_payload.get("context_id") or "").strip(),
+        "job_id": str(job_id or preview_payload.get("job_id") or "").strip(),
+        "safety_metadata": _human_reviewed_influence_approval_request_safety_metadata(
+            did_create_approval=False
+        ),
+        "manual_surface": True,
+        "service_surface": "human_reviewed_influence_approval_request",
+    }
+
+    if _human_reviewed_influence_approval_config_enabled(
+        config,
+        human_reviewed_influence_preview.KILL_SWITCH_FLAG,
+        "kill_switch_enabled",
+        default=False,
+    ):
+        return {
+            **base_payload,
+            "request_status": "blocked_by_kill_switch",
+            "blocked_actions": ["shadow_sidecar_kill_switch_enabled"],
+            "next_safe_step": "disable_kill_switch_before_manual_request",
+        }
+
+    if not _human_reviewed_influence_approval_config_enabled(
+        config,
+        HUMAN_REVIEWED_INFLUENCE_APPROVAL_REQUEST_FLAG,
+        "influence_approval_request_enabled",
+        default=False,
+    ):
+        return {
+            **base_payload,
+            "request_status": "not_enabled",
+            "blocked_actions": ["human_reviewed_influence_approval_request_not_enabled"],
+        }
+
+    preview_status = str(preview_payload.get("preview_status") or "").strip()
+    preview_ready = preview_status in {"preview_ready", "preview_ready_with_fallback"}
+    if not preview_ready:
+        return {
+            **base_payload,
+            "request_status": "blocked_missing_preview_context",
+            "blocked_actions": ["human_reviewed_influence_preview_not_ready"],
+            "next_safe_step": "build_enabled_human_reviewed_influence_preview",
+        }
+
+    if not bool(reviewer_confirmation):
+        return {
+            **base_payload,
+            "request_status": "blocked_missing_reviewer_confirmation",
+            "blocked_actions": ["reviewer_confirmation_missing"],
+            "next_safe_step": "collect_explicit_reviewer_confirmation",
+        }
+
+    resolved_connection = connection
+    if resolved_connection is None and callable(connection_provider):
+        resolved_connection = connection_provider()
+    if resolved_connection is None:
+        return {
+            **base_payload,
+            "request_status": "failed_non_blocking",
+            "blocked_actions": ["approval_storage_connection_unavailable"],
+            "next_safe_step": "configure_existing_approval_storage_connection",
+            "rationale": (
+                "Manual approval-gated influence request could not access the existing approval "
+                "storage connection; no influence was applied and no pipeline behavior changed."
+            ),
+        }
+
+    identity = _human_reviewed_influence_approval_identity(
+        preview_payload,
+        context_id=context_id,
+        job_id=job_id,
+    )
+    now = created_at or datetime.now(timezone.utc)
+    expiry = expires_at or (now + timedelta(days=7))
+    storage_result = app_service_persist_agentic_approval_request(
+        resolved_connection,
+        app_service_safety_gate_output={
+            "app_service_safety_gate_passed": True,
+            "app_service_safety_gate_status": "passed",
+            "blocked_by_app_service_safety_gate": False,
+            "fixture_validation": {
+                "manual_human_reviewed_influence_approval_request": True,
+                "preview_status": preview_status,
+                "influence_not_applied": True,
+                "deterministic_score_context": deepcopy(
+                    preview_payload.get("deterministic_score_context") or {}
+                ),
+                "shadow_comparison_context": deepcopy(
+                    preview_payload.get("shadow_comparison_context") or {}
+                ),
+                "proposed_influence_summary": deepcopy(
+                    preview_payload.get("proposed_influence_summary") or {}
+                ),
+                "proposed_score_adjustment_preview": deepcopy(
+                    preview_payload.get("proposed_score_adjustment_preview") or {}
+                ),
+                "proposed_ranking_effect_preview": deepcopy(
+                    preview_payload.get("proposed_ranking_effect_preview") or {}
+                ),
+                "human_review_required": True,
+                "approval_gate_required": True,
+                "safety_metadata": _human_reviewed_influence_approval_request_safety_metadata(
+                    did_create_approval=False
+                ),
+            },
+        },
+        approval_request_id=identity["approval_request_id"],
+        dry_run_artifact_id=identity["dry_run_artifact_id"],
+        owner_id=identity["owner_id"],
+        idempotency_key=identity["idempotency_key"],
+        expires_at=expiry,
+        proposed_action_type="human_reviewed_influence_preview",
+        proposed_action_summary="Approval-gated human review of shadow influence preview; influence is not applied.",
+        queue_safety_gate_output={},
+        created_at=now,
+        storage_module=storage_module,
+    )
+    created = bool(storage_result.get("did_create_approval_request"))
+    if not created:
+        return {
+            **base_payload,
+            "request_status": "failed_non_blocking",
+            "blocked_actions": list(
+                dict.fromkeys(
+                    list(storage_result.get("approval_storage_reason_codes") or [])
+                    or ["approval_storage_unavailable"]
+                )
+            ),
+            "next_safe_step": "review_approval_storage_error",
+            "approval_storage_result": storage_result,
+        }
+
+    approval_request = dict(storage_result.get("approval_request") or {})
+    created_id = str(
+        approval_request.get("approval_request_id")
+        or identity["approval_request_id"]
+        or ""
+    ).strip()
+    safety = _human_reviewed_influence_approval_request_safety_metadata(
+        did_create_approval=True
+    )
+    return {
+        **base_payload,
+        "request_status": "created",
+        "created_approval_request_id": created_id,
+        "approval_request_created": True,
+        "approval_request": approval_request,
+        "blocked_actions": [],
+        "next_safe_step": "review_created_influence_approval_request",
+        "rationale": (
+            "Created exactly one manual approval request record for human-reviewed influence; "
+            "the influence preview remains unapplied and scoring, ranking, queue, resume, "
+            "execution, launch, application, and submission state were not changed."
+        ),
+        "context_id": identity["owner_id"],
+        "job_id": str(job_id or preview_payload.get("job_id") or "").strip(),
+        "reviewer_note": str(reviewer_note or "").strip(),
+        "safety_metadata": safety,
+        "approval_storage_result": storage_result,
     }
 
 

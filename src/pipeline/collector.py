@@ -106,6 +106,7 @@ def _shadow_sidecar_pipeline_config_from_env() -> Dict[str, Any]:
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_TAILORING_SUGGESTION_ENABLED",
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_CRITIC_GUARDRAIL_ENABLED",
         "APPLYLENS_AGENTIC_PIPELINE_SHADOW_KILL_SWITCH",
+        "APPLYLENS_AGENTIC_PIPELINE_AGENT_RECOMMENDATION_OVERLAY_AUTO_GENERATE_ENABLED",
     )
     return {flag_name: os.environ.get(flag_name, "") for flag_name in flag_names}
 

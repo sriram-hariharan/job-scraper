@@ -313,6 +313,25 @@ class ManualGuardedApprovalRequestCreateRequest(BaseModel):
     job_id: str = ""
 
 
+class HumanReviewedInfluenceApprovalRequest(BaseModel):
+    human_reviewed_influence_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    deterministic_score_context: dict[str, Any] = Field(default_factory=dict)
+    shadow_score_comparison_context: dict[str, Any] = Field(default_factory=dict)
+    preview_config: dict[str, Any] = Field(default_factory=dict)
+    reviewer_confirmation: bool = False
+    reviewer_note: str = ""
+    context_id: str = ""
+    job_id: str = ""
+
+
+class AgentRecommendationOverlayRequest(BaseModel):
+    deterministic_score_context: dict[str, Any] = Field(default_factory=dict)
+    shadow_score_comparison_context: dict[str, Any] = Field(default_factory=dict)
+    human_reviewed_influence_preview_payload: dict[str, Any] = Field(default_factory=dict)
+    influence_approval_request_payload: dict[str, Any] = Field(default_factory=dict)
+    overlay_config: dict[str, Any] = Field(default_factory=dict)
+
+
 class ManualGuardedApprovalCreationObservabilityRequest(BaseModel):
     guarded_creation_payload: dict[str, Any] = Field(default_factory=dict)
     approval_creation_gate_payload: dict[str, Any] = Field(default_factory=dict)
@@ -3728,6 +3747,203 @@ def shadow_sidecar_score_comparison(payload: dict | None = Body(default=None)):
     return {
         **response,
         "api_surface": "shadow_sidecar_score_comparison",
+        "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/human-reviewed-influence-preview")
+def human_reviewed_influence_preview(payload: dict | None = Body(default=None)):
+    request_payload = dict(payload or {}) if isinstance(payload, dict) else {}
+    try:
+        response = services.human_reviewed_influence_preview_service_payload(
+            deterministic_score_context=(
+                dict(request_payload.get("deterministic_score_context") or {})
+                if isinstance(request_payload.get("deterministic_score_context"), dict)
+                else {}
+            ),
+            shadow_score_comparison_context=(
+                dict(request_payload.get("shadow_score_comparison_context") or {})
+                if isinstance(
+                    request_payload.get("shadow_score_comparison_context"), dict
+                )
+                else {}
+            ),
+            preview_config=(
+                dict(request_payload.get("preview_config") or {})
+                if isinstance(request_payload.get("preview_config"), dict)
+                else {}
+            ),
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase5_shadow_sidecar_trace_v1",
+            "preview_status": "preview_failed_non_blocking",
+            "preview_type": "human_reviewed_shadow_score_influence_preview",
+            "preview_enabled": True,
+            "deterministic_score_context": {},
+            "shadow_comparison_context": {},
+            "proposed_influence_summary": {},
+            "proposed_score_adjustment_preview": {},
+            "proposed_ranking_effect_preview": {},
+            "required_human_review": True,
+            "approval_gate_required": True,
+            "operator_review_summary": {
+                "summary_type": "human_reviewed_influence_preview",
+                "review_status": "failed_non_blocking",
+                "operator_review_only": True,
+                "read_only": True,
+                "advisory_only": True,
+                "required_human_review": True,
+                "approval_gate_required": True,
+                "recommended_review_focus": ["retry_preview_with_safe_inputs"],
+            },
+            "preview_findings": [],
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "advisory_only": True,
+                "service_helper_only": True,
+                "influence_preview_only": True,
+                "human_review_required": True,
+                "approval_gate_required": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["influence_preview_only"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "human_reviewed_influence_preview",
+        "api_readback_only": True,
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/human-reviewed-influence-approval-request")
+def human_reviewed_influence_approval_request(
+    request: HumanReviewedInfluenceApprovalRequest,
+):
+    payload = services.build_human_reviewed_influence_approval_request_payload(
+        human_reviewed_influence_preview_payload=(
+            request.human_reviewed_influence_preview_payload
+        ),
+        deterministic_score_context=request.deterministic_score_context,
+        shadow_score_comparison_context=request.shadow_score_comparison_context,
+        preview_config=request.preview_config,
+        reviewer_confirmation=request.reviewer_confirmation,
+        reviewer_note=request.reviewer_note,
+        context_id=request.context_id,
+        job_id=request.job_id,
+        connection_provider=_agentic_approval_storage_connection,
+    )
+    return {
+        **payload,
+        "explicit_user_action": True,
+        "api_surface": "human_reviewed_influence_approval_request",
+        "ui_action_added": False,
+    }
+
+
+@app.post("/api/agent-recommendation-overlay")
+def agent_recommendation_overlay(request: AgentRecommendationOverlayRequest):
+    try:
+        response = services.agent_recommendation_overlay_service_payload(
+            deterministic_score_context=request.deterministic_score_context,
+            shadow_score_comparison_context=request.shadow_score_comparison_context,
+            human_reviewed_influence_preview_payload=(
+                request.human_reviewed_influence_preview_payload
+            ),
+            influence_approval_request_payload=request.influence_approval_request_payload,
+            overlay_config=request.overlay_config,
+        )
+    except (SystemExit, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        response = {
+            "schema_version": "phase6_agent_recommendation_overlay_v1",
+            "overlay_status": "overlay_failed_non_blocking",
+            "overlay_type": "agent_recommendation_overlay",
+            "overlay_enabled": True,
+            "deterministic_decision_context": {},
+            "shadow_score_comparison": {},
+            "human_reviewed_influence_preview": {},
+            "approval_request_context": {},
+            "recommended_review_action": "insufficient_context",
+            "recommended_review_label": "Insufficient Context",
+            "overlay_findings": [],
+            "operator_review_summary": {
+                "summary_type": "agent_recommendation_overlay",
+                "review_status": "overlay_failed_non_blocking",
+                "recommended_review_action": "insufficient_context",
+                "operator_review_only": True,
+                "read_only": True,
+                "advisory_only": True,
+                "human_review_required": True,
+                "approval_gate_required_for_influence": True,
+            },
+            "error_type": exc.__class__.__name__,
+            "provider_calls_disabled_in_tests": True,
+            "requires_live_database": False,
+            "live_provider_backed_automated_agents": 0,
+            "mutation_authorized_agents": 0,
+            "service_helper_only": True,
+            "api_route_added": True,
+            "ui_action_added": False,
+            "safety_metadata": {
+                "read_only": True,
+                "advisory_only": True,
+                "service_helper_only": True,
+                "overlay_only": True,
+                "human_review_required": True,
+                "approval_gate_required_for_influence": True,
+                "did_read_database": False,
+                "did_write_database": False,
+                "did_mutate_scoring": False,
+                "did_change_ranking": False,
+                "did_mutate_queue": False,
+                "did_create_approval": False,
+                "did_mutate_approval": False,
+                "did_mutate_resume": False,
+                "did_create_execution_request": False,
+                "did_create_execution_launch_request": False,
+                "did_execute_application": False,
+                "did_submit_application": False,
+                "auto_apply_enabled": False,
+                "mutation_authorized": False,
+            },
+        }
+    safety = dict(response.get("safety_metadata", {}) or {})
+    safety["api_readback_only"] = True
+    safety["overlay_only"] = True
+    response["safety_metadata"] = safety
+    return {
+        **response,
+        "api_surface": "agent_recommendation_overlay",
         "api_readback_only": True,
         "ui_action_added": False,
     }

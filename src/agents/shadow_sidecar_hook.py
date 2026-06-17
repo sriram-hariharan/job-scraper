@@ -95,6 +95,21 @@ def evaluate_agent_recommendation_overlay_auto_generation_safety(
     return safety
 
 
+def evaluate_agent_recommendation_overlay_trace_context_safety() -> dict[str, bool]:
+    safety = evaluate_agent_recommendation_overlay_auto_generation_safety(
+        automatic_generation=False
+    )
+    safety.update(
+        {
+            "trace_context_only": True,
+            "pipeline_generated_overlay_context_propagation": True,
+            "read_only": True,
+            "advisory_only": True,
+        }
+    )
+    return safety
+
+
 def evaluate_shadow_sidecar_hook_trace_capture_safety(
     *, called_by_pipeline: bool = False
 ) -> dict[str, bool]:
@@ -605,6 +620,21 @@ def _base_hook_payload(
     payload["agent_recommendation_overlay_auto_generation"] = (
         _safe_agent_recommendation_overlay_auto_generation_payload(payload)
     )
+    overlay_context = deepcopy(
+        payload["agent_recommendation_overlay_auto_generation"]
+    )
+    overlay_context_safety = dict(overlay_context.get("safety_metadata") or {})
+    automatic_generation = bool(
+        overlay_context_safety.get("automatic_generation")
+    )
+    overlay_context_safety.update(
+        evaluate_agent_recommendation_overlay_trace_context_safety()
+    )
+    overlay_context_safety["automatic_generation"] = automatic_generation
+    overlay_context["safety_metadata"] = overlay_context_safety
+    payload["existing_trace_context"][
+        "agent_recommendation_overlay_auto_generation"
+    ] = overlay_context
     payload["trace_capture"] = _safe_shadow_sidecar_hook_trace_capture_payload(payload)
     payload["trace_persistence"] = _safe_shadow_sidecar_trace_persistence_payload(
         payload,

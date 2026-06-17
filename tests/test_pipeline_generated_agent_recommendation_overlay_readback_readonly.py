@@ -190,9 +190,14 @@ def test_overlay_is_read_back_from_persistence_and_trace_readback_shapes():
         trace_readback_payload=trace_readback_payload
     )
 
-    assert from_persistence["readback_status"] == "pipeline_generated_overlay_not_found"
-    assert from_persistence["pipeline_generated_overlay_found"] is False
-    assert from_persistence["auto_generation_status"] == ""
+    assert from_persistence["readback_status"] == (
+        "pipeline_generated_overlay_readback_ready"
+    )
+    assert from_persistence["pipeline_generated_overlay_found"] is True
+    assert from_persistence["auto_generation_status"] in {
+        "overlay_auto_generated",
+        "overlay_auto_generated_partial",
+    }
 
     assert from_trace_readback["readback_status"] == "pipeline_generated_overlay_readback_ready"
     assert from_trace_readback["pipeline_generated_overlay_found"] is True
@@ -200,6 +205,7 @@ def test_overlay_is_read_back_from_persistence_and_trace_readback_shapes():
         "overlay_auto_generated",
         "overlay_auto_generated_partial",
     }
+
 
 def test_service_and_api_readback_are_read_only(monkeypatch):
     hook = _hook_payload(**{GLOBAL_FLAG: True, JD_FLAG: True, AUTO_FLAG: True})

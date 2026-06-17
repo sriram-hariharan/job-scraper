@@ -193,6 +193,7 @@ ALLOWED_CHANGED = {
     "tests/test_agentic_review_ui_portfolio_polish_no_backend_change.py",
     "docs/phase6_shadow_score_comparison_ui_readiness_audit.md",
     "tests/test_phase6_shadow_score_comparison_ui_readiness_audit.py",
+    "tests/test_shadow_sidecar_score_comparison_ui_default_off.py",
 }
 
 def _changed_files():

@@ -923,6 +923,90 @@ function renderShadowSidecarTraceReadbackSection(tracePayload = {}) {
   `;
 }
 
+function shadowScoreComparisonRequestPayload(tracePayload = {}) {
+  const deterministicContext = hasAgentTraceSummaryObject(tracePayload?.shadow_score_comparison_deterministic_context)
+    ? tracePayload.shadow_score_comparison_deterministic_context
+    : hasAgentTraceSummaryObject(tracePayload?.source_deterministic_context)
+      ? tracePayload.source_deterministic_context
+      : hasAgentTraceSummaryObject(tracePayload?.agent_run?.summary_json)
+        ? tracePayload.agent_run.summary_json
+        : {};
+  const snapshotPayload = hasAgentTraceSummaryObject(tracePayload?.shadow_sidecar_evidence_snapshot_result)
+    ? tracePayload.shadow_sidecar_evidence_snapshot_result
+    : hasAgentTraceSummaryObject(tracePayload?.shadow_score_comparison_snapshot_payload)
+      ? tracePayload.shadow_score_comparison_snapshot_payload
+      : {};
+  return {
+    deterministic_score_context: deterministicContext,
+    shadow_evidence_snapshot_payload: snapshotPayload,
+  };
+}
+
+function renderShadowSidecarScoreComparisonSection(tracePayload = {}) {
+  const result = hasAgentTraceSummaryObject(tracePayload?.shadow_sidecar_score_comparison_result)
+    ? tracePayload.shadow_sidecar_score_comparison_result
+    : {};
+  const safety = hasAgentTraceSummaryObject(result.safety_metadata)
+    ? result.safety_metadata
+    : {};
+  const operatorSummary = hasAgentTraceSummaryObject(result.operator_review_summary)
+    ? result.operator_review_summary
+    : {};
+  const findings = Array.isArray(result.comparison_findings)
+    ? result.comparison_findings
+    : [];
+  const status = result.comparison_status || "not run";
+  return `
+    <article class="agent-trace-summary" aria-label="Shadow score comparison">
+      <div class="agentic-workflow-header">
+        <div>
+          <h4>Shadow Score Comparison</h4>
+          <p>Manual read-only comparison between deterministic final scoring context and shadow sidecar evidence. It is operator-review only and never changes scoring, ranking, queues, approvals, resumes, execution requests, launch requests, applications, or submissions.</p>
+        </div>
+        <span class="agentic-workflow-badge">Default-off</span>
+      </div>
+      <div class="agent-trace-counts">
+        ${renderWorkflowSummaryMetric("Comparison", status)}
+        ${renderWorkflowSummaryMetric("Deterministic score", result.deterministic_score ?? "-")}
+        ${renderWorkflowSummaryMetric("Decision", result.deterministic_decision || "-")}
+        ${renderWorkflowSummaryMetric("Shadow snapshot", result.shadow_snapshot_status || "-")}
+        ${renderWorkflowSummaryMetric("Agreement", result.agreement_level || "-")}
+        ${renderWorkflowSummaryMetric("Read-only", safety.read_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Shadow-only", safety.shadow_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Operator review", safety.operator_review_only === true ? "yes" : "unknown")}
+        ${renderWorkflowSummaryMetric("Scoring mutation", safety.did_mutate_scoring ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Ranking mutation", safety.did_change_ranking ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Queue mutation", safety.did_mutate_queue ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Approval mutation", safety.did_mutate_approval ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Resume mutation", safety.did_mutate_resume ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Execution request", safety.did_create_execution_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Launch request", safety.did_create_execution_launch_request ? "created" : "no")}
+        ${renderWorkflowSummaryMetric("Execution", safety.did_execute_application ? "yes" : "no")}
+        ${renderWorkflowSummaryMetric("Submission", safety.did_submit_application ? "yes" : "no")}
+      </div>
+      ${status === "comparison_not_enabled" ? renderAgentTraceReadOnlyState("Shadow score comparison is not enabled. Default-off display is safe.", "info", "Shadow score comparison not enabled") : ""}
+      ${status === "comparison_blocked_by_kill_switch" ? renderAgentTraceReadOnlyState("Shadow score comparison is blocked by the kill switch. No comparison mutation is attempted.", "warning", "Shadow score comparison blocked by kill switch") : ""}
+      ${status === "comparison_blocked_missing_deterministic_context" ? renderAgentTraceReadOnlyState("Deterministic score context is missing. The read-only comparison remains unavailable.", "info", "Shadow score comparison missing deterministic context") : ""}
+      ${status === "comparison_blocked_missing_shadow_snapshot" ? renderAgentTraceReadOnlyState("Shadow evidence snapshot is missing. The read-only comparison remains unavailable.", "info", "Shadow score comparison missing shadow snapshot") : ""}
+      <div class="agent-trace-json-grid">
+        ${renderAgentTraceReadOnlyDetails("Comparison findings", findings, { helper: "Read-only advisory findings. They do not change deterministic scoring or ranking." })}
+        ${renderAgentTraceReadOnlyDetails("Operator review summary", operatorSummary, { helper: "Operator-review only summary from the default-off comparison API." })}
+        ${renderAgentTraceReadOnlyDetails("Source deterministic context", result.source_deterministic_context || {}, { helper: "Read-only deterministic score context used for comparison." })}
+        ${renderAgentTraceReadOnlyDetails("Source shadow snapshot context", result.source_shadow_snapshot_context || {}, { helper: "Read-only shadow evidence snapshot context used for comparison." })}
+        ${renderAgentTraceReadOnlyDetails("Safety metadata", safety, { helper: "No-mutation safety metadata for shadow score comparison." })}
+      </div>
+      <div class="agentic-feedback-actions">
+        <button type="button" class="agentic-feedback-action" data-shadow-sidecar-score-comparison>
+          Compare Shadow Score
+        </button>
+        <span class="agentic-review-muted" data-shadow-sidecar-score-comparison-status>
+          Manual read-only. Safe states include not-enabled, blocked by kill switch, missing deterministic context, and missing shadow snapshot.
+        </span>
+      </div>
+    </article>
+  `;
+}
+
 function renderAgentTraceDetailedSections(tracePayload = {}) {
   const detailedSections = [
     renderAgentTraceSummarySection(tracePayload?.trace_summary),
@@ -3538,6 +3622,7 @@ function renderAgentTraceReadOnlyPanel(tracePayload = {}) {
       </div>
       ${renderAgentTraceEvidencePackSection(tracePayload?.trace_evidence_pack)}
       ${renderShadowSidecarTraceReadbackSection(tracePayload)}
+      ${renderShadowSidecarScoreComparisonSection(tracePayload)}
       ${renderAgentTraceCriticEvaluatorSection(tracePayload)}
       ${renderManualJdIntelligenceDryRunSection(tracePayload)}
       ${renderManualResumeMatchDryRunSection(tracePayload)}
@@ -5253,6 +5338,44 @@ function bindAgenticReviewTabs() {
       }
     } catch (err) {
       if (status) status.textContent = err?.message || "Shadow sidecar trace readback failed.";
+    } finally {
+      window.setTimeout(() => {
+        button.disabled = previousDisabled;
+      }, 700);
+    }
+  });
+
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-shadow-sidecar-score-comparison]");
+    if (!button) return;
+    const status = button.closest(".agent-trace-summary")?.querySelector("[data-shadow-sidecar-score-comparison-status]");
+    const previousDisabled = Boolean(button.disabled);
+    button.disabled = true;
+    if (status) status.textContent = "Comparing deterministic score and shadow evidence in read-only mode...";
+    try {
+      const tracePayload = window.__agenticReviewTracePayload && typeof window.__agenticReviewTracePayload === "object"
+        ? window.__agenticReviewTracePayload
+        : {};
+      const comparisonResult = await fetchJson(
+        "/api/shadow-sidecar/score-comparison",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(shadowScoreComparisonRequestPayload(tracePayload)),
+        },
+      );
+      window.__agenticReviewTracePayload = {
+        ...tracePayload,
+        shadow_sidecar_score_comparison_result: comparisonResult,
+      };
+      const traceNode = qs("agenticReviewTracePanel");
+      if (traceNode) {
+        traceNode.outerHTML = renderAgentTraceReadOnlyPanel(window.__agenticReviewTracePayload);
+      }
+    } catch (err) {
+      if (status) status.textContent = err?.message || "Shadow score comparison failed.";
     } finally {
       window.setTimeout(() => {
         button.disabled = previousDisabled;

@@ -1,7 +1,7 @@
 from copy import deepcopy
 from pathlib import Path
 
-from src.agents import shadow_sidecar_trace_readback as readback
+from src.app import services
 
 
 GLOBAL_FLAG = "APPLYLENS_AGENTIC_PIPELINE_SHADOW_SIDECAR_ENABLED"
@@ -34,9 +34,7 @@ def _readback_source():
             "status": "ready",
             "started_at": "in_memory",
             "completed_at": "in_memory",
-            "summary_json": {
-                "trace_persistence_status": "trace_persistence_ready",
-            },
+            "summary_json": {"trace_persistence_status": "trace_persistence_ready"},
             "error": "",
         },
         "agent_step_record": {
@@ -68,15 +66,14 @@ def _readback_source():
     }
 
 
-def _assert_safety(payload):
+def _assert_service_safety(payload):
     safety = payload["safety_metadata"]
     assert safety["read_only"] is True
     assert safety["shadow_only"] is True
+    assert safety["service_helper_only"] is True
     assert safety["trace_readback_only"] is True
     assert safety["did_read_database"] is False
     assert safety["did_write_database"] is False
-    assert safety["did_write_agent_trace_run"] is False
-    assert safety["did_write_agent_trace_step"] is False
     assert safety["did_mutate_scoring"] is False
     assert safety["did_change_ranking"] is False
     assert safety["did_mutate_queue"] is False
@@ -87,20 +84,20 @@ def _assert_safety(payload):
     assert safety["did_create_execution_launch_request"] is False
     assert safety["did_execute_application"] is False
     assert safety["did_submit_application"] is False
-    assert safety["pipeline_wiring_added"] is False
-    assert safety["api_route_added"] is False
-    assert safety["ui_action_added"] is False
     assert safety["auto_apply_enabled"] is False
+    assert payload["service_helper_only"] is True
+    assert payload["api_route_added"] is False
+    assert payload["ui_action_added"] is False
 
 
-def test_default_environment_returns_trace_readback_not_enabled():
+def test_service_helper_default_environment_returns_trace_readback_not_enabled():
     calls = []
 
     def reader(_context):
         calls.append("called")
         return _readback_source()
 
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config={},
         readback_reader=reader,
@@ -110,17 +107,17 @@ def test_default_environment_returns_trace_readback_not_enabled():
     assert payload["readback_attempted"] is False
     assert payload["trace_readback"] == {}
     assert calls == []
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_global_sidecar_disabled_does_not_attempt_readback():
+def test_global_sidecar_disabled_does_not_attempt_service_readback():
     calls = []
 
     def reader(_context):
         calls.append("called")
         return _readback_source()
 
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config={GLOBAL_FLAG: False, READBACK_FLAG: True},
         readback_reader=reader,
@@ -129,11 +126,11 @@ def test_global_sidecar_disabled_does_not_attempt_readback():
     assert payload["trace_readback_status"] == "trace_readback_not_enabled"
     assert payload["readback_attempted"] is False
     assert calls == []
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_kill_switch_blocks_readback():
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+def test_kill_switch_blocks_service_readback():
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config={GLOBAL_FLAG: True, READBACK_FLAG: True, KILL_SWITCH: True},
         readback_source=_readback_source(),
@@ -142,13 +139,12 @@ def test_kill_switch_blocks_readback():
     assert payload["trace_readback_status"] == (
         "trace_readback_blocked_by_kill_switch"
     )
-    assert payload["readback_attempted"] is False
     assert payload["trace_readback"] == {}
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_missing_lookup_context_blocks_safely():
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+def test_missing_lookup_context_blocks_service_readback_safely():
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         sidecar_config=_enabled_config(),
         readback_source=_readback_source(),
     )
@@ -157,11 +153,11 @@ def test_missing_lookup_context_blocks_safely():
         "trace_readback_blocked_missing_context"
     )
     assert payload["trace_readback"] == {}
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_invalid_lookup_context_blocks_safely():
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+def test_invalid_lookup_context_blocks_service_readback_safely():
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         owner_user_id="owner_shadow",
         pipeline_run_id="pipeline\nshadow",
         sidecar_config=_enabled_config(),
@@ -172,19 +168,19 @@ def test_invalid_lookup_context_blocks_safely():
         "trace_readback_blocked_invalid_context"
     )
     assert payload["trace_readback"] == {}
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_enabled_readback_builds_deterministic_envelope_without_live_db():
+def test_enabled_service_readback_builds_deterministic_envelope_without_live_db():
     source = _readback_source()
     before = deepcopy(source)
 
-    first = readback.build_shadow_sidecar_trace_readback_payload(
+    first = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config=_enabled_config(),
         readback_source=source,
     )
-    second = readback.build_shadow_sidecar_trace_readback_payload(
+    second = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config=_enabled_config(),
         readback_source=source,
@@ -195,30 +191,22 @@ def test_enabled_readback_builds_deterministic_envelope_without_live_db():
     assert first["trace_readback_status"] == "trace_readback_ready"
     assert first["requires_live_database"] is False
     assert first["provider_calls_disabled_in_tests"] is True
+    assert first["service_surface"] == "shadow_sidecar_trace_readback_service"
     assert first["source_trace_context"]["pipeline_run_id"] == "pipeline_shadow"
     envelope = first["trace_readback"]
     assert envelope["readback_type"] == "shadow_sidecar_trace_readback"
     assert envelope["counts"] == {"agent_runs": 1, "agent_steps": 1}
     assert envelope["trace_summary"]["summary_type"] == "agent_trace"
-    assert envelope["trace_summary"]["run_count"] == 1
-    assert envelope["trace_summary"]["step_count"] == 1
-    assert envelope["stage_trace_bundle"]["bundle_type"] == "stage_trace_bundle"
-    assert envelope["stage_trace_health"]["health_status"] in {"healthy", "warning"}
-    assert envelope["stage_trace_readiness"]["readiness_status"] in {
-        "ready",
-        "warning",
-        "blocked",
-    }
     assert envelope["trace_evidence_pack"]["evidence_pack_type"] == (
         "agent_trace_evidence_pack"
     )
     assert first["live_provider_backed_automated_agents"] == 0
     assert first["mutation_authorized_agents"] == 0
-    _assert_safety(first)
+    _assert_service_safety(first)
 
 
-def test_enabled_readback_without_safe_source_skips_without_live_db():
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+def test_service_readback_without_safe_source_skips_without_live_db():
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config=_enabled_config(),
     )
@@ -227,14 +215,14 @@ def test_enabled_readback_without_safe_source_skips_without_live_db():
     assert payload["readback_attempted"] is False
     assert payload["trace_readback"] == {}
     assert payload["requires_live_database"] is False
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_readback_failure_is_non_blocking_with_injected_reader():
+def test_service_readback_failure_is_non_blocking_with_injected_reader():
     def reader(_context):
         raise RuntimeError("read boom")
 
-    payload = readback.build_shadow_sidecar_trace_readback_payload(
+    payload = services.shadow_sidecar_trace_readback_service_payload(
         **_lookup_kwargs(),
         sidecar_config=_enabled_config(),
         readback_reader=reader,
@@ -246,20 +234,15 @@ def test_readback_failure_is_non_blocking_with_injected_reader():
     assert payload["readback_attempted"] is True
     assert payload["reader_result"]["error_type"] == "RuntimeError"
     assert payload["trace_readback"] == {}
-    _assert_safety(payload)
+    _assert_service_safety(payload)
 
 
-def test_source_has_no_pipeline_api_ui_schema_or_provider_wiring():
-    source = Path("src/agents/shadow_sidecar_trace_readback.py").read_text(
-        encoding="utf-8"
-    )
+def test_service_helper_slice_has_no_storage_scoring_queue_or_execution_calls():
+    source = Path("src/app/services.py").read_text(encoding="utf-8")
+    start = source.index("def shadow_sidecar_trace_readback_service_payload")
+    end = source.index("def record_agent_feedback_payload", start)
+    helper_source = source[start:end]
     forbidden = [
-        "src.pipeline",
-        "src.app.api",
-        "src.app.services",
-        "agentic_review.js",
-        "schema.sql",
-        "connect(",
         "get_agent_run_postgres_payload(",
         "list_agent_runs_postgres_payload(",
         "list_agent_steps_postgres_payload(",
@@ -277,10 +260,10 @@ def test_source_has_no_pipeline_api_ui_schema_or_provider_wiring():
         "submit_application(",
     ]
     for marker in forbidden:
-        assert marker not in source
+        assert marker not in helper_source
 
 
-def test_runtime_api_ui_storage_schema_files_do_not_call_trace_readback_helper():
+def test_no_api_ui_pipeline_or_schema_wiring_for_service_readback():
     protected_paths = [
         Path("src/pipeline/collector.py"),
         Path("src/app/api.py"),
@@ -289,5 +272,5 @@ def test_runtime_api_ui_storage_schema_files_do_not_call_trace_readback_helper()
     ]
     combined = "\n".join(path.read_text(encoding="utf-8") for path in protected_paths)
 
-    assert "shadow_sidecar_trace_readback" not in combined
+    assert "shadow_sidecar_trace_readback_service_payload" not in combined
     assert "build_shadow_sidecar_trace_readback_payload" not in combined

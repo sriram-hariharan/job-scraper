@@ -80,6 +80,11 @@ def _extract_auto_payload(source: Any) -> dict[str, Any]:
     if direct:
         return direct
 
+    source_trace_context = _plain_dict(payload.get("source_trace_context"))
+    direct = _direct_auto_payload(source_trace_context)
+    if direct:
+        return direct
+
     trace_persistence = _plain_dict(payload.get("trace_persistence"))
     direct = _extract_auto_payload(trace_persistence)
     if direct:

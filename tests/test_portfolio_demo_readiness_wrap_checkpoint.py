@@ -209,6 +209,7 @@ ALLOWED_CHANGED = {
     "tests/test_agent_recommendation_overlay_pipeline_auto_default_off.py",
     "src/agents/agent_recommendation_overlay_readback.py",
     "tests/test_pipeline_generated_agent_recommendation_overlay_readback_readonly.py",
+    "tests/test_pipeline_generated_overlay_trace_context_propagation.py",
 }
 
 def _changed_files():

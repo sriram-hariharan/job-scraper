@@ -196,6 +196,8 @@ ALLOWED_CHANGED = {
     "tests/test_shadow_sidecar_score_comparison_ui_default_off.py",
     "docs/phase6_human_reviewed_influence_preview_readiness_audit.md",
     "tests/test_phase6_human_reviewed_influence_preview_readiness_audit.py",
+    "src/agents/human_reviewed_influence_preview.py",
+    "tests/test_human_reviewed_influence_preview_readonly.py",
 }
 
 def _changed_files():
@@ -244,6 +246,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/shadow_sidecar_trace_readback.py",
         "src/agents/shadow_sidecar_evidence_snapshot.py",
         "src/agents/shadow_sidecar_score_comparison.py",
+        "src/agents/human_reviewed_influence_preview.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

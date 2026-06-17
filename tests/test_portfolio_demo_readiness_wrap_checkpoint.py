@@ -168,6 +168,11 @@ ALLOWED_CHANGED = {
     "src/pipeline/collector.py",
     "tests/test_shadow_sidecar_first_pipeline_callsite_default_off.py",
     "tests/test_shadow_sidecar_hook_trace_capture_default_off.py",
+    "docs/phase5_shadow_sidecar_trace_persistence_readiness_audit.md",
+    "tests/test_phase5_shadow_sidecar_trace_persistence_readiness_audit.py",
+    "src/agents/shadow_sidecar_trace_persistence.py",
+    "tests/test_shadow_sidecar_trace_persistence_helper_default_off_not_called.py",
+    "tests/test_shadow_sidecar_trace_persistence_hook_integration_default_off.py",
 }
 
 def _changed_files():
@@ -212,6 +217,7 @@ def test_portfolio_demo_readiness_is_docs_tests_only():
         "src/agents/job_prioritization_agent.py",
         "src/agents/shadow_sidecar.py",
         "src/agents/shadow_sidecar_hook.py",
+        "src/agents/shadow_sidecar_trace_persistence.py",
         "src/pipeline/collector.py",
     }
     runtime_paths = [

@@ -182,6 +182,8 @@ ALLOWED_CHANGED = {
     "docs/phase5_shadow_sidecar_trace_readback_ui_readiness_audit.md",
     "tests/test_phase5_shadow_sidecar_trace_readback_ui_readiness_audit.py",
     "tests/test_shadow_sidecar_trace_readback_ui_default_off.py",
+    "docs/phase5_shadow_sidecar_end_to_end_readiness_audit.md",
+    "tests/test_phase5_shadow_sidecar_end_to_end_readiness_audit.py",
 }
 
 def _changed_files():
